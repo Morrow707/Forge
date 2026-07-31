@@ -1,0 +1,85 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+  Forge theme tokens.
+  PLACEHOLDER PALETTE — swap these HSL values once exact adapt-ptp.com
+  colors are provided (screenshots/video). Everything in the UI reads
+  from these variables, so updating them here re-themes the whole app.
+*/
+:root {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Barlow Condensed", "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  --background: 220 15% 7%;
+  --foreground: 0 0% 96%;
+
+  --card: 220 14% 11%;
+  --card-foreground: 0 0% 96%;
+
+  --popover: 220 14% 11%;
+  --popover-foreground: 0 0% 96%;
+
+  --surface: 220 14% 11%;
+  --surface-elevated: 220 13% 15%;
+
+  --primary: 16 92% 55%;
+  --primary-foreground: 0 0% 100%;
+
+  --secondary: 220 12% 18%;
+  --secondary-foreground: 0 0% 92%;
+
+  --muted: 220 10% 18%;
+  --muted-foreground: 220 9% 62%;
+
+  --accent: 16 92% 55%;
+  --accent-foreground: 0 0% 100%;
+
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+
+  --success: 142 71% 45%;
+  --success-foreground: 0 0% 100%;
+
+  --border: 220 12% 20%;
+  --input: 220 12% 20%;
+  --ring: 16 92% 55%;
+
+  --radius: 0.6rem;
+}
+
+* {
+  @apply border-border;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-background text-foreground font-sans antialiased;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+}
+
+.font-display {
+  font-family: var(--font-display);
+  letter-spacing: 0.01em;
+}
+
+::selection {
+  background-color: hsl(var(--primary) / 0.3);
+}
+
+/* thin, dark-friendly scrollbars */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--border));
+  border-radius: 999px;
+}
