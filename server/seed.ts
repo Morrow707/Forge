@@ -272,12 +272,7 @@ async function main() {
       ],
     });
 
-    const today = new Date();
-    const monday = new Date(today);
-    const day = monday.getDay();
-    const diff = (day === 0 ? -6 : 1) - day;
-    monday.setDate(monday.getDate() + diff);
-    const startDate = monday.toISOString().slice(0, 10);
+    const startDate = new Date().toISOString().slice(0, 10);
 
     await storage.createAssignment(coach.id, program.id, [athlete.id], startDate);
   }

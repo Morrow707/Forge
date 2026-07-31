@@ -13,6 +13,7 @@ import CoachExercises from "@/pages/coach/exercises";
 import CoachPrograms from "@/pages/coach/programs";
 import CoachProgramBuilder from "@/pages/coach/program-builder";
 import CoachRoster from "@/pages/coach/roster";
+import CoachCalendar from "@/pages/coach/calendar";
 import AthleteDashboard from "@/pages/athlete/dashboard";
 import AthleteWorkout from "@/pages/athlete/workout";
 
@@ -56,6 +57,9 @@ function Router() {
       <Route path="/signup" component={SignupPage} />
       <Route path="/coach">
         <ProtectedRoute role="coach" component={CoachDashboard} />
+      </Route>
+      <Route path="/coach/calendar">
+        <ProtectedRoute role="coach" component={CoachCalendar} />
       </Route>
       <Route path="/coach/exercises">
         <ProtectedRoute role="coach" component={CoachExercises} />
