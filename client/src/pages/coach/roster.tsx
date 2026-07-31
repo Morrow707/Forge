@@ -24,7 +24,7 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { Users, UserPlus, Send, Plus, X } from "lucide-react";
+import { Users, UserPlus, Send, Plus, X, Stethoscope } from "lucide-react";
 
 type RosterEntry = { id: number; name: string; email: string };
 type TeamMember = { athlete: RosterEntry };
@@ -44,7 +44,7 @@ export default function CoachRoster() {
   });
 
   const [assignOpen, setAssignOpen] = useState(false);
-  const [assignAthleteIds, setAssignAthleteIds] = useState<number[]>([]);
+  const [assignAthletes, setAssignAthletes] = useState<Map<number, boolean>>(new Map());
   const [assignProgramId, setAssignProgramId] = useState<string>("");
   const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
 
@@ -88,23 +88,44 @@ export default function CoachRoster() {
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/coach/assignments", {
         programId: Number(assignProgramId),
-        athleteIds: assignAthleteIds,
         startDate,
+        athletes: Array.from(assignAthletes.entries()).map(([athleteId, correctivesEnabled]) => ({
+          athleteId,
+          correctivesEnabled,
+        })),
       });
-      return res.json();
+      return res.json() as Promise<{ created: unknown[]; skippedAthleteIds: number[] }>;
     },
-    onSuccess: () => {
-      toast.success("Program assigned — athlete calendars updated");
+    onSuccess: (result) => {
+      if (result.created.length > 0) {
+        toast.success(
+          `Assigned to ${result.created.length} athlete${result.created.length === 1 ? "" : "s"} — calendars updated`,
+        );
+      }
+      if (result.skippedAthleteIds.length > 0) {
+        const names = result.skippedAthleteIds
+          .map((id) => roster.find((r) => r.id === id)?.name ?? "athlete")
+          .join(", ");
+        toast.info(`Already assigned this program, skipped: ${names}`);
+      }
       setAssignOpen(false);
-      setAssignAthleteIds([]);
+      setAssignAthletes(new Map());
       setAssignProgramId("");
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not assign program"),
   });
 
   function openAssignFor(athleteIds: number[]) {
-    setAssignAthleteIds(athleteIds);
+    setAssignAthletes(new Map(athleteIds.map((id) => [id, true])));
     setAssignOpen(true);
+  }
+
+  function toggleCorrectivesForAll(enabled: boolean) {
+    setAssignAthletes((prev) => {
+      const next = new Map(prev);
+      for (const id of next.keys()) next.set(id, enabled);
+      return next;
+    });
   }
 
   return (
@@ -285,21 +306,69 @@ export default function CoachRoster() {
               </p>
             </div>
             <div className="space-y-1.5">
-              <Label>Athletes</Label>
-              <div className="max-h-40 space-y-1 overflow-y-auto rounded-md border border-border p-2">
-                {roster.map((a) => (
-                  <label key={a.id} className="flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-surface-elevated">
-                    <Checkbox
-                      checked={assignAthleteIds.includes(a.id)}
-                      onCheckedChange={(checked) => {
-                        setAssignAthleteIds((prev) =>
-                          checked ? [...prev, a.id] : prev.filter((id) => id !== a.id),
-                        );
-                      }}
-                    />
-                    {a.name}
-                  </label>
-                ))}
+              <div className="flex items-center justify-between">
+                <Label>Athletes</Label>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Stethoscope className="h-3.5 w-3.5" />
+                  Correctives
+                  <button
+                    type="button"
+                    className="font-semibold text-primary hover:underline"
+                    onClick={() => toggleCorrectivesForAll(true)}
+                  >
+                    all on
+                  </button>
+                  ·
+                  <button
+                    type="button"
+                    className="font-semibold text-primary hover:underline"
+                    onClick={() => toggleCorrectivesForAll(false)}
+                  >
+                    all off
+                  </button>
+                </div>
+              </div>
+              <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border border-border p-2">
+                {roster.map((a) => {
+                  const selected = assignAthletes.has(a.id);
+                  const correctivesEnabled = assignAthletes.get(a.id) ?? true;
+                  return (
+                    <div
+                      key={a.id}
+                      className="flex items-center justify-between gap-2 rounded px-2 py-1.5 text-sm hover:bg-surface-elevated"
+                    >
+                      <label className="flex flex-1 items-center gap-2">
+                        <Checkbox
+                          checked={selected}
+                          onCheckedChange={(checked) => {
+                            setAssignAthletes((prev) => {
+                              const next = new Map(prev);
+                              if (checked) next.set(a.id, true);
+                              else next.delete(a.id);
+                              return next;
+                            });
+                          }}
+                        />
+                        {a.name}
+                      </label>
+                      {selected && (
+                        <label className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+                          <Checkbox
+                            checked={correctivesEnabled}
+                            onCheckedChange={(checked) =>
+                              setAssignAthletes((prev) => {
+                                const next = new Map(prev);
+                                next.set(a.id, checked === true);
+                                return next;
+                              })
+                            }
+                          />
+                          Correctives
+                        </label>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
             <DialogFooter>
@@ -308,12 +377,10 @@ export default function CoachRoster() {
               </Button>
               <Button
                 type="submit"
-                disabled={
-                  assignMutation.isPending || !assignProgramId || assignAthleteIds.length === 0
-                }
+                disabled={assignMutation.isPending || !assignProgramId || assignAthletes.size === 0}
               >
-                Assign to {assignAthleteIds.length} athlete
-                {assignAthleteIds.length === 1 ? "" : "s"}
+                Assign to {assignAthletes.size} athlete
+                {assignAthletes.size === 1 ? "" : "s"}
               </Button>
             </DialogFooter>
           </form>

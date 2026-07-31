@@ -10,14 +10,19 @@ import {
   programDays,
   programExercises,
   assignments,
+  assignmentCorrectives,
   workoutLogs,
   workoutLogEntries,
+  workoutSetEntries,
   type InsertUser,
 } from "@shared/schema";
 import type {
   ProgramStructureInput,
   SubmitWorkoutLogInput,
   UpdateProgramDayInput,
+  UpdateCorrectivesInput,
+  UpdateAssignmentInput,
+  UpdatePreferencesInput,
 } from "@shared/schema";
 import { eq, and, inArray, asc, desc } from "drizzle-orm";
 import { generateCoachCode } from "./auth-utils";
@@ -53,6 +58,15 @@ export const storage = {
     }
     const [user] = await db.insert(users).values(values).returning();
     return user;
+  },
+
+  async updateUserPreferences(userId: number, input: UpdatePreferencesInput) {
+    const [row] = await db
+      .update(users)
+      .set({ preferredWeightUnit: input.preferredWeightUnit })
+      .where(eq(users.id, userId))
+      .returning();
+    return row;
   },
 
   async linkAthleteToCoach(coachId: number, athleteId: number) {
@@ -256,6 +270,7 @@ export const storage = {
               weight: ex.weight ?? null,
               restSeconds: ex.restSeconds ?? null,
               notes: ex.notes ?? null,
+              supersetGroup: ex.supersetGroup ?? null,
             });
           }
         }
@@ -312,6 +327,7 @@ export const storage = {
               weight: ex.weight ?? null,
               restSeconds: ex.restSeconds ?? null,
               notes: ex.notes ?? null,
+              supersetGroup: ex.supersetGroup ?? null,
             });
           }
         }
@@ -367,6 +383,7 @@ export const storage = {
             weight: ex.weight ?? null,
             restSeconds: ex.restSeconds ?? null,
             notes: ex.notes ?? null,
+            supersetGroup: ex.supersetGroup ?? null,
           })),
         );
       }
@@ -377,21 +394,52 @@ export const storage = {
   async createAssignment(
     coachId: number,
     programId: number,
-    athleteIds: number[],
+    athletes: { athleteId: number; correctivesEnabled: boolean }[],
     startDate: string,
   ) {
-    const rows = await db
-      .insert(assignments)
-      .values(
-        athleteIds.map((athleteId) => ({
-          coachId,
-          programId,
-          athleteId,
-          startDate,
-        })),
-      )
+    const existing = await db.query.assignments.findMany({
+      where: and(
+        eq(assignments.coachId, coachId),
+        eq(assignments.programId, programId),
+      ),
+    });
+    const alreadyAssigned = new Set(existing.map((a) => a.athleteId));
+    const toCreate = athletes.filter((a) => !alreadyAssigned.has(a.athleteId));
+    const skippedAthleteIds = athletes
+      .filter((a) => alreadyAssigned.has(a.athleteId))
+      .map((a) => a.athleteId);
+
+    const created = toCreate.length
+      ? await db
+          .insert(assignments)
+          .values(
+            toCreate.map((a) => ({
+              coachId,
+              programId,
+              athleteId: a.athleteId,
+              startDate,
+              correctivesEnabled: a.correctivesEnabled,
+            })),
+          )
+          .returning()
+      : [];
+
+    return { created, skippedAthleteIds };
+  },
+
+  async getAssignmentForCoach(coachId: number, assignmentId: number) {
+    return db.query.assignments.findFirst({
+      where: and(eq(assignments.id, assignmentId), eq(assignments.coachId, coachId)),
+    });
+  },
+
+  async updateAssignment(assignmentId: number, input: UpdateAssignmentInput) {
+    const [row] = await db
+      .update(assignments)
+      .set({ correctivesEnabled: input.correctivesEnabled })
+      .where(eq(assignments.id, assignmentId))
       .returning();
-    return rows;
+    return row;
   },
 
   async getAssignmentsForCoach(coachId: number) {
@@ -409,6 +457,121 @@ export const storage = {
     if (!assignment) return undefined;
     const program = await this.getProgramFull(assignment.programId);
     return { assignment, program };
+  },
+
+  // ---------- Correctives ----------
+  async getCorrectivesForAssignmentDay(assignmentId: number, programDayId: number) {
+    return db.query.assignmentCorrectives.findMany({
+      where: and(
+        eq(assignmentCorrectives.assignmentId, assignmentId),
+        eq(assignmentCorrectives.programDayId, programDayId),
+      ),
+      orderBy: asc(assignmentCorrectives.orderIndex),
+      with: { exercise: true },
+    });
+  },
+
+  async updateCorrectivesForAssignmentDay(
+    assignmentId: number,
+    programDayId: number,
+    input: UpdateCorrectivesInput,
+  ) {
+    return db.transaction(async (tx) => {
+      await tx
+        .delete(assignmentCorrectives)
+        .where(
+          and(
+            eq(assignmentCorrectives.assignmentId, assignmentId),
+            eq(assignmentCorrectives.programDayId, programDayId),
+          ),
+        );
+
+      if (input.correctives.length > 0) {
+        await tx.insert(assignmentCorrectives).values(
+          input.correctives.map((c, i) => ({
+            assignmentId,
+            programDayId,
+            exerciseId: c.exerciseId,
+            orderIndex: c.orderIndex ?? i,
+            sets: c.sets,
+            reps: c.reps,
+            weight: c.weight ?? null,
+            restSeconds: c.restSeconds ?? null,
+            notes: c.notes ?? null,
+          })),
+        );
+      }
+    });
+  },
+
+  async copyCorrectivesToDays(
+    assignmentId: number,
+    sourceProgramDayId: number,
+    targetProgramDayIds: number[],
+  ) {
+    const source = await this.getCorrectivesForAssignmentDay(
+      assignmentId,
+      sourceProgramDayId,
+    );
+    for (const dayId of targetProgramDayIds) {
+      await db.transaction(async (tx) => {
+        await tx
+          .delete(assignmentCorrectives)
+          .where(
+            and(
+              eq(assignmentCorrectives.assignmentId, assignmentId),
+              eq(assignmentCorrectives.programDayId, dayId),
+            ),
+          );
+        if (source.length > 0) {
+          await tx.insert(assignmentCorrectives).values(
+            source.map((c, i) => ({
+              assignmentId,
+              programDayId: dayId,
+              exerciseId: c.exerciseId,
+              orderIndex: i,
+              sets: c.sets,
+              reps: c.reps,
+              weight: c.weight,
+              restSeconds: c.restSeconds,
+              notes: c.notes,
+            })),
+          );
+        }
+      });
+    }
+  },
+
+  async getRecentCorrectivesForAthlete(
+    coachId: number,
+    athleteId: number,
+    limit = 10,
+  ) {
+    const rows = await db
+      .select({
+        exerciseId: assignmentCorrectives.exerciseId,
+        createdAt: assignmentCorrectives.createdAt,
+      })
+      .from(assignmentCorrectives)
+      .innerJoin(assignments, eq(assignmentCorrectives.assignmentId, assignments.id))
+      .where(and(eq(assignments.athleteId, athleteId), eq(assignments.coachId, coachId)))
+      .orderBy(desc(assignmentCorrectives.createdAt));
+
+    const seen = new Set<number>();
+    const distinctIds: number[] = [];
+    for (const r of rows) {
+      if (!seen.has(r.exerciseId)) {
+        seen.add(r.exerciseId);
+        distinctIds.push(r.exerciseId);
+      }
+      if (distinctIds.length >= limit) break;
+    }
+    if (distinctIds.length === 0) return [];
+    const rowsById = await db.query.exercises.findMany({
+      where: inArray(exercises.id, distinctIds),
+    });
+    const byId = new Map(rowsById.map((e) => [e.id, e]));
+    return distinctIds.map((id) => byId.get(id)).filter((e): e is typeof rowsById[number] => !!e);
   },
 
   // ---------- Calendar ----------
@@ -615,18 +778,24 @@ export const storage = {
     });
     if (!day) return undefined;
 
+    const correctives = assignment.correctivesEnabled
+      ? await this.getCorrectivesForAssignmentDay(assignmentId, programDayId)
+      : [];
+
     const log = await db.query.workoutLogs.findFirst({
       where: and(
         eq(workoutLogs.assignmentId, assignmentId),
         eq(workoutLogs.programDayId, programDayId),
         eq(workoutLogs.date, date),
       ),
-      with: { entries: true },
+      with: { entries: { with: { sets: true } } },
     });
 
     return {
       programName: assignment.program.name,
+      correctivesEnabled: assignment.correctivesEnabled,
       day,
+      correctives,
       log: log ?? null,
     };
   },
@@ -650,6 +819,7 @@ export const storage = {
           })
           .where(eq(workoutLogs.id, log.id))
           .returning();
+        // cascades to workout_set_entries for the removed entries
         await tx
           .delete(workoutLogEntries)
           .where(eq(workoutLogEntries.workoutLogId, log.id));
@@ -667,18 +837,29 @@ export const storage = {
           .returning();
       }
 
-      if (input.entries.length > 0) {
-        await tx.insert(workoutLogEntries).values(
-          input.entries.map((e) => ({
+      for (const entry of input.entries) {
+        const [entryRow] = await tx
+          .insert(workoutLogEntries)
+          .values({
             workoutLogId: log!.id,
-            programExerciseId: e.programExerciseId,
-            actualSets: e.actualSets ?? null,
-            actualReps: e.actualReps ?? null,
-            actualWeight: e.actualWeight ?? null,
-            rpe: e.rpe ?? null,
-            notes: e.notes ?? null,
-          })),
-        );
+            programExerciseId: entry.programExerciseId ?? null,
+            correctiveId: entry.correctiveId ?? null,
+            weightMode: entry.weightMode,
+            rpe: entry.rpe ?? null,
+            notes: entry.notes ?? null,
+          })
+          .returning();
+
+        if (entry.sets.length > 0) {
+          await tx.insert(workoutSetEntries).values(
+            entry.sets.map((s) => ({
+              logEntryId: entryRow.id,
+              setNumber: s.setNumber,
+              reps: s.reps ?? null,
+              weight: s.weight ?? null,
+            })),
+          );
+        }
       }
 
       return log;

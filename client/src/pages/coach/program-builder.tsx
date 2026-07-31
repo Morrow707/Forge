@@ -11,6 +11,8 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { ExercisePickerDialog } from "@/components/exercise-picker-dialog";
 import { apiRequest, ApiError } from "@/lib/queryClient";
+import { cn } from "@/lib/utils";
+import { computeExerciseLabels, assignSupersetGroups, deriveLinkedToNext } from "@/lib/supersets";
 import { toast } from "sonner";
 import {
   DndContext,
@@ -35,6 +37,7 @@ import {
   Save,
   ArrowLeft,
   MoonStar,
+  Link2,
 } from "lucide-react";
 import type { Exercise } from "@shared/schema";
 
@@ -47,6 +50,11 @@ type LocalExercise = {
   weight: string;
   restSeconds: string;
   notes: string;
+  // Locally we track "is this linked to the exercise right after it" rather
+  // than a shared group id -- much simpler to toggle and to keep correct
+  // when exercises are added/removed/reordered. Converted to/from the
+  // persisted `supersetGroup` token only at load/save time.
+  linkedToNext: boolean;
 };
 
 type LocalDay = {
@@ -123,16 +131,19 @@ export default function CoachProgramBuilder() {
           dayNumber: d.dayNumber,
           title: d.title,
           isRestDay: d.isRestDay,
-          exercises: d.exercises.map((pe: any) => ({
-            key: uid(),
-            exerciseId: pe.exercise.id,
-            exerciseName: pe.exercise.name,
-            sets: pe.sets,
-            reps: pe.reps,
-            weight: pe.weight ?? "",
-            restSeconds: pe.restSeconds != null ? String(pe.restSeconds) : "",
-            notes: pe.notes ?? "",
-          })),
+          exercises: deriveLinkedToNext(
+            d.exercises.map((pe: any) => ({
+              key: uid(),
+              exerciseId: pe.exercise.id,
+              exerciseName: pe.exercise.name,
+              sets: pe.sets,
+              reps: pe.reps,
+              weight: pe.weight ?? "",
+              restSeconds: pe.restSeconds != null ? String(pe.restSeconds) : "",
+              notes: pe.notes ?? "",
+              supersetGroup: pe.supersetGroup ?? null,
+            })),
+          ),
         })),
       }));
       setWeeks(loadedWeeks);
@@ -195,7 +206,7 @@ export default function CoachProgramBuilder() {
             dayNumber: d.dayNumber,
             title: d.title,
             isRestDay: d.isRestDay,
-            exercises: d.exercises.map((ex, i) => ({
+            exercises: assignSupersetGroups(d.exercises).map((ex, i) => ({
               exerciseId: ex.exerciseId,
               orderIndex: i,
               sets: Number(ex.sets) || 1,
@@ -203,6 +214,7 @@ export default function CoachProgramBuilder() {
               weight: ex.weight || null,
               restSeconds: ex.restSeconds ? Number(ex.restSeconds) : null,
               notes: ex.notes || null,
+              supersetGroup: ex.supersetGroup,
             })),
           })),
         })),
@@ -330,6 +342,7 @@ export default function CoachProgramBuilder() {
                 weight: "",
                 restSeconds: "",
                 notes: "",
+                linkedToNext: false,
               },
             ],
           }));
@@ -349,6 +362,7 @@ function DayCard({
   onAddExercise: () => void;
 }) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+  const exerciseLabels = computeExerciseLabels(day.exercises);
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
@@ -400,26 +414,43 @@ function DayCard({
                 items={day.exercises.map((e) => e.key)}
                 strategy={verticalListSortingStrategy}
               >
-                <div className="space-y-2">
-                  {day.exercises.map((ex) => (
-                    <SortableExerciseRow
-                      key={ex.key}
-                      exercise={ex}
-                      onUpdate={(patch) =>
-                        onChange((d) => ({
-                          ...d,
-                          exercises: d.exercises.map((e) =>
-                            e.key === ex.key ? { ...e, ...patch } : e,
-                          ),
-                        }))
-                      }
-                      onRemove={() =>
-                        onChange((d) => ({
-                          ...d,
-                          exercises: d.exercises.filter((e) => e.key !== ex.key),
-                        }))
-                      }
-                    />
+                <div className="space-y-1">
+                  {day.exercises.map((ex, i) => (
+                    <div key={ex.key}>
+                      <SortableExerciseRow
+                        exercise={ex}
+                        label={exerciseLabels[ex.key]}
+                        onUpdate={(patch) =>
+                          onChange((d) => ({
+                            ...d,
+                            exercises: d.exercises.map((e) =>
+                              e.key === ex.key ? { ...e, ...patch } : e,
+                            ),
+                          }))
+                        }
+                        onRemove={() =>
+                          onChange((d) => ({
+                            ...d,
+                            exercises: d.exercises.filter((e) => e.key !== ex.key),
+                          }))
+                        }
+                      />
+                      {i < day.exercises.length - 1 && (
+                        <SupersetConnector
+                          linked={ex.linkedToNext}
+                          onToggle={() =>
+                            onChange((d) => ({
+                              ...d,
+                              exercises: d.exercises.map((e) =>
+                                e.key === ex.key
+                                  ? { ...e, linkedToNext: !e.linkedToNext }
+                                  : e,
+                              ),
+                            }))
+                          }
+                        />
+                      )}
+                    </div>
                   ))}
                 </div>
               </SortableContext>
@@ -440,12 +471,42 @@ function DayCard({
   );
 }
 
+function SupersetConnector({
+  linked,
+  onToggle,
+}: {
+  linked: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-2 py-0.5 pl-3">
+      <div className={cn("h-3 w-px", linked ? "bg-primary" : "bg-transparent")} />
+      <button
+        type="button"
+        onClick={onToggle}
+        title={linked ? "Unlink superset" : "Link into a superset"}
+        className={cn(
+          "flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold transition-colors",
+          linked
+            ? "border-primary bg-primary/15 text-primary"
+            : "border-border text-muted-foreground hover:border-primary/50 hover:text-primary",
+        )}
+      >
+        <Link2 className="h-3 w-3" />
+        {linked ? "Linked" : "Link"}
+      </button>
+    </div>
+  );
+}
+
 function SortableExerciseRow({
   exercise,
+  label,
   onUpdate,
   onRemove,
 }: {
   exercise: LocalExercise;
+  label: string;
   onUpdate: (patch: Partial<LocalExercise>) => void;
   onRemove: () => void;
 }) {
@@ -473,6 +534,9 @@ function SortableExerciseRow({
         >
           <GripVertical className="h-4 w-4" />
         </button>
+        <Badge variant="outline" className="shrink-0 px-1.5 font-mono text-[10px]">
+          {label}
+        </Badge>
         <span className="flex-1 truncate text-sm font-semibold">
           {exercise.exerciseName}
         </span>

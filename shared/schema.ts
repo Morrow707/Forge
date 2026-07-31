@@ -14,6 +14,13 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
 export const roleEnum = pgEnum("role", ["coach", "athlete"]);
+export const weightUnitEnum = pgEnum("weight_unit", ["lbs", "kg"]);
+export const weightModeEnum = pgEnum("weight_mode", [
+  "numeric",
+  "bodyweight",
+  "band",
+]);
+export const lateralityEnum = pgEnum("laterality", ["bilateral", "unilateral"]);
 
 export const users = pgTable(
   "users",
@@ -24,6 +31,9 @@ export const users = pgTable(
     name: text("name").notNull(),
     role: roleEnum("role").notNull(),
     coachCode: text("coach_code"),
+    preferredWeightUnit: weightUnitEnum("preferred_weight_unit")
+      .notNull()
+      .default("lbs"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({
@@ -98,6 +108,9 @@ export const exercises = pgTable("exercises", {
   category: exerciseCategoryEnum("category").notNull().default("strength"),
   muscleGroup: text("muscle_group").notNull().default("Full Body"),
   equipment: text("equipment").notNull().default("Barbell"),
+  movementType: text("movement_type"),
+  laterality: lateralityEnum("laterality"),
+  isCorrective: boolean("is_corrective").notNull().default(false),
   videoUrl: text("video_url"),
   instructions: text("instructions"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -146,6 +159,10 @@ export const programExercises = pgTable("program_exercises", {
   weight: text("weight"),
   restSeconds: integer("rest_seconds"),
   notes: text("notes"),
+  // Exercises sharing the same (non-null) supersetGroup value, and adjacent
+  // in orderIndex, are chained together and rendered as one lettered slot
+  // (A1, A2...) instead of separate letters. Opaque token, not a display value.
+  supersetGroup: text("superset_group"),
 });
 
 export const assignments = pgTable("assignments", {
@@ -160,6 +177,31 @@ export const assignments = pgTable("assignments", {
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
   startDate: date("start_date").notNull(),
+  correctivesEnabled: boolean("correctives_enabled").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Per-athlete, per-day corrective exercises. Kept separate from
+// program_exercises (the shared template) because correctives are a manual
+// judgment call for one specific athlete's instance of the program, not
+// something that should apply to everyone assigned to it.
+export const assignmentCorrectives = pgTable("assignment_correctives", {
+  id: serial("id").primaryKey(),
+  assignmentId: integer("assignment_id")
+    .notNull()
+    .references(() => assignments.id, { onDelete: "cascade" }),
+  programDayId: integer("program_day_id")
+    .notNull()
+    .references(() => programDays.id, { onDelete: "cascade" }),
+  exerciseId: integer("exercise_id")
+    .notNull()
+    .references(() => exercises.id, { onDelete: "cascade" }),
+  orderIndex: integer("order_index").notNull().default(0),
+  sets: integer("sets").notNull().default(3),
+  reps: text("reps").notNull().default("10"),
+  weight: text("weight"),
+  restSeconds: integer("rest_seconds"),
+  notes: text("notes"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -189,19 +231,35 @@ export const workoutLogs = pgTable(
   }),
 );
 
+// One row per logged exercise (either a program exercise or a corrective --
+// exactly one of the two FKs is set). Actual per-set performance lives in
+// workoutSetEntries below, sized to however many sets were prescribed.
 export const workoutLogEntries = pgTable("workout_log_entries", {
   id: serial("id").primaryKey(),
   workoutLogId: integer("workout_log_id")
     .notNull()
     .references(() => workoutLogs.id, { onDelete: "cascade" }),
-  programExerciseId: integer("program_exercise_id")
-    .notNull()
-    .references(() => programExercises.id, { onDelete: "cascade" }),
-  actualSets: integer("actual_sets"),
-  actualReps: text("actual_reps"),
-  actualWeight: text("actual_weight"),
+  programExerciseId: integer("program_exercise_id").references(
+    () => programExercises.id,
+    { onDelete: "cascade" },
+  ),
+  correctiveId: integer("corrective_id").references(
+    () => assignmentCorrectives.id,
+    { onDelete: "cascade" },
+  ),
+  weightMode: weightModeEnum("weight_mode").notNull().default("numeric"),
   rpe: integer("rpe"),
   notes: text("notes"),
+});
+
+export const workoutSetEntries = pgTable("workout_set_entries", {
+  id: serial("id").primaryKey(),
+  logEntryId: integer("log_entry_id")
+    .notNull()
+    .references(() => workoutLogEntries.id, { onDelete: "cascade" }),
+  setNumber: integer("set_number").notNull(),
+  reps: text("reps"),
+  weight: text("weight"),
 });
 
 // ---------- Relations ----------
@@ -269,6 +327,7 @@ export const programDaysRelations = relations(
       references: [programWeeks.id],
     }),
     exercises: many(programExercises),
+    correctives: many(assignmentCorrectives),
   }),
 );
 
@@ -300,7 +359,26 @@ export const assignmentsRelations = relations(assignments, ({ one, many }) => ({
     references: [users.id],
   }),
   logs: many(workoutLogs),
+  correctives: many(assignmentCorrectives),
 }));
+
+export const assignmentCorrectivesRelations = relations(
+  assignmentCorrectives,
+  ({ one }) => ({
+    assignment: one(assignments, {
+      fields: [assignmentCorrectives.assignmentId],
+      references: [assignments.id],
+    }),
+    day: one(programDays, {
+      fields: [assignmentCorrectives.programDayId],
+      references: [programDays.id],
+    }),
+    exercise: one(exercises, {
+      fields: [assignmentCorrectives.exerciseId],
+      references: [exercises.id],
+    }),
+  }),
+);
 
 export const workoutLogsRelations = relations(
   workoutLogs,
@@ -323,7 +401,7 @@ export const workoutLogsRelations = relations(
 
 export const workoutLogEntriesRelations = relations(
   workoutLogEntries,
-  ({ one }) => ({
+  ({ one, many }) => ({
     log: one(workoutLogs, {
       fields: [workoutLogEntries.workoutLogId],
       references: [workoutLogs.id],
@@ -331,6 +409,21 @@ export const workoutLogEntriesRelations = relations(
     programExercise: one(programExercises, {
       fields: [workoutLogEntries.programExerciseId],
       references: [programExercises.id],
+    }),
+    corrective: one(assignmentCorrectives, {
+      fields: [workoutLogEntries.correctiveId],
+      references: [assignmentCorrectives.id],
+    }),
+    sets: many(workoutSetEntries),
+  }),
+);
+
+export const workoutSetEntriesRelations = relations(
+  workoutSetEntries,
+  ({ one }) => ({
+    logEntry: one(workoutLogEntries, {
+      fields: [workoutSetEntries.logEntryId],
+      references: [workoutLogEntries.id],
     }),
   }),
 );
@@ -356,14 +449,24 @@ export const loginSchema = z.object({
   password: z.string().min(1),
 });
 
-export const insertExerciseSchema = createInsertSchema(exercises).pick({
-  name: true,
-  category: true,
-  muscleGroup: true,
-  equipment: true,
-  videoUrl: true,
-  instructions: true,
+export const updatePreferencesSchema = z.object({
+  preferredWeightUnit: z.enum(["lbs", "kg"]),
 });
+
+export const insertExerciseSchema = createInsertSchema(exercises)
+  .pick({
+    name: true,
+    category: true,
+    muscleGroup: true,
+    equipment: true,
+    videoUrl: true,
+    instructions: true,
+  })
+  .extend({
+    movementType: z.string().optional().nullable(),
+    laterality: z.enum(["bilateral", "unilateral"]).optional().nullable(),
+    isCorrective: z.boolean().default(false),
+  });
 
 export const insertProgramSchema = createInsertSchema(programs).pick({
   name: true,
@@ -379,6 +482,7 @@ export const programExerciseInputSchema = z.object({
   weight: z.string().optional().nullable(),
   restSeconds: z.number().optional().nullable(),
   notes: z.string().optional().nullable(),
+  supersetGroup: z.string().optional().nullable(),
 });
 
 export const programDayInputSchema = z.object({
@@ -404,8 +508,19 @@ export const programStructureSchema = z.object({
 
 export const insertAssignmentSchema = z.object({
   programId: z.number(),
-  athleteIds: z.array(z.number()).min(1),
   startDate: z.string(),
+  athletes: z
+    .array(
+      z.object({
+        athleteId: z.number(),
+        correctivesEnabled: z.boolean().default(true),
+      }),
+    )
+    .min(1),
+});
+
+export const updateAssignmentSchema = z.object({
+  correctivesEnabled: z.boolean(),
 });
 
 export const updateProgramDaySchema = z.object({
@@ -414,14 +529,39 @@ export const updateProgramDaySchema = z.object({
   exercises: z.array(programExerciseInputSchema).default([]),
 });
 
-export const logEntryInputSchema = z.object({
-  programExerciseId: z.number(),
-  actualSets: z.number().optional().nullable(),
-  actualReps: z.string().optional().nullable(),
-  actualWeight: z.string().optional().nullable(),
-  rpe: z.number().optional().nullable(),
+export const correctiveInputSchema = z.object({
+  exerciseId: z.number(),
+  orderIndex: z.number().default(0),
+  sets: z.number().min(1).default(3),
+  reps: z.string().default("10"),
+  weight: z.string().optional().nullable(),
+  restSeconds: z.number().optional().nullable(),
   notes: z.string().optional().nullable(),
 });
+
+export const updateCorrectivesSchema = z.object({
+  correctives: z.array(correctiveInputSchema).default([]),
+});
+
+export const setLogInputSchema = z.object({
+  setNumber: z.number(),
+  reps: z.string().optional().nullable(),
+  weight: z.string().optional().nullable(),
+});
+
+export const logEntryInputSchema = z
+  .object({
+    programExerciseId: z.number().optional(),
+    correctiveId: z.number().optional(),
+    weightMode: z.enum(["numeric", "bodyweight", "band"]).default("numeric"),
+    rpe: z.number().optional().nullable(),
+    notes: z.string().optional().nullable(),
+    sets: z.array(setLogInputSchema).default([]),
+  })
+  .refine(
+    (data) => (data.programExerciseId != null) !== (data.correctiveId != null),
+    { message: "Exactly one of programExerciseId or correctiveId must be set" },
+  );
 
 export const submitWorkoutLogSchema = z.object({
   assignmentId: z.number(),
@@ -441,15 +581,20 @@ export type ProgramWeek = typeof programWeeks.$inferSelect;
 export type ProgramDay = typeof programDays.$inferSelect;
 export type ProgramExercise = typeof programExercises.$inferSelect;
 export type Assignment = typeof assignments.$inferSelect;
+export type AssignmentCorrective = typeof assignmentCorrectives.$inferSelect;
 export type WorkoutLog = typeof workoutLogs.$inferSelect;
 export type WorkoutLogEntry = typeof workoutLogEntries.$inferSelect;
+export type WorkoutSetEntry = typeof workoutSetEntries.$inferSelect;
 export type Team = typeof teams.$inferSelect;
 
 export type SignupInput = z.infer<typeof signupSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type ProgramStructureInput = z.infer<typeof programStructureSchema>;
 export type InsertAssignmentInput = z.infer<typeof insertAssignmentSchema>;
+export type UpdateAssignmentInput = z.infer<typeof updateAssignmentSchema>;
 export type UpdateProgramDayInput = z.infer<typeof updateProgramDaySchema>;
+export type UpdateCorrectivesInput = z.infer<typeof updateCorrectivesSchema>;
 export type SubmitWorkoutLogInput = z.infer<typeof submitWorkoutLogSchema>;
+export type UpdatePreferencesInput = z.infer<typeof updatePreferencesSchema>;
 
 export type PublicUser = Omit<User, "passwordHash">;

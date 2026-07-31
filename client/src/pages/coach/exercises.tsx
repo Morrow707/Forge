@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
@@ -23,7 +24,7 @@ import {
 } from "@/components/ui/select";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, Dumbbell, Search, Video } from "lucide-react";
+import { Plus, Pencil, Trash2, Dumbbell, Search, Video, Stethoscope } from "lucide-react";
 import type { Exercise } from "@shared/schema";
 
 const CATEGORIES = [
@@ -34,6 +35,18 @@ const CATEGORIES = [
   "mobility",
   "plyometric",
 ] as const;
+
+export const MOVEMENT_TYPES = [
+  "Squat",
+  "Hinge",
+  "Push",
+  "Pull",
+  "Rotation",
+  "Carry",
+  "Mobility",
+  "Activation",
+  "Isometric",
+];
 
 const categoryColors: Record<string, string> = {
   strength: "bg-primary/15 text-primary",
@@ -50,6 +63,9 @@ type ExerciseForm = {
   category: string;
   muscleGroup: string;
   equipment: string;
+  movementType: string;
+  laterality: string;
+  isCorrective: boolean;
   videoUrl: string;
   instructions: string;
 };
@@ -59,6 +75,9 @@ const emptyForm: ExerciseForm = {
   category: "strength",
   muscleGroup: "",
   equipment: "",
+  movementType: "",
+  laterality: "",
+  isCorrective: false,
   videoUrl: "",
   instructions: "",
 };
@@ -71,8 +90,16 @@ export default function CoachExercises() {
 
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [movementFilter, setMovementFilter] = useState<string>("all");
+  const [lateralityFilter, setLateralityFilter] = useState<string>("all");
+  const [correctivesOnly, setCorrectivesOnly] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState<ExerciseForm>(emptyForm);
+
+  const bodyParts = useMemo(
+    () => Array.from(new Set(exercises.map((e) => e.muscleGroup))).sort(),
+    [exercises],
+  );
 
   const filtered = useMemo(() => {
     return exercises.filter((ex) => {
@@ -81,9 +108,20 @@ export default function CoachExercises() {
         ex.name.toLowerCase().includes(search.toLowerCase()) ||
         ex.muscleGroup.toLowerCase().includes(search.toLowerCase());
       const matchesCategory = categoryFilter === "all" || ex.category === categoryFilter;
-      return matchesSearch && matchesCategory;
+      const matchesMovement =
+        movementFilter === "all" || ex.movementType === movementFilter;
+      const matchesLaterality =
+        lateralityFilter === "all" || ex.laterality === lateralityFilter;
+      const matchesCorrective = !correctivesOnly || ex.isCorrective;
+      return (
+        matchesSearch &&
+        matchesCategory &&
+        matchesMovement &&
+        matchesLaterality &&
+        matchesCorrective
+      );
     });
-  }, [exercises, search, categoryFilter]);
+  }, [exercises, search, categoryFilter, movementFilter, lateralityFilter, correctivesOnly]);
 
   const saveMutation = useMutation({
     mutationFn: async (data: ExerciseForm) => {
@@ -92,6 +130,9 @@ export default function CoachExercises() {
         category: data.category,
         muscleGroup: data.muscleGroup || "Full Body",
         equipment: data.equipment || "Bodyweight",
+        movementType: data.movementType || null,
+        laterality: data.laterality || null,
+        isCorrective: data.isCorrective,
         videoUrl: data.videoUrl || null,
         instructions: data.instructions || null,
       };
@@ -134,6 +175,9 @@ export default function CoachExercises() {
       category: ex.category,
       muscleGroup: ex.muscleGroup,
       equipment: ex.equipment,
+      movementType: ex.movementType ?? "",
+      laterality: ex.laterality ?? "",
+      isCorrective: ex.isCorrective,
       videoUrl: ex.videoUrl ?? "",
       instructions: ex.instructions ?? "",
     });
@@ -150,29 +194,61 @@ export default function CoachExercises() {
         </Button>
       }
     >
-      <div className="mb-5 flex flex-col gap-3 sm:flex-row">
-        <div className="relative flex-1">
+      <div className="mb-5 space-y-3">
+        <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search exercises or muscle group…"
+            placeholder="Search exercises or body part…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
           />
         </div>
-        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-          <SelectTrigger className="sm:w-56">
-            <SelectValue placeholder="All categories" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All categories</SelectItem>
-            {CATEGORIES.map((c) => (
-              <SelectItem key={c} value={c} className="capitalize">
-                {c}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex flex-wrap items-center gap-3">
+          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+            <SelectTrigger className="w-44">
+              <SelectValue placeholder="All categories" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All categories</SelectItem>
+              {CATEGORIES.map((c) => (
+                <SelectItem key={c} value={c} className="capitalize">
+                  {c}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={movementFilter} onValueChange={setMovementFilter}>
+            <SelectTrigger className="w-44">
+              <SelectValue placeholder="All movement types" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All movement types</SelectItem>
+              {MOVEMENT_TYPES.map((m) => (
+                <SelectItem key={m} value={m}>
+                  {m}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={lateralityFilter} onValueChange={setLateralityFilter}>
+            <SelectTrigger className="w-40">
+              <SelectValue placeholder="Bilateral/Unilateral" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Bilateral/Unilateral</SelectItem>
+              <SelectItem value="bilateral">Bilateral</SelectItem>
+              <SelectItem value="unilateral">Unilateral</SelectItem>
+            </SelectContent>
+          </Select>
+          <label className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm">
+            <Checkbox
+              checked={correctivesOnly}
+              onCheckedChange={(c) => setCorrectivesOnly(c === true)}
+            />
+            Correctives only
+          </label>
+        </div>
       </div>
 
       {!isLoading && filtered.length === 0 && (
@@ -201,11 +277,23 @@ export default function CoachExercises() {
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <p className="font-semibold leading-tight">{ex.name}</p>
-                  <p className="text-xs text-muted-foreground">{ex.muscleGroup}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {ex.muscleGroup}
+                    {ex.movementType ? ` · ${ex.movementType}` : ""}
+                    {ex.laterality ? ` · ${ex.laterality}` : ""}
+                  </p>
                 </div>
-                <Badge className={categoryColors[ex.category]} variant="default">
-                  {ex.category}
-                </Badge>
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  <Badge className={categoryColors[ex.category]} variant="default">
+                    {ex.category}
+                  </Badge>
+                  {ex.isCorrective && (
+                    <Badge variant="secondary" className="gap-1">
+                      <Stethoscope className="h-3 w-3" />
+                      Corrective
+                    </Badge>
+                  )}
+                </div>
               </div>
               {ex.instructions && (
                 <p className="line-clamp-2 text-xs text-muted-foreground">
@@ -281,13 +369,54 @@ export default function CoachExercises() {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="ex-muscle">Muscle group</Label>
+                <Label htmlFor="ex-muscle">Body part</Label>
                 <Input
                   id="ex-muscle"
+                  list="body-parts"
                   value={form.muscleGroup}
                   onChange={(e) => setForm((f) => ({ ...f, muscleGroup: e.target.value }))}
-                  placeholder="e.g. Legs"
+                  placeholder="e.g. Legs, Ankle, T-Spine"
                 />
+                <datalist id="body-parts">
+                  {bodyParts.map((b) => (
+                    <option key={b} value={b} />
+                  ))}
+                </datalist>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="ex-movement">Movement type</Label>
+                <Input
+                  id="ex-movement"
+                  list="movement-types"
+                  value={form.movementType}
+                  onChange={(e) => setForm((f) => ({ ...f, movementType: e.target.value }))}
+                  placeholder="e.g. Hinge"
+                />
+                <datalist id="movement-types">
+                  {MOVEMENT_TYPES.map((m) => (
+                    <option key={m} value={m} />
+                  ))}
+                </datalist>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Laterality</Label>
+                <Select
+                  value={form.laterality || "none"}
+                  onValueChange={(v) =>
+                    setForm((f) => ({ ...f, laterality: v === "none" ? "" : v }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="N/A" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">N/A</SelectItem>
+                    <SelectItem value="bilateral">Bilateral</SelectItem>
+                    <SelectItem value="unilateral">Unilateral</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <div className="space-y-1.5">
@@ -299,6 +428,15 @@ export default function CoachExercises() {
                 placeholder="e.g. Barbell"
               />
             </div>
+            <label className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm">
+              <Checkbox
+                checked={form.isCorrective}
+                onCheckedChange={(c) =>
+                  setForm((f) => ({ ...f, isCorrective: c === true }))
+                }
+              />
+              Available as a corrective
+            </label>
             <div className="space-y-1.5">
               <Label htmlFor="ex-video">Video URL (optional)</Label>
               <Input
