@@ -408,6 +408,12 @@ export const insertAssignmentSchema = z.object({
   startDate: z.string(),
 });
 
+export const updateProgramDaySchema = z.object({
+  title: z.string().min(1),
+  isRestDay: z.boolean(),
+  exercises: z.array(programExerciseInputSchema).default([]),
+});
+
 export const logEntryInputSchema = z.object({
   programExerciseId: z.number(),
   actualSets: z.number().optional().nullable(),
@@ -443,6 +449,7 @@ export type SignupInput = z.infer<typeof signupSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type ProgramStructureInput = z.infer<typeof programStructureSchema>;
 export type InsertAssignmentInput = z.infer<typeof insertAssignmentSchema>;
+export type UpdateProgramDayInput = z.infer<typeof updateProgramDaySchema>;
 export type SubmitWorkoutLogInput = z.infer<typeof submitWorkoutLogSchema>;
 
 export type PublicUser = Omit<User, "passwordHash">;

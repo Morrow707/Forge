@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 
 const coachNav = [
   { href: "/coach", label: "Dashboard", icon: Flame, exact: true },
+  { href: "/coach/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/coach/programs", label: "Programs", icon: ListChecks },
   { href: "/coach/exercises", label: "Exercise Bank", icon: Dumbbell },
   { href: "/coach/roster", label: "Roster & Teams", icon: Users },

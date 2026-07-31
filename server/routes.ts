@@ -7,6 +7,7 @@ import {
   programStructureSchema,
   insertAssignmentSchema,
   submitWorkoutLogSchema,
+  updateProgramDaySchema,
 } from "@shared/schema";
 import { z } from "zod";
 
@@ -201,6 +202,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
       parsed.data.startDate,
     );
     res.status(201).json(created);
+  });
+
+  // ---------------- Coach: Calendar ----------------
+
+  app.get("/api/coach/calendar", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const schema = z.object({
+      start: z.string(),
+      end: z.string(),
+      athleteId: z.coerce.number().optional(),
+    });
+    const parsed = schema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "start and end query params required" });
+    }
+    const entries = await storage.getCalendarForCoach(
+      user.id,
+      parsed.data.start,
+      parsed.data.end,
+      parsed.data.athleteId,
+    );
+    res.json(entries);
+  });
+
+  app.get("/api/coach/program-days/:id", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const day = await storage.getProgramDayForCoach(user.id, id);
+    if (!day) return res.status(404).json({ message: "Day not found" });
+    res.json(day);
+  });
+
+  app.put("/api/coach/program-days/:id", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const existing = await storage.getProgramDayForCoach(user.id, id);
+    if (!existing) return res.status(404).json({ message: "Day not found" });
+    const parsed = updateProgramDaySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    await storage.updateProgramDay(id, parsed.data);
+    const updated = await storage.getProgramDayForCoach(user.id, id);
+    res.json(updated);
   });
 
   // ---------------- Athlete ----------------

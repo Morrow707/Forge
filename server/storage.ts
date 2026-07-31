@@ -17,6 +17,7 @@ import {
 import type {
   ProgramStructureInput,
   SubmitWorkoutLogInput,
+  UpdateProgramDayInput,
 } from "@shared/schema";
 import { eq, and, inArray, asc, desc } from "drizzle-orm";
 import { generateCoachCode } from "./auth-utils";
@@ -322,6 +323,56 @@ export const storage = {
     await db.delete(programs).where(eq(programs.id, id));
   },
 
+  async getProgramDayForCoach(coachId: number, dayId: number) {
+    const day = await db.query.programDays.findFirst({
+      where: eq(programDays.id, dayId),
+      with: {
+        exercises: {
+          orderBy: asc(programExercises.orderIndex),
+          with: { exercise: true },
+        },
+        week: { with: { program: true } },
+      },
+    });
+    if (!day || day.week.program.coachId !== coachId) return undefined;
+    return {
+      id: day.id,
+      title: day.title,
+      isRestDay: day.isRestDay,
+      dayNumber: day.dayNumber,
+      programId: day.week.program.id,
+      programName: day.week.program.name,
+      weekNumber: day.week.weekNumber,
+      exercises: day.exercises,
+    };
+  },
+
+  async updateProgramDay(dayId: number, input: UpdateProgramDayInput) {
+    return db.transaction(async (tx) => {
+      await tx
+        .update(programDays)
+        .set({ title: input.title, isRestDay: input.isRestDay })
+        .where(eq(programDays.id, dayId));
+
+      await tx.delete(programExercises).where(eq(programExercises.dayId, dayId));
+
+      if (input.exercises.length > 0) {
+        await tx.insert(programExercises).values(
+          input.exercises.map((ex, i) => ({
+            dayId,
+            exerciseId: ex.exerciseId,
+            orderIndex: ex.orderIndex ?? i,
+            sets: ex.sets,
+            reps: ex.reps,
+            weight: ex.weight ?? null,
+            restSeconds: ex.restSeconds ?? null,
+            notes: ex.notes ?? null,
+          })),
+        );
+      }
+    });
+  },
+
   // ---------- Assignments ----------
   async createAssignment(
     coachId: number,
@@ -429,6 +480,97 @@ export const storage = {
             workoutLogs.assignmentId,
             Array.from(new Set(entries.map((e) => e.assignmentId))),
           ),
+        ),
+      });
+      const completedKeys = new Set(
+        logs
+          .filter((l) => l.completed)
+          .map((l) => `${l.assignmentId}:${l.programDayId}:${l.date}`),
+      );
+      for (const e of entries) {
+        if (completedKeys.has(`${e.assignmentId}:${e.programDayId}:${e.date}`)) {
+          e.completed = true;
+        }
+      }
+    }
+
+    entries.sort((a, b) => a.date.localeCompare(b.date));
+    return entries;
+  },
+
+  async getCalendarForCoach(
+    coachId: number,
+    rangeStart: string,
+    rangeEnd: string,
+    athleteId?: number,
+  ) {
+    const coachAssignments = await db.query.assignments.findMany({
+      where: athleteId
+        ? and(eq(assignments.coachId, coachId), eq(assignments.athleteId, athleteId))
+        : eq(assignments.coachId, coachId),
+      with: {
+        athlete: true,
+        program: {
+          with: {
+            weeks: {
+              with: {
+                days: { with: { exercises: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const start = parseISO(rangeStart);
+    const end = parseISO(rangeEnd);
+
+    type CoachCalendarEntry = {
+      date: string;
+      assignmentId: number;
+      programDayId: number;
+      programId: number;
+      programName: string;
+      athleteId: number;
+      athleteName: string;
+      title: string;
+      isRestDay: boolean;
+      exerciseCount: number;
+      completed: boolean;
+    };
+
+    const entries: CoachCalendarEntry[] = [];
+
+    for (const a of coachAssignments) {
+      const assignmentStart = parseISO(a.startDate);
+      for (const week of a.program.weeks) {
+        for (const day of week.days) {
+          const offset = (week.weekNumber - 1) * 7 + (day.dayNumber - 1);
+          const date = addDays(assignmentStart, offset);
+          if (isWithinInterval(date, { start, end })) {
+            entries.push({
+              date: formatISO(date, { representation: "date" }),
+              assignmentId: a.id,
+              programDayId: day.id,
+              programId: a.program.id,
+              programName: a.program.name,
+              athleteId: a.athlete.id,
+              athleteName: a.athlete.name,
+              title: day.title,
+              isRestDay: day.isRestDay,
+              exerciseCount: day.exercises.length,
+              completed: false,
+            });
+          }
+        }
+      }
+    }
+
+    if (entries.length > 0) {
+      const logs = await db.query.workoutLogs.findMany({
+        where: inArray(
+          workoutLogs.assignmentId,
+          Array.from(new Set(entries.map((e) => e.assignmentId))),
         ),
       });
       const completedKeys = new Set(
