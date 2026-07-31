@@ -3,7 +3,7 @@ services:
     name: forge
     env: node
     plan: free
-    buildCommand: npm install && npm run build && npm run db:push && npm run db:seed
+    buildCommand: npm install --include=dev && npm run build && npm run db:push && npm run db:seed
     startCommand: npm start
     healthCheckPath: /
     envVars:
