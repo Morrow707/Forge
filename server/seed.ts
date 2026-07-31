@@ -90,6 +90,26 @@ async function main() {
         equipment: "Foam Roller",
         instructions: "Slow rolls, pause on tender spots for 20-30s.",
       },
+      {
+        name: "Ankle Dorsiflexion Mobilization",
+        category: "mobility" as const,
+        muscleGroup: "Ankle",
+        equipment: "Bodyweight",
+        movementType: "Mobility",
+        laterality: "unilateral" as const,
+        isCorrective: true,
+        instructions: "Knee-to-wall drive, keep heel down, 10 slow reps each side.",
+      },
+      {
+        name: "Band Pull-Apart",
+        category: "accessory" as const,
+        muscleGroup: "Shoulder",
+        equipment: "Band",
+        movementType: "Activation",
+        laterality: "bilateral" as const,
+        isCorrective: true,
+        instructions: "Arms straight, squeeze shoulder blades together for 2s each rep.",
+      },
     ];
     for (const ex of seedExercises) {
       const row = await storage.createExercise(coach.id, ex);
@@ -143,10 +163,11 @@ async function main() {
                 {
                   exerciseId: exerciseMap["Bench Press"],
                   orderIndex: 0,
-                  sets: 5,
-                  reps: "5",
+                  sets: 4,
+                  reps: "8",
                   weight: "70% 1RM",
-                  restSeconds: 150,
+                  restSeconds: 90,
+                  supersetGroup: "week1-day2-super",
                 },
                 {
                   exerciseId: exerciseMap["Pull-Up"],
@@ -155,6 +176,7 @@ async function main() {
                   reps: "8-10",
                   weight: "Bodyweight",
                   restSeconds: 90,
+                  supersetGroup: "week1-day2-super",
                 },
               ],
             },
@@ -274,7 +296,46 @@ async function main() {
 
     const startDate = new Date().toISOString().slice(0, 10);
 
-    await storage.createAssignment(coach.id, program.id, [athlete.id], startDate);
+    const { created } = await storage.createAssignment(
+      coach.id,
+      program.id,
+      [{ athleteId: athlete.id, correctivesEnabled: true }],
+      startDate,
+    );
+
+    // Demonstrate day-specific correctives: leg-day correctives on the lower
+    // body day, upper-body correctives on the push/pull day -- different
+    // content per day, same athlete, matching how a coach would actually use it.
+    const assignment = created[0];
+    const fullProgram = await storage.getProgramFull(program.id);
+    const week1 = fullProgram?.weeks.find((w) => w.weekNumber === 1);
+    const lowerBodyDay = week1?.days.find((d) => d.dayNumber === 1);
+    const upperBodyDay = week1?.days.find((d) => d.dayNumber === 2);
+
+    if (assignment && lowerBodyDay) {
+      await storage.updateCorrectivesForAssignmentDay(assignment.id, lowerBodyDay.id, {
+        correctives: [
+          {
+            exerciseId: exerciseMap["Ankle Dorsiflexion Mobilization"],
+            orderIndex: 0,
+            sets: 2,
+            reps: "10 each side",
+          },
+        ],
+      });
+    }
+    if (assignment && upperBodyDay) {
+      await storage.updateCorrectivesForAssignmentDay(assignment.id, upperBodyDay.id, {
+        correctives: [
+          {
+            exerciseId: exerciseMap["Band Pull-Apart"],
+            orderIndex: 0,
+            sets: 3,
+            reps: "15",
+          },
+        ],
+      });
+    }
   }
 
   console.log("Seed complete.");

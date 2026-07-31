@@ -6,8 +6,11 @@ import {
   insertExerciseSchema,
   programStructureSchema,
   insertAssignmentSchema,
+  updateAssignmentSchema,
   submitWorkoutLogSchema,
   updateProgramDaySchema,
+  updateCorrectivesSchema,
+  updatePreferencesSchema,
 } from "@shared/schema";
 import { z } from "zod";
 
@@ -190,18 +193,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     const roster = await storage.getRosterForCoach(user.id);
     const rosterIds = new Set(roster.map((a) => a.id));
-    const invalidAthlete = parsed.data.athleteIds.find((id) => !rosterIds.has(id));
+    const invalidAthlete = parsed.data.athletes.find((a) => !rosterIds.has(a.athleteId));
     if (invalidAthlete) {
       return res.status(400).json({ message: "Athlete not on your roster" });
     }
 
-    const created = await storage.createAssignment(
+    const result = await storage.createAssignment(
       user.id,
       parsed.data.programId,
-      parsed.data.athleteIds,
+      parsed.data.athletes,
       parsed.data.startDate,
     );
-    res.status(201).json(created);
+    res.status(201).json(result);
+  });
+
+  app.patch("/api/coach/assignments/:id", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const owned = await storage.getAssignmentForCoach(user.id, id);
+    if (!owned) return res.status(404).json({ message: "Assignment not found" });
+    const parsed = updateAssignmentSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const updated = await storage.updateAssignment(id, parsed.data);
+    res.json(updated);
   });
 
   // ---------------- Coach: Calendar ----------------
@@ -248,12 +264,98 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(updated);
   });
 
+  // ---------------- Coach: Correctives ----------------
+
+  app.get(
+    "/api/coach/assignments/:assignmentId/days/:programDayId/correctives",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const assignmentId = Number(req.params.assignmentId);
+      const programDayId = Number(req.params.programDayId);
+      const owned = await storage.getAssignmentForCoach(user.id, assignmentId);
+      if (!owned) return res.status(404).json({ message: "Assignment not found" });
+      const correctives = await storage.getCorrectivesForAssignmentDay(
+        assignmentId,
+        programDayId,
+      );
+      res.json({ correctivesEnabled: owned.correctivesEnabled, correctives });
+    },
+  );
+
+  app.put(
+    "/api/coach/assignments/:assignmentId/days/:programDayId/correctives",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const assignmentId = Number(req.params.assignmentId);
+      const programDayId = Number(req.params.programDayId);
+      const owned = await storage.getAssignmentForCoach(user.id, assignmentId);
+      if (!owned) return res.status(404).json({ message: "Assignment not found" });
+      const parsed = updateCorrectivesSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      await storage.updateCorrectivesForAssignmentDay(assignmentId, programDayId, parsed.data);
+      const correctives = await storage.getCorrectivesForAssignmentDay(
+        assignmentId,
+        programDayId,
+      );
+      res.json({ correctives });
+    },
+  );
+
+  app.post(
+    "/api/coach/assignments/:assignmentId/days/:programDayId/correctives/copy",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const assignmentId = Number(req.params.assignmentId);
+      const programDayId = Number(req.params.programDayId);
+      const owned = await storage.getAssignmentForCoach(user.id, assignmentId);
+      if (!owned) return res.status(404).json({ message: "Assignment not found" });
+      const schema = z.object({ targetProgramDayIds: z.array(z.number()).min(1) });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      await storage.copyCorrectivesToDays(
+        assignmentId,
+        programDayId,
+        parsed.data.targetProgramDayIds,
+      );
+      res.status(204).end();
+    },
+  );
+
+  app.get(
+    "/api/coach/athletes/:athleteId/recent-correctives",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      const recent = await storage.getRecentCorrectivesForAthlete(user.id, athleteId);
+      res.json(recent);
+    },
+  );
+
   // ---------------- Athlete ----------------
 
   app.get("/api/athlete/coaches", requireRole("athlete"), async (req, res) => {
     const user = currentUser(req);
     const coaches = await storage.getCoachesForAthlete(user.id);
     res.json(coaches);
+  });
+
+  app.patch("/api/athlete/preferences", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = updatePreferencesSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const updated = await storage.updateUserPreferences(user.id, parsed.data);
+    const { passwordHash, ...publicUser } = updated;
+    res.json(publicUser);
   });
 
   app.get("/api/athlete/calendar", requireRole("athlete"), async (req, res) => {

@@ -23,7 +23,12 @@ export default function CoachCalendar() {
 
   const [athleteId, setAthleteId] = useState<string>("all");
   const [range, setRange] = useState<{ start: string; end: string }>({ start: "", end: "" });
-  const [editingDayId, setEditingDayId] = useState<number | null>(null);
+  const [editing, setEditing] = useState<{
+    programDayId: number;
+    assignmentId: number;
+    athleteId: number;
+    athleteName: string;
+  } | null>(null);
 
   const { data: entries = [], isLoading } = useQuery<CalendarEntry[]>({
     queryKey: ["/api/coach/calendar", range.start, range.end, athleteId],
@@ -60,7 +65,14 @@ export default function CoachCalendar() {
       <CalendarView
         entries={entries}
         onRangeChange={(start, end) => setRange({ start, end })}
-        onEntryClick={(e) => setEditingDayId(e.programDayId)}
+        onEntryClick={(e) =>
+          setEditing({
+            programDayId: e.programDayId,
+            assignmentId: e.assignmentId,
+            athleteId: e.athleteId!,
+            athleteName: e.athleteName!,
+          })
+        }
       />
 
       {!isLoading && entries.length === 0 && (
@@ -75,9 +87,12 @@ export default function CoachCalendar() {
       )}
 
       <CoachDayEditDialog
-        programDayId={editingDayId}
-        open={editingDayId !== null}
-        onOpenChange={(open) => !open && setEditingDayId(null)}
+        programDayId={editing?.programDayId ?? null}
+        assignmentId={editing?.assignmentId ?? null}
+        athleteId={editing?.athleteId ?? null}
+        athleteName={editing?.athleteName}
+        open={editing !== null}
+        onOpenChange={(open) => !open && setEditing(null)}
       />
     </AppShell>
   );
