@@ -248,6 +248,23 @@ export function CoachDayEditDialog({
     onError: (err: ApiError) => toast.error(err.message || "Could not delete workout"),
   });
 
+  const enableCorrectivesMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("PATCH", `/api/coach/assignments/${assignmentId}`, {
+        correctivesEnabled: true,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({
+        queryKey: ["/api/coach/assignments", assignmentId, "days", programDayId, "correctives"],
+      });
+      invalidateCalendars();
+      toast.success(`Correctives turned on for ${athleteName ?? "this athlete"}`);
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Could not enable correctives"),
+  });
+
   const saveCorrectivesMutation = useMutation({
     mutationFn: async (list: LocalCorrective[]) => {
       const res = await apiRequest(
@@ -424,6 +441,28 @@ export function CoachDayEditDialog({
                   >
                     <Plus className="h-3.5 w-3.5" />
                     Add Exercise
+                  </Button>
+                </div>
+              )}
+
+              {assignmentId != null && correctivesData && !correctivesData.correctivesEnabled && (
+                <div className="space-y-2 rounded-md border border-cyan-900/40 bg-cyan-950/10 p-3">
+                  <div className="flex items-center gap-1.5">
+                    <Stethoscope className="h-4 w-4 text-cyan-400" />
+                    <p className="text-sm font-semibold">
+                      Correctives are off for {athleteName ?? "this athlete"}
+                    </p>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Turn them on to add corrective exercises for this athlete on this day.
+                  </p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={enableCorrectivesMutation.isPending}
+                    onClick={() => enableCorrectivesMutation.mutate()}
+                  >
+                    {enableCorrectivesMutation.isPending ? "Enabling…" : "Turn on Correctives"}
                   </Button>
                 </div>
               )}
