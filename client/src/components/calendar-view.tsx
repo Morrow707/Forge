@@ -52,7 +52,7 @@ function rangeFor(mode: CalendarViewMode, cursor: Date) {
   return { start: cursor, end: cursor };
 }
 
-function EntryPill({
+export function EntryPill({
   entry,
   onClick,
   compact = true,
