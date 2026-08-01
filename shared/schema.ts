@@ -8,10 +8,33 @@ import {
   date,
   pgEnum,
   uniqueIndex,
+  varchar,
+  json,
+  index,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+
+// Owned and populated by connect-pg-simple at runtime, not by our own code --
+// declared here purely so drizzle-kit's live-diff sees it as an already-
+// accounted-for table. Without this, `drizzle-kit push` treats it as an
+// unclaimed table and guesses it might be a "rename" source whenever a new
+// table is added to the schema, which can silently abort the rest of that
+// push (see: assignment_correctives/session rename-ambiguity prompt on a
+// non-interactive build, which aborted before the users.preferred_weight_unit
+// column got added).
+export const session = pgTable(
+  "session",
+  {
+    sid: varchar("sid").primaryKey().notNull(),
+    sess: json("sess").notNull(),
+    expire: timestamp("expire", { precision: 6 }).notNull(),
+  },
+  (table) => ({
+    expireIdx: index("IDX_session_expire").on(table.expire),
+  }),
+);
 
 export const roleEnum = pgEnum("role", ["coach", "athlete"]);
 export const weightUnitEnum = pgEnum("weight_unit", ["lbs", "kg"]);
