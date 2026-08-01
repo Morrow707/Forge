@@ -213,14 +213,12 @@ export default function CoachExercises() {
             options={[...CATEGORIES]}
             selected={categoryFilter}
             onToggle={(v) => toggleInSet(setCategoryFilter, v)}
-            cols={2}
           />
           <FilterChipGroup
             label="Movement"
             options={MOVEMENT_TYPES}
             selected={movementFilter}
             onToggle={(v) => toggleInSet(setMovementFilter, v)}
-            cols={3}
           />
           <div className="space-y-2">
             <FilterChipGroup
@@ -228,7 +226,6 @@ export default function CoachExercises() {
               options={["bilateral", "unilateral"]}
               selected={lateralityFilter}
               onToggle={(v) => toggleInSet(setLateralityFilter, v)}
-              cols={2}
             />
             <button
               type="button"
@@ -250,7 +247,6 @@ export default function CoachExercises() {
             options={bodyParts}
             selected={muscleGroupFilter}
             onToggle={(v) => toggleInSet(setMuscleGroupFilter, v)}
-            cols={4}
             className="sm:col-span-3"
           />
         </div>
