@@ -11,13 +11,20 @@ import { Badge } from "@/components/ui/badge";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { computeExerciseLabels, deriveLinkedToNext, groupConsecutiveBySupersetGroup } from "@/lib/supersets";
+import { ExerciseVideo } from "@/components/exercise-video";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import { ArrowLeft, CheckCircle2, MoonStar, Stethoscope, Link2 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import type { PublicUser } from "@shared/schema";
 
-type ExerciseInfo = { id: number; name: string; muscleGroup: string; instructions: string | null };
+type ExerciseInfo = {
+  id: number;
+  name: string;
+  muscleGroup: string;
+  instructions: string | null;
+  videoUrl: string | null;
+};
 
 type PrescribedExercise = {
   id: number;
@@ -66,6 +73,7 @@ type ItemState = {
   exerciseName: string;
   muscleGroup: string;
   instructions: string | null;
+  videoUrl: string | null;
   prescribedSets: number;
   prescribedReps: string;
   prescribedWeight: string | null;
@@ -99,6 +107,7 @@ function buildItem(
     exerciseName: prescribed.exercise.name,
     muscleGroup: prescribed.exercise.muscleGroup,
     instructions: prescribed.exercise.instructions,
+    videoUrl: prescribed.exercise.videoUrl,
     prescribedSets: prescribed.sets,
     prescribedReps: prescribed.reps,
     prescribedWeight: prescribed.weight,
@@ -381,6 +390,7 @@ function ExerciseLogContent({
 }) {
   return (
     <div className="space-y-3">
+      <ExerciseVideo url={item.videoUrl} name={item.exerciseName} />
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2">
           {badge}
