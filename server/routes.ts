@@ -328,6 +328,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
+  app.post(
+    "/api/coach/assignments/:assignmentId/correctives/apply-all",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const assignmentId = Number(req.params.assignmentId);
+      const owned = await storage.getAssignmentForCoach(user.id, assignmentId);
+      if (!owned) return res.status(404).json({ message: "Assignment not found" });
+      const parsed = updateCorrectivesSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      await storage.applyCorrectivesToAllDays(assignmentId, parsed.data.correctives);
+      res.status(204).end();
+    },
+  );
+
   app.get(
     "/api/coach/athletes/:athleteId/recent-correctives",
     requireRole("coach"),

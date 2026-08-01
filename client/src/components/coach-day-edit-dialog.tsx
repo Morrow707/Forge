@@ -347,9 +347,9 @@ export function CoachDayEditDialog({
                       <div key={ex.key}>
                         <div className="rounded-md border border-border bg-surface-elevated p-2.5">
                           <div className="mb-2 flex items-center gap-2">
-                            <Badge variant="outline" className="shrink-0 px-1.5 font-mono text-[10px]">
+                            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-extrabold text-primary-foreground">
                               {labels[ex.key]}
-                            </Badge>
+                            </span>
                             <span className="flex-1 truncate text-sm font-semibold">
                               {ex.exerciseName}
                             </span>
@@ -399,7 +399,7 @@ export function CoachDayEditDialog({
                             <div
                               className={cn(
                                 "h-3 w-px",
-                                ex.linkedToNext ? "bg-primary" : "bg-transparent",
+                                ex.linkedToNext ? "bg-blue-500" : "bg-transparent",
                               )}
                             />
                             <button
@@ -415,10 +415,10 @@ export function CoachDayEditDialog({
                               }
                               title={ex.linkedToNext ? "Unlink superset" : "Link into a superset"}
                               className={cn(
-                                "flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold transition-colors",
+                                "flex items-center gap-1 rounded-full border-2 px-2.5 py-1 text-[11px] font-bold transition-colors",
                                 ex.linkedToNext
-                                  ? "border-primary bg-primary/15 text-primary"
-                                  : "border-border text-muted-foreground hover:border-primary/50 hover:text-primary",
+                                  ? "border-blue-500 bg-blue-500 text-white"
+                                  : "border-blue-500 text-blue-500 hover:bg-blue-500/10",
                               )}
                             >
                               <Link2 className="h-3 w-3" />

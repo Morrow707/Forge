@@ -28,6 +28,29 @@ import { eq, and, inArray, asc, desc, lt } from "drizzle-orm";
 import { generateCoachCode } from "./auth-utils";
 import { addDays, parseISO, formatISO, isWithinInterval } from "date-fns";
 
+// A coach can run multiple assignments/programs for the same athlete at
+// once, and each contributes its own rest-day entry to the calendar. If two
+// or more land on the same date, that's just visual noise -- keep the first
+// one and drop the rest so the day shows a single "Rest Day" instead of a
+// stack of them. Real (non-rest) entries are left untouched even if they
+// overlap, since that's a genuine scheduling conflict worth seeing.
+function dedupeRestDays<T extends { isRestDay: boolean }>(
+  entries: T[],
+  keyFor: (entry: T) => string,
+): T[] {
+  const seen = new Set<string>();
+  const result: T[] = [];
+  for (const entry of entries) {
+    if (entry.isRestDay) {
+      const key = keyFor(entry);
+      if (seen.has(key)) continue;
+      seen.add(key);
+    }
+    result.push(entry);
+  }
+  return result;
+}
+
 export const storage = {
   // ---------- Users ----------
   async getUser(id: number) {
@@ -504,6 +527,27 @@ export const storage = {
     });
   },
 
+  // Quick-start default for a freshly created assignment: apply the same
+  // corrective list to every non-rest day at once, so a coach can set
+  // correctives during the assign flow instead of visiting each day on the
+  // calendar individually. Fine-tuning specific days afterward still works
+  // the same as before via updateCorrectivesForAssignmentDay.
+  async applyCorrectivesToAllDays(
+    assignmentId: number,
+    correctives: UpdateCorrectivesInput["correctives"],
+  ) {
+    const assignment = await db.query.assignments.findFirst({
+      where: eq(assignments.id, assignmentId),
+    });
+    if (!assignment) return;
+    const program = await this.getProgramFull(assignment.programId);
+    if (!program) return;
+    const nonRestDays = program.weeks.flatMap((w) => w.days.filter((d) => !d.isRestDay));
+    for (const day of nonRestDays) {
+      await this.updateCorrectivesForAssignmentDay(assignmentId, day.id, { correctives });
+    }
+  },
+
   async copyCorrectivesToDays(
     assignmentId: number,
     sourceProgramDayId: number,
@@ -657,8 +701,9 @@ export const storage = {
       }
     }
 
-    entries.sort((a, b) => a.date.localeCompare(b.date));
-    return entries;
+    const deduped = dedupeRestDays(entries, (e) => e.date);
+    deduped.sort((a, b) => a.date.localeCompare(b.date));
+    return deduped;
   },
 
   async getCalendarForCoach(
@@ -748,8 +793,9 @@ export const storage = {
       }
     }
 
-    entries.sort((a, b) => a.date.localeCompare(b.date));
-    return entries;
+    const deduped = dedupeRestDays(entries, (e) => `${e.athleteId}:${e.date}`);
+    deduped.sort((a, b) => a.date.localeCompare(b.date));
+    return deduped;
   },
 
   // Most recent prior time this athlete logged this specific exercise

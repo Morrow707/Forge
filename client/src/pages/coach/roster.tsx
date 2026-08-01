@@ -1,12 +1,10 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -22,10 +20,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { AssignProgramDialog } from "@/components/assign-program-dialog";
 import { apiRequest, ApiError } from "@/lib/queryClient";
-import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { Users, UserPlus, Send, Plus, X, Stethoscope } from "lucide-react";
+import { Users, UserPlus, Send, Plus, X } from "lucide-react";
 
 type RosterEntry = { id: number; name: string; email: string };
 type TeamMember = { athlete: RosterEntry };
@@ -45,9 +43,7 @@ export default function CoachRoster() {
   });
 
   const [assignOpen, setAssignOpen] = useState(false);
-  const [assignAthletes, setAssignAthletes] = useState<Map<number, boolean>>(new Map());
-  const [assignProgramId, setAssignProgramId] = useState<string>("");
-  const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [assignAthleteIds, setAssignAthleteIds] = useState<number[]>([]);
 
   const [teamDialogOpen, setTeamDialogOpen] = useState(false);
   const [newTeamName, setNewTeamName] = useState("");
@@ -85,48 +81,9 @@ export default function CoachRoster() {
     },
   });
 
-  const assignMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/coach/assignments", {
-        programId: Number(assignProgramId),
-        startDate,
-        athletes: Array.from(assignAthletes.entries()).map(([athleteId, correctivesEnabled]) => ({
-          athleteId,
-          correctivesEnabled,
-        })),
-      });
-      return res.json() as Promise<{ created: unknown[]; skippedAthleteIds: number[] }>;
-    },
-    onSuccess: (result) => {
-      if (result.created.length > 0) {
-        toast.success(
-          `Assigned to ${result.created.length} athlete${result.created.length === 1 ? "" : "s"} — calendars updated`,
-        );
-      }
-      if (result.skippedAthleteIds.length > 0) {
-        const names = result.skippedAthleteIds
-          .map((id) => roster.find((r) => r.id === id)?.name ?? "athlete")
-          .join(", ");
-        toast.info(`Already assigned this program, skipped: ${names}`);
-      }
-      setAssignOpen(false);
-      setAssignAthletes(new Map());
-      setAssignProgramId("");
-    },
-    onError: (err: ApiError) => toast.error(err.message || "Could not assign program"),
-  });
-
   function openAssignFor(athleteIds: number[]) {
-    setAssignAthletes(new Map(athleteIds.map((id) => [id, true])));
+    setAssignAthleteIds(athleteIds);
     setAssignOpen(true);
-  }
-
-  function toggleCorrectivesForAll(enabled: boolean) {
-    setAssignAthletes((prev) => {
-      const next = new Map(prev);
-      for (const id of next.keys()) next.set(id, enabled);
-      return next;
-    });
   }
 
   return (
@@ -267,130 +224,13 @@ export default function CoachRoster() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={assignOpen} onOpenChange={setAssignOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Assign Program</DialogTitle>
-          </DialogHeader>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              assignMutation.mutate();
-            }}
-            className="space-y-4"
-          >
-            <div className="space-y-1.5">
-              <Label>Program</Label>
-              <Select value={assignProgramId} onValueChange={setAssignProgramId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a program" />
-                </SelectTrigger>
-                <SelectContent>
-                  {programs.map((p) => (
-                    <SelectItem key={p.id} value={String(p.id)}>
-                      {p.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Start date</Label>
-              <Input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                required
-              />
-              <p className="text-xs text-muted-foreground">
-                Day 1 of Week 1 lands on this date on the athlete's calendar.
-              </p>
-            </div>
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <Label>Athletes</Label>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <Stethoscope className="h-3.5 w-3.5" />
-                  Correctives
-                  <button
-                    type="button"
-                    className="font-semibold text-primary hover:underline"
-                    onClick={() => toggleCorrectivesForAll(true)}
-                  >
-                    all on
-                  </button>
-                  ·
-                  <button
-                    type="button"
-                    className="font-semibold text-primary hover:underline"
-                    onClick={() => toggleCorrectivesForAll(false)}
-                  >
-                    all off
-                  </button>
-                </div>
-              </div>
-              <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border border-border p-2">
-                {roster.map((a) => {
-                  const selected = assignAthletes.has(a.id);
-                  const correctivesEnabled = assignAthletes.get(a.id) ?? true;
-                  return (
-                    <div
-                      key={a.id}
-                      className="flex items-center justify-between gap-2 rounded px-2 py-1.5 text-sm hover:bg-surface-elevated"
-                    >
-                      <label className="flex flex-1 items-center gap-2">
-                        <Checkbox
-                          checked={selected}
-                          onCheckedChange={(checked) => {
-                            setAssignAthletes((prev) => {
-                              const next = new Map(prev);
-                              if (checked) next.set(a.id, true);
-                              else next.delete(a.id);
-                              return next;
-                            });
-                          }}
-                        />
-                        {a.name}
-                      </label>
-                      <label
-                        className={cn(
-                          "flex shrink-0 items-center gap-1.5 text-xs",
-                          selected ? "text-muted-foreground" : "text-muted-foreground/40",
-                        )}
-                      >
-                        <Checkbox
-                          checked={correctivesEnabled}
-                          disabled={!selected}
-                          onCheckedChange={(checked) =>
-                            setAssignAthletes((prev) => {
-                              const next = new Map(prev);
-                              next.set(a.id, checked === true);
-                              return next;
-                            })
-                          }
-                        />
-                        Correctives
-                      </label>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setAssignOpen(false)}>
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                disabled={assignMutation.isPending || !assignProgramId || assignAthletes.size === 0}
-              >
-                Assign to {assignAthletes.size} athlete
-                {assignAthletes.size === 1 ? "" : "s"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <AssignProgramDialog
+        open={assignOpen}
+        onOpenChange={setAssignOpen}
+        roster={roster}
+        programs={programs}
+        initialAthleteIds={assignAthleteIds}
+      />
     </AppShell>
   );
 }
