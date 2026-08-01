@@ -88,7 +88,7 @@ export function AssignProgramDialog({
           correctivesEnabled,
         })),
       });
-      return res.json() as Promise<{ created: CreatedAssignment[]; skippedAthleteIds: number[] }>;
+      return res.json() as Promise<{ created: CreatedAssignment[] }>;
     },
     onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ["/api/coach/calendar"] });
@@ -98,12 +98,6 @@ export function AssignProgramDialog({
         toast.success(
           `Assigned to ${result.created.length} athlete${result.created.length === 1 ? "" : "s"} — calendars updated`,
         );
-      }
-      if (result.skippedAthleteIds.length > 0) {
-        const names = result.skippedAthleteIds
-          .map((id) => roster.find((r) => r.id === id)?.name ?? "athlete")
-          .join(", ");
-        toast.info(`Already assigned this program, skipped: ${names}`);
       }
 
       const needsCorrectives = result.created
