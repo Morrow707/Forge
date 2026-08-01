@@ -4,17 +4,24 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { computeExerciseLabels, deriveLinkedToNext, groupConsecutiveBySupersetGroup } from "@/lib/supersets";
-import { ExerciseVideo } from "@/components/exercise-video";
+import { ExerciseVideoThumb } from "@/components/exercise-video";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
-import { ArrowLeft, CheckCircle2, MoonStar, Stethoscope, Link2 } from "lucide-react";
+import {
+  ArrowLeft,
+  CheckCircle2,
+  MoonStar,
+  Stethoscope,
+  Link2,
+  Plus,
+  Minus,
+  Check,
+} from "lucide-react";
 import { format, parseISO } from "date-fns";
 import type { PublicUser } from "@shared/schema";
 
@@ -26,6 +33,14 @@ type ExerciseInfo = {
   videoUrl: string | null;
 };
 
+type LastPerformance = {
+  date: string;
+  sets: number;
+  reps: string | null;
+  weight: string | null;
+  weightMode: "numeric" | "bodyweight" | "band";
+} | null;
+
 type PrescribedExercise = {
   id: number;
   sets: number;
@@ -35,6 +50,7 @@ type PrescribedExercise = {
   notes: string | null;
   supersetGroup: string | null;
   exercise: ExerciseInfo;
+  lastPerformance: LastPerformance;
 };
 
 type PrescribedCorrective = {
@@ -45,6 +61,7 @@ type PrescribedCorrective = {
   restSeconds: number | null;
   notes: string | null;
   exercise: ExerciseInfo;
+  lastPerformance: LastPerformance;
 };
 
 type LogEntry = {
@@ -80,6 +97,7 @@ type ItemState = {
   restSeconds: number | null;
   coachNotes: string | null;
   supersetGroup: string | null;
+  lastPerformance: LastPerformance;
   weightMode: "numeric" | "bodyweight" | "band";
   athleteNotes: string;
   rpe: string;
@@ -114,11 +132,45 @@ function buildItem(
     restSeconds: prescribed.restSeconds,
     coachNotes: prescribed.notes,
     supersetGroup: kind === "exercise" ? (prescribed as PrescribedExercise).supersetGroup : null,
+    lastPerformance: prescribed.lastPerformance,
     weightMode: existing?.weightMode ?? "numeric",
     athleteNotes: existing?.notes ?? "",
     rpe: existing?.rpe != null ? String(existing.rpe) : "",
     sets,
   };
+}
+
+function isSetComplete(item: ItemState, set: SetRow) {
+  if (item.weightMode === "bodyweight") return set.reps.trim() !== "";
+  return set.reps.trim() !== "" && set.weight.trim() !== "";
+}
+
+function formatLastPerformance(lp: NonNullable<LastPerformance>) {
+  let s = `${lp.sets} × ${lp.reps ?? "-"}`;
+  if (lp.weight) s += ` @ ${lp.weight}`;
+  return s;
+}
+
+function computeStats(items: ItemState[]) {
+  let totalReps = 0;
+  let totalVolume = 0;
+  let totalSets = 0;
+  let completeSets = 0;
+  for (const item of items) {
+    for (const set of item.sets) {
+      totalSets++;
+      if (isSetComplete(item, set)) completeSets++;
+      const repsNum = parseInt(set.reps, 10);
+      if (!Number.isNaN(repsNum)) {
+        totalReps += repsNum;
+        if (item.weightMode === "numeric") {
+          const weightNum = parseFloat(set.weight);
+          if (!Number.isNaN(weightNum)) totalVolume += repsNum * weightNum;
+        }
+      }
+    }
+  }
+  return { totalReps, totalVolume, totalSets, completeSets };
 }
 
 export default function AthleteWorkout() {
@@ -227,6 +279,25 @@ export default function AthleteWorkout() {
     );
   }
 
+  function addSet(key: string) {
+    setItems((prev) =>
+      prev.map((it) => {
+        if (it.key !== key) return it;
+        const nextNumber = it.sets.length > 0 ? it.sets[it.sets.length - 1].setNumber + 1 : 1;
+        return {
+          ...it,
+          sets: [...it.sets, { setNumber: nextNumber, reps: it.prescribedReps, weight: "" }],
+        };
+      }),
+    );
+  }
+
+  function removeSet(key: string) {
+    setItems((prev) =>
+      prev.map((it) => (it.key === key && it.sets.length > 1 ? { ...it, sets: it.sets.slice(0, -1) } : it)),
+    );
+  }
+
   if (isLoading || !data) {
     return (
       <AppShell title="Loading Workout…">
@@ -240,6 +311,7 @@ export default function AthleteWorkout() {
   const exerciseBlocks = groupConsecutiveBySupersetGroup(exerciseItems);
   const labels = computeExerciseLabels(deriveLinkedToNext(exerciseItems));
   const unit = user?.preferredWeightUnit ?? "lbs";
+  const stats = computeStats(items);
 
   return (
     <AppShell
@@ -293,6 +365,37 @@ export default function AthleteWorkout() {
         </Card>
       ) : (
         <div className="space-y-4">
+          {stats.totalSets > 0 && (
+            <div className="rounded-lg border border-border bg-surface p-4">
+              <div className="mb-3 flex items-baseline gap-8">
+                <div>
+                  <p className="font-display text-3xl font-extrabold leading-none">
+                    {stats.totalReps}
+                  </p>
+                  <p className="mt-1 text-[10px] font-semibold uppercase text-muted-foreground">
+                    Reps
+                  </p>
+                </div>
+                <div>
+                  <p className="font-display text-3xl font-extrabold leading-none">
+                    {stats.totalVolume.toLocaleString()}
+                  </p>
+                  <p className="mt-1 text-[10px] font-semibold uppercase text-muted-foreground">
+                    {unit}
+                  </p>
+                </div>
+              </div>
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary">
+                <div
+                  className="h-full bg-success transition-all"
+                  style={{
+                    width: `${stats.totalSets ? (stats.completeSets / stats.totalSets) * 100 : 0}%`,
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
           {correctiveItems.length > 0 && (
             <div className="space-y-3">
               <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-cyan-400">
@@ -304,15 +407,12 @@ export default function AthleteWorkout() {
                   <CardContent className="p-4">
                     <ExerciseLogContent
                       item={item}
-                      badge={
-                        <Badge variant="secondary" className="gap-1">
-                          <Stethoscope className="h-3 w-3" />
-                          Corrective
-                        </Badge>
-                      }
+                      linked={false}
                       unit={unit}
                       onUpdateItem={(patch) => updateItem(item.key, patch)}
                       onUpdateSet={(setNumber, patch) => updateSet(item.key, setNumber, patch)}
+                      onAddSet={() => addSet(item.key)}
+                      onRemoveSet={() => removeSet(item.key)}
                     />
                   </CardContent>
                 </Card>
@@ -321,29 +421,19 @@ export default function AthleteWorkout() {
           )}
 
           {exerciseBlocks.map((block) => (
-            <Card
-              key={block[0].key}
-              className={block.length > 1 ? "border-primary/40" : undefined}
-            >
+            <Card key={block[0].key} className={block.length > 1 ? "border-primary/40" : undefined}>
               <CardContent className="divide-y divide-border p-4">
-                {block.length > 1 && (
-                  <div className="mb-3 flex items-center gap-1.5 pb-0 text-xs font-semibold uppercase tracking-wide text-primary">
-                    <Link2 className="h-3.5 w-3.5" />
-                    Superset
-                  </div>
-                )}
                 {block.map((item, i) => (
                   <div key={item.key} className={i > 0 ? "pt-4" : ""}>
                     <ExerciseLogContent
                       item={item}
-                      badge={
-                        <Badge variant="outline" className="font-mono">
-                          {labels[item.key]}
-                        </Badge>
-                      }
+                      linked={block.length > 1}
+                      badgeLabel={labels[item.key]}
                       unit={unit}
                       onUpdateItem={(patch) => updateItem(item.key, patch)}
                       onUpdateSet={(setNumber, patch) => updateSet(item.key, setNumber, patch)}
+                      onAddSet={() => addSet(item.key)}
+                      onRemoveSet={() => removeSet(item.key)}
                     />
                   </div>
                 ))}
@@ -377,35 +467,57 @@ export default function AthleteWorkout() {
 
 function ExerciseLogContent({
   item,
-  badge,
+  linked,
+  badgeLabel,
   unit,
   onUpdateItem,
   onUpdateSet,
+  onAddSet,
+  onRemoveSet,
 }: {
   item: ItemState;
-  badge: React.ReactNode;
+  linked: boolean;
+  badgeLabel?: string;
   unit: "lbs" | "kg";
   onUpdateItem: (patch: Partial<ItemState>) => void;
   onUpdateSet: (setNumber: number, patch: Partial<SetRow>) => void;
+  onAddSet: () => void;
+  onRemoveSet: () => void;
 }) {
+  const isCorrective = item.key.startsWith("corrective-");
+
   return (
     <div className="space-y-3">
-      <ExerciseVideo url={item.videoUrl} name={item.exerciseName} />
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2">
-          {badge}
-          <div>
-            <p className="font-semibold">{item.exerciseName}</p>
-            <p className="text-xs text-muted-foreground">
-              Prescribed: {item.prescribedSets} × {item.prescribedReps}
-              {item.prescribedWeight ? ` @ ${item.prescribedWeight}` : ""}
-              {item.restSeconds ? ` · Rest ${item.restSeconds}s` : ""}
-            </p>
+      <div className="flex gap-3">
+        <ExerciseVideoThumb url={item.videoUrl} name={item.exerciseName} />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-1.5">
+              {isCorrective ? (
+                <Stethoscope className="h-3.5 w-3.5 shrink-0 text-cyan-400" />
+              ) : badgeLabel ? (
+                <Badge variant="outline" className="shrink-0 font-mono text-[10px]">
+                  {badgeLabel}
+                </Badge>
+              ) : null}
+              <p className="truncate font-semibold">{item.exerciseName}</p>
+              {linked && <Link2 className="h-3.5 w-3.5 shrink-0 text-primary" />}
+            </div>
+            <Badge variant="outline" className="shrink-0">
+              {item.muscleGroup}
+            </Badge>
           </div>
+          <p className="text-xs text-muted-foreground">
+            Prescribed: {item.prescribedSets} × {item.prescribedReps}
+            {item.prescribedWeight ? ` @ ${item.prescribedWeight}` : ""}
+            {item.restSeconds ? ` · Rest ${item.restSeconds}s` : ""}
+          </p>
+          {item.lastPerformance && (
+            <p className="text-xs font-semibold text-muted-foreground">
+              <span className="text-primary">LAST</span> {formatLastPerformance(item.lastPerformance)}
+            </p>
+          )}
         </div>
-        <Badge variant="outline" className="shrink-0">
-          {item.muscleGroup}
-        </Badge>
       </div>
 
       {item.coachNotes && (
@@ -436,64 +548,100 @@ function ExerciseLogContent({
         ))}
       </div>
 
-      <div className="space-y-1.5">
-        {item.sets.map((set) => (
-          <div key={set.setNumber} className="grid grid-cols-[3rem_1fr_1fr] items-center gap-2">
-            <span className="text-xs font-semibold text-muted-foreground">Set {set.setNumber}</span>
-            <Input
-              placeholder="Reps"
-              value={set.reps}
-              onChange={(e) => onUpdateSet(set.setNumber, { reps: e.target.value })}
-              className="h-9 text-sm"
-            />
-            {item.weightMode === "bodyweight" ? (
-              <div className="flex h-9 items-center justify-center rounded-md border border-dashed border-border text-xs text-muted-foreground">
-                Bodyweight
-              </div>
-            ) : item.weightMode === "band" ? (
-              <Input
-                placeholder="e.g. Green band"
-                value={set.weight}
-                onChange={(e) => onUpdateSet(set.setNumber, { weight: e.target.value })}
-                className="h-9 text-sm"
-              />
-            ) : (
-              <div className="relative">
+      <div>
+        <div className="grid grid-cols-[2.25rem_1fr_1fr_2rem] items-center gap-2 px-0.5 pb-1">
+          <span className="text-[10px] font-semibold uppercase text-muted-foreground">Set</span>
+          <span className="text-[10px] font-semibold uppercase text-muted-foreground">Reps</span>
+          <span className="text-[10px] font-semibold uppercase text-muted-foreground">
+            {item.weightMode === "numeric" ? unit : item.weightMode === "band" ? "Band" : ""}
+          </span>
+          <span />
+        </div>
+        <div className="space-y-1.5">
+          {item.sets.map((set) => {
+            const complete = isSetComplete(item, set);
+            return (
+              <div
+                key={set.setNumber}
+                className="grid grid-cols-[2.25rem_1fr_1fr_2rem] items-center gap-2"
+              >
+                <span className="text-sm font-semibold text-muted-foreground">{set.setNumber}</span>
                 <Input
-                  type="number"
-                  inputMode="decimal"
-                  placeholder="0"
-                  value={set.weight}
-                  onChange={(e) => onUpdateSet(set.setNumber, { weight: e.target.value })}
-                  className="h-9 pr-10 text-sm"
+                  placeholder="Reps"
+                  value={set.reps}
+                  onChange={(e) => onUpdateSet(set.setNumber, { reps: e.target.value })}
+                  className="h-9 text-sm"
                 />
-                <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] uppercase text-muted-foreground">
-                  {unit}
-                </span>
+                {item.weightMode === "bodyweight" ? (
+                  <div className="flex h-9 items-center justify-center rounded-md border border-dashed border-border text-xs text-muted-foreground">
+                    Bodyweight
+                  </div>
+                ) : item.weightMode === "band" ? (
+                  <Input
+                    placeholder="e.g. Green"
+                    value={set.weight}
+                    onChange={(e) => onUpdateSet(set.setNumber, { weight: e.target.value })}
+                    className="h-9 text-sm"
+                  />
+                ) : (
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    placeholder="0"
+                    value={set.weight}
+                    onChange={(e) => onUpdateSet(set.setNumber, { weight: e.target.value })}
+                    className="h-9 text-sm"
+                  />
+                )}
+                <div
+                  className={cn(
+                    "flex h-7 w-7 items-center justify-center rounded-full",
+                    complete ? "bg-success text-success-foreground" : "bg-secondary text-muted-foreground/30",
+                  )}
+                >
+                  <Check className="h-4 w-4" />
+                </div>
               </div>
-            )}
-          </div>
-        ))}
+            );
+          })}
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">RPE</Label>
-          <Input
-            type="number"
-            value={item.rpe}
-            onChange={(e) => onUpdateItem({ rpe: e.target.value })}
-          />
-        </div>
-        <div className="col-span-1 space-y-1 sm:col-span-3">
-          <Label className="text-xs text-muted-foreground">Notes</Label>
-          <Textarea
-            rows={1}
-            value={item.athleteNotes}
-            onChange={(e) => onUpdateItem({ athleteNotes: e.target.value })}
-            placeholder="How did it feel?"
-          />
-        </div>
+      <div className="flex items-center justify-center gap-4 pt-1">
+        <button
+          type="button"
+          onClick={onRemoveSet}
+          disabled={item.sets.length <= 1}
+          aria-label="Remove set"
+          className="flex h-8 w-8 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:border-destructive/50 hover:text-destructive disabled:pointer-events-none disabled:opacity-30"
+        >
+          <Minus className="h-4 w-4" />
+        </button>
+        <span className="text-xs font-semibold text-muted-foreground">Set</span>
+        <button
+          type="button"
+          onClick={onAddSet}
+          aria-label="Add set"
+          className="flex h-8 w-8 items-center justify-center rounded-full border border-primary text-primary transition-colors hover:bg-primary/10"
+        >
+          <Plus className="h-4 w-4" />
+        </button>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <Input
+          value={item.rpe}
+          type="number"
+          onChange={(e) => onUpdateItem({ rpe: e.target.value })}
+          placeholder="RPE"
+          className="w-20 shrink-0 text-center"
+        />
+        <Input
+          value={item.athleteNotes}
+          onChange={(e) => onUpdateItem({ athleteNotes: e.target.value })}
+          placeholder="Add exercise note"
+          className="flex-1"
+        />
       </div>
     </div>
   );

@@ -378,6 +378,35 @@ async function main() {
         ],
       });
     }
+
+    // Log a completed Back Squat session from a week ago so the athlete's
+    // workout view has a "LAST: ..." reference to display on day one.
+    const backSquatExercise = lowerBodyDay?.exercises.find(
+      (pe) => pe.exercise?.name === "Back Squat",
+    );
+    if (assignment && lowerBodyDay && backSquatExercise) {
+      const priorDate = new Date();
+      priorDate.setDate(priorDate.getDate() - 7);
+      await storage.submitWorkoutLog(athlete.id, {
+        assignmentId: assignment.id,
+        programDayId: lowerBodyDay.id,
+        date: priorDate.toISOString().slice(0, 10),
+        completed: true,
+        entries: [
+          {
+            programExerciseId: backSquatExercise.id,
+            weightMode: "numeric",
+            sets: [
+              { setNumber: 1, reps: "5", weight: "405" },
+              { setNumber: 2, reps: "5", weight: "405" },
+              { setNumber: 3, reps: "5", weight: "405" },
+              { setNumber: 4, reps: "3", weight: "415" },
+              { setNumber: 5, reps: "3", weight: "415" },
+            ],
+          },
+        ],
+      });
+    }
   }
 
   console.log("Seed complete.");

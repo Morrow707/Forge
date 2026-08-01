@@ -24,7 +24,7 @@ import type {
   UpdateAssignmentInput,
   UpdatePreferencesInput,
 } from "@shared/schema";
-import { eq, and, inArray, asc, desc } from "drizzle-orm";
+import { eq, and, inArray, asc, desc, lt } from "drizzle-orm";
 import { generateCoachCode } from "./auth-utils";
 import { addDays, parseISO, formatISO, isWithinInterval } from "date-fns";
 
@@ -752,6 +752,46 @@ export const storage = {
     return entries;
   },
 
+  // Most recent prior time this athlete logged this specific exercise
+  // (across any program/day), for the "LAST: 4x3 @ 415lb" reference line.
+  async getLastPerformanceForAthlete(
+    athleteId: number,
+    exerciseId: number,
+    beforeDate: string,
+  ) {
+    const logs = await db.query.workoutLogs.findMany({
+      where: and(eq(workoutLogs.athleteId, athleteId), lt(workoutLogs.date, beforeDate)),
+      orderBy: desc(workoutLogs.date),
+      limit: 30,
+      with: {
+        entries: {
+          with: {
+            sets: { orderBy: asc(workoutSetEntries.setNumber) },
+            programExercise: true,
+            corrective: true,
+          },
+        },
+      },
+    });
+
+    for (const log of logs) {
+      for (const entry of log.entries) {
+        const entryExerciseId =
+          entry.programExercise?.exerciseId ?? entry.corrective?.exerciseId;
+        if (entryExerciseId === exerciseId && entry.sets.length > 0) {
+          return {
+            date: log.date,
+            sets: entry.sets.length,
+            reps: entry.sets[0]?.reps ?? null,
+            weight: entry.sets[0]?.weight ?? null,
+            weightMode: entry.weightMode,
+          };
+        }
+      }
+    }
+    return null;
+  },
+
   async getWorkoutDayDetail(
     athleteId: number,
     assignmentId: number,
@@ -791,11 +831,32 @@ export const storage = {
       with: { entries: { with: { sets: true } } },
     });
 
+    const exercisesWithHistory = await Promise.all(
+      day.exercises.map(async (pe) => ({
+        ...pe,
+        lastPerformance: await this.getLastPerformanceForAthlete(
+          athleteId,
+          pe.exerciseId,
+          date,
+        ),
+      })),
+    );
+    const correctivesWithHistory = await Promise.all(
+      correctives.map(async (c) => ({
+        ...c,
+        lastPerformance: await this.getLastPerformanceForAthlete(
+          athleteId,
+          c.exerciseId,
+          date,
+        ),
+      })),
+    );
+
     return {
       programName: assignment.program.name,
       correctivesEnabled: assignment.correctivesEnabled,
-      day,
-      correctives,
+      day: { ...day, exercises: exercisesWithHistory },
+      correctives: correctivesWithHistory,
       log: log ?? null,
     };
   },
