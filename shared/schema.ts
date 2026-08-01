@@ -615,6 +615,11 @@ export const updateCorrectivesSchema = z.object({
   correctives: z.array(correctiveInputSchema).default([]),
 });
 
+export const applyCorrectivesToDaysSchema = z.object({
+  programDayIds: z.array(z.number()).min(1),
+  correctives: z.array(correctiveInputSchema).default([]),
+});
+
 export const createWorkoutCommentSchema = z.object({
   body: z.string().trim().min(1).max(2000),
   videoUrl: z.string().trim().max(500).optional().nullable(),
@@ -672,6 +677,7 @@ export type InsertAssignmentInput = z.infer<typeof insertAssignmentSchema>;
 export type UpdateAssignmentInput = z.infer<typeof updateAssignmentSchema>;
 export type UpdateProgramDayInput = z.infer<typeof updateProgramDaySchema>;
 export type UpdateCorrectivesInput = z.infer<typeof updateCorrectivesSchema>;
+export type ApplyCorrectivesToDaysInput = z.infer<typeof applyCorrectivesToDaysSchema>;
 export type SubmitWorkoutLogInput = z.infer<typeof submitWorkoutLogSchema>;
 export type UpdatePreferencesInput = z.infer<typeof updatePreferencesSchema>;
 export type CreateWorkoutCommentInput = z.infer<typeof createWorkoutCommentSchema>;

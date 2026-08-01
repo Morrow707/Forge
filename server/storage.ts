@@ -538,13 +538,38 @@ export const storage = {
     });
   },
 
-  // Quick-start default for a freshly created assignment: apply the same
-  // corrective list to every non-rest day at once, so a coach can set
+  // Groups a program's non-rest days by title -- e.g. every "Lower Body
+  // Strength" day across all weeks in one group, every "Upper Body
+  // Push/Pull" day in another -- so the quick-start correctives flow can
+  // ask for different correctives per day type instead of one blanket list.
+  async getNonRestDayGroups(programId: number) {
+    const program = await this.getProgramFull(programId);
+    if (!program) return [];
+    const groups = new Map<string, number[]>();
+    for (const week of program.weeks) {
+      for (const day of week.days) {
+        if (day.isRestDay) continue;
+        const ids = groups.get(day.title) ?? [];
+        ids.push(day.id);
+        groups.set(day.title, ids);
+      }
+    }
+    return Array.from(groups.entries()).map(([title, programDayIds]) => ({
+      title,
+      programDayIds,
+    }));
+  },
+
+  // Quick-start default for a freshly created assignment: apply one
+  // corrective list to a specific set of days at once (typically all days
+  // sharing a title, from getNonRestDayGroups), so a coach can set
   // correctives during the assign flow instead of visiting each day on the
-  // calendar individually. Fine-tuning specific days afterward still works
-  // the same as before via updateCorrectivesForAssignmentDay.
-  async applyCorrectivesToAllDays(
+  // calendar individually. Only ever touches days that actually belong to
+  // this assignment's own program. Fine-tuning specific days afterward
+  // still works the same as before via updateCorrectivesForAssignmentDay.
+  async applyCorrectivesToDays(
     assignmentId: number,
+    programDayIds: number[],
     correctives: UpdateCorrectivesInput["correctives"],
   ) {
     const assignment = await db.query.assignments.findFirst({
@@ -553,9 +578,12 @@ export const storage = {
     if (!assignment) return;
     const program = await this.getProgramFull(assignment.programId);
     if (!program) return;
-    const nonRestDays = program.weeks.flatMap((w) => w.days.filter((d) => !d.isRestDay));
-    for (const day of nonRestDays) {
-      await this.updateCorrectivesForAssignmentDay(assignmentId, day.id, { correctives });
+    const validDayIds = new Set(
+      program.weeks.flatMap((w) => w.days.filter((d) => !d.isRestDay).map((d) => d.id)),
+    );
+    for (const dayId of programDayIds) {
+      if (!validDayIds.has(dayId)) continue;
+      await this.updateCorrectivesForAssignmentDay(assignmentId, dayId, { correctives });
     }
   },
 

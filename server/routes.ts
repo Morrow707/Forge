@@ -10,6 +10,7 @@ import {
   submitWorkoutLogSchema,
   updateProgramDaySchema,
   updateCorrectivesSchema,
+  applyCorrectivesToDaysSchema,
   updatePreferencesSchema,
   createWorkoutCommentSchema,
 } from "@shared/schema";
@@ -88,6 +89,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const program = await assertCoachOwnsProgram(user.id, id);
     if (!program) return res.status(404).json({ message: "Program not found" });
     res.json(program);
+  });
+
+  app.get("/api/coach/programs/:id/day-groups", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const program = await assertCoachOwnsProgram(user.id, id);
+    if (!program) return res.status(404).json({ message: "Program not found" });
+    const groups = await storage.getNonRestDayGroups(id);
+    res.json(groups);
   });
 
   app.post("/api/coach/programs", requireRole("coach"), async (req, res) => {
@@ -330,18 +340,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   );
 
   app.post(
-    "/api/coach/assignments/:assignmentId/correctives/apply-all",
+    "/api/coach/assignments/:assignmentId/correctives/apply",
     requireRole("coach"),
     async (req, res) => {
       const user = currentUser(req);
       const assignmentId = Number(req.params.assignmentId);
       const owned = await storage.getAssignmentForCoach(user.id, assignmentId);
       if (!owned) return res.status(404).json({ message: "Assignment not found" });
-      const parsed = updateCorrectivesSchema.safeParse(req.body);
+      const parsed = applyCorrectivesToDaysSchema.safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({ message: parsed.error.issues[0]?.message });
       }
-      await storage.applyCorrectivesToAllDays(assignmentId, parsed.data.correctives);
+      await storage.applyCorrectivesToDays(
+        assignmentId,
+        parsed.data.programDayIds,
+        parsed.data.correctives,
+      );
       res.status(204).end();
     },
   );

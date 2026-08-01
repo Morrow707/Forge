@@ -29,7 +29,15 @@ import type { Exercise } from "@shared/schema";
 type RosterEntry = { id: number; name: string; email: string };
 type ProgramSummary = { id: number; name: string };
 type CreatedAssignment = { id: number; athleteId: number; correctivesEnabled: boolean };
-type CorrectivesQueueItem = { assignmentId: number; athleteId: number; athleteName: string };
+type DayGroup = { title: string; programDayIds: number[] };
+type CorrectivesQueueItem = {
+  assignmentId: number;
+  athleteId: number;
+  athleteName: string;
+  dayGroup: DayGroup;
+  groupIndex: number;
+  groupCount: number;
+};
 
 /** Assign a program to one or more athletes. Pass `programId` to lock the
  * program (used when assigning from a specific program's own page) or omit
@@ -90,7 +98,7 @@ export function AssignProgramDialog({
       });
       return res.json() as Promise<{ created: CreatedAssignment[] }>;
     },
-    onSuccess: (result) => {
+    onSuccess: async (result) => {
       qc.invalidateQueries({ queryKey: ["/api/coach/calendar"] });
       qc.invalidateQueries({ queryKey: ["/api/athlete/calendar"] });
       qc.invalidateQueries({ queryKey: ["/api/coach/programs"] });
@@ -111,7 +119,26 @@ export function AssignProgramDialog({
 
       onOpenChange(false);
       setAssignAthletes(new Map());
-      if (needsCorrectives.length > 0) setCorrectivesQueue(needsCorrectives);
+
+      if (needsCorrectives.length === 0) return;
+
+      // A program can have several distinct day types (e.g. Lower Body vs.
+      // Upper Body) that each need their own correctives, so the setup flow
+      // is one step per athlete per day type, not one step per athlete.
+      const groupsRes = await apiRequest(
+        "GET",
+        `/api/coach/programs/${Number(selectedProgramId)}/day-groups`,
+      );
+      const dayGroups: DayGroup[] = await groupsRes.json();
+      if (dayGroups.length === 0) return;
+
+      const queue: CorrectivesQueueItem[] = [];
+      for (const athlete of needsCorrectives) {
+        dayGroups.forEach((dayGroup, i) => {
+          queue.push({ ...athlete, dayGroup, groupIndex: i, groupCount: dayGroups.length });
+        });
+      }
+      setCorrectivesQueue(queue);
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not assign program"),
   });
@@ -287,6 +314,9 @@ function CorrectivesSetupFlow({
   const [pickerOpen, setPickerOpen] = useState(false);
   const current = queue[index];
   const isLast = index === queue.length - 1;
+  const distinctAthleteIds = Array.from(new Set(queue.map((q) => q.athleteId)));
+  const athleteOrdinal = distinctAthleteIds.indexOf(current.athleteId) + 1;
+  const totalAthletes = distinctAthleteIds.length;
 
   const { data: recentCorrectives = [] } = useQuery<Exercise[]>({
     queryKey: ["/api/coach/athletes", current.athleteId, "recent-correctives"],
@@ -304,8 +334,9 @@ function CorrectivesSetupFlow({
       if (correctives.length === 0) return;
       await apiRequest(
         "POST",
-        `/api/coach/assignments/${current.assignmentId}/correctives/apply-all`,
+        `/api/coach/assignments/${current.assignmentId}/correctives/apply`,
         {
+          programDayIds: current.dayGroup.programDayIds,
           correctives: correctives.map((c, i) => ({
             exerciseId: c.exerciseId,
             orderIndex: i,
@@ -319,10 +350,13 @@ function CorrectivesSetupFlow({
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/athlete/day"] });
       qc.invalidateQueries({ queryKey: ["/api/coach/athletes", current.athleteId, "recent-correctives"] });
+      const label = current.groupCount > 1
+        ? `${current.athleteName} — ${current.dayGroup.title}`
+        : current.athleteName;
       toast.success(
         correctives.length > 0
-          ? `Correctives set for ${current.athleteName}`
-          : `No correctives added for ${current.athleteName}`,
+          ? `Correctives set for ${label}`
+          : `No correctives added for ${label}`,
       );
       setCorrectives([]);
       if (isLast) onDone();
@@ -336,10 +370,20 @@ function CorrectivesSetupFlow({
       <Dialog open onOpenChange={(o) => !o && onDone()}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Correctives for {current.athleteName}</DialogTitle>
+            <DialogTitle>
+              Correctives for {current.athleteName}
+              {current.groupCount > 1 && (
+                <span className="ml-2 text-sm font-normal text-muted-foreground">
+                  · {current.dayGroup.title}
+                </span>
+              )}
+            </DialogTitle>
             <DialogDescription>
-              Athlete {index + 1} of {queue.length} · Applied to every training day in this
-              program — fine-tune specific days later from the calendar.
+              Athlete {athleteOrdinal} of {totalAthletes}
+              {current.groupCount > 1 &&
+                ` · Day type ${current.groupIndex + 1} of ${current.groupCount}`}{" "}
+              · Applied to every{current.dayGroup.title ? ` ${current.dayGroup.title}` : ""} day
+              in this program — fine-tune specific days later from the calendar.
             </DialogDescription>
           </DialogHeader>
 
