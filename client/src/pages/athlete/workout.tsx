@@ -8,8 +8,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
-import { computeExerciseLabels, deriveLinkedToNext, groupConsecutiveBySupersetGroup } from "@/lib/supersets";
+import { groupConsecutiveBySupersetGroup } from "@/lib/supersets";
 import { ExerciseVideoThumb } from "@/components/exercise-video";
+import { RestTimerControl } from "@/components/rest-timer";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import {
@@ -21,6 +22,8 @@ import {
   Plus,
   Minus,
   Check,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import type { PublicUser } from "@shared/schema";
@@ -151,6 +154,45 @@ function formatLastPerformance(lp: NonNullable<LastPerformance>) {
   return s;
 }
 
+type Page = {
+  kind: "corrective" | "exercise";
+  items: ItemState[];
+  labels: Record<string, string>;
+};
+
+/** Correctives always form one leading group (like TrainHeroic's A1-A5 block);
+ * main exercises follow as their own groups, one per superset chain, continuing
+ * the same letter sequence -- e.g. correctives are "A", the first working
+ * superset is "B", the next solo lift is "C". */
+function buildPages(items: ItemState[]): Page[] {
+  const correctiveItems = items.filter((it) => it.kind === "corrective");
+  const exerciseItems = items.filter((it) => it.kind === "exercise");
+  const exerciseBlocks = groupConsecutiveBySupersetGroup(exerciseItems);
+
+  const pages: Page[] = [];
+  let letterIndex = 0;
+
+  function pushBlock(kind: Page["kind"], block: ItemState[]) {
+    const letter = String.fromCharCode(65 + letterIndex++);
+    const labels: Record<string, string> = {};
+    block.forEach((it, i) => {
+      labels[it.key] = block.length > 1 ? `${letter}${i + 1}` : letter;
+    });
+    pages.push({ kind, items: block, labels });
+  }
+
+  if (correctiveItems.length > 0) pushBlock("corrective", correctiveItems);
+  for (const block of exerciseBlocks) pushBlock("exercise", block);
+
+  return pages;
+}
+
+function isPageComplete(page: Page) {
+  return page.items.every(
+    (it) => it.sets.length > 0 && it.sets.every((s) => isSetComplete(it, s)),
+  );
+}
+
 function computeStats(items: ItemState[]) {
   let totalReps = 0;
   let totalVolume = 0;
@@ -196,6 +238,7 @@ export default function AthleteWorkout() {
 
   const [items, setItems] = useState<ItemState[]>([]);
   const [hydrated, setHydrated] = useState(false);
+  const [pageIndex, setPageIndex] = useState(0);
 
   useEffect(() => {
     if (data && !hydrated) {
@@ -215,6 +258,7 @@ export default function AthleteWorkout() {
       );
       setItems([...correctiveItems, ...exerciseItems]);
       setHydrated(true);
+      setPageIndex(0);
     }
   }, [data, hydrated]);
 
@@ -306,10 +350,8 @@ export default function AthleteWorkout() {
     );
   }
 
-  const correctiveItems = items.filter((it) => it.kind === "corrective");
-  const exerciseItems = items.filter((it) => it.kind === "exercise");
-  const exerciseBlocks = groupConsecutiveBySupersetGroup(exerciseItems);
-  const labels = computeExerciseLabels(deriveLinkedToNext(exerciseItems));
+  const pages = buildPages(items);
+  const currentPage = pages[Math.min(pageIndex, pages.length - 1)];
   const unit = user?.preferredWeightUnit ?? "lbs";
   const stats = computeStats(items);
 
@@ -364,7 +406,32 @@ export default function AthleteWorkout() {
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-4 pb-24">
+          {pages.length > 0 && (
+            <div className="flex items-center justify-center gap-2 py-1">
+              {pages.map((page, i) => {
+                const complete = isPageComplete(page);
+                const isCurrent = i === pageIndex;
+                return (
+                  <button
+                    key={i}
+                    type="button"
+                    aria-label={`Go to exercise group ${i + 1} of ${pages.length}`}
+                    onClick={() => setPageIndex(i)}
+                    className={cn(
+                      "rounded-full transition-all",
+                      isCurrent
+                        ? "h-3 w-3 bg-success"
+                        : complete
+                          ? "h-2 w-2 bg-success"
+                          : "h-2 w-2 border border-border",
+                    )}
+                  />
+                );
+              })}
+            </div>
+          )}
+
           {stats.totalSets > 0 && (
             <div className="rounded-lg border border-border bg-surface p-4">
               <div className="mb-3 flex items-baseline gap-8">
@@ -396,50 +463,46 @@ export default function AthleteWorkout() {
             </div>
           )}
 
-          {correctiveItems.length > 0 && (
-            <div className="space-y-3">
-              <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-cyan-400">
-                <Stethoscope className="h-3.5 w-3.5" />
-                Correctives
-              </p>
-              {correctiveItems.map((item) => (
-                <Card key={item.key} className="border-cyan-900/40 bg-cyan-950/10">
-                  <CardContent className="p-4">
-                    <ExerciseLogContent
-                      item={item}
-                      linked={false}
-                      unit={unit}
-                      onUpdateItem={(patch) => updateItem(item.key, patch)}
-                      onUpdateSet={(setNumber, patch) => updateSet(item.key, setNumber, patch)}
-                      onAddSet={() => addSet(item.key)}
-                      onRemoveSet={() => removeSet(item.key)}
-                    />
-                  </CardContent>
-                </Card>
-              ))}
+          {currentPage ? (
+            <div className="space-y-2">
+              {currentPage.kind === "corrective" && (
+                <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-cyan-400">
+                  <Stethoscope className="h-3.5 w-3.5" />
+                  Correctives
+                </p>
+              )}
+              <Card
+                className={cn(
+                  currentPage.kind === "corrective"
+                    ? "border-cyan-900/40 bg-cyan-950/10"
+                    : currentPage.items.length > 1
+                      ? "border-primary/40"
+                      : undefined,
+                )}
+              >
+                <CardContent className="divide-y divide-border p-4">
+                  {currentPage.items.map((item, i) => (
+                    <div key={item.key} className={i > 0 ? "pt-4" : ""}>
+                      <ExerciseLogContent
+                        item={item}
+                        linked={currentPage.kind === "exercise" && currentPage.items.length > 1}
+                        badgeLabel={currentPage.labels[item.key]}
+                        unit={unit}
+                        onUpdateItem={(patch) => updateItem(item.key, patch)}
+                        onUpdateSet={(setNumber, patch) => updateSet(item.key, setNumber, patch)}
+                        onAddSet={() => addSet(item.key)}
+                        onRemoveSet={() => removeSet(item.key)}
+                      />
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
             </div>
+          ) : (
+            <p className="py-10 text-center text-sm text-muted-foreground">
+              Nothing prescribed for this day yet.
+            </p>
           )}
-
-          {exerciseBlocks.map((block) => (
-            <Card key={block[0].key} className={block.length > 1 ? "border-primary/40" : undefined}>
-              <CardContent className="divide-y divide-border p-4">
-                {block.map((item, i) => (
-                  <div key={item.key} className={i > 0 ? "pt-4" : ""}>
-                    <ExerciseLogContent
-                      item={item}
-                      linked={block.length > 1}
-                      badgeLabel={labels[item.key]}
-                      unit={unit}
-                      onUpdateItem={(patch) => updateItem(item.key, patch)}
-                      onUpdateSet={(setNumber, patch) => updateSet(item.key, setNumber, patch)}
-                      onAddSet={() => addSet(item.key)}
-                      onRemoveSet={() => removeSet(item.key)}
-                    />
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          ))}
 
           <div className="flex flex-col gap-2 sm:flex-row">
             <Button
@@ -461,6 +524,32 @@ export default function AthleteWorkout() {
           </div>
         </div>
       )}
+
+      {!data.day.isRestDay && pages.length > 0 && (
+        <div className="fixed inset-x-0 bottom-14 z-20 border-t border-border bg-surface md:bottom-0 md:left-64">
+          <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3 sm:px-8">
+            <button
+              type="button"
+              onClick={() => setPageIndex((p) => Math.max(0, p - 1))}
+              disabled={pageIndex === 0}
+              className="flex items-center gap-1.5 text-sm font-semibold text-primary disabled:pointer-events-none disabled:opacity-30"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Back
+            </button>
+            <RestTimerControl defaultSeconds={currentPage?.items[0]?.restSeconds} />
+            <button
+              type="button"
+              onClick={() => setPageIndex((p) => Math.min(pages.length - 1, p + 1))}
+              disabled={pageIndex === pages.length - 1}
+              className="flex items-center gap-1.5 text-sm font-semibold text-primary disabled:pointer-events-none disabled:opacity-30"
+            >
+              Next
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
     </AppShell>
   );
 }
@@ -477,14 +566,14 @@ function ExerciseLogContent({
 }: {
   item: ItemState;
   linked: boolean;
-  badgeLabel?: string;
+  badgeLabel: string;
   unit: "lbs" | "kg";
   onUpdateItem: (patch: Partial<ItemState>) => void;
   onUpdateSet: (setNumber: number, patch: Partial<SetRow>) => void;
   onAddSet: () => void;
   onRemoveSet: () => void;
 }) {
-  const isCorrective = item.key.startsWith("corrective-");
+  const isCorrective = item.kind === "corrective";
 
   return (
     <div className="space-y-3">
@@ -493,13 +582,14 @@ function ExerciseLogContent({
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
             <div className="flex min-w-0 items-center gap-1.5">
-              {isCorrective ? (
-                <Stethoscope className="h-3.5 w-3.5 shrink-0 text-cyan-400" />
-              ) : badgeLabel ? (
-                <Badge variant="outline" className="shrink-0 font-mono text-[10px]">
-                  {badgeLabel}
-                </Badge>
-              ) : null}
+              <span
+                className={cn(
+                  "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-extrabold",
+                  isCorrective ? "bg-cyan-500 text-white" : "bg-primary text-primary-foreground",
+                )}
+              >
+                {badgeLabel}
+              </span>
               <p className="truncate font-semibold">{item.exerciseName}</p>
               {linked && <Link2 className="h-3.5 w-3.5 shrink-0 text-primary" />}
             </div>
