@@ -24,6 +24,7 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  TrendingUp,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import type { PublicUser } from "@shared/schema";
@@ -42,6 +43,8 @@ type LastPerformance = {
   reps: string | null;
   weight: string | null;
   weightMode: "numeric" | "bodyweight" | "band";
+  rpe: number | null;
+  suggestion: { text: string; suggestedWeight: number | null } | null;
 } | null;
 
 type PrescribedExercise = {
@@ -151,6 +154,7 @@ function isSetComplete(item: ItemState, set: SetRow) {
 function formatLastPerformance(lp: NonNullable<LastPerformance>) {
   let s = `${lp.sets} × ${lp.reps ?? "-"}`;
   if (lp.weight) s += ` @ ${lp.weight}`;
+  if (lp.rpe != null) s += ` · RPE ${lp.rpe}`;
   return s;
 }
 
@@ -606,6 +610,27 @@ function ExerciseLogContent({
             <p className="text-xs font-semibold text-muted-foreground">
               <span className="text-primary">LAST</span> {formatLastPerformance(item.lastPerformance)}
             </p>
+          )}
+          {item.lastPerformance?.suggestion && (
+            <div className="mt-0.5 flex items-center gap-1.5 text-xs">
+              <TrendingUp className="h-3 w-3 shrink-0 text-amber-500" />
+              <span className="font-medium text-amber-600 dark:text-amber-400">
+                {item.lastPerformance.suggestion.text}
+              </span>
+              {item.lastPerformance.suggestion.suggestedWeight != null &&
+                item.weightMode === "numeric" && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const value = String(item.lastPerformance!.suggestion!.suggestedWeight);
+                      for (const set of item.sets) onUpdateSet(set.setNumber, { weight: value });
+                    }}
+                    className="font-semibold text-primary hover:underline"
+                  >
+                    Use
+                  </button>
+                )}
+            </div>
           )}
         </div>
       </div>

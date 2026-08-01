@@ -817,6 +817,40 @@ export const storage = {
     return reconciled;
   },
 
+  // Simple RPE-based autoregulation: turn how hard the last set felt into a
+  // concrete suggestion for this time, the way TrainHeroic's Training Load
+  // does but surfaced as one plain-language line instead of a chart to read.
+  // Rounds to the nearest 2.5 since that's the smallest common plate jump.
+  suggestNextLoad(
+    rpe: number | null,
+    weight: string | null,
+    weightMode: "numeric" | "bodyweight" | "band",
+  ): { text: string; suggestedWeight: number | null } | null {
+    if (rpe == null) return null;
+    const parsed = weightMode === "numeric" && weight ? parseFloat(weight) : NaN;
+    const hasWeight = !Number.isNaN(parsed);
+    const round = (n: number) => Math.round(n / 2.5) * 2.5;
+
+    if (rpe <= 6) {
+      return hasWeight
+        ? { text: `Felt easy last time — try ${round(parsed * 1.05)}`, suggestedWeight: round(parsed * 1.05) }
+        : { text: "Felt easy last time — add a rep or two", suggestedWeight: null };
+    }
+    if (rpe <= 8) {
+      return hasWeight
+        ? { text: `On target — repeat ${parsed}`, suggestedWeight: parsed }
+        : { text: "On target — repeat this", suggestedWeight: null };
+    }
+    if (rpe === 9) {
+      return hasWeight
+        ? { text: `Near max effort — hold ${parsed}`, suggestedWeight: parsed }
+        : { text: "Near max effort — hold this", suggestedWeight: null };
+    }
+    return hasWeight
+      ? { text: `Maxed out — consider backing off to ${round(parsed * 0.93)}`, suggestedWeight: null }
+      : { text: "Maxed out — consider a lighter set", suggestedWeight: null };
+  },
+
   // Most recent prior time this athlete logged this specific exercise
   // (across any program/day), for the "LAST: 4x3 @ 415lb" reference line.
   async getLastPerformanceForAthlete(
@@ -844,12 +878,15 @@ export const storage = {
         const entryExerciseId =
           entry.programExercise?.exerciseId ?? entry.corrective?.exerciseId;
         if (entryExerciseId === exerciseId && entry.sets.length > 0) {
+          const weight = entry.sets[0]?.weight ?? null;
           return {
             date: log.date,
             sets: entry.sets.length,
             reps: entry.sets[0]?.reps ?? null,
-            weight: entry.sets[0]?.weight ?? null,
+            weight,
             weightMode: entry.weightMode,
+            rpe: entry.rpe,
+            suggestion: this.suggestNextLoad(entry.rpe, weight, entry.weightMode),
           };
         }
       }
