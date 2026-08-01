@@ -26,6 +26,7 @@ import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Dumbbell, Search, Video, Stethoscope } from "lucide-react";
 import type { Exercise } from "@shared/schema";
+import { MOVEMENT_TYPES, MUSCLE_GROUPS } from "@/lib/exercise-taxonomy";
 
 const CATEGORIES = [
   "strength",
@@ -35,18 +36,6 @@ const CATEGORIES = [
   "mobility",
   "plyometric",
 ] as const;
-
-export const MOVEMENT_TYPES = [
-  "Squat",
-  "Hinge",
-  "Push",
-  "Pull",
-  "Rotation",
-  "Carry",
-  "Mobility",
-  "Activation",
-  "Isometric",
-];
 
 const categoryColors: Record<string, string> = {
   strength: "bg-primary/15 text-primary",
@@ -91,13 +80,15 @@ export default function CoachExercises() {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [movementFilter, setMovementFilter] = useState<string>("all");
+  const [muscleGroupFilter, setMuscleGroupFilter] = useState<string>("all");
   const [lateralityFilter, setLateralityFilter] = useState<string>("all");
   const [correctivesOnly, setCorrectivesOnly] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState<ExerciseForm>(emptyForm);
 
   const bodyParts = useMemo(
-    () => Array.from(new Set(exercises.map((e) => e.muscleGroup))).sort(),
+    () =>
+      Array.from(new Set([...MUSCLE_GROUPS, ...exercises.map((e) => e.muscleGroup)])).sort(),
     [exercises],
   );
 
@@ -110,6 +101,8 @@ export default function CoachExercises() {
       const matchesCategory = categoryFilter === "all" || ex.category === categoryFilter;
       const matchesMovement =
         movementFilter === "all" || ex.movementType === movementFilter;
+      const matchesMuscleGroup =
+        muscleGroupFilter === "all" || ex.muscleGroup === muscleGroupFilter;
       const matchesLaterality =
         lateralityFilter === "all" || ex.laterality === lateralityFilter;
       const matchesCorrective = !correctivesOnly || ex.isCorrective;
@@ -117,11 +110,20 @@ export default function CoachExercises() {
         matchesSearch &&
         matchesCategory &&
         matchesMovement &&
+        matchesMuscleGroup &&
         matchesLaterality &&
         matchesCorrective
       );
     });
-  }, [exercises, search, categoryFilter, movementFilter, lateralityFilter, correctivesOnly]);
+  }, [
+    exercises,
+    search,
+    categoryFilter,
+    movementFilter,
+    muscleGroupFilter,
+    lateralityFilter,
+    correctivesOnly,
+  ]);
 
   const saveMutation = useMutation({
     mutationFn: async (data: ExerciseForm) => {
@@ -227,6 +229,19 @@ export default function CoachExercises() {
               {MOVEMENT_TYPES.map((m) => (
                 <SelectItem key={m} value={m}>
                   {m}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={muscleGroupFilter} onValueChange={setMuscleGroupFilter}>
+            <SelectTrigger className="w-44">
+              <SelectValue placeholder="All muscle groups" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All muscle groups</SelectItem>
+              {bodyParts.map((b) => (
+                <SelectItem key={b} value={b}>
+                  {b}
                 </SelectItem>
               ))}
             </SelectContent>

@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/select";
 import { Search, Dumbbell, Stethoscope } from "lucide-react";
 import type { Exercise } from "@shared/schema";
-import { MOVEMENT_TYPES } from "@/pages/coach/exercises";
+import { MOVEMENT_TYPES, MUSCLE_GROUPS } from "@/lib/exercise-taxonomy";
 
 export function ExercisePickerDialog({
   open,
@@ -40,12 +40,19 @@ export function ExercisePickerDialog({
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [movementFilter, setMovementFilter] = useState("all");
+  const [muscleGroupFilter, setMuscleGroupFilter] = useState("all");
   const [lateralityFilter, setLateralityFilter] = useState("all");
   const [onlyCorrectives, setOnlyCorrectives] = useState(correctivesOnly);
 
   useEffect(() => {
     if (open) setOnlyCorrectives(correctivesOnly);
   }, [open, correctivesOnly]);
+
+  const bodyParts = useMemo(
+    () =>
+      Array.from(new Set([...MUSCLE_GROUPS, ...exercises.map((e) => e.muscleGroup)])).sort(),
+    [exercises],
+  );
 
   const filtered = useMemo(
     () =>
@@ -57,6 +64,8 @@ export function ExercisePickerDialog({
         const matchesCategory = categoryFilter === "all" || ex.category === categoryFilter;
         const matchesMovement =
           movementFilter === "all" || ex.movementType === movementFilter;
+        const matchesMuscleGroup =
+          muscleGroupFilter === "all" || ex.muscleGroup === muscleGroupFilter;
         const matchesLaterality =
           lateralityFilter === "all" || ex.laterality === lateralityFilter;
         const matchesCorrective = !onlyCorrectives || ex.isCorrective;
@@ -64,11 +73,20 @@ export function ExercisePickerDialog({
           matchesSearch &&
           matchesCategory &&
           matchesMovement &&
+          matchesMuscleGroup &&
           matchesLaterality &&
           matchesCorrective
         );
       }),
-    [exercises, search, categoryFilter, movementFilter, lateralityFilter, onlyCorrectives],
+    [
+      exercises,
+      search,
+      categoryFilter,
+      movementFilter,
+      muscleGroupFilter,
+      lateralityFilter,
+      onlyCorrectives,
+    ],
   );
 
   return (
@@ -112,6 +130,19 @@ export function ExercisePickerDialog({
               {MOVEMENT_TYPES.map((m) => (
                 <SelectItem key={m} value={m}>
                   {m}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={muscleGroupFilter} onValueChange={setMuscleGroupFilter}>
+            <SelectTrigger className="h-8 w-36 text-xs">
+              <SelectValue placeholder="Muscle group" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All muscle groups</SelectItem>
+              {bodyParts.map((b) => (
+                <SelectItem key={b} value={b}>
+                  {b}
                 </SelectItem>
               ))}
             </SelectContent>
