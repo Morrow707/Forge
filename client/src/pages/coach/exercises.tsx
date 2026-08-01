@@ -207,38 +207,35 @@ export default function CoachExercises() {
             className="pl-9"
           />
         </div>
-        <div className="space-y-1.5">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <FilterChipGroup
             label="Category"
             options={[...CATEGORIES]}
             selected={categoryFilter}
             onToggle={(v) => toggleInSet(setCategoryFilter, v)}
+            cols={2}
           />
           <FilterChipGroup
             label="Movement"
             options={MOVEMENT_TYPES}
             selected={movementFilter}
             onToggle={(v) => toggleInSet(setMovementFilter, v)}
+            cols={3}
           />
-          <FilterChipGroup
-            label="Muscle"
-            options={bodyParts}
-            selected={muscleGroupFilter}
-            onToggle={(v) => toggleInSet(setMuscleGroupFilter, v)}
-          />
-          <div className="flex flex-wrap items-center gap-1">
+          <div className="space-y-2">
             <FilterChipGroup
               label="Laterality"
               options={["bilateral", "unilateral"]}
               selected={lateralityFilter}
               onToggle={(v) => toggleInSet(setLateralityFilter, v)}
+              cols={2}
             />
             <button
               type="button"
               onClick={() => setCorrectivesOnly((v) => !v)}
               aria-pressed={correctivesOnly}
               className={cn(
-                "flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors",
+                "flex w-full items-center justify-center gap-1 rounded-full border px-2 py-1 text-[11px] font-medium transition-colors",
                 correctivesOnly
                   ? "border-cyan-500 bg-cyan-500/15 text-cyan-400"
                   : "border-border text-muted-foreground hover:border-cyan-500/50 hover:text-cyan-400",
@@ -248,6 +245,14 @@ export default function CoachExercises() {
               Correctives only
             </button>
           </div>
+          <FilterChipGroup
+            label="Muscle"
+            options={bodyParts}
+            selected={muscleGroupFilter}
+            onToggle={(v) => toggleInSet(setMuscleGroupFilter, v)}
+            cols={4}
+            className="sm:col-span-3"
+          />
         </div>
       </div>
 
