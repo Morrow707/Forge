@@ -273,6 +273,19 @@ export const workoutLogEntries = pgTable("workout_log_entries", {
   weightMode: weightModeEnum("weight_mode").notNull().default("numeric"),
   rpe: integer("rpe"),
   notes: text("notes"),
+  // TEMPORARY: dropped from the app's data model long ago (superseded by
+  // workoutSetEntries + correctiveId/weightMode above), but never actually
+  // dropped from the deployed database. Declaring them here as unused,
+  // harmless leftovers lets drizzle-kit push see them as already-accounted-
+  // for, so it can't confuse a genuinely new column (like correctiveId) for
+  // a rename of one of these -- that ambiguity was silently aborting the
+  // rest of the migration on every deploy since correctives shipped. Remove
+  // these three lines in a follow-up PR once a deploy has run successfully
+  // with this in place (at that point corrective_id will already exist, so
+  // dropping them will be an unambiguous "drop column", not a rename guess).
+  actualSets: integer("actual_sets"),
+  actualReps: text("actual_reps"),
+  actualWeight: text("actual_weight"),
 });
 
 export const workoutSetEntries = pgTable("workout_set_entries", {
