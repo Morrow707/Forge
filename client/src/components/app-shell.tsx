@@ -25,6 +25,11 @@ const athleteNav = [
   { href: "/athlete", label: "Calendar", icon: CalendarDays, exact: true },
 ];
 
+const adminNav = [
+  { href: "/admin", label: "Dashboard", icon: Flame, exact: true },
+  { href: "/admin/exercises", label: "Forge Library", icon: Dumbbell },
+];
+
 export function AppShell({
   children,
   title,
@@ -36,7 +41,8 @@ export function AppShell({
 }) {
   const { user, logoutMutation } = useAuth();
   const [location] = useLocation();
-  const nav = user?.role === "coach" ? coachNav : athleteNav;
+  const nav =
+    user?.role === "coach" ? coachNav : user?.role === "admin" ? adminNav : athleteNav;
 
   return (
     <div className="flex min-h-screen bg-background">

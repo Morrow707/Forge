@@ -17,12 +17,12 @@ import {
 import { z } from "zod";
 
 function currentUser(req: any) {
-  return req.user as { id: number; role: "coach" | "athlete"; name: string };
+  return req.user as { id: number; role: "coach" | "athlete" | "admin"; name: string };
 }
 
-async function assertCoachOwnsExercise(coachId: number, exerciseId: number) {
+async function assertOwnsExercise(userId: number, exerciseId: number) {
   const exercise = await storage.getExercise(exerciseId);
-  if (!exercise || exercise.coachId !== coachId) return null;
+  if (!exercise || exercise.coachId !== userId) return null;
   return exercise;
 }
 
@@ -36,11 +36,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
 
   // ---------------- Coach: Exercise Bank ----------------
+  // A coach sees their own private exercises plus every Forge-official
+  // (admin-created) exercise, but can only edit/delete the ones they
+  // personally created -- Forge exercises are read-only to them.
 
   app.get("/api/coach/exercises", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
-    const list = await storage.getExercisesByCoach(user.id);
+    const list = await storage.getVisibleExercisesForCoach(user.id);
     res.json(list);
+  });
+
+  app.get("/api/coach/exercises/:id", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const exercise = await storage.getExerciseDetail(id, user.id);
+    if (!exercise || (!exercise.isForgeOfficial && exercise.coachId !== user.id)) {
+      return res.status(404).json({ message: "Exercise not found" });
+    }
+    res.json(exercise);
   });
 
   app.post("/api/coach/exercises", requireRole("coach"), async (req, res) => {
@@ -56,7 +69,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/coach/exercises/:id", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     const id = Number(req.params.id);
-    const owned = await assertCoachOwnsExercise(user.id, id);
+    const owned = await assertOwnsExercise(user.id, id);
     if (!owned) return res.status(404).json({ message: "Exercise not found" });
     const parsed = insertExerciseSchema.partial().safeParse(req.body);
     if (!parsed.success) {
@@ -69,7 +82,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/coach/exercises/:id", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     const id = Number(req.params.id);
-    const owned = await assertCoachOwnsExercise(user.id, id);
+    const owned = await assertOwnsExercise(user.id, id);
+    if (!owned) return res.status(404).json({ message: "Exercise not found" });
+    await storage.deleteExercise(id);
+    res.status(204).end();
+  });
+
+  // ---------------- Admin: Forge Exercise Library ----------------
+  // An admin's own exercise bank *is* the Forge library -- everything they
+  // create here is automatically shared, read-only, with every coach (see
+  // getVisibleExercisesForCoach). Admins have no calendar or roster access.
+
+  app.get("/api/admin/exercises", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const list = await storage.getExercisesByCoach(user.id);
+    res.json(list);
+  });
+
+  app.get("/api/admin/exercises/:id", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const exercise = await storage.getExerciseDetail(id, user.id);
+    if (!exercise || exercise.coachId !== user.id) {
+      return res.status(404).json({ message: "Exercise not found" });
+    }
+    res.json(exercise);
+  });
+
+  app.post("/api/admin/exercises", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = insertExerciseSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const exercise = await storage.createExercise(user.id, parsed.data);
+    res.status(201).json(exercise);
+  });
+
+  app.put("/api/admin/exercises/:id", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const owned = await assertOwnsExercise(user.id, id);
+    if (!owned) return res.status(404).json({ message: "Exercise not found" });
+    const parsed = insertExerciseSchema.partial().safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const updated = await storage.updateExercise(id, parsed.data);
+    res.json(updated);
+  });
+
+  app.delete("/api/admin/exercises/:id", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const owned = await assertOwnsExercise(user.id, id);
     if (!owned) return res.status(404).json({ message: "Exercise not found" });
     await storage.deleteExercise(id);
     res.status(204).end();

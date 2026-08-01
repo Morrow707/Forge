@@ -16,6 +16,7 @@ const SQL = `
 DO $$ BEGIN
   CREATE TYPE "role" AS ENUM ('coach', 'athlete');
 EXCEPTION WHEN duplicate_object THEN null; END $$;
+ALTER TYPE "role" ADD VALUE IF NOT EXISTS 'admin';
 
 DO $$ BEGIN
   CREATE TYPE "weight_unit" AS ENUM ('lbs', 'kg');

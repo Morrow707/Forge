@@ -39,10 +39,14 @@ async function main() {
 
   await storage.linkAthleteToCoach(coach.id, athlete.id);
 
-  const existingExercises = await storage.getExercisesByCoach(coach.id);
-  const existingExerciseNames = new Set(existingExercises.map((e) => e.name));
+  // Looked up system-wide (not scoped to this coach) since an exercise's
+  // owner can change after seeding -- e.g. once transferred to the admin as
+  // an official Forge exercise below, it would otherwise look "new" again
+  // to a coach-scoped check and get recreated as a duplicate on every deploy.
+  const allExercises = await storage.getAllExercises();
+  const existingExerciseNames = new Set(allExercises.map((e) => e.name));
   const exerciseMap: Record<string, number> = {};
-  for (const ex of existingExercises) exerciseMap[ex.name] = ex.id;
+  for (const ex of allExercises) exerciseMap[ex.name] = ex.id;
 
   {
     const seedExercises = [
@@ -513,6 +517,19 @@ async function main() {
       });
       exerciseMap[ex.name] = row.id;
     }
+  }
+
+  // One-time production fixup: promote scott.morrow@live.com to admin and
+  // hand over the exercise library so it becomes the official Forge-branded
+  // set (shared with every coach, editable only by the admin) instead of
+  // living under the demo coach account. Fully idempotent -- both steps
+  // no-op on every subsequent deploy once already applied.
+  const scott = await storage.getUserByEmail("scott.morrow@live.com");
+  if (scott) {
+    if (scott.role !== "admin") {
+      await storage.setUserRole(scott.id, "admin");
+    }
+    await storage.transferExerciseOwnership(coach.id, scott.id);
   }
 
   const coachPrograms = await storage.getProgramsByCoach(coach.id);

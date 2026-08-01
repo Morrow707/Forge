@@ -10,7 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { Search, Dumbbell, Stethoscope } from "lucide-react";
-import type { Exercise } from "@shared/schema";
+import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
+import type { ExerciseWithOwnership as Exercise } from "@/lib/exercise-types";
 import { MOVEMENT_TYPES, MUSCLE_GROUPS } from "@/lib/exercise-taxonomy";
 import { FilterChipGroup, toggleInSet } from "@/components/filter-chip-group";
 
@@ -173,6 +174,10 @@ export function ExercisePickerDialog({
               </div>
               <div className="flex shrink-0 items-center gap-1">
                 {ex.isCorrective && <Stethoscope className="h-3.5 w-3.5 text-cyan-400" />}
+                <ExerciseOwnershipBadge
+                  isForgeOfficial={ex.isForgeOfficial}
+                  ownerLabel={ex.ownerLabel}
+                />
                 <Badge variant="secondary" className="capitalize">
                   {ex.category}
                 </Badge>

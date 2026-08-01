@@ -18,7 +18,11 @@ export default function SignupPage() {
   const [coachCode, setCoachCode] = useState("");
 
   if (!isLoading && user) {
-    return <Redirect to={user.role === "coach" ? "/coach" : "/athlete"} />;
+    return (
+      <Redirect
+        to={user.role === "coach" ? "/coach" : user.role === "admin" ? "/admin" : "/athlete"}
+      />
+    );
   }
 
   function handleSubmit(e: FormEvent) {
