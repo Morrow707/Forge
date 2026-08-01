@@ -11,6 +11,7 @@ import {
   updateProgramDaySchema,
   updateCorrectivesSchema,
   updatePreferencesSchema,
+  createWorkoutCommentSchema,
 } from "@shared/schema";
 import { z } from "zod";
 
@@ -356,6 +357,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
+  app.get(
+    "/api/coach/assignments/:assignmentId/days/:programDayId/comments",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const assignmentId = Number(req.params.assignmentId);
+      const programDayId = Number(req.params.programDayId);
+      const owned = await storage.getAssignmentForCoach(user.id, assignmentId);
+      if (!owned) return res.status(404).json({ message: "Assignment not found" });
+      const comments = await storage.getWorkoutComments(assignmentId, programDayId);
+      res.json(comments);
+    },
+  );
+
+  app.post(
+    "/api/coach/assignments/:assignmentId/days/:programDayId/comments",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const assignmentId = Number(req.params.assignmentId);
+      const programDayId = Number(req.params.programDayId);
+      const owned = await storage.getAssignmentForCoach(user.id, assignmentId);
+      if (!owned) return res.status(404).json({ message: "Assignment not found" });
+      const parsed = createWorkoutCommentSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      const comment = await storage.addWorkoutComment(
+        assignmentId,
+        programDayId,
+        user.id,
+        parsed.data,
+      );
+      res.status(201).json(comment);
+    },
+  );
+
   // ---------------- Athlete ----------------
 
   app.get("/api/athlete/coaches", requireRole("athlete"), async (req, res) => {
@@ -420,6 +458,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const log = await storage.submitWorkoutLog(user.id, parsed.data);
     res.status(200).json(log);
   });
+
+  app.get(
+    "/api/athlete/assignments/:assignmentId/days/:programDayId/comments",
+    requireRole("athlete"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const assignmentId = Number(req.params.assignmentId);
+      const programDayId = Number(req.params.programDayId);
+      const owned = await storage.getAssignmentForAthlete(user.id, assignmentId);
+      if (!owned) return res.status(404).json({ message: "Assignment not found" });
+      const comments = await storage.getWorkoutComments(assignmentId, programDayId);
+      res.json(comments);
+    },
+  );
+
+  app.post(
+    "/api/athlete/assignments/:assignmentId/days/:programDayId/comments",
+    requireRole("athlete"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const assignmentId = Number(req.params.assignmentId);
+      const programDayId = Number(req.params.programDayId);
+      const owned = await storage.getAssignmentForAthlete(user.id, assignmentId);
+      if (!owned) return res.status(404).json({ message: "Assignment not found" });
+      const parsed = createWorkoutCommentSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      const comment = await storage.addWorkoutComment(
+        assignmentId,
+        programDayId,
+        user.id,
+        parsed.data,
+      );
+      res.status(201).json(comment);
+    },
+  );
 
   const httpServer = createServer(app);
   return httpServer;

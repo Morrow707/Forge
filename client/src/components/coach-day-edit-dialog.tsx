@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { ExercisePickerDialog } from "@/components/exercise-picker-dialog";
+import { WorkoutCommentThread } from "@/components/workout-comment-thread";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { computeExerciseLabels, assignSupersetGroups, deriveLinkedToNext } from "@/lib/supersets";
@@ -639,6 +640,16 @@ export function CoachDayEditDialog({
                       {saveCorrectivesMutation.isPending ? "Saving…" : "Save Correctives"}
                     </Button>
                   </div>
+                </div>
+              )}
+
+              {assignmentId != null && programDayId != null && (
+                <div className="border-t border-border pt-4">
+                  <WorkoutCommentThread
+                    role="coach"
+                    assignmentId={assignmentId}
+                    programDayId={programDayId}
+                  />
                 </div>
               )}
             </div>

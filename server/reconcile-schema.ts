@@ -215,6 +215,16 @@ CREATE TABLE IF NOT EXISTS "workout_set_entries" (
   "reps" text,
   "weight" text
 );
+
+CREATE TABLE IF NOT EXISTS "workout_comments" (
+  "id" serial PRIMARY KEY,
+  "assignment_id" integer NOT NULL REFERENCES "assignments"("id") ON DELETE CASCADE,
+  "program_day_id" integer NOT NULL REFERENCES "program_days"("id") ON DELETE CASCADE,
+  "author_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "body" text NOT NULL,
+  "video_url" text,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
 `;
 
 async function main() {

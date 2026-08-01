@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { groupConsecutiveBySupersetGroup } from "@/lib/supersets";
 import { ExerciseVideoThumb } from "@/components/exercise-video";
 import { RestTimerControl } from "@/components/rest-timer";
+import { WorkoutCommentThread } from "@/components/workout-comment-thread";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import {
@@ -528,6 +529,14 @@ export default function AthleteWorkout() {
           </div>
         </div>
       )}
+
+      <div className={cn("mt-4", !data.day.isRestDay && pages.length > 0 && "pb-16")}>
+        <WorkoutCommentThread
+          role="athlete"
+          assignmentId={Number(assignmentId)}
+          programDayId={Number(programDayId)}
+        />
+      </div>
 
       {!data.day.isRestDay && pages.length > 0 && (
         <div className="fixed inset-x-0 bottom-14 z-20 border-t border-border bg-surface md:bottom-0 md:left-64">
