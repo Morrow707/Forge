@@ -29,24 +29,41 @@ import { generateCoachCode } from "./auth-utils";
 import { addDays, parseISO, formatISO, isWithinInterval } from "date-fns";
 
 // A coach can run multiple assignments/programs for the same athlete at
-// once, and each contributes its own rest-day entry to the calendar. If two
-// or more land on the same date, that's just visual noise -- keep the first
-// one and drop the rest so the day shows a single "Rest Day" instead of a
-// stack of them. Real (non-rest) entries are left untouched even if they
-// overlap, since that's a genuine scheduling conflict worth seeing.
-function dedupeRestDays<T extends { isRestDay: boolean }>(
+// once. When two or more land on the same date, the most recently assigned
+// program wins outright -- assigning a new program is meant to replace
+// whatever was previously scheduled for that day, rest day or not -- and
+// every other entry sharing that date is dropped entirely.
+function reconcileOverlappingAssignments<
+  T extends { isRestDay: boolean; assignmentId: number },
+>(
   entries: T[],
   keyFor: (entry: T) => string,
+  createdAtByAssignment: Map<number, Date>,
 ): T[] {
-  const seen = new Set<string>();
-  const result: T[] = [];
+  const groups = new Map<string, T[]>();
   for (const entry of entries) {
-    if (entry.isRestDay) {
-      const key = keyFor(entry);
-      if (seen.has(key)) continue;
-      seen.add(key);
+    const key = keyFor(entry);
+    const list = groups.get(key);
+    if (list) list.push(entry);
+    else groups.set(key, [entry]);
+  }
+
+  const result: T[] = [];
+  for (const list of groups.values()) {
+    if (list.length === 1) {
+      result.push(list[0]);
+      continue;
     }
-    result.push(entry);
+    let winner = list[0];
+    let winnerCreatedAt = createdAtByAssignment.get(winner.assignmentId) ?? new Date(0);
+    for (const entry of list.slice(1)) {
+      const createdAt = createdAtByAssignment.get(entry.assignmentId) ?? new Date(0);
+      if (createdAt > winnerCreatedAt) {
+        winner = entry;
+        winnerCreatedAt = createdAt;
+      }
+    }
+    result.push(winner);
   }
   return result;
 }
@@ -701,9 +718,12 @@ export const storage = {
       }
     }
 
-    const deduped = dedupeRestDays(entries, (e) => e.date);
-    deduped.sort((a, b) => a.date.localeCompare(b.date));
-    return deduped;
+    const createdAtByAssignment = new Map(
+      athleteAssignments.map((a) => [a.id, new Date(a.createdAt)]),
+    );
+    const reconciled = reconcileOverlappingAssignments(entries, (e) => e.date, createdAtByAssignment);
+    reconciled.sort((a, b) => a.date.localeCompare(b.date));
+    return reconciled;
   },
 
   async getCalendarForCoach(
@@ -793,9 +813,16 @@ export const storage = {
       }
     }
 
-    const deduped = dedupeRestDays(entries, (e) => `${e.athleteId}:${e.date}`);
-    deduped.sort((a, b) => a.date.localeCompare(b.date));
-    return deduped;
+    const createdAtByAssignment = new Map(
+      coachAssignments.map((a) => [a.id, new Date(a.createdAt)]),
+    );
+    const reconciled = reconcileOverlappingAssignments(
+      entries,
+      (e) => `${e.athleteId}:${e.date}`,
+      createdAtByAssignment,
+    );
+    reconciled.sort((a, b) => a.date.localeCompare(b.date));
+    return reconciled;
   },
 
   // Most recent prior time this athlete logged this specific exercise
