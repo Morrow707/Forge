@@ -437,23 +437,15 @@ export const storage = {
     athletes: { athleteId: number; correctivesEnabled: boolean }[],
     startDate: string,
   ) {
-    const existing = await db.query.assignments.findMany({
-      where: and(
-        eq(assignments.coachId, coachId),
-        eq(assignments.programId, programId),
-      ),
-    });
-    const alreadyAssigned = new Set(existing.map((a) => a.athleteId));
-    const toCreate = athletes.filter((a) => !alreadyAssigned.has(a.athleteId));
-    const skippedAthleteIds = athletes
-      .filter((a) => alreadyAssigned.has(a.athleteId))
-      .map((a) => a.athleteId);
-
-    const created = toCreate.length
+    // Re-assigning a program an athlete already has (or has finished) is
+    // intentional -- e.g. running the same block again -- so every request
+    // creates a fresh assignment. The newest one wins on any calendar date
+    // it overlaps with an older assignment (see reconcileOverlappingAssignments).
+    const created = athletes.length
       ? await db
           .insert(assignments)
           .values(
-            toCreate.map((a) => ({
+            athletes.map((a) => ({
               coachId,
               programId,
               athleteId: a.athleteId,
@@ -464,7 +456,7 @@ export const storage = {
           .returning()
       : [];
 
-    return { created, skippedAthleteIds };
+    return { created };
   },
 
   async getAssignmentForCoach(coachId: number, assignmentId: number) {
