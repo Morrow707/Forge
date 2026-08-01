@@ -111,20 +111,9 @@ export function AppShell({
           <h1 className="font-display text-2xl font-bold uppercase tracking-wide md:text-3xl">
             {title}
           </h1>
-          <div className="flex items-center gap-2">
-            {actions}
-            <Button
-              variant="outline"
-              size="icon"
-              className="shrink-0 md:hidden"
-              onClick={() => logoutMutation.mutate()}
-              aria-label="Log out"
-            >
-              <LogOut className="h-4 w-4" />
-            </Button>
-          </div>
+          <div className="flex min-w-0 items-center gap-2 overflow-x-auto">{actions}</div>
         </header>
-        <main className="flex-1 px-4 py-6 md:px-8 md:py-8">{children}</main>
+        <main className="flex-1 px-4 py-6 pb-24 md:px-8 md:py-8 md:pb-8">{children}</main>
       </div>
 
       <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t border-border bg-surface md:hidden">
@@ -147,6 +136,14 @@ export function AppShell({
             </Link>
           );
         })}
+        <button
+          type="button"
+          onClick={() => logoutMutation.mutate()}
+          className="flex flex-1 flex-col items-center gap-1 py-2.5 text-[11px] font-semibold text-muted-foreground"
+        >
+          <LogOut className="h-5 w-5" />
+          Log out
+        </button>
       </nav>
     </div>
   );

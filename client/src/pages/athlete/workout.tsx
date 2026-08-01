@@ -262,9 +262,9 @@ export default function AthleteWorkout() {
               </button>
             ))}
           </div>
-          <Button variant="outline" onClick={() => navigate("/athlete")}>
+          <Button variant="outline" onClick={() => navigate("/athlete")} className="shrink-0">
             <ArrowLeft className="h-4 w-4" />
-            Calendar
+            <span className="hidden sm:inline">Calendar</span>
           </Button>
         </>
       }
