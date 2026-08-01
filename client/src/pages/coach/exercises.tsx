@@ -23,10 +23,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { apiRequest, ApiError } from "@/lib/queryClient";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Dumbbell, Search, Video, Stethoscope } from "lucide-react";
 import type { Exercise } from "@shared/schema";
 import { MOVEMENT_TYPES, MUSCLE_GROUPS } from "@/lib/exercise-taxonomy";
+import { FilterChipGroup, toggleInSet } from "@/components/filter-chip-group";
 
 const CATEGORIES = [
   "strength",
@@ -78,10 +80,10 @@ export default function CoachExercises() {
   });
 
   const [search, setSearch] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState<string>("all");
-  const [movementFilter, setMovementFilter] = useState<string>("all");
-  const [muscleGroupFilter, setMuscleGroupFilter] = useState<string>("all");
-  const [lateralityFilter, setLateralityFilter] = useState<string>("all");
+  const [categoryFilter, setCategoryFilter] = useState<Set<string>>(new Set());
+  const [movementFilter, setMovementFilter] = useState<Set<string>>(new Set());
+  const [muscleGroupFilter, setMuscleGroupFilter] = useState<Set<string>>(new Set());
+  const [lateralityFilter, setLateralityFilter] = useState<Set<string>>(new Set());
   const [correctivesOnly, setCorrectivesOnly] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState<ExerciseForm>(emptyForm);
@@ -98,13 +100,12 @@ export default function CoachExercises() {
         !search ||
         ex.name.toLowerCase().includes(search.toLowerCase()) ||
         ex.muscleGroup.toLowerCase().includes(search.toLowerCase());
-      const matchesCategory = categoryFilter === "all" || ex.category === categoryFilter;
+      const matchesCategory = categoryFilter.size === 0 || categoryFilter.has(ex.category);
       const matchesMovement =
-        movementFilter === "all" || ex.movementType === movementFilter;
-      const matchesMuscleGroup =
-        muscleGroupFilter === "all" || ex.muscleGroup === muscleGroupFilter;
+        movementFilter.size === 0 || (ex.movementType != null && movementFilter.has(ex.movementType));
+      const matchesMuscleGroup = muscleGroupFilter.size === 0 || muscleGroupFilter.has(ex.muscleGroup);
       const matchesLaterality =
-        lateralityFilter === "all" || ex.laterality === lateralityFilter;
+        lateralityFilter.size === 0 || (ex.laterality != null && lateralityFilter.has(ex.laterality));
       const matchesCorrective = !correctivesOnly || ex.isCorrective;
       return (
         matchesSearch &&
@@ -206,63 +207,47 @@ export default function CoachExercises() {
             className="pl-9"
           />
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-            <SelectTrigger className="w-44">
-              <SelectValue placeholder="All categories" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All categories</SelectItem>
-              {CATEGORIES.map((c) => (
-                <SelectItem key={c} value={c} className="capitalize">
-                  {c}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={movementFilter} onValueChange={setMovementFilter}>
-            <SelectTrigger className="w-44">
-              <SelectValue placeholder="All movement types" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All movement types</SelectItem>
-              {MOVEMENT_TYPES.map((m) => (
-                <SelectItem key={m} value={m}>
-                  {m}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={muscleGroupFilter} onValueChange={setMuscleGroupFilter}>
-            <SelectTrigger className="w-44">
-              <SelectValue placeholder="All muscle groups" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All muscle groups</SelectItem>
-              {bodyParts.map((b) => (
-                <SelectItem key={b} value={b}>
-                  {b}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={lateralityFilter} onValueChange={setLateralityFilter}>
-            <SelectTrigger className="w-40">
-              <SelectValue placeholder="Bilateral/Unilateral" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Bilateral/Unilateral</SelectItem>
-              <SelectItem value="bilateral">Bilateral</SelectItem>
-              <SelectItem value="unilateral">Unilateral</SelectItem>
-            </SelectContent>
-          </Select>
-          <label className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm">
-            <Checkbox
-              checked={correctivesOnly}
-              onCheckedChange={(c) => setCorrectivesOnly(c === true)}
+        <div className="space-y-1.5">
+          <FilterChipGroup
+            label="Category"
+            options={[...CATEGORIES]}
+            selected={categoryFilter}
+            onToggle={(v) => toggleInSet(setCategoryFilter, v)}
+          />
+          <FilterChipGroup
+            label="Movement"
+            options={MOVEMENT_TYPES}
+            selected={movementFilter}
+            onToggle={(v) => toggleInSet(setMovementFilter, v)}
+          />
+          <FilterChipGroup
+            label="Muscle"
+            options={bodyParts}
+            selected={muscleGroupFilter}
+            onToggle={(v) => toggleInSet(setMuscleGroupFilter, v)}
+          />
+          <div className="flex flex-wrap items-center gap-1">
+            <FilterChipGroup
+              label="Laterality"
+              options={["bilateral", "unilateral"]}
+              selected={lateralityFilter}
+              onToggle={(v) => toggleInSet(setLateralityFilter, v)}
             />
-            Correctives only
-          </label>
+            <button
+              type="button"
+              onClick={() => setCorrectivesOnly((v) => !v)}
+              aria-pressed={correctivesOnly}
+              className={cn(
+                "flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors",
+                correctivesOnly
+                  ? "border-cyan-500 bg-cyan-500/15 text-cyan-400"
+                  : "border-border text-muted-foreground hover:border-cyan-500/50 hover:text-cyan-400",
+              )}
+            >
+              <Stethoscope className="h-3 w-3" />
+              Correctives only
+            </button>
+          </div>
         </div>
       </div>
 
