@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { apiRequest, ApiError } from "@/lib/queryClient";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Users, UserPlus, Send, Plus, X, Stethoscope } from "lucide-react";
 
@@ -351,21 +352,25 @@ export default function CoachRoster() {
                         />
                         {a.name}
                       </label>
-                      {selected && (
-                        <label className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
-                          <Checkbox
-                            checked={correctivesEnabled}
-                            onCheckedChange={(checked) =>
-                              setAssignAthletes((prev) => {
-                                const next = new Map(prev);
-                                next.set(a.id, checked === true);
-                                return next;
-                              })
-                            }
-                          />
-                          Correctives
-                        </label>
-                      )}
+                      <label
+                        className={cn(
+                          "flex shrink-0 items-center gap-1.5 text-xs",
+                          selected ? "text-muted-foreground" : "text-muted-foreground/40",
+                        )}
+                      >
+                        <Checkbox
+                          checked={correctivesEnabled}
+                          disabled={!selected}
+                          onCheckedChange={(checked) =>
+                            setAssignAthletes((prev) => {
+                              const next = new Map(prev);
+                              next.set(a.id, checked === true);
+                              return next;
+                            })
+                          }
+                        />
+                        Correctives
+                      </label>
                     </div>
                   );
                 })}
