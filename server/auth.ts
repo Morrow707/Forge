@@ -166,13 +166,16 @@ export const requireAuth: RequestHandler = (req, res, next) => {
   next();
 };
 
+type Role = "coach" | "athlete" | "admin";
+
 export const requireRole =
-  (role: "coach" | "athlete"): RequestHandler =>
+  (role: Role | Role[]): RequestHandler =>
   (req, res, next) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Not authenticated" });
     }
-    if ((req.user as any).role !== role) {
+    const allowed = Array.isArray(role) ? role : [role];
+    if (!allowed.includes((req.user as any).role)) {
       return res.status(403).json({ message: "Forbidden" });
     }
     next();

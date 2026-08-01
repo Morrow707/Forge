@@ -10,12 +10,16 @@ import SignupPage from "@/pages/signup";
 import NotFound from "@/pages/not-found";
 import CoachDashboard from "@/pages/coach/dashboard";
 import CoachExercises from "@/pages/coach/exercises";
+import CoachExerciseDetail from "@/pages/coach/exercise-detail";
 import CoachPrograms from "@/pages/coach/programs";
 import CoachProgramBuilder from "@/pages/coach/program-builder";
 import CoachRoster from "@/pages/coach/roster";
 import CoachCalendar from "@/pages/coach/calendar";
 import AthleteDashboard from "@/pages/athlete/dashboard";
 import AthleteWorkout from "@/pages/athlete/workout";
+import AdminDashboard from "@/pages/admin/dashboard";
+import AdminExercises from "@/pages/admin/exercises";
+import AdminExerciseDetail from "@/pages/admin/exercise-detail";
 
 function FullScreenSpinner() {
   return (
@@ -25,11 +29,17 @@ function FullScreenSpinner() {
   );
 }
 
+function homeFor(role: "coach" | "athlete" | "admin") {
+  if (role === "coach") return "/coach";
+  if (role === "admin") return "/admin";
+  return "/athlete";
+}
+
 function ProtectedRoute({
   role,
   component: Component,
 }: {
-  role: "coach" | "athlete";
+  role: "coach" | "athlete" | "admin";
   component: ComponentType;
 }) {
   const { user, isLoading } = useAuth();
@@ -37,7 +47,7 @@ function ProtectedRoute({
   if (isLoading) return <FullScreenSpinner />;
   if (!user) return <Redirect to="/login" />;
   if (user.role !== role) {
-    return <Redirect to={user.role === "coach" ? "/coach" : "/athlete"} />;
+    return <Redirect to={homeFor(user.role)} />;
   }
   return <Component />;
 }
@@ -46,7 +56,7 @@ function HomeRedirect() {
   const { user, isLoading } = useAuth();
   if (isLoading) return <FullScreenSpinner />;
   if (!user) return <Redirect to="/login" />;
-  return <Redirect to={user.role === "coach" ? "/coach" : "/athlete"} />;
+  return <Redirect to={homeFor(user.role)} />;
 }
 
 function Router() {
@@ -60,6 +70,9 @@ function Router() {
       </Route>
       <Route path="/coach/calendar">
         <ProtectedRoute role="coach" component={CoachCalendar} />
+      </Route>
+      <Route path="/coach/exercises/:id">
+        <ProtectedRoute role="coach" component={CoachExerciseDetail} />
       </Route>
       <Route path="/coach/exercises">
         <ProtectedRoute role="coach" component={CoachExercises} />
@@ -78,6 +91,15 @@ function Router() {
       </Route>
       <Route path="/athlete/day/:assignmentId/:programDayId/:date">
         <ProtectedRoute role="athlete" component={AthleteWorkout} />
+      </Route>
+      <Route path="/admin">
+        <ProtectedRoute role="admin" component={AdminDashboard} />
+      </Route>
+      <Route path="/admin/exercises/:id">
+        <ProtectedRoute role="admin" component={AdminExerciseDetail} />
+      </Route>
+      <Route path="/admin/exercises">
+        <ProtectedRoute role="admin" component={AdminExercises} />
       </Route>
       <Route component={NotFound} />
     </Switch>

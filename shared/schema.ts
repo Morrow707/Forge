@@ -36,7 +36,7 @@ export const session = pgTable(
   }),
 );
 
-export const roleEnum = pgEnum("role", ["coach", "athlete"]);
+export const roleEnum = pgEnum("role", ["coach", "athlete", "admin"]);
 export const weightUnitEnum = pgEnum("weight_unit", ["lbs", "kg"]);
 export const weightModeEnum = pgEnum("weight_mode", [
   "numeric",

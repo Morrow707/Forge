@@ -30,6 +30,12 @@ import { eq, and, inArray, asc, desc, lt } from "drizzle-orm";
 import { generateCoachCode } from "./auth-utils";
 import { addDays, parseISO, formatISO, isWithinInterval } from "date-fns";
 
+function initialsFor(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  const initials = parts.slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("");
+  return initials || "?";
+}
+
 // A coach can run multiple assignments/programs for the same athlete at
 // once. When two or more land on the same date, the most recently assigned
 // program wins outright -- assigning a new program is meant to replace
@@ -108,6 +114,11 @@ export const storage = {
       .set({ preferredWeightUnit: input.preferredWeightUnit })
       .where(eq(users.id, userId))
       .returning();
+    return row;
+  },
+
+  async setUserRole(userId: number, role: "coach" | "athlete" | "admin") {
+    const [row] = await db.update(users).set({ role }).where(eq(users.id, userId)).returning();
     return row;
   },
 
@@ -192,11 +203,63 @@ export const storage = {
   },
 
   // ---------- Exercises ----------
+  // System-wide, unfiltered -- used for one-off seeding/migration scripts
+  // that need to know what already exists by name regardless of current
+  // owner (an exercise's coachId can change, e.g. when its ownership is
+  // handed to the admin to become a Forge-official exercise).
+  async getAllExercises() {
+    return db.query.exercises.findMany();
+  },
+
+  // Exercises created by an admin are "Forge" branded -- shared with every
+  // coach, read-only to them. A coach's own exercises are private to them.
+  // These are derived from the creator's role rather than stored as a flag,
+  // so there's no separate field that could drift out of sync with it.
+  withExerciseOwnership<T extends { coachId: number; coach: { name: string; role: string } }>(
+    ex: T,
+    requestingUserId: number,
+  ) {
+    const { coach, ...rest } = ex;
+    const isForgeOfficial = coach.role === "admin";
+    return {
+      ...rest,
+      isForgeOfficial,
+      ownerLabel: isForgeOfficial ? "FORGE" : initialsFor(coach.name),
+      editable: rest.coachId === requestingUserId,
+    };
+  },
+
+  // A coach's own bank plus every Forge-official exercise -- what a coach
+  // sees in their exercise bank and the program-builder picker.
+  async getVisibleExercisesForCoach(coachId: number) {
+    const admins = await db.query.users.findMany({ where: eq(users.role, "admin") });
+    const ownerIds = Array.from(new Set([coachId, ...admins.map((a) => a.id)]));
+    const rows = await db.query.exercises.findMany({
+      where: inArray(exercises.coachId, ownerIds),
+      orderBy: desc(exercises.createdAt),
+      with: { coach: true },
+    });
+    return rows.map((ex) => this.withExerciseOwnership(ex, coachId));
+  },
+
+  // Exercises a specific user (coach or admin) personally created -- an
+  // admin's own bank is exactly their Forge library, nothing shared in.
   async getExercisesByCoach(coachId: number) {
-    return db.query.exercises.findMany({
+    const rows = await db.query.exercises.findMany({
       where: eq(exercises.coachId, coachId),
       orderBy: desc(exercises.createdAt),
+      with: { coach: true },
     });
+    return rows.map((ex) => this.withExerciseOwnership(ex, coachId));
+  },
+
+  async getExerciseDetail(id: number, requestingUserId: number) {
+    const ex = await db.query.exercises.findFirst({
+      where: eq(exercises.id, id),
+      with: { coach: true },
+    });
+    if (!ex) return null;
+    return this.withExerciseOwnership(ex, requestingUserId);
   },
 
   async getExercise(id: number) {
@@ -218,6 +281,17 @@ export const storage = {
       .where(eq(exercises.id, id))
       .returning();
     return row;
+  },
+
+  // One-off migration helper: hand an existing exercise library over to a
+  // different owner (e.g. promoting a coach's library to the admin's
+  // official Forge library). Idempotent -- re-running finds nothing left
+  // to move once it's already been done.
+  async transferExerciseOwnership(fromUserId: number, toUserId: number) {
+    await db
+      .update(exercises)
+      .set({ coachId: toUserId })
+      .where(eq(exercises.coachId, fromUserId));
   },
 
   async deleteExercise(id: number) {
