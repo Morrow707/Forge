@@ -438,13 +438,19 @@ export default function CoachExercises() {
               Available as a corrective
             </label>
             <div className="space-y-1.5">
-              <Label htmlFor="ex-video">Video URL (optional)</Label>
+              <Label htmlFor="ex-video">YouTube video URL</Label>
               <Input
                 id="ex-video"
+                type="url"
+                required
                 value={form.videoUrl}
                 onChange={(e) => setForm((f) => ({ ...f, videoUrl: e.target.value }))}
-                placeholder="https://…"
+                placeholder="https://www.youtube.com/watch?v=…"
               />
+              <p className="text-xs text-muted-foreground">
+                Paste a direct video link and it'll play inline for athletes; anything else shows
+                as a link out to YouTube.
+              </p>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="ex-instructions">Instructions (optional)</Label>

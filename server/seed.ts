@@ -5,6 +5,15 @@ import { hashPassword } from "./auth-utils";
 import { users } from "@shared/schema";
 import { eq } from "drizzle-orm";
 
+// We don't have live web access from this environment to verify specific
+// YouTube video IDs are real and still online, so hand-picking exact links
+// risks seeding dead or wrong embeds. A search link is always valid and
+// always relevant; the athlete's video player auto-upgrades to a real
+// embedded player the moment a coach edits the exercise with a direct link.
+function videoSearchUrl(name: string) {
+  return `https://www.youtube.com/results?search_query=${encodeURIComponent(`${name} exercise tutorial`)}`;
+}
+
 async function main() {
   console.log("Seeding Forge demo data...");
 
@@ -110,9 +119,42 @@ async function main() {
         isCorrective: true,
         instructions: "Arms straight, squeeze shoulder blades together for 2s each rep.",
       },
+      {
+        name: "Band External Rotation",
+        category: "mobility" as const,
+        muscleGroup: "Shoulder",
+        equipment: "Band",
+        movementType: "Activation",
+        laterality: "unilateral" as const,
+        isCorrective: true,
+        instructions: "Elbow pinned to side at 90°, rotate forearm out slowly, control the return.",
+      },
+      {
+        name: "90/90 Hip Switch",
+        category: "mobility" as const,
+        muscleGroup: "Hip",
+        equipment: "Bodyweight",
+        movementType: "Mobility",
+        laterality: "unilateral" as const,
+        isCorrective: true,
+        instructions: "Seated, both legs at 90°, rotate knees side to side keeping chest tall.",
+      },
+      {
+        name: "World's Greatest Stretch",
+        category: "mobility" as const,
+        muscleGroup: "Hip",
+        equipment: "Bodyweight",
+        movementType: "Mobility",
+        laterality: "unilateral" as const,
+        isCorrective: true,
+        instructions: "Lunge forward, drop back hand to floor, rotate front elbow to the sky, hold 2s.",
+      },
     ];
     for (const ex of seedExercises) {
-      const row = await storage.createExercise(coach.id, ex);
+      const row = await storage.createExercise(coach.id, {
+        ...ex,
+        videoUrl: videoSearchUrl(ex.name),
+      });
       exerciseMap[ex.name] = row.id;
     }
   } else {
