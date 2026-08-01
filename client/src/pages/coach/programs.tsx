@@ -14,9 +14,10 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { AssignProgramDialog } from "@/components/assign-program-dialog";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { Plus, ListChecks, Trash2, Users, CalendarRange } from "lucide-react";
+import { Plus, ListChecks, Trash2, Users, CalendarRange, Send } from "lucide-react";
 
 type ProgramSummary = {
   id: number;
@@ -27,16 +28,22 @@ type ProgramSummary = {
   assignedAthleteCount: number;
 };
 
+type RosterEntry = { id: number; name: string; email: string };
+
 export default function CoachPrograms() {
   const qc = useQueryClient();
   const [, navigate] = useLocation();
   const { data: programs = [], isLoading } = useQuery<ProgramSummary[]>({
     queryKey: ["/api/coach/programs"],
   });
+  const { data: roster = [] } = useQuery<RosterEntry[]>({
+    queryKey: ["/api/coach/roster"],
+  });
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [assignProgramId, setAssignProgramId] = useState<number | null>(null);
 
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -122,25 +129,36 @@ export default function CoachPrograms() {
                   </p>
                 )}
               </div>
-              <div className="mt-auto flex items-center justify-between border-t border-border pt-3 text-xs text-muted-foreground">
-                <span className="flex items-center gap-1">
-                  <CalendarRange className="h-3.5 w-3.5" />
-                  {p.weekCount} wk · {p.dayCount} days
-                </span>
-                <span className="flex items-center gap-1">
-                  <Users className="h-3.5 w-3.5" />
-                  {p.assignedAthleteCount}
-                </span>
+              <div className="mt-auto space-y-2">
+                <div className="flex items-center justify-between border-t border-border pt-3 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    <CalendarRange className="h-3.5 w-3.5" />
+                    {p.weekCount} wk · {p.dayCount} days
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Users className="h-3.5 w-3.5" />
+                    {p.assignedAthleteCount}
+                  </span>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => {
+                      if (confirm(`Delete "${p.name}"? This cannot be undone.`)) {
+                        deleteMutation.mutate(p.id);
+                      }
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                </div>
                 <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={() => {
-                    if (confirm(`Delete "${p.name}"? This cannot be undone.`)) {
-                      deleteMutation.mutate(p.id);
-                    }
-                  }}
+                  size="sm"
+                  variant="secondary"
+                  className="w-full"
+                  onClick={() => setAssignProgramId(p.id)}
                 >
-                  <Trash2 className="h-4 w-4 text-destructive" />
+                  <Send className="h-3.5 w-3.5" />
+                  Assign
                 </Button>
               </div>
             </CardContent>
@@ -190,6 +208,14 @@ export default function CoachPrograms() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <AssignProgramDialog
+        open={assignProgramId !== null}
+        onOpenChange={(open) => !open && setAssignProgramId(null)}
+        roster={roster}
+        programs={programs}
+        programId={assignProgramId ?? undefined}
+      />
     </AppShell>
   );
 }

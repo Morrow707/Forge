@@ -10,6 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { ExercisePickerDialog } from "@/components/exercise-picker-dialog";
+import { AssignProgramDialog } from "@/components/assign-program-dialog";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { computeExerciseLabels, assignSupersetGroups, deriveLinkedToNext } from "@/lib/supersets";
@@ -38,8 +39,11 @@ import {
   ArrowLeft,
   MoonStar,
   Link2,
+  Send,
 } from "lucide-react";
 import type { Exercise } from "@shared/schema";
+
+type RosterEntry = { id: number; name: string; email: string };
 
 type LocalExercise = {
   key: string;
@@ -110,6 +114,9 @@ export default function CoachProgramBuilder() {
       return res.json();
     },
   });
+  const { data: roster = [] } = useQuery<RosterEntry[]>({
+    queryKey: ["/api/coach/roster"],
+  });
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -117,6 +124,7 @@ export default function CoachProgramBuilder() {
   const [activeWeekKey, setActiveWeekKey] = useState<string | null>(null);
   const [pickerForDay, setPickerForDay] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
+  const [assignOpen, setAssignOpen] = useState(false);
 
   useEffect(() => {
     if (program && !hydrated) {
@@ -246,6 +254,10 @@ export default function CoachProgramBuilder() {
             <ArrowLeft className="h-4 w-4" />
             Back
           </Button>
+          <Button variant="secondary" onClick={() => setAssignOpen(true)}>
+            <Send className="h-4 w-4" />
+            Assign Program
+          </Button>
           <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
             <Save className="h-4 w-4" />
             {saveMutation.isPending ? "Saving…" : "Save Program"}
@@ -347,6 +359,14 @@ export default function CoachProgramBuilder() {
             ],
           }));
         }}
+      />
+
+      <AssignProgramDialog
+        open={assignOpen}
+        onOpenChange={setAssignOpen}
+        roster={roster}
+        programs={[{ id: programId, name }]}
+        programId={programId}
       />
     </AppShell>
   );
@@ -480,16 +500,16 @@ function SupersetConnector({
 }) {
   return (
     <div className="flex items-center gap-2 py-0.5 pl-3">
-      <div className={cn("h-3 w-px", linked ? "bg-primary" : "bg-transparent")} />
+      <div className={cn("h-3 w-px", linked ? "bg-blue-500" : "bg-transparent")} />
       <button
         type="button"
         onClick={onToggle}
         title={linked ? "Unlink superset" : "Link into a superset"}
         className={cn(
-          "flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold transition-colors",
+          "flex items-center gap-1 rounded-full border-2 px-2.5 py-1 text-[11px] font-bold transition-colors",
           linked
-            ? "border-primary bg-primary/15 text-primary"
-            : "border-border text-muted-foreground hover:border-primary/50 hover:text-primary",
+            ? "border-blue-500 bg-blue-500 text-white"
+            : "border-blue-500 text-blue-500 hover:bg-blue-500/10",
         )}
       >
         <Link2 className="h-3 w-3" />
@@ -534,9 +554,9 @@ function SortableExerciseRow({
         >
           <GripVertical className="h-4 w-4" />
         </button>
-        <Badge variant="outline" className="shrink-0 px-1.5 font-mono text-[10px]">
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-extrabold text-primary-foreground">
           {label}
-        </Badge>
+        </span>
         <span className="flex-1 truncate text-sm font-semibold">
           {exercise.exerciseName}
         </span>
