@@ -14,6 +14,7 @@ import {
   workoutLogs,
   workoutLogEntries,
   workoutSetEntries,
+  workoutComments,
   type InsertUser,
 } from "@shared/schema";
 import type {
@@ -23,6 +24,7 @@ import type {
   UpdateCorrectivesInput,
   UpdateAssignmentInput,
   UpdatePreferencesInput,
+  CreateWorkoutCommentInput,
 } from "@shared/schema";
 import { eq, and, inArray, asc, desc, lt } from "drizzle-orm";
 import { generateCoachCode } from "./auth-utils";
@@ -625,6 +627,57 @@ export const storage = {
     });
     const byId = new Map(rowsById.map((e) => [e.id, e]));
     return distinctIds.map((id) => byId.get(id)).filter((e): e is typeof rowsById[number] => !!e);
+  },
+
+  // ---------- Workout comments ----------
+  async getAssignmentForAthlete(athleteId: number, assignmentId: number) {
+    return db.query.assignments.findFirst({
+      where: and(eq(assignments.id, assignmentId), eq(assignments.athleteId, athleteId)),
+    });
+  },
+
+  async getWorkoutComments(assignmentId: number, programDayId: number) {
+    const rows = await db.query.workoutComments.findMany({
+      where: and(
+        eq(workoutComments.assignmentId, assignmentId),
+        eq(workoutComments.programDayId, programDayId),
+      ),
+      orderBy: asc(workoutComments.createdAt),
+      with: { author: true },
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      body: r.body,
+      videoUrl: r.videoUrl,
+      createdAt: r.createdAt,
+      author: { id: r.author.id, name: r.author.name, role: r.author.role },
+    }));
+  },
+
+  async addWorkoutComment(
+    assignmentId: number,
+    programDayId: number,
+    authorId: number,
+    input: CreateWorkoutCommentInput,
+  ) {
+    const [row] = await db
+      .insert(workoutComments)
+      .values({
+        assignmentId,
+        programDayId,
+        authorId,
+        body: input.body,
+        videoUrl: input.videoUrl || null,
+      })
+      .returning();
+    const author = await db.query.users.findFirst({ where: eq(users.id, authorId) });
+    return {
+      id: row.id,
+      body: row.body,
+      videoUrl: row.videoUrl,
+      createdAt: row.createdAt,
+      author: { id: author!.id, name: author!.name, role: author!.role },
+    };
   },
 
   // ---------- Calendar ----------

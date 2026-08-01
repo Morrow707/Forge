@@ -298,6 +298,26 @@ export const workoutSetEntries = pgTable("workout_set_entries", {
   weight: text("weight"),
 });
 
+// A two-way thread on a specific day of a specific assignment -- an athlete
+// flagging a rough set or attaching a form-check video, a coach replying.
+// Scoped to (assignmentId, programDayId) rather than a workoutLog row so the
+// thread exists even before the athlete has logged anything for that day.
+export const workoutComments = pgTable("workout_comments", {
+  id: serial("id").primaryKey(),
+  assignmentId: integer("assignment_id")
+    .notNull()
+    .references(() => assignments.id, { onDelete: "cascade" }),
+  programDayId: integer("program_day_id")
+    .notNull()
+    .references(() => programDays.id, { onDelete: "cascade" }),
+  authorId: integer("author_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  body: text("body").notNull(),
+  videoUrl: text("video_url"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 // ---------- Relations ----------
 
 export const usersRelations = relations(users, ({ many }) => ({
@@ -396,6 +416,22 @@ export const assignmentsRelations = relations(assignments, ({ one, many }) => ({
   }),
   logs: many(workoutLogs),
   correctives: many(assignmentCorrectives),
+  comments: many(workoutComments),
+}));
+
+export const workoutCommentsRelations = relations(workoutComments, ({ one }) => ({
+  assignment: one(assignments, {
+    fields: [workoutComments.assignmentId],
+    references: [assignments.id],
+  }),
+  programDay: one(programDays, {
+    fields: [workoutComments.programDayId],
+    references: [programDays.id],
+  }),
+  author: one(users, {
+    fields: [workoutComments.authorId],
+    references: [users.id],
+  }),
 }));
 
 export const assignmentCorrectivesRelations = relations(
@@ -579,6 +615,11 @@ export const updateCorrectivesSchema = z.object({
   correctives: z.array(correctiveInputSchema).default([]),
 });
 
+export const createWorkoutCommentSchema = z.object({
+  body: z.string().trim().min(1).max(2000),
+  videoUrl: z.string().trim().max(500).optional().nullable(),
+});
+
 export const setLogInputSchema = z.object({
   setNumber: z.number(),
   reps: z.string().optional().nullable(),
@@ -621,6 +662,7 @@ export type AssignmentCorrective = typeof assignmentCorrectives.$inferSelect;
 export type WorkoutLog = typeof workoutLogs.$inferSelect;
 export type WorkoutLogEntry = typeof workoutLogEntries.$inferSelect;
 export type WorkoutSetEntry = typeof workoutSetEntries.$inferSelect;
+export type WorkoutComment = typeof workoutComments.$inferSelect;
 export type Team = typeof teams.$inferSelect;
 
 export type SignupInput = z.infer<typeof signupSchema>;
@@ -632,5 +674,6 @@ export type UpdateProgramDayInput = z.infer<typeof updateProgramDaySchema>;
 export type UpdateCorrectivesInput = z.infer<typeof updateCorrectivesSchema>;
 export type SubmitWorkoutLogInput = z.infer<typeof submitWorkoutLogSchema>;
 export type UpdatePreferencesInput = z.infer<typeof updatePreferencesSchema>;
+export type CreateWorkoutCommentInput = z.infer<typeof createWorkoutCommentSchema>;
 
 export type PublicUser = Omit<User, "passwordHash">;
