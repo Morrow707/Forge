@@ -7,6 +7,15 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
+      // Switched from the default generateSW strategy to injectManifest so
+      // the service worker can also handle Web Push (`push` /
+      // `notificationclick`) -- generateSW auto-generates the whole worker
+      // and has no hook for custom event listeners. client/src/sw.ts now
+      // owns precaching + the SPA offline fallback directly (previously
+      // configured here via `workbox` options) alongside the push handling.
+      strategies: "injectManifest",
+      srcDir: "src",
+      filename: "sw.ts",
       registerType: "autoUpdate",
       injectRegister: "auto",
       manifest: {
@@ -28,18 +37,10 @@ export default defineConfig({
           },
         ],
       },
-      workbox: {
-        // The app shell (JS/CSS/HTML) is what needs to work offline so the
-        // UI can load and render; API responses are handled by the app's
-        // own localStorage-backed offline cache/queue on the workout page,
-        // not the service worker, so live data is never served stale here.
-        navigateFallbackDenylist: [/^\/api\//],
-        runtimeCaching: [
-          {
-            urlPattern: /^\/api\//,
-            handler: "NetworkOnly",
-          },
-        ],
+      injectManifest: {
+        // Vite already code-splits aggressively; keep the same "big client
+        // chunks still get precached" behavior generateSW had by default.
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
       },
     }),
   ],

@@ -452,6 +452,22 @@ export const notifications = pgTable("notifications", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// One row per browser/device a user has enabled push notifications on --
+// the Web Push standard's subscription object (endpoint + encryption
+// keys), opaque to us, handed to web-push verbatim when sending. A user
+// can have several (phone, laptop, etc); each is removed independently if
+// the push service reports it's gone stale (410/404 on send).
+export const pushSubscriptions = pgTable("push_subscriptions", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  endpoint: text("endpoint").notNull(),
+  p256dh: text("p256dh").notNull(),
+  auth: text("auth").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 // Single-use, expiring password reset tokens. Only the SHA-256 hash of the
 // token is stored -- same reasoning as password hashing -- so a database
 // leak alone can't be used to reset anyone's password.
@@ -918,3 +934,12 @@ export const updateHealthStatusSchema = z.object({
   healthStatus: z.enum(["healthy", "hurt"]),
 });
 export type UpdateHealthStatusInput = z.infer<typeof updateHealthStatusSchema>;
+
+export const pushSubscribeSchema = z.object({
+  endpoint: z.string().url(),
+  keys: z.object({
+    p256dh: z.string().min(1),
+    auth: z.string().min(1),
+  }),
+});
+export type PushSubscribeInput = z.infer<typeof pushSubscribeSchema>;

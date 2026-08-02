@@ -13,8 +13,14 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { Mail, MessageCircle } from "lucide-react";
+import { Mail, MessageCircle, Bell } from "lucide-react";
 import type { PublicUser } from "@shared/schema";
+import {
+  isPushSupported,
+  getCurrentPushSubscription,
+  subscribeToPush,
+  unsubscribeFromPush,
+} from "@/lib/push";
 
 export function NotificationSettingsDialog({
   user,
@@ -29,14 +35,40 @@ export function NotificationSettingsDialog({
   const [phone, setPhone] = useState("");
   const [notifyEmail, setNotifyEmail] = useState(true);
   const [notifySms, setNotifySms] = useState(false);
+  // Push is per-device, not part of the account -- tracked separately from
+  // the other prefs, read straight from this browser's own subscription
+  // state rather than the server.
+  const [pushSubscribed, setPushSubscribed] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
 
   useEffect(() => {
     if (open) {
       setPhone(user.phone ?? "");
       setNotifyEmail(user.notifyEmail);
       setNotifySms(user.notifySms);
+      if (isPushSupported()) {
+        getCurrentPushSubscription().then((sub) => setPushSubscribed(!!sub));
+      }
     }
   }, [open, user]);
+
+  async function togglePush(next: boolean) {
+    setPushBusy(true);
+    try {
+      if (next) {
+        await subscribeToPush();
+        toast.success("Push notifications enabled on this device");
+      } else {
+        await unsubscribeFromPush();
+        toast.success("Push notifications turned off on this device");
+      }
+      setPushSubscribed(next);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not update push notifications");
+    } finally {
+      setPushBusy(false);
+    }
+  }
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -66,6 +98,23 @@ export function NotificationSettingsDialog({
           completions or team-wide activity.
         </p>
         <div className="space-y-4">
+          {isPushSupported() && (
+            <label className="flex items-start gap-2.5 text-sm">
+              <Checkbox
+                checked={pushSubscribed}
+                disabled={pushBusy}
+                onCheckedChange={(checked) => togglePush(checked === true)}
+              />
+              <span>
+                <span className="flex items-center gap-1.5 font-semibold">
+                  <Bell className="h-3.5 w-3.5" /> Push notifications
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  Sent to this device/browser only -- enable on each one you want alerts on.
+                </span>
+              </span>
+            </label>
+          )}
           <div className="space-y-1.5">
             <Label htmlFor="notif-phone">Phone number</Label>
             <Input
