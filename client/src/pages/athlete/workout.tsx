@@ -49,6 +49,7 @@ type ExerciseInfo = {
   id: number;
   name: string;
   muscleGroup: string;
+  equipment: string;
   instructions: string | null;
   videoUrl: string | null;
 };
@@ -138,6 +139,7 @@ type ItemState = {
   refId: number;
   exerciseName: string;
   muscleGroup: string;
+  equipment: string;
   instructions: string | null;
   videoUrl: string | null;
   prescribedSets: number;
@@ -182,6 +184,7 @@ function buildItem(
     refId: prescribed.id,
     exerciseName: prescribed.exercise.name,
     muscleGroup: prescribed.exercise.muscleGroup,
+    equipment: prescribed.exercise.equipment,
     instructions: prescribed.exercise.instructions,
     videoUrl: prescribed.exercise.videoUrl,
     prescribedSets: prescribed.sets,
@@ -349,6 +352,12 @@ export default function AthleteWorkout() {
   const [items, setItems] = useState<ItemState[]>([]);
   const [hydrated, setHydrated] = useState(false);
   const [pageIndex, setPageIndex] = useState(0);
+  const [viewMode, setViewMode] = useState<"overview" | "logging">("overview");
+
+  function openPage(index: number) {
+    setPageIndex(index);
+    setViewMode("logging");
+  }
 
   useEffect(() => {
     if (data && !hydrated) {
@@ -573,32 +582,7 @@ export default function AthleteWorkout() {
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-4 pb-24">
-          {pages.length > 0 && (
-            <div className="flex items-center justify-center gap-2 py-1">
-              {pages.map((page, i) => {
-                const complete = isPageComplete(page);
-                const isCurrent = i === pageIndex;
-                return (
-                  <button
-                    key={i}
-                    type="button"
-                    aria-label={`Go to exercise group ${i + 1} of ${pages.length}`}
-                    onClick={() => setPageIndex(i)}
-                    className={cn(
-                      "rounded-full transition-all",
-                      isCurrent
-                        ? "h-3 w-3 bg-success"
-                        : complete
-                          ? "h-2 w-2 bg-success"
-                          : "h-2 w-2 border border-border",
-                    )}
-                  />
-                );
-              })}
-            </div>
-          )}
-
+        <div className={cn("space-y-4", viewMode === "logging" && "pb-24")}>
           {stats.totalSets > 0 && (
             <div className="rounded-lg border border-border bg-surface p-4">
               <div className="mb-3 flex items-baseline gap-8">
@@ -630,8 +614,101 @@ export default function AthleteWorkout() {
             </div>
           )}
 
-          {currentPage ? (
+          {viewMode === "overview" ? (
+            <div className="space-y-3">
+              <p className="text-xs text-muted-foreground">
+                Everything for today, A to Z — tap any exercise to prep or start logging.
+              </p>
+              {pages.length === 0 ? (
+                <p className="py-10 text-center text-sm text-muted-foreground">
+                  Nothing prescribed for this day yet.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {pages.map((page, i) => {
+                    const complete = isPageComplete(page);
+                    return (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => openPage(i)}
+                        className={cn(
+                          "flex w-full items-center gap-3 rounded-md border p-3 text-left transition-colors hover:border-primary/50",
+                          page.kind === "corrective"
+                            ? "border-cyan-900/40 bg-cyan-950/10"
+                            : "border-border",
+                        )}
+                      >
+                        <ExerciseVideoThumb
+                          url={page.items[0].videoUrl}
+                          name={page.items[0].exerciseName}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {page.kind === "corrective" && (
+                              <Stethoscope className="h-3.5 w-3.5 shrink-0 text-cyan-400" />
+                            )}
+                            {page.items.map((it) => (
+                              <span key={it.key} className="flex items-center gap-1 text-sm font-semibold">
+                                <span
+                                  className={cn(
+                                    "flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-extrabold",
+                                    page.kind === "corrective"
+                                      ? "bg-cyan-500 text-white"
+                                      : "bg-primary text-primary-foreground",
+                                  )}
+                                >
+                                  {page.labels[it.key]}
+                                </span>
+                                {it.exerciseName}
+                              </span>
+                            ))}
+                          </div>
+                          <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                            {page.items.map((it) => it.equipment).join(" · ")}
+                          </p>
+                        </div>
+                        <div
+                          className={cn(
+                            "flex h-7 w-7 shrink-0 items-center justify-center rounded-full border",
+                            complete
+                              ? "border-success bg-success text-success-foreground"
+                              : "border-dashed border-muted-foreground/30",
+                          )}
+                        >
+                          {complete && <Check className="h-4 w-4" />}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              {pages.length > 0 && (
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Button variant="secondary" className="flex-1" onClick={() => openPage(0)}>
+                    Start with {pages[0].kind === "corrective" ? "Correctives" : pages[0].labels[pages[0].items[0].key]}
+                  </Button>
+                  <Button
+                    className="flex-1"
+                    onClick={() => submitMutation.mutate(true)}
+                    disabled={submitMutation.isPending}
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+                    Mark Workout Complete
+                  </Button>
+                </div>
+              )}
+            </div>
+          ) : currentPage ? (
             <div className="space-y-2">
+              <button
+                type="button"
+                onClick={() => setViewMode("overview")}
+                className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" />
+                Back to full workout
+              </button>
               {currentPage.kind === "corrective" && (
                 <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-cyan-400">
                   <Stethoscope className="h-3.5 w-3.5" />
@@ -666,35 +743,48 @@ export default function AthleteWorkout() {
                   ))}
                 </CardContent>
               </Card>
-            </div>
-          ) : (
-            <p className="py-10 text-center text-sm text-muted-foreground">
-              Nothing prescribed for this day yet.
-            </p>
-          )}
 
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <Button
-              variant="secondary"
-              className="flex-1"
-              onClick={() => submitMutation.mutate(false)}
-              disabled={submitMutation.isPending}
-            >
-              Save Progress
-            </Button>
-            <Button
-              className="flex-1"
-              onClick={() => submitMutation.mutate(true)}
-              disabled={submitMutation.isPending}
-            >
-              <CheckCircle2 className="h-4 w-4" />
-              Mark Complete
-            </Button>
-          </div>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => submitMutation.mutate(false)}
+                  disabled={submitMutation.isPending}
+                >
+                  Save Progress
+                </Button>
+                {pageIndex < pages.length - 1 ? (
+                  <Button
+                    className="flex-1"
+                    onClick={() => {
+                      submitMutation.mutate(false);
+                      setPageIndex((p) => p + 1);
+                    }}
+                    disabled={submitMutation.isPending}
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+                    Complete &amp; Next
+                  </Button>
+                ) : (
+                  <Button
+                    className="flex-1"
+                    onClick={() => {
+                      submitMutation.mutate(true);
+                      setViewMode("overview");
+                    }}
+                    disabled={submitMutation.isPending}
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+                    Mark Workout Complete
+                  </Button>
+                )}
+              </div>
+            </div>
+          ) : null}
         </div>
       )}
 
-      <div className={cn("mt-4", !data.day.isRestDay && pages.length > 0 && "pb-16")}>
+      <div className={cn("mt-4", viewMode === "logging" && pages.length > 0 && "pb-16")}>
         <WorkoutCommentThread
           role="athlete"
           assignmentId={Number(assignmentId)}
@@ -702,14 +792,15 @@ export default function AthleteWorkout() {
         />
       </div>
 
-      {!data.day.isRestDay && pages.length > 0 && (
+      {viewMode === "logging" && pages.length > 0 && (
         <div className="fixed inset-x-0 bottom-14 z-20 border-t border-border bg-surface md:bottom-0 md:left-64">
           <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3 sm:px-8">
             <button
               type="button"
-              onClick={() => setPageIndex((p) => Math.max(0, p - 1))}
-              disabled={pageIndex === 0}
-              className="flex items-center gap-1.5 text-sm font-semibold text-primary disabled:pointer-events-none disabled:opacity-30"
+              onClick={() =>
+                pageIndex === 0 ? setViewMode("overview") : setPageIndex((p) => p - 1)
+              }
+              className="flex items-center gap-1.5 text-sm font-semibold text-primary"
             >
               <ChevronLeft className="h-4 w-4" />
               Back
