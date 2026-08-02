@@ -102,14 +102,24 @@ export const coachAthletes = pgTable(
   }),
 );
 
-export const teams = pgTable("teams", {
-  id: serial("id").primaryKey(),
-  coachId: integer("coach_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  name: text("name").notNull(),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+export const teams = pgTable(
+  "teams",
+  {
+    id: serial("id").primaryKey(),
+    coachId: integer("coach_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    // A random join code specific to this team -- an athlete signing up
+    // with it links to the team's coach AND is added straight to the team,
+    // unlike the coach's personal code which only links the coach.
+    code: text("code"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    codeIdx: uniqueIndex("teams_code_idx").on(table.code),
+  }),
+);
 
 export const teamMembers = pgTable(
   "team_members",

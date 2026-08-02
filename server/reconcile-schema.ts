@@ -94,8 +94,11 @@ CREATE TABLE IF NOT EXISTS "teams" (
   "id" serial PRIMARY KEY,
   "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
   "name" text NOT NULL,
+  "code" text,
   "created_at" timestamp NOT NULL DEFAULT now()
 );
+ALTER TABLE "teams" ADD COLUMN IF NOT EXISTS "code" text;
+CREATE UNIQUE INDEX IF NOT EXISTS "teams_code_idx" ON "teams" ("code");
 
 CREATE TABLE IF NOT EXISTS "team_members" (
   "id" serial PRIMARY KEY,

@@ -75,7 +75,7 @@ function CoachJoinHint() {
       toast.success(`Linked to ${data.coachName}`);
       setCode("");
     },
-    onError: (err: ApiError) => toast.error(err.message || "Invalid coach code"),
+    onError: (err: ApiError) => toast.error(err.message || "Invalid invite code"),
   });
 
   return (
@@ -89,7 +89,7 @@ function CoachJoinHint() {
       <Input
         value={code}
         onChange={(e) => setCode(e.target.value.toUpperCase())}
-        placeholder="Enter coach code"
+        placeholder="Enter invite code"
         className="h-9 w-40"
       />
       <Button type="submit" size="sm" disabled={joinMutation.isPending}>
