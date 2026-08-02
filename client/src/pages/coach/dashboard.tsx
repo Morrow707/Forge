@@ -72,135 +72,141 @@ export default function CoachDashboard() {
   } | null>(null);
 
   return (
-    <AppShell title={`Welcome, ${user?.name?.split(" ")[0] ?? "Coach"}`}>
-      <Card>
-        <CardHeader className="flex-row items-center justify-between space-y-0">
-          <div>
-            <CardTitle>Next 3 Days</CardTitle>
-            <CardDescription>Quick look across your roster — synced with the full calendar.</CardDescription>
-          </div>
-          <Link href="/coach/calendar">
-            <Button variant="outline" size="sm">
-              Full Calendar
-            </Button>
-          </Link>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-3 sm:grid-cols-3">
-            {days.map((day) => {
-              const dateStr = formatISO(day, { representation: "date" });
-              const dayEntries = upcoming.filter((e) => e.date === dateStr);
-              const shown = dayEntries.slice(0, 4);
-              const overflow = dayEntries.length - shown.length;
-              return (
-                <div key={dateStr} className="rounded-md border border-border p-2.5">
-                  <div className="mb-2 flex items-baseline justify-between">
-                    <span
-                      className={cn(
-                        "text-xs font-semibold uppercase text-muted-foreground",
-                        isToday(day) && "text-primary",
-                      )}
-                    >
-                      {isToday(day) ? "Today" : format(day, "EEEE")}
-                    </span>
-                    <span className={cn("text-sm font-bold", isToday(day) && "text-primary")}>
-                      {format(day, "MMM d")}
-                    </span>
-                  </div>
-                  <div className="space-y-1.5">
-                    {shown.length === 0 && (
-                      <p className="flex items-center justify-center gap-1.5 py-4 text-center text-xs text-muted-foreground">
-                        <CalendarDays className="h-3.5 w-3.5" />
-                        Nothing scheduled
-                      </p>
-                    )}
-                    {shown.map((e) => (
-                      <EntryPill
-                        key={`${e.assignmentId}-${e.programDayId}`}
-                        entry={e}
-                        onClick={() =>
-                          setEditing({
-                            programDayId: e.programDayId,
-                            assignmentId: e.assignmentId,
-                            athleteId: e.athleteId!,
-                            athleteName: e.athleteName!,
-                          })
-                        }
-                      />
-                    ))}
-                    {overflow > 0 && (
-                      <Link href="/coach/calendar">
-                        <span className="block px-1.5 text-[11px] font-semibold text-primary hover:underline">
-                          +{overflow} more
-                        </span>
-                      </Link>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="mt-6 grid gap-4 sm:grid-cols-3">
-        <StatCard icon={Users} label="Athletes" value={roster.length} href="/coach/roster" />
-        <StatCard
-          icon={ListChecks}
-          label="Programs"
-          value={programs.length}
-          href="/coach/programs"
-        />
-        <StatCard
-          icon={Dumbbell}
-          label="Exercises in bank"
-          value={exercises.length}
-          href="/coach/exercises"
-        />
-      </div>
-
-      <div className="mt-6 grid gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <CardHeader className="flex-row items-center justify-between space-y-0">
+    <AppShell title={`Welcome, ${user?.name?.split(" ")[0] ?? "Coach"}`} fitScreen>
+      <div className="flex h-full min-h-0 flex-col gap-3">
+        <Card className="shrink-0">
+          <CardHeader className="flex-row items-center justify-between space-y-0 p-3 md:p-4">
             <div>
-              <CardTitle>Recent Programs</CardTitle>
-              <CardDescription>Your most recently created training blocks.</CardDescription>
+              <CardTitle className="text-base md:text-lg">Next 3 Days</CardTitle>
+              <CardDescription className="hidden sm:block">
+                Quick look across your roster — synced with the full calendar.
+              </CardDescription>
             </div>
-            <Link href="/coach/programs">
+            <Link href="/coach/calendar">
               <Button variant="outline" size="sm">
-                View all
+                Full Calendar
               </Button>
             </Link>
           </CardHeader>
-          <CardContent className="space-y-3">
-            {programs.length === 0 && (
-              <p className="py-6 text-center text-sm text-muted-foreground">
-                No programs yet. Build your first one to start assigning workouts.
-              </p>
-            )}
-            {programs.slice(0, 5).map((p) => (
-              <Link key={p.id} href={`/coach/programs/${p.id}`}>
-                <div className="flex cursor-pointer items-center justify-between rounded-md border border-border p-3 transition-colors hover:bg-surface-elevated">
-                  <div>
-                    <p className="font-semibold">{p.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {p.weekCount} weeks · {p.dayCount} days · {p.assignedAthleteCount}{" "}
-                      athlete{p.assignedAthleteCount === 1 ? "" : "s"} assigned
-                    </p>
+          <CardContent className="p-3 pt-0 md:p-4 md:pt-0">
+            <div className="grid gap-2.5 sm:grid-cols-3">
+              {days.map((day) => {
+                const dateStr = formatISO(day, { representation: "date" });
+                const dayEntries = upcoming.filter((e) => e.date === dateStr);
+                const shown = dayEntries.slice(0, 3);
+                const overflow = dayEntries.length - shown.length;
+                return (
+                  <div key={dateStr} className="rounded-md border border-border p-2">
+                    <div className="mb-1.5 flex items-baseline justify-between">
+                      <span
+                        className={cn(
+                          "text-xs font-semibold uppercase text-muted-foreground",
+                          isToday(day) && "text-primary",
+                        )}
+                      >
+                        {isToday(day) ? "Today" : format(day, "EEEE")}
+                      </span>
+                      <span className={cn("text-sm font-bold", isToday(day) && "text-primary")}>
+                        {format(day, "MMM d")}
+                      </span>
+                    </div>
+                    <div className="space-y-1">
+                      {shown.length === 0 && (
+                        <p className="flex items-center justify-center gap-1.5 py-2 text-center text-xs text-muted-foreground">
+                          <CalendarDays className="h-3.5 w-3.5" />
+                          Nothing scheduled
+                        </p>
+                      )}
+                      {shown.map((e) => (
+                        <EntryPill
+                          key={`${e.assignmentId}-${e.programDayId}`}
+                          entry={e}
+                          onClick={() =>
+                            setEditing({
+                              programDayId: e.programDayId,
+                              assignmentId: e.assignmentId,
+                              athleteId: e.athleteId!,
+                              athleteName: e.athleteName!,
+                            })
+                          }
+                        />
+                      ))}
+                      {overflow > 0 && (
+                        <Link href="/coach/calendar">
+                          <span className="block px-1.5 text-[11px] font-semibold text-primary hover:underline">
+                            +{overflow} more
+                          </span>
+                        </Link>
+                      )}
+                    </div>
                   </div>
-                  <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                </div>
-              </Link>
-            ))}
-            <Link href="/coach/programs">
-              <Button variant="secondary" className="w-full">
-                + New Program
-              </Button>
-            </Link>
+                );
+              })}
+            </div>
           </CardContent>
         </Card>
 
-        <TeamInviteCard teams={teams} coachCode={user?.coachCode ?? null} />
+        <div className="grid shrink-0 gap-3 sm:grid-cols-3">
+          <StatCard icon={Users} label="Athletes" value={roster.length} href="/coach/roster" />
+          <StatCard
+            icon={ListChecks}
+            label="Programs"
+            value={programs.length}
+            href="/coach/programs"
+          />
+          <StatCard
+            icon={Dumbbell}
+            label="Exercises in bank"
+            value={exercises.length}
+            href="/coach/exercises"
+          />
+        </div>
+
+        <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-3">
+          <Card className="flex min-h-0 flex-col lg:col-span-2">
+            <CardHeader className="flex-row shrink-0 items-center justify-between space-y-0 p-3 md:p-4">
+              <div>
+                <CardTitle className="text-base md:text-lg">Recent Programs</CardTitle>
+                <CardDescription className="hidden sm:block">
+                  Your most recently created training blocks.
+                </CardDescription>
+              </div>
+              <Link href="/coach/programs">
+                <Button variant="outline" size="sm">
+                  View all
+                </Button>
+              </Link>
+            </CardHeader>
+            <CardContent className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3 pt-0 md:p-4 md:pt-0">
+              {programs.length === 0 && (
+                <p className="py-6 text-center text-sm text-muted-foreground">
+                  No programs yet. Build your first one to start assigning workouts.
+                </p>
+              )}
+              {programs.slice(0, 5).map((p) => (
+                <Link key={p.id} href={`/coach/programs/${p.id}`}>
+                  <div className="flex cursor-pointer items-center justify-between rounded-md border border-border p-2.5 transition-colors hover:bg-surface-elevated">
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold">{p.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {p.weekCount} weeks · {p.dayCount} days · {p.assignedAthleteCount}{" "}
+                        athlete{p.assignedAthleteCount === 1 ? "" : "s"} assigned
+                      </p>
+                    </div>
+                    <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  </div>
+                </Link>
+              ))}
+              <Link href="/coach/programs">
+                <Button variant="secondary" className="w-full">
+                  + New Program
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+
+          <TeamInviteCard teams={teams} coachCode={user?.coachCode ?? null} />
+        </div>
       </div>
 
       <CoachDayEditDialog
@@ -247,14 +253,14 @@ function TeamInviteCard({
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Invite Athletes</CardTitle>
-        <CardDescription>
+    <Card className="flex min-h-0 flex-col">
+      <CardHeader className="shrink-0 p-3 md:p-4">
+        <CardTitle className="text-base md:text-lg">Invite Athletes</CardTitle>
+        <CardDescription className="hidden sm:block">
           Each team has its own code -- athletes who use it join that team automatically.
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3 pt-0 md:p-4 md:pt-0">
         {codeOptions.length === 0 && (
           <p className="text-sm text-muted-foreground">
             Create a team on the Roster page to get a shareable code.
@@ -263,7 +269,7 @@ function TeamInviteCard({
         {codeOptions.map((opt) => (
           <div
             key={opt.code}
-            className="flex items-center justify-between rounded-md bg-surface-elevated px-3 py-2"
+            className="flex items-center justify-between rounded-md bg-surface-elevated px-3 py-1.5"
           >
             <div className="min-w-0">
               <p className="truncate text-[10px] font-semibold uppercase text-muted-foreground">
@@ -288,7 +294,7 @@ function TeamInviteCard({
         ))}
 
         {codeOptions.length > 0 && (
-          <div className="space-y-2 border-t border-border pt-3">
+          <div className="space-y-2 border-t border-border pt-2">
             <Select value={effectiveCode} onValueChange={setSelectedCode}>
               <SelectTrigger className="h-8 text-xs">
                 <SelectValue placeholder="Code to include" />
@@ -305,7 +311,7 @@ function TeamInviteCard({
               value={emails}
               onChange={(e) => setEmails(e.target.value)}
               placeholder="athlete1@email.com, athlete2@email.com"
-              className="min-h-16 text-sm"
+              className="min-h-12 text-sm"
             />
             <Button size="sm" className="w-full" onClick={sendInvite}>
               <Mail className="h-3.5 w-3.5" />
@@ -332,13 +338,13 @@ function StatCard({
   return (
     <Link href={href}>
       <Card className="cursor-pointer transition-colors hover:border-primary/50">
-        <CardContent className="flex items-center gap-4 p-5">
-          <div className="flex h-11 w-11 items-center justify-center rounded-md bg-primary/15 text-primary">
+        <CardContent className="flex items-center gap-3 p-3 md:p-4">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary/15 text-primary">
             <Icon className="h-5 w-5" />
           </div>
-          <div>
-            <p className="font-display text-3xl font-bold">{value}</p>
-            <p className="text-sm text-muted-foreground">{label}</p>
+          <div className="min-w-0">
+            <p className="font-display text-2xl font-bold md:text-3xl">{value}</p>
+            <p className="truncate text-sm text-muted-foreground">{label}</p>
           </div>
         </CardContent>
       </Card>

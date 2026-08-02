@@ -48,10 +48,13 @@ export function AppShell({
   children,
   title,
   actions,
+  fitScreen,
 }: {
   children: ReactNode;
   title: string;
   actions?: ReactNode;
+  /** Constrains content to the viewport instead of letting the page scroll -- opt in per page. */
+  fitScreen?: boolean;
 }) {
   const { user, logoutMutation } = useAuth();
   const [location] = useLocation();
@@ -66,8 +69,13 @@ export function AppShell({
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="sticky top-0 z-30 border-b border-border bg-surface">
+    <div
+      className={cn(
+        "min-h-screen bg-background",
+        fitScreen && "flex flex-col md:h-screen md:overflow-hidden",
+      )}
+    >
+      <div className="sticky top-0 z-30 shrink-0 border-b border-border bg-surface">
         <div className="flex items-center justify-between gap-3 px-4 py-3 md:px-8">
           <div className="flex items-center gap-2">
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
@@ -218,14 +226,22 @@ export function AppShell({
         )}
       </div>
 
-      <div className="flex w-full flex-1 flex-col">
-        <header className="flex items-center justify-between border-b border-border bg-background/95 px-4 py-4 backdrop-blur md:px-8">
+      <div className={cn("flex w-full flex-col", fitScreen ? "flex-1 md:min-h-0" : "flex-1")}>
+        <header className="shrink-0 flex items-center justify-between border-b border-border bg-background/95 px-4 py-4 backdrop-blur md:px-8">
           <h1 className="font-display text-2xl font-bold uppercase tracking-wide md:text-3xl">
             {title}
           </h1>
           <div className="flex min-w-0 items-center gap-2 overflow-x-auto">{actions}</div>
         </header>
-        <main className="flex-1 px-4 py-6 md:px-8 md:py-8">{children}</main>
+        <main
+          className={cn(
+            fitScreen
+              ? "flex-1 px-4 py-4 md:min-h-0 md:overflow-hidden md:px-8"
+              : "flex-1 px-4 py-6 md:px-8 md:py-8",
+          )}
+        >
+          {children}
+        </main>
       </div>
 
       {user?.role === "athlete" && (
