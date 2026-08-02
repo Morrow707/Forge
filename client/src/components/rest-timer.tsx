@@ -1,23 +1,34 @@
 import { useEffect, useRef, useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Timer } from "lucide-react";
+import { Timer, BellRing } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const PRESETS = [30, 60, 90, 120, 180];
 
+// Web Audio output mixes with any other audio source (music, video, a call)
+// rather than pausing/ducking it, and isn't subject to a silent-mode switch
+// the way an <audio> element can be on iOS -- this is what makes it audible
+// over headphones/media instead of a normal chime getting lost underneath.
 function playChime() {
   try {
     const AudioCtx = window.AudioContext ?? (window as any).webkitAudioContext;
     const ctx = new AudioCtx();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.frequency.value = 880;
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    gain.gain.setValueAtTime(0.2, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
-    osc.start();
-    osc.stop(ctx.currentTime + 0.6);
+    // Three quick beeps instead of one soft tone -- easier to notice over
+    // music/headphones, and reads unambiguously as "timer done" rather than
+    // a generic notification sound.
+    [0, 0.25, 0.5].forEach((delay) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.frequency.value = 880;
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      const start = ctx.currentTime + delay;
+      gain.gain.setValueAtTime(0.35, start);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + 0.2);
+      osc.start(start);
+      osc.stop(start + 0.2);
+    });
+    setTimeout(() => ctx.close(), 900);
   } catch {
     // Web Audio isn't available in every environment -- the timer still works, just silently.
   }
@@ -30,17 +41,20 @@ function formatClock(seconds: number) {
 }
 
 /** Rest timer for the bottom nav bar of the athlete's workout view -- presets
- * default to the current exercise's prescribed rest, counts down, chimes on zero. */
+ * default to the current exercise's prescribed rest, counts down, then rings
+ * repeatedly (not a single chime-and-forget) until the athlete dismisses it. */
 export function RestTimerControl({ defaultSeconds }: { defaultSeconds?: number | null }) {
   const [open, setOpen] = useState(false);
   const [remaining, setRemaining] = useState<number | null>(null);
+  const [ringing, setRinging] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const ringIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     if (remaining === null) return;
     if (remaining <= 0) {
-      playChime();
       setRemaining(null);
+      setRinging(true);
       return;
     }
     timeoutRef.current = setTimeout(() => setRemaining((r) => (r !== null ? r - 1 : null)), 1000);
@@ -48,6 +62,28 @@ export function RestTimerControl({ defaultSeconds }: { defaultSeconds?: number |
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
   }, [remaining]);
+
+  useEffect(() => {
+    if (!ringing) return;
+    playChime();
+    ringIntervalRef.current = setInterval(playChime, 1500);
+    return () => {
+      if (ringIntervalRef.current) clearInterval(ringIntervalRef.current);
+    };
+  }, [ringing]);
+
+  if (ringing) {
+    return (
+      <button
+        type="button"
+        onClick={() => setRinging(false)}
+        className="flex animate-pulse items-center gap-1.5 rounded-full bg-primary px-3 py-1 text-sm font-bold text-primary-foreground"
+      >
+        <BellRing className="h-4 w-4" />
+        Rest over — tap to dismiss
+      </button>
+    );
+  }
 
   if (remaining !== null) {
     return (
