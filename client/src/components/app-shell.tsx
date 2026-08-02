@@ -17,6 +17,7 @@ import {
   Trophy,
   CalendarRange,
   Settings,
+  MessagesSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { EditMyProfileDialog } from "@/components/edit-my-profile-dialog";
@@ -31,11 +32,13 @@ const coachNav = [
   { href: "/coach/roster", label: "Roster & Teams", icon: Users },
   { href: "/coach/analytics", label: "Analytics", icon: LineChart },
   { href: "/coach/leaderboard", label: "Leaderboard", icon: Trophy },
+  { href: "/coach/team-board", label: "Team Board", icon: MessagesSquare },
 ];
 
 const athleteNav = [
   { href: "/athlete", label: "Calendar", icon: CalendarDays, exact: true },
   { href: "/athlete/progress", label: "Progress", icon: LineChart },
+  { href: "/athlete/team-board", label: "Team Board", icon: MessagesSquare },
 ];
 
 const adminNav = [

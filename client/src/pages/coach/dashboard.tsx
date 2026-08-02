@@ -17,7 +17,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Dumbbell, ListChecks, Users, ArrowRight, Copy, CalendarDays, Mail } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { QRCodeSVG } from "qrcode.react";
+import {
+  Dumbbell,
+  ListChecks,
+  Users,
+  ArrowRight,
+  Copy,
+  CalendarDays,
+  Mail,
+  QrCode,
+} from "lucide-react";
 import { toast } from "sonner";
 import { addDays, format, formatISO, isToday } from "date-fns";
 
@@ -234,6 +251,7 @@ function TeamInviteCard({
   ];
   const [selectedCode, setSelectedCode] = useState("");
   const [emails, setEmails] = useState("");
+  const [qrOption, setQrOption] = useState<{ label: string; code: string } | null>(null);
   const effectiveCode =
     codeOptions.find((opt) => opt.code === selectedCode)?.code ?? codeOptions[0]?.code ?? "";
 
@@ -279,17 +297,27 @@ function TeamInviteCard({
                 {opt.code}
               </p>
             </div>
-            <Button
-              size="icon"
-              variant="ghost"
-              aria-label={`Copy ${opt.label} code`}
-              onClick={() => {
-                navigator.clipboard.writeText(opt.code);
-                toast.success("Code copied");
-              }}
-            >
-              <Copy className="h-4 w-4" />
-            </Button>
+            <div className="flex shrink-0 items-center gap-1">
+              <Button
+                size="icon"
+                variant="ghost"
+                aria-label={`Show QR code for ${opt.label}`}
+                onClick={() => setQrOption(opt)}
+              >
+                <QrCode className="h-4 w-4" />
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                aria-label={`Copy ${opt.label} code`}
+                onClick={() => {
+                  navigator.clipboard.writeText(opt.code);
+                  toast.success("Code copied");
+                }}
+              >
+                <Copy className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         ))}
 
@@ -320,6 +348,30 @@ function TeamInviteCard({
           </div>
         )}
       </CardContent>
+
+      <Dialog open={qrOption !== null} onOpenChange={(open) => !open && setQrOption(null)}>
+        <DialogContent className="max-w-xs">
+          <DialogHeader>
+            <DialogTitle>{qrOption?.label}</DialogTitle>
+            <DialogDescription>
+              Scan to sign up as an athlete with this code pre-filled.
+            </DialogDescription>
+          </DialogHeader>
+          {qrOption && (
+            <div className="flex flex-col items-center gap-3 py-2">
+              <div className="rounded-md bg-white p-3">
+                <QRCodeSVG
+                  value={`${window.location.origin}/signup?code=${qrOption.code}`}
+                  size={200}
+                />
+              </div>
+              <p className="font-display text-xl font-bold tracking-widest text-primary">
+                {qrOption.code}
+              </p>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

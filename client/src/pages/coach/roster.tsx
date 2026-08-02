@@ -17,6 +17,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { AssignProgramDialog } from "@/components/assign-program-dialog";
 import { AthleteProfileDialog } from "@/components/athlete-profile-dialog";
 import { CalendarLinkDialog } from "@/components/calendar-link-dialog";
+import { BodyMetricsDialog } from "@/components/body-metrics-dialog";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -31,6 +32,7 @@ import {
   HeartPulse,
   HeartCrack,
   CalendarDays,
+  Scale,
 } from "lucide-react";
 
 type HealthStatus = "healthy" | "hurt";
@@ -71,6 +73,7 @@ export default function CoachRoster() {
   const [rosterSearch, setRosterSearch] = useState("");
   const [profileAthlete, setProfileAthlete] = useState<RosterEntry | null>(null);
   const [calendarAthlete, setCalendarAthlete] = useState<RosterEntry | null>(null);
+  const [metricsAthlete, setMetricsAthlete] = useState<RosterEntry | null>(null);
 
   const filteredRoster = roster.filter((a) => {
     const q = rosterSearch.trim().toLowerCase();
@@ -188,6 +191,15 @@ export default function CoachRoster() {
                           )}
                         </div>
                         <div className="flex shrink-0 items-center gap-1">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            aria-label={`View ${a.name}'s body metrics`}
+                            title="Body metrics"
+                            onClick={() => setMetricsAthlete(a)}
+                          >
+                            <Scale className="h-4 w-4" />
+                          </Button>
                           <Button
                             size="icon"
                             variant="ghost"
@@ -370,6 +382,15 @@ export default function CoachRoster() {
           onOpenChange={(open) => !open && setCalendarAthlete(null)}
           title={`${calendarAthlete.name}'s Calendar`}
           fetchUrl={`/api/coach/roster/${calendarAthlete.id}/calendar-link`}
+        />
+      )}
+
+      {metricsAthlete && (
+        <BodyMetricsDialog
+          open={metricsAthlete !== null}
+          onOpenChange={(open) => !open && setMetricsAthlete(null)}
+          athleteName={metricsAthlete.name}
+          fetchUrl={`/api/coach/roster/${metricsAthlete.id}/body-metrics`}
         />
       )}
     </AppShell>
