@@ -18,7 +18,7 @@ import { AssignProgramDialog } from "@/components/assign-program-dialog";
 import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { Plus, ListChecks, Trash2, Users, CalendarRange, Send } from "lucide-react";
+import { Plus, ListChecks, Trash2, Users, CalendarRange, Send, Copy } from "lucide-react";
 
 type ProgramSummary = {
   id: number;
@@ -70,24 +70,13 @@ export function ProgramListPage({
       const res = await apiRequest("POST", `${apiBase}/programs`, {
         name,
         description,
-        weeks: [
-          {
-            weekNumber: 1,
-            name: "Week 1",
-            days: Array.from({ length: 7 }, (_, i) => ({
-              dayNumber: i + 1,
-              title: i === 0 ? "Training Day" : "Rest Day",
-              isRestDay: i !== 0,
-              exercises: [],
-            })),
-          },
-        ],
+        weeks: [],
       });
       return res.json();
     },
     onSuccess: (program) => {
       qc.invalidateQueries({ queryKey: [`${apiBase}/programs`] });
-      toast.success("Program created — start adding exercises");
+      toast.success("Program created — start adding days");
       setDialogOpen(false);
       setName("");
       setDescription("");
@@ -105,6 +94,48 @@ export function ProgramListPage({
       toast.success("Program deleted");
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not delete program"),
+  });
+
+  // Clones a program's full week/day/exercise structure under a new name --
+  // works on a read-only Forge program too, since the copy is a normal,
+  // fully editable program owned by whoever duplicated it.
+  const duplicateMutation = useMutation({
+    mutationFn: async (source: ProgramSummary) => {
+      const detailRes = await apiRequest("GET", `${apiBase}/programs/${source.id}`);
+      const detail = await detailRes.json();
+      const res = await apiRequest("POST", `${apiBase}/programs`, {
+        name: `${source.name} (Copy)`,
+        description: detail.description ?? null,
+        weeks: detail.weeks.map((w: any) => ({
+          weekNumber: w.weekNumber,
+          name: w.name,
+          days: w.days.map((d: any) => ({
+            dayNumber: d.dayNumber,
+            title: d.title,
+            isRestDay: d.isRestDay,
+            exercises: d.exercises.map((ex: any) => ({
+              exerciseId: ex.exercise.id,
+              orderIndex: ex.orderIndex,
+              sets: ex.sets,
+              reps: ex.reps,
+              weight: ex.weight,
+              restSeconds: ex.restSeconds,
+              notes: ex.notes,
+              supersetGroup: ex.supersetGroup,
+              trackingLevel: ex.trackingLevel,
+              videoCheckEnabled: ex.videoCheckEnabled,
+            })),
+          })),
+        })),
+      });
+      return res.json();
+    },
+    onSuccess: (program) => {
+      qc.invalidateQueries({ queryKey: [`${apiBase}/programs`] });
+      toast.success("Program duplicated");
+      navigate(`${routeBase}/${program.id}`);
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Could not duplicate program"),
   });
 
   return (
@@ -163,20 +194,32 @@ export function ProgramListPage({
                     <Users className="h-3.5 w-3.5" />
                     {p.assignedAthleteCount}
                   </span>
-                  {p.editable !== false && (
+                  <div className="flex items-center">
                     <Button
                       size="icon"
                       variant="ghost"
-                      aria-label={`Delete ${p.name}`}
-                      onClick={() => {
-                        if (confirm(`Delete "${p.name}"? This cannot be undone.`)) {
-                          deleteMutation.mutate(p.id);
-                        }
-                      }}
+                      aria-label={`Duplicate ${p.name}`}
+                      title="Duplicate as a new editable program"
+                      disabled={duplicateMutation.isPending}
+                      onClick={() => duplicateMutation.mutate(p)}
                     >
-                      <Trash2 className="h-4 w-4 text-destructive" />
+                      <Copy className="h-4 w-4" />
                     </Button>
-                  )}
+                    {p.editable !== false && (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        aria-label={`Delete ${p.name}`}
+                        onClick={() => {
+                          if (confirm(`Delete "${p.name}"? This cannot be undone.`)) {
+                            deleteMutation.mutate(p.id);
+                          }
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    )}
+                  </div>
                 </div>
                 {showAssign && (
                   <Button
