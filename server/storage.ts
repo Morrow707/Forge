@@ -457,20 +457,27 @@ export const storage = {
     return rows.map((r) => ({
       id: r.id,
       body: r.body,
+      isAnnouncement: r.isAnnouncement,
       createdAt: r.createdAt,
       author: { id: r.author.id, name: r.author.name, role: r.author.role },
     }));
   },
 
-  async createTeamPost(coachId: number, authorId: number, body: string) {
+  async createTeamPost(
+    coachId: number,
+    authorId: number,
+    body: string,
+    isAnnouncement = false,
+  ) {
     const [row] = await db
       .insert(teamPosts)
-      .values({ coachId, authorId, body })
+      .values({ coachId, authorId, body, isAnnouncement })
       .returning();
     const author = await db.query.users.findFirst({ where: eq(users.id, authorId) });
     return {
       id: row.id,
       body: row.body,
+      isAnnouncement: row.isAnnouncement,
       createdAt: row.createdAt,
       author: { id: author!.id, name: author!.name, role: author!.role },
     };

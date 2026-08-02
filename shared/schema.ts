@@ -514,6 +514,10 @@ export const teamPosts = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     body: text("body").notNull(),
+    // Coach-only, opt-in per post (defaults off so it's never left on by
+    // accident) -- pushes to every team member's device regardless of their
+    // notification preferences, meant for emergencies (practice moved, etc).
+    isAnnouncement: boolean("is_announcement").notNull().default(false),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({
@@ -1058,6 +1062,7 @@ export type PushSubscribeInput = z.infer<typeof pushSubscribeSchema>;
 
 export const createTeamPostSchema = z.object({
   body: z.string().trim().min(1).max(2000),
+  isAnnouncement: z.boolean().optional().default(false),
 });
 export type CreateTeamPostInput = z.infer<typeof createTeamPostSchema>;
 export type TeamPost = typeof teamPosts.$inferSelect;
