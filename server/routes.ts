@@ -6,6 +6,7 @@ import multer from "multer";
 import { setupAuth, requireAuth, requireRole } from "./auth";
 import { storage } from "./storage";
 import { buildIcsFeed } from "./ics";
+import { sendPushToUser, getVapidPublicKey } from "./push";
 import {
   insertExerciseSchema,
   programStructureSchema,
@@ -19,6 +20,7 @@ import {
   updateProfileSchema,
   updateNotificationPrefsSchema,
   updateHealthStatusSchema,
+  pushSubscribeSchema,
   createWorkoutCommentSchema,
   createExerciseReportSchema,
   resolveSubmissionSchema,
@@ -940,13 +942,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Only the two events the coach actually asked to hear about --
       // never for program completions or team-wide activity.
       const hasVideo = !!parsed.data.videoUrl;
+      const title = hasVideo ? "New video from an athlete" : "New comment from an athlete";
+      const body = `${user.name}: ${parsed.data.body}`;
       await storage.createNotification(
         owned.coachId,
         hasVideo ? "video" : "comment",
-        hasVideo ? "New video from an athlete" : "New comment from an athlete",
-        `${user.name}: ${parsed.data.body}`,
+        title,
+        body,
         "/coach/calendar",
       );
+      await sendPushToUser(owned.coachId, { title, body, url: "/coach/calendar" });
 
       res.status(201).json(comment);
     },
@@ -984,6 +989,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const updated = await storage.updateNotificationPrefs(user.id, parsed.data);
     const { passwordHash, healthStatus, ...publicUser } = updated;
     res.json(publicUser);
+  });
+
+  app.get("/api/push/vapid-public-key", requireAuth, async (req, res) => {
+    res.json({ publicKey: getVapidPublicKey() });
+  });
+
+  app.post("/api/push/subscribe", requireAuth, async (req, res) => {
+    const user = currentUser(req);
+    const parsed = pushSubscribeSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    await storage.savePushSubscription(user.id, parsed.data.endpoint, parsed.data.keys);
+    res.status(204).end();
+  });
+
+  app.post("/api/push/unsubscribe", requireAuth, async (req, res) => {
+    const schema = z.object({ endpoint: z.string().url() });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    await storage.removePushSubscription(parsed.data.endpoint);
+    res.status(204).end();
   });
 
   const httpServer = createServer(app);

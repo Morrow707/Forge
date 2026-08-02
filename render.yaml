@@ -15,6 +15,17 @@ services:
         fromDatabase:
           name: forge-db
           property: connectionString
+      # Web Push VAPID keypair -- not auto-generatable like SESSION_SECRET
+      # (needs to be a real EC keypair, not just a random string), so these
+      # are set manually in the Render dashboard. Generate a pair with
+      # `npx web-push generate-vapid-keys` and paste the values in; push
+      # notifications silently no-op until both are set.
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        value: mailto:support@forge.app
 
 databases:
   - name: forge-db

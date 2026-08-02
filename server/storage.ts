@@ -19,6 +19,7 @@ import {
   exerciseReports,
   notifications,
   passwordResetTokens,
+  pushSubscriptions,
   type InsertUser,
 } from "@shared/schema";
 import type {
@@ -1259,6 +1260,36 @@ export const storage = {
       .where(eq(users.id, userId))
       .returning();
     return row;
+  },
+
+  // ---------- Push subscriptions ----------
+  // One row per browser/device; re-subscribing the same endpoint (e.g. the
+  // user toggles the setting off and on) just no-ops rather than creating
+  // a duplicate.
+  async savePushSubscription(
+    userId: number,
+    endpoint: string,
+    keys: { p256dh: string; auth: string },
+  ) {
+    const existing = await db.query.pushSubscriptions.findFirst({
+      where: eq(pushSubscriptions.endpoint, endpoint),
+    });
+    if (existing) return existing;
+    const [row] = await db
+      .insert(pushSubscriptions)
+      .values({ userId, endpoint, p256dh: keys.p256dh, auth: keys.auth })
+      .returning();
+    return row;
+  },
+
+  async removePushSubscription(endpoint: string) {
+    await db.delete(pushSubscriptions).where(eq(pushSubscriptions.endpoint, endpoint));
+  },
+
+  async getPushSubscriptionsForUser(userId: number) {
+    return db.query.pushSubscriptions.findMany({
+      where: eq(pushSubscriptions.userId, userId),
+    });
   },
 
   // ---------- Calendar ----------
