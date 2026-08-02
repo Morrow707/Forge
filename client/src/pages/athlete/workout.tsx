@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
@@ -10,7 +10,8 @@ import { apiRequest, ApiError } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { groupConsecutiveBySupersetGroup, colorForLabel } from "@/lib/supersets";
 import { ExerciseVideoThumb } from "@/components/exercise-video";
-import { RestTimerControl } from "@/components/rest-timer";
+import { RestTimerControl, type RestTimerHandle } from "@/components/rest-timer";
+import { useWakeLock } from "@/hooks/use-wake-lock";
 import { WorkoutCommentThread } from "@/components/workout-comment-thread";
 import { BarTrackerDialog } from "@/components/bar-tracker-dialog";
 import { FormVideoRecorderDialog } from "@/components/form-video-recorder-dialog";
@@ -395,6 +396,11 @@ export default function AthleteWorkout() {
   const [hydrated, setHydrated] = useState(false);
   const [pageIndex, setPageIndex] = useState(0);
   const [viewMode, setViewMode] = useState<"overview" | "logging">("overview");
+  const restTimerRef = useRef<RestTimerHandle>(null);
+
+  // Keep the screen awake for the length of an active logging session --
+  // athletes are usually mid-set with the phone propped up, not holding it.
+  useWakeLock(viewMode === "logging");
 
   function openPage(index: number) {
     setPageIndex(index);
@@ -495,16 +501,26 @@ export default function AthleteWorkout() {
   }
 
   function updateSet(key: string, setNumber: number, patch: Partial<SetRow>) {
-    setItems((prev) =>
-      prev.map((it) =>
-        it.key === key
-          ? {
-              ...it,
-              sets: it.sets.map((s) => (s.setNumber === setNumber ? { ...s, ...patch } : s)),
+    setItems((prev) => {
+      let restOnComplete: number | null = null;
+      const next = prev.map((it) => {
+        if (it.key !== key) return it;
+        return {
+          ...it,
+          sets: it.sets.map((s) => {
+            if (s.setNumber !== setNumber) return s;
+            const wasComplete = isSetComplete(it, s);
+            const updated = { ...s, ...patch };
+            if (!wasComplete && isSetComplete(it, updated)) {
+              restOnComplete = it.restSeconds;
             }
-          : it,
-      ),
-    );
+            return updated;
+          }),
+        };
+      });
+      if (restOnComplete !== null) restTimerRef.current?.autoStart(restOnComplete);
+      return next;
+    });
   }
 
   function addSet(key: string) {
@@ -849,7 +865,7 @@ export default function AthleteWorkout() {
               <ChevronLeft className="h-4 w-4" />
               Back
             </button>
-            <RestTimerControl defaultSeconds={currentPage?.items[0]?.restSeconds} />
+            <RestTimerControl ref={restTimerRef} defaultSeconds={currentPage?.items[0]?.restSeconds} />
             <button
               type="button"
               onClick={() => setPageIndex((p) => Math.min(pages.length - 1, p + 1))}

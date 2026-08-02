@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Timer, BellRing } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -40,15 +40,33 @@ function formatClock(seconds: number) {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
+export type RestTimerHandle = {
+  /** Starts the timer for `seconds`, but only if it's currently idle -- a
+   * set completing mid-countdown (e.g. the other side of a superset)
+   * shouldn't interrupt a rest that's already running. */
+  autoStart: (seconds: number | null | undefined) => void;
+};
+
 /** Rest timer for the bottom nav bar of the athlete's workout view -- presets
  * default to the current exercise's prescribed rest, counts down, then rings
  * repeatedly (not a single chime-and-forget) until the athlete dismisses it. */
-export function RestTimerControl({ defaultSeconds }: { defaultSeconds?: number | null }) {
+export const RestTimerControl = forwardRef<RestTimerHandle, { defaultSeconds?: number | null }>(
+  function RestTimerControl({ defaultSeconds }, ref) {
   const [open, setOpen] = useState(false);
   const [remaining, setRemaining] = useState<number | null>(null);
   const [ringing, setRinging] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const ringIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useImperativeHandle(ref, () => ({
+    autoStart: (seconds) => {
+      if (!seconds || seconds <= 0) return;
+      setRemaining((current) => {
+        if (current !== null || ringing) return current;
+        return seconds;
+      });
+    },
+  }));
 
   useEffect(() => {
     if (remaining === null) return;
@@ -137,4 +155,5 @@ export function RestTimerControl({ defaultSeconds }: { defaultSeconds?: number |
       </PopoverContent>
     </Popover>
   );
-}
+  },
+);
