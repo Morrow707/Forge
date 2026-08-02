@@ -16,6 +16,7 @@ import {
   applyCorrectivesToDaysSchema,
   updatePreferencesSchema,
   updateProfileSchema,
+  updateNotificationPrefsSchema,
   createWorkoutCommentSchema,
   createExerciseReportSchema,
   resolveSubmissionSchema,
@@ -855,9 +856,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
         user.id,
         parsed.data,
       );
+
+      // Only the two events the coach actually asked to hear about --
+      // never for program completions or team-wide activity.
+      const hasVideo = !!parsed.data.videoUrl;
+      await storage.createNotification(
+        owned.coachId,
+        hasVideo ? "video" : "comment",
+        hasVideo ? "New video from an athlete" : "New comment from an athlete",
+        `${user.name}: ${parsed.data.body}`,
+        "/coach/calendar",
+      );
+
       res.status(201).json(comment);
     },
   );
+
+  // ---------------- Notifications ----------------
+  // In-app inbox, available to any authenticated user -- in practice only
+  // coaches ever have entries, since athlete comments/videos are the only
+  // events that create one (see the athlete comments route above).
+
+  app.get("/api/notifications", requireAuth, async (req, res) => {
+    const user = currentUser(req);
+    const list = await storage.getNotificationsForUser(user.id);
+    res.json(list);
+  });
+
+  app.get("/api/notifications/unread-count", requireAuth, async (req, res) => {
+    const user = currentUser(req);
+    const count = await storage.getUnreadNotificationCount(user.id);
+    res.json({ count });
+  });
+
+  app.post("/api/notifications/read", requireAuth, async (req, res) => {
+    const user = currentUser(req);
+    await storage.markAllNotificationsRead(user.id);
+    res.status(204).end();
+  });
+
+  app.patch("/api/notification-prefs", requireAuth, async (req, res) => {
+    const user = currentUser(req);
+    const parsed = updateNotificationPrefsSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const updated = await storage.updateNotificationPrefs(user.id, parsed.data);
+    const { passwordHash, ...publicUser } = updated;
+    res.json(publicUser);
+  });
 
   const httpServer = createServer(app);
   return httpServer;

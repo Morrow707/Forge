@@ -17,6 +17,7 @@ import {
   workoutComments,
   exerciseSubmissions,
   exerciseReports,
+  notifications,
   type InsertUser,
 } from "@shared/schema";
 import type {
@@ -27,6 +28,7 @@ import type {
   UpdateAssignmentInput,
   UpdatePreferencesInput,
   UpdateProfileInput,
+  UpdateNotificationPrefsInput,
   CreateWorkoutCommentInput,
   CreateExerciseReportInput,
 } from "@shared/schema";
@@ -1099,6 +1101,60 @@ export const storage = {
       createdAt: row.createdAt,
       author: { id: author!.id, name: author!.name, role: author!.role },
     };
+  },
+
+  // ---------- Notifications ----------
+  // Deliberately narrow: only ever created for a coach when an athlete
+  // comments or attaches a video (see the call site in routes.ts) -- never
+  // for program completions or team-wide activity, by design.
+  async createNotification(
+    userId: number,
+    type: string,
+    title: string,
+    body: string,
+    link?: string,
+  ) {
+    const [row] = await db
+      .insert(notifications)
+      .values({ userId, type, title, body, link: link ?? null })
+      .returning();
+    return row;
+  },
+
+  async getNotificationsForUser(userId: number, limit = 30) {
+    return db.query.notifications.findMany({
+      where: eq(notifications.userId, userId),
+      orderBy: desc(notifications.createdAt),
+      limit,
+    });
+  },
+
+  async getUnreadNotificationCount(userId: number) {
+    const rows = await db
+      .select({ id: notifications.id })
+      .from(notifications)
+      .where(and(eq(notifications.userId, userId), eq(notifications.read, false)));
+    return rows.length;
+  },
+
+  async markAllNotificationsRead(userId: number) {
+    await db
+      .update(notifications)
+      .set({ read: true })
+      .where(and(eq(notifications.userId, userId), eq(notifications.read, false)));
+  },
+
+  async updateNotificationPrefs(userId: number, input: UpdateNotificationPrefsInput) {
+    const [row] = await db
+      .update(users)
+      .set({
+        phone: input.phone ?? null,
+        notifyEmail: input.notifyEmail,
+        notifySms: input.notifySms,
+      })
+      .where(eq(users.id, userId))
+      .returning();
+    return row;
   },
 
   // ---------- Calendar ----------
