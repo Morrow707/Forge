@@ -26,10 +26,14 @@ export async function apiRequest(
   url: string,
   body?: unknown,
 ): Promise<Response> {
+  // FormData (file uploads) must go through untouched -- JSON.stringify-ing
+  // it just serializes an empty object, and the browser needs to set its
+  // own multipart Content-Type (with boundary) rather than the JSON one.
+  const isFormData = body instanceof FormData;
   const res = await fetch(url, {
     method,
-    headers: body ? { "Content-Type": "application/json" } : {},
-    body: body ? JSON.stringify(body) : undefined,
+    headers: body && !isFormData ? { "Content-Type": "application/json" } : {},
+    body: isFormData ? (body as FormData) : body ? JSON.stringify(body) : undefined,
     credentials: "include",
   });
   await throwIfResNotOk(res);

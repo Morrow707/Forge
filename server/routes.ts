@@ -1,5 +1,8 @@
-import type { Express } from "express";
+import express, { type Express } from "express";
 import { createServer, type Server } from "http";
+import path from "path";
+import fs from "fs";
+import multer from "multer";
 import { setupAuth, requireAuth, requireRole } from "./auth";
 import { storage } from "./storage";
 import {
@@ -15,8 +18,37 @@ import {
   createWorkoutCommentSchema,
   createExerciseReportSchema,
   resolveSubmissionSchema,
+  coachAnalyticsQuerySchema,
 } from "@shared/schema";
 import { z } from "zod";
+
+// Form-check clips are opt-in and athlete-initiated: recorded in the
+// browser, previewed, then either saved here or discarded and never sent.
+// There is no automatic/background upload of raw video anywhere in the app.
+const UPLOADS_DIR = path.join(process.cwd(), "server", "uploads", "form-videos");
+fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+
+const VIDEO_EXTENSION_BY_MIME: Record<string, string> = {
+  "video/webm": ".webm",
+  "video/mp4": ".mp4",
+  "video/quicktime": ".mov",
+};
+
+const uploadFormVideo = multer({
+  storage: multer.diskStorage({
+    destination: UPLOADS_DIR,
+    filename: (_req, file, cb) => {
+      cb(null, `${crypto.randomUUID()}${VIDEO_EXTENSION_BY_MIME[file.mimetype] ?? ""}`);
+    },
+  }),
+  limits: { fileSize: 100 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (!VIDEO_EXTENSION_BY_MIME[file.mimetype]) {
+      return cb(new Error("Unsupported video format"));
+    }
+    cb(null, true);
+  },
+});
 
 function currentUser(req: any) {
   return req.user as { id: number; role: "coach" | "athlete" | "admin"; name: string };
@@ -36,6 +68,7 @@ async function assertCoachOwnsProgram(coachId: number, programId: number) {
 
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
+  app.use("/uploads", express.static(path.join(process.cwd(), "server", "uploads")));
 
   // ---------------- Coach: Exercise Bank ----------------
   // A coach sees their own private exercises plus every Forge-official
@@ -537,6 +570,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
+  // ---------------- Coach: Analytics ----------------
+  // Coach-only trend data (velocity, bar path) derived from an athlete's
+  // tracked sets. Athletes never get an equivalent page -- they only see
+  // live numbers during their own set.
+
+  app.get("/api/coach/analytics/exercises", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const schema = z.object({ athleteId: z.coerce.number() });
+    const parsed = schema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "athleteId query param required" });
+    }
+    const list = await storage.getTrackedExercisesForAthlete(user.id, parsed.data.athleteId);
+    res.json(list);
+  });
+
+  app.get("/api/coach/analytics", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = coachAnalyticsQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "athleteId and exerciseId query params required" });
+    }
+    const points = await storage.getAnalyticsForCoach(
+      user.id,
+      parsed.data.athleteId,
+      parsed.data.exerciseId,
+    );
+    res.json(points);
+  });
+
   // ---------------- Athlete ----------------
 
   app.get("/api/athlete/coaches", requireRole("athlete"), async (req, res) => {
@@ -601,6 +664,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const log = await storage.submitWorkoutLog(user.id, parsed.data);
     res.status(200).json(log);
   });
+
+  // Athlete-initiated only: recorded and previewed client-side, uploaded
+  // here solely when the athlete taps Save. A discarded clip never reaches
+  // this route at all.
+  app.post(
+    "/api/athlete/form-video",
+    requireRole("athlete"),
+    (req, res) => {
+      uploadFormVideo.single("video")(req, res, (err: unknown) => {
+        if (err) {
+          const message = err instanceof Error ? err.message : "Upload failed";
+          return res.status(400).json({ message });
+        }
+        if (!req.file) {
+          return res.status(400).json({ message: "No video file provided" });
+        }
+        res.status(201).json({ url: `/uploads/form-videos/${req.file.filename}` });
+      });
+    },
+  );
 
   app.get(
     "/api/athlete/assignments/:assignmentId/days/:programDayId/comments",

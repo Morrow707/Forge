@@ -11,6 +11,7 @@ import {
   LogOut,
   Flame,
   ClipboardCheck,
+  LineChart,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -20,6 +21,7 @@ const coachNav = [
   { href: "/coach/programs", label: "Programs", icon: ListChecks },
   { href: "/coach/exercises", label: "Exercise Bank", icon: Dumbbell },
   { href: "/coach/roster", label: "Roster & Teams", icon: Users },
+  { href: "/coach/analytics", label: "Analytics", icon: LineChart },
 ];
 
 const athleteNav = [

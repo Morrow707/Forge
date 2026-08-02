@@ -22,6 +22,8 @@ import { toast } from "sonner";
 import { Plus, Trash2, MoonStar, Link2, Stethoscope, Copy, Clock } from "lucide-react";
 import type { Exercise } from "@shared/schema";
 
+type TrackingLevel = "none" | "bar_path" | "full";
+
 type LocalExercise = {
   key: string;
   exerciseId: number;
@@ -32,6 +34,8 @@ type LocalExercise = {
   restSeconds: string;
   notes: string;
   linkedToNext: boolean;
+  trackingLevel: TrackingLevel;
+  videoCheckEnabled: boolean;
 };
 
 type LocalCorrective = {
@@ -59,6 +63,8 @@ type DayDetail = {
     restSeconds: number | null;
     notes: string | null;
     supersetGroup: string | null;
+    trackingLevel: TrackingLevel;
+    videoCheckEnabled: boolean;
     exercise: Exercise;
   }[];
 };
@@ -161,6 +167,8 @@ export function CoachDayEditDialog({
             restSeconds: pe.restSeconds != null ? String(pe.restSeconds) : "",
             notes: pe.notes ?? "",
             supersetGroup: pe.supersetGroup,
+            trackingLevel: pe.trackingLevel ?? "none",
+            videoCheckEnabled: pe.videoCheckEnabled ?? false,
           })),
         ),
       );
@@ -220,6 +228,8 @@ export function CoachDayEditDialog({
           restSeconds: ex.restSeconds ? Number(ex.restSeconds) : null,
           notes: ex.notes || null,
           supersetGroup: ex.supersetGroup,
+          trackingLevel: ex.trackingLevel,
+          videoCheckEnabled: ex.videoCheckEnabled,
         })),
       });
       return res.json();
@@ -394,6 +404,31 @@ export function CoachDayEditDialog({
                                 )
                               }
                             />
+                          </div>
+                          <div className="mt-1.5 flex items-end gap-3">
+                            <TrackingLevelControl
+                              value={ex.trackingLevel}
+                              onChange={(trackingLevel) =>
+                                setExercises((prev) =>
+                                  prev.map((e) => (e.key === ex.key ? { ...e, trackingLevel } : e)),
+                                )
+                              }
+                            />
+                            <label className="mb-[3px] flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                              <Checkbox
+                                checked={ex.videoCheckEnabled}
+                                onCheckedChange={(checked) =>
+                                  setExercises((prev) =>
+                                    prev.map((e) =>
+                                      e.key === ex.key
+                                        ? { ...e, videoCheckEnabled: checked === true }
+                                        : e,
+                                    ),
+                                  )
+                                }
+                              />
+                              Require form-check video
+                            </label>
                           </div>
                         </div>
                         {i < exercises.length - 1 && (
@@ -703,6 +738,8 @@ export function CoachDayEditDialog({
               restSeconds: "",
               notes: "",
               linkedToNext: false,
+              trackingLevel: "none",
+              videoCheckEnabled: false,
             },
           ]);
         }}
@@ -751,6 +788,44 @@ function MiniField({
         onChange={(e) => onChange(e.target.value)}
         className="h-8 px-2 text-xs"
       />
+    </div>
+  );
+}
+
+function TrackingLevelControl({
+  value,
+  onChange,
+}: {
+  value: TrackingLevel;
+  onChange: (v: TrackingLevel) => void;
+}) {
+  const options: { value: TrackingLevel; label: string; title: string }[] = [
+    { value: "none", label: "Off", title: "No camera tracking for this exercise" },
+    { value: "bar_path", label: "Path", title: "Track bar path only (no speed emphasis)" },
+    { value: "full", label: "Full", title: "Track bar speed, tempo, and bar path" },
+  ];
+  return (
+    <div>
+      <span className="mb-0.5 block text-[10px] uppercase text-muted-foreground">Tracking</span>
+      <div className="flex gap-1">
+        {options.map((opt) => (
+          <button
+            key={opt.value}
+            type="button"
+            title={opt.title}
+            aria-pressed={value === opt.value}
+            onClick={() => onChange(opt.value)}
+            className={cn(
+              "rounded border px-2 py-1 text-[10px] font-semibold transition-colors",
+              value === opt.value
+                ? "border-primary bg-primary text-primary-foreground"
+                : "border-border text-muted-foreground hover:border-primary/50 hover:text-primary",
+            )}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

@@ -520,6 +520,8 @@ export const storage = {
               restSeconds: ex.restSeconds ?? null,
               notes: ex.notes ?? null,
               supersetGroup: ex.supersetGroup ?? null,
+              trackingLevel: ex.trackingLevel ?? "none",
+              videoCheckEnabled: ex.videoCheckEnabled ?? false,
             });
           }
         }
@@ -577,6 +579,8 @@ export const storage = {
               restSeconds: ex.restSeconds ?? null,
               notes: ex.notes ?? null,
               supersetGroup: ex.supersetGroup ?? null,
+              trackingLevel: ex.trackingLevel ?? "none",
+              videoCheckEnabled: ex.videoCheckEnabled ?? false,
             });
           }
         }
@@ -633,6 +637,8 @@ export const storage = {
             restSeconds: ex.restSeconds ?? null,
             notes: ex.notes ?? null,
             supersetGroup: ex.supersetGroup ?? null,
+            trackingLevel: ex.trackingLevel ?? "none",
+            videoCheckEnabled: ex.videoCheckEnabled ?? false,
           })),
         );
       }
@@ -1308,6 +1314,12 @@ export const storage = {
               setNumber: s.setNumber,
               reps: s.reps ?? null,
               weight: s.weight ?? null,
+              peakVelocityMps: s.peakVelocityMps ?? null,
+              meanVelocityMps: s.meanVelocityMps ?? null,
+              concentricSeconds: s.concentricSeconds ?? null,
+              eccentricSeconds: s.eccentricSeconds ?? null,
+              barPathDeviationCm: s.barPathDeviationCm ?? null,
+              barPathTrace: s.barPathTrace ?? null,
             })),
           );
         }
@@ -1315,5 +1327,65 @@ export const storage = {
 
       return log;
     });
+  },
+
+  // ---------- Coach analytics (velocity/bar-path trends) ----------
+  // Coach-only: rolls up the CV-derived metrics an athlete's tracked sets
+  // produced for one exercise into a time series. Athletes never see this
+  // history -- only the live number during their own set.
+  async getAnalyticsForCoach(coachId: number, athleteId: number, exerciseId: number) {
+    const rows = await db
+      .select({
+        date: workoutLogs.date,
+        setNumber: workoutSetEntries.setNumber,
+        peakVelocityMps: workoutSetEntries.peakVelocityMps,
+        meanVelocityMps: workoutSetEntries.meanVelocityMps,
+        concentricSeconds: workoutSetEntries.concentricSeconds,
+        eccentricSeconds: workoutSetEntries.eccentricSeconds,
+        barPathDeviationCm: workoutSetEntries.barPathDeviationCm,
+      })
+      .from(workoutSetEntries)
+      .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
+      .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
+      .innerJoin(assignments, eq(workoutLogs.assignmentId, assignments.id))
+      .innerJoin(programExercises, eq(workoutLogEntries.programExerciseId, programExercises.id))
+      .where(
+        and(
+          eq(assignments.coachId, coachId),
+          eq(assignments.athleteId, athleteId),
+          eq(programExercises.exerciseId, exerciseId),
+        ),
+      )
+      .orderBy(asc(workoutLogs.date), asc(workoutSetEntries.setNumber));
+
+    return rows.filter(
+      (r) =>
+        r.peakVelocityMps != null || r.meanVelocityMps != null || r.barPathDeviationCm != null,
+    );
+  },
+
+  // Exercises with at least one tracked set for this athlete, scoped to
+  // this coach -- populates the analytics page's exercise picker with only
+  // options that actually have data instead of the entire exercise bank.
+  async getTrackedExercisesForAthlete(coachId: number, athleteId: number) {
+    const rows = await db
+      .selectDistinct({
+        id: exercises.id,
+        name: exercises.name,
+      })
+      .from(workoutSetEntries)
+      .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
+      .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
+      .innerJoin(assignments, eq(workoutLogs.assignmentId, assignments.id))
+      .innerJoin(programExercises, eq(workoutLogEntries.programExerciseId, programExercises.id))
+      .innerJoin(exercises, eq(programExercises.exerciseId, exercises.id))
+      .where(
+        and(
+          eq(assignments.coachId, coachId),
+          eq(assignments.athleteId, athleteId),
+          inArray(programExercises.trackingLevel, ["bar_path", "full"]),
+        ),
+      );
+    return rows;
   },
 };

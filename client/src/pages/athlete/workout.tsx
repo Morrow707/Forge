@@ -12,6 +12,9 @@ import { groupConsecutiveBySupersetGroup } from "@/lib/supersets";
 import { ExerciseVideoThumb } from "@/components/exercise-video";
 import { RestTimerControl } from "@/components/rest-timer";
 import { WorkoutCommentThread } from "@/components/workout-comment-thread";
+import { BarTrackerDialog } from "@/components/bar-tracker-dialog";
+import { FormVideoRecorderDialog } from "@/components/form-video-recorder-dialog";
+import type { RepMetrics } from "@/lib/bar-tracking";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import {
@@ -35,6 +38,8 @@ import {
   TrendingUp,
   WifiOff,
   CloudUpload,
+  Camera,
+  Video,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import type { PublicUser } from "@shared/schema";
@@ -57,6 +62,8 @@ type LastPerformance = {
   suggestion: { text: string; suggestedWeight: number | null } | null;
 } | null;
 
+type TrackingLevel = "none" | "bar_path" | "full";
+
 type PrescribedExercise = {
   id: number;
   sets: number;
@@ -65,6 +72,8 @@ type PrescribedExercise = {
   restSeconds: number | null;
   notes: string | null;
   supersetGroup: string | null;
+  trackingLevel: TrackingLevel;
+  videoCheckEnabled: boolean;
   exercise: ExerciseInfo;
   lastPerformance: LastPerformance;
 };
@@ -80,13 +89,22 @@ type PrescribedCorrective = {
   lastPerformance: LastPerformance;
 };
 
+type SetMetrics = {
+  peakVelocityMps: number | null;
+  meanVelocityMps: number | null;
+  concentricSeconds: number | null;
+  eccentricSeconds: number | null;
+  barPathDeviationCm: number | null;
+  barPathTrace: { t: number; x: number; y: number }[] | null;
+};
+
 type LogEntry = {
   programExerciseId: number | null;
   correctiveId: number | null;
   weightMode: "numeric" | "bodyweight" | "band";
   rpe: number | null;
   notes: string | null;
-  sets: { setNumber: number; reps: string | null; weight: string | null }[];
+  sets: ({ setNumber: number; reps: string | null; weight: string | null } & Partial<SetMetrics>)[];
 };
 
 type DayDetail = {
@@ -97,7 +115,7 @@ type DayDetail = {
   log: { completed: boolean; entries: LogEntry[] } | null;
 };
 
-type SetRow = { setNumber: number; reps: string; weight: string };
+type SetRow = { setNumber: number; reps: string; weight: string } & SetMetrics;
 
 type ItemState = {
   key: string;
@@ -113,6 +131,8 @@ type ItemState = {
   restSeconds: number | null;
   coachNotes: string | null;
   supersetGroup: string | null;
+  trackingLevel: TrackingLevel;
+  videoCheckEnabled: boolean;
   lastPerformance: LastPerformance;
   weightMode: "numeric" | "bodyweight" | "band";
   athleteNotes: string;
@@ -132,6 +152,12 @@ function buildItem(
       setNumber,
       reps: existingSet?.reps ?? prescribed.reps,
       weight: existingSet?.weight ?? "",
+      peakVelocityMps: existingSet?.peakVelocityMps ?? null,
+      meanVelocityMps: existingSet?.meanVelocityMps ?? null,
+      concentricSeconds: existingSet?.concentricSeconds ?? null,
+      eccentricSeconds: existingSet?.eccentricSeconds ?? null,
+      barPathDeviationCm: existingSet?.barPathDeviationCm ?? null,
+      barPathTrace: existingSet?.barPathTrace ?? null,
     };
   });
   return {
@@ -148,6 +174,9 @@ function buildItem(
     restSeconds: prescribed.restSeconds,
     coachNotes: prescribed.notes,
     supersetGroup: kind === "exercise" ? (prescribed as PrescribedExercise).supersetGroup : null,
+    trackingLevel: kind === "exercise" ? (prescribed as PrescribedExercise).trackingLevel : "none",
+    videoCheckEnabled:
+      kind === "exercise" ? (prescribed as PrescribedExercise).videoCheckEnabled : false,
     lastPerformance: prescribed.lastPerformance,
     weightMode: existing?.weightMode ?? "numeric",
     athleteNotes: existing?.notes ?? "",
@@ -321,6 +350,12 @@ export default function AthleteWorkout() {
             setNumber: s.setNumber,
             reps: s.reps || null,
             weight: s.weight || null,
+            peakVelocityMps: s.peakVelocityMps,
+            meanVelocityMps: s.meanVelocityMps,
+            concentricSeconds: s.concentricSeconds,
+            eccentricSeconds: s.eccentricSeconds,
+            barPathDeviationCm: s.barPathDeviationCm,
+            barPathTrace: s.barPathTrace,
           })),
         })),
       };
@@ -374,7 +409,20 @@ export default function AthleteWorkout() {
         const nextNumber = it.sets.length > 0 ? it.sets[it.sets.length - 1].setNumber + 1 : 1;
         return {
           ...it,
-          sets: [...it.sets, { setNumber: nextNumber, reps: it.prescribedReps, weight: "" }],
+          sets: [
+            ...it.sets,
+            {
+              setNumber: nextNumber,
+              reps: it.prescribedReps,
+              weight: "",
+              peakVelocityMps: null,
+              meanVelocityMps: null,
+              concentricSeconds: null,
+              eccentricSeconds: null,
+              barPathDeviationCm: null,
+              barPathTrace: null,
+            },
+          ],
         };
       }),
     );
@@ -555,6 +603,8 @@ export default function AthleteWorkout() {
                         linked={currentPage.kind === "exercise" && currentPage.items.length > 1}
                         badgeLabel={currentPage.labels[item.key]}
                         unit={unit}
+                        assignmentId={Number(assignmentId)}
+                        programDayId={Number(programDayId)}
                         onUpdateItem={(patch) => updateItem(item.key, patch)}
                         onUpdateSet={(setNumber, patch) => updateSet(item.key, setNumber, patch)}
                         onAddSet={() => addSet(item.key)}
@@ -634,6 +684,8 @@ function ExerciseLogContent({
   linked,
   badgeLabel,
   unit,
+  assignmentId,
+  programDayId,
   onUpdateItem,
   onUpdateSet,
   onAddSet,
@@ -643,12 +695,32 @@ function ExerciseLogContent({
   linked: boolean;
   badgeLabel: string;
   unit: "lbs" | "kg";
+  assignmentId: number;
+  programDayId: number;
   onUpdateItem: (patch: Partial<ItemState>) => void;
   onUpdateSet: (setNumber: number, patch: Partial<SetRow>) => void;
   onAddSet: () => void;
   onRemoveSet: () => void;
 }) {
   const isCorrective = item.kind === "corrective";
+  const [trackingSet, setTrackingSet] = useState<number | null>(null);
+  const [formVideoOpen, setFormVideoOpen] = useState(false);
+  const qc = useQueryClient();
+  const commentsPath = `/api/athlete/assignments/${assignmentId}/days/${programDayId}/comments`;
+  const postFormVideoMutation = useMutation({
+    mutationFn: async (videoUrl: string) => {
+      const res = await apiRequest("POST", commentsPath, {
+        body: `Form check: ${item.exerciseName}`,
+        videoUrl,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [commentsPath] });
+      toast.success("Form check video sent to your coach");
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Could not attach video"),
+  });
 
   return (
     <div className="space-y-3">
@@ -715,6 +787,18 @@ function ExerciseLogContent({
         <p className="text-xs text-muted-foreground">{item.instructions}</p>
       )}
 
+      {item.videoCheckEnabled && (
+        <div className="flex items-center justify-between gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-2.5 py-2">
+          <span className="text-xs font-semibold text-amber-500">
+            Your coach wants a form check video for this exercise
+          </span>
+          <Button size="sm" variant="secondary" onClick={() => setFormVideoOpen(true)}>
+            <Video className="h-3.5 w-3.5" />
+            Record
+          </Button>
+        </div>
+      )}
+
       <div className="flex items-center gap-1.5">
         <span className="text-[10px] uppercase text-muted-foreground">Log as:</span>
         {(["numeric", "bodyweight", "band"] as const).map((m) => (
@@ -746,54 +830,101 @@ function ExerciseLogContent({
         <div className="space-y-1.5">
           {item.sets.map((set) => {
             const complete = isSetComplete(item, set);
+            const tracked = set.peakVelocityMps != null || set.barPathDeviationCm != null;
             return (
-              <div
-                key={set.setNumber}
-                className="grid grid-cols-[2.25rem_1fr_1fr_2rem] items-center gap-2"
-              >
-                <span className="text-sm font-semibold text-muted-foreground">{set.setNumber}</span>
-                <Input
-                  placeholder="Reps"
-                  value={set.reps}
-                  onChange={(e) => onUpdateSet(set.setNumber, { reps: e.target.value })}
-                  className="h-9 text-sm"
-                />
-                {item.weightMode === "bodyweight" ? (
-                  <div className="flex h-9 items-center justify-center rounded-md border border-dashed border-border text-xs text-muted-foreground">
-                    Bodyweight
-                  </div>
-                ) : item.weightMode === "band" ? (
+              <div key={set.setNumber}>
+                <div className="grid grid-cols-[2.25rem_1fr_1fr_2rem] items-center gap-2">
+                  <span className="text-sm font-semibold text-muted-foreground">{set.setNumber}</span>
                   <Input
-                    placeholder="e.g. Green"
-                    value={set.weight}
-                    onChange={(e) => onUpdateSet(set.setNumber, { weight: e.target.value })}
+                    placeholder="Reps"
+                    value={set.reps}
+                    onChange={(e) => onUpdateSet(set.setNumber, { reps: e.target.value })}
                     className="h-9 text-sm"
                   />
-                ) : (
-                  <Input
-                    type="number"
-                    inputMode="decimal"
-                    placeholder="0"
-                    value={set.weight}
-                    onChange={(e) => onUpdateSet(set.setNumber, { weight: e.target.value })}
-                    className="h-9 text-sm"
-                  />
-                )}
-                <div
-                  className={cn(
-                    "flex h-7 w-7 items-center justify-center rounded-full border",
-                    complete
-                      ? "border-success bg-success text-success-foreground"
-                      : "border-dashed border-muted-foreground/30 bg-secondary",
+                  {item.weightMode === "bodyweight" ? (
+                    <div className="flex h-9 items-center justify-center rounded-md border border-dashed border-border text-xs text-muted-foreground">
+                      Bodyweight
+                    </div>
+                  ) : item.weightMode === "band" ? (
+                    <Input
+                      placeholder="e.g. Green"
+                      value={set.weight}
+                      onChange={(e) => onUpdateSet(set.setNumber, { weight: e.target.value })}
+                      className="h-9 text-sm"
+                    />
+                  ) : (
+                    <Input
+                      type="number"
+                      inputMode="decimal"
+                      placeholder="0"
+                      value={set.weight}
+                      onChange={(e) => onUpdateSet(set.setNumber, { weight: e.target.value })}
+                      className="h-9 text-sm"
+                    />
                   )}
-                >
-                  {complete && <Check className="h-4 w-4" />}
+                  <div
+                    className={cn(
+                      "flex h-7 w-7 items-center justify-center rounded-full border",
+                      complete
+                        ? "border-success bg-success text-success-foreground"
+                        : "border-dashed border-muted-foreground/30 bg-secondary",
+                    )}
+                  >
+                    {complete && <Check className="h-4 w-4" />}
+                  </div>
                 </div>
+                {item.trackingLevel !== "none" && (
+                  <button
+                    type="button"
+                    onClick={() => setTrackingSet(set.setNumber)}
+                    className={cn(
+                      "mt-1 flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold",
+                      tracked
+                        ? "border-success/40 bg-success/10 text-success"
+                        : "border-primary/40 text-primary hover:bg-primary/10",
+                    )}
+                  >
+                    <Camera className="h-3 w-3" />
+                    {tracked
+                      ? item.trackingLevel === "full" && set.peakVelocityMps != null
+                        ? `${set.peakVelocityMps} m/s peak — retake`
+                        : `Path ${set.barPathDeviationCm} cm — retake`
+                      : "Track this set"}
+                  </button>
+                )}
               </div>
             );
           })}
         </div>
       </div>
+
+      {item.trackingLevel !== "none" && (
+        <BarTrackerDialog
+          open={trackingSet !== null}
+          onOpenChange={(open) => !open && setTrackingSet(null)}
+          mode={item.trackingLevel}
+          exerciseName={item.exerciseName}
+          onCapture={(metrics: RepMetrics) => {
+            if (trackingSet == null) return;
+            onUpdateSet(trackingSet, {
+              peakVelocityMps: metrics.peakVelocityMps,
+              meanVelocityMps: metrics.meanVelocityMps,
+              concentricSeconds: metrics.concentricSeconds,
+              eccentricSeconds: metrics.eccentricSeconds,
+              barPathDeviationCm: metrics.barPathDeviationCm,
+              barPathTrace: metrics.barPathTrace,
+            });
+          }}
+        />
+      )}
+
+      {item.videoCheckEnabled && (
+        <FormVideoRecorderDialog
+          open={formVideoOpen}
+          onOpenChange={setFormVideoOpen}
+          onSaved={(url) => postFormVideoMutation.mutate(url)}
+        />
+      )}
 
       <div className="flex items-center justify-center gap-4 pt-1">
         <button
