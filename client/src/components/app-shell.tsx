@@ -13,8 +13,10 @@ import {
   LineChart,
   Menu,
   X,
+  UserCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { EditMyProfileDialog } from "@/components/edit-my-profile-dialog";
 
 const coachNav = [
   { href: "/coach", label: "Dashboard", icon: Flame, exact: true },
@@ -47,6 +49,7 @@ export function AppShell({
   const { user, logoutMutation } = useAuth();
   const [location] = useLocation();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const nav =
     user?.role === "coach" ? coachNav : user?.role === "admin" ? adminNav : athleteNav;
 
@@ -95,6 +98,16 @@ export function AppShell({
                 <p className="truncate text-sm font-semibold">{user?.name}</p>
                 <p className="truncate text-xs capitalize text-muted-foreground">{user?.role}</p>
               </div>
+              {user?.role === "athlete" && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setProfileOpen(true)}
+                  aria-label="Edit profile"
+                >
+                  <UserCircle className="h-4 w-4" />
+                </Button>
+              )}
               <Button
                 variant="outline"
                 size="sm"
@@ -145,14 +158,29 @@ export function AppShell({
                 <p className="truncate text-sm font-semibold">{user?.name}</p>
                 <p className="truncate text-xs capitalize text-muted-foreground">{user?.role}</p>
               </div>
-              <button
-                type="button"
-                onClick={() => logoutMutation.mutate()}
-                className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground"
-              >
-                <LogOut className="h-4 w-4" />
-                Log out
-              </button>
+              <div className="flex items-center gap-3">
+                {user?.role === "athlete" && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProfileOpen(true);
+                      setMobileNavOpen(false);
+                    }}
+                    className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground"
+                  >
+                    <UserCircle className="h-4 w-4" />
+                    Profile
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => logoutMutation.mutate()}
+                  className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Log out
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -167,6 +195,10 @@ export function AppShell({
         </header>
         <main className="flex-1 px-4 py-6 md:px-8 md:py-8">{children}</main>
       </div>
+
+      {user?.role === "athlete" && (
+        <EditMyProfileDialog user={user} open={profileOpen} onOpenChange={setProfileOpen} />
+      )}
     </div>
   );
 }

@@ -15,6 +15,7 @@ import {
   updateCorrectivesSchema,
   applyCorrectivesToDaysSchema,
   updatePreferencesSchema,
+  updateProfileSchema,
   createWorkoutCommentSchema,
   createExerciseReportSchema,
   resolveSubmissionSchema,
@@ -301,6 +302,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const user = currentUser(req);
     const roster = await storage.getRosterForCoach(user.id);
     res.json(roster);
+  });
+
+  app.get("/api/coach/roster/:athleteId", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const athleteId = Number(req.params.athleteId);
+    const athlete = await storage.getRosterAthleteForCoach(user.id, athleteId);
+    if (!athlete) return res.status(404).json({ message: "Athlete not found" });
+    res.json(athlete);
+  });
+
+  app.patch("/api/coach/roster/:athleteId/profile", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const athleteId = Number(req.params.athleteId);
+    const existing = await storage.getRosterAthleteForCoach(user.id, athleteId);
+    if (!existing) return res.status(404).json({ message: "Athlete not found" });
+    const parsed = updateProfileSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const updated = await storage.updateUserProfile(athleteId, parsed.data);
+    const { passwordHash, ...publicUser } = updated;
+    res.json(publicUser);
   });
 
   app.get("/api/coach/teams", requireRole("coach"), async (req, res) => {
@@ -627,6 +650,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
     const updated = await storage.updateUserPreferences(user.id, parsed.data);
+    const { passwordHash, ...publicUser } = updated;
+    res.json(publicUser);
+  });
+
+  app.patch("/api/athlete/profile", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = updateProfileSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const updated = await storage.updateUserProfile(user.id, parsed.data);
     const { passwordHash, ...publicUser } = updated;
     res.json(publicUser);
   });

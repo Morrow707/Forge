@@ -66,9 +66,19 @@ CREATE TABLE IF NOT EXISTS "users" (
   "role" role NOT NULL,
   "coach_code" text,
   "preferred_weight_unit" weight_unit NOT NULL DEFAULT 'lbs',
+  "age" integer,
+  "height_in" integer,
+  "body_weight_lbs" real,
+  "sport" text,
+  "position" text,
   "created_at" timestamp NOT NULL DEFAULT now()
 );
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "preferred_weight_unit" weight_unit NOT NULL DEFAULT 'lbs';
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "age" integer;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "height_in" integer;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "body_weight_lbs" real;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "sport" text;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "position" text;
 CREATE UNIQUE INDEX IF NOT EXISTS "users_email_idx" ON "users" ("email");
 CREATE UNIQUE INDEX IF NOT EXISTS "users_coach_code_idx" ON "users" ("coach_code");
 
