@@ -23,15 +23,17 @@ export function ExercisePickerDialog({
   onSelect,
   correctivesOnly = false,
   title,
+  apiBase = "/api/coach",
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSelect: (exercise: Exercise) => void;
   correctivesOnly?: boolean;
   title?: string;
+  apiBase?: string;
 }) {
   const { data: exercises = [] } = useQuery<Exercise[]>({
-    queryKey: ["/api/coach/exercises"],
+    queryKey: [`${apiBase}/exercises`],
     enabled: open,
   });
   const [search, setSearch] = useState("");
