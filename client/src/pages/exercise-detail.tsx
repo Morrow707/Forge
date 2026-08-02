@@ -16,13 +16,37 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
 import { extractYouTubeId } from "@/components/exercise-video";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { ArrowLeft, Pencil, Trash2, Lock, Stethoscope, Youtube } from "lucide-react";
+import {
+  ArrowLeft,
+  Pencil,
+  Trash2,
+  Lock,
+  Stethoscope,
+  Youtube,
+  Sparkles,
+  Flag,
+  CheckCircle2,
+} from "lucide-react";
 import type { ExerciseWithOwnership } from "@/lib/exercise-types";
 import { MOVEMENT_TYPES, MUSCLE_GROUPS } from "@/lib/exercise-taxonomy";
+
+const ISSUE_TYPES = [
+  { value: "broken_video", label: "Broken video link" },
+  { value: "wrong_info", label: "Wrong movement/muscle/category" },
+  { value: "misspelling", label: "Misspelling" },
+  { value: "other", label: "Other" },
+] as const;
 
 const CATEGORIES = [
   "strength",
@@ -151,6 +175,19 @@ export function ExerciseDetailPage({
     onError: (err: ApiError) => toast.error(err.message || "Could not delete exercise"),
   });
 
+  const [reportOpen, setReportOpen] = useState(false);
+
+  const submitMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("POST", `${apiBase}/exercises/${id}/submit`);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [`${apiBase}/exercises/${id}`] });
+      toast.success("Submitted — the admin will review it for the Forge library");
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Could not submit"),
+  });
+
   if (!isNew && isLoading) {
     return (
       <AppShell title="Loading Exercise…">
@@ -236,6 +273,42 @@ export function ExerciseDetailPage({
                   ? "Created by Forge — read-only"
                   : "Created by another coach — read-only"}
               </span>
+            )}
+          </div>
+        )}
+
+        {!isNew && exercise && apiBase === "/api/coach" && (
+          <div className="flex flex-wrap items-center gap-2">
+            {exercise.editable && !exercise.isForgeOfficial && (
+              exercise.hasPendingSubmission ? (
+                <Badge variant="secondary" className="gap-1">
+                  <Sparkles className="h-3 w-3" />
+                  Submitted — pending Forge review
+                </Badge>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => submitMutation.mutate()}
+                  disabled={submitMutation.isPending}
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  {submitMutation.isPending ? "Submitting…" : "Submit to Forge"}
+                </Button>
+              )
+            )}
+            {exercise.isForgeOfficial && (
+              exercise.hasOpenReport ? (
+                <Badge variant="secondary" className="gap-1">
+                  <CheckCircle2 className="h-3 w-3" />
+                  Reported — thanks!
+                </Badge>
+              ) : (
+                <Button size="sm" variant="outline" onClick={() => setReportOpen(true)}>
+                  <Flag className="h-3.5 w-3.5" />
+                  Report an issue
+                </Button>
+              )
             )}
           </div>
         )}
@@ -430,7 +503,95 @@ export function ExerciseDetailPage({
           </Card>
         )}
       </div>
+
+      {!isNew && exercise && (
+        <ReportIssueDialog
+          open={reportOpen}
+          onOpenChange={setReportOpen}
+          apiBase={apiBase}
+          exerciseId={exercise.id}
+          onReported={() => qc.invalidateQueries({ queryKey: [`${apiBase}/exercises/${id}`] })}
+        />
+      )}
     </AppShell>
+  );
+}
+
+function ReportIssueDialog({
+  open,
+  onOpenChange,
+  apiBase,
+  exerciseId,
+  onReported,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  apiBase: string;
+  exerciseId: number;
+  onReported: () => void;
+}) {
+  const [issueType, setIssueType] = useState<string>("broken_video");
+  const [note, setNote] = useState("");
+
+  const mutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("POST", `${apiBase}/exercises/${exerciseId}/report`, {
+        issueType,
+        note: note || undefined,
+      });
+    },
+    onSuccess: () => {
+      toast.success("Thanks — flagged for the admin to review");
+      onOpenChange(false);
+      setNote("");
+      setIssueType("broken_video");
+      onReported();
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Could not submit report"),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Report an Issue</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <Label>What's wrong?</Label>
+            <Select value={issueType} onValueChange={setIssueType}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ISSUE_TYPES.map((t) => (
+                  <SelectItem key={t.value} value={t.value}>
+                    {t.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="report-note">Details (optional)</Label>
+            <Textarea
+              id="report-note"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Anything that'll help the admin fix it faster…"
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button onClick={() => mutation.mutate()} disabled={mutation.isPending}>
+            {mutation.isPending ? "Submitting…" : "Submit Report"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

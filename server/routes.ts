@@ -13,6 +13,8 @@ import {
   applyCorrectivesToDaysSchema,
   updatePreferencesSchema,
   createWorkoutCommentSchema,
+  createExerciseReportSchema,
+  resolveSubmissionSchema,
 } from "@shared/schema";
 import { z } from "zod";
 
@@ -88,6 +90,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.status(204).end();
   });
 
+  app.post("/api/coach/exercises/:id/submit", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const owned = await assertOwnsExercise(user.id, id);
+    if (!owned) return res.status(404).json({ message: "Exercise not found" });
+    const existing = await storage.getPendingSubmissionForExercise(id, user.id);
+    if (existing) {
+      return res.status(409).json({ message: "Already submitted, pending review" });
+    }
+    const submission = await storage.createExerciseSubmission(id, user.id);
+    res.status(201).json(submission);
+  });
+
+  app.post("/api/coach/exercises/:id/report", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const exercise = await storage.getExerciseDetail(id, user.id);
+    if (!exercise || (!exercise.isForgeOfficial && exercise.coachId !== user.id)) {
+      return res.status(404).json({ message: "Exercise not found" });
+    }
+    const parsed = createExerciseReportSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const report = await storage.createExerciseReport(id, user.id, parsed.data);
+    res.status(201).json(report);
+  });
+
   // ---------------- Admin: Forge Exercise Library ----------------
   // An admin's own exercise bank *is* the Forge library -- everything they
   // create here is automatically shared, read-only, with every coach (see
@@ -139,6 +169,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!owned) return res.status(404).json({ message: "Exercise not found" });
     await storage.deleteExercise(id);
     res.status(204).end();
+  });
+
+  // ---------------- Admin: Review Queue ----------------
+  // Coaches nominate their own exercises for official Forge status, or
+  // flag a problem with an existing Forge exercise. Both land here.
+
+  app.get("/api/admin/submissions", requireRole("admin"), async (req, res) => {
+    const list = await storage.getPendingSubmissionsForAdmin();
+    res.json(list);
+  });
+
+  app.post("/api/admin/submissions/:id/resolve", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const parsed = resolveSubmissionSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const updated = await storage.resolveSubmission(id, parsed.data.approve, user.id);
+    if (!updated) return res.status(404).json({ message: "Submission not found" });
+    res.json(updated);
+  });
+
+  app.get("/api/admin/reports", requireRole("admin"), async (req, res) => {
+    const list = await storage.getOpenReportsForAdmin();
+    res.json(list);
+  });
+
+  app.post("/api/admin/reports/:id/resolve", requireRole("admin"), async (req, res) => {
+    const id = Number(req.params.id);
+    const updated = await storage.resolveReport(id);
+    if (!updated) return res.status(404).json({ message: "Report not found" });
+    res.json(updated);
   });
 
   // ---------------- Coach: Programs ----------------

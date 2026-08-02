@@ -108,6 +108,38 @@ ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "movement_type" text;
 ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "laterality" laterality;
 ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "is_corrective" boolean NOT NULL DEFAULT false;
 
+DO $$ BEGIN
+  CREATE TYPE "exercise_submission_status" AS ENUM ('pending', 'approved', 'rejected');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+CREATE TABLE IF NOT EXISTS "exercise_submissions" (
+  "id" serial PRIMARY KEY,
+  "exercise_id" integer NOT NULL REFERENCES "exercises"("id") ON DELETE CASCADE,
+  "submitted_by" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "status" exercise_submission_status NOT NULL DEFAULT 'pending',
+  "created_at" timestamp NOT NULL DEFAULT now(),
+  "resolved_at" timestamp
+);
+
+DO $$ BEGIN
+  CREATE TYPE "exercise_report_status" AS ENUM ('open', 'resolved');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE "exercise_issue_type" AS ENUM ('broken_video', 'wrong_info', 'misspelling', 'other');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+CREATE TABLE IF NOT EXISTS "exercise_reports" (
+  "id" serial PRIMARY KEY,
+  "exercise_id" integer NOT NULL REFERENCES "exercises"("id") ON DELETE CASCADE,
+  "reported_by" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "issue_type" exercise_issue_type NOT NULL,
+  "note" text,
+  "status" exercise_report_status NOT NULL DEFAULT 'open',
+  "created_at" timestamp NOT NULL DEFAULT now(),
+  "resolved_at" timestamp
+);
+
 CREATE TABLE IF NOT EXISTS "programs" (
   "id" serial PRIMARY KEY,
   "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
