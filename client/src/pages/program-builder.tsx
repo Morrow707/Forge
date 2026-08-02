@@ -73,42 +73,28 @@ type LocalExercise = {
 
 type LocalDay = {
   key: string;
-  dayNumber: number;
   title: string;
   isRestDay: boolean;
   exercises: LocalExercise[];
-};
-
-type LocalWeek = {
-  key: string;
-  weekNumber: number;
-  name: string;
-  days: LocalDay[];
 };
 
 function uid() {
   return crypto.randomUUID();
 }
 
-function makeWeek(weekNumber: number, template?: LocalDay[]): LocalWeek {
-  return {
-    key: uid(),
-    weekNumber,
-    name: `Week ${weekNumber}`,
-    days:
-      template?.map((d) => ({
-        ...d,
-        key: uid(),
-        exercises: d.exercises.map((ex) => ({ ...ex, key: uid() })),
-      })) ??
-      Array.from({ length: 7 }, (_, i) => ({
-        key: uid(),
-        dayNumber: i + 1,
-        title: i === 0 ? "Training Day" : "Rest Day",
-        isRestDay: i !== 0,
-        exercises: [],
-      })),
-  };
+function makeDay(): LocalDay {
+  return { key: uid(), title: "Training Day", isRestDay: false, exercises: [] };
+}
+
+// Weeks aren't something a coach manages directly anymore -- there's no
+// "Add Week" action. A program is just a flat, growable list of days;
+// every run of 7 is bucketed into a week purely so the storage shape (and
+// the default every-7-days scheduling offset) still lines up, with a
+// label the coach can still customize per group for readability.
+function chunkIntoWeeks(days: LocalDay[]) {
+  const chunks: LocalDay[][] = [];
+  for (let i = 0; i < days.length; i += 7) chunks.push(days.slice(i, i + 7));
+  return chunks;
 }
 
 export function ProgramBuilderPage({
@@ -140,8 +126,8 @@ export function ProgramBuilderPage({
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [weeks, setWeeks] = useState<LocalWeek[]>([]);
-  const [activeWeekKey, setActiveWeekKey] = useState<string | null>(null);
+  const [days, setDays] = useState<LocalDay[]>([]);
+  const [weekNames, setWeekNames] = useState<string[]>([]);
   const [pickerForDay, setPickerForDay] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
@@ -150,80 +136,71 @@ export function ProgramBuilderPage({
     if (program && !hydrated) {
       setName(program.name);
       setDescription(program.description ?? "");
-      const loadedWeeks: LocalWeek[] = program.weeks.map((w: any) => ({
-        key: uid(),
-        weekNumber: w.weekNumber,
-        name: w.name ?? `Week ${w.weekNumber}`,
-        days: w.days.map((d: any) => ({
-          key: uid(),
-          dayNumber: d.dayNumber,
-          title: d.title,
-          isRestDay: d.isRestDay,
-          exercises: deriveLinkedToNext(
-            d.exercises.map((pe: any) => ({
-              key: uid(),
-              exerciseId: pe.exercise.id,
-              exerciseName: pe.exercise.name,
-              sets: pe.sets,
-              reps: pe.reps,
-              weight: pe.weight ?? "",
-              restSeconds: pe.restSeconds != null ? String(pe.restSeconds) : "",
-              notes: pe.notes ?? "",
-              supersetGroup: pe.supersetGroup ?? null,
-              trackingLevel: pe.trackingLevel ?? "none",
-              videoCheckEnabled: pe.videoCheckEnabled ?? false,
-            })),
-          ),
-        })),
-      }));
-      setWeeks(loadedWeeks);
-      setActiveWeekKey(loadedWeeks[0]?.key ?? null);
+      const loadedDays: LocalDay[] = [];
+      const loadedWeekNames: string[] = [];
+      for (const w of program.weeks) {
+        loadedWeekNames.push(w.name ?? `Week ${w.weekNumber}`);
+        for (const d of w.days) {
+          loadedDays.push({
+            key: uid(),
+            title: d.title,
+            isRestDay: d.isRestDay,
+            exercises: deriveLinkedToNext(
+              d.exercises.map((pe: any) => ({
+                key: uid(),
+                exerciseId: pe.exercise.id,
+                exerciseName: pe.exercise.name,
+                sets: pe.sets,
+                reps: pe.reps,
+                weight: pe.weight ?? "",
+                restSeconds: pe.restSeconds != null ? String(pe.restSeconds) : "",
+                notes: pe.notes ?? "",
+                supersetGroup: pe.supersetGroup ?? null,
+                trackingLevel: pe.trackingLevel ?? "none",
+                videoCheckEnabled: pe.videoCheckEnabled ?? false,
+              })),
+            ) as LocalExercise[],
+          });
+        }
+      }
+      setDays(loadedDays);
+      setWeekNames(loadedWeekNames);
       setHydrated(true);
     }
   }, [program, hydrated]);
 
-  const activeWeek = weeks.find((w) => w.key === activeWeekKey) ?? weeks[0];
-
   function updateDay(dayKey: string, updater: (day: LocalDay) => LocalDay) {
-    setWeeks((prev) =>
-      prev.map((w) => ({
-        ...w,
-        days: w.days.map((d) => (d.key === dayKey ? updater(d) : d)),
-      })),
-    );
+    setDays((prev) => prev.map((d) => (d.key === dayKey ? updater(d) : d)));
   }
 
-  function addWeek() {
-    const nextNumber = weeks.length + 1;
-    const w = makeWeek(nextNumber);
-    setWeeks((prev) => [...prev, w]);
-    setActiveWeekKey(w.key);
+  function addDay() {
+    setDays((prev) => [...prev, makeDay()]);
   }
 
-  function removeWeek(weekKey: string) {
-    if (weeks.length <= 1) {
-      toast.error("A program needs at least one week");
-      return;
-    }
-    setWeeks((prev) => {
-      const next = prev
-        .filter((w) => w.key !== weekKey)
-        .map((w, i) => ({ ...w, weekNumber: i + 1 }));
-      if (activeWeekKey === weekKey) setActiveWeekKey(next[0]?.key ?? null);
+  function removeDay(dayKey: string) {
+    setDays((prev) => prev.filter((d) => d.key !== dayKey));
+  }
+
+  function renameWeek(weekIndex: number, value: string) {
+    setWeekNames((prev) => {
+      const next = [...prev];
+      next[weekIndex] = value;
       return next;
     });
   }
+
+  const weekChunks = chunkIntoWeeks(days);
 
   const saveMutation = useMutation({
     mutationFn: async () => {
       const payload = {
         name,
         description,
-        weeks: weeks.map((w) => ({
-          weekNumber: w.weekNumber,
-          name: w.name,
-          days: w.days.map((d) => ({
-            dayNumber: d.dayNumber,
+        weeks: weekChunks.map((chunk, wi) => ({
+          weekNumber: wi + 1,
+          name: weekNames[wi] || `Week ${wi + 1}`,
+          days: chunk.map((d, di) => ({
+            dayNumber: di + 1,
             title: d.title,
             isRestDay: d.isRestDay,
             exercises: assignSupersetGroups(d.exercises).map((ex, i) => ({
@@ -251,7 +228,7 @@ export function ProgramBuilderPage({
     onError: (err: ApiError) => toast.error(err.message || "Could not save program"),
   });
 
-  if (isLoading || !hydrated || !activeWeek) {
+  if (isLoading || !hydrated) {
     return (
       <AppShell title="Loading Program…">
         <div className="h-40 animate-pulse rounded-lg bg-surface" />
@@ -316,55 +293,46 @@ export function ProgramBuilderPage({
           </CardContent>
         </Card>
 
-        <div className="mb-4 flex flex-wrap items-center gap-2">
-          {weeks.map((w) => (
-            <button
-              key={w.key}
-              onClick={() => setActiveWeekKey(w.key)}
-              className={`rounded-md px-4 py-2 text-sm font-semibold transition-colors ${
-                w.key === activeWeek.key
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-secondary text-secondary-foreground hover:bg-surface-elevated"
-              }`}
-            >
-              {w.name}
-            </button>
-          ))}
-          <Button size="sm" variant="outline" onClick={addWeek}>
-            <Plus className="h-4 w-4" />
-            Add Week
-          </Button>
-          {weeks.length > 1 && (
-            <Button size="sm" variant="ghost" onClick={() => removeWeek(activeWeek.key)}>
-              <Trash2 className="h-4 w-4 text-destructive" />
+        {days.length === 0 ? (
+          <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border py-16 text-center text-muted-foreground">
+            <p>No days yet. Add training days one at a time -- no need to plan whole weeks.</p>
+            <Button onClick={addDay}>
+              <Plus className="h-4 w-4" />
+              Add Day
             </Button>
-          )}
-        </div>
+          </div>
+        ) : (
+          <div className="space-y-8">
+            {weekChunks.map((chunk, wi) => (
+              <div key={wi}>
+                <Input
+                  value={weekNames[wi] || `Week ${wi + 1}`}
+                  onChange={(e) => renameWeek(wi, e.target.value)}
+                  className="mb-3 h-8 max-w-xs border-none bg-transparent px-0 text-xs font-bold uppercase tracking-wide text-muted-foreground focus-visible:ring-0"
+                />
+                <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+                  {chunk.map((day, di) => (
+                    <DayCard
+                      key={day.key}
+                      dayNumber={wi * 7 + di + 1}
+                      day={day}
+                      onChange={(updater) => updateDay(day.key, updater)}
+                      onAddExercise={() => setPickerForDay(day.key)}
+                      onRemove={() => removeDay(day.key)}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
-        <div className="mb-3 space-y-1.5">
-          <Label className="text-xs uppercase text-muted-foreground">Week label</Label>
-          <Input
-            value={activeWeek.name}
-            onChange={(e) => {
-              const val = e.target.value;
-              setWeeks((prev) =>
-                prev.map((w) => (w.key === activeWeek.key ? { ...w, name: val } : w)),
-              );
-            }}
-            className="max-w-xs"
-          />
-        </div>
-
-        <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
-          {activeWeek.days.map((day) => (
-            <DayCard
-              key={day.key}
-              day={day}
-              onChange={(updater) => updateDay(day.key, updater)}
-              onAddExercise={() => setPickerForDay(day.key)}
-            />
-          ))}
-        </div>
+        {days.length > 0 && (
+          <Button variant="outline" className="mt-4" onClick={addDay}>
+            <Plus className="h-4 w-4" />
+            Add Day
+          </Button>
+        )}
       </fieldset>
 
       <ExercisePickerDialog
@@ -410,12 +378,16 @@ export function ProgramBuilderPage({
 
 function DayCard({
   day,
+  dayNumber,
   onChange,
   onAddExercise,
+  onRemove,
 }: {
   day: LocalDay;
+  dayNumber: number;
   onChange: (updater: (day: LocalDay) => LocalDay) => void;
   onAddExercise: () => void;
+  onRemove: () => void;
 }) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
   const exerciseLabels = computeExerciseLabels(day.exercises);
@@ -434,16 +406,26 @@ function DayCard({
     <Card className={day.isRestDay ? "opacity-70" : ""}>
       <CardContent className="space-y-3 p-4">
         <div className="flex items-center justify-between gap-2">
-          <Badge variant="outline">Day {day.dayNumber}</Badge>
-          <label className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Checkbox
-              checked={day.isRestDay}
-              onCheckedChange={(checked) =>
-                onChange((d) => ({ ...d, isRestDay: checked === true }))
-              }
-            />
-            Rest day
-          </label>
+          <Badge variant="outline">Day {dayNumber}</Badge>
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Checkbox
+                checked={day.isRestDay}
+                onCheckedChange={(checked) =>
+                  onChange((d) => ({ ...d, isRestDay: checked === true }))
+                }
+              />
+              Rest day
+            </label>
+            <button
+              type="button"
+              aria-label={`Remove Day ${dayNumber}`}
+              onClick={onRemove}
+              className="text-muted-foreground hover:text-destructive"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
         </div>
         <Input
           value={day.title}
