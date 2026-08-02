@@ -66,7 +66,7 @@ export function setupAuth(app: Express) {
       if (!parsed.success) {
         return res.status(400).json({ message: parsed.error.issues[0]?.message });
       }
-      const { email, password, name, role, coachCode } = parsed.data;
+      const { email, password, name, role, coachCode, phone } = parsed.data;
       const existing = await storage.getUserByEmail(email);
       if (existing) {
         return res.status(409).json({ message: "Email already in use" });
@@ -91,6 +91,7 @@ export function setupAuth(app: Express) {
         passwordHash,
         name,
         role,
+        phone: phone || null,
       });
 
       if (coach) {

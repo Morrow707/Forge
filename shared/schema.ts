@@ -74,6 +74,14 @@ export const users = pgTable(
     bodyWeightLbs: real("body_weight_lbs"),
     sport: text("sport"),
     position: text("position"),
+    // Optional, collected at signup or added later. notifyEmail/notifySms
+    // are separate toggles on purpose -- a coach may want one, both, or
+    // neither. Only ever used for the targeted events below, never for
+    // program completions or team-wide activity (that's an explicit
+    // decision to avoid notification fatigue).
+    phone: text("phone"),
+    notifyEmail: boolean("notify_email").notNull().default(true),
+    notifySms: boolean("notify_sms").notNull().default(false),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({
@@ -417,6 +425,23 @@ export const workoutComments = pgTable("workout_comments", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// In-app notification inbox. Deliberately narrow: only ever created for a
+// coach when an athlete comments or attaches a video, never for program
+// completions or team-wide events -- see the notification-creation call
+// sites in routes.ts for the full (short) list of triggers.
+export const notifications = pgTable("notifications", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  type: text("type").notNull(),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  link: text("link"),
+  read: boolean("read").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 // ---------- Relations ----------
 
 export const usersRelations = relations(users, ({ many }) => ({
@@ -629,6 +654,7 @@ export const signupSchema = z.object({
   name: z.string().min(1, "Name is required"),
   role: z.enum(["coach", "athlete"]),
   coachCode: z.string().optional(),
+  phone: z.string().trim().max(20).optional(),
 });
 
 export const loginSchema = z.object({
@@ -646,6 +672,12 @@ export const updateProfileSchema = z.object({
   bodyWeightLbs: z.number().min(0).max(1500).optional().nullable(),
   sport: z.string().trim().max(60).optional().nullable(),
   position: z.string().trim().max(60).optional().nullable(),
+});
+
+export const updateNotificationPrefsSchema = z.object({
+  phone: z.string().trim().max(20).optional().nullable(),
+  notifyEmail: z.boolean(),
+  notifySms: z.boolean(),
 });
 
 export const insertExerciseSchema = createInsertSchema(exercises)
@@ -837,6 +869,7 @@ export type ApplyCorrectivesToDaysInput = z.infer<typeof applyCorrectivesToDaysS
 export type SubmitWorkoutLogInput = z.infer<typeof submitWorkoutLogSchema>;
 export type UpdatePreferencesInput = z.infer<typeof updatePreferencesSchema>;
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
+export type UpdateNotificationPrefsInput = z.infer<typeof updateNotificationPrefsSchema>;
 export type CreateWorkoutCommentInput = z.infer<typeof createWorkoutCommentSchema>;
 export type CreateExerciseReportInput = z.infer<typeof createExerciseReportSchema>;
 export type ResolveSubmissionInput = z.infer<typeof resolveSubmissionSchema>;

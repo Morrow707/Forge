@@ -71,6 +71,9 @@ CREATE TABLE IF NOT EXISTS "users" (
   "body_weight_lbs" real,
   "sport" text,
   "position" text,
+  "phone" text,
+  "notify_email" boolean NOT NULL DEFAULT true,
+  "notify_sms" boolean NOT NULL DEFAULT false,
   "created_at" timestamp NOT NULL DEFAULT now()
 );
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "preferred_weight_unit" weight_unit NOT NULL DEFAULT 'lbs';
@@ -79,6 +82,9 @@ ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "height_in" integer;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "body_weight_lbs" real;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "sport" text;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "position" text;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "phone" text;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "notify_email" boolean NOT NULL DEFAULT true;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "notify_sms" boolean NOT NULL DEFAULT false;
 CREATE UNIQUE INDEX IF NOT EXISTS "users_email_idx" ON "users" ("email");
 CREATE UNIQUE INDEX IF NOT EXISTS "users_coach_code_idx" ON "users" ("coach_code");
 
@@ -293,6 +299,17 @@ CREATE TABLE IF NOT EXISTS "workout_comments" (
   "author_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
   "body" text NOT NULL,
   "video_url" text,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS "notifications" (
+  "id" serial PRIMARY KEY,
+  "user_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "type" text NOT NULL,
+  "title" text NOT NULL,
+  "body" text NOT NULL,
+  "link" text,
+  "read" boolean NOT NULL DEFAULT false,
   "created_at" timestamp NOT NULL DEFAULT now()
 );
 `;

@@ -10,6 +10,7 @@ type SignupPayload = {
   name: string;
   role: "coach" | "athlete";
   coachCode?: string;
+  phone?: string;
 };
 
 type LoginPayload = { email: string; password: string };

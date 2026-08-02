@@ -16,9 +16,12 @@ import {
   UserCircle,
   Trophy,
   CalendarRange,
+  Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { EditMyProfileDialog } from "@/components/edit-my-profile-dialog";
+import { NotificationBell } from "@/components/notification-bell";
+import { NotificationSettingsDialog } from "@/components/notification-settings-dialog";
 
 const coachNav = [
   { href: "/coach", label: "Dashboard", icon: Flame, exact: true },
@@ -54,6 +57,7 @@ export function AppShell({
   const [location] = useLocation();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [notifSettingsOpen, setNotifSettingsOpen] = useState(false);
   const nav =
     user?.role === "coach" ? coachNav : user?.role === "admin" ? adminNav : athleteNav;
 
@@ -112,6 +116,16 @@ export function AppShell({
                   <UserCircle className="h-4 w-4" />
                 </Button>
               )}
+              {user?.role === "coach" && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setNotifSettingsOpen(true)}
+                  aria-label="Notification settings"
+                >
+                  <Settings className="h-4 w-4" />
+                </Button>
+              )}
               <Button
                 variant="outline"
                 size="sm"
@@ -121,6 +135,7 @@ export function AppShell({
                 <LogOut className="h-4 w-4" />
               </Button>
             </div>
+            {user?.role === "coach" && <NotificationBell />}
             <button
               type="button"
               onClick={() => setMobileNavOpen((v) => !v)}
@@ -176,6 +191,19 @@ export function AppShell({
                     Profile
                   </button>
                 )}
+                {user?.role === "coach" && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNotifSettingsOpen(true);
+                      setMobileNavOpen(false);
+                    }}
+                    className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground"
+                  >
+                    <Settings className="h-4 w-4" />
+                    Notifications
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => logoutMutation.mutate()}
@@ -202,6 +230,13 @@ export function AppShell({
 
       {user?.role === "athlete" && (
         <EditMyProfileDialog user={user} open={profileOpen} onOpenChange={setProfileOpen} />
+      )}
+      {user?.role === "coach" && (
+        <NotificationSettingsDialog
+          user={user}
+          open={notifSettingsOpen}
+          onOpenChange={setNotifSettingsOpen}
+        />
       )}
     </div>
   );
