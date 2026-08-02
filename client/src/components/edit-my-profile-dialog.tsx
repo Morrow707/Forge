@@ -32,11 +32,19 @@ export function EditMyProfileDialog({
   useEffect(() => {
     if (open) {
       setValue({
+        name: user.name,
         age: user.age != null ? String(user.age) : "",
         heightIn: user.heightIn != null ? String(user.heightIn) : "",
         bodyWeightLbs: user.bodyWeightLbs != null ? String(user.bodyWeightLbs) : "",
         sport: user.sport ?? "",
         position: user.position ?? "",
+        fortyYardDash: user.fortyYardDash != null ? String(user.fortyYardDash) : "",
+        verticalJumpIn: user.verticalJumpIn != null ? String(user.verticalJumpIn) : "",
+        broadJumpIn: user.broadJumpIn != null ? String(user.broadJumpIn) : "",
+        proAgilitySeconds: user.proAgilitySeconds != null ? String(user.proAgilitySeconds) : "",
+        benchMaxLbs: user.benchMaxLbs != null ? String(user.benchMaxLbs) : "",
+        squatMaxLbs: user.squatMaxLbs != null ? String(user.squatMaxLbs) : "",
+        deadliftMaxLbs: user.deadliftMaxLbs != null ? String(user.deadliftMaxLbs) : "",
       });
     }
   }, [open, user]);
@@ -44,11 +52,21 @@ export function EditMyProfileDialog({
   const saveMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("PATCH", "/api/athlete/profile", {
+        name: value.name.trim() || undefined,
         age: value.age.trim() ? Number(value.age) : null,
         heightIn: value.heightIn.trim() ? Number(value.heightIn) : null,
         bodyWeightLbs: value.bodyWeightLbs.trim() ? Number(value.bodyWeightLbs) : null,
         sport: value.sport.trim() || null,
         position: value.position.trim() || null,
+        fortyYardDash: value.fortyYardDash.trim() ? Number(value.fortyYardDash) : null,
+        verticalJumpIn: value.verticalJumpIn.trim() ? Number(value.verticalJumpIn) : null,
+        broadJumpIn: value.broadJumpIn.trim() ? Number(value.broadJumpIn) : null,
+        proAgilitySeconds: value.proAgilitySeconds.trim()
+          ? Number(value.proAgilitySeconds)
+          : null,
+        benchMaxLbs: value.benchMaxLbs.trim() ? Number(value.benchMaxLbs) : null,
+        squatMaxLbs: value.squatMaxLbs.trim() ? Number(value.squatMaxLbs) : null,
+        deadliftMaxLbs: value.deadliftMaxLbs.trim() ? Number(value.deadliftMaxLbs) : null,
       });
       return (await res.json()) as PublicUser;
     },

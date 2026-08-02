@@ -203,6 +203,13 @@ export const storage = {
         sport: users.sport,
         position: users.position,
         healthStatus: users.healthStatus,
+        fortyYardDash: users.fortyYardDash,
+        verticalJumpIn: users.verticalJumpIn,
+        broadJumpIn: users.broadJumpIn,
+        proAgilitySeconds: users.proAgilitySeconds,
+        benchMaxLbs: users.benchMaxLbs,
+        squatMaxLbs: users.squatMaxLbs,
+        deadliftMaxLbs: users.deadliftMaxLbs,
       })
       .from(coachAthletes)
       .innerJoin(users, eq(coachAthletes.athleteId, users.id))
@@ -226,6 +233,13 @@ export const storage = {
         sport: users.sport,
         position: users.position,
         healthStatus: users.healthStatus,
+        fortyYardDash: users.fortyYardDash,
+        verticalJumpIn: users.verticalJumpIn,
+        broadJumpIn: users.broadJumpIn,
+        proAgilitySeconds: users.proAgilitySeconds,
+        benchMaxLbs: users.benchMaxLbs,
+        squatMaxLbs: users.squatMaxLbs,
+        deadliftMaxLbs: users.deadliftMaxLbs,
       })
       .from(coachAthletes)
       .innerJoin(users, eq(coachAthletes.athleteId, users.id))

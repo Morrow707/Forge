@@ -77,6 +77,19 @@ export const users = pgTable(
     bodyWeightLbs: real("body_weight_lbs"),
     sport: text("sport"),
     position: text("position"),
+    // Coach-entered testing/combine snapshot -- a fast manual number from a
+    // testing day (tryouts, combine, quick assessment), deliberately
+    // separate from and not derived from actual logged workout sets (which
+    // already drive the leaderboard's estimated 1RM). One current value
+    // each, not a history -- same "just a profile field" treatment as
+    // age/height/weight above.
+    fortyYardDash: real("forty_yard_dash"), // seconds
+    verticalJumpIn: real("vertical_jump_in"),
+    broadJumpIn: real("broad_jump_in"),
+    proAgilitySeconds: real("pro_agility_seconds"),
+    benchMaxLbs: real("bench_max_lbs"),
+    squatMaxLbs: real("squat_max_lbs"),
+    deadliftMaxLbs: real("deadlift_max_lbs"),
     // Optional, collected at signup or added later. notifyEmail/notifySms
     // are separate toggles on purpose -- a coach may want one, both, or
     // neither. Only ever used for the targeted events below, never for
@@ -767,11 +780,19 @@ export const updatePreferencesSchema = z.object({
 });
 
 export const updateProfileSchema = z.object({
+  name: z.string().trim().min(1).max(100).optional(),
   age: z.number().int().min(0).max(120).optional().nullable(),
   heightIn: z.number().int().min(0).max(120).optional().nullable(),
   bodyWeightLbs: z.number().min(0).max(1500).optional().nullable(),
   sport: z.string().trim().max(60).optional().nullable(),
   position: z.string().trim().max(60).optional().nullable(),
+  fortyYardDash: z.number().min(0).max(20).optional().nullable(),
+  verticalJumpIn: z.number().min(0).max(60).optional().nullable(),
+  broadJumpIn: z.number().min(0).max(200).optional().nullable(),
+  proAgilitySeconds: z.number().min(0).max(20).optional().nullable(),
+  benchMaxLbs: z.number().min(0).max(1500).optional().nullable(),
+  squatMaxLbs: z.number().min(0).max(1500).optional().nullable(),
+  deadliftMaxLbs: z.number().min(0).max(1500).optional().nullable(),
 });
 
 export const updateNotificationPrefsSchema = z.object({

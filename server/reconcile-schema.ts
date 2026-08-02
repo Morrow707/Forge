@@ -75,6 +75,13 @@ CREATE TABLE IF NOT EXISTS "users" (
   "body_weight_lbs" real,
   "sport" text,
   "position" text,
+  "forty_yard_dash" real,
+  "vertical_jump_in" real,
+  "broad_jump_in" real,
+  "pro_agility_seconds" real,
+  "bench_max_lbs" real,
+  "squat_max_lbs" real,
+  "deadlift_max_lbs" real,
   "phone" text,
   "notify_email" boolean NOT NULL DEFAULT true,
   "notify_sms" boolean NOT NULL DEFAULT false,
@@ -88,6 +95,13 @@ ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "height_in" integer;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "body_weight_lbs" real;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "sport" text;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "position" text;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "forty_yard_dash" real;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "vertical_jump_in" real;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "broad_jump_in" real;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "pro_agility_seconds" real;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "bench_max_lbs" real;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "squat_max_lbs" real;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "deadlift_max_lbs" real;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "phone" text;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "notify_email" boolean NOT NULL DEFAULT true;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "notify_sms" boolean NOT NULL DEFAULT false;

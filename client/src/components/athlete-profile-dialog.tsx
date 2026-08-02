@@ -25,16 +25,32 @@ export type ProfileAthlete = {
   bodyWeightLbs?: number | null;
   sport?: string | null;
   position?: string | null;
+  fortyYardDash?: number | null;
+  verticalJumpIn?: number | null;
+  broadJumpIn?: number | null;
+  proAgilitySeconds?: number | null;
+  benchMaxLbs?: number | null;
+  squatMaxLbs?: number | null;
+  deadliftMaxLbs?: number | null;
 };
 
 function toFormValue(athlete: ProfileAthlete | null): ProfileFieldsValue {
   if (!athlete) return emptyProfileFields;
   return {
+    name: athlete.name,
     age: athlete.age != null ? String(athlete.age) : "",
     heightIn: athlete.heightIn != null ? String(athlete.heightIn) : "",
     bodyWeightLbs: athlete.bodyWeightLbs != null ? String(athlete.bodyWeightLbs) : "",
     sport: athlete.sport ?? "",
     position: athlete.position ?? "",
+    fortyYardDash: athlete.fortyYardDash != null ? String(athlete.fortyYardDash) : "",
+    verticalJumpIn: athlete.verticalJumpIn != null ? String(athlete.verticalJumpIn) : "",
+    broadJumpIn: athlete.broadJumpIn != null ? String(athlete.broadJumpIn) : "",
+    proAgilitySeconds:
+      athlete.proAgilitySeconds != null ? String(athlete.proAgilitySeconds) : "",
+    benchMaxLbs: athlete.benchMaxLbs != null ? String(athlete.benchMaxLbs) : "",
+    squatMaxLbs: athlete.squatMaxLbs != null ? String(athlete.squatMaxLbs) : "",
+    deadliftMaxLbs: athlete.deadliftMaxLbs != null ? String(athlete.deadliftMaxLbs) : "",
   };
 }
 
@@ -56,11 +72,21 @@ export function AthleteProfileDialog({
     mutationFn: async () => {
       if (!athlete) return;
       const res = await apiRequest("PATCH", `/api/coach/roster/${athlete.id}/profile`, {
+        name: value.name.trim() || undefined,
         age: value.age.trim() ? Number(value.age) : null,
         heightIn: value.heightIn.trim() ? Number(value.heightIn) : null,
         bodyWeightLbs: value.bodyWeightLbs.trim() ? Number(value.bodyWeightLbs) : null,
         sport: value.sport.trim() || null,
         position: value.position.trim() || null,
+        fortyYardDash: value.fortyYardDash.trim() ? Number(value.fortyYardDash) : null,
+        verticalJumpIn: value.verticalJumpIn.trim() ? Number(value.verticalJumpIn) : null,
+        broadJumpIn: value.broadJumpIn.trim() ? Number(value.broadJumpIn) : null,
+        proAgilitySeconds: value.proAgilitySeconds.trim()
+          ? Number(value.proAgilitySeconds)
+          : null,
+        benchMaxLbs: value.benchMaxLbs.trim() ? Number(value.benchMaxLbs) : null,
+        squatMaxLbs: value.squatMaxLbs.trim() ? Number(value.squatMaxLbs) : null,
+        deadliftMaxLbs: value.deadliftMaxLbs.trim() ? Number(value.deadliftMaxLbs) : null,
       });
       return res.json();
     },
