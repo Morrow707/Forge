@@ -113,7 +113,7 @@ export function WorkoutCommentThread({
           <div className="flex items-center justify-between rounded-md border border-success/40 bg-success/10 px-2.5 py-1.5 text-xs font-semibold text-success">
             <span className="flex items-center gap-1.5">
               <Video className="h-3 w-3" />
-              Recorded video attached
+              Video attached
             </span>
             <button
               type="button"
@@ -163,7 +163,7 @@ export function WorkoutCommentThread({
                 onClick={() => setRecorderOpen(true)}
                 className="flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
               >
-                <Video className="h-3 w-3" /> Record a video
+                <Video className="h-3 w-3" /> Record or upload a video
               </button>
             )}
           </div>
