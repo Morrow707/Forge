@@ -20,6 +20,7 @@ import AthleteWorkout from "@/pages/athlete/workout";
 import AdminDashboard from "@/pages/admin/dashboard";
 import AdminExercises from "@/pages/admin/exercises";
 import AdminExerciseDetail from "@/pages/admin/exercise-detail";
+import AdminReviewQueue from "@/pages/admin/review-queue";
 
 function FullScreenSpinner() {
   return (
@@ -100,6 +101,9 @@ function Router() {
       </Route>
       <Route path="/admin/exercises">
         <ProtectedRoute role="admin" component={AdminExercises} />
+      </Route>
+      <Route path="/admin/review">
+        <ProtectedRoute role="admin" component={AdminReviewQueue} />
       </Route>
       <Route component={NotFound} />
     </Switch>

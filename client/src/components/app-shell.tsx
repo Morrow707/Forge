@@ -10,6 +10,7 @@ import {
   CalendarDays,
   LogOut,
   Flame,
+  ClipboardCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -28,6 +29,7 @@ const athleteNav = [
 const adminNav = [
   { href: "/admin", label: "Dashboard", icon: Flame, exact: true },
   { href: "/admin/exercises", label: "Forge Library", icon: Dumbbell },
+  { href: "/admin/review", label: "Review Queue", icon: ClipboardCheck },
 ];
 
 export function AppShell({

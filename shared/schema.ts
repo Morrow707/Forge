@@ -139,6 +139,55 @@ export const exercises = pgTable("exercises", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const exerciseSubmissionStatusEnum = pgEnum("exercise_submission_status", [
+  "pending",
+  "approved",
+  "rejected",
+]);
+
+// A coach's own exercise, nominated to become official Forge content.
+// Approving one just hands the exercise's ownership to the admin -- the
+// same coachId column that already drives the FORGE/initials badge, so
+// nothing else needs to change for it to show up as Forge-official.
+export const exerciseSubmissions = pgTable("exercise_submissions", {
+  id: serial("id").primaryKey(),
+  exerciseId: integer("exercise_id")
+    .notNull()
+    .references(() => exercises.id, { onDelete: "cascade" }),
+  submittedBy: integer("submitted_by")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  status: exerciseSubmissionStatusEnum("status").notNull().default("pending"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  resolvedAt: timestamp("resolved_at"),
+});
+
+export const exerciseReportStatusEnum = pgEnum("exercise_report_status", ["open", "resolved"]);
+export const exerciseIssueTypeEnum = pgEnum("exercise_issue_type", [
+  "broken_video",
+  "wrong_info",
+  "misspelling",
+  "other",
+]);
+
+// A coach flagging a problem with a Forge-official exercise they can see
+// but can't fix themselves (broken video link, wrong movement type, a
+// typo, etc).
+export const exerciseReports = pgTable("exercise_reports", {
+  id: serial("id").primaryKey(),
+  exerciseId: integer("exercise_id")
+    .notNull()
+    .references(() => exercises.id, { onDelete: "cascade" }),
+  reportedBy: integer("reported_by")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  issueType: exerciseIssueTypeEnum("issue_type").notNull(),
+  note: text("note"),
+  status: exerciseReportStatusEnum("status").notNull().default("open"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  resolvedAt: timestamp("resolved_at"),
+});
+
 export const programs = pgTable("programs", {
   id: serial("id").primaryKey(),
   coachId: integer("coach_id")
@@ -356,6 +405,22 @@ export const teamMembersRelations = relations(teamMembers, ({ one }) => ({
 
 export const exercisesRelations = relations(exercises, ({ one }) => ({
   coach: one(users, { fields: [exercises.coachId], references: [users.id] }),
+}));
+
+export const exerciseSubmissionsRelations = relations(exerciseSubmissions, ({ one }) => ({
+  exercise: one(exercises, {
+    fields: [exerciseSubmissions.exerciseId],
+    references: [exercises.id],
+  }),
+  submitter: one(users, {
+    fields: [exerciseSubmissions.submittedBy],
+    references: [users.id],
+  }),
+}));
+
+export const exerciseReportsRelations = relations(exerciseReports, ({ one }) => ({
+  exercise: one(exercises, { fields: [exerciseReports.exerciseId], references: [exercises.id] }),
+  reporter: one(users, { fields: [exerciseReports.reportedBy], references: [users.id] }),
 }));
 
 export const programsRelations = relations(programs, ({ one, many }) => ({
@@ -625,6 +690,15 @@ export const createWorkoutCommentSchema = z.object({
   videoUrl: z.string().trim().max(500).optional().nullable(),
 });
 
+export const createExerciseReportSchema = z.object({
+  issueType: z.enum(["broken_video", "wrong_info", "misspelling", "other"]),
+  note: z.string().trim().max(1000).optional(),
+});
+
+export const resolveSubmissionSchema = z.object({
+  approve: z.boolean(),
+});
+
 export const setLogInputSchema = z.object({
   setNumber: z.number(),
   reps: z.string().optional().nullable(),
@@ -681,5 +755,7 @@ export type ApplyCorrectivesToDaysInput = z.infer<typeof applyCorrectivesToDaysS
 export type SubmitWorkoutLogInput = z.infer<typeof submitWorkoutLogSchema>;
 export type UpdatePreferencesInput = z.infer<typeof updatePreferencesSchema>;
 export type CreateWorkoutCommentInput = z.infer<typeof createWorkoutCommentSchema>;
+export type CreateExerciseReportInput = z.infer<typeof createExerciseReportSchema>;
+export type ResolveSubmissionInput = z.infer<typeof resolveSubmissionSchema>;
 
 export type PublicUser = Omit<User, "passwordHash">;

@@ -15,6 +15,8 @@ import {
   workoutLogEntries,
   workoutSetEntries,
   workoutComments,
+  exerciseSubmissions,
+  exerciseReports,
   type InsertUser,
 } from "@shared/schema";
 import type {
@@ -25,6 +27,7 @@ import type {
   UpdateAssignmentInput,
   UpdatePreferencesInput,
   CreateWorkoutCommentInput,
+  CreateExerciseReportInput,
 } from "@shared/schema";
 import { eq, and, inArray, asc, desc, lt } from "drizzle-orm";
 import { generateCoachCode } from "./auth-utils";
@@ -259,7 +262,25 @@ export const storage = {
       with: { coach: true },
     });
     if (!ex) return null;
-    return this.withExerciseOwnership(ex, requestingUserId);
+    const pendingSubmission = await db.query.exerciseSubmissions.findFirst({
+      where: and(
+        eq(exerciseSubmissions.exerciseId, id),
+        eq(exerciseSubmissions.submittedBy, requestingUserId),
+        eq(exerciseSubmissions.status, "pending"),
+      ),
+    });
+    const openReport = await db.query.exerciseReports.findFirst({
+      where: and(
+        eq(exerciseReports.exerciseId, id),
+        eq(exerciseReports.reportedBy, requestingUserId),
+        eq(exerciseReports.status, "open"),
+      ),
+    });
+    return {
+      ...this.withExerciseOwnership(ex, requestingUserId),
+      hasPendingSubmission: !!pendingSubmission,
+      hasOpenReport: !!openReport,
+    };
   },
 
   async getExercise(id: number) {
@@ -296,6 +317,118 @@ export const storage = {
 
   async deleteExercise(id: number) {
     await db.delete(exercises).where(eq(exercises.id, id));
+  },
+
+  // ---------- Exercise submissions (coach -> Forge) ----------
+  async getPendingSubmissionForExercise(exerciseId: number, submittedBy: number) {
+    return db.query.exerciseSubmissions.findFirst({
+      where: and(
+        eq(exerciseSubmissions.exerciseId, exerciseId),
+        eq(exerciseSubmissions.submittedBy, submittedBy),
+        eq(exerciseSubmissions.status, "pending"),
+      ),
+    });
+  },
+
+  async createExerciseSubmission(exerciseId: number, submittedBy: number) {
+    const [row] = await db
+      .insert(exerciseSubmissions)
+      .values({ exerciseId, submittedBy })
+      .returning();
+    return row;
+  },
+
+  async getPendingSubmissionsForAdmin() {
+    const rows = await db.query.exerciseSubmissions.findMany({
+      where: eq(exerciseSubmissions.status, "pending"),
+      orderBy: asc(exerciseSubmissions.createdAt),
+      with: { exercise: true, submitter: true },
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      createdAt: r.createdAt,
+      exercise: {
+        id: r.exercise.id,
+        name: r.exercise.name,
+        category: r.exercise.category,
+        muscleGroup: r.exercise.muscleGroup,
+        movementType: r.exercise.movementType,
+        laterality: r.exercise.laterality,
+        equipment: r.exercise.equipment,
+        instructions: r.exercise.instructions,
+        videoUrl: r.exercise.videoUrl,
+      },
+      submitter: { id: r.submitter.id, name: r.submitter.name },
+    }));
+  },
+
+  async resolveSubmission(id: number, approve: boolean, adminId: number) {
+    const submission = await db.query.exerciseSubmissions.findFirst({
+      where: eq(exerciseSubmissions.id, id),
+    });
+    if (!submission) return null;
+    if (approve) {
+      await db.update(exercises).set({ coachId: adminId }).where(eq(exercises.id, submission.exerciseId));
+    }
+    const [row] = await db
+      .update(exerciseSubmissions)
+      .set({ status: approve ? "approved" : "rejected", resolvedAt: new Date() })
+      .where(eq(exerciseSubmissions.id, id))
+      .returning();
+    return row;
+  },
+
+  // ---------- Exercise reports (coach flags a Forge exercise) ----------
+  async createExerciseReport(
+    exerciseId: number,
+    reportedBy: number,
+    input: CreateExerciseReportInput,
+  ) {
+    const [row] = await db
+      .insert(exerciseReports)
+      .values({
+        exerciseId,
+        reportedBy,
+        issueType: input.issueType,
+        note: input.note || null,
+      })
+      .returning();
+    return row;
+  },
+
+  async getOpenReportsForAdmin() {
+    const rows = await db.query.exerciseReports.findMany({
+      where: eq(exerciseReports.status, "open"),
+      orderBy: asc(exerciseReports.createdAt),
+      with: { exercise: true, reporter: true },
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      issueType: r.issueType,
+      note: r.note,
+      createdAt: r.createdAt,
+      exercise: {
+        id: r.exercise.id,
+        name: r.exercise.name,
+        category: r.exercise.category,
+        muscleGroup: r.exercise.muscleGroup,
+        movementType: r.exercise.movementType,
+        laterality: r.exercise.laterality,
+        equipment: r.exercise.equipment,
+        instructions: r.exercise.instructions,
+        videoUrl: r.exercise.videoUrl,
+      },
+      reporter: { id: r.reporter.id, name: r.reporter.name },
+    }));
+  },
+
+  async resolveReport(id: number) {
+    const [row] = await db
+      .update(exerciseReports)
+      .set({ status: "resolved", resolvedAt: new Date() })
+      .where(eq(exerciseReports.id, id))
+      .returning();
+    return row;
   },
 
   // ---------- Programs ----------
