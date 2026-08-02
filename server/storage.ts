@@ -34,7 +34,12 @@ import type {
   CreateExerciseReportInput,
 } from "@shared/schema";
 import { eq, and, inArray, asc, desc, lt, gt, isNull } from "drizzle-orm";
-import { generateCoachCode, generateResetToken, hashResetToken } from "./auth-utils";
+import {
+  generateCoachCode,
+  generateResetToken,
+  hashResetToken,
+  generateCalendarToken,
+} from "./auth-utils";
 import { addDays, parseISO, formatISO, isWithinInterval } from "date-fns";
 
 function initialsFor(name: string): string {
@@ -115,6 +120,19 @@ export const storage = {
     return db.query.users.findFirst({
       where: eq(users.coachCode, code.toUpperCase()),
     });
+  },
+
+  async getUserByCalendarToken(token: string) {
+    return db.query.users.findFirst({ where: eq(users.calendarToken, token) });
+  },
+
+  async getOrCreateCalendarToken(userId: number) {
+    const user = await this.getUser(userId);
+    if (user?.calendarToken) return user.calendarToken;
+    let token = generateCalendarToken();
+    while (await this.getUserByCalendarToken(token)) token = generateCalendarToken();
+    await db.update(users).set({ calendarToken: token }).where(eq(users.id, userId));
+    return token;
   },
 
   async createUser(data: Omit<InsertUser, "coachCode">) {

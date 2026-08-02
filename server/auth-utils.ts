@@ -31,6 +31,10 @@ export function hashResetToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
+export function generateCalendarToken(): string {
+  return randomBytes(24).toString("hex");
+}
+
 export function generateCoachCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let code = "";

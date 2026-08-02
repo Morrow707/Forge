@@ -5,6 +5,7 @@ import fs from "fs";
 import multer from "multer";
 import { setupAuth, requireAuth, requireRole } from "./auth";
 import { storage } from "./storage";
+import { buildIcsFeed } from "./ics";
 import {
   insertExerciseSchema,
   programStructureSchema,
@@ -72,6 +73,39 @@ async function assertCoachOwnsProgram(coachId: number, programId: number) {
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
   app.use("/uploads", express.static(path.join(process.cwd(), "server", "uploads")));
+
+  // ---------------- Public calendar subscribe feed ----------------
+  // Deliberately unauthenticated: calendar apps (Google/Apple/Outlook)
+  // re-fetch a plain URL on their own schedule and can't carry a session
+  // cookie, so access control here is "possession of the unguessable
+  // token" rather than a login. Only ever resolves to an athlete's own
+  // training days -- never rest days, to keep a subscribed calendar from
+  // filling up with noise.
+  app.get("/api/calendar/:token.ics", async (req, res) => {
+    const user = await storage.getUserByCalendarToken(req.params.token);
+    if (!user || user.role !== "athlete") {
+      return res.status(404).send("Calendar not found");
+    }
+    const start = new Date();
+    start.setDate(start.getDate() - 30);
+    const end = new Date();
+    end.setDate(end.getDate() + 180);
+    const toIso = (d: Date) => d.toISOString().slice(0, 10);
+    const entries = await storage.getCalendarForAthlete(user.id, toIso(start), toIso(end));
+    const feed = buildIcsFeed(
+      `Forge Training — ${user.name}`,
+      entries
+        .filter((e) => !e.isRestDay)
+        .map((e) => ({
+          uid: `forge-assignment${e.assignmentId}-day${e.programDayId}-${e.date}`,
+          date: e.date,
+          summary: e.title,
+          description: e.programName,
+        })),
+    );
+    res.setHeader("Content-Type", "text/calendar; charset=utf-8");
+    res.send(feed);
+  });
 
   // ---------------- Coach: Exercise Bank ----------------
   // A coach sees their own private exercises plus every Forge-official
@@ -414,6 +448,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
       if (!updated) return res.status(404).json({ message: "Athlete not found" });
       res.json(updated);
+    },
+  );
+
+  app.get(
+    "/api/coach/roster/:athleteId/calendar-link",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      const onRoster = await storage.getRosterAthleteForCoach(user.id, athleteId);
+      if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
+      const token = await storage.getOrCreateCalendarToken(athleteId);
+      res.json({ token });
     },
   );
 
@@ -791,6 +838,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       parsed.data.end,
     );
     res.json(entries);
+  });
+
+  app.get("/api/athlete/calendar-link", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const token = await storage.getOrCreateCalendarToken(user.id);
+    res.json({ token });
   });
 
   app.get("/api/athlete/day", requireRole("athlete"), async (req, res) => {

@@ -6,13 +6,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { CalendarView, type CalendarEntry } from "@/components/calendar-view";
+import { CalendarLinkDialog } from "@/components/calendar-link-dialog";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { Dumbbell } from "lucide-react";
+import { Dumbbell, CalendarDays } from "lucide-react";
 
 export default function AthleteDashboard() {
   const [, navigate] = useLocation();
   const [range, setRange] = useState<{ start: string; end: string }>({ start: "", end: "" });
+  const [syncOpen, setSyncOpen] = useState(false);
 
   const { data: entries = [] } = useQuery<CalendarEntry[]>({
     queryKey: ["/api/athlete/calendar", range.start, range.end],
@@ -35,7 +37,15 @@ export default function AthleteDashboard() {
   });
 
   return (
-    <AppShell title="My Calendar">
+    <AppShell
+      title="My Calendar"
+      actions={
+        <Button variant="outline" size="sm" onClick={() => setSyncOpen(true)}>
+          <CalendarDays className="h-4 w-4" />
+          Sync to Phone
+        </Button>
+      }
+    >
       <CalendarView
         entries={entries}
         onRangeChange={(start, end) => setRange({ start, end })}
@@ -57,6 +67,13 @@ export default function AthleteDashboard() {
           </CardContent>
         </Card>
       )}
+
+      <CalendarLinkDialog
+        open={syncOpen}
+        onOpenChange={setSyncOpen}
+        title="Sync Your Calendar"
+        fetchUrl="/api/athlete/calendar-link"
+      />
     </AppShell>
   );
 }
