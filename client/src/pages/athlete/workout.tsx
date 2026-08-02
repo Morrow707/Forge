@@ -42,9 +42,11 @@ import {
   Video,
   Crown,
   Calculator,
+  CalendarRange,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import type { PublicUser } from "@shared/schema";
+import { parseProgression } from "@/lib/progression";
 
 type ExerciseInfo = {
   id: number;
@@ -127,7 +129,13 @@ type LogEntry = {
 type DayDetail = {
   programName: string;
   correctivesEnabled: boolean;
-  day: { id: number; title: string; isRestDay: boolean; exercises: PrescribedExercise[] };
+  day: {
+    id: number;
+    title: string;
+    isRestDay: boolean;
+    weekNumber: number;
+    exercises: PrescribedExercise[];
+  };
   correctives: PrescribedCorrective[];
   log: { completed: boolean; entries: LogEntry[] } | null;
 };
@@ -157,12 +165,14 @@ type ItemState = {
   athleteNotes: string;
   rpe: string;
   sets: SetRow[];
+  weekNumber: number;
 };
 
 function buildItem(
   kind: "exercise" | "corrective",
   prescribed: PrescribedExercise | PrescribedCorrective,
   existing: LogEntry | undefined,
+  weekNumber: number,
 ): ItemState {
   const sets: SetRow[] = Array.from({ length: prescribed.sets }, (_, i) => {
     const setNumber = i + 1;
@@ -203,6 +213,7 @@ function buildItem(
     athleteNotes: existing?.notes ?? "",
     rpe: existing?.rpe != null ? String(existing.rpe) : "",
     sets,
+    weekNumber,
   };
 }
 
@@ -253,6 +264,11 @@ function isRepCountPR(
 function parsePercentOfOneRm(weightText: string | null) {
   if (!weightText) return null;
   const match = weightText.match(/(\d+(?:\.\d+)?)\s*%\s*1\s*rm/i);
+  return match ? parseFloat(match[1]) : null;
+}
+
+function parseLiteralWeight(weightText: string) {
+  const match = weightText.match(/^(\d+(?:\.\d+)?)/);
   return match ? parseFloat(match[1]) : null;
 }
 
@@ -392,6 +408,7 @@ export default function AthleteWorkout() {
           "corrective",
           c,
           data.log?.entries.find((e) => e.correctiveId === c.id),
+          data.day.weekNumber,
         ),
       );
       const exerciseItems = data.day.exercises.map((pe) =>
@@ -399,6 +416,7 @@ export default function AthleteWorkout() {
           "exercise",
           pe,
           data.log?.entries.find((e) => e.programExerciseId === pe.id),
+          data.day.weekNumber,
         ),
       );
       setItems([...correctiveItems, ...exerciseItems]);
@@ -875,11 +893,40 @@ function ExerciseLogContent({
   const [trackingSet, setTrackingSet] = useState<number | null>(null);
   const [formVideoOpen, setFormVideoOpen] = useState(false);
   const qc = useQueryClient();
-  const percentOfOneRm = parsePercentOfOneRm(item.prescribedWeight);
+  const progression = parseProgression(item.prescribedWeight);
+  const weeksElapsed = Math.max(0, item.weekNumber - 1);
+  const baseWeightText = progression ? progression.baseText : item.prescribedWeight;
+  const basePercentOfOneRm = parsePercentOfOneRm(baseWeightText);
+  // Percent-of-1RM progressions shift the percentage itself (e.g. 70% ->
+  // 72% in week 2); a flat lbs/kg increment doesn't make sense against a
+  // percent base, so it's ignored rather than producing a nonsense number.
+  const percentOfOneRm =
+    basePercentOfOneRm != null && progression?.isPercent
+      ? basePercentOfOneRm + progression.amount * weeksElapsed
+      : basePercentOfOneRm;
   const estimatedOneRm =
     percentOfOneRm != null ? estimateOneRmFromHistory(item.setHistory, unit) : null;
   const suggestedFromOneRm =
     estimatedOneRm != null ? Math.round((percentOfOneRm! / 100) * estimatedOneRm) : null;
+  // Literal-number progression (e.g. "225 lbs +5 lbs/week") -- only applies
+  // when the base isn't a %1RM expression, which is handled above instead.
+  const literalBase =
+    basePercentOfOneRm == null && baseWeightText ? parseLiteralWeight(baseWeightText) : null;
+  const progressionIncrementLabel = progression
+    ? progression.isPercent
+      ? `${progression.amount}%`
+      : `${progression.amount} ${unit}`
+    : null;
+  const suggestedFromProgression =
+    literalBase != null && progression
+      ? Math.round(
+          (literalBase +
+            (progression.isPercent
+              ? literalBase * (progression.amount / 100) * weeksElapsed
+              : progression.amount * weeksElapsed)) *
+            10,
+        ) / 10
+      : null;
   const commentsPath = `/api/athlete/assignments/${assignmentId}/days/${programDayId}/comments`;
   const postFormVideoMutation = useMutation({
     mutationFn: async (videoUrl: string) => {
@@ -922,6 +969,9 @@ function ExerciseLogContent({
             Prescribed: {item.prescribedSets} × {item.prescribedReps}
             {item.prescribedWeight ? ` @ ${item.prescribedWeight}` : ""}
             {suggestedFromOneRm != null ? ` (≈ ${suggestedFromOneRm} ${unit})` : ""}
+            {suggestedFromOneRm == null && suggestedFromProgression != null
+              ? ` (≈ ${suggestedFromProgression} ${unit})`
+              : ""}
             {item.restSeconds ? ` · Rest ${item.restSeconds}s` : ""}
           </p>
           {item.lastPerformance && (
@@ -934,11 +984,31 @@ function ExerciseLogContent({
               <Calculator className="h-3 w-3 shrink-0 text-blue-500" />
               <span className="font-medium text-blue-600 dark:text-blue-400">
                 {percentOfOneRm}% of your {estimatedOneRm} {unit} 1RM ≈ {suggestedFromOneRm} {unit}
+                {progression && ` (Week ${item.weekNumber}, +${progressionIncrementLabel}/week)`}
               </span>
               <button
                 type="button"
                 onClick={() => {
                   const value = String(suggestedFromOneRm);
+                  for (const set of item.sets) onUpdateSet(set.setNumber, { weight: value });
+                }}
+                className="font-semibold text-primary hover:underline"
+              >
+                Use
+              </button>
+            </div>
+          )}
+          {suggestedFromProgression != null && item.weightMode === "numeric" && (
+            <div className="mt-0.5 flex items-center gap-1.5 text-xs">
+              <CalendarRange className="h-3 w-3 shrink-0 text-blue-500" />
+              <span className="font-medium text-blue-600 dark:text-blue-400">
+                Week {item.weekNumber} progression (+{progressionIncrementLabel}/week) ≈{" "}
+                {suggestedFromProgression} {unit}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  const value = String(suggestedFromProgression);
                   for (const set of item.sets) onUpdateSet(set.setNumber, { weight: value });
                 }}
                 className="font-semibold text-primary hover:underline"

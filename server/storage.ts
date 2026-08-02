@@ -1736,6 +1736,7 @@ export const storage = {
           orderBy: asc(programExercises.orderIndex),
           with: { exercise: true },
         },
+        week: true,
       },
     });
     if (!day) return undefined;
@@ -1774,10 +1775,11 @@ export const storage = {
       }),
     );
 
+    const { week, ...dayFields } = day;
     return {
       programName: assignment.program.name,
       correctivesEnabled: assignment.correctivesEnabled,
-      day: { ...day, exercises: exercisesWithHistory },
+      day: { ...dayFields, weekNumber: week.weekNumber, exercises: exercisesWithHistory },
       correctives: correctivesWithHistory,
       log: log ?? null,
     };
