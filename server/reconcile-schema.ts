@@ -38,6 +38,10 @@ DO $$ BEGIN
   CREATE TYPE "tracking_level" AS ENUM ('none', 'bar_path', 'full');
 EXCEPTION WHEN duplicate_object THEN null; END $$;
 
+DO $$ BEGIN
+  CREATE TYPE "health_status" AS ENUM ('healthy', 'hurt');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
 -- Owned by connect-pg-simple at runtime; declared here only so it's never
 -- mistaken for an "unclaimed" table by anything diffing live schema state.
 CREATE TABLE IF NOT EXISTS "session" (
@@ -74,6 +78,7 @@ CREATE TABLE IF NOT EXISTS "users" (
   "phone" text,
   "notify_email" boolean NOT NULL DEFAULT true,
   "notify_sms" boolean NOT NULL DEFAULT false,
+  "health_status" health_status NOT NULL DEFAULT 'healthy',
   "created_at" timestamp NOT NULL DEFAULT now()
 );
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "preferred_weight_unit" weight_unit NOT NULL DEFAULT 'lbs';
@@ -85,6 +90,7 @@ ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "position" text;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "phone" text;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "notify_email" boolean NOT NULL DEFAULT true;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "notify_sms" boolean NOT NULL DEFAULT false;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "health_status" health_status NOT NULL DEFAULT 'healthy';
 CREATE UNIQUE INDEX IF NOT EXISTS "users_email_idx" ON "users" ("email");
 CREATE UNIQUE INDEX IF NOT EXISTS "users_coach_code_idx" ON "users" ("coach_code");
 

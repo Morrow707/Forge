@@ -544,9 +544,18 @@ async function main() {
     await storage.transferExerciseOwnership(coach.id, scott.id);
   }
 
-  const coachPrograms = await storage.getProgramsByCoach(coach.id);
+  // Looked up system-wide (not scoped to this coach), same reasoning as the
+  // exercise idempotency check above: this program's owner/name can change
+  // after seeding (e.g. handed to the admin and renamed Forge-official), so
+  // a coach-scoped check would see it as "new" again and recreate a
+  // duplicate on every deploy. Matches on either name so it recognizes the
+  // program whether or not that rename has happened yet.
+  const allPrograms = await storage.getAllPrograms();
+  const demoProgramExists = allPrograms.some((p) =>
+    ["Forge Strength Block", "Forge Workout Program"].includes(p.name),
+  );
   let program;
-  if (coachPrograms.length === 0) {
+  if (!demoProgramExists) {
     program = await storage.createProgramWithStructure(coach.id, {
       name: "Forge Strength Block",
       description: "4-day full body strength & conditioning program.",

@@ -17,8 +17,11 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { AssignProgramDialog } from "@/components/assign-program-dialog";
 import { AthleteProfileDialog } from "@/components/athlete-profile-dialog";
 import { apiRequest, ApiError } from "@/lib/queryClient";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { Users, UserPlus, Send, Plus, X, Search, Copy } from "lucide-react";
+import { Users, UserPlus, Send, Plus, X, Search, Copy, HeartPulse, HeartCrack } from "lucide-react";
+
+type HealthStatus = "healthy" | "hurt";
 
 type RosterEntry = {
   id: number;
@@ -29,6 +32,7 @@ type RosterEntry = {
   bodyWeightLbs?: number | null;
   sport?: string | null;
   position?: string | null;
+  healthStatus?: HealthStatus;
 };
 type TeamMember = { athlete: RosterEntry };
 type TeamEntry = { id: number; name: string; code: string | null; members: TeamMember[] };
@@ -152,13 +156,16 @@ export default function CoachRoster() {
                     <Card key={a.id}>
                       <CardContent className="flex items-center justify-between gap-3 p-4">
                         <div className="min-w-0">
-                          <button
-                            type="button"
-                            onClick={() => setProfileAthlete(a)}
-                            className="truncate text-left font-semibold hover:underline"
-                          >
-                            {a.name}
-                          </button>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setProfileAthlete(a)}
+                              className="truncate text-left font-semibold hover:underline"
+                            >
+                              {a.name}
+                            </button>
+                            <HealthStatusToggle athleteId={a.id} status={a.healthStatus ?? "healthy"} />
+                          </div>
                           <p className="truncate text-xs text-muted-foreground">{a.email}</p>
                           {(a.sport || a.position) && (
                             <div className="mt-1.5 flex flex-wrap gap-1">
@@ -224,6 +231,10 @@ export default function CoachRoster() {
                           >
                             {m.athlete.name}
                           </button>
+                          <HealthStatusToggle
+                            athleteId={m.athlete.id}
+                            status={m.athlete.healthStatus ?? "healthy"}
+                          />
                           {m.athlete.sport && (
                             <Badge variant="secondary" className="text-[10px]">
                               {m.athlete.sport}
@@ -334,6 +345,54 @@ export default function CoachRoster() {
         }}
       />
     </AppShell>
+  );
+}
+
+// Coach-only quick-glance status -- never shown to the athlete themselves
+// (the backend strips it from any athlete-facing response). Icon + text
+// label so the signal isn't color-only.
+function HealthStatusToggle({
+  athleteId,
+  status,
+}: {
+  athleteId: number;
+  status: HealthStatus;
+}) {
+  const qc = useQueryClient();
+  const isHealthy = status === "healthy";
+
+  const mutation = useMutation({
+    mutationFn: async (next: HealthStatus) => {
+      await apiRequest("PATCH", `/api/coach/roster/${athleteId}/health-status`, {
+        healthStatus: next,
+      });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/coach/roster"] });
+      qc.invalidateQueries({ queryKey: ["/api/coach/teams"] });
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Could not update status"),
+  });
+
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        mutation.mutate(isHealthy ? "hurt" : "healthy");
+      }}
+      disabled={mutation.isPending}
+      aria-label={`${isHealthy ? "Healthy" : "Hurt"} -- click to mark ${isHealthy ? "hurt" : "healthy"}`}
+      className={cn(
+        "flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold transition-colors",
+        isHealthy
+          ? "bg-success/15 text-success hover:bg-success/25"
+          : "bg-destructive/15 text-destructive hover:bg-destructive/25",
+      )}
+    >
+      {isHealthy ? <HeartPulse className="h-3 w-3" /> : <HeartCrack className="h-3 w-3" />}
+      {isHealthy ? "Healthy" : "Hurt"}
+    </button>
   );
 }
 

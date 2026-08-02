@@ -45,6 +45,9 @@ export const weightModeEnum = pgEnum("weight_mode", [
   "band",
 ]);
 export const lateralityEnum = pgEnum("laterality", ["bilateral", "unilateral"]);
+// Coach-only quick-glance status, toggled by the coach as an athlete gets
+// hurt/recovers -- never surfaced to the athlete themselves (see PublicUser).
+export const healthStatusEnum = pgEnum("health_status", ["healthy", "hurt"]);
 // "bar_path" tracks only the bar's path/straightness (movement quality) --
 // no speed emphasis, meant for phases where velocity isn't the point (e.g.
 // rehab/offseason). "full" adds live bar speed, tempo, and velocity-loss.
@@ -82,6 +85,8 @@ export const users = pgTable(
     phone: text("phone"),
     notifyEmail: boolean("notify_email").notNull().default(true),
     notifySms: boolean("notify_sms").notNull().default(false),
+    // Coach-only injury/availability flag -- see healthStatusEnum above.
+    healthStatus: healthStatusEnum("health_status").notNull().default("healthy"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({
@@ -874,4 +879,12 @@ export type CreateWorkoutCommentInput = z.infer<typeof createWorkoutCommentSchem
 export type CreateExerciseReportInput = z.infer<typeof createExerciseReportSchema>;
 export type ResolveSubmissionInput = z.infer<typeof resolveSubmissionSchema>;
 
-export type PublicUser = Omit<User, "passwordHash">;
+// healthStatus is coach-only -- deliberately excluded here so it never rides
+// along in an athlete's own login/signup/me response. Coach-facing roster
+// endpoints attach it explicitly (see getRosterForCoach).
+export type PublicUser = Omit<User, "passwordHash" | "healthStatus">;
+
+export const updateHealthStatusSchema = z.object({
+  healthStatus: z.enum(["healthy", "hurt"]),
+});
+export type UpdateHealthStatusInput = z.infer<typeof updateHealthStatusSchema>;

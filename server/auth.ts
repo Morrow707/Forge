@@ -11,7 +11,7 @@ import { signupSchema, type PublicUser } from "@shared/schema";
 const PgStore = connectPgSimple(session);
 
 function toPublicUser(user: any): PublicUser {
-  const { passwordHash, ...rest } = user;
+  const { passwordHash, healthStatus, ...rest } = user;
   return rest;
 }
 

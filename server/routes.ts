@@ -17,6 +17,7 @@ import {
   updatePreferencesSchema,
   updateProfileSchema,
   updateNotificationPrefsSchema,
+  updateHealthStatusSchema,
   createWorkoutCommentSchema,
   createExerciseReportSchema,
   resolveSubmissionSchema,
@@ -396,6 +397,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(publicUser);
   });
 
+  app.patch(
+    "/api/coach/roster/:athleteId/health-status",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      const parsed = updateHealthStatusSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      const updated = await storage.updateAthleteHealthStatus(
+        user.id,
+        athleteId,
+        parsed.data.healthStatus,
+      );
+      if (!updated) return res.status(404).json({ message: "Athlete not found" });
+      res.json(updated);
+    },
+  );
+
   app.get("/api/coach/teams", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     const teamList = await storage.getTeamsForCoach(user.id);
@@ -742,7 +763,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
     const updated = await storage.updateUserPreferences(user.id, parsed.data);
-    const { passwordHash, ...publicUser } = updated;
+    const { passwordHash, healthStatus, ...publicUser } = updated;
     res.json(publicUser);
   });
 
@@ -753,7 +774,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
     const updated = await storage.updateUserProfile(user.id, parsed.data);
-    const { passwordHash, ...publicUser } = updated;
+    const { passwordHash, healthStatus, ...publicUser } = updated;
     res.json(publicUser);
   });
 
@@ -902,7 +923,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
     const updated = await storage.updateNotificationPrefs(user.id, parsed.data);
-    const { passwordHash, ...publicUser } = updated;
+    const { passwordHash, healthStatus, ...publicUser } = updated;
     res.json(publicUser);
   });
 
