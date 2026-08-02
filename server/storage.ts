@@ -179,6 +179,7 @@ export const storage = {
         bodyWeightLbs: users.bodyWeightLbs,
         sport: users.sport,
         position: users.position,
+        healthStatus: users.healthStatus,
       })
       .from(coachAthletes)
       .innerJoin(users, eq(coachAthletes.athleteId, users.id))
@@ -201,11 +202,29 @@ export const storage = {
         bodyWeightLbs: users.bodyWeightLbs,
         sport: users.sport,
         position: users.position,
+        healthStatus: users.healthStatus,
       })
       .from(coachAthletes)
       .innerJoin(users, eq(coachAthletes.athleteId, users.id))
       .where(and(eq(coachAthletes.coachId, coachId), eq(coachAthletes.athleteId, athleteId)));
     return rows[0] ?? null;
+  },
+
+  // Coach-only toggle -- 404s (via null) if the athlete isn't on this
+  // coach's roster, so a coach can never flip a status on someone else's.
+  async updateAthleteHealthStatus(
+    coachId: number,
+    athleteId: number,
+    healthStatus: "healthy" | "hurt",
+  ) {
+    const onRoster = await this.getRosterAthleteForCoach(coachId, athleteId);
+    if (!onRoster) return null;
+    const [updated] = await db
+      .update(users)
+      .set({ healthStatus })
+      .where(eq(users.id, athleteId))
+      .returning({ id: users.id, healthStatus: users.healthStatus });
+    return updated;
   },
 
   async getCoachesForAthlete(athleteId: number) {
@@ -224,10 +243,20 @@ export const storage = {
       with: { members: { with: { athlete: true } } },
       orderBy: asc(teams.name),
     });
+    // The `with: { athlete: true }` join above pulls the full user row --
+    // strip passwordHash before this ever reaches a response; a coach
+    // legitimately sees the rest (including healthStatus).
+    const sanitized = rows.map((team) => ({
+      ...team,
+      members: team.members.map((m) => {
+        const { passwordHash, ...athlete } = m.athlete;
+        return { ...m, athlete };
+      }),
+    }));
     // Teams created before the join-code column existed have none yet --
     // backfill lazily so every team the coach sees always has one to share.
     return Promise.all(
-      rows.map(async (team) => {
+      sanitized.map(async (team) => {
         if (team.code) return team;
         let code = generateCoachCode();
         while (await this.getTeamByCode(code)) code = generateCoachCode();
@@ -508,6 +537,15 @@ export const storage = {
   },
 
   // ---------- Programs ----------
+  // System-wide, unfiltered -- same idempotency purpose as getAllExercises:
+  // a program's owner/name can change after seeding (e.g. handed to the
+  // admin and renamed as Forge-official), so a seed script checking "does
+  // this exist yet" needs to look everywhere, not just under whichever
+  // account originally created it.
+  async getAllPrograms() {
+    return db.query.programs.findMany();
+  },
+
   // A single owner's own programs -- used by both a coach's private bank
   // and an admin's Forge program library (same query, different owner id).
   async getProgramsByCoach(coachId: number) {
@@ -840,10 +878,16 @@ export const storage = {
   },
 
   async getAssignmentsForCoach(coachId: number) {
-    return db.query.assignments.findMany({
+    const rows = await db.query.assignments.findMany({
       where: eq(assignments.coachId, coachId),
       with: { program: true, athlete: true },
       orderBy: desc(assignments.createdAt),
+    });
+    // `with: { athlete: true }` pulls the full user row -- strip
+    // passwordHash before this reaches a response.
+    return rows.map((a) => {
+      const { passwordHash, ...athlete } = a.athlete;
+      return { ...a, athlete };
     });
   },
 
