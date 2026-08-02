@@ -34,6 +34,10 @@ DO $$ BEGIN
   CREATE TYPE "exercise_category" AS ENUM ('strength', 'conditioning', 'olympic', 'accessory', 'mobility', 'plyometric');
 EXCEPTION WHEN duplicate_object THEN null; END $$;
 
+DO $$ BEGIN
+  CREATE TYPE "tracking_level" AS ENUM ('none', 'bar_path', 'full');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
 -- Owned by connect-pg-simple at runtime; declared here only so it's never
 -- mistaken for an "unclaimed" table by anything diffing live schema state.
 CREATE TABLE IF NOT EXISTS "session" (
@@ -173,9 +177,13 @@ CREATE TABLE IF NOT EXISTS "program_exercises" (
   "weight" text,
   "rest_seconds" integer,
   "notes" text,
-  "superset_group" text
+  "superset_group" text,
+  "tracking_level" tracking_level NOT NULL DEFAULT 'none',
+  "video_check_enabled" boolean NOT NULL DEFAULT false
 );
 ALTER TABLE "program_exercises" ADD COLUMN IF NOT EXISTS "superset_group" text;
+ALTER TABLE "program_exercises" ADD COLUMN IF NOT EXISTS "tracking_level" tracking_level NOT NULL DEFAULT 'none';
+ALTER TABLE "program_exercises" ADD COLUMN IF NOT EXISTS "video_check_enabled" boolean NOT NULL DEFAULT false;
 
 CREATE TABLE IF NOT EXISTS "assignments" (
   "id" serial PRIMARY KEY,
@@ -246,8 +254,20 @@ CREATE TABLE IF NOT EXISTS "workout_set_entries" (
   "log_entry_id" integer NOT NULL REFERENCES "workout_log_entries"("id") ON DELETE CASCADE,
   "set_number" integer NOT NULL,
   "reps" text,
-  "weight" text
+  "weight" text,
+  "peak_velocity_mps" real,
+  "mean_velocity_mps" real,
+  "concentric_seconds" real,
+  "eccentric_seconds" real,
+  "bar_path_deviation_cm" real,
+  "bar_path_trace" json
 );
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "peak_velocity_mps" real;
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "mean_velocity_mps" real;
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "concentric_seconds" real;
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "eccentric_seconds" real;
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "bar_path_deviation_cm" real;
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "bar_path_trace" json;
 
 CREATE TABLE IF NOT EXISTS "workout_comments" (
   "id" serial PRIMARY KEY,

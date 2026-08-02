@@ -16,6 +16,7 @@ import CoachPrograms from "@/pages/coach/programs";
 import CoachProgramBuilder from "@/pages/coach/program-builder";
 import CoachRoster from "@/pages/coach/roster";
 import CoachCalendar from "@/pages/coach/calendar";
+import CoachAnalytics from "@/pages/coach/analytics";
 import AthleteDashboard from "@/pages/athlete/dashboard";
 import AthleteWorkout from "@/pages/athlete/workout";
 import AdminDashboard from "@/pages/admin/dashboard";
@@ -88,6 +89,9 @@ function Router() {
       </Route>
       <Route path="/coach/roster">
         <ProtectedRoute role="coach" component={CoachRoster} />
+      </Route>
+      <Route path="/coach/analytics">
+        <ProtectedRoute role="coach" component={CoachAnalytics} />
       </Route>
       <Route path="/athlete">
         <ProtectedRoute role="athlete" component={AthleteDashboard} />

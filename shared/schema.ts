@@ -11,6 +11,7 @@ import {
   varchar,
   json,
   index,
+  real,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
@@ -44,6 +45,14 @@ export const weightModeEnum = pgEnum("weight_mode", [
   "band",
 ]);
 export const lateralityEnum = pgEnum("laterality", ["bilateral", "unilateral"]);
+// "bar_path" tracks only the bar's path/straightness (movement quality) --
+// no speed emphasis, meant for phases where velocity isn't the point (e.g.
+// rehab/offseason). "full" adds live bar speed, tempo, and velocity-loss.
+export const trackingLevelEnum = pgEnum("tracking_level", [
+  "none",
+  "bar_path",
+  "full",
+]);
 
 export const users = pgTable(
   "users",
@@ -235,6 +244,8 @@ export const programExercises = pgTable("program_exercises", {
   // in orderIndex, are chained together and rendered as one lettered slot
   // (A1, A2...) instead of separate letters. Opaque token, not a display value.
   supersetGroup: text("superset_group"),
+  trackingLevel: trackingLevelEnum("tracking_level").notNull().default("none"),
+  videoCheckEnabled: boolean("video_check_enabled").notNull().default(false),
 });
 
 export const assignments = pgTable("assignments", {
@@ -345,6 +356,15 @@ export const workoutSetEntries = pgTable("workout_set_entries", {
   setNumber: integer("set_number").notNull(),
   reps: text("reps"),
   weight: text("weight"),
+  // Bar-speed/bar-path CV metrics for this set, computed on-device and
+  // synced as plain numbers -- never the source video. Null unless the
+  // exercise's trackingLevel was "bar_path"/"full" when this set was logged.
+  peakVelocityMps: real("peak_velocity_mps"),
+  meanVelocityMps: real("mean_velocity_mps"),
+  concentricSeconds: real("concentric_seconds"),
+  eccentricSeconds: real("eccentric_seconds"),
+  barPathDeviationCm: real("bar_path_deviation_cm"),
+  barPathTrace: json("bar_path_trace"),
 });
 
 // A two-way thread on a specific day of a specific assignment -- an athlete
@@ -620,6 +640,8 @@ export const programExerciseInputSchema = z.object({
   restSeconds: z.number().optional().nullable(),
   notes: z.string().optional().nullable(),
   supersetGroup: z.string().optional().nullable(),
+  trackingLevel: z.enum(["none", "bar_path", "full"]).optional(),
+  videoCheckEnabled: z.boolean().optional(),
 });
 
 export const programDayInputSchema = z.object({
@@ -699,10 +721,22 @@ export const resolveSubmissionSchema = z.object({
   approve: z.boolean(),
 });
 
+export const barPathPointSchema = z.object({
+  t: z.number(),
+  x: z.number(),
+  y: z.number(),
+});
+
 export const setLogInputSchema = z.object({
   setNumber: z.number(),
   reps: z.string().optional().nullable(),
   weight: z.string().optional().nullable(),
+  peakVelocityMps: z.number().optional().nullable(),
+  meanVelocityMps: z.number().optional().nullable(),
+  concentricSeconds: z.number().optional().nullable(),
+  eccentricSeconds: z.number().optional().nullable(),
+  barPathDeviationCm: z.number().optional().nullable(),
+  barPathTrace: z.array(barPathPointSchema).optional().nullable(),
 });
 
 export const logEntryInputSchema = z
@@ -718,6 +752,11 @@ export const logEntryInputSchema = z
     (data) => (data.programExerciseId != null) !== (data.correctiveId != null),
     { message: "Exactly one of programExerciseId or correctiveId must be set" },
   );
+
+export const coachAnalyticsQuerySchema = z.object({
+  athleteId: z.coerce.number(),
+  exerciseId: z.coerce.number(),
+});
 
 export const submitWorkoutLogSchema = z.object({
   assignmentId: z.number(),

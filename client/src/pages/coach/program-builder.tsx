@@ -45,6 +45,8 @@ import type { Exercise } from "@shared/schema";
 
 type RosterEntry = { id: number; name: string; email: string };
 
+type TrackingLevel = "none" | "bar_path" | "full";
+
 type LocalExercise = {
   key: string;
   exerciseId: number;
@@ -59,6 +61,8 @@ type LocalExercise = {
   // when exercises are added/removed/reordered. Converted to/from the
   // persisted `supersetGroup` token only at load/save time.
   linkedToNext: boolean;
+  trackingLevel: TrackingLevel;
+  videoCheckEnabled: boolean;
 };
 
 type LocalDay = {
@@ -150,6 +154,8 @@ export default function CoachProgramBuilder() {
               restSeconds: pe.restSeconds != null ? String(pe.restSeconds) : "",
               notes: pe.notes ?? "",
               supersetGroup: pe.supersetGroup ?? null,
+              trackingLevel: pe.trackingLevel ?? "none",
+              videoCheckEnabled: pe.videoCheckEnabled ?? false,
             })),
           ),
         })),
@@ -223,6 +229,8 @@ export default function CoachProgramBuilder() {
               restSeconds: ex.restSeconds ? Number(ex.restSeconds) : null,
               notes: ex.notes || null,
               supersetGroup: ex.supersetGroup,
+              trackingLevel: ex.trackingLevel,
+              videoCheckEnabled: ex.videoCheckEnabled,
             })),
           })),
         })),
@@ -355,6 +363,8 @@ export default function CoachProgramBuilder() {
                 restSeconds: "",
                 notes: "",
                 linkedToNext: false,
+                trackingLevel: "none",
+                videoCheckEnabled: false,
               },
             ],
           }));
@@ -583,6 +593,57 @@ function SortableExerciseRow({
           value={exercise.weight}
           onChange={(v) => onUpdate({ weight: v })}
         />
+      </div>
+      <div className="mt-1.5 flex items-end gap-3">
+        <TrackingLevelControl
+          value={exercise.trackingLevel}
+          onChange={(trackingLevel) => onUpdate({ trackingLevel })}
+        />
+        <label className="mb-[3px] flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <Checkbox
+            checked={exercise.videoCheckEnabled}
+            onCheckedChange={(checked) => onUpdate({ videoCheckEnabled: checked === true })}
+          />
+          Require form-check video
+        </label>
+      </div>
+    </div>
+  );
+}
+
+function TrackingLevelControl({
+  value,
+  onChange,
+}: {
+  value: TrackingLevel;
+  onChange: (v: TrackingLevel) => void;
+}) {
+  const options: { value: TrackingLevel; label: string; title: string }[] = [
+    { value: "none", label: "Off", title: "No camera tracking for this exercise" },
+    { value: "bar_path", label: "Path", title: "Track bar path only (no speed emphasis)" },
+    { value: "full", label: "Full", title: "Track bar speed, tempo, and bar path" },
+  ];
+  return (
+    <div>
+      <span className="mb-0.5 block text-[10px] uppercase text-muted-foreground">Tracking</span>
+      <div className="flex gap-1">
+        {options.map((opt) => (
+          <button
+            key={opt.value}
+            type="button"
+            title={opt.title}
+            aria-pressed={value === opt.value}
+            onClick={() => onChange(opt.value)}
+            className={cn(
+              "rounded border px-2 py-1 text-[10px] font-semibold transition-colors",
+              value === opt.value
+                ? "border-primary bg-primary text-primary-foreground"
+                : "border-border text-muted-foreground hover:border-primary/50 hover:text-primary",
+            )}
+          >
+            {opt.label}
+          </button>
+        ))}
       </div>
     </div>
   );

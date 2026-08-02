@@ -4,8 +4,9 @@ import { apiRequest, ApiError } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
+import { FormVideoRecorderDialog } from "@/components/form-video-recorder-dialog";
 import { toast } from "sonner";
-import { MessageSquare, Video, Send } from "lucide-react";
+import { MessageSquare, Video, Send, X } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
 type Comment = {
@@ -34,6 +35,8 @@ export function WorkoutCommentThread({
   const [body, setBody] = useState("");
   const [videoUrl, setVideoUrl] = useState("");
   const [showVideoField, setShowVideoField] = useState(false);
+  const [recordedVideo, setRecordedVideo] = useState(false);
+  const [recorderOpen, setRecorderOpen] = useState(false);
 
   const { data: comments = [] } = useQuery<Comment[]>({
     queryKey: [basePath],
@@ -52,6 +55,7 @@ export function WorkoutCommentThread({
       setBody("");
       setVideoUrl("");
       setShowVideoField(false);
+      setRecordedVideo(false);
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not post comment"),
   });
@@ -105,7 +109,25 @@ export function WorkoutCommentThread({
           }
           className="min-h-16 text-sm"
         />
-        {showVideoField ? (
+        {recordedVideo ? (
+          <div className="flex items-center justify-between rounded-md border border-success/40 bg-success/10 px-2.5 py-1.5 text-xs font-semibold text-success">
+            <span className="flex items-center gap-1.5">
+              <Video className="h-3 w-3" />
+              Recorded video attached
+            </span>
+            <button
+              type="button"
+              aria-label="Remove attached video"
+              onClick={() => {
+                setVideoUrl("");
+                setRecordedVideo(false);
+              }}
+              className="text-muted-foreground hover:text-destructive"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+        ) : showVideoField ? (
           <Input
             value={videoUrl}
             onChange={(e) => setVideoUrl(e.target.value)}
@@ -113,13 +135,24 @@ export function WorkoutCommentThread({
             className="h-8 text-xs"
           />
         ) : (
-          <button
-            type="button"
-            onClick={() => setShowVideoField(true)}
-            className="flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
-          >
-            <Video className="h-3 w-3" /> Attach a video link
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setShowVideoField(true)}
+              className="flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+            >
+              <Video className="h-3 w-3" /> Attach a video link
+            </button>
+            {role === "athlete" && (
+              <button
+                type="button"
+                onClick={() => setRecorderOpen(true)}
+                className="flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+              >
+                <Video className="h-3 w-3" /> Record a video
+              </button>
+            )}
+          </div>
         )}
         <Button
           size="sm"
@@ -130,6 +163,19 @@ export function WorkoutCommentThread({
           {postMutation.isPending ? "Posting…" : "Post"}
         </Button>
       </div>
+
+      {role === "athlete" && (
+        <FormVideoRecorderDialog
+          open={recorderOpen}
+          onOpenChange={setRecorderOpen}
+          onSaved={(url) => {
+            setVideoUrl(url);
+            setRecordedVideo(true);
+            setShowVideoField(false);
+            if (!body.trim()) setBody("Form check video attached.");
+          }}
+        />
+      )}
     </div>
   );
 }
