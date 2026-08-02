@@ -1801,6 +1801,86 @@ export const storage = {
     });
   },
 
+  // An athlete's own, deliberately limited view of their progress -- just
+  // enough to see recent PRs and where they currently stand on each lift.
+  // No velocity/bar-path/RPE trends or charts and no historical time series;
+  // that level of detail stays behind the coach's full analytics page.
+  async getAthleteProgressSummary(athleteId: number) {
+    const rows = await db
+      .select({
+        date: workoutLogs.date,
+        setNumber: workoutSetEntries.setNumber,
+        reps: workoutSetEntries.reps,
+        weight: workoutSetEntries.weight,
+        weightUnit: workoutSetEntries.weightUnit,
+        weightMode: workoutLogEntries.weightMode,
+        exerciseId: exercises.id,
+        exerciseName: exercises.name,
+      })
+      .from(workoutSetEntries)
+      .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
+      .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
+      .innerJoin(assignments, eq(workoutLogs.assignmentId, assignments.id))
+      .innerJoin(programExercises, eq(workoutLogEntries.programExerciseId, programExercises.id))
+      .innerJoin(exercises, eq(programExercises.exerciseId, exercises.id))
+      .where(eq(assignments.athleteId, athleteId));
+
+    const sorted = rows
+      .filter((r) => r.weightMode === "numeric" && r.weight && r.reps)
+      .sort((a, b) => a.date.localeCompare(b.date) || a.setNumber - b.setNumber);
+
+    const bestByKey = new Map<string, number>();
+    const prEvents: {
+      exerciseName: string;
+      weight: number;
+      unit: string;
+      reps: string;
+      date: string;
+    }[] = [];
+    for (const r of sorted) {
+      const weight = parseFloat(r.weight!);
+      if (Number.isNaN(weight)) continue;
+      const key = `${r.exerciseId}-${r.weightUnit}-${r.reps}`;
+      const prevBest = bestByKey.get(key) ?? -Infinity;
+      if (weight > prevBest) {
+        bestByKey.set(key, weight);
+        prEvents.push({
+          exerciseName: r.exerciseName,
+          weight,
+          unit: r.weightUnit ?? "lbs",
+          reps: r.reps!,
+          date: r.date,
+        });
+      }
+    }
+    const recentPRs = prEvents.reverse().slice(0, 10);
+
+    const latestByExercise = new Map<number, (typeof sorted)[number]>();
+    for (const r of sorted) latestByExercise.set(r.exerciseId, r);
+    const currentLifts = Array.from(latestByExercise.values())
+      .map((r) => ({
+        exerciseName: r.exerciseName,
+        weight: r.weight!,
+        unit: r.weightUnit ?? "lbs",
+        reps: r.reps!,
+        date: r.date,
+      }))
+      .sort((a, b) => a.exerciseName.localeCompare(b.exerciseName));
+
+    const completedLogs = await db.query.workoutLogs.findMany({
+      where: and(eq(workoutLogs.athleteId, athleteId), eq(workoutLogs.completed, true)),
+    });
+    const monthPrefix = new Date().toISOString().slice(0, 7);
+    const workoutsThisMonth = completedLogs.filter((l) => l.date.startsWith(monthPrefix)).length;
+
+    return {
+      totalWorkoutsCompleted: completedLogs.length,
+      workoutsThisMonth,
+      recentPRs,
+      currentLifts,
+    };
+  },
+
   // Every distinct exercise this athlete has ever logged at least one set
   // for, scoped to this coach -- not just CV-tracked ones, so the coach can
   // drill into plain weight/PR history too.

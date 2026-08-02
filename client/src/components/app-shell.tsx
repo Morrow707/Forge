@@ -35,6 +35,7 @@ const coachNav = [
 
 const athleteNav = [
   { href: "/athlete", label: "Calendar", icon: CalendarDays, exact: true },
+  { href: "/athlete/progress", label: "Progress", icon: LineChart },
 ];
 
 const adminNav = [

@@ -21,6 +21,7 @@ import CoachCalendar from "@/pages/coach/calendar";
 import CoachAnalytics from "@/pages/coach/analytics";
 import CoachLeaderboard from "@/pages/coach/leaderboard";
 import AthleteDashboard from "@/pages/athlete/dashboard";
+import AthleteProgress from "@/pages/athlete/progress";
 import AthleteWorkout from "@/pages/athlete/workout";
 import AdminDashboard from "@/pages/admin/dashboard";
 import AdminExercises from "@/pages/admin/exercises";
@@ -105,6 +106,9 @@ function Router() {
       </Route>
       <Route path="/athlete">
         <ProtectedRoute role="athlete" component={AthleteDashboard} />
+      </Route>
+      <Route path="/athlete/progress">
+        <ProtectedRoute role="athlete" component={AthleteProgress} />
       </Route>
       <Route path="/athlete/day/:assignmentId/:programDayId/:date">
         <ProtectedRoute role="athlete" component={AthleteWorkout} />
