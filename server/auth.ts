@@ -6,7 +6,7 @@ import type { Express, RequestHandler } from "express";
 import { storage } from "./storage";
 import { hashPassword, comparePasswords } from "./auth-utils";
 import { pool } from "./db";
-import type { PublicUser } from "@shared/schema";
+import { signupSchema, type PublicUser } from "@shared/schema";
 
 const PgStore = connectPgSimple(session);
 
@@ -62,15 +62,11 @@ export function setupAuth(app: Express) {
 
   app.post("/api/auth/signup", async (req, res, next) => {
     try {
-      const { email, password, name, role, coachCode } = req.body;
-      if (!email || !password || !name || !role) {
-        return res.status(400).json({ message: "Missing required fields" });
+      const parsed = signupSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
       }
-      if (password.length < 6) {
-        return res
-          .status(400)
-          .json({ message: "Password must be at least 6 characters" });
-      }
+      const { email, password, name, role, coachCode } = parsed.data;
       const existing = await storage.getUserByEmail(email);
       if (existing) {
         return res.status(409).json({ message: "Email already in use" });

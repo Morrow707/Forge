@@ -15,6 +15,13 @@ import { WorkoutCommentThread } from "@/components/workout-comment-thread";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import {
+  dayCacheKey,
+  saveDayCache,
+  loadDayCache,
+  queueLog,
+  hasPendingLog,
+} from "@/lib/offline-queue";
+import {
   ArrowLeft,
   CheckCircle2,
   MoonStar,
@@ -26,6 +33,8 @@ import {
   ChevronLeft,
   ChevronRight,
   TrendingUp,
+  WifiOff,
+  CloudUpload,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import type { PublicUser } from "@shared/schema";
@@ -229,15 +238,30 @@ export default function AthleteWorkout() {
   const [, navigate] = useLocation();
   const qc = useQueryClient();
   const { user } = useAuth();
+  const dayKey = dayCacheKey(assignmentId, programDayId, date);
+  const [offline, setOffline] = useState(false);
+  const [pendingSync, setPendingSync] = useState(() => hasPendingLog(dayKey));
 
   const { data, isLoading } = useQuery<DayDetail>({
     queryKey: ["/api/athlete/day", assignmentId, programDayId, date],
     queryFn: async () => {
-      const res = await apiRequest(
-        "GET",
-        `/api/athlete/day?assignmentId=${assignmentId}&programDayId=${programDayId}&date=${date}`,
-      );
-      return res.json();
+      try {
+        const res = await apiRequest(
+          "GET",
+          `/api/athlete/day?assignmentId=${assignmentId}&programDayId=${programDayId}&date=${date}`,
+        );
+        const json = await res.json();
+        saveDayCache(dayKey, json);
+        setOffline(false);
+        return json;
+      } catch (err) {
+        const cached = loadDayCache<DayDetail>(dayKey);
+        if (cached) {
+          setOffline(true);
+          return cached;
+        }
+        throw err;
+      }
     },
   });
 
@@ -300,13 +324,28 @@ export default function AthleteWorkout() {
           })),
         })),
       };
-      const res = await apiRequest("POST", "/api/athlete/log", payload);
-      return res.json();
+      try {
+        const res = await apiRequest("POST", "/api/athlete/log", payload);
+        return { synced: true as const, data: await res.json() };
+      } catch (err) {
+        // A real server rejection (bad data, auth, etc) should surface as
+        // an error same as always -- only a genuine network failure gets
+        // queued for automatic retry.
+        if (err instanceof ApiError) throw err;
+        queueLog(dayKey, payload);
+        return { synced: false as const, data: null };
+      }
     },
-    onSuccess: (_res, completed) => {
+    onSuccess: ({ synced }, completed) => {
       qc.invalidateQueries({ queryKey: ["/api/athlete/calendar"] });
       qc.invalidateQueries({ queryKey: ["/api/athlete/day"] });
-      toast.success(completed ? "Workout marked complete" : "Progress saved");
+      if (synced) {
+        setPendingSync(false);
+        toast.success(completed ? "Workout marked complete" : "Progress saved");
+      } else {
+        setPendingSync(true);
+        toast.info("You're offline — saved on this device, will sync automatically");
+      }
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not save workout"),
   });
@@ -388,6 +427,29 @@ export default function AthleteWorkout() {
         </>
       }
     >
+      {(offline || pendingSync) && (
+        <div
+          className={cn(
+            "mb-4 flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium",
+            offline
+              ? "border-amber-500/40 bg-amber-500/10 text-amber-400"
+              : "border-primary/40 bg-primary/10 text-primary",
+          )}
+        >
+          {offline ? (
+            <>
+              <WifiOff className="h-4 w-4 shrink-0" />
+              You're offline — showing your last saved workout.
+            </>
+          ) : (
+            <>
+              <CloudUpload className="h-4 w-4 shrink-0" />
+              Saved on this device — will sync once you're back online.
+            </>
+          )}
+        </div>
+      )}
+
       <div className="mb-5 flex items-center gap-3">
         <div>
           <p className="text-sm text-muted-foreground">{data.programName}</p>
@@ -719,11 +781,13 @@ function ExerciseLogContent({
                 )}
                 <div
                   className={cn(
-                    "flex h-7 w-7 items-center justify-center rounded-full",
-                    complete ? "bg-success text-success-foreground" : "bg-secondary text-muted-foreground/30",
+                    "flex h-7 w-7 items-center justify-center rounded-full border",
+                    complete
+                      ? "border-success bg-success text-success-foreground"
+                      : "border-dashed border-muted-foreground/30 bg-secondary",
                   )}
                 >
-                  <Check className="h-4 w-4" />
+                  {complete && <Check className="h-4 w-4" />}
                 </div>
               </div>
             );

@@ -571,15 +571,15 @@ export const insertUserSchema = createInsertSchema(users)
   .pick({ email: true, passwordHash: true, name: true, role: true })
   .extend({ email: z.string().email() });
 
-export const signupSchema = z
-  .object({
-    email: z.string().email(),
-    password: z.string().min(6, "Password must be at least 6 characters"),
-    name: z.string().min(1, "Name is required"),
-    role: z.enum(["coach", "athlete"]),
-    coachCode: z.string().optional(),
-  })
-  .refine((data) => data.role !== "athlete" || true, {});
+// role is deliberately restricted to coach/athlete -- admin accounts are
+// never self-service, only promoted directly in the database.
+export const signupSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+  name: z.string().min(1, "Name is required"),
+  role: z.enum(["coach", "athlete"]),
+  coachCode: z.string().optional(),
+});
 
 export const loginSchema = z.object({
   email: z.string().email(),

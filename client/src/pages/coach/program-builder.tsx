@@ -548,6 +548,7 @@ function SortableExerciseRow({
       <div className="mb-2 flex items-center gap-2">
         <button
           type="button"
+          aria-label={`Reorder ${exercise.exerciseName}`}
           {...attributes}
           {...listeners}
           className="cursor-grab touch-none text-muted-foreground active:cursor-grabbing"
@@ -560,7 +561,12 @@ function SortableExerciseRow({
         <span className="flex-1 truncate text-sm font-semibold">
           {exercise.exerciseName}
         </span>
-        <button type="button" onClick={onRemove} className="text-muted-foreground hover:text-destructive">
+        <button
+          type="button"
+          aria-label={`Remove ${exercise.exerciseName}`}
+          onClick={onRemove}
+          className="text-muted-foreground hover:text-destructive"
+        >
           <Trash2 className="h-4 w-4" />
         </button>
       </div>

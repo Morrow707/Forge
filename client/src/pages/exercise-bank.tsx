@@ -234,6 +234,7 @@ export function ExerciseBankPage({
                     <Button
                       size="icon"
                       variant="ghost"
+                      aria-label={`Delete ${ex.name}`}
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
