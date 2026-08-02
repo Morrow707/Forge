@@ -7,6 +7,8 @@ import { setupAuth, requireAuth, requireRole } from "./auth";
 import { storage } from "./storage";
 import { buildIcsFeed } from "./ics";
 import { sendPushToUser, getVapidPublicKey } from "./push";
+import { sendEmail } from "./email";
+import { buildProgressReportEmail } from "./progress-report";
 import {
   insertExerciseSchema,
   programStructureSchema,
@@ -534,6 +536,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const points = await storage.getTeamTestingTrends(user.id, parsed.data.metric);
     res.json(points);
   });
+
+  // Coach-initiated only -- there is no automatic/scheduled version of this,
+  // by design. Silently no-ops server-side (via sendEmail) if RESEND_API_KEY
+  // hasn't been set up yet, same graceful-degrade pattern as web push.
+  app.post(
+    "/api/coach/roster/:athleteId/progress-report",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      const athlete = await storage.getRosterAthleteForCoach(user.id, athleteId);
+      if (!athlete) return res.status(404).json({ message: "Athlete not found" });
+
+      const [summary, streak] = await Promise.all([
+        storage.getAthleteProgressSummary(athleteId),
+        storage.getStreakForAthlete(athleteId),
+      ]);
+      const html = buildProgressReportEmail(athlete, user.name, summary, streak);
+      const result = await sendEmail({
+        to: athlete.email,
+        subject: "Your Progress Report from Forge",
+        html,
+      });
+      res.json(result);
+    },
+  );
 
   app.get("/api/coach/teams", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);

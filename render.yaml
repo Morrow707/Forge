@@ -26,6 +26,16 @@ services:
         sync: false
       - key: VAPID_SUBJECT
         value: mailto:support@forge.app
+      # Resend API key for coach-driven progress report emails -- sign up at
+      # resend.com (free tier), create an API key, and paste it in. Sending
+      # silently no-ops until this is set. RESEND_FROM_EMAIL defaults to
+      # Resend's shared sandbox address, which only delivers to your own
+      # verified account email -- verify a domain in Resend and set
+      # RESEND_FROM_EMAIL to send to athletes for real.
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM_EMAIL
+        value: "Forge <onboarding@resend.dev>"
 
 databases:
   - name: forge-db

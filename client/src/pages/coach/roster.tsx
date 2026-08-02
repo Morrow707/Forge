@@ -35,6 +35,7 @@ import {
   CalendarDays,
   Scale,
   Timer,
+  Mail,
 } from "lucide-react";
 
 type HealthStatus = "healthy" | "hurt";
@@ -127,6 +128,23 @@ export default function CoachRoster() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/coach/teams"] });
     },
+  });
+
+  const sendReportMutation = useMutation({
+    mutationFn: async (athleteId: number) => {
+      const res = await apiRequest("POST", `/api/coach/roster/${athleteId}/progress-report`);
+      return res.json() as Promise<{ sent: boolean; error?: string }>;
+    },
+    onSuccess: (result) => {
+      if (result.sent) {
+        toast.success("Progress report emailed");
+      } else if (result.error === "not_configured") {
+        toast.info("Email sending isn't set up yet -- ask your Forge admin to configure it.");
+      } else {
+        toast.error("Couldn't send that report -- try again in a bit.");
+      }
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't send that report"),
   });
 
   function openAssignFor(athleteIds: number[]) {
@@ -227,6 +245,16 @@ export default function CoachRoster() {
                             onClick={() => setCalendarAthlete(a)}
                           >
                             <CalendarDays className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            aria-label={`Email ${a.name} a progress report`}
+                            title="Email progress report"
+                            disabled={sendReportMutation.isPending}
+                            onClick={() => sendReportMutation.mutate(a.id)}
+                          >
+                            <Mail className="h-4 w-4" />
                           </Button>
                           <Button size="sm" variant="outline" onClick={() => openAssignFor([a.id])}>
                             Assign
