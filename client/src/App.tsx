@@ -20,8 +20,10 @@ import CoachRoster from "@/pages/coach/roster";
 import CoachCalendar from "@/pages/coach/calendar";
 import CoachAnalytics from "@/pages/coach/analytics";
 import CoachLeaderboard from "@/pages/coach/leaderboard";
+import CoachTeamBoard from "@/pages/coach/team-board";
 import AthleteDashboard from "@/pages/athlete/dashboard";
 import AthleteProgress from "@/pages/athlete/progress";
+import AthleteTeamBoard from "@/pages/athlete/team-board";
 import AthleteWorkout from "@/pages/athlete/workout";
 import AdminDashboard from "@/pages/admin/dashboard";
 import AdminExercises from "@/pages/admin/exercises";
@@ -104,11 +106,17 @@ function Router() {
       <Route path="/coach/leaderboard">
         <ProtectedRoute role="coach" component={CoachLeaderboard} />
       </Route>
+      <Route path="/coach/team-board">
+        <ProtectedRoute role="coach" component={CoachTeamBoard} />
+      </Route>
       <Route path="/athlete">
         <ProtectedRoute role="athlete" component={AthleteDashboard} />
       </Route>
       <Route path="/athlete/progress">
         <ProtectedRoute role="athlete" component={AthleteProgress} />
+      </Route>
+      <Route path="/athlete/team-board">
+        <ProtectedRoute role="athlete" component={AthleteTeamBoard} />
       </Route>
       <Route path="/athlete/day/:assignmentId/:programDayId/:date">
         <ProtectedRoute role="athlete" component={AthleteWorkout} />

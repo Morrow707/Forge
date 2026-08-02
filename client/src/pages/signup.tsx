@@ -11,11 +11,15 @@ import { Flame, Dumbbell, ClipboardList } from "lucide-react";
 
 export default function SignupPage() {
   const { user, isLoading, signupMutation } = useAuth();
+  // A QR code or shared link can carry ?code=XXXX (see the coach dashboard's
+  // invite QR) so scanning it lands here with the athlete role and invite
+  // code already filled in -- just enter name/email/password and go.
+  const prefilledCode = new URLSearchParams(window.location.search).get("code") ?? "";
   const [role, setRole] = useState<"coach" | "athlete">("athlete");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [coachCode, setCoachCode] = useState("");
+  const [coachCode, setCoachCode] = useState(prefilledCode.toUpperCase());
   const [phone, setPhone] = useState("");
 
   if (!isLoading && user) {
@@ -142,7 +146,9 @@ export default function SignupPage() {
                     placeholder="e.g. F3G7K2"
                   />
                   <p className="text-xs text-muted-foreground">
-                    Ask your coach for their code (or a team code) to join now, or add it later.
+                    {prefilledCode
+                      ? "Filled in from your invite link/QR code."
+                      : "Ask your coach for their code (or a team code) to join now, or add it later."}
                   </p>
                 </div>
               )}

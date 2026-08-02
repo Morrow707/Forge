@@ -20,6 +20,8 @@ import {
   notifications,
   passwordResetTokens,
   pushSubscriptions,
+  teamPosts,
+  bodyMetrics,
   type InsertUser,
 } from "@shared/schema";
 import type {
@@ -33,6 +35,7 @@ import type {
   UpdateNotificationPrefsInput,
   CreateWorkoutCommentInput,
   CreateExerciseReportInput,
+  CreateBodyMetricInput,
 } from "@shared/schema";
 import { eq, and, inArray, asc, desc, lt, gt, isNull } from "drizzle-orm";
 import {
@@ -256,6 +259,36 @@ export const storage = {
     return rows;
   },
 
+  // ---------- Body metrics (weight/composition over time, no photos) ----------
+  async getBodyMetricsForAthlete(athleteId: number) {
+    return db.query.bodyMetrics.findMany({
+      where: eq(bodyMetrics.athleteId, athleteId),
+      orderBy: asc(bodyMetrics.date),
+    });
+  },
+
+  async createBodyMetric(athleteId: number, input: CreateBodyMetricInput) {
+    const [row] = await db
+      .insert(bodyMetrics)
+      .values({
+        athleteId,
+        date: input.date,
+        weight: input.weight,
+        weightUnit: input.weightUnit,
+        bodyFatPercent: input.bodyFatPercent ?? null,
+        notes: input.notes || null,
+      })
+      .returning();
+    return row;
+  },
+
+  // Scoped to athleteId so an athlete can only ever delete their own entry.
+  async deleteBodyMetric(athleteId: number, id: number) {
+    await db
+      .delete(bodyMetrics)
+      .where(and(eq(bodyMetrics.id, id), eq(bodyMetrics.athleteId, athleteId)));
+  },
+
   // ---------- Teams ----------
   async getTeamsForCoach(coachId: number) {
     const rows = await db.query.teams.findMany({
@@ -328,6 +361,35 @@ export const storage = {
 
   async deleteTeam(teamId: number) {
     await db.delete(teams).where(eq(teams.id, teamId));
+  },
+
+  // ---------- Team board (shared Q&A, not private messaging) ----------
+  async getTeamBoardPosts(coachId: number) {
+    const rows = await db.query.teamPosts.findMany({
+      where: eq(teamPosts.coachId, coachId),
+      orderBy: desc(teamPosts.createdAt),
+      with: { author: true },
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      body: r.body,
+      createdAt: r.createdAt,
+      author: { id: r.author.id, name: r.author.name, role: r.author.role },
+    }));
+  },
+
+  async createTeamPost(coachId: number, authorId: number, body: string) {
+    const [row] = await db
+      .insert(teamPosts)
+      .values({ coachId, authorId, body })
+      .returning();
+    const author = await db.query.users.findFirst({ where: eq(users.id, authorId) });
+    return {
+      id: row.id,
+      body: row.body,
+      createdAt: row.createdAt,
+      author: { id: author!.id, name: author!.name, role: author!.role },
+    };
   },
 
   // ---------- Exercises ----------

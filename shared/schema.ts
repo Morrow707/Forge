@@ -482,6 +482,50 @@ export const passwordResetTokens = pgTable("password_reset_tokens", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// One shared board per coach -- every post is visible to the coach and
+// every athlete on that coach's roster, deliberately not a private 1:1
+// thread. Scoped by coachId (not a specific `teams` row) so it works the
+// same whether or not a coach has bothered to organize athletes into teams.
+export const teamPosts = pgTable(
+  "team_posts",
+  {
+    id: serial("id").primaryKey(),
+    coachId: integer("coach_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    authorId: integer("author_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    body: text("body").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    coachIdx: index("team_posts_coach_idx").on(table.coachId),
+  }),
+);
+
+// Athlete-logged body weight/composition over time -- no photos (explicitly
+// out of scope, storage cost). One row per check-in; an athlete owns and can
+// delete their own entries, and their coach can view (read-only) via roster.
+export const bodyMetrics = pgTable(
+  "body_metrics",
+  {
+    id: serial("id").primaryKey(),
+    athleteId: integer("athlete_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    date: date("date").notNull(),
+    weight: real("weight").notNull(),
+    weightUnit: weightUnitEnum("weight_unit").notNull().default("lbs"),
+    bodyFatPercent: real("body_fat_percent"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    athleteIdx: index("body_metrics_athlete_idx").on(table.athleteId),
+  }),
+);
+
 // ---------- Relations ----------
 
 export const usersRelations = relations(users, ({ many }) => ({
@@ -516,6 +560,11 @@ export const teamMembersRelations = relations(teamMembers, ({ one }) => ({
     fields: [teamMembers.athleteId],
     references: [users.id],
   }),
+}));
+
+export const teamPostsRelations = relations(teamPosts, ({ one }) => ({
+  coach: one(users, { fields: [teamPosts.coachId], references: [users.id] }),
+  author: one(users, { fields: [teamPosts.authorId], references: [users.id] }),
 }));
 
 export const exercisesRelations = relations(exercises, ({ one }) => ({
@@ -943,3 +992,19 @@ export const pushSubscribeSchema = z.object({
   }),
 });
 export type PushSubscribeInput = z.infer<typeof pushSubscribeSchema>;
+
+export const createTeamPostSchema = z.object({
+  body: z.string().trim().min(1).max(2000),
+});
+export type CreateTeamPostInput = z.infer<typeof createTeamPostSchema>;
+export type TeamPost = typeof teamPosts.$inferSelect;
+
+export const createBodyMetricSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date"),
+  weight: z.coerce.number().positive(),
+  weightUnit: z.enum(["lbs", "kg"]),
+  bodyFatPercent: z.coerce.number().min(0).max(100).optional(),
+  notes: z.string().max(500).optional(),
+});
+export type CreateBodyMetricInput = z.infer<typeof createBodyMetricSchema>;
+export type BodyMetric = typeof bodyMetrics.$inferSelect;

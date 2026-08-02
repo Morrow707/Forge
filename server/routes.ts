@@ -25,6 +25,8 @@ import {
   createExerciseReportSchema,
   resolveSubmissionSchema,
   coachAnalyticsQuerySchema,
+  createTeamPostSchema,
+  createBodyMetricSchema,
 } from "@shared/schema";
 import { z } from "zod";
 
@@ -466,6 +468,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
+  // Read-only for the coach -- body metrics are athlete-logged, the coach
+  // just gets visibility (same roster-membership gate as everything else here).
+  app.get(
+    "/api/coach/roster/:athleteId/body-metrics",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      const onRoster = await storage.getRosterAthleteForCoach(user.id, athleteId);
+      if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
+      const entries = await storage.getBodyMetricsForAthlete(athleteId);
+      res.json(entries);
+    },
+  );
+
   app.get("/api/coach/teams", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     const teamList = await storage.getTeamsForCoach(user.id);
@@ -508,6 +525,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/coach/teams/:id", requireRole("coach"), async (req, res) => {
     await storage.deleteTeam(Number(req.params.id));
     res.status(204).end();
+  });
+
+  // ---------------- Coach & Athlete: Team board ----------------
+  // A single shared board per coach, visible to the coach and every athlete
+  // on their roster -- deliberately not private 1:1 messaging.
+
+  app.get("/api/coach/team-board", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const posts = await storage.getTeamBoardPosts(user.id);
+    res.json(posts);
+  });
+
+  app.post("/api/coach/team-board", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = createTeamPostSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const post = await storage.createTeamPost(user.id, user.id, parsed.data.body);
+    res.status(201).json(post);
+  });
+
+  app.get("/api/athlete/team-board", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const coaches = await storage.getCoachesForAthlete(user.id);
+    const coach = coaches[0];
+    if (!coach) return res.status(404).json({ message: "You're not linked to a coach yet." });
+    const posts = await storage.getTeamBoardPosts(coach.id);
+    res.json(posts);
+  });
+
+  app.post("/api/athlete/team-board", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const coaches = await storage.getCoachesForAthlete(user.id);
+    const coach = coaches[0];
+    if (!coach) return res.status(404).json({ message: "You're not linked to a coach yet." });
+    const parsed = createTeamPostSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const post = await storage.createTeamPost(coach.id, user.id, parsed.data.body);
+    res.status(201).json(post);
   });
 
   // ---------------- Coach: Assignments ----------------
@@ -852,6 +911,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const user = currentUser(req);
     const summary = await storage.getAthleteProgressSummary(user.id);
     res.json(summary);
+  });
+
+  app.get("/api/athlete/body-metrics", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const entries = await storage.getBodyMetricsForAthlete(user.id);
+    res.json(entries);
+  });
+
+  app.post("/api/athlete/body-metrics", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = createBodyMetricSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const entry = await storage.createBodyMetric(user.id, parsed.data);
+    res.status(201).json(entry);
+  });
+
+  app.delete("/api/athlete/body-metrics/:id", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    await storage.deleteBodyMetric(user.id, Number(req.params.id));
+    res.status(204).end();
   });
 
   app.get("/api/athlete/day", requireRole("athlete"), async (req, res) => {

@@ -339,6 +339,27 @@ CREATE TABLE IF NOT EXISTS "push_subscriptions" (
   "auth" text NOT NULL,
   "created_at" timestamp NOT NULL DEFAULT now()
 );
+
+CREATE TABLE IF NOT EXISTS "team_posts" (
+  "id" serial PRIMARY KEY,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "author_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "body" text NOT NULL,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "team_posts_coach_idx" ON "team_posts" ("coach_id");
+
+CREATE TABLE IF NOT EXISTS "body_metrics" (
+  "id" serial PRIMARY KEY,
+  "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "date" date NOT NULL,
+  "weight" real NOT NULL,
+  "weight_unit" weight_unit NOT NULL DEFAULT 'lbs',
+  "body_fat_percent" real,
+  "notes" text,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "body_metrics_athlete_idx" ON "body_metrics" ("athlete_id");
 `;
 
 async function main() {
