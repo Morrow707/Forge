@@ -206,6 +206,7 @@ export default function CoachDashboard() {
               <Button
                 size="icon"
                 variant="ghost"
+                aria-label="Copy coach code"
                 onClick={() => {
                   if (user?.coachCode) {
                     navigator.clipboard.writeText(user.coachCode);

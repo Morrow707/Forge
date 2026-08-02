@@ -356,6 +356,7 @@ export function CoachDayEditDialog({
                             </span>
                             <button
                               type="button"
+                              aria-label={`Remove ${ex.exerciseName}`}
                               onClick={() =>
                                 setExercises((prev) => prev.filter((e) => e.key !== ex.key))
                               }
@@ -572,6 +573,7 @@ export function CoachDayEditDialog({
                           </span>
                           <button
                             type="button"
+                            aria-label={`Remove ${c.exerciseName}`}
                             onClick={() =>
                               setCorrectives((prev) => prev.filter((e) => e.key !== c.key))
                             }

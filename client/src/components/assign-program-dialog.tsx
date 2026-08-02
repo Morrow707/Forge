@@ -430,6 +430,7 @@ function CorrectivesSetupFlow({
                   <span className="flex-1 truncate text-sm font-semibold">{c.exerciseName}</span>
                   <button
                     type="button"
+                    aria-label={`Remove ${c.exerciseName}`}
                     onClick={() =>
                       setCorrectives((prev) => prev.filter((e) => e.key !== c.key))
                     }

@@ -146,13 +146,13 @@ export function CalendarView({
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <Button size="icon" variant="outline" onClick={goPrev}>
+          <Button size="icon" variant="outline" aria-label="Previous" onClick={goPrev}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
           <span className="min-w-40 text-center font-display text-lg font-bold uppercase">
             {label}
           </span>
-          <Button size="icon" variant="outline" onClick={goNext}>
+          <Button size="icon" variant="outline" aria-label="Next" onClick={goNext}>
             <ChevronRight className="h-4 w-4" />
           </Button>
           <Button size="sm" variant="ghost" onClick={() => setCursor(new Date())}>

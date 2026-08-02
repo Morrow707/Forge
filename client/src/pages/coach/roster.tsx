@@ -165,6 +165,7 @@ export default function CoachRoster() {
                       >
                         {m.athlete.name}
                         <button
+                          aria-label={`Remove ${m.athlete.name} from ${team.name}`}
                           onClick={() =>
                             removeFromTeamMutation.mutate({
                               teamId: team.id,

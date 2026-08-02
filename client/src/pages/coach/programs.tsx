@@ -142,6 +142,7 @@ export default function CoachPrograms() {
                   <Button
                     size="icon"
                     variant="ghost"
+                    aria-label={`Delete ${p.name}`}
                     onClick={() => {
                       if (confirm(`Delete "${p.name}"? This cannot be undone.`)) {
                         deleteMutation.mutate(p.id);
