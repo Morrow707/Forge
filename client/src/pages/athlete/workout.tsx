@@ -41,6 +41,7 @@ import {
   Camera,
   Video,
   Crown,
+  Calculator,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import type { PublicUser } from "@shared/schema";
@@ -245,6 +246,31 @@ function isRepCountPR(
     .filter((w) => !Number.isNaN(w));
   if (priorWeights.length === 0) return false;
   return currentWeight > Math.max(...priorWeights);
+}
+
+// Matches a prescribed weight of "70% 1RM", "70%1rm", etc. -- the coach's
+// shorthand for "load relative to this athlete's max," not a literal number.
+function parsePercentOfOneRm(weightText: string | null) {
+  if (!weightText) return null;
+  const match = weightText.match(/(\d+(?:\.\d+)?)\s*%\s*1\s*rm/i);
+  return match ? parseFloat(match[1]) : null;
+}
+
+// Epley-estimated 1RM from this athlete's own logged history for the
+// exercise, same formula the coach's analytics page uses. Only counts sets
+// logged in the athlete's current weight unit -- mixing lbs and kg maxes
+// would silently produce a nonsense number.
+function estimateOneRmFromHistory(history: SetHistoryPoint[], unit: WeightUnit) {
+  let best = 0;
+  for (const h of history) {
+    if (h.weightMode !== "numeric" || !h.weight || h.weightUnit !== unit) continue;
+    const weight = parseFloat(h.weight);
+    const reps = parseInt(h.reps, 10);
+    if (Number.isNaN(weight) || Number.isNaN(reps) || reps <= 0) continue;
+    const oneRm = weight * (1 + reps / 30);
+    if (oneRm > best) best = oneRm;
+  }
+  return best > 0 ? Math.round(best * 10) / 10 : null;
 }
 
 type Page = {
@@ -849,6 +875,11 @@ function ExerciseLogContent({
   const [trackingSet, setTrackingSet] = useState<number | null>(null);
   const [formVideoOpen, setFormVideoOpen] = useState(false);
   const qc = useQueryClient();
+  const percentOfOneRm = parsePercentOfOneRm(item.prescribedWeight);
+  const estimatedOneRm =
+    percentOfOneRm != null ? estimateOneRmFromHistory(item.setHistory, unit) : null;
+  const suggestedFromOneRm =
+    estimatedOneRm != null ? Math.round((percentOfOneRm! / 100) * estimatedOneRm) : null;
   const commentsPath = `/api/athlete/assignments/${assignmentId}/days/${programDayId}/comments`;
   const postFormVideoMutation = useMutation({
     mutationFn: async (videoUrl: string) => {
@@ -890,12 +921,31 @@ function ExerciseLogContent({
           <p className="text-xs text-muted-foreground">
             Prescribed: {item.prescribedSets} × {item.prescribedReps}
             {item.prescribedWeight ? ` @ ${item.prescribedWeight}` : ""}
+            {suggestedFromOneRm != null ? ` (≈ ${suggestedFromOneRm} ${unit})` : ""}
             {item.restSeconds ? ` · Rest ${item.restSeconds}s` : ""}
           </p>
           {item.lastPerformance && (
             <p className="text-xs font-semibold text-muted-foreground">
               <span className="text-primary">LAST</span> {formatLastPerformance(item.lastPerformance)}
             </p>
+          )}
+          {suggestedFromOneRm != null && item.weightMode === "numeric" && (
+            <div className="mt-0.5 flex items-center gap-1.5 text-xs">
+              <Calculator className="h-3 w-3 shrink-0 text-blue-500" />
+              <span className="font-medium text-blue-600 dark:text-blue-400">
+                {percentOfOneRm}% of your {estimatedOneRm} {unit} 1RM ≈ {suggestedFromOneRm} {unit}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  const value = String(suggestedFromOneRm);
+                  for (const set of item.sets) onUpdateSet(set.setNumber, { weight: value });
+                }}
+                className="font-semibold text-primary hover:underline"
+              >
+                Use
+              </button>
+            </div>
           )}
           {item.lastPerformance?.suggestion && (
             <div className="mt-0.5 flex items-center gap-1.5 text-xs">
