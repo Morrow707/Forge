@@ -25,11 +25,12 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { Crown, Dumbbell, CalendarCheck, Flame, Scale, Trash2 } from "lucide-react";
+import { Crown, Dumbbell, CalendarCheck, Flame, Scale, Trash2, TrendingUp } from "lucide-react";
 
 type ProgressSummary = {
   totalWorkoutsCompleted: number;
   workoutsThisMonth: number;
+  currentStreak: number;
   recentPRs: { exerciseName: string; weight: number; unit: string; reps: string; date: string }[];
   currentLifts: { exerciseName: string; weight: string; unit: string; reps: string; date: string }[];
 };
@@ -109,7 +110,7 @@ export default function AthleteProgress() {
         <div className="h-40 animate-pulse rounded-lg bg-surface" />
       ) : (
         <>
-          <div className="mb-6 grid gap-4 sm:grid-cols-2">
+          <div className="mb-6 grid gap-4 sm:grid-cols-3">
             <Card>
               <CardContent className="flex items-center gap-4 p-5">
                 <div className="flex h-11 w-11 items-center justify-center rounded-md bg-primary/15 text-primary">
@@ -126,13 +127,24 @@ export default function AthleteProgress() {
             <Card>
               <CardContent className="flex items-center gap-4 p-5">
                 <div className="flex h-11 w-11 items-center justify-center rounded-md bg-primary/15 text-primary">
-                  <Flame className="h-5 w-5" />
+                  <TrendingUp className="h-5 w-5" />
                 </div>
                 <div>
                   <p className="font-display text-3xl font-bold">
                     {data?.workoutsThisMonth ?? 0}
                   </p>
                   <p className="text-sm text-muted-foreground">Workouts this month</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="flex items-center gap-4 p-5">
+                <div className="flex h-11 w-11 items-center justify-center rounded-md bg-primary/15 text-primary">
+                  <Flame className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="font-display text-3xl font-bold">{data?.currentStreak ?? 0}</p>
+                  <p className="text-sm text-muted-foreground">Current streak</p>
                 </div>
               </CardContent>
             </Card>

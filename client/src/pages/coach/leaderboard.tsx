@@ -14,6 +14,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { Trophy, Medal } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { formatHeight } from "@/components/profile-fields-form";
+import { StreakBadges } from "@/components/streak-badge";
 import { cn } from "@/lib/utils";
 
 type LeaderboardExercise = { id: number; name: string };
@@ -30,6 +31,8 @@ type LeaderboardEntry = {
   reps: number;
   date: string;
   weightUnit: string;
+  currentStreak: number;
+  totalCompleted: number;
 };
 
 const RANK_STYLES = [
@@ -138,6 +141,10 @@ export default function CoachLeaderboard() {
                         {entry.bodyWeightLbs} lbs bw
                       </span>
                     )}
+                    <StreakBadges
+                      currentStreak={entry.currentStreak}
+                      totalCompleted={entry.totalCompleted}
+                    />
                   </div>
                 </div>
                 <div className="shrink-0 text-right">
