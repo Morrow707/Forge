@@ -468,8 +468,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
-  // Read-only for the coach -- body metrics are athlete-logged, the coach
-  // just gets visibility (same roster-membership gate as everything else here).
+  // Normally athlete-logged; a coach can also add an entry directly here
+  // (e.g. a weigh-in during a testing day), same roster-membership gate as
+  // everything else in this section.
   app.get(
     "/api/coach/roster/:athleteId/body-metrics",
     requireRole("coach"),
@@ -480,6 +481,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
       const entries = await storage.getBodyMetricsForAthlete(athleteId);
       res.json(entries);
+    },
+  );
+
+  app.post(
+    "/api/coach/roster/:athleteId/body-metrics",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      const onRoster = await storage.getRosterAthleteForCoach(user.id, athleteId);
+      if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
+      const parsed = createBodyMetricSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      const entry = await storage.createBodyMetric(athleteId, parsed.data);
+      res.status(201).json(entry);
     },
   );
 

@@ -1,4 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
@@ -6,7 +7,18 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { apiRequest } from "@/lib/queryClient";
+import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
 import {
   LineChart,
@@ -27,8 +39,9 @@ type BodyMetric = {
   bodyFatPercent: number | null;
 };
 
-/** Coach-only, read-only view of an athlete's self-logged body metrics --
- * the coach never edits these, only the athlete does (see progress.tsx). */
+/** Coach view of an athlete's body metrics -- normally athlete-logged, but a
+ * coach can add an entry directly too (e.g. a weigh-in during a testing
+ * day) via fetchUrl's POST. */
 export function BodyMetricsDialog({
   open,
   onOpenChange,
@@ -40,6 +53,7 @@ export function BodyMetricsDialog({
   athleteName: string;
   fetchUrl: string;
 }) {
+  const qc = useQueryClient();
   const { data, isLoading } = useQuery<BodyMetric[]>({
     queryKey: [fetchUrl],
     queryFn: async () => {
@@ -47,6 +61,30 @@ export function BodyMetricsDialog({
       return res.json();
     },
     enabled: open,
+  });
+
+  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [weight, setWeight] = useState("");
+  const [weightUnit, setWeightUnit] = useState<"lbs" | "kg">("lbs");
+  const [bodyFatPercent, setBodyFatPercent] = useState("");
+
+  const addMetric = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", fetchUrl, {
+        date,
+        weight: Number(weight),
+        weightUnit,
+        bodyFatPercent: bodyFatPercent ? Number(bodyFatPercent) : undefined,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [fetchUrl] });
+      setWeight("");
+      setBodyFatPercent("");
+      toast.success("Logged");
+    },
+    onError: () => toast.error("Couldn't save that entry"),
   });
 
   const chartData = (data ?? []).map((m) => ({
@@ -62,8 +100,62 @@ export function BodyMetricsDialog({
             <Scale className="h-5 w-5" />
             {athleteName}'s Body Metrics
           </DialogTitle>
-          <DialogDescription>Self-logged by the athlete. Read-only here.</DialogDescription>
+          <DialogDescription>
+            Normally logged by the athlete -- add an entry yourself for a testing day.
+          </DialogDescription>
         </DialogHeader>
+
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!weight) {
+              toast.error("Enter a weight");
+              return;
+            }
+            addMetric.mutate();
+          }}
+          className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:items-end"
+        >
+          <div className="space-y-1.5">
+            <Label htmlFor="coach-metric-date">Date</Label>
+            <Input
+              id="coach-metric-date"
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              max={new Date().toISOString().slice(0, 10)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="coach-metric-weight">Weight</Label>
+            <Input
+              id="coach-metric-weight"
+              type="number"
+              inputMode="decimal"
+              step="0.1"
+              min="0"
+              value={weight}
+              onChange={(e) => setWeight(e.target.value)}
+              placeholder="185"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="coach-metric-unit">Unit</Label>
+            <Select value={weightUnit} onValueChange={(v) => setWeightUnit(v as "lbs" | "kg")}>
+              <SelectTrigger id="coach-metric-unit">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="lbs">lbs</SelectItem>
+                <SelectItem value="kg">kg</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <Button type="submit" disabled={addMetric.isPending} className="w-full">
+            Log
+          </Button>
+        </form>
+
         {isLoading ? (
           <div className="h-40 animate-pulse rounded-md bg-surface" />
         ) : !data?.length ? (

@@ -46,6 +46,13 @@ type RosterEntry = {
   bodyWeightLbs?: number | null;
   sport?: string | null;
   position?: string | null;
+  fortyYardDash?: number | null;
+  verticalJumpIn?: number | null;
+  broadJumpIn?: number | null;
+  proAgilitySeconds?: number | null;
+  benchMaxLbs?: number | null;
+  squatMaxLbs?: number | null;
+  deadliftMaxLbs?: number | null;
   healthStatus?: HealthStatus;
 };
 type TeamMember = { athlete: RosterEntry };
