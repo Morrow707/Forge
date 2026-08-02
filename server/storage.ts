@@ -22,6 +22,7 @@ import {
   pushSubscriptions,
   teamPosts,
   bodyMetrics,
+  testingResults,
   type InsertUser,
 } from "@shared/schema";
 import type {
@@ -36,6 +37,7 @@ import type {
   CreateWorkoutCommentInput,
   CreateExerciseReportInput,
   CreateBodyMetricInput,
+  TestingMetric,
 } from "@shared/schema";
 import { eq, and, inArray, asc, desc, lt, gt, isNull } from "drizzle-orm";
 import {
@@ -51,6 +53,16 @@ function initialsFor(name: string): string {
   const initials = parts.slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("");
   return initials || "?";
 }
+
+const TESTING_FIELDS = [
+  "fortyYardDash",
+  "verticalJumpIn",
+  "broadJumpIn",
+  "proAgilitySeconds",
+  "benchMaxLbs",
+  "squatMaxLbs",
+  "deadliftMaxLbs",
+] as const;
 
 // A program day's calendar date is normally the rigid "every 7 days from
 // startDate" grid -- but a coach can move any individual occurrence (game,
@@ -164,9 +176,33 @@ export const storage = {
 
   // Used both for an athlete editing their own bio fields and for a coach
   // editing an athlete on their roster -- callers are responsible for
-  // verifying the target user is one the requester may edit.
+  // verifying the target user is one the requester may edit. Also captures
+  // a dated testing_results snapshot whenever any testing/combine number
+  // actually changes, so team trends have real history to plot without a
+  // separate "log a testing day" form -- re-saving unchanged values (the
+  // form always resends the full set) never creates a phantom entry.
   async updateUserProfile(userId: number, input: UpdateProfileInput) {
+    const before = await db.query.users.findFirst({ where: eq(users.id, userId) });
     const [row] = await db.update(users).set(input).where(eq(users.id, userId)).returning();
+
+    const testingChanged = TESTING_FIELDS.some(
+      (field) => field in input && input[field] !== before?.[field],
+    );
+    if (testingChanged) {
+      const today = new Date().toISOString().slice(0, 10);
+      const snapshot = Object.fromEntries(TESTING_FIELDS.map((f) => [f, row[f]])) as Record<
+        (typeof TESTING_FIELDS)[number],
+        number | null
+      >;
+      await db
+        .insert(testingResults)
+        .values({ athleteId: userId, date: today, ...snapshot })
+        .onConflictDoUpdate({
+          target: [testingResults.athleteId, testingResults.date],
+          set: snapshot,
+        });
+    }
+
     return row;
   },
 
@@ -301,6 +337,40 @@ export const storage = {
     await db
       .delete(bodyMetrics)
       .where(and(eq(bodyMetrics.id, id), eq(bodyMetrics.athleteId, athleteId)));
+  },
+
+  // ---------- Testing/combine history ----------
+  // Snapshots are written automatically by updateUserProfile above; this is
+  // just the read side.
+  async getTestingHistoryForAthlete(athleteId: number) {
+    return db.query.testingResults.findMany({
+      where: eq(testingResults.athleteId, athleteId),
+      orderBy: asc(testingResults.date),
+    });
+  },
+
+  // One line per athlete per testing date for the whole roster, for a
+  // single chosen metric -- the coach-only "team trends" chart plots this
+  // directly, one series per athlete.
+  async getTeamTestingTrends(coachId: number, metric: TestingMetric) {
+    const roster = await this.getRosterForCoach(coachId);
+    if (roster.length === 0) return [];
+    const athleteIds = roster.map((a) => a.id);
+    const nameById = new Map(roster.map((a) => [a.id, a.name]));
+
+    const rows = await db.query.testingResults.findMany({
+      where: inArray(testingResults.athleteId, athleteIds),
+      orderBy: asc(testingResults.date),
+    });
+
+    return rows
+      .filter((r) => r[metric] != null)
+      .map((r) => ({
+        athleteId: r.athleteId,
+        athleteName: nameById.get(r.athleteId) ?? "Unknown",
+        date: r.date,
+        value: r[metric] as number,
+      }));
   },
 
   // ---------- Teams ----------

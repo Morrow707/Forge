@@ -18,6 +18,7 @@ import { AssignProgramDialog } from "@/components/assign-program-dialog";
 import { AthleteProfileDialog } from "@/components/athlete-profile-dialog";
 import { CalendarLinkDialog } from "@/components/calendar-link-dialog";
 import { BodyMetricsDialog } from "@/components/body-metrics-dialog";
+import { TestingHistoryDialog } from "@/components/testing-history-dialog";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -33,6 +34,7 @@ import {
   HeartCrack,
   CalendarDays,
   Scale,
+  Timer,
 } from "lucide-react";
 
 type HealthStatus = "healthy" | "hurt";
@@ -81,6 +83,7 @@ export default function CoachRoster() {
   const [profileAthlete, setProfileAthlete] = useState<RosterEntry | null>(null);
   const [calendarAthlete, setCalendarAthlete] = useState<RosterEntry | null>(null);
   const [metricsAthlete, setMetricsAthlete] = useState<RosterEntry | null>(null);
+  const [testingAthlete, setTestingAthlete] = useState<RosterEntry | null>(null);
 
   const filteredRoster = roster.filter((a) => {
     const q = rosterSearch.trim().toLowerCase();
@@ -206,6 +209,15 @@ export default function CoachRoster() {
                             onClick={() => setMetricsAthlete(a)}
                           >
                             <Scale className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            aria-label={`View ${a.name}'s testing history`}
+                            title="Testing history"
+                            onClick={() => setTestingAthlete(a)}
+                          >
+                            <Timer className="h-4 w-4" />
                           </Button>
                           <Button
                             size="icon"
@@ -398,6 +410,15 @@ export default function CoachRoster() {
           onOpenChange={(open) => !open && setMetricsAthlete(null)}
           athleteName={metricsAthlete.name}
           fetchUrl={`/api/coach/roster/${metricsAthlete.id}/body-metrics`}
+        />
+      )}
+
+      {testingAthlete && (
+        <TestingHistoryDialog
+          open={testingAthlete !== null}
+          onOpenChange={(open) => !open && setTestingAthlete(null)}
+          athleteName={testingAthlete.name}
+          fetchUrl={`/api/coach/roster/${testingAthlete.id}/testing-history`}
         />
       )}
     </AppShell>

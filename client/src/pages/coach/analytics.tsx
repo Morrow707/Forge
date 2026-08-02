@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -11,7 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { apiRequest } from "@/lib/queryClient";
-import { Users, Gauge, Crown, CalendarDays } from "lucide-react";
+import { Users, Gauge, Crown, CalendarDays, TrendingUp } from "lucide-react";
 import {
   LineChart,
   Line,
@@ -24,6 +25,7 @@ import {
 } from "recharts";
 import { format, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
+import { TESTING_METRICS, type TestingMetricKey } from "@/lib/testing-metrics";
 
 type RosterEntry = { id: number; name: string; email: string };
 type TrackedExercise = { id: number; name: string };
@@ -116,6 +118,13 @@ export default function CoachAnalytics() {
 
   return (
     <AppShell title="Analytics">
+      <Tabs defaultValue="performance">
+        <TabsList className="mb-6">
+          <TabsTrigger value="performance">Performance</TabsTrigger>
+          <TabsTrigger value="trends">Team Trends</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="performance">
       <div className="mb-6 grid gap-3 sm:grid-cols-2">
         <div className="space-y-1.5">
           <label className="text-xs font-semibold uppercase text-muted-foreground">Athlete</label>
@@ -468,6 +477,120 @@ export default function CoachAnalytics() {
           </Card>
         </div>
       )}
+        </TabsContent>
+
+        <TabsContent value="trends">
+          <TeamTrends />
+        </TabsContent>
+      </Tabs>
     </AppShell>
+  );
+}
+
+type TrendPoint = { athleteId: number; athleteName: string; date: string; value: number };
+
+const TREND_COLORS = [
+  "hsl(var(--primary))",
+  "#3b82f6",
+  "#f59e0b",
+  "#a855f7",
+  "#22c55e",
+  "#ef4444",
+  "#06b6d4",
+  "#ec4899",
+];
+
+/** One line per athlete for a chosen testing metric, so a coach can see team-wide
+ * trends rather than just one athlete at a time. Reuses the automatic snapshot
+ * history built from profile-edit testing fields -- no separate data entry. */
+function TeamTrends() {
+  const [metric, setMetric] = useState<TestingMetricKey>("fortyYardDash");
+
+  const { data: points = [], isLoading } = useQuery<TrendPoint[]>({
+    queryKey: ["/api/coach/testing-trends", metric],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/coach/testing-trends?metric=${metric}`);
+      return res.json();
+    },
+  });
+
+  const activeMetric = TESTING_METRICS.find((m) => m.key === metric)!;
+  const athletes = Array.from(new Set(points.map((p) => p.athleteName))).sort();
+  const dates = Array.from(new Set(points.map((p) => p.date))).sort();
+
+  const chartData = dates.map((date) => {
+    const row: Record<string, string | number> = { label: format(parseISO(date), "MMM d") };
+    for (const p of points.filter((pt) => pt.date === date)) {
+      row[p.athleteName] = p.value;
+    }
+    return row;
+  });
+
+  return (
+    <div className="space-y-4">
+      <div className="max-w-xs space-y-1.5">
+        <label className="text-xs font-semibold uppercase text-muted-foreground">Metric</label>
+        <Select value={metric} onValueChange={(v) => setMetric(v as TestingMetricKey)}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {TESTING_METRICS.map((m) => (
+              <SelectItem key={m.key} value={m.key}>
+                {m.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {!isLoading && athletes.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
+            <TrendingUp className="h-10 w-10 text-muted-foreground" />
+            <p className="text-muted-foreground">
+              No {activeMetric.label.toLowerCase()} entries recorded for your team yet.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle>{activeMetric.label} — Team Trend</CardTitle>
+            <CardDescription>
+              Every athlete with a recorded {activeMetric.label.toLowerCase()} ({activeMetric.unit}
+              ), over time.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="h-80">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={chartData} margin={{ left: 4, right: 12 }}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} width={44} domain={["auto", "auto"]} />
+                <Tooltip
+                  contentStyle={{
+                    background: "hsl(var(--card))",
+                    border: "1px solid hsl(var(--border))",
+                  }}
+                />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+                {athletes.map((name, i) => (
+                  <Line
+                    key={name}
+                    type="monotone"
+                    dataKey={name}
+                    stroke={TREND_COLORS[i % TREND_COLORS.length]}
+                    strokeWidth={2}
+                    connectNulls
+                    dot={{ r: 3 }}
+                  />
+                ))}
+              </LineChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      )}
+    </div>
   );
 }

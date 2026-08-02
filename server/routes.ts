@@ -28,6 +28,7 @@ import {
   createTeamPostSchema,
   createBodyMetricSchema,
   createAnnotationSchema,
+  testingTrendsQuerySchema,
 } from "@shared/schema";
 import { z } from "zod";
 
@@ -508,6 +509,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(201).json(entry);
     },
   );
+
+  // Snapshots are written automatically whenever a coach changes a testing
+  // field via the profile-edit routes above -- this is read-only.
+  app.get(
+    "/api/coach/roster/:athleteId/testing-history",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      const onRoster = await storage.getRosterAthleteForCoach(user.id, athleteId);
+      if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
+      const history = await storage.getTestingHistoryForAthlete(athleteId);
+      res.json(history);
+    },
+  );
+
+  app.get("/api/coach/testing-trends", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = testingTrendsQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "metric query param required" });
+    }
+    const points = await storage.getTeamTestingTrends(user.id, parsed.data.metric);
+    res.json(points);
+  });
 
   app.get("/api/coach/teams", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
