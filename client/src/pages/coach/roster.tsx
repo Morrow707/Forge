@@ -18,7 +18,7 @@ import { AssignProgramDialog } from "@/components/assign-program-dialog";
 import { AthleteProfileDialog } from "@/components/athlete-profile-dialog";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { Users, UserPlus, Send, Plus, X, Search } from "lucide-react";
+import { Users, UserPlus, Send, Plus, X, Search, Copy } from "lucide-react";
 
 type RosterEntry = {
   id: number;
@@ -31,7 +31,7 @@ type RosterEntry = {
   position?: string | null;
 };
 type TeamMember = { athlete: RosterEntry };
-type TeamEntry = { id: number; name: string; members: TeamMember[] };
+type TeamEntry = { id: number; name: string; code: string | null; members: TeamMember[] };
 type ProgramSummary = { id: number; name: string };
 
 export default function CoachRoster() {
@@ -250,6 +250,29 @@ export default function CoachRoster() {
                       </div>
                     ))}
                   </div>
+                  {team.code && (
+                    <div className="mb-3 flex items-center justify-between rounded-md bg-surface-elevated px-3 py-2">
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase text-muted-foreground">
+                          Team invite code
+                        </p>
+                        <p className="font-display text-lg font-bold tracking-widest text-primary">
+                          {team.code}
+                        </p>
+                      </div>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        aria-label={`Copy ${team.name} invite code`}
+                        onClick={() => {
+                          navigator.clipboard.writeText(team.code!);
+                          toast.success("Team code copied");
+                        }}
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
                   <AddMemberSelect
                     roster={roster.filter(
                       (r) => !team.members.some((m) => m.athlete.id === r.id),

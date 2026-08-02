@@ -9,7 +9,15 @@ import { CoachDayEditDialog } from "@/components/coach-day-edit-dialog";
 import { useAuth } from "@/hooks/use-auth";
 import { apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
-import { Dumbbell, ListChecks, Users, ArrowRight, Copy, CalendarDays } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Dumbbell, ListChecks, Users, ArrowRight, Copy, CalendarDays, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { addDays, format, formatISO, isToday } from "date-fns";
 
@@ -24,6 +32,7 @@ type ProgramSummary = {
 
 type RosterEntry = { id: number; name: string; email: string };
 type ExerciseSummary = { id: number };
+type TeamSummary = { id: number; name: string; code: string | null };
 
 export default function CoachDashboard() {
   const { user } = useAuth();
@@ -35,6 +44,9 @@ export default function CoachDashboard() {
   });
   const { data: exercises = [] } = useQuery<ExerciseSummary[]>({
     queryKey: ["/api/coach/exercises"],
+  });
+  const { data: teams = [] } = useQuery<TeamSummary[]>({
+    queryKey: ["/api/coach/teams"],
   });
 
   const days = [0, 1, 2].map((offset) => addDays(new Date(), offset));
@@ -61,28 +73,7 @@ export default function CoachDashboard() {
 
   return (
     <AppShell title={`Welcome, ${user?.name?.split(" ")[0] ?? "Coach"}`}>
-      <div className="grid gap-4 sm:grid-cols-3">
-        <StatCard
-          icon={ListChecks}
-          label="Programs"
-          value={programs.length}
-          href="/coach/programs"
-        />
-        <StatCard
-          icon={Dumbbell}
-          label="Exercises in bank"
-          value={exercises.length}
-          href="/coach/exercises"
-        />
-        <StatCard
-          icon={Users}
-          label="Athletes"
-          value={roster.length}
-          href="/coach/roster"
-        />
-      </div>
-
-      <Card className="mt-6">
+      <Card>
         <CardHeader className="flex-row items-center justify-between space-y-0">
           <div>
             <CardTitle>Next 3 Days</CardTitle>
@@ -152,6 +143,22 @@ export default function CoachDashboard() {
         </CardContent>
       </Card>
 
+      <div className="mt-6 grid gap-4 sm:grid-cols-3">
+        <StatCard icon={Users} label="Athletes" value={roster.length} href="/coach/roster" />
+        <StatCard
+          icon={ListChecks}
+          label="Programs"
+          value={programs.length}
+          href="/coach/programs"
+        />
+        <StatCard
+          icon={Dumbbell}
+          label="Exercises in bank"
+          value={exercises.length}
+          href="/coach/exercises"
+        />
+      </div>
+
       <div className="mt-6 grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader className="flex-row items-center justify-between space-y-0">
@@ -193,35 +200,7 @@ export default function CoachDashboard() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Invite Athletes</CardTitle>
-            <CardDescription>Share your coach code so athletes can join your roster.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between rounded-md bg-surface-elevated p-4">
-              <span className="font-display text-2xl font-bold tracking-widest text-primary">
-                {user?.coachCode}
-              </span>
-              <Button
-                size="icon"
-                variant="ghost"
-                aria-label="Copy coach code"
-                onClick={() => {
-                  if (user?.coachCode) {
-                    navigator.clipboard.writeText(user.coachCode);
-                    toast.success("Coach code copied");
-                  }
-                }}
-              >
-                <Copy className="h-4 w-4" />
-              </Button>
-            </div>
-            <p className="mt-3 text-xs text-muted-foreground">
-              Athletes enter this code at signup, or from their account, to link to you.
-            </p>
-          </CardContent>
-        </Card>
+        <TeamInviteCard teams={teams} coachCode={user?.coachCode ?? null} />
       </div>
 
       <CoachDayEditDialog
@@ -233,6 +212,109 @@ export default function CoachDashboard() {
         onOpenChange={(open) => !open && setEditing(null)}
       />
     </AppShell>
+  );
+}
+
+function TeamInviteCard({
+  teams,
+  coachCode,
+}: {
+  teams: TeamSummary[];
+  coachCode: string | null;
+}) {
+  const codeOptions = [
+    ...(coachCode ? [{ label: "All teams (personal code)", code: coachCode }] : []),
+    ...teams.filter((t) => t.code).map((t) => ({ label: t.name, code: t.code as string })),
+  ];
+  const [selectedCode, setSelectedCode] = useState("");
+  const [emails, setEmails] = useState("");
+  const effectiveCode =
+    codeOptions.find((opt) => opt.code === selectedCode)?.code ?? codeOptions[0]?.code ?? "";
+
+  function sendInvite() {
+    const recipients = emails
+      .split(/[,\n]/)
+      .map((e) => e.trim())
+      .filter(Boolean);
+    if (recipients.length === 0) {
+      toast.error("Add at least one email");
+      return;
+    }
+    const subject = "Join our team on Forge";
+    const body = `Hey! Join our training program on Forge:\n\n1. Sign up at ${window.location.origin}/signup\n2. Choose "Athlete" and enter this invite code: ${effectiveCode}\n\nSee you there!`;
+    const mailto = `mailto:?bcc=${encodeURIComponent(recipients.join(","))}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.location.href = mailto;
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Invite Athletes</CardTitle>
+        <CardDescription>
+          Each team has its own code -- athletes who use it join that team automatically.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {codeOptions.length === 0 && (
+          <p className="text-sm text-muted-foreground">
+            Create a team on the Roster page to get a shareable code.
+          </p>
+        )}
+        {codeOptions.map((opt) => (
+          <div
+            key={opt.code}
+            className="flex items-center justify-between rounded-md bg-surface-elevated px-3 py-2"
+          >
+            <div className="min-w-0">
+              <p className="truncate text-[10px] font-semibold uppercase text-muted-foreground">
+                {opt.label}
+              </p>
+              <p className="font-display text-lg font-bold tracking-widest text-primary">
+                {opt.code}
+              </p>
+            </div>
+            <Button
+              size="icon"
+              variant="ghost"
+              aria-label={`Copy ${opt.label} code`}
+              onClick={() => {
+                navigator.clipboard.writeText(opt.code);
+                toast.success("Code copied");
+              }}
+            >
+              <Copy className="h-4 w-4" />
+            </Button>
+          </div>
+        ))}
+
+        {codeOptions.length > 0 && (
+          <div className="space-y-2 border-t border-border pt-3">
+            <Select value={effectiveCode} onValueChange={setSelectedCode}>
+              <SelectTrigger className="h-8 text-xs">
+                <SelectValue placeholder="Code to include" />
+              </SelectTrigger>
+              <SelectContent>
+                {codeOptions.map((opt) => (
+                  <SelectItem key={opt.code} value={opt.code}>
+                    {opt.label} — {opt.code}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Textarea
+              value={emails}
+              onChange={(e) => setEmails(e.target.value)}
+              placeholder="athlete1@email.com, athlete2@email.com"
+              className="min-h-16 text-sm"
+            />
+            <Button size="sm" className="w-full" onClick={sendInvite}>
+              <Mail className="h-3.5 w-3.5" />
+              Email Invite
+            </Button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

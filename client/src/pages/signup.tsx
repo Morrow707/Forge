@@ -121,7 +121,7 @@ export default function SignupPage() {
               </div>
               {role === "athlete" && (
                 <div className="space-y-1.5">
-                  <Label htmlFor="coachCode">Coach code (optional)</Label>
+                  <Label htmlFor="coachCode">Invite code (optional)</Label>
                   <Input
                     id="coachCode"
                     value={coachCode}
@@ -129,7 +129,7 @@ export default function SignupPage() {
                     placeholder="e.g. F3G7K2"
                   />
                   <p className="text-xs text-muted-foreground">
-                    Ask your coach for their code to join their roster now, or add it later.
+                    Ask your coach for their code (or a team code) to join now, or add it later.
                   </p>
                 </div>
               )}

@@ -201,16 +201,39 @@ export const storage = {
 
   // ---------- Teams ----------
   async getTeamsForCoach(coachId: number) {
-    return db.query.teams.findMany({
+    const rows = await db.query.teams.findMany({
       where: eq(teams.coachId, coachId),
       with: { members: { with: { athlete: true } } },
       orderBy: asc(teams.name),
     });
+    // Teams created before the join-code column existed have none yet --
+    // backfill lazily so every team the coach sees always has one to share.
+    return Promise.all(
+      rows.map(async (team) => {
+        if (team.code) return team;
+        let code = generateCoachCode();
+        while (await this.getTeamByCode(code)) code = generateCoachCode();
+        const [updated] = await db
+          .update(teams)
+          .set({ code })
+          .where(eq(teams.id, team.id))
+          .returning();
+        return { ...team, code: updated.code };
+      }),
+    );
   },
 
   async createTeam(coachId: number, name: string) {
-    const [team] = await db.insert(teams).values({ coachId, name }).returning();
+    let code = generateCoachCode();
+    while (await this.getTeamByCode(code)) {
+      code = generateCoachCode();
+    }
+    const [team] = await db.insert(teams).values({ coachId, name, code }).returning();
     return team;
+  },
+
+  async getTeamByCode(code: string) {
+    return db.query.teams.findFirst({ where: eq(teams.code, code.toUpperCase()) });
   },
 
   async addAthleteToTeam(teamId: number, athleteId: number) {

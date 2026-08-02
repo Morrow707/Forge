@@ -73,10 +73,15 @@ export function setupAuth(app: Express) {
       }
 
       let coach = null;
+      let team = null;
       if (role === "athlete" && coachCode) {
         coach = await storage.getUserByCoachCode(coachCode);
         if (!coach) {
-          return res.status(400).json({ message: "Invalid coach code" });
+          team = await storage.getTeamByCode(coachCode);
+          if (team) coach = await storage.getUser(team.coachId);
+        }
+        if (!coach) {
+          return res.status(400).json({ message: "Invalid invite code" });
         }
       }
 
@@ -90,6 +95,7 @@ export function setupAuth(app: Express) {
 
       if (coach) {
         await storage.linkAthleteToCoach(coach.id, user.id);
+        if (team) await storage.addAthleteToTeam(team.id, user.id);
       }
 
       req.login(user, (err) => {
@@ -143,11 +149,17 @@ export function setupAuth(app: Express) {
         return res.status(403).json({ message: "Only athletes can join a coach" });
       }
       const { coachCode } = req.body;
-      const coach = await storage.getUserByCoachCode(coachCode || "");
+      let coach = await storage.getUserByCoachCode(coachCode || "");
+      let team = null;
       if (!coach) {
-        return res.status(400).json({ message: "Invalid coach code" });
+        team = await storage.getTeamByCode(coachCode || "");
+        if (team) coach = await storage.getUser(team.coachId);
+      }
+      if (!coach) {
+        return res.status(400).json({ message: "Invalid invite code" });
       }
       await storage.linkAthleteToCoach(coach.id, user.id);
+      if (team) await storage.addAthleteToTeam(team.id, user.id);
       res.json({ coachId: coach.id, coachName: coach.name });
     } catch (err) {
       next(err);
