@@ -846,6 +846,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ token });
   });
 
+  app.get("/api/athlete/progress", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const summary = await storage.getAthleteProgressSummary(user.id);
+    res.json(summary);
+  });
+
   app.get("/api/athlete/day", requireRole("athlete"), async (req, res) => {
     const user = currentUser(req);
     const schema = z.object({
