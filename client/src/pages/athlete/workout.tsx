@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
-import { groupConsecutiveBySupersetGroup } from "@/lib/supersets";
+import { groupConsecutiveBySupersetGroup, colorForLabel } from "@/lib/supersets";
 import { ExerciseVideoThumb } from "@/components/exercise-video";
 import { RestTimerControl } from "@/components/rest-timer";
 import { WorkoutCommentThread } from "@/components/workout-comment-thread";
@@ -655,7 +655,7 @@ export default function AthleteWorkout() {
                                     "flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-extrabold",
                                     page.kind === "corrective"
                                       ? "bg-cyan-500 text-white"
-                                      : "bg-primary text-primary-foreground",
+                                      : colorForLabel(page.labels[it.key]),
                                   )}
                                 >
                                   {page.labels[it.key]}
@@ -875,7 +875,7 @@ function ExerciseLogContent({
               <span
                 className={cn(
                   "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-extrabold",
-                  isCorrective ? "bg-cyan-500 text-white" : "bg-primary text-primary-foreground",
+                  isCorrective ? "bg-cyan-500 text-white" : colorForLabel(badgeLabel),
                 )}
               >
                 {badgeLabel}
