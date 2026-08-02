@@ -23,6 +23,8 @@ import AthleteWorkout from "@/pages/athlete/workout";
 import AdminDashboard from "@/pages/admin/dashboard";
 import AdminExercises from "@/pages/admin/exercises";
 import AdminExerciseDetail from "@/pages/admin/exercise-detail";
+import AdminPrograms from "@/pages/admin/programs";
+import AdminProgramBuilder from "@/pages/admin/program-builder";
 import AdminReviewQueue from "@/pages/admin/review-queue";
 
 function FullScreenSpinner() {
@@ -111,6 +113,12 @@ function Router() {
       </Route>
       <Route path="/admin/exercises">
         <ProtectedRoute role="admin" component={AdminExercises} />
+      </Route>
+      <Route path="/admin/programs/:id">
+        <ProtectedRoute role="admin" component={AdminProgramBuilder} />
+      </Route>
+      <Route path="/admin/programs">
+        <ProtectedRoute role="admin" component={AdminPrograms} />
       </Route>
       <Route path="/admin/review">
         <ProtectedRoute role="admin" component={AdminReviewQueue} />

@@ -205,6 +205,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.status(204).end();
   });
 
+  // ---------------- Admin: Forge Program Library ----------------
+  // Same model as the exercise library -- an admin's own programs are
+  // automatically shared, read-only, with every coach (see
+  // getVisibleProgramsForCoach).
+
+  app.get("/api/admin/programs", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const list = await storage.getProgramsByCoach(user.id);
+    res.json(list);
+  });
+
+  app.get("/api/admin/programs/:id", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const program = await assertCoachOwnsProgram(user.id, id);
+    if (!program) return res.status(404).json({ message: "Program not found" });
+    res.json({ ...program, isForgeOfficial: true, ownerLabel: "FORGE", editable: true });
+  });
+
+  app.post("/api/admin/programs", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = programStructureSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const program = await storage.createProgramWithStructure(user.id, parsed.data);
+    res.status(201).json(program);
+  });
+
+  app.put("/api/admin/programs/:id", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const owned = await assertCoachOwnsProgram(user.id, id);
+    if (!owned) return res.status(404).json({ message: "Program not found" });
+    const parsed = programStructureSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    await storage.updateProgramStructure(id, parsed.data);
+    const updated = await storage.getProgramFull(id);
+    res.json(updated);
+  });
+
+  app.delete("/api/admin/programs/:id", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const owned = await assertCoachOwnsProgram(user.id, id);
+    if (!owned) return res.status(404).json({ message: "Program not found" });
+    await storage.deleteProgram(id);
+    res.status(204).end();
+  });
+
   // ---------------- Admin: Review Queue ----------------
   // Coaches nominate their own exercises for official Forge status, or
   // flag a problem with an existing Forge exercise. Both land here.
@@ -242,14 +294,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/coach/programs", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
-    const list = await storage.getProgramsByCoach(user.id);
+    const list = await storage.getVisibleProgramsForCoach(user.id);
     res.json(list);
   });
 
   app.get("/api/coach/programs/:id", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     const id = Number(req.params.id);
-    const program = await assertCoachOwnsProgram(user.id, id);
+    const program = await storage.getVisibleProgramDetail(id, user.id);
     if (!program) return res.status(404).json({ message: "Program not found" });
     res.json(program);
   });
@@ -257,7 +309,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/coach/programs/:id/day-groups", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     const id = Number(req.params.id);
-    const program = await assertCoachOwnsProgram(user.id, id);
+    // Read-only lookup used while assigning (own programs or Forge
+    // templates) -- not an edit, so it uses the same "usable" check as
+    // assignment creation rather than strict ownership.
+    const program = await storage.getProgramIfUsableByCoach(user.id, id);
     if (!program) return res.status(404).json({ message: "Program not found" });
     const groups = await storage.getNonRestDayGroups(id);
     res.json(groups);
@@ -384,8 +439,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
-    const owned = await assertCoachOwnsProgram(user.id, parsed.data.programId);
-    if (!owned) return res.status(404).json({ message: "Program not found" });
+    const usable = await storage.getProgramIfUsableByCoach(user.id, parsed.data.programId);
+    if (!usable) return res.status(404).json({ message: "Program not found" });
 
     const roster = await storage.getRosterForCoach(user.id);
     const rosterIds = new Set(roster.map((a) => a.id));

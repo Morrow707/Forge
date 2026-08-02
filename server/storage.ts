@@ -276,7 +276,7 @@ export const storage = {
   // coach, read-only to them. A coach's own exercises are private to them.
   // These are derived from the creator's role rather than stored as a flag,
   // so there's no separate field that could drift out of sync with it.
-  withExerciseOwnership<T extends { coachId: number; coach: { name: string; role: string } }>(
+  withOwnership<T extends { coachId: number; coach: { name: string; role: string } }>(
     ex: T,
     requestingUserId: number,
   ) {
@@ -300,7 +300,7 @@ export const storage = {
       orderBy: desc(exercises.createdAt),
       with: { coach: true },
     });
-    return rows.map((ex) => this.withExerciseOwnership(ex, coachId));
+    return rows.map((ex) => this.withOwnership(ex, coachId));
   },
 
   // Exercises a specific user (coach or admin) personally created -- an
@@ -311,7 +311,7 @@ export const storage = {
       orderBy: desc(exercises.createdAt),
       with: { coach: true },
     });
-    return rows.map((ex) => this.withExerciseOwnership(ex, coachId));
+    return rows.map((ex) => this.withOwnership(ex, coachId));
   },
 
   async getExerciseDetail(id: number, requestingUserId: number) {
@@ -335,7 +335,7 @@ export const storage = {
       ),
     });
     return {
-      ...this.withExerciseOwnership(ex, requestingUserId),
+      ...this.withOwnership(ex, requestingUserId),
       hasPendingSubmission: !!pendingSubmission,
       hasOpenReport: !!openReport,
     };
@@ -490,6 +490,8 @@ export const storage = {
   },
 
   // ---------- Programs ----------
+  // A single owner's own programs -- used by both a coach's private bank
+  // and an admin's Forge program library (same query, different owner id).
   async getProgramsByCoach(coachId: number) {
     const progs = await db.query.programs.findMany({
       where: eq(programs.coachId, coachId),
@@ -508,6 +510,31 @@ export const storage = {
       dayCount: p.weeks.reduce((acc, w) => acc + w.days.length, 0),
       assignedAthleteCount: new Set(p.assignments.map((a) => a.athleteId)).size,
     }));
+  },
+
+  // A coach's own programs plus every Forge-official (admin-created) one --
+  // same Forge-tagging model as getVisibleExercisesForCoach.
+  async getVisibleProgramsForCoach(coachId: number) {
+    const admins = await db.query.users.findMany({ where: eq(users.role, "admin") });
+    const ownerIds = Array.from(new Set([coachId, ...admins.map((a) => a.id)]));
+    const progs = await db.query.programs.findMany({
+      where: inArray(programs.coachId, ownerIds),
+      with: {
+        weeks: { with: { days: true } },
+        assignments: true,
+        coach: true,
+      },
+      orderBy: desc(programs.createdAt),
+    });
+    return progs.map((p) => {
+      const { weeks, assignments, ...ownership } = this.withOwnership(p, coachId);
+      return {
+        ...ownership,
+        weekCount: weeks.length,
+        dayCount: weeks.reduce((acc, w) => acc + w.days.length, 0),
+        assignedAthleteCount: new Set(assignments.map((a) => a.athleteId)).size,
+      };
+    });
   },
 
   async getProgramFull(id: number) {
@@ -530,6 +557,51 @@ export const storage = {
         },
       },
     });
+  },
+
+  // Detail view for a program a coach may only look at, not necessarily
+  // edit -- their own programs, or any Forge-official one (read-only).
+  // Returns null if the program doesn't exist or isn't visible to them at
+  // all (someone else's private program).
+  async getVisibleProgramDetail(id: number, requestingUserId: number) {
+    const program = await db.query.programs.findFirst({
+      where: eq(programs.id, id),
+      with: {
+        coach: true,
+        weeks: {
+          orderBy: asc(programWeeks.weekNumber),
+          with: {
+            days: {
+              orderBy: asc(programDays.dayNumber),
+              with: {
+                exercises: {
+                  orderBy: asc(programExercises.orderIndex),
+                  with: { exercise: true },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!program) return null;
+    const isForgeOfficial = program.coach.role === "admin";
+    if (program.coachId !== requestingUserId && !isForgeOfficial) return null;
+    return this.withOwnership(program, requestingUserId);
+  },
+
+  // A program a coach may assign to their athletes -- their own, or any
+  // Forge-official template. Distinct from edit/delete ownership, which
+  // stays strictly "created by this exact user" (assertCoachOwnsProgram).
+  async getProgramIfUsableByCoach(coachId: number, programId: number) {
+    const program = await db.query.programs.findFirst({
+      where: eq(programs.id, programId),
+      with: { coach: true },
+    });
+    if (!program) return null;
+    const isForgeOfficial = program.coach.role === "admin";
+    if (program.coachId !== coachId && !isForgeOfficial) return null;
+    return program;
   },
 
   async createProgramWithStructure(

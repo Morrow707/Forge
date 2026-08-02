@@ -15,6 +15,7 @@ import {
   X,
   UserCircle,
   Trophy,
+  CalendarRange,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { EditMyProfileDialog } from "@/components/edit-my-profile-dialog";
@@ -36,6 +37,7 @@ const athleteNav = [
 const adminNav = [
   { href: "/admin", label: "Dashboard", icon: Flame, exact: true },
   { href: "/admin/exercises", label: "Forge Library", icon: Dumbbell },
+  { href: "/admin/programs", label: "Forge Programs", icon: CalendarRange },
   { href: "/admin/review", label: "Review Queue", icon: ClipboardCheck },
 ];
 
