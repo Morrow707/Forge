@@ -781,11 +781,13 @@ function ExerciseLogContent({
                 )}
                 <div
                   className={cn(
-                    "flex h-7 w-7 items-center justify-center rounded-full",
-                    complete ? "bg-success text-success-foreground" : "bg-secondary text-muted-foreground/30",
+                    "flex h-7 w-7 items-center justify-center rounded-full border",
+                    complete
+                      ? "border-success bg-success text-success-foreground"
+                      : "border-dashed border-muted-foreground/30 bg-secondary",
                   )}
                 >
-                  <Check className="h-4 w-4" />
+                  {complete && <Check className="h-4 w-4" />}
                 </div>
               </div>
             );

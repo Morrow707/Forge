@@ -227,14 +227,21 @@ function MonthGrid({
           return (
             <div
               key={dateStr}
+              aria-current={isToday(day) ? "date" : undefined}
               className={cn(
                 "flex min-h-24 flex-col gap-1 rounded-md border border-border p-1.5 sm:min-h-28 sm:p-2",
                 !inMonth && "opacity-30",
                 isToday(day) && "border-primary",
               )}
             >
-              <span className={cn("text-xs font-semibold", isToday(day) && "text-primary")}>
+              <span
+                className={cn(
+                  "flex h-5 w-5 items-center justify-center rounded-full text-xs font-semibold",
+                  isToday(day) && "bg-primary text-primary-foreground",
+                )}
+              >
                 {format(day, "d")}
+                {isToday(day) && <span className="sr-only"> (Today)</span>}
               </span>
               <div className="flex flex-1 flex-col gap-1">
                 {dayEntries.map((e) => (
@@ -273,6 +280,7 @@ function WeekRow({
         return (
           <div
             key={dateStr}
+            aria-current={isToday(day) ? "date" : undefined}
             className={cn(
               "flex min-h-40 flex-col gap-1.5 rounded-md border border-border p-2.5",
               isToday(day) && "border-primary",
@@ -280,9 +288,14 @@ function WeekRow({
           >
             <div className="flex items-baseline justify-between">
               <span className="text-xs font-semibold uppercase text-muted-foreground">
-                {format(day, "EEE")}
+                {isToday(day) ? "Today" : format(day, "EEE")}
               </span>
-              <span className={cn("text-sm font-bold", isToday(day) && "text-primary")}>
+              <span
+                className={cn(
+                  "flex h-5 w-5 items-center justify-center rounded-full text-sm font-bold",
+                  isToday(day) && "bg-primary text-primary-foreground",
+                )}
+              >
                 {format(day, "d")}
               </span>
             </div>
