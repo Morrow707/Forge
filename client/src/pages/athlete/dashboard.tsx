@@ -5,7 +5,6 @@ import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { CalendarView, type CalendarEntry } from "@/components/calendar-view";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
@@ -15,7 +14,7 @@ export default function AthleteDashboard() {
   const [, navigate] = useLocation();
   const [range, setRange] = useState<{ start: string; end: string }>({ start: "", end: "" });
 
-  const { data: entries = [], isLoading } = useQuery<CalendarEntry[]>({
+  const { data: entries = [] } = useQuery<CalendarEntry[]>({
     queryKey: ["/api/athlete/calendar", range.start, range.end],
     queryFn: async () => {
       const res = await apiRequest(
@@ -29,6 +28,12 @@ export default function AthleteDashboard() {
     refetchOnWindowFocus: true,
   });
 
+  const { data: coaches = [], isLoading: coachesLoading } = useQuery<
+    { id: number; name: string; coachCode: string }[]
+  >({
+    queryKey: ["/api/athlete/coaches"],
+  });
+
   return (
     <AppShell title="My Calendar">
       <CalendarView
@@ -37,7 +42,11 @@ export default function AthleteDashboard() {
         onEntryClick={(e) => navigate(`/athlete/day/${e.assignmentId}/${e.programDayId}/${e.date}`)}
       />
 
-      {!isLoading && entries.length === 0 && (
+      {/* Only the "you have no coach at all" case gets a big empty state --
+          an empty day/week within a real program is just "nothing scheduled",
+          already shown inline by the calendar itself. Showing both here too
+          was a redundant, confusing double empty-state. */}
+      {!coachesLoading && coaches.length === 0 && (
         <Card className="mt-6">
           <CardContent className="flex flex-col items-center gap-2 py-14 text-center">
             <Dumbbell className="h-8 w-8 text-muted-foreground" />
@@ -55,9 +64,6 @@ export default function AthleteDashboard() {
 function CoachJoinHint() {
   const qc = useQueryClient();
   const [code, setCode] = useState("");
-  const { data: coaches = [] } = useQuery<{ id: number; name: string; coachCode: string }[]>({
-    queryKey: ["/api/athlete/coaches"],
-  });
 
   const joinMutation = useMutation({
     mutationFn: async () => {
@@ -71,14 +77,6 @@ function CoachJoinHint() {
     },
     onError: (err: ApiError) => toast.error(err.message || "Invalid coach code"),
   });
-
-  if (coaches.length > 0) {
-    return (
-      <Badge variant="secondary">
-        Linked to coach {coaches.map((c) => c.name).join(", ")}
-      </Badge>
-    );
-  }
 
   return (
     <form

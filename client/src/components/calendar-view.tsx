@@ -11,8 +11,11 @@ import {
   isSameDay,
   isSameMonth,
   isToday,
+  isTomorrow,
+  isYesterday,
   startOfMonth,
   startOfWeek,
+  subDays,
   subMonths,
   subWeeks,
 } from "date-fns";
@@ -36,6 +39,12 @@ export type CalendarEntry = {
 
 export type CalendarViewMode = "month" | "week" | "day";
 
+const VIEW_LABEL: Record<CalendarViewMode, string> = {
+  day: "3-Day",
+  week: "Week",
+  month: "Month",
+};
+
 function rangeFor(mode: CalendarViewMode, cursor: Date) {
   if (mode === "month") {
     return {
@@ -49,7 +58,15 @@ function rangeFor(mode: CalendarViewMode, cursor: Date) {
       end: endOfWeek(cursor, { weekStartsOn: 1 }),
     };
   }
-  return { start: cursor, end: cursor };
+  // "day" mode is actually a 3-day window (yesterday/today/tomorrow relative
+  // to the cursor) -- a single isolated day was rarely useful on its own.
+  return { start: subDays(cursor, 1), end: addDays(cursor, 1) };
+}
+
+function entryIcon(entry: CalendarEntry, className: string) {
+  if (entry.isRestDay) return <MoonStar className={className} />;
+  if (entry.completed) return <CheckCircle2 className={className} />;
+  return <Dumbbell className={className} />;
 }
 
 export function EntryPill({
@@ -74,13 +91,7 @@ export function EntryPill({
             : "bg-primary/20 text-primary hover:bg-primary/30",
       )}
     >
-      {entry.isRestDay ? (
-        <MoonStar className="h-3 w-3 shrink-0" />
-      ) : entry.completed ? (
-        <CheckCircle2 className="h-3 w-3 shrink-0" />
-      ) : (
-        <Dumbbell className="h-3 w-3 shrink-0" />
-      )}
+      {entryIcon(entry, "h-3 w-3 shrink-0")}
       <span className="truncate">
         {entry.athleteName ? `${entry.athleteName} · ` : ""}
         {entry.title}
@@ -140,7 +151,7 @@ export function CalendarView({
       ? format(cursor, "MMMM yyyy")
       : view === "week"
         ? `${format(start, "MMM d")} – ${format(end, "MMM d, yyyy")}`
-        : format(cursor, "EEEE, MMM d");
+        : `${format(start, "MMM d")} – ${format(end, "MMM d")}`;
 
   return (
     <div>
@@ -165,13 +176,13 @@ export function CalendarView({
               key={m}
               onClick={() => setView(m)}
               className={cn(
-                "rounded px-3 py-1.5 text-xs font-semibold capitalize transition-colors",
+                "rounded px-3 py-1.5 text-xs font-semibold transition-colors",
                 view === m
                   ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:text-foreground",
               )}
             >
-              {m}
+              {VIEW_LABEL[m]}
             </button>
           ))}
         </div>
@@ -190,7 +201,7 @@ export function CalendarView({
         <WeekRow start={start} end={end} entriesByDate={entriesByDate} onEntryClick={onEntryClick} />
       )}
       {view === "day" && (
-        <DayAgenda date={cursor} entries={entriesByDate.get(startISO) ?? []} onEntryClick={onEntryClick} />
+        <ThreeDayAgenda centerDate={cursor} entriesByDate={entriesByDate} onEntryClick={onEntryClick} />
       )}
     </div>
   );
@@ -212,7 +223,7 @@ function MonthGrid({
   const days = eachDayOfInterval({ start, end });
   return (
     <div>
-      <div className="grid grid-cols-7 gap-1 text-center text-xs font-semibold uppercase text-muted-foreground sm:gap-2">
+      <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-semibold uppercase text-muted-foreground sm:gap-2 sm:text-xs">
         {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
           <div key={d} className="py-1">
             {d}
@@ -229,21 +240,46 @@ function MonthGrid({
               key={dateStr}
               aria-current={isToday(day) ? "date" : undefined}
               className={cn(
-                "flex min-h-24 flex-col gap-1 rounded-md border border-border p-1.5 sm:min-h-28 sm:p-2",
+                "flex min-h-11 flex-col gap-0.5 rounded-md border border-border p-1 sm:min-h-28 sm:gap-1 sm:p-2",
                 !inMonth && "opacity-30",
                 isToday(day) && "border-primary",
               )}
             >
               <span
                 className={cn(
-                  "flex h-5 w-5 items-center justify-center rounded-full text-xs font-semibold",
+                  "flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-semibold sm:h-5 sm:w-5 sm:text-xs",
                   isToday(day) && "bg-primary text-primary-foreground",
                 )}
               >
                 {format(day, "d")}
                 {isToday(day) && <span className="sr-only"> (Today)</span>}
               </span>
-              <div className="flex flex-1 flex-col gap-1">
+
+              {/* Mobile: icon-only dots so a full month fits on one screen
+                  without scrolling -- tapping still opens that entry. */}
+              <div className="flex flex-1 flex-wrap items-end gap-0.5 sm:hidden">
+                {dayEntries.slice(0, 3).map((e) => (
+                  <button
+                    key={`${e.assignmentId}-${e.programDayId}`}
+                    onClick={() => onEntryClick(e)}
+                    aria-label={e.title}
+                    title={e.title}
+                    className={cn(
+                      "flex h-4 w-4 items-center justify-center rounded-full",
+                      e.isRestDay
+                        ? "bg-secondary text-muted-foreground"
+                        : e.completed
+                          ? "bg-success/25 text-success"
+                          : "bg-primary/25 text-primary",
+                    )}
+                  >
+                    {entryIcon(e, "h-2.5 w-2.5")}
+                  </button>
+                ))}
+              </div>
+
+              {/* Desktop/tablet: full text pills. */}
+              <div className="hidden flex-1 flex-col gap-1 sm:flex">
                 {dayEntries.map((e) => (
                   <EntryPill
                     key={`${e.assignmentId}-${e.programDayId}`}
@@ -272,113 +308,169 @@ function WeekRow({
   onEntryClick: (entry: CalendarEntry) => void;
 }) {
   const days = eachDayOfInterval({ start, end });
+  const weekEntries = days.flatMap((d) => entriesByDate.get(formatISO(d, { representation: "date" })) ?? []);
+  const workoutCount = weekEntries.filter((e) => !e.isRestDay).length;
+  const completedCount = weekEntries.filter((e) => !e.isRestDay && e.completed).length;
+
   return (
-    <div className="grid grid-cols-1 gap-2 sm:grid-cols-7">
-      {days.map((day) => {
-        const dateStr = formatISO(day, { representation: "date" });
-        const dayEntries = entriesByDate.get(dateStr) ?? [];
-        return (
-          <div
-            key={dateStr}
-            aria-current={isToday(day) ? "date" : undefined}
-            className={cn(
-              "flex min-h-40 flex-col gap-1.5 rounded-md border border-border p-2.5",
-              isToday(day) && "border-primary",
-            )}
-          >
-            <div className="flex items-baseline justify-between">
-              <span className="text-xs font-semibold uppercase text-muted-foreground">
-                {isToday(day) ? "Today" : format(day, "EEE")}
-              </span>
-              <span
-                className={cn(
-                  "flex h-5 w-5 items-center justify-center rounded-full text-sm font-bold",
-                  isToday(day) && "bg-primary text-primary-foreground",
-                )}
-              >
-                {format(day, "d")}
-              </span>
-            </div>
-            <div className="flex flex-1 flex-col gap-1.5">
-              {dayEntries.length === 0 && (
-                <span className="text-xs text-muted-foreground">—</span>
-              )}
-              {dayEntries.map((e) => (
-                <EntryPill
-                  key={`${e.assignmentId}-${e.programDayId}`}
-                  entry={e}
-                  onClick={() => onEntryClick(e)}
-                  compact={false}
-                />
-              ))}
-            </div>
+    <div className="space-y-3">
+      {workoutCount > 0 && (
+        <div className="flex items-center gap-6 rounded-lg border border-border bg-surface p-4">
+          <div>
+            <p className="font-display text-2xl font-extrabold leading-none">{workoutCount}</p>
+            <p className="mt-1 text-[10px] font-semibold uppercase text-muted-foreground">
+              Workouts this week
+            </p>
           </div>
-        );
-      })}
+          <div className="h-8 w-px bg-border" />
+          <div>
+            <p className="font-display text-2xl font-extrabold leading-none text-success">
+              {completedCount}
+            </p>
+            <p className="mt-1 text-[10px] font-semibold uppercase text-muted-foreground">Completed</p>
+          </div>
+          <div className="ml-auto h-2 w-24 overflow-hidden rounded-full bg-secondary sm:w-32">
+            <div
+              className="h-full bg-success transition-all"
+              style={{ width: `${workoutCount ? (completedCount / workoutCount) * 100 : 0}%` }}
+            />
+          </div>
+        </div>
+      )}
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-7">
+        {days.map((day) => {
+          const dateStr = formatISO(day, { representation: "date" });
+          const dayEntries = entriesByDate.get(dateStr) ?? [];
+          const today = isToday(day);
+          return (
+            <div
+              key={dateStr}
+              aria-current={today ? "date" : undefined}
+              className={cn(
+                "flex min-h-36 flex-col gap-1.5 rounded-lg border p-2.5 transition-colors",
+                today ? "border-primary bg-primary/5" : "border-border",
+              )}
+            >
+              <div className="flex items-baseline justify-between">
+                <span
+                  className={cn(
+                    "text-xs font-bold uppercase",
+                    today ? "text-primary" : "text-muted-foreground",
+                  )}
+                >
+                  {today ? "Today" : format(day, "EEE")}
+                </span>
+                <span
+                  className={cn(
+                    "flex h-5 w-5 items-center justify-center rounded-full text-sm font-bold",
+                    today && "bg-primary text-primary-foreground",
+                  )}
+                >
+                  {format(day, "d")}
+                </span>
+              </div>
+              <div className="flex flex-1 flex-col gap-1.5">
+                {dayEntries.length === 0 && (
+                  <span className="text-xs text-muted-foreground">—</span>
+                )}
+                {dayEntries.map((e) => (
+                  <EntryPill
+                    key={`${e.assignmentId}-${e.programDayId}`}
+                    entry={e}
+                    onClick={() => onEntryClick(e)}
+                    compact={false}
+                  />
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
 
-function DayAgenda({
-  date,
-  entries,
+function ThreeDayAgenda({
+  centerDate,
+  entriesByDate,
   onEntryClick,
 }: {
-  date: Date;
-  entries: CalendarEntry[];
+  centerDate: Date;
+  entriesByDate: Map<string, CalendarEntry[]>;
   onEntryClick: (entry: CalendarEntry) => void;
 }) {
-  if (entries.length === 0) {
-    return (
-      <div className="flex flex-col items-center gap-2 rounded-md border border-dashed border-border py-16 text-center text-muted-foreground">
-        <MoonStar className="h-8 w-8" />
-        Nothing scheduled {isSameDay(date, new Date()) ? "today" : "this day"}.
-      </div>
-    );
-  }
+  const days = [subDays(centerDate, 1), centerDate, addDays(centerDate, 1)];
   return (
-    <div className="space-y-2">
-      {entries.map((e) => (
-        <button
-          key={`${e.assignmentId}-${e.programDayId}`}
-          onClick={() => onEntryClick(e)}
-          className={cn(
-            "flex w-full items-center justify-between gap-3 rounded-md border border-border p-4 text-left transition-colors hover:bg-surface-elevated",
-          )}
-        >
-          <div className="flex items-center gap-3">
-            <div
-              className={cn(
-                "flex h-10 w-10 shrink-0 items-center justify-center rounded-md",
-                e.isRestDay
-                  ? "bg-secondary text-muted-foreground"
-                  : e.completed
-                    ? "bg-success/15 text-success"
-                    : "bg-primary/15 text-primary",
-              )}
-            >
-              {e.isRestDay ? (
-                <MoonStar className="h-5 w-5" />
-              ) : e.completed ? (
-                <CheckCircle2 className="h-5 w-5" />
-              ) : (
-                <Dumbbell className="h-5 w-5" />
-              )}
+    <div className="space-y-5">
+      {days.map((day) => {
+        const dateStr = formatISO(day, { representation: "date" });
+        const dayEntries = entriesByDate.get(dateStr) ?? [];
+        const label = isToday(day)
+          ? "Today"
+          : isYesterday(day)
+            ? "Yesterday"
+            : isTomorrow(day)
+              ? "Tomorrow"
+              : format(day, "EEEE");
+        return (
+          <div key={dateStr}>
+            <div className="mb-2 flex items-baseline justify-between">
+              <span
+                className={cn(
+                  "text-sm font-bold uppercase tracking-wide",
+                  isToday(day) && "text-primary",
+                )}
+              >
+                {label}
+              </span>
+              <span className="text-xs text-muted-foreground">{format(day, "MMM d")}</span>
             </div>
-            <div>
-              {e.athleteName && (
-                <p className="text-xs text-muted-foreground">{e.athleteName}</p>
-              )}
-              <p className="font-semibold">{e.title}</p>
-              <p className="text-xs text-muted-foreground">
-                {e.programName}
-                {!e.isRestDay && ` · ${e.exerciseCount} exercise${e.exerciseCount === 1 ? "" : "s"}`}
-              </p>
-            </div>
+            {dayEntries.length === 0 ? (
+              <div className="flex items-center justify-center gap-1.5 rounded-md border border-dashed border-border py-6 text-xs text-muted-foreground">
+                <MoonStar className="h-3.5 w-3.5" />
+                Nothing scheduled
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {dayEntries.map((e) => (
+                  <button
+                    key={`${e.assignmentId}-${e.programDayId}`}
+                    onClick={() => onEntryClick(e)}
+                    className="flex w-full items-center justify-between gap-3 rounded-md border border-border p-3.5 text-left transition-colors hover:bg-surface-elevated"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={cn(
+                          "flex h-9 w-9 shrink-0 items-center justify-center rounded-md",
+                          e.isRestDay
+                            ? "bg-secondary text-muted-foreground"
+                            : e.completed
+                              ? "bg-success/15 text-success"
+                              : "bg-primary/15 text-primary",
+                        )}
+                      >
+                        {entryIcon(e, "h-4.5 w-4.5")}
+                      </div>
+                      <div>
+                        {e.athleteName && (
+                          <p className="text-xs text-muted-foreground">{e.athleteName}</p>
+                        )}
+                        <p className="font-semibold">{e.title}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {e.programName}
+                          {!e.isRestDay &&
+                            ` · ${e.exerciseCount} exercise${e.exerciseCount === 1 ? "" : "s"}`}
+                        </p>
+                      </div>
+                    </div>
+                    {e.completed && <CheckCircle2 className="h-5 w-5 shrink-0 text-success" />}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-          {e.completed && <CheckCircle2 className="h-5 w-5 shrink-0 text-success" />}
-        </button>
-      ))}
+        );
+      })}
     </div>
   );
 }
