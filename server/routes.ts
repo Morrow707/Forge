@@ -9,6 +9,7 @@ import { buildIcsFeed } from "./ics";
 import { sendPushToUser, getVapidPublicKey } from "./push";
 import { sendEmail } from "./email";
 import { buildProgressReportEmail } from "./progress-report";
+import { buildRecruitingProfilePdf } from "./recruiting-profile";
 import {
   insertExerciseSchema,
   programStructureSchema,
@@ -563,6 +564,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
+  // No public hosting -- the PDF is generated on demand and streamed straight
+  // to the requester, who downloads or shares it themselves.
+  app.get(
+    "/api/coach/roster/:athleteId/recruiting-profile.pdf",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      const athlete = await storage.getRosterAthleteForCoach(user.id, athleteId);
+      if (!athlete) return res.status(404).json({ message: "Athlete not found" });
+
+      const summary = await storage.getAthleteProgressSummary(athleteId);
+      const pdf = await buildRecruitingProfilePdf(athlete, summary);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${athlete.name.replace(/[^a-z0-9]+/gi, "-")}-recruiting-profile.pdf"`,
+      );
+      res.send(pdf);
+    },
+  );
+
   app.get("/api/coach/teams", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     const teamList = await storage.getTeamsForCoach(user.id);
@@ -1042,6 +1065,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const summary = await storage.getAthleteProgressSummary(user.id);
     const streak = await storage.getStreakForAthlete(user.id);
     res.json({ ...summary, ...streak });
+  });
+
+  app.get("/api/athlete/recruiting-profile.pdf", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const [profile, summary] = await Promise.all([
+      storage.getUser(user.id),
+      storage.getAthleteProgressSummary(user.id),
+    ]);
+    const pdf = await buildRecruitingProfilePdf(profile!, summary);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${user.name.replace(/[^a-z0-9]+/gi, "-")}-recruiting-profile.pdf"`,
+    );
+    res.send(pdf);
   });
 
   app.get("/api/athlete/body-metrics", requireRole("athlete"), async (req, res) => {

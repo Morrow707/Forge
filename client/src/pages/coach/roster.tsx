@@ -20,6 +20,7 @@ import { CalendarLinkDialog } from "@/components/calendar-link-dialog";
 import { BodyMetricsDialog } from "@/components/body-metrics-dialog";
 import { TestingHistoryDialog } from "@/components/testing-history-dialog";
 import { apiRequest, ApiError } from "@/lib/queryClient";
+import { shareOrDownloadFile } from "@/lib/share-file";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
@@ -36,6 +37,7 @@ import {
   Scale,
   Timer,
   Mail,
+  Share2,
 } from "lucide-react";
 
 type HealthStatus = "healthy" | "hurt";
@@ -85,6 +87,22 @@ export default function CoachRoster() {
   const [calendarAthlete, setCalendarAthlete] = useState<RosterEntry | null>(null);
   const [metricsAthlete, setMetricsAthlete] = useState<RosterEntry | null>(null);
   const [testingAthlete, setTestingAthlete] = useState<RosterEntry | null>(null);
+  const [sharingProfileId, setSharingProfileId] = useState<number | null>(null);
+
+  async function handleShareRecruitingProfile(athlete: RosterEntry) {
+    setSharingProfileId(athlete.id);
+    try {
+      await shareOrDownloadFile(
+        `/api/coach/roster/${athlete.id}/recruiting-profile.pdf`,
+        `${athlete.name}-recruiting-profile.pdf`,
+        `${athlete.name}'s Forge Recruiting Profile`,
+      );
+    } catch {
+      toast.error("Couldn't generate that recruiting profile");
+    } finally {
+      setSharingProfileId(null);
+    }
+  }
 
   const filteredRoster = roster.filter((a) => {
     const q = rosterSearch.trim().toLowerCase();
@@ -198,7 +216,7 @@ export default function CoachRoster() {
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {filteredRoster.map((a) => (
                     <Card key={a.id}>
-                      <CardContent className="flex items-center justify-between gap-3 p-4">
+                      <CardContent className="flex flex-col gap-3 p-4">
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5">
                             <button
@@ -218,7 +236,7 @@ export default function CoachRoster() {
                             </div>
                           )}
                         </div>
-                        <div className="flex shrink-0 items-center gap-1">
+                        <div className="flex flex-wrap items-center gap-1 border-t border-border pt-2">
                           <Button
                             size="icon"
                             variant="ghost"
@@ -256,7 +274,22 @@ export default function CoachRoster() {
                           >
                             <Mail className="h-4 w-4" />
                           </Button>
-                          <Button size="sm" variant="outline" onClick={() => openAssignFor([a.id])}>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            aria-label={`Share ${a.name}'s recruiting profile`}
+                            title="Share recruiting profile"
+                            disabled={sharingProfileId === a.id}
+                            onClick={() => handleShareRecruitingProfile(a)}
+                          >
+                            <Share2 className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="ml-auto"
+                            onClick={() => openAssignFor([a.id])}
+                          >
                             Assign
                           </Button>
                         </div>
