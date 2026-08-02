@@ -376,6 +376,22 @@ CREATE TABLE IF NOT EXISTS "body_metrics" (
   "created_at" timestamp NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS "body_metrics_athlete_idx" ON "body_metrics" ("athlete_id");
+
+CREATE TABLE IF NOT EXISTS "testing_results" (
+  "id" serial PRIMARY KEY,
+  "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "date" date NOT NULL,
+  "forty_yard_dash" real,
+  "vertical_jump_in" real,
+  "broad_jump_in" real,
+  "pro_agility_seconds" real,
+  "bench_max_lbs" real,
+  "squat_max_lbs" real,
+  "deadlift_max_lbs" real,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "testing_results_athlete_idx" ON "testing_results" ("athlete_id");
+CREATE UNIQUE INDEX IF NOT EXISTS "testing_results_athlete_date_idx" ON "testing_results" ("athlete_id", "date");
 `;
 
 async function main() {

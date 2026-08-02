@@ -543,6 +543,39 @@ export const bodyMetrics = pgTable(
   }),
 );
 
+// Automatic snapshot of the testing/combine fields (see users table above),
+// one row per date whenever a coach actually changes one of those numbers
+// via the roster profile edit -- there's no separate "log a testing day"
+// form, this just captures the full 7-metric state every time it moves so
+// team trends have something to plot. Re-saving unchanged values never
+// creates a row; a real change on a date that already has one updates it
+// in place rather than duplicating.
+export const testingResults = pgTable(
+  "testing_results",
+  {
+    id: serial("id").primaryKey(),
+    athleteId: integer("athlete_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    date: date("date").notNull(),
+    fortyYardDash: real("forty_yard_dash"),
+    verticalJumpIn: real("vertical_jump_in"),
+    broadJumpIn: real("broad_jump_in"),
+    proAgilitySeconds: real("pro_agility_seconds"),
+    benchMaxLbs: real("bench_max_lbs"),
+    squatMaxLbs: real("squat_max_lbs"),
+    deadliftMaxLbs: real("deadlift_max_lbs"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    athleteIdx: index("testing_results_athlete_idx").on(table.athleteId),
+    athleteDateIdx: uniqueIndex("testing_results_athlete_date_idx").on(
+      table.athleteId,
+      table.date,
+    ),
+  }),
+);
+
 // ---------- Relations ----------
 
 export const usersRelations = relations(users, ({ many }) => ({
@@ -1038,3 +1071,18 @@ export const createBodyMetricSchema = z.object({
 });
 export type CreateBodyMetricInput = z.infer<typeof createBodyMetricSchema>;
 export type BodyMetric = typeof bodyMetrics.$inferSelect;
+
+export type TestingResult = typeof testingResults.$inferSelect;
+
+export const testingTrendsQuerySchema = z.object({
+  metric: z.enum([
+    "fortyYardDash",
+    "verticalJumpIn",
+    "broadJumpIn",
+    "proAgilitySeconds",
+    "benchMaxLbs",
+    "squatMaxLbs",
+    "deadliftMaxLbs",
+  ]),
+});
+export type TestingMetric = z.infer<typeof testingTrendsQuerySchema>["metric"];
