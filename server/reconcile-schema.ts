@@ -363,6 +363,7 @@ CREATE TABLE IF NOT EXISTS "team_posts" (
   "body" text NOT NULL,
   "created_at" timestamp NOT NULL DEFAULT now()
 );
+ALTER TABLE "team_posts" ADD COLUMN IF NOT EXISTS "is_announcement" boolean NOT NULL DEFAULT false;
 CREATE INDEX IF NOT EXISTS "team_posts_coach_idx" ON "team_posts" ("coach_id");
 
 CREATE TABLE IF NOT EXISTS "body_metrics" (

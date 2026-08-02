@@ -623,7 +623,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
-    const post = await storage.createTeamPost(user.id, user.id, parsed.data.body);
+    const post = await storage.createTeamPost(
+      user.id,
+      user.id,
+      parsed.data.body,
+      parsed.data.isAnnouncement,
+    );
+
+    // Announcements deliberately ignore each athlete's notification prefs --
+    // this is the one path meant for "practice moved" style emergencies, so
+    // it only fires when the coach explicitly opts a post in (default off).
+    if (parsed.data.isAnnouncement) {
+      const roster = await storage.getRosterForCoach(user.id);
+      await Promise.all(
+        roster.map(async (athlete) => {
+          await storage.createNotification(
+            athlete.id,
+            "announcement",
+            `Announcement from ${user.name}`,
+            parsed.data.body,
+            "/athlete/team-board",
+          );
+          await sendPushToUser(athlete.id, {
+            title: `📢 Announcement from ${user.name}`,
+            body: parsed.data.body,
+            url: "/athlete/team-board",
+          });
+        }),
+      );
+    }
+
     res.status(201).json(post);
   });
 
@@ -645,7 +674,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
-    const post = await storage.createTeamPost(coach.id, user.id, parsed.data.body);
+    // Announcements are coach-only -- ignore the field entirely here rather
+    // than trusting the client to not send it.
+    const post = await storage.createTeamPost(coach.id, user.id, parsed.data.body, false);
     res.status(201).json(post);
   });
 
