@@ -40,6 +40,22 @@ function initialsFor(name: string): string {
   return initials || "?";
 }
 
+// A program day's calendar date is normally the rigid "every 7 days from
+// startDate" grid -- but a coach can move any individual occurrence (game,
+// travel, extra rest) via dateOverrides, keyed by program_day_id. Falls
+// back to the grid whenever a day has no override.
+function resolveAssignmentDate(
+  assignment: { startDate: string; dateOverrides?: Record<string, string> | null },
+  weekNumber: number,
+  dayNumber: number,
+  programDayId: number,
+): Date {
+  const override = assignment.dateOverrides?.[String(programDayId)];
+  if (override) return parseISO(override);
+  const offset = (weekNumber - 1) * 7 + (dayNumber - 1);
+  return addDays(parseISO(assignment.startDate), offset);
+}
+
 // A coach can run multiple assignments/programs for the same athlete at
 // once. When two or more land on the same date, the most recently assigned
 // program wins outright -- assigning a new program is meant to replace
@@ -781,6 +797,7 @@ export const storage = {
     programId: number,
     athletes: { athleteId: number; correctivesEnabled: boolean }[],
     startDate: string,
+    dateOverrides?: Record<string, string>,
   ) {
     // Re-assigning a program an athlete already has (or has finished) is
     // intentional -- e.g. running the same block again -- so every request
@@ -796,6 +813,7 @@ export const storage = {
               athleteId: a.athleteId,
               startDate,
               correctivesEnabled: a.correctivesEnabled,
+              dateOverrides: dateOverrides && Object.keys(dateOverrides).length ? dateOverrides : null,
             })),
           )
           .returning()
@@ -879,6 +897,38 @@ export const storage = {
         );
       }
     });
+  },
+
+  // Every non-rest day in a program, in order, with its week/day position
+  // and the calendar date that position would land on for a given start
+  // date -- the raw material for the manual-schedule editor in the assign
+  // dialog (a coach adjusting individual days for games/travel/rest).
+  async getProgramSchedule(programId: number, startDate: string) {
+    const program = await this.getProgramFull(programId);
+    if (!program) return [];
+    const schedule: {
+      programDayId: number;
+      weekNumber: number;
+      dayNumber: number;
+      title: string;
+      defaultDate: string;
+    }[] = [];
+    for (const week of program.weeks) {
+      for (const day of week.days) {
+        if (day.isRestDay) continue;
+        const offset = (week.weekNumber - 1) * 7 + (day.dayNumber - 1);
+        schedule.push({
+          programDayId: day.id,
+          weekNumber: week.weekNumber,
+          dayNumber: day.dayNumber,
+          title: day.title,
+          defaultDate: formatISO(addDays(parseISO(startDate), offset), {
+            representation: "date",
+          }),
+        });
+      }
+    }
+    return schedule;
   },
 
   // Groups a program's non-rest days by title -- e.g. every "Lower Body
@@ -1090,11 +1140,9 @@ export const storage = {
     const entries: CalendarEntry[] = [];
 
     for (const a of athleteAssignments) {
-      const assignmentStart = parseISO(a.startDate);
       for (const week of a.program.weeks) {
         for (const day of week.days) {
-          const offset = (week.weekNumber - 1) * 7 + (day.dayNumber - 1);
-          const date = addDays(assignmentStart, offset);
+          const date = resolveAssignmentDate(a, week.weekNumber, day.dayNumber, day.id);
           if (isWithinInterval(date, { start, end })) {
             entries.push({
               date: formatISO(date, { representation: "date" }),
@@ -1186,11 +1234,9 @@ export const storage = {
     const entries: CoachCalendarEntry[] = [];
 
     for (const a of coachAssignments) {
-      const assignmentStart = parseISO(a.startDate);
       for (const week of a.program.weeks) {
         for (const day of week.days) {
-          const offset = (week.weekNumber - 1) * 7 + (day.dayNumber - 1);
-          const date = addDays(assignmentStart, offset);
+          const date = resolveAssignmentDate(a, week.weekNumber, day.dayNumber, day.id);
           if (isWithinInterval(date, { start, end })) {
             entries.push({
               date: formatISO(date, { representation: "date" }),

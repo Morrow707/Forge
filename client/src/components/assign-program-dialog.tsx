@@ -23,11 +23,18 @@ import { ExercisePickerDialog } from "@/components/exercise-picker-dialog";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { Stethoscope, Plus, Trash2, Clock } from "lucide-react";
+import { Stethoscope, Plus, Trash2, Clock, CalendarCog, ChevronDown } from "lucide-react";
 import type { Exercise } from "@shared/schema";
 
 type RosterEntry = { id: number; name: string; email: string };
 type ProgramSummary = { id: number; name: string };
+type ScheduleDay = {
+  programDayId: number;
+  weekNumber: number;
+  dayNumber: number;
+  title: string;
+  defaultDate: string;
+};
 type CreatedAssignment = { id: number; athleteId: number; correctivesEnabled: boolean };
 type DayGroup = { title: string; programDayIds: number[] };
 type CorrectivesQueueItem = {
@@ -66,17 +73,41 @@ export function AssignProgramDialog({
   );
   const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [correctivesQueue, setCorrectivesQueue] = useState<CorrectivesQueueItem[] | null>(null);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [dateOverrides, setDateOverrides] = useState<Map<number, string>>(new Map());
 
   useEffect(() => {
     if (open) {
       setAssignAthletes(new Map(initialAthleteIds.map((id) => [id, true])));
       setSelectedProgramId(programId ? String(programId) : "");
       setStartDate(new Date().toISOString().slice(0, 10));
+      setScheduleOpen(false);
+      setDateOverrides(new Map());
     }
     // Reset only when the dialog transitions open -- initialAthleteIds/programId
     // are read fresh at that moment.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  // Discard any per-day overrides whenever the program or start date
+  // changes -- they were computed against a schedule that no longer
+  // applies, and silently keeping stale ones would land exercises on the
+  // wrong dates.
+  useEffect(() => {
+    setDateOverrides(new Map());
+  }, [selectedProgramId, startDate]);
+
+  const { data: schedule = [] } = useQuery<ScheduleDay[]>({
+    queryKey: ["/api/coach/programs", selectedProgramId, "schedule", startDate],
+    queryFn: async () => {
+      const res = await apiRequest(
+        "GET",
+        `/api/coach/programs/${selectedProgramId}/schedule?startDate=${startDate}`,
+      );
+      return res.json();
+    },
+    enabled: open && !!selectedProgramId && !!startDate,
+  });
 
   function toggleCorrectivesForAll(enabled: boolean) {
     setAssignAthletes((prev) => {
@@ -91,6 +122,8 @@ export function AssignProgramDialog({
       const res = await apiRequest("POST", "/api/coach/assignments", {
         programId: Number(selectedProgramId),
         startDate,
+        dateOverrides:
+          dateOverrides.size > 0 ? Object.fromEntries(dateOverrides) : undefined,
         athletes: Array.from(assignAthletes.entries()).map(([athleteId, correctivesEnabled]) => ({
           athleteId,
           correctivesEnabled,
@@ -191,9 +224,82 @@ export function AssignProgramDialog({
                 required
               />
               <p className="text-xs text-muted-foreground">
-                Day 1 of Week 1 lands on this date on the athlete's calendar.
+                Day 1 of Week 1 lands on this date by default -- adjust individual days below for
+                games, travel, or extra rest.
               </p>
             </div>
+
+            {schedule.length > 0 && (
+              <div className="rounded-md border border-border">
+                <button
+                  type="button"
+                  onClick={() => setScheduleOpen((v) => !v)}
+                  className="flex w-full items-center justify-between gap-2 px-3 py-2 text-sm font-semibold"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <CalendarCog className="h-4 w-4 text-muted-foreground" />
+                    Customize schedule
+                    {dateOverrides.size > 0 && (
+                      <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-bold text-primary">
+                        {dateOverrides.size} changed
+                      </span>
+                    )}
+                  </span>
+                  <ChevronDown
+                    className={cn("h-4 w-4 transition-transform", scheduleOpen && "rotate-180")}
+                  />
+                </button>
+                {scheduleOpen && (
+                  <div className="max-h-56 space-y-1 overflow-y-auto border-t border-border p-2">
+                    {schedule.map((day) => {
+                      const value = dateOverrides.get(day.programDayId) ?? day.defaultDate;
+                      const changed = dateOverrides.has(day.programDayId);
+                      return (
+                        <div
+                          key={day.programDayId}
+                          className="flex items-center justify-between gap-2 rounded px-1.5 py-1 text-xs"
+                        >
+                          <span className="min-w-0 truncate text-muted-foreground">
+                            Wk {day.weekNumber} · {day.title}
+                          </span>
+                          <div className="flex shrink-0 items-center gap-1.5">
+                            <Input
+                              type="date"
+                              value={value}
+                              onChange={(e) =>
+                                setDateOverrides((prev) => {
+                                  const next = new Map(prev);
+                                  next.set(day.programDayId, e.target.value);
+                                  return next;
+                                })
+                              }
+                              className="h-7 w-36 text-xs"
+                            />
+                            {changed && (
+                              <button
+                                type="button"
+                                title="Reset to default date"
+                                onClick={() =>
+                                  setDateOverrides((prev) => {
+                                    const next = new Map(prev);
+                                    next.delete(day.programDayId);
+                                    return next;
+                                  })
+                                }
+                                className="text-muted-foreground hover:text-destructive"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <Label>Athletes</Label>

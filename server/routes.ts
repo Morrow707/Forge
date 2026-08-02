@@ -318,6 +318,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(groups);
   });
 
+  app.get("/api/coach/programs/:id/schedule", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const program = await storage.getProgramIfUsableByCoach(user.id, id);
+    if (!program) return res.status(404).json({ message: "Program not found" });
+    const schema = z.object({ startDate: z.string() });
+    const parsed = schema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "startDate query param required" });
+    }
+    const schedule = await storage.getProgramSchedule(id, parsed.data.startDate);
+    res.json(schedule);
+  });
+
   app.post("/api/coach/programs", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     const parsed = programStructureSchema.safeParse(req.body);
@@ -454,6 +468,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       parsed.data.programId,
       parsed.data.athletes,
       parsed.data.startDate,
+      parsed.data.dateOverrides,
     );
     res.status(201).json(result);
   });
