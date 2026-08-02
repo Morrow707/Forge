@@ -25,7 +25,7 @@ import {
 } from "recharts";
 import { format, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
-import { TESTING_METRICS, type TestingMetricKey } from "@/lib/testing-metrics";
+import { TESTING_METRICS, type TestingMetricKey } from "@shared/testing-metrics";
 
 type RosterEntry = { id: number; name: string; email: string };
 type TrackedExercise = { id: number; name: string };

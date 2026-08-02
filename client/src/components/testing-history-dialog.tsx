@@ -26,7 +26,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { Timer } from "lucide-react";
-import { TESTING_METRICS, type TestingMetricKey } from "@/lib/testing-metrics";
+import { TESTING_METRICS, type TestingMetricKey } from "@shared/testing-metrics";
 
 type TestingResult = {
   id: number;
