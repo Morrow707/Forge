@@ -39,6 +39,18 @@ async function main() {
 
   await storage.linkAthleteToCoach(coach.id, athlete.id);
 
+  // A pure admin account, shareable the same way the coach/athlete demo
+  // logins are -- no calendar or roster access, just Forge library curation.
+  const demoAdmin = await storage.getUserByEmail("admin@forge.app");
+  if (!demoAdmin) {
+    await storage.createUser({
+      email: "admin@forge.app",
+      passwordHash: await hashPassword("admin123"),
+      name: "Forge Admin",
+      role: "admin",
+    });
+  }
+
   // Looked up system-wide (not scoped to this coach) since an exercise's
   // owner can change after seeding -- e.g. once transferred to the admin as
   // an official Forge exercise below, it would otherwise look "new" again

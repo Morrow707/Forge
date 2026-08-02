@@ -6,9 +6,13 @@ import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Flame } from "lucide-react";
+import { ShieldCheck } from "lucide-react";
 
-export default function LoginPage() {
+/** A dedicated, shareable login link for admins -- functionally identical
+ * to /login (same auth endpoint, same role-based redirect), just framed
+ * for someone who's landing directly on this URL rather than the general
+ * coach/athlete login. */
+export default function AdminLoginPage() {
   const { user, isLoading, loginMutation } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -16,7 +20,7 @@ export default function LoginPage() {
   if (!isLoading && user) {
     return (
       <Redirect
-        to={user.role === "coach" ? "/coach" : user.role === "admin" ? "/admin" : "/athlete"}
+        to={user.role === "admin" ? "/admin" : user.role === "coach" ? "/coach" : "/athlete"}
       />
     );
   }
@@ -31,18 +35,18 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         <div className="mb-8 flex flex-col items-center gap-3">
           <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-            <Flame className="h-8 w-8" />
+            <ShieldCheck className="h-8 w-8" />
           </div>
           <h1 className="font-display text-4xl font-extrabold uppercase tracking-wider">
-            Forge
+            Forge Admin
           </h1>
-          <p className="text-sm text-muted-foreground">Coach. Program. Perform.</p>
+          <p className="text-sm text-muted-foreground">Curate the official exercise library.</p>
         </div>
 
         <Card>
           <CardHeader>
-            <CardTitle>Log In</CardTitle>
-            <CardDescription>Welcome back. Enter your credentials to continue.</CardDescription>
+            <CardTitle>Admin Log In</CardTitle>
+            <CardDescription>For Forge library administrators only.</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -55,7 +59,7 @@ export default function LoginPage() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@example.com"
+                  placeholder="admin@example.com"
                 />
               </div>
               <div className="space-y-1.5">
@@ -79,14 +83,8 @@ export default function LoginPage() {
               </Button>
             </form>
             <p className="mt-5 text-center text-sm text-muted-foreground">
-              Don't have an account?{" "}
-              <Link href="/signup" className="font-semibold text-primary hover:underline">
-                Sign up
-              </Link>
-            </p>
-            <p className="mt-2 text-center text-sm text-muted-foreground">
-              Are you an admin?{" "}
-              <Link href="/admin/login" className="font-semibold text-primary hover:underline">
+              Not an admin?{" "}
+              <Link href="/login" className="font-semibold text-primary hover:underline">
                 Log in here
               </Link>
             </p>
@@ -94,9 +92,8 @@ export default function LoginPage() {
         </Card>
 
         <div className="mt-6 rounded-md border border-border bg-surface p-4 text-xs text-muted-foreground">
-          <p className="mb-1 font-semibold text-foreground">Demo accounts</p>
-          <p>Coach: coach@forge.app / coach123</p>
-          <p>Athlete: athlete@forge.app / athlete123</p>
+          <p className="mb-1 font-semibold text-foreground">Demo admin account</p>
+          <p>admin@forge.app / admin123</p>
         </div>
       </div>
     </div>

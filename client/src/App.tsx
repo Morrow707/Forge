@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import type { ComponentType } from "react";
 
 import LoginPage from "@/pages/login";
+import AdminLoginPage from "@/pages/admin-login";
 import SignupPage from "@/pages/signup";
 import NotFound from "@/pages/not-found";
 import CoachDashboard from "@/pages/coach/dashboard";
@@ -65,6 +66,7 @@ function Router() {
     <Switch>
       <Route path="/" component={HomeRedirect} />
       <Route path="/login" component={LoginPage} />
+      <Route path="/admin/login" component={AdminLoginPage} />
       <Route path="/signup" component={SignupPage} />
       <Route path="/coach">
         <ProtectedRoute role="coach" component={CoachDashboard} />
