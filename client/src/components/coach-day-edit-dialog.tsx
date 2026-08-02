@@ -15,6 +15,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { ExercisePickerDialog } from "@/components/exercise-picker-dialog";
 import { WorkoutCommentThread } from "@/components/workout-comment-thread";
+import { ProgressionButton } from "@/components/progression-button";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import {
@@ -405,15 +406,36 @@ export function CoachDayEditDialog({
                                 )
                               }
                             />
-                            <MiniField
-                              label="Weight"
-                              value={ex.weight}
-                              onChange={(v) =>
-                                setExercises((prev) =>
-                                  prev.map((e) => (e.key === ex.key ? { ...e, weight: v } : e)),
-                                )
-                              }
-                            />
+                            <div>
+                              <label className="mb-0.5 block text-[10px] uppercase text-muted-foreground">
+                                Weight
+                              </label>
+                              <div className="flex items-center gap-1">
+                                <Input
+                                  value={ex.weight}
+                                  onChange={(e) =>
+                                    setExercises((prev) =>
+                                      prev.map((row) =>
+                                        row.key === ex.key
+                                          ? { ...row, weight: e.target.value }
+                                          : row,
+                                      ),
+                                    )
+                                  }
+                                  className="h-8 px-2 text-xs"
+                                />
+                                <ProgressionButton
+                                  value={ex.weight}
+                                  onChange={(next) =>
+                                    setExercises((prev) =>
+                                      prev.map((row) =>
+                                        row.key === ex.key ? { ...row, weight: next } : row,
+                                      ),
+                                    )
+                                  }
+                                />
+                              </div>
+                            </div>
                           </div>
                           <div className="mt-1.5 flex items-end gap-3">
                             <TrackingLevelControl

@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { ExercisePickerDialog } from "@/components/exercise-picker-dialog";
 import { AssignProgramDialog } from "@/components/assign-program-dialog";
 import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
+import { ProgressionButton } from "@/components/progression-button";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import {
@@ -601,11 +602,22 @@ function SortableExerciseRow({
           type="number"
         />
         <FieldInput label="Reps" value={exercise.reps} onChange={(v) => onUpdate({ reps: v })} />
-        <FieldInput
-          label="Weight"
-          value={exercise.weight}
-          onChange={(v) => onUpdate({ weight: v })}
-        />
+        <div>
+          <label className="mb-0.5 block text-[10px] uppercase text-muted-foreground">
+            Weight
+          </label>
+          <div className="flex items-center gap-1">
+            <Input
+              value={exercise.weight}
+              onChange={(e) => onUpdate({ weight: e.target.value })}
+              className="h-8 px-2 text-xs"
+            />
+            <ProgressionButton
+              value={exercise.weight}
+              onChange={(next) => onUpdate({ weight: next })}
+            />
+          </div>
+        </div>
       </div>
       <div className="mt-1.5 flex items-end gap-3">
         <TrackingLevelControl
