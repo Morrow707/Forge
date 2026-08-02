@@ -17,7 +17,12 @@ import { ExercisePickerDialog } from "@/components/exercise-picker-dialog";
 import { WorkoutCommentThread } from "@/components/workout-comment-thread";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
-import { computeExerciseLabels, assignSupersetGroups, deriveLinkedToNext } from "@/lib/supersets";
+import {
+  computeExerciseLabels,
+  assignSupersetGroups,
+  deriveLinkedToNext,
+  colorForLabel,
+} from "@/lib/supersets";
 import { toast } from "sonner";
 import { Plus, Trash2, MoonStar, Link2, Stethoscope, Copy, Clock } from "lucide-react";
 import type { Exercise } from "@shared/schema";
@@ -358,7 +363,12 @@ export function CoachDayEditDialog({
                       <div key={ex.key}>
                         <div className="rounded-md border border-border bg-surface-elevated p-2.5">
                           <div className="mb-2 flex items-center gap-2">
-                            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-extrabold text-primary-foreground">
+                            <span
+                              className={cn(
+                                "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-extrabold",
+                                colorForLabel(labels[ex.key]),
+                              )}
+                            >
                               {labels[ex.key]}
                             </span>
                             <span className="flex-1 truncate text-sm font-semibold">

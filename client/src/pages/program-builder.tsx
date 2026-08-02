@@ -14,7 +14,12 @@ import { AssignProgramDialog } from "@/components/assign-program-dialog";
 import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
-import { computeExerciseLabels, assignSupersetGroups, deriveLinkedToNext } from "@/lib/supersets";
+import {
+  computeExerciseLabels,
+  assignSupersetGroups,
+  deriveLinkedToNext,
+  colorForLabel,
+} from "@/lib/supersets";
 import { toast } from "sonner";
 import {
   DndContext,
@@ -601,7 +606,12 @@ function SortableExerciseRow({
         >
           <GripVertical className="h-4 w-4" />
         </button>
-        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-extrabold text-primary-foreground">
+        <span
+          className={cn(
+            "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-extrabold",
+            colorForLabel(label),
+          )}
+        >
           {label}
         </span>
         <span className="flex-1 truncate text-sm font-semibold">

@@ -1,5 +1,27 @@
 export type Linkable = { key: string; linkedToNext: boolean };
 
+// One color per superset letter (A, B, C...) so a coach or athlete can
+// visually tell superset groups apart at a glance; wraps around for the
+// (rare) day with more groups than colors.
+const LETTER_BADGE_COLORS = [
+  "bg-primary text-primary-foreground", // A
+  "bg-blue-500 text-white", // B
+  "bg-purple-500 text-white", // C
+  "bg-emerald-500 text-white", // D
+  "bg-amber-500 text-black", // E
+  "bg-pink-500 text-white", // F
+  "bg-teal-500 text-white", // G
+  "bg-rose-500 text-white", // H
+];
+
+/** Maps an exercise label ("A", "B2", ...) to a Tailwind color pair keyed
+ * off its leading letter, so every item in the same superset group shares
+ * a color regardless of its sub-number. */
+export function colorForLabel(label: string): string {
+  const index = label.toUpperCase().charCodeAt(0) - 65;
+  return LETTER_BADGE_COLORS[index % LETTER_BADGE_COLORS.length] ?? LETTER_BADGE_COLORS[0];
+}
+
 /**
  * A(linked), B, C -> "A1","A2","B","C". Consecutive items with
  * linkedToNext=true share a letter with sub-numbers; everything else gets
