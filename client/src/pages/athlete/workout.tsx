@@ -40,6 +40,7 @@ import {
   CloudUpload,
   Camera,
   Video,
+  Crown,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import type { PublicUser } from "@shared/schema";
@@ -52,15 +53,27 @@ type ExerciseInfo = {
   videoUrl: string | null;
 };
 
+type WeightUnit = "lbs" | "kg";
+
 type LastPerformance = {
   date: string;
   sets: number;
   reps: string | null;
   weight: string | null;
   weightMode: "numeric" | "bodyweight" | "band";
+  weightUnit: WeightUnit | null;
   rpe: number | null;
   suggestion: { text: string; suggestedWeight: number | null } | null;
 } | null;
+
+type SetHistoryPoint = {
+  date: string;
+  reps: string;
+  weight: string | null;
+  weightMode: "numeric" | "bodyweight" | "band";
+  weightUnit: WeightUnit | null;
+  rpe: number | null;
+};
 
 type TrackingLevel = "none" | "bar_path" | "full";
 
@@ -76,6 +89,7 @@ type PrescribedExercise = {
   videoCheckEnabled: boolean;
   exercise: ExerciseInfo;
   lastPerformance: LastPerformance;
+  setHistory: SetHistoryPoint[];
 };
 
 type PrescribedCorrective = {
@@ -87,6 +101,7 @@ type PrescribedCorrective = {
   notes: string | null;
   exercise: ExerciseInfo;
   lastPerformance: LastPerformance;
+  setHistory: SetHistoryPoint[];
 };
 
 type SetMetrics = {
@@ -134,6 +149,7 @@ type ItemState = {
   trackingLevel: TrackingLevel;
   videoCheckEnabled: boolean;
   lastPerformance: LastPerformance;
+  setHistory: SetHistoryPoint[];
   weightMode: "numeric" | "bodyweight" | "band";
   athleteNotes: string;
   rpe: string;
@@ -178,6 +194,7 @@ function buildItem(
     videoCheckEnabled:
       kind === "exercise" ? (prescribed as PrescribedExercise).videoCheckEnabled : false,
     lastPerformance: prescribed.lastPerformance,
+    setHistory: prescribed.setHistory,
     weightMode: existing?.weightMode ?? "numeric",
     athleteNotes: existing?.notes ?? "",
     rpe: existing?.rpe != null ? String(existing.rpe) : "",
@@ -192,9 +209,39 @@ function isSetComplete(item: ItemState, set: SetRow) {
 
 function formatLastPerformance(lp: NonNullable<LastPerformance>) {
   let s = `${lp.sets} × ${lp.reps ?? "-"}`;
-  if (lp.weight) s += ` @ ${lp.weight}`;
+  if (lp.weight) s += ` @ ${lp.weight}${lp.weightUnit ? ` ${lp.weightUnit}` : ""}`;
   if (lp.rpe != null) s += ` · RPE ${lp.rpe}`;
   return s;
+}
+
+// Most recent prior set logged at this exact rep count -- a pyramid scheme
+// (8/5/3/1) should compare each set against its own rep count, not just the
+// first set of the last session.
+function findHistoryForReps(history: SetHistoryPoint[], reps: string) {
+  const trimmed = reps.trim();
+  if (!trimmed) return null;
+  return history.find((h) => h.reps.trim() === trimmed) ?? null;
+}
+
+// A set is a PR when its weight beats every prior numeric-weight set logged
+// at that same rep count -- so one workout can produce several PRs (one per
+// rep count), not just one for the whole exercise.
+function isRepCountPR(
+  history: SetHistoryPoint[],
+  reps: string,
+  weightMode: "numeric" | "bodyweight" | "band",
+  weight: string,
+) {
+  if (weightMode !== "numeric") return false;
+  const trimmed = reps.trim();
+  const currentWeight = parseFloat(weight);
+  if (!trimmed || Number.isNaN(currentWeight)) return false;
+  const priorWeights = history
+    .filter((h) => h.reps.trim() === trimmed && h.weightMode === "numeric" && h.weight)
+    .map((h) => parseFloat(h.weight!))
+    .filter((w) => !Number.isNaN(w));
+  if (priorWeights.length === 0) return false;
+  return currentWeight > Math.max(...priorWeights);
 }
 
 type Page = {
@@ -292,6 +339,11 @@ export default function AthleteWorkout() {
         throw err;
       }
     },
+    // Workout data (history, PRs, prescriptions) must always reflect the
+    // most recent log -- never serve a cached snapshot from before the last
+    // completion just because it's still within the default staleTime window.
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 
   const [items, setItems] = useState<ItemState[]>([]);
@@ -813,7 +865,7 @@ function ExerciseLogContent({
                 : "border-border text-muted-foreground hover:border-primary/50 hover:text-primary",
             )}
           >
-            {m === "numeric" ? "Weight" : m}
+            {m === "numeric" ? `Weight (${unit})` : m}
           </button>
         ))}
       </div>
@@ -831,6 +883,8 @@ function ExerciseLogContent({
           {item.sets.map((set) => {
             const complete = isSetComplete(item, set);
             const tracked = set.peakVelocityMps != null || set.barPathDeviationCm != null;
+            const historyMatch = findHistoryForReps(item.setHistory, set.reps);
+            const isPR = complete && isRepCountPR(item.setHistory, set.reps, item.weightMode, set.weight);
             return (
               <div key={set.setNumber}>
                 <div className="grid grid-cols-[2.25rem_1fr_1fr_2rem] items-center gap-2">
@@ -865,14 +919,31 @@ function ExerciseLogContent({
                   <div
                     className={cn(
                       "flex h-7 w-7 items-center justify-center rounded-full border",
-                      complete
-                        ? "border-success bg-success text-success-foreground"
-                        : "border-dashed border-muted-foreground/30 bg-secondary",
+                      isPR
+                        ? "border-amber-400 bg-amber-400 text-black"
+                        : complete
+                          ? "border-success bg-success text-success-foreground"
+                          : "border-dashed border-muted-foreground/30 bg-secondary",
                     )}
+                    title={isPR ? "New PR!" : undefined}
                   >
-                    {complete && <Check className="h-4 w-4" />}
+                    {isPR ? (
+                      <Crown className="h-4 w-4" />
+                    ) : (
+                      complete && <Check className="h-4 w-4" />
+                    )}
                   </div>
                 </div>
+                {historyMatch && !isPR && (
+                  <p className="mt-0.5 pl-9 text-[10px] text-muted-foreground">
+                    Last @ {set.reps} reps:{" "}
+                    {historyMatch.weightMode === "numeric"
+                      ? `${historyMatch.weight} ${historyMatch.weightUnit ?? ""}`.trim()
+                      : historyMatch.weightMode === "band"
+                        ? historyMatch.weight
+                        : "Bodyweight"}
+                  </p>
+                )}
                 {item.trackingLevel !== "none" && (
                   <button
                     type="button"

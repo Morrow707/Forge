@@ -255,6 +255,7 @@ CREATE TABLE IF NOT EXISTS "workout_set_entries" (
   "set_number" integer NOT NULL,
   "reps" text,
   "weight" text,
+  "weight_unit_at_log" weight_unit,
   "peak_velocity_mps" real,
   "mean_velocity_mps" real,
   "concentric_seconds" real,
@@ -262,6 +263,7 @@ CREATE TABLE IF NOT EXISTS "workout_set_entries" (
   "bar_path_deviation_cm" real,
   "bar_path_trace" json
 );
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "weight_unit_at_log" weight_unit;
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "peak_velocity_mps" real;
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "mean_velocity_mps" real;
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "concentric_seconds" real;

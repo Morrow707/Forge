@@ -356,6 +356,12 @@ export const workoutSetEntries = pgTable("workout_set_entries", {
   setNumber: integer("set_number").notNull(),
   reps: text("reps"),
   weight: text("weight"),
+  // The athlete's preferred unit at the moment this set was logged -- weight
+  // is otherwise a unitless string, which makes history/PR comparisons and
+  // coach analytics ambiguous once an athlete ever switches lbs/kg. Null for
+  // bodyweight/band sets (weightMode lives on the parent log entry) and for
+  // rows logged before this column existed.
+  weightUnit: weightUnitEnum("weight_unit_at_log"),
   // Bar-speed/bar-path CV metrics for this set, computed on-device and
   // synced as plain numbers -- never the source video. Null unless the
   // exercise's trackingLevel was "bar_path"/"full" when this set was logged.

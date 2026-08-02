@@ -128,12 +128,26 @@ export function WorkoutCommentThread({
             </button>
           </div>
         ) : showVideoField ? (
-          <Input
-            value={videoUrl}
-            onChange={(e) => setVideoUrl(e.target.value)}
-            placeholder="Video link (YouTube, Loom, etc.)"
-            className="h-8 text-xs"
-          />
+          <div className="flex items-center gap-2">
+            <Input
+              value={videoUrl}
+              onChange={(e) => setVideoUrl(e.target.value)}
+              placeholder="Video link (YouTube, Loom, etc.)"
+              className="h-8 text-xs"
+              autoFocus
+            />
+            <button
+              type="button"
+              aria-label="Cancel attaching a video link"
+              onClick={() => {
+                setShowVideoField(false);
+                setVideoUrl("");
+              }}
+              className="shrink-0 text-muted-foreground hover:text-destructive"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         ) : (
           <div className="flex items-center gap-3">
             <button
