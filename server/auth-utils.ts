@@ -1,4 +1,4 @@
-import { scrypt, randomBytes, timingSafeEqual } from "crypto";
+import { scrypt, randomBytes, timingSafeEqual, createHash } from "crypto";
 import { promisify } from "util";
 
 const scryptAsync = promisify(scrypt);
@@ -17,6 +17,18 @@ export async function comparePasswords(
   const hashedBuf = Buffer.from(hashed, "hex");
   const suppliedBuf = (await scryptAsync(supplied, salt, 64)) as Buffer;
   return timingSafeEqual(hashedBuf, suppliedBuf);
+}
+
+// A 256-bit random token is unguessable regardless of how its hash is
+// stored, so a plain SHA-256 (no per-token salt) is enough here -- unlike
+// passwords, there's no low-entropy input to protect against dictionary
+// attack.
+export function generateResetToken(): string {
+  return randomBytes(32).toString("hex");
+}
+
+export function hashResetToken(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
 }
 
 export function generateCoachCode(): string {
