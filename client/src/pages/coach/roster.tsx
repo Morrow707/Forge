@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -12,20 +13,23 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { AssignProgramDialog } from "@/components/assign-program-dialog";
+import { AthleteProfileDialog } from "@/components/athlete-profile-dialog";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { Users, UserPlus, Send, Plus, X } from "lucide-react";
+import { Users, UserPlus, Send, Plus, X, Search } from "lucide-react";
 
-type RosterEntry = { id: number; name: string; email: string };
+type RosterEntry = {
+  id: number;
+  name: string;
+  email: string;
+  age?: number | null;
+  heightIn?: number | null;
+  bodyWeightLbs?: number | null;
+  sport?: string | null;
+  position?: string | null;
+};
 type TeamMember = { athlete: RosterEntry };
 type TeamEntry = { id: number; name: string; members: TeamMember[] };
 type ProgramSummary = { id: number; name: string };
@@ -47,6 +51,20 @@ export default function CoachRoster() {
 
   const [teamDialogOpen, setTeamDialogOpen] = useState(false);
   const [newTeamName, setNewTeamName] = useState("");
+
+  const [rosterSearch, setRosterSearch] = useState("");
+  const [profileAthlete, setProfileAthlete] = useState<RosterEntry | null>(null);
+
+  const filteredRoster = roster.filter((a) => {
+    const q = rosterSearch.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      a.name.toLowerCase().includes(q) ||
+      a.email.toLowerCase().includes(q) ||
+      (a.sport ?? "").toLowerCase().includes(q) ||
+      (a.position ?? "").toLowerCase().includes(q)
+    );
+  });
 
   const createTeamMutation = useMutation({
     mutationFn: async () => {
@@ -113,21 +131,56 @@ export default function CoachRoster() {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {roster.map((a) => (
-                <Card key={a.id}>
-                  <CardContent className="flex items-center justify-between p-4">
-                    <div>
-                      <p className="font-semibold">{a.name}</p>
-                      <p className="text-xs text-muted-foreground">{a.email}</p>
-                    </div>
-                    <Button size="sm" variant="outline" onClick={() => openAssignFor([a.id])}>
-                      Assign
-                    </Button>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+            <>
+              <div className="relative mb-4 max-w-sm">
+                <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={rosterSearch}
+                  onChange={(e) => setRosterSearch(e.target.value)}
+                  placeholder="Search athletes by name, sport, position..."
+                  className="pl-8"
+                  aria-label="Search athletes"
+                />
+              </div>
+              {filteredRoster.length === 0 ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">
+                  No athletes match "{rosterSearch}".
+                </p>
+              ) : (
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {filteredRoster.map((a) => (
+                    <Card key={a.id}>
+                      <CardContent className="flex items-center justify-between gap-3 p-4">
+                        <div className="min-w-0">
+                          <button
+                            type="button"
+                            onClick={() => setProfileAthlete(a)}
+                            className="truncate text-left font-semibold hover:underline"
+                          >
+                            {a.name}
+                          </button>
+                          <p className="truncate text-xs text-muted-foreground">{a.email}</p>
+                          {(a.sport || a.position) && (
+                            <div className="mt-1.5 flex flex-wrap gap-1">
+                              {a.sport && <Badge variant="secondary">{a.sport}</Badge>}
+                              {a.position && <Badge variant="outline">{a.position}</Badge>}
+                            </div>
+                          )}
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="shrink-0"
+                          onClick={() => openAssignFor([a.id])}
+                        >
+                          Assign
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </TabsContent>
 
@@ -161,9 +214,27 @@ export default function CoachRoster() {
                     {team.members.map((m) => (
                       <div
                         key={m.athlete.id}
-                        className="flex items-center justify-between rounded-md bg-surface-elevated px-3 py-1.5 text-sm"
+                        className="flex items-center justify-between gap-2 rounded-md bg-surface-elevated px-3 py-1.5 text-sm"
                       >
-                        {m.athlete.name}
+                        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setProfileAthlete(m.athlete)}
+                            className="truncate font-medium hover:underline"
+                          >
+                            {m.athlete.name}
+                          </button>
+                          {m.athlete.sport && (
+                            <Badge variant="secondary" className="text-[10px]">
+                              {m.athlete.sport}
+                            </Badge>
+                          )}
+                          {m.athlete.position && (
+                            <Badge variant="outline" className="text-[10px]">
+                              {m.athlete.position}
+                            </Badge>
+                          )}
+                        </div>
                         <button
                           aria-label={`Remove ${m.athlete.name} from ${team.name}`}
                           onClick={() =>
@@ -172,7 +243,7 @@ export default function CoachRoster() {
                               athleteId: m.athlete.id,
                             })
                           }
-                          className="text-muted-foreground hover:text-destructive"
+                          className="shrink-0 text-muted-foreground hover:text-destructive"
                         >
                           <X className="h-3.5 w-3.5" />
                         </button>
@@ -232,6 +303,13 @@ export default function CoachRoster() {
         programs={programs}
         initialAthleteIds={assignAthleteIds}
       />
+
+      <AthleteProfileDialog
+        athlete={profileAthlete}
+        onOpenChange={(open) => {
+          if (!open) setProfileAthlete(null);
+        }}
+      />
     </AppShell>
   );
 }
@@ -243,30 +321,51 @@ function AddMemberSelect({
   roster: RosterEntry[];
   onAdd: (athleteId: number) => void;
 }) {
-  const [value, setValue] = useState("");
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
   if (roster.length === 0) return null;
+
+  const matches = roster.filter((r) => r.name.toLowerCase().includes(query.trim().toLowerCase()));
+
   return (
-    <div className="flex items-center gap-2">
-      <Select
-        value={value}
-        onValueChange={(v) => {
-          setValue(v);
-          onAdd(Number(v));
-          setValue("");
-        }}
-      >
-        <SelectTrigger className="h-8 text-xs">
-          <UserPlus className="h-3.5 w-3.5" />
-          <SelectValue placeholder="Add athlete to team" />
-        </SelectTrigger>
-        <SelectContent>
-          {roster.map((r) => (
-            <SelectItem key={r.id} value={String(r.id)}>
-              {r.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+    <div className="relative">
+      <div className="relative">
+        <UserPlus className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setOpen(true);
+          }}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setTimeout(() => setOpen(false), 150)}
+          placeholder="Search to add athlete..."
+          className="h-8 pl-8 text-xs"
+        />
+      </div>
+      {open && (
+        <div className="absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-md border border-border bg-surface shadow-md">
+          {matches.length === 0 ? (
+            <p className="px-3 py-2 text-xs text-muted-foreground">No matching athletes</p>
+          ) : (
+            matches.map((r) => (
+              <button
+                key={r.id}
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  onAdd(r.id);
+                  setQuery("");
+                  setOpen(false);
+                }}
+                className="block w-full px-3 py-1.5 text-left text-xs hover:bg-surface-elevated"
+              >
+                {r.name}
+              </button>
+            ))
+          )}
+        </div>
+      )}
     </div>
   );
 }

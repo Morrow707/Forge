@@ -26,6 +26,7 @@ import type {
   UpdateCorrectivesInput,
   UpdateAssignmentInput,
   UpdatePreferencesInput,
+  UpdateProfileInput,
   CreateWorkoutCommentInput,
   CreateExerciseReportInput,
 } from "@shared/schema";
@@ -120,6 +121,14 @@ export const storage = {
     return row;
   },
 
+  // Used both for an athlete editing their own bio fields and for a coach
+  // editing an athlete on their roster -- callers are responsible for
+  // verifying the target user is one the requester may edit.
+  async updateUserProfile(userId: number, input: UpdateProfileInput) {
+    const [row] = await db.update(users).set(input).where(eq(users.id, userId)).returning();
+    return row;
+  },
+
   async setUserRole(userId: number, role: "coach" | "athlete" | "admin") {
     const [row] = await db.update(users).set({ role }).where(eq(users.id, userId)).returning();
     return row;
@@ -147,12 +156,38 @@ export const storage = {
         name: users.name,
         email: users.email,
         createdAt: users.createdAt,
+        age: users.age,
+        heightIn: users.heightIn,
+        bodyWeightLbs: users.bodyWeightLbs,
+        sport: users.sport,
+        position: users.position,
       })
       .from(coachAthletes)
       .innerJoin(users, eq(coachAthletes.athleteId, users.id))
       .where(eq(coachAthletes.coachId, coachId))
       .orderBy(asc(users.name));
     return rows;
+  },
+
+  // Single roster athlete's full profile, scoped to this coach -- returns
+  // null if the athlete isn't on the coach's roster so callers can 404.
+  async getRosterAthleteForCoach(coachId: number, athleteId: number) {
+    const rows = await db
+      .select({
+        id: users.id,
+        name: users.name,
+        email: users.email,
+        createdAt: users.createdAt,
+        age: users.age,
+        heightIn: users.heightIn,
+        bodyWeightLbs: users.bodyWeightLbs,
+        sport: users.sport,
+        position: users.position,
+      })
+      .from(coachAthletes)
+      .innerJoin(users, eq(coachAthletes.athleteId, users.id))
+      .where(and(eq(coachAthletes.coachId, coachId), eq(coachAthletes.athleteId, athleteId)));
+    return rows[0] ?? null;
   },
 
   async getCoachesForAthlete(athleteId: number) {

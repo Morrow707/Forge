@@ -66,6 +66,14 @@ export const users = pgTable(
     preferredWeightUnit: weightUnitEnum("preferred_weight_unit")
       .notNull()
       .default("lbs"),
+    // Athlete bio/profile fields -- optional, self-reported or filled in by
+    // a coach managing their roster. Used for roster/team identification
+    // and the coach-only leaderboard; meaningless for coach/admin accounts.
+    age: integer("age"),
+    heightIn: integer("height_in"),
+    bodyWeightLbs: real("body_weight_lbs"),
+    sport: text("sport"),
+    position: text("position"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({
@@ -616,6 +624,14 @@ export const updatePreferencesSchema = z.object({
   preferredWeightUnit: z.enum(["lbs", "kg"]),
 });
 
+export const updateProfileSchema = z.object({
+  age: z.number().int().min(0).max(120).optional().nullable(),
+  heightIn: z.number().int().min(0).max(120).optional().nullable(),
+  bodyWeightLbs: z.number().min(0).max(1500).optional().nullable(),
+  sport: z.string().trim().max(60).optional().nullable(),
+  position: z.string().trim().max(60).optional().nullable(),
+});
+
 export const insertExerciseSchema = createInsertSchema(exercises)
   .pick({
     name: true,
@@ -799,6 +815,7 @@ export type UpdateCorrectivesInput = z.infer<typeof updateCorrectivesSchema>;
 export type ApplyCorrectivesToDaysInput = z.infer<typeof applyCorrectivesToDaysSchema>;
 export type SubmitWorkoutLogInput = z.infer<typeof submitWorkoutLogSchema>;
 export type UpdatePreferencesInput = z.infer<typeof updatePreferencesSchema>;
+export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 export type CreateWorkoutCommentInput = z.infer<typeof createWorkoutCommentSchema>;
 export type CreateExerciseReportInput = z.infer<typeof createExerciseReportSchema>;
 export type ResolveSubmissionInput = z.infer<typeof resolveSubmissionSchema>;
