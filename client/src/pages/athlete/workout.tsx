@@ -987,7 +987,7 @@ function ExerciseLogContent({
           </span>
           <Button size="sm" variant="secondary" onClick={() => setFormVideoOpen(true)}>
             <Video className="h-3.5 w-3.5" />
-            Record
+            Record / Upload
           </Button>
         </div>
       )}
