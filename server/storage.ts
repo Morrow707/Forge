@@ -2119,6 +2119,87 @@ export const storage = {
   // Ranks every athlete on this coach's roster by their best Epley-estimated
   // 1RM for one exercise. Only numeric-weight sets count -- bodyweight/band
   // sets have no comparable load, same rule the PR detector uses.
+  // Derived purely from existing assignment schedules + workout logs, no new
+  // tables. "Streak" = consecutive most-recent *scheduled* training days
+  // (rest days excluded, so a normal week off doesn't reset it) that were
+  // completed, walking backward from the most recent scheduled day that's
+  // already happened.
+  async getStreaksForCoachRoster(coachId: number) {
+    const roster = await this.getRosterForCoach(coachId);
+    if (roster.length === 0) return new Map<number, { currentStreak: number; totalCompleted: number }>();
+    return this.computeStreaks(roster.map((a) => a.id));
+  },
+
+  async getStreakForAthlete(athleteId: number) {
+    const map = await this.computeStreaks([athleteId]);
+    return map.get(athleteId) ?? { currentStreak: 0, totalCompleted: 0 };
+  },
+
+  async computeStreaks(athleteIds: number[]) {
+    const athleteAssignments = await db.query.assignments.findMany({
+      where: inArray(assignments.athleteId, athleteIds),
+      with: { program: { with: { weeks: { with: { days: true } } } } },
+    });
+
+    const today = formatISO(new Date(), { representation: "date" });
+    const assignmentAthlete = new Map(athleteAssignments.map((a) => [a.id, a.athleteId]));
+
+    const scheduledByAthlete = new Map<
+      number,
+      Map<string, { assignmentId: number; programDayId: number }>
+    >();
+    for (const a of athleteAssignments) {
+      let byDate = scheduledByAthlete.get(a.athleteId);
+      if (!byDate) {
+        byDate = new Map();
+        scheduledByAthlete.set(a.athleteId, byDate);
+      }
+      for (const week of a.program.weeks) {
+        for (const day of week.days) {
+          if (day.isRestDay) continue;
+          const dateStr = formatISO(
+            resolveAssignmentDate(a, week.weekNumber, day.dayNumber, day.id),
+            { representation: "date" },
+          );
+          if (dateStr <= today && !byDate.has(dateStr)) {
+            byDate.set(dateStr, { assignmentId: a.id, programDayId: day.id });
+          }
+        }
+      }
+    }
+
+    const assignmentIds = athleteAssignments.map((a) => a.id);
+    const logs = assignmentIds.length
+      ? await db.query.workoutLogs.findMany({
+          where: and(inArray(workoutLogs.assignmentId, assignmentIds), eq(workoutLogs.completed, true)),
+        })
+      : [];
+    const completedKeys = new Set(logs.map((l) => `${l.assignmentId}:${l.programDayId}:${l.date}`));
+    const completedCountByAthlete = new Map<number, number>();
+    for (const l of logs) {
+      const athleteId = assignmentAthlete.get(l.assignmentId);
+      if (athleteId == null) continue;
+      completedCountByAthlete.set(athleteId, (completedCountByAthlete.get(athleteId) ?? 0) + 1);
+    }
+
+    const result = new Map<number, { currentStreak: number; totalCompleted: number }>();
+    for (const athleteId of athleteIds) {
+      const byDate = scheduledByAthlete.get(athleteId) ?? new Map();
+      const sortedDates = Array.from(byDate.keys()).sort((a, b) => b.localeCompare(a));
+      let currentStreak = 0;
+      for (const date of sortedDates) {
+        const { assignmentId, programDayId } = byDate.get(date)!;
+        if (completedKeys.has(`${assignmentId}:${programDayId}:${date}`)) currentStreak++;
+        else break;
+      }
+      result.set(athleteId, {
+        currentStreak,
+        totalCompleted: completedCountByAthlete.get(athleteId) ?? 0,
+      });
+    }
+    return result;
+  },
+
   async getLeaderboardForExercise(coachId: number, exerciseId: number) {
     const peRows = await db
       .select({
@@ -2195,9 +2276,15 @@ export const storage = {
       .from(users)
       .where(inArray(users.id, athleteIds));
     const profileById = new Map(profiles.map((p) => [p.id, p]));
+    const streaks = await this.getStreaksForCoachRoster(coachId);
 
     return athleteIds
-      .map((id) => ({ ...profileById.get(id)!, ...bestByAthlete.get(id)! }))
+      .map((id) => ({
+        ...profileById.get(id)!,
+        ...bestByAthlete.get(id)!,
+        currentStreak: streaks.get(id)?.currentStreak ?? 0,
+        totalCompleted: streaks.get(id)?.totalCompleted ?? 0,
+      }))
       .sort((a, b) => b.estimatedOneRm - a.estimatedOneRm);
   },
 };

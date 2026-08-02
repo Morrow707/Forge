@@ -928,7 +928,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/athlete/progress", requireRole("athlete"), async (req, res) => {
     const user = currentUser(req);
     const summary = await storage.getAthleteProgressSummary(user.id);
-    res.json(summary);
+    const streak = await storage.getStreakForAthlete(user.id);
+    res.json({ ...summary, ...streak });
   });
 
   app.get("/api/athlete/body-metrics", requireRole("athlete"), async (req, res) => {
