@@ -87,11 +87,16 @@ export const users = pgTable(
     notifySms: boolean("notify_sms").notNull().default(false),
     // Coach-only injury/availability flag -- see healthStatusEnum above.
     healthStatus: healthStatusEnum("health_status").notNull().default("healthy"),
+    // Unguessable, unauthenticated URL token for the .ics calendar
+    // subscribe feed -- calendar apps re-fetch a plain URL on a timer, they
+    // can't carry a session cookie. Lazily generated on first request.
+    calendarToken: text("calendar_token"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({
     emailIdx: uniqueIndex("users_email_idx").on(table.email),
     coachCodeIdx: uniqueIndex("users_coach_code_idx").on(table.coachCode),
+    calendarTokenIdx: uniqueIndex("users_calendar_token_idx").on(table.calendarToken),
   }),
 );
 
