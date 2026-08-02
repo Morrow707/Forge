@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { apiRequest } from "@/lib/queryClient";
-import { Copy, CalendarDays } from "lucide-react";
+import { Copy, CalendarDays, CalendarPlus } from "lucide-react";
 import { toast } from "sonner";
 
 /** Shows a read-only .ics subscribe URL -- used both by an athlete syncing
@@ -37,6 +37,11 @@ export function CalendarLinkDialog({
   });
 
   const url = data ? `${window.location.origin}/api/calendar/${data.token}.ics` : "";
+  // webcal:// is the scheme calendar apps register a subscribe handler for --
+  // tapping it opens Apple Calendar's/Google Calendar's/Outlook's native
+  // "add subscription" flow directly, no copy-pasting required.
+  const webcalUrl = url.replace(/^https?:\/\//, "webcal://");
+  const googleUrl = url ? `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(url)}` : "";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -54,28 +59,40 @@ export function CalendarLinkDialog({
         {isLoading || !url ? (
           <div className="h-16 animate-pulse rounded-md bg-surface" />
         ) : (
-          <div className="space-y-4">
-            <p className="break-all rounded bg-surface-elevated p-2 font-mono text-xs">{url}</p>
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              onClick={() => {
-                navigator.clipboard.writeText(url);
-                toast.success("Link copied");
-              }}
-            >
-              <Copy className="h-4 w-4" />
-              Copy Link
+          <div className="space-y-3">
+            <Button type="button" className="w-full" asChild>
+              <a href={webcalUrl}>
+                <CalendarPlus className="h-4 w-4" />
+                Add to Calendar
+              </a>
             </Button>
-            <div className="space-y-1 text-xs text-muted-foreground">
-              <p>
-                <span className="font-semibold text-foreground">Google Calendar:</span> Settings →
-                Add calendar → From URL, then paste this link.
-              </p>
-              <p>
-                <span className="font-semibold text-foreground">Apple Calendar:</span> File → New
-                Calendar Subscription, then paste this link.
+            <Button type="button" variant="outline" className="w-full" asChild>
+              <a href={googleUrl} target="_blank" rel="noopener noreferrer">
+                <CalendarDays className="h-4 w-4" />
+                Add to Google Calendar
+              </a>
+            </Button>
+            <p className="text-center text-xs text-muted-foreground">
+              "Add to Calendar" works on iPhone/iPad and most calendar apps. Use the Google option
+              on Android or if the first one doesn't open anything.
+            </p>
+            <div className="space-y-2 border-t pt-3">
+              <p className="break-all rounded bg-surface-elevated p-2 font-mono text-xs">{url}</p>
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full"
+                onClick={() => {
+                  navigator.clipboard.writeText(url);
+                  toast.success("Link copied");
+                }}
+              >
+                <Copy className="h-4 w-4" />
+                Copy Link Instead
+              </Button>
+              <p className="text-xs text-muted-foreground">
+                Or paste this link manually: Outlook → Add calendar → Subscribe from web; Apple
+                Calendar → File → New Calendar Subscription.
               </p>
             </div>
           </div>

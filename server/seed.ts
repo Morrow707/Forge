@@ -2,7 +2,7 @@ import "dotenv/config";
 import { db } from "./db";
 import { storage } from "./storage";
 import { hashPassword } from "./auth-utils";
-import { users } from "@shared/schema";
+import { users, programs } from "@shared/schema";
 import { eq } from "drizzle-orm";
 
 // We don't have live web access from this environment to verify specific
@@ -41,9 +41,9 @@ async function main() {
 
   // A pure admin account, shareable the same way the coach/athlete demo
   // logins are -- no calendar or roster access, just Forge library curation.
-  const demoAdmin = await storage.getUserByEmail("admin@forge.app");
+  let demoAdmin = await storage.getUserByEmail("admin@forge.app");
   if (!demoAdmin) {
-    await storage.createUser({
+    demoAdmin = await storage.createUser({
       email: "admin@forge.app",
       passwordHash: await hashPassword("admin123"),
       name: "Forge Admin",
@@ -796,6 +796,194 @@ async function main() {
           },
         ],
       });
+    }
+  }
+
+  // One-time production fixup, same idempotent post-hoc pattern as the
+  // exercise-library handoff above: settle on a single "Forge" identity
+  // (scott's real account once it exists, else the local demo admin) and
+  // make sure the flagship program and a full-coverage test program are
+  // both owned by it under the right name. Runs on every deploy forever;
+  // each half no-ops once it's already been applied.
+  const forgeIdentity = scott ?? demoAdmin;
+  if (forgeIdentity) {
+    const strengthBlock = await db.query.programs.findFirst({
+      where: eq(programs.name, "Forge Strength Block"),
+    });
+    if (strengthBlock) {
+      await db
+        .update(programs)
+        .set({ coachId: forgeIdentity.id, name: "Forge Workout Program" })
+        .where(eq(programs.id, strengthBlock.id));
+      console.log('Renamed "Forge Strength Block" -> "Forge Workout Program" and flagged it Forge-official.');
+    }
+
+    if (!allPrograms.some((p) => p.name === "Test Program")) {
+      function testExerciseId(name: string) {
+        const found = exerciseMap[name];
+        if (!found) throw new Error(`Exercise not found while seeding Test Program: "${name}"`);
+        return found;
+      }
+
+      const testProgram = await storage.createProgramWithStructure(forgeIdentity.id, {
+        name: "Test Program",
+        description:
+          "A deliberately exhaustive program covering every Forge feature in one block: plain strength logging, multi-group supersets, bar-path/full velocity tracking, video-check uploads, %1RM auto-resolution, manual corrective work, and a big multi-exercise day.",
+        weeks: [
+          {
+            weekNumber: 1,
+            name: "Week 1 — Everything, Round One",
+            days: [
+              {
+                dayNumber: 1,
+                title: "Baseline Strength Check",
+                isRestDay: false,
+                exercises: [
+                  { exerciseId: testExerciseId("Back Squat"), orderIndex: 0, sets: 4, reps: "5", weight: "225 lbs", restSeconds: 150 },
+                  { exerciseId: testExerciseId("Bench Press"), orderIndex: 1, sets: 4, reps: "5", weight: "185 lbs", restSeconds: 150 },
+                  { exerciseId: testExerciseId("Bent-Over Row"), orderIndex: 2, sets: 3, reps: "8", weight: "135 lbs", restSeconds: 90 },
+                  { exerciseId: testExerciseId("Overhead Press"), orderIndex: 3, sets: 3, reps: "8", weight: "95 lbs", restSeconds: 90 },
+                  { exerciseId: testExerciseId("Plank"), orderIndex: 4, sets: 3, reps: "60s hold", weight: "Bodyweight", restSeconds: 60 },
+                ],
+              },
+              {
+                dayNumber: 2,
+                title: "Superset Circuit",
+                isRestDay: false,
+                exercises: [
+                  { exerciseId: testExerciseId("Incline Dumbbell Press"), orderIndex: 0, sets: 3, reps: "10", weight: "60 lbs", restSeconds: 75, supersetGroup: "test-super-a" },
+                  { exerciseId: testExerciseId("Chest-Supported Row"), orderIndex: 1, sets: 3, reps: "10", weight: "50 lbs", restSeconds: 75, supersetGroup: "test-super-a" },
+                  { exerciseId: testExerciseId("Bulgarian Split Squat"), orderIndex: 2, sets: 3, reps: "8/side", weight: "30 lbs", restSeconds: 90, supersetGroup: "test-super-b" },
+                  { exerciseId: testExerciseId("Nordic Hamstring Curl"), orderIndex: 3, sets: 3, reps: "6", weight: "Bodyweight", restSeconds: 90, supersetGroup: "test-super-b" },
+                  { exerciseId: testExerciseId("Barbell Curl"), orderIndex: 4, sets: 3, reps: "10", weight: "60 lbs", restSeconds: 60, supersetGroup: "test-super-c" },
+                  { exerciseId: testExerciseId("Hammer Curl"), orderIndex: 5, sets: 3, reps: "10", weight: "30 lbs", restSeconds: 60, supersetGroup: "test-super-c" },
+                  { exerciseId: testExerciseId("Tricep Rope Pushdown"), orderIndex: 6, sets: 3, reps: "12", weight: "50 lbs", restSeconds: 60, supersetGroup: "test-super-c" },
+                ],
+              },
+              {
+                dayNumber: 3,
+                title: "Bar Speed Lab",
+                isRestDay: false,
+                exercises: [
+                  { exerciseId: testExerciseId("Back Squat"), orderIndex: 0, sets: 5, reps: "3", weight: "245 lbs", restSeconds: 180, trackingLevel: "full" },
+                  { exerciseId: testExerciseId("Bench Press"), orderIndex: 1, sets: 5, reps: "3", weight: "205 lbs", restSeconds: 180, trackingLevel: "full" },
+                  { exerciseId: testExerciseId("Deadlift"), orderIndex: 2, sets: 3, reps: "5", weight: "315 lbs", restSeconds: 180, trackingLevel: "bar_path" },
+                  { exerciseId: testExerciseId("Box Jump"), orderIndex: 3, sets: 4, reps: "5", weight: "Bodyweight", restSeconds: 90, trackingLevel: "full" },
+                ],
+              },
+              { dayNumber: 4, title: "Rest Day", isRestDay: true, exercises: [] },
+              {
+                dayNumber: 5,
+                title: "Video Check Day",
+                isRestDay: false,
+                exercises: [
+                  { exerciseId: testExerciseId("Back Squat"), orderIndex: 0, sets: 3, reps: "5", weight: "205 lbs", restSeconds: 150, videoCheckEnabled: true },
+                  { exerciseId: testExerciseId("Overhead Press"), orderIndex: 1, sets: 3, reps: "6", weight: "85 lbs", restSeconds: 90, videoCheckEnabled: true },
+                  { exerciseId: testExerciseId("Bulgarian Split Squat"), orderIndex: 2, sets: 3, reps: "8/side", weight: "Bodyweight", restSeconds: 90, videoCheckEnabled: true },
+                  { exerciseId: testExerciseId("Deadlift"), orderIndex: 3, sets: 3, reps: "5", weight: "275 lbs", restSeconds: 150, videoCheckEnabled: true },
+                ],
+              },
+              { dayNumber: 6, title: "Rest Day", isRestDay: true, exercises: [] },
+              { dayNumber: 7, title: "Rest Day", isRestDay: true, exercises: [] },
+            ],
+          },
+          {
+            weekNumber: 2,
+            name: "Week 2 — Everything, Round Two",
+            days: [
+              {
+                dayNumber: 1,
+                title: "%1RM Auto-Adjust Day",
+                isRestDay: false,
+                exercises: [
+                  { exerciseId: testExerciseId("Back Squat"), orderIndex: 0, sets: 4, reps: "3", weight: "80% 1RM", restSeconds: 180 },
+                  { exerciseId: testExerciseId("Bench Press"), orderIndex: 1, sets: 4, reps: "5", weight: "75% 1RM", restSeconds: 150 },
+                  { exerciseId: testExerciseId("Deadlift"), orderIndex: 2, sets: 3, reps: "3", weight: "85% 1RM", restSeconds: 180 },
+                  { exerciseId: testExerciseId("Overhead Press"), orderIndex: 3, sets: 3, reps: "6", weight: "70% 1RM", restSeconds: 90 },
+                ],
+              },
+              {
+                dayNumber: 2,
+                title: "Kitchen Sink Day",
+                isRestDay: false,
+                exercises: [
+                  { exerciseId: testExerciseId("Back Squat"), orderIndex: 0, sets: 3, reps: "3", weight: "75% 1RM", restSeconds: 180, supersetGroup: "test-super-d", trackingLevel: "full", videoCheckEnabled: true },
+                  { exerciseId: testExerciseId("Deadlift"), orderIndex: 1, sets: 3, reps: "3", weight: "70% 1RM", restSeconds: 180, supersetGroup: "test-super-d", trackingLevel: "bar_path", videoCheckEnabled: true },
+                  { exerciseId: testExerciseId("Incline Dumbbell Press"), orderIndex: 2, sets: 3, reps: "10", weight: "65 lbs", restSeconds: 75, supersetGroup: "test-super-e" },
+                  { exerciseId: testExerciseId("Chest-Supported Row"), orderIndex: 3, sets: 3, reps: "10", weight: "55 lbs", restSeconds: 75, supersetGroup: "test-super-e" },
+                  { exerciseId: testExerciseId("Plank"), orderIndex: 4, sets: 3, reps: "60s hold", weight: "Bodyweight", restSeconds: 60 },
+                ],
+              },
+              {
+                dayNumber: 3,
+                title: "Corrective Focus Day",
+                isRestDay: false,
+                exercises: [
+                  { exerciseId: testExerciseId("Goblet Squat"), orderIndex: 0, sets: 3, reps: "10", weight: "53 lbs", restSeconds: 75 },
+                  { exerciseId: testExerciseId("Farmer's Carry"), orderIndex: 1, sets: 3, reps: "40yd", weight: "70 lbs/hand", restSeconds: 90 },
+                ],
+              },
+              { dayNumber: 4, title: "Rest Day", isRestDay: true, exercises: [] },
+              {
+                dayNumber: 5,
+                title: "Final Gauntlet",
+                isRestDay: false,
+                exercises: [
+                  { exerciseId: testExerciseId("Back Extension"), orderIndex: 0, sets: 3, reps: "12", weight: "Bodyweight", restSeconds: 60 },
+                  { exerciseId: testExerciseId("Barbell Shrug"), orderIndex: 1, sets: 3, reps: "10", weight: "185 lbs", restSeconds: 60 },
+                  { exerciseId: testExerciseId("Cable Crunch"), orderIndex: 2, sets: 3, reps: "15", weight: "60 lbs", restSeconds: 45 },
+                  { exerciseId: testExerciseId("Close-Grip Bench Press"), orderIndex: 3, sets: 3, reps: "8", weight: "135 lbs", restSeconds: 90 },
+                  { exerciseId: testExerciseId("Hip Thrust"), orderIndex: 4, sets: 3, reps: "10", weight: "185 lbs", restSeconds: 90 },
+                  { exerciseId: testExerciseId("Lat Pulldown"), orderIndex: 5, sets: 3, reps: "10", weight: "120 lbs", restSeconds: 75 },
+                  { exerciseId: testExerciseId("Pallof Press"), orderIndex: 6, sets: 3, reps: "10/side", weight: "30 lbs", restSeconds: 45 },
+                  { exerciseId: testExerciseId("Russian Twist"), orderIndex: 7, sets: 3, reps: "20", weight: "20 lbs", restSeconds: 45 },
+                  { exerciseId: testExerciseId("Standing Calf Raise"), orderIndex: 8, sets: 4, reps: "12", weight: "225 lbs", restSeconds: 60 },
+                ],
+              },
+              { dayNumber: 6, title: "Rest Day", isRestDay: true, exercises: [] },
+              { dayNumber: 7, title: "Rest Day", isRestDay: true, exercises: [] },
+            ],
+          },
+        ],
+      });
+
+      const fullTestProgram = await storage.getProgramFull(testProgram.id);
+      const correctiveDay = fullTestProgram?.weeks
+        .flatMap((w) => w.days)
+        .find((d) => d.title === "Corrective Focus Day");
+
+      const testStartDate = new Date().toISOString().slice(0, 10);
+      let testDateOverrides: Record<string, string> | undefined;
+      if (correctiveDay) {
+        const start = new Date(testStartDate + "T00:00:00Z");
+        const offsetDays = (2 - 1) * 7 + (correctiveDay.dayNumber - 1);
+        const defaultDate = new Date(start.getTime() + offsetDays * 86400000);
+        const overriddenDate = new Date(defaultDate.getTime() + 7 * 86400000);
+        testDateOverrides = { [String(correctiveDay.id)]: overriddenDate.toISOString().slice(0, 10) };
+      }
+
+      // Assigned by the demo coach (not the Forge identity, which has no
+      // roster) so it shows up as a real assignment on the demo athlete,
+      // exactly like a coach assigning a Forge-official program in practice.
+      const { created: testCreated } = await storage.createAssignment(
+        coach.id,
+        testProgram.id,
+        [{ athleteId: athlete.id, correctivesEnabled: true }],
+        testStartDate,
+        testDateOverrides,
+      );
+
+      if (correctiveDay) {
+        await storage.updateCorrectivesForAssignmentDay(testCreated[0].id, correctiveDay.id, {
+          correctives: [
+            { exerciseId: testExerciseId("Ankle Dorsiflexion Mobilization"), orderIndex: 0, sets: 2, reps: "10/side", weight: null },
+            { exerciseId: testExerciseId("World's Greatest Stretch"), orderIndex: 1, sets: 2, reps: "6/side", weight: null },
+            { exerciseId: testExerciseId("Band External Rotation"), orderIndex: 2, sets: 2, reps: "15/side", weight: null },
+          ],
+        });
+      }
+
+      console.log(`Created "Test Program" (id ${testProgram.id}), owned by Forge identity ${forgeIdentity.id}.`);
     }
   }
 
