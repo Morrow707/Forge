@@ -71,7 +71,15 @@ body {
   background-color: hsl(var(--primary) / 0.3);
 }
 
-/* thin, dark-friendly scrollbars */
+/* thin, dark-friendly, always-visible (non-overlay) scrollbars -- defining
+   any ::-webkit-scrollbar rule opts Chrome/Safari out of the OS's
+   auto-hiding overlay style, and scrollbar-gutter reserves the track space
+   up front so content doesn't shift when a scrollbar appears. */
+* {
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--border)) transparent;
+}
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
@@ -82,4 +90,18 @@ body {
 ::-webkit-scrollbar-thumb {
   background-color: hsl(var(--border));
   border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+/* iOS Safari auto-zooms the page on focusing any form control with a
+   computed font-size under 16px -- force 16px on small viewports (the
+   visual size can still differ via padding/line-height) so tapping a field
+   never leaves the page stuck zoomed in. */
+@media (max-width: 767px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
 }

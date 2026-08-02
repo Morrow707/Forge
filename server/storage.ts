@@ -1146,8 +1146,12 @@ export const storage = {
   },
 
   // Most recent prior time this athlete logged this specific exercise
-  // (across any program/day), for the "LAST: 4x3 @ 415lb" reference line.
-  async getLastPerformanceForAthlete(
+  // (across any program/day) for the "LAST: 4x3 @ 415lb" reference line, plus
+  // a flat history of every individual set ever logged for it so the UI can
+  // show "what did I get last time at THIS rep count" per set rather than
+  // one summary for the whole exercise -- a pyramid scheme (8/5/3/1) should
+  // compare each set against its own rep count, not the first set overall.
+  async getPerformanceHistoryForAthlete(
     athleteId: number,
     exerciseId: number,
     beforeDate: string,
@@ -1155,7 +1159,7 @@ export const storage = {
     const logs = await db.query.workoutLogs.findMany({
       where: and(eq(workoutLogs.athleteId, athleteId), lt(workoutLogs.date, beforeDate)),
       orderBy: desc(workoutLogs.date),
-      limit: 30,
+      limit: 60,
       with: {
         entries: {
           with: {
@@ -1167,25 +1171,62 @@ export const storage = {
       },
     });
 
+    type SetHistoryPoint = {
+      date: string;
+      reps: string;
+      weight: string | null;
+      weightMode: "numeric" | "bodyweight" | "band";
+      weightUnit: "lbs" | "kg" | null;
+      rpe: number | null;
+    };
+    let lastPerformance: {
+      date: string;
+      sets: number;
+      reps: string | null;
+      weight: string | null;
+      weightMode: "numeric" | "bodyweight" | "band";
+      weightUnit: "lbs" | "kg" | null;
+      rpe: number | null;
+      suggestion: { text: string; suggestedWeight: number | null } | null;
+    } | null = null;
+    const setHistory: SetHistoryPoint[] = [];
+
     for (const log of logs) {
       for (const entry of log.entries) {
         const entryExerciseId =
           entry.programExercise?.exerciseId ?? entry.corrective?.exerciseId;
-        if (entryExerciseId === exerciseId && entry.sets.length > 0) {
+        if (entryExerciseId !== exerciseId || entry.sets.length === 0) continue;
+
+        if (!lastPerformance) {
           const weight = entry.sets[0]?.weight ?? null;
-          return {
+          lastPerformance = {
             date: log.date,
             sets: entry.sets.length,
             reps: entry.sets[0]?.reps ?? null,
             weight,
             weightMode: entry.weightMode,
+            weightUnit: entry.sets[0]?.weightUnit ?? null,
             rpe: entry.rpe,
             suggestion: this.suggestNextLoad(entry.rpe, weight, entry.weightMode),
           };
         }
+
+        for (const set of entry.sets) {
+          if (!set.reps) continue;
+          setHistory.push({
+            date: log.date,
+            reps: set.reps,
+            weight: set.weight,
+            weightMode: entry.weightMode,
+            weightUnit: set.weightUnit,
+            rpe: entry.rpe,
+          });
+          if (setHistory.length >= 200) break;
+        }
       }
     }
-    return null;
+
+    return { lastPerformance, setHistory };
   },
 
   async getWorkoutDayDetail(
@@ -1228,24 +1269,24 @@ export const storage = {
     });
 
     const exercisesWithHistory = await Promise.all(
-      day.exercises.map(async (pe) => ({
-        ...pe,
-        lastPerformance: await this.getLastPerformanceForAthlete(
+      day.exercises.map(async (pe) => {
+        const { lastPerformance, setHistory } = await this.getPerformanceHistoryForAthlete(
           athleteId,
           pe.exerciseId,
           date,
-        ),
-      })),
+        );
+        return { ...pe, lastPerformance, setHistory };
+      }),
     );
     const correctivesWithHistory = await Promise.all(
-      correctives.map(async (c) => ({
-        ...c,
-        lastPerformance: await this.getLastPerformanceForAthlete(
+      correctives.map(async (c) => {
+        const { lastPerformance, setHistory } = await this.getPerformanceHistoryForAthlete(
           athleteId,
           c.exerciseId,
           date,
-        ),
-      })),
+        );
+        return { ...c, lastPerformance, setHistory };
+      }),
     );
 
     return {
@@ -1258,6 +1299,8 @@ export const storage = {
   },
 
   async submitWorkoutLog(athleteId: number, input: SubmitWorkoutLogInput) {
+    const athlete = await db.query.users.findFirst({ where: eq(users.id, athleteId) });
+    const weightUnit = athlete?.preferredWeightUnit ?? "lbs";
     return db.transaction(async (tx) => {
       let log = await tx.query.workoutLogs.findFirst({
         where: and(
@@ -1314,6 +1357,7 @@ export const storage = {
               setNumber: s.setNumber,
               reps: s.reps ?? null,
               weight: s.weight ?? null,
+              weightUnit: entry.weightMode === "numeric" && s.weight ? weightUnit : null,
               peakVelocityMps: s.peakVelocityMps ?? null,
               meanVelocityMps: s.meanVelocityMps ?? null,
               concentricSeconds: s.concentricSeconds ?? null,
