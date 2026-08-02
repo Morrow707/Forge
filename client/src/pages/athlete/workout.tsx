@@ -582,7 +582,7 @@ export default function AthleteWorkout() {
           </CardContent>
         </Card>
       ) : (
-        <div className={cn("space-y-4", viewMode === "logging" && "pb-24")}>
+        <div className={cn("space-y-4", viewMode === "logging" && "pb-4")}>
           {stats.totalSets > 0 && (
             <div className="rounded-lg border border-border bg-surface p-4">
               <div className="mb-3 flex items-baseline gap-8">
@@ -784,7 +784,7 @@ export default function AthleteWorkout() {
         </div>
       )}
 
-      <div className={cn("mt-4", viewMode === "logging" && pages.length > 0 && "pb-16")}>
+      <div className={cn("mt-4", viewMode === "logging" && pages.length > 0 && "pb-14")}>
         <WorkoutCommentThread
           role="athlete"
           assignmentId={Number(assignmentId)}
@@ -793,7 +793,7 @@ export default function AthleteWorkout() {
       </div>
 
       {viewMode === "logging" && pages.length > 0 && (
-        <div className="fixed inset-x-0 bottom-14 z-20 border-t border-border bg-surface md:bottom-0 md:left-64">
+        <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-surface">
           <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3 sm:px-8">
             <button
               type="button"
