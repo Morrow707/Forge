@@ -447,6 +447,20 @@ export const notifications = pgTable("notifications", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// Single-use, expiring password reset tokens. Only the SHA-256 hash of the
+// token is stored -- same reasoning as password hashing -- so a database
+// leak alone can't be used to reset anyone's password.
+export const passwordResetTokens = pgTable("password_reset_tokens", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  tokenHash: text("token_hash").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  usedAt: timestamp("used_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 // ---------- Relations ----------
 
 export const usersRelations = relations(users, ({ many }) => ({
@@ -666,6 +680,17 @@ export const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
 });
+
+export const requestPasswordResetSchema = z.object({
+  email: z.string().email(),
+});
+export type RequestPasswordResetInput = z.infer<typeof requestPasswordResetSchema>;
+
+export const resetPasswordSchema = z.object({
+  token: z.string().min(1),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+});
+export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
 
 export const updatePreferencesSchema = z.object({
   preferredWeightUnit: z.enum(["lbs", "kg"]),

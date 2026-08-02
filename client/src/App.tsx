@@ -8,6 +8,8 @@ import type { ComponentType } from "react";
 import LoginPage from "@/pages/login";
 import AdminLoginPage from "@/pages/admin-login";
 import SignupPage from "@/pages/signup";
+import ForgotPasswordPage from "@/pages/forgot-password";
+import ResetPasswordPage from "@/pages/reset-password";
 import NotFound from "@/pages/not-found";
 import CoachDashboard from "@/pages/coach/dashboard";
 import CoachExercises from "@/pages/coach/exercises";
@@ -72,6 +74,8 @@ function Router() {
       <Route path="/login" component={LoginPage} />
       <Route path="/admin/login" component={AdminLoginPage} />
       <Route path="/signup" component={SignupPage} />
+      <Route path="/forgot-password" component={ForgotPasswordPage} />
+      <Route path="/reset-password" component={ResetPasswordPage} />
       <Route path="/coach">
         <ProtectedRoute role="coach" component={CoachDashboard} />
       </Route>

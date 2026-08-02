@@ -6,7 +6,12 @@ import type { Express, RequestHandler } from "express";
 import { storage } from "./storage";
 import { hashPassword, comparePasswords } from "./auth-utils";
 import { pool } from "./db";
-import { signupSchema, type PublicUser } from "@shared/schema";
+import {
+  signupSchema,
+  requestPasswordResetSchema,
+  resetPasswordSchema,
+  type PublicUser,
+} from "@shared/schema";
 
 const PgStore = connectPgSimple(session);
 
@@ -131,6 +136,49 @@ export function setupAuth(app: Express) {
         res.status(204).end();
       });
     });
+  });
+
+  // No email service is wired up in this environment yet, so the reset
+  // token is handed straight back in the response instead of being emailed
+  // -- the frontend shows it directly as a copyable link. This does mean an
+  // attacker can tell whether an email is registered (a real provider would
+  // hide that by always responding the same way); acceptable for now given
+  // there's no delivery mechanism to hide behind. Swap this for a real send
+  // once a provider is connected -- everything else here already assumes
+  // token-based reset, not email content.
+  app.post("/api/auth/request-password-reset", async (req, res, next) => {
+    try {
+      const parsed = requestPasswordResetSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      const user = await storage.getUserByEmail(parsed.data.email);
+      if (!user) {
+        return res.json({ resetToken: null });
+      }
+      const resetToken = await storage.createPasswordResetToken(user.id);
+      res.json({ resetToken });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.post("/api/auth/reset-password", async (req, res, next) => {
+    try {
+      const parsed = resetPasswordSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      const record = await storage.getValidPasswordResetToken(parsed.data.token);
+      if (!record) {
+        return res.status(400).json({ message: "This reset link is invalid or has expired." });
+      }
+      const passwordHash = await hashPassword(parsed.data.password);
+      await storage.consumePasswordResetToken(record.id, record.userId, passwordHash);
+      res.status(204).end();
+    } catch (err) {
+      next(err);
+    }
   });
 
   app.get("/api/auth/me", (req, res) => {

@@ -18,6 +18,7 @@ import {
   exerciseSubmissions,
   exerciseReports,
   notifications,
+  passwordResetTokens,
   type InsertUser,
 } from "@shared/schema";
 import type {
@@ -32,8 +33,8 @@ import type {
   CreateWorkoutCommentInput,
   CreateExerciseReportInput,
 } from "@shared/schema";
-import { eq, and, inArray, asc, desc, lt } from "drizzle-orm";
-import { generateCoachCode } from "./auth-utils";
+import { eq, and, inArray, asc, desc, lt, gt, isNull } from "drizzle-orm";
+import { generateCoachCode, generateResetToken, hashResetToken } from "./auth-utils";
 import { addDays, parseISO, formatISO, isWithinInterval } from "date-fns";
 
 function initialsFor(name: string): string {
@@ -1145,6 +1146,47 @@ export const storage = {
       createdAt: row.createdAt,
       author: { id: author!.id, name: author!.name, role: author!.role },
     };
+  },
+
+  // ---------- Password reset ----------
+  // Invalidates any earlier outstanding tokens for this user first, so only
+  // the most recently requested link ever works. Returns the raw token --
+  // it's never persisted, only its hash is.
+  async createPasswordResetToken(userId: number) {
+    await db.delete(passwordResetTokens).where(eq(passwordResetTokens.userId, userId));
+    const token = generateResetToken();
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+    await db.insert(passwordResetTokens).values({
+      userId,
+      tokenHash: hashResetToken(token),
+      expiresAt,
+    });
+    return token;
+  },
+
+  async getValidPasswordResetToken(rawToken: string) {
+    const tokenHash = hashResetToken(rawToken);
+    const row = await db.query.passwordResetTokens.findFirst({
+      where: and(
+        eq(passwordResetTokens.tokenHash, tokenHash),
+        isNull(passwordResetTokens.usedAt),
+        gt(passwordResetTokens.expiresAt, new Date()),
+      ),
+    });
+    return row ?? null;
+  },
+
+  async consumePasswordResetToken(tokenId: number, userId: number, newPasswordHash: string) {
+    await db.transaction(async (tx) => {
+      await tx
+        .update(users)
+        .set({ passwordHash: newPasswordHash })
+        .where(eq(users.id, userId));
+      await tx
+        .update(passwordResetTokens)
+        .set({ usedAt: new Date() })
+        .where(eq(passwordResetTokens.id, tokenId));
+    });
   },
 
   // ---------- Notifications ----------
