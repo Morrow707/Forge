@@ -1373,15 +1373,21 @@ export const storage = {
     });
   },
 
-  // ---------- Coach analytics (velocity/bar-path trends) ----------
-  // Coach-only: rolls up the CV-derived metrics an athlete's tracked sets
-  // produced for one exercise into a time series. Athletes never see this
-  // history -- only the live number during their own set.
-  async getAnalyticsForCoach(coachId: number, athleteId: number, exerciseId: number) {
-    const rows = await db
+  // ---------- Coach analytics ----------
+  // Coach-only, full picture of an athlete's history for one exercise --
+  // every set ever logged (not just CV-tracked ones), with weight/unit,
+  // estimated 1RM (Epley), PR flags, and CV metrics when present. Athletes
+  // never see this rollup -- only the live number during their own set.
+  async getExerciseAnalyticsForCoach(coachId: number, athleteId: number, exerciseId: number) {
+    const peRows = await db
       .select({
         date: workoutLogs.date,
         setNumber: workoutSetEntries.setNumber,
+        reps: workoutSetEntries.reps,
+        weight: workoutSetEntries.weight,
+        weightUnit: workoutSetEntries.weightUnit,
+        weightMode: workoutLogEntries.weightMode,
+        rpe: workoutLogEntries.rpe,
         peakVelocityMps: workoutSetEntries.peakVelocityMps,
         meanVelocityMps: workoutSetEntries.meanVelocityMps,
         concentricSeconds: workoutSetEntries.concentricSeconds,
@@ -1399,37 +1405,155 @@ export const storage = {
           eq(assignments.athleteId, athleteId),
           eq(programExercises.exerciseId, exerciseId),
         ),
-      )
-      .orderBy(asc(workoutLogs.date), asc(workoutSetEntries.setNumber));
+      );
 
-    return rows.filter(
-      (r) =>
-        r.peakVelocityMps != null || r.meanVelocityMps != null || r.barPathDeviationCm != null,
-    );
+    const correctiveRows = await db
+      .select({
+        date: workoutLogs.date,
+        setNumber: workoutSetEntries.setNumber,
+        reps: workoutSetEntries.reps,
+        weight: workoutSetEntries.weight,
+        weightUnit: workoutSetEntries.weightUnit,
+        weightMode: workoutLogEntries.weightMode,
+        rpe: workoutLogEntries.rpe,
+        peakVelocityMps: workoutSetEntries.peakVelocityMps,
+        meanVelocityMps: workoutSetEntries.meanVelocityMps,
+        concentricSeconds: workoutSetEntries.concentricSeconds,
+        eccentricSeconds: workoutSetEntries.eccentricSeconds,
+        barPathDeviationCm: workoutSetEntries.barPathDeviationCm,
+      })
+      .from(workoutSetEntries)
+      .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
+      .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
+      .innerJoin(assignments, eq(workoutLogs.assignmentId, assignments.id))
+      .innerJoin(
+        assignmentCorrectives,
+        eq(workoutLogEntries.correctiveId, assignmentCorrectives.id),
+      )
+      .where(
+        and(
+          eq(assignments.coachId, coachId),
+          eq(assignments.athleteId, athleteId),
+          eq(assignmentCorrectives.exerciseId, exerciseId),
+        ),
+      );
+
+    const rows = [...peRows, ...correctiveRows]
+      .filter((r) => r.reps != null)
+      .sort((a, b) => a.date.localeCompare(b.date) || a.setNumber - b.setNumber);
+
+    const bestByReps = new Map<string, number>();
+    return rows.map((r) => {
+      const weight = r.weight ? parseFloat(r.weight) : NaN;
+      const reps = r.reps ? parseInt(r.reps, 10) : NaN;
+      const hasNumeric = r.weightMode === "numeric" && !Number.isNaN(weight);
+      const estimatedOneRm =
+        hasNumeric && !Number.isNaN(reps) && reps > 0
+          ? Math.round(weight * (1 + reps / 30) * 10) / 10
+          : null;
+
+      let isPR = false;
+      if (hasNumeric && r.reps) {
+        const prevBest = bestByReps.get(r.reps) ?? -Infinity;
+        if (weight > prevBest) {
+          isPR = true;
+          bestByReps.set(r.reps, weight);
+        }
+      }
+
+      return { ...r, estimatedOneRm, isPR };
+    });
   },
 
-  // Exercises with at least one tracked set for this athlete, scoped to
-  // this coach -- populates the analytics page's exercise picker with only
-  // options that actually have data instead of the entire exercise bank.
-  async getTrackedExercisesForAthlete(coachId: number, athleteId: number) {
-    const rows = await db
-      .selectDistinct({
-        id: exercises.id,
-        name: exercises.name,
-      })
+  // Every distinct exercise this athlete has ever logged at least one set
+  // for, scoped to this coach -- not just CV-tracked ones, so the coach can
+  // drill into plain weight/PR history too.
+  async getExercisesWithHistoryForAthlete(coachId: number, athleteId: number) {
+    const peRows = await db
+      .selectDistinct({ id: exercises.id, name: exercises.name })
       .from(workoutSetEntries)
       .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
       .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
       .innerJoin(assignments, eq(workoutLogs.assignmentId, assignments.id))
       .innerJoin(programExercises, eq(workoutLogEntries.programExerciseId, programExercises.id))
       .innerJoin(exercises, eq(programExercises.exerciseId, exercises.id))
-      .where(
-        and(
-          eq(assignments.coachId, coachId),
-          eq(assignments.athleteId, athleteId),
-          inArray(programExercises.trackingLevel, ["bar_path", "full"]),
-        ),
-      );
-    return rows;
+      .where(and(eq(assignments.coachId, coachId), eq(assignments.athleteId, athleteId)));
+
+    const correctiveRows = await db
+      .selectDistinct({ id: exercises.id, name: exercises.name })
+      .from(workoutSetEntries)
+      .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
+      .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
+      .innerJoin(assignments, eq(workoutLogs.assignmentId, assignments.id))
+      .innerJoin(
+        assignmentCorrectives,
+        eq(workoutLogEntries.correctiveId, assignmentCorrectives.id),
+      )
+      .innerJoin(exercises, eq(assignmentCorrectives.exerciseId, exercises.id))
+      .where(and(eq(assignments.coachId, coachId), eq(assignments.athleteId, athleteId)));
+
+    const byId = new Map<number, string>();
+    for (const r of [...peRows, ...correctiveRows]) byId.set(r.id, r.name);
+    return Array.from(byId.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  },
+
+  // Reduced overview shown before a specific exercise is chosen -- recent
+  // sessions across everything this athlete has logged, so picking an
+  // athlete is never a dead end even before drilling into one exercise.
+  async getRecentSessionsForAthlete(coachId: number, athleteId: number, limit = 8) {
+    const owned = await db
+      .select({ id: assignments.id })
+      .from(assignments)
+      .where(and(eq(assignments.coachId, coachId), eq(assignments.athleteId, athleteId)));
+    const assignmentIds = owned.map((a) => a.id);
+    if (assignmentIds.length === 0) return [];
+
+    const logs = await db.query.workoutLogs.findMany({
+      where: and(
+        eq(workoutLogs.athleteId, athleteId),
+        inArray(workoutLogs.assignmentId, assignmentIds),
+      ),
+      orderBy: desc(workoutLogs.date),
+      limit,
+      with: {
+        day: true,
+        entries: {
+          with: {
+            sets: true,
+            programExercise: { with: { exercise: true } },
+            corrective: { with: { exercise: true } },
+          },
+        },
+      },
+    });
+
+    return logs.map((log) => {
+      let totalReps = 0;
+      let totalVolume = 0;
+      const exerciseNames = new Set<string>();
+      for (const entry of log.entries) {
+        const name = entry.programExercise?.exercise.name ?? entry.corrective?.exercise.name;
+        if (name) exerciseNames.add(name);
+        for (const set of entry.sets) {
+          const reps = set.reps ? parseInt(set.reps, 10) : NaN;
+          if (Number.isNaN(reps)) continue;
+          totalReps += reps;
+          if (entry.weightMode === "numeric" && set.weight) {
+            const w = parseFloat(set.weight);
+            if (!Number.isNaN(w)) totalVolume += reps * w;
+          }
+        }
+      }
+      return {
+        date: log.date,
+        dayTitle: log.day.title,
+        completed: log.completed,
+        exercises: Array.from(exerciseNames),
+        totalReps,
+        totalVolume,
+      };
+    });
   },
 };

@@ -571,9 +571,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   );
 
   // ---------------- Coach: Analytics ----------------
-  // Coach-only trend data (velocity, bar path) derived from an athlete's
-  // tracked sets. Athletes never get an equivalent page -- they only see
-  // live numbers during their own set.
+  // Coach-only performance history (weight, PRs, velocity, bar path,
+  // whatever was recorded) derived from an athlete's logged sets. Athletes
+  // never get an equivalent page -- they only see live numbers during
+  // their own set.
 
   app.get("/api/coach/analytics/exercises", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
@@ -582,8 +583,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!parsed.success) {
       return res.status(400).json({ message: "athleteId query param required" });
     }
-    const list = await storage.getTrackedExercisesForAthlete(user.id, parsed.data.athleteId);
+    const list = await storage.getExercisesWithHistoryForAthlete(user.id, parsed.data.athleteId);
     res.json(list);
+  });
+
+  app.get("/api/coach/analytics/overview", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const schema = z.object({ athleteId: z.coerce.number() });
+    const parsed = schema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "athleteId query param required" });
+    }
+    const sessions = await storage.getRecentSessionsForAthlete(user.id, parsed.data.athleteId);
+    res.json(sessions);
   });
 
   app.get("/api/coach/analytics", requireRole("coach"), async (req, res) => {
@@ -592,7 +604,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!parsed.success) {
       return res.status(400).json({ message: "athleteId and exerciseId query params required" });
     }
-    const points = await storage.getAnalyticsForCoach(
+    const points = await storage.getExerciseAnalyticsForCoach(
       user.id,
       parsed.data.athleteId,
       parsed.data.exerciseId,
