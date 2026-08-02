@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
+import { shareOrDownloadFile } from "@/lib/share-file";
 import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
 import {
@@ -25,7 +26,16 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { Crown, Dumbbell, CalendarCheck, Flame, Scale, Trash2, TrendingUp } from "lucide-react";
+import {
+  Crown,
+  Dumbbell,
+  CalendarCheck,
+  Flame,
+  Scale,
+  Trash2,
+  TrendingUp,
+  Share2,
+} from "lucide-react";
 
 type ProgressSummary = {
   totalWorkoutsCompleted: number;
@@ -47,6 +57,23 @@ type BodyMetric = {
 export default function AthleteProgress() {
   const { user } = useAuth();
   const qc = useQueryClient();
+  const [sharingProfile, setSharingProfile] = useState(false);
+
+  async function handleShareProfile() {
+    setSharingProfile(true);
+    try {
+      await shareOrDownloadFile(
+        "/api/athlete/recruiting-profile.pdf",
+        `${user?.name ?? "athlete"}-recruiting-profile.pdf`,
+        "My Forge Recruiting Profile",
+      );
+    } catch {
+      toast.error("Couldn't generate your recruiting profile");
+    } finally {
+      setSharingProfile(false);
+    }
+  }
+
   const { data, isLoading } = useQuery<ProgressSummary>({
     queryKey: ["/api/athlete/progress"],
     queryFn: async () => {
@@ -100,7 +127,15 @@ export default function AthleteProgress() {
   }));
 
   return (
-    <AppShell title="My Progress">
+    <AppShell
+      title="My Progress"
+      actions={
+        <Button variant="outline" size="sm" onClick={handleShareProfile} disabled={sharingProfile}>
+          <Share2 className="h-4 w-4" />
+          Share Recruiting Profile
+        </Button>
+      }
+    >
       <p className="mb-6 text-sm text-muted-foreground">
         A quick look at your own numbers -- for the full breakdown (velocity trends, bar path,
         team rankings), ask your coach.
