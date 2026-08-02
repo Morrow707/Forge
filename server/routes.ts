@@ -635,6 +635,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(points);
   });
 
+  // ---------------- Coach: Leaderboard ----------------
+  // Coach-only, ranks every athlete on the roster (never other coaches'
+  // athletes) by their best estimated 1RM for a chosen exercise.
+
+  app.get("/api/coach/leaderboard/exercises", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const list = await storage.getLeaderboardExercisesForCoach(user.id);
+    res.json(list);
+  });
+
+  app.get("/api/coach/leaderboard", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const schema = z.object({ exerciseId: z.coerce.number() });
+    const parsed = schema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "exerciseId query param required" });
+    }
+    const rows = await storage.getLeaderboardForExercise(user.id, parsed.data.exerciseId);
+    res.json(rows);
+  });
+
   // ---------------- Athlete ----------------
 
   app.get("/api/athlete/coaches", requireRole("athlete"), async (req, res) => {

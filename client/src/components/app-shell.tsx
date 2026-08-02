@@ -14,6 +14,7 @@ import {
   Menu,
   X,
   UserCircle,
+  Trophy,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { EditMyProfileDialog } from "@/components/edit-my-profile-dialog";
@@ -25,6 +26,7 @@ const coachNav = [
   { href: "/coach/exercises", label: "Exercise Bank", icon: Dumbbell },
   { href: "/coach/roster", label: "Roster & Teams", icon: Users },
   { href: "/coach/analytics", label: "Analytics", icon: LineChart },
+  { href: "/coach/leaderboard", label: "Leaderboard", icon: Trophy },
 ];
 
 const athleteNav = [

@@ -1591,4 +1591,125 @@ export const storage = {
       };
     });
   },
+
+  // ---------- Leaderboard (coach-only) ----------
+
+  // Every distinct exercise ANY athlete on this coach's roster has logged --
+  // the leaderboard's exercise picker, same shape as the per-athlete
+  // analytics picker but not scoped to one athlete.
+  async getLeaderboardExercisesForCoach(coachId: number) {
+    const peRows = await db
+      .selectDistinct({ id: exercises.id, name: exercises.name })
+      .from(workoutSetEntries)
+      .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
+      .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
+      .innerJoin(assignments, eq(workoutLogs.assignmentId, assignments.id))
+      .innerJoin(programExercises, eq(workoutLogEntries.programExerciseId, programExercises.id))
+      .innerJoin(exercises, eq(programExercises.exerciseId, exercises.id))
+      .where(eq(assignments.coachId, coachId));
+
+    const correctiveRows = await db
+      .selectDistinct({ id: exercises.id, name: exercises.name })
+      .from(workoutSetEntries)
+      .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
+      .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
+      .innerJoin(assignments, eq(workoutLogs.assignmentId, assignments.id))
+      .innerJoin(
+        assignmentCorrectives,
+        eq(workoutLogEntries.correctiveId, assignmentCorrectives.id),
+      )
+      .innerJoin(exercises, eq(assignmentCorrectives.exerciseId, exercises.id))
+      .where(eq(assignments.coachId, coachId));
+
+    const byId = new Map<number, string>();
+    for (const r of [...peRows, ...correctiveRows]) byId.set(r.id, r.name);
+    return Array.from(byId.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  },
+
+  // Ranks every athlete on this coach's roster by their best Epley-estimated
+  // 1RM for one exercise. Only numeric-weight sets count -- bodyweight/band
+  // sets have no comparable load, same rule the PR detector uses.
+  async getLeaderboardForExercise(coachId: number, exerciseId: number) {
+    const peRows = await db
+      .select({
+        athleteId: assignments.athleteId,
+        date: workoutLogs.date,
+        reps: workoutSetEntries.reps,
+        weight: workoutSetEntries.weight,
+        weightUnit: workoutSetEntries.weightUnit,
+        weightMode: workoutLogEntries.weightMode,
+      })
+      .from(workoutSetEntries)
+      .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
+      .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
+      .innerJoin(assignments, eq(workoutLogs.assignmentId, assignments.id))
+      .innerJoin(programExercises, eq(workoutLogEntries.programExerciseId, programExercises.id))
+      .where(and(eq(assignments.coachId, coachId), eq(programExercises.exerciseId, exerciseId)));
+
+    const correctiveRows = await db
+      .select({
+        athleteId: assignments.athleteId,
+        date: workoutLogs.date,
+        reps: workoutSetEntries.reps,
+        weight: workoutSetEntries.weight,
+        weightUnit: workoutSetEntries.weightUnit,
+        weightMode: workoutLogEntries.weightMode,
+      })
+      .from(workoutSetEntries)
+      .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
+      .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
+      .innerJoin(assignments, eq(workoutLogs.assignmentId, assignments.id))
+      .innerJoin(
+        assignmentCorrectives,
+        eq(workoutLogEntries.correctiveId, assignmentCorrectives.id),
+      )
+      .where(
+        and(eq(assignments.coachId, coachId), eq(assignmentCorrectives.exerciseId, exerciseId)),
+      );
+
+    const bestByAthlete = new Map<
+      number,
+      { estimatedOneRm: number; weight: number; reps: number; date: string; weightUnit: string }
+    >();
+    for (const r of [...peRows, ...correctiveRows]) {
+      if (r.weightMode !== "numeric" || !r.weight || !r.reps) continue;
+      const weight = parseFloat(r.weight);
+      const reps = parseInt(r.reps, 10);
+      if (Number.isNaN(weight) || Number.isNaN(reps) || reps <= 0) continue;
+      const estimatedOneRm = Math.round(weight * (1 + reps / 30) * 10) / 10;
+      const existing = bestByAthlete.get(r.athleteId);
+      if (!existing || estimatedOneRm > existing.estimatedOneRm) {
+        bestByAthlete.set(r.athleteId, {
+          estimatedOneRm,
+          weight,
+          reps,
+          date: r.date,
+          weightUnit: r.weightUnit ?? "lbs",
+        });
+      }
+    }
+
+    const athleteIds = Array.from(bestByAthlete.keys());
+    if (athleteIds.length === 0) return [];
+
+    const profiles = await db
+      .select({
+        id: users.id,
+        name: users.name,
+        sport: users.sport,
+        position: users.position,
+        age: users.age,
+        heightIn: users.heightIn,
+        bodyWeightLbs: users.bodyWeightLbs,
+      })
+      .from(users)
+      .where(inArray(users.id, athleteIds));
+    const profileById = new Map(profiles.map((p) => [p.id, p]));
+
+    return athleteIds
+      .map((id) => ({ ...profileById.get(id)!, ...bestByAthlete.get(id)! }))
+      .sort((a, b) => b.estimatedOneRm - a.estimatedOneRm);
+  },
 };
