@@ -445,6 +445,10 @@ export const workoutComments = pgTable("workout_comments", {
     .references(() => users.id, { onDelete: "cascade" }),
   body: text("body").notNull(),
   videoUrl: text("video_url"),
+  // A coach-drawn markup on a paused frame of the athlete's video -- e.g.
+  // circling a knee valgus moment -- saved as a PNG and attached the same
+  // way a video link is, just a different media type on the same comment.
+  imageUrl: text("image_url"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -906,6 +910,11 @@ export const applyCorrectivesToDaysSchema = z.object({
 export const createWorkoutCommentSchema = z.object({
   body: z.string().trim().min(1).max(2000),
   videoUrl: z.string().trim().max(500).optional().nullable(),
+  imageUrl: z.string().trim().max(500).optional().nullable(),
+});
+
+export const createAnnotationSchema = z.object({
+  dataUrl: z.string().startsWith("data:image/png;base64,"),
 });
 
 export const createExerciseReportSchema = z.object({

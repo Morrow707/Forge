@@ -27,6 +27,7 @@ import {
   coachAnalyticsQuerySchema,
   createTeamPostSchema,
   createBodyMetricSchema,
+  createAnnotationSchema,
 } from "@shared/schema";
 import { z } from "zod";
 
@@ -35,6 +36,13 @@ import { z } from "zod";
 // There is no automatic/background upload of raw video anywhere in the app.
 const UPLOADS_DIR = path.join(process.cwd(), "server", "uploads", "form-videos");
 fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+
+// Coach-drawn markup on a paused video frame -- sent as a PNG data URL
+// (small, canvas-generated) rather than multipart, decoded and written to
+// disk here the same way an uploaded video is.
+const ANNOTATIONS_DIR = path.join(process.cwd(), "server", "uploads", "annotations");
+fs.mkdirSync(ANNOTATIONS_DIR, { recursive: true });
+const MAX_ANNOTATION_BYTES = 5 * 1024 * 1024;
 
 const VIDEO_EXTENSION_BY_MIME: Record<string, string> = {
   "video/webm": ".webm",
@@ -659,7 +667,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/coach/program-days/:id", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     const id = Number(req.params.id);
-    const day = await storage.getProgramDayForCoach(user.id, id);
+    const day = await storage.getProgramDayForCoachView(user.id, id);
     if (!day) return res.status(404).json({ message: "Day not found" });
     res.json(day);
   });
@@ -810,6 +818,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(201).json(comment);
     },
   );
+
+  // Coach draws on a paused frame of an athlete's video, client-side canvas
+  // produces a PNG data URL, decoded and written to disk here -- the
+  // resulting /uploads/annotations/... URL is then posted as imageUrl on a
+  // normal comment via the route above.
+  app.post("/api/coach/annotations", requireRole("coach"), (req, res) => {
+    const parsed = createAnnotationSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const base64 = parsed.data.dataUrl.slice(parsed.data.dataUrl.indexOf(",") + 1);
+    const buffer = Buffer.from(base64, "base64");
+    if (buffer.length > MAX_ANNOTATION_BYTES) {
+      return res.status(400).json({ message: "Annotation image is too large" });
+    }
+    const filename = `${crypto.randomUUID()}.png`;
+    fs.writeFileSync(path.join(ANNOTATIONS_DIR, filename), buffer);
+    res.status(201).json({ url: `/uploads/annotations/${filename}` });
+  });
 
   // ---------------- Coach: Analytics ----------------
   // Coach-only performance history (weight, PRs, velocity, bar path,

@@ -5,14 +5,16 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { FormVideoRecorderDialog } from "@/components/form-video-recorder-dialog";
+import { VideoAnnotationDialog } from "@/components/video-annotation-dialog";
 import { toast } from "sonner";
-import { MessageSquare, Video, Send, X } from "lucide-react";
+import { MessageSquare, Video, Send, X, Pencil } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
 type Comment = {
   id: number;
   body: string;
   videoUrl: string | null;
+  imageUrl: string | null;
   createdAt: string;
   author: { id: number; name: string; role: "coach" | "athlete" };
 };
@@ -37,6 +39,8 @@ export function WorkoutCommentThread({
   const [showVideoField, setShowVideoField] = useState(false);
   const [recordedVideo, setRecordedVideo] = useState(false);
   const [recorderOpen, setRecorderOpen] = useState(false);
+  const [imageUrl, setImageUrl] = useState("");
+  const [annotatingUrl, setAnnotatingUrl] = useState<string | null>(null);
 
   const { data: comments = [] } = useQuery<Comment[]>({
     queryKey: [basePath],
@@ -47,6 +51,7 @@ export function WorkoutCommentThread({
       const res = await apiRequest("POST", basePath, {
         body,
         videoUrl: videoUrl.trim() || undefined,
+        imageUrl: imageUrl || undefined,
       });
       return res.json();
     },
@@ -56,6 +61,7 @@ export function WorkoutCommentThread({
       setVideoUrl("");
       setShowVideoField(false);
       setRecordedVideo(false);
+      setImageUrl("");
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not post comment"),
   });
@@ -83,15 +89,35 @@ export function WorkoutCommentThread({
                 </span>
               </div>
               <p className="mt-0.5 whitespace-pre-wrap text-muted-foreground">{c.body}</p>
-              {c.videoUrl && (
-                <a
-                  href={c.videoUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
-                >
-                  <Video className="h-3 w-3" /> Watch video
+              {c.imageUrl && (
+                <a href={c.imageUrl} target="_blank" rel="noreferrer" className="mt-1 block">
+                  <img
+                    src={c.imageUrl}
+                    alt="Coach annotation"
+                    className="max-h-48 rounded-md border border-border"
+                  />
                 </a>
+              )}
+              {c.videoUrl && (
+                <div className="mt-1 flex items-center gap-3">
+                  <a
+                    href={c.videoUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+                  >
+                    <Video className="h-3 w-3" /> Watch video
+                  </a>
+                  {role === "coach" && (
+                    <button
+                      type="button"
+                      onClick={() => setAnnotatingUrl(c.videoUrl)}
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+                    >
+                      <Pencil className="h-3 w-3" /> Annotate
+                    </button>
+                  )}
+                </div>
               )}
             </div>
           ))}
@@ -109,6 +135,22 @@ export function WorkoutCommentThread({
           }
           className="min-h-16 text-sm"
         />
+        {imageUrl && (
+          <div className="flex items-center justify-between rounded-md border border-success/40 bg-success/10 px-2.5 py-1.5 text-xs font-semibold text-success">
+            <span className="flex items-center gap-1.5">
+              <Pencil className="h-3 w-3" />
+              Annotated image attached
+            </span>
+            <button
+              type="button"
+              aria-label="Remove attached annotation"
+              onClick={() => setImageUrl("")}
+              className="text-muted-foreground hover:text-destructive"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+        )}
         {recordedVideo ? (
           <div className="flex items-center justify-between rounded-md border border-success/40 bg-success/10 px-2.5 py-1.5 text-xs font-semibold text-success">
             <span className="flex items-center gap-1.5">
@@ -187,6 +229,18 @@ export function WorkoutCommentThread({
             setRecordedVideo(true);
             setShowVideoField(false);
             if (!body.trim()) setBody("Form check video attached.");
+          }}
+        />
+      )}
+
+      {role === "coach" && (
+        <VideoAnnotationDialog
+          open={annotatingUrl !== null}
+          onOpenChange={(open) => !open && setAnnotatingUrl(null)}
+          videoUrl={annotatingUrl ?? ""}
+          onSaved={(url) => {
+            setImageUrl(url);
+            if (!body.trim()) setBody("See the marked-up frame above.");
           }}
         />
       )}

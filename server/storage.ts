@@ -898,6 +898,45 @@ export const storage = {
     };
   },
 
+  // Read-only counterpart to getProgramDayForCoach -- also allows viewing a
+  // day (and posting/reading comments on it) for a Forge-official program
+  // the coach has assigned to one of their athletes, even though they don't
+  // own the program itself. Editing (getProgramDayForCoach, used by the PUT
+  // route) stays strictly owner-only so a coach can never modify shared
+  // official content just because they assigned it.
+  async getProgramDayForCoachView(coachId: number, dayId: number) {
+    const day = await db.query.programDays.findFirst({
+      where: eq(programDays.id, dayId),
+      with: {
+        exercises: {
+          orderBy: asc(programExercises.orderIndex),
+          with: { exercise: true },
+        },
+        week: { with: { program: true } },
+      },
+    });
+    if (!day) return undefined;
+    if (day.week.program.coachId !== coachId) {
+      const hasAssignment = await db.query.assignments.findFirst({
+        where: and(
+          eq(assignments.coachId, coachId),
+          eq(assignments.programId, day.week.program.id),
+        ),
+      });
+      if (!hasAssignment) return undefined;
+    }
+    return {
+      id: day.id,
+      title: day.title,
+      isRestDay: day.isRestDay,
+      dayNumber: day.dayNumber,
+      programId: day.week.program.id,
+      programName: day.week.program.name,
+      weekNumber: day.week.weekNumber,
+      exercises: day.exercises,
+    };
+  },
+
   async updateProgramDay(dayId: number, input: UpdateProgramDayInput) {
     return db.transaction(async (tx) => {
       await tx
@@ -1212,6 +1251,7 @@ export const storage = {
       id: r.id,
       body: r.body,
       videoUrl: r.videoUrl,
+      imageUrl: r.imageUrl,
       createdAt: r.createdAt,
       author: { id: r.author.id, name: r.author.name, role: r.author.role },
     }));
@@ -1231,6 +1271,7 @@ export const storage = {
         authorId,
         body: input.body,
         videoUrl: input.videoUrl || null,
+        imageUrl: input.imageUrl || null,
       })
       .returning();
     const author = await db.query.users.findFirst({ where: eq(users.id, authorId) });
@@ -1238,6 +1279,7 @@ export const storage = {
       id: row.id,
       body: row.body,
       videoUrl: row.videoUrl,
+      imageUrl: row.imageUrl,
       createdAt: row.createdAt,
       author: { id: author!.id, name: author!.name, role: author!.role },
     };
