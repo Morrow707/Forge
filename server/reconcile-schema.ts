@@ -205,9 +205,11 @@ CREATE TABLE IF NOT EXISTS "assignments" (
   "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
   "start_date" date NOT NULL,
   "correctives_enabled" boolean NOT NULL DEFAULT true,
+  "date_overrides" json,
   "created_at" timestamp NOT NULL DEFAULT now()
 );
 ALTER TABLE "assignments" ADD COLUMN IF NOT EXISTS "correctives_enabled" boolean NOT NULL DEFAULT true;
+ALTER TABLE "assignments" ADD COLUMN IF NOT EXISTS "date_overrides" json;
 
 CREATE TABLE IF NOT EXISTS "assignment_correctives" (
   "id" serial PRIMARY KEY,

@@ -40,7 +40,6 @@ import {
   Plus,
   GripVertical,
   Trash2,
-  Copy,
   Save,
   ArrowLeft,
   MoonStar,
@@ -201,16 +200,6 @@ export function ProgramBuilderPage({
     setActiveWeekKey(w.key);
   }
 
-  function duplicateWeek(weekKey: string) {
-    const source = weeks.find((w) => w.key === weekKey);
-    if (!source) return;
-    const nextNumber = weeks.length + 1;
-    const w = makeWeek(nextNumber, source.days);
-    w.name = `${source.name} (copy)`;
-    setWeeks((prev) => [...prev, w]);
-    setActiveWeekKey(w.key);
-  }
-
   function removeWeek(weekKey: string) {
     if (weeks.length <= 1) {
       toast.error("A program needs at least one week");
@@ -344,10 +333,6 @@ export function ProgramBuilderPage({
           <Button size="sm" variant="outline" onClick={addWeek}>
             <Plus className="h-4 w-4" />
             Add Week
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => duplicateWeek(activeWeek.key)}>
-            <Copy className="h-4 w-4" />
-            Duplicate Week
           </Button>
           {weeks.length > 1 && (
             <Button size="sm" variant="ghost" onClick={() => removeWeek(activeWeek.key)}>

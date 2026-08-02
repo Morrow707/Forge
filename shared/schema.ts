@@ -279,6 +279,12 @@ export const assignments = pgTable("assignments", {
     .references(() => users.id, { onDelete: "cascade" }),
   startDate: date("start_date").notNull(),
   correctivesEnabled: boolean("correctives_enabled").notNull().default(true),
+  // Manual per-day schedule overrides, keyed by program_day_id (as a
+  // string) -> an explicit calendar date. Lets a coach account for games,
+  // travel, or extra rest by moving individual occurrences off the rigid
+  // "every 7 days from startDate" grid; days with no entry here still fall
+  // back to that computed date.
+  dateOverrides: json("date_overrides").$type<Record<string, string>>(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -700,6 +706,11 @@ export const programStructureSchema = z.object({
 export const insertAssignmentSchema = z.object({
   programId: z.number(),
   startDate: z.string(),
+  // Optional manual schedule -- programDayId (as a string key) -> an
+  // explicit date, for days that shouldn't land on the rigid "every 7 days
+  // from startDate" grid (games, travel, an extra rest day). Applied the
+  // same way to every athlete created in this one assignment call.
+  dateOverrides: z.record(z.string(), z.string()).optional(),
   athletes: z
     .array(
       z.object({
