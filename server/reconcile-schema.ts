@@ -322,8 +322,10 @@ CREATE TABLE IF NOT EXISTS "workout_comments" (
   "author_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
   "body" text NOT NULL,
   "video_url" text,
+  "image_url" text,
   "created_at" timestamp NOT NULL DEFAULT now()
 );
+ALTER TABLE "workout_comments" ADD COLUMN IF NOT EXISTS "image_url" text;
 
 CREATE TABLE IF NOT EXISTS "notifications" (
   "id" serial PRIMARY KEY,
