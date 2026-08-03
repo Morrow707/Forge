@@ -25,6 +25,11 @@ EXCEPTION WHEN duplicate_object THEN null; END $$;
 DO $$ BEGIN
   CREATE TYPE "weight_mode" AS ENUM ('numeric', 'bodyweight', 'band');
 EXCEPTION WHEN duplicate_object THEN null; END $$;
+ALTER TYPE "weight_mode" ADD VALUE IF NOT EXISTS 'box';
+
+DO $$ BEGIN
+  CREATE TYPE "box_height_unit" AS ENUM ('in', 'm');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
 
 DO $$ BEGIN
   CREATE TYPE "laterality" AS ENUM ('bilateral', 'unilateral');
@@ -162,6 +167,10 @@ CREATE TABLE IF NOT EXISTS "exercises" (
 ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "movement_type" text;
 ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "laterality" laterality;
 ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "is_corrective" boolean NOT NULL DEFAULT false;
+ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "uses_weight" boolean NOT NULL DEFAULT true;
+ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "uses_bodyweight" boolean NOT NULL DEFAULT false;
+ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "uses_band" boolean NOT NULL DEFAULT false;
+ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "uses_box" boolean NOT NULL DEFAULT false;
 
 DO $$ BEGIN
   CREATE TYPE "exercise_submission_status" AS ENUM ('pending', 'approved', 'rejected');
@@ -317,6 +326,9 @@ CREATE TABLE IF NOT EXISTS "workout_set_entries" (
   "bar_path_trace" json
 );
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "weight_unit_at_log" weight_unit;
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "band_color" text;
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "box_height" text;
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "box_height_unit" box_height_unit;
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "peak_velocity_mps" real;
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "mean_velocity_mps" real;
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "concentric_seconds" real;

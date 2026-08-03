@@ -59,17 +59,77 @@ type ExerciseInfo = {
   equipment: string;
   instructions: string | null;
   videoUrl: string | null;
+  usesWeight: boolean;
+  usesBodyweight: boolean;
+  usesBand: boolean;
+  usesBox: boolean;
 };
 
 type WeightUnit = "lbs" | "kg";
+type BoxHeightUnit = "in" | "m";
+type WeightMode = "numeric" | "bodyweight" | "band" | "box";
+
+type Materials = {
+  usesWeight: boolean;
+  usesBodyweight: boolean;
+  usesBand: boolean;
+  usesBox: boolean;
+};
+
+// What the exercise's materials say the athlete should log, in the fixed
+// order fields are shown -- box always renders alongside weight/band rather
+// than replacing them, since a combo movement (dumbbell box step-up) needs
+// both a weight and a box height on the same set.
+function materialsFrom(ex: ExerciseInfo): Materials {
+  return {
+    usesWeight: ex.usesWeight,
+    usesBodyweight: ex.usesBodyweight,
+    usesBand: ex.usesBand,
+    usesBox: ex.usesBox,
+  };
+}
+
+function deriveWeightMode(m: Materials): WeightMode {
+  if (m.usesWeight) return "numeric";
+  if (m.usesBodyweight) return "bodyweight";
+  if (m.usesBand) return "band";
+  if (m.usesBox) return "box";
+  return "numeric";
+}
+
+// Shared by the top "LAST" summary line and the per-set "Last @ X reps"
+// history line -- combo movements (weight + box) show both parts together.
+function formatLoad(entry: {
+  weightMode: WeightMode;
+  weight: string | null;
+  weightUnit: WeightUnit | null;
+  bandColor: string | null;
+  boxHeight: string | null;
+  boxHeightUnit: BoxHeightUnit | null;
+}) {
+  const parts: string[] = [];
+  if (entry.weightMode === "numeric" && entry.weight) {
+    parts.push(`${entry.weight}${entry.weightUnit ? ` ${entry.weightUnit}` : ""}`);
+  }
+  if (entry.weightMode === "band") {
+    parts.push(entry.bandColor ?? entry.weight ?? "Band");
+  }
+  if (entry.boxHeight) {
+    parts.push(`${entry.boxHeight}${entry.boxHeightUnit ? ` ${entry.boxHeightUnit}` : ""} box`);
+  }
+  return parts.length > 0 ? parts.join(", ") : "Bodyweight";
+}
 
 type LastPerformance = {
   date: string;
   sets: number;
   reps: string | null;
   weight: string | null;
-  weightMode: "numeric" | "bodyweight" | "band";
+  weightMode: WeightMode;
   weightUnit: WeightUnit | null;
+  bandColor: string | null;
+  boxHeight: string | null;
+  boxHeightUnit: BoxHeightUnit | null;
   rpe: number | null;
   suggestion: { text: string; suggestedWeight: number | null } | null;
 } | null;
@@ -78,8 +138,11 @@ type SetHistoryPoint = {
   date: string;
   reps: string;
   weight: string | null;
-  weightMode: "numeric" | "bodyweight" | "band";
+  weightMode: WeightMode;
   weightUnit: WeightUnit | null;
+  bandColor: string | null;
+  boxHeight: string | null;
+  boxHeightUnit: BoxHeightUnit | null;
   rpe: number | null;
 };
 
@@ -124,10 +187,17 @@ type SetMetrics = {
 type LogEntry = {
   programExerciseId: number | null;
   correctiveId: number | null;
-  weightMode: "numeric" | "bodyweight" | "band";
+  weightMode: WeightMode;
   rpe: number | null;
   notes: string | null;
-  sets: ({ setNumber: number; reps: string | null; weight: string | null } & Partial<SetMetrics>)[];
+  sets: ({
+    setNumber: number;
+    reps: string | null;
+    weight: string | null;
+    bandColor: string | null;
+    boxHeight: string | null;
+    boxHeightUnit: BoxHeightUnit | null;
+  } & Partial<SetMetrics>)[];
 };
 
 type DayDetail = {
@@ -144,7 +214,14 @@ type DayDetail = {
   log: { completed: boolean; entries: LogEntry[] } | null;
 };
 
-type SetRow = { setNumber: number; reps: string; weight: string } & SetMetrics;
+type SetRow = {
+  setNumber: number;
+  reps: string;
+  weight: string;
+  bandColor: string;
+  boxHeight: string;
+  boxHeightUnit: BoxHeightUnit;
+} & SetMetrics;
 
 type ItemState = {
   key: string;
@@ -165,7 +242,8 @@ type ItemState = {
   videoCheckEnabled: boolean;
   lastPerformance: LastPerformance;
   setHistory: SetHistoryPoint[];
-  weightMode: "numeric" | "bodyweight" | "band";
+  materials: Materials;
+  weightMode: WeightMode;
   athleteNotes: string;
   rpe: string;
   sets: SetRow[];
@@ -185,6 +263,9 @@ function buildItem(
       setNumber,
       reps: existingSet?.reps ?? prescribed.reps,
       weight: existingSet?.weight ?? "",
+      bandColor: existingSet?.bandColor ?? "",
+      boxHeight: existingSet?.boxHeight ?? "",
+      boxHeightUnit: existingSet?.boxHeightUnit ?? "in",
       peakVelocityMps: existingSet?.peakVelocityMps ?? null,
       meanVelocityMps: existingSet?.meanVelocityMps ?? null,
       concentricSeconds: existingSet?.concentricSeconds ?? null,
@@ -193,6 +274,7 @@ function buildItem(
       barPathTrace: existingSet?.barPathTrace ?? null,
     };
   });
+  const materials = materialsFrom(prescribed.exercise);
   return {
     key: `${kind}-${prescribed.id}`,
     kind,
@@ -213,7 +295,8 @@ function buildItem(
       kind === "exercise" ? (prescribed as PrescribedExercise).videoCheckEnabled : false,
     lastPerformance: prescribed.lastPerformance,
     setHistory: prescribed.setHistory,
-    weightMode: existing?.weightMode ?? "numeric",
+    materials,
+    weightMode: deriveWeightMode(materials),
     athleteNotes: existing?.notes ?? "",
     rpe: existing?.rpe != null ? String(existing.rpe) : "",
     sets,
@@ -222,13 +305,17 @@ function buildItem(
 }
 
 function isSetComplete(item: ItemState, set: SetRow) {
-  if (item.weightMode === "bodyweight") return set.reps.trim() !== "";
-  return set.reps.trim() !== "" && set.weight.trim() !== "";
+  if (!set.reps.trim()) return false;
+  if (item.materials.usesWeight && !set.weight.trim()) return false;
+  if (item.materials.usesBand && !set.bandColor.trim()) return false;
+  if (item.materials.usesBox && !set.boxHeight.trim()) return false;
+  return true;
 }
 
 function formatLastPerformance(lp: NonNullable<LastPerformance>) {
   let s = `${lp.sets} × ${lp.reps ?? "-"}`;
-  if (lp.weight) s += ` @ ${lp.weight}${lp.weightUnit ? ` ${lp.weightUnit}` : ""}`;
+  const load = formatLoad(lp);
+  if (load !== "Bodyweight") s += ` @ ${load}`;
   if (lp.rpe != null) s += ` · RPE ${lp.rpe}`;
   return s;
 }
@@ -248,7 +335,7 @@ function findHistoryForReps(history: SetHistoryPoint[], reps: string) {
 function isRepCountPR(
   history: SetHistoryPoint[],
   reps: string,
-  weightMode: "numeric" | "bodyweight" | "band",
+  weightMode: WeightMode,
   weight: string,
 ) {
   if (weightMode !== "numeric") return false;
@@ -464,6 +551,9 @@ export default function AthleteWorkout() {
             setNumber: s.setNumber,
             reps: s.reps || null,
             weight: s.weight || null,
+            bandColor: s.bandColor || null,
+            boxHeight: s.boxHeight || null,
+            boxHeightUnit: s.boxHeight ? s.boxHeightUnit : null,
             peakVelocityMps: s.peakVelocityMps,
             meanVelocityMps: s.meanVelocityMps,
             concentricSeconds: s.concentricSeconds,
@@ -539,6 +629,9 @@ export default function AthleteWorkout() {
               setNumber: nextNumber,
               reps: it.prescribedReps,
               weight: "",
+              bandColor: "",
+              boxHeight: "",
+              boxHeightUnit: it.sets[it.sets.length - 1]?.boxHeightUnit ?? "in",
               peakVelocityMps: null,
               meanVelocityMps: null,
               concentricSeconds: null,
@@ -573,30 +666,36 @@ export default function AthleteWorkout() {
 
   return (
     <AppShell
-      title={format(parseISO(date), "EEEE, MMM d")}
+      title={
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => navigate("/athlete")}
+            aria-label="Back to calendar"
+            className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ArrowLeft className="h-6 w-6 md:h-7 md:w-7" />
+          </button>
+          <span>{format(parseISO(date), "EEEE, MMM d")}</span>
+        </div>
+      }
       actions={
-        <>
-          <div className="flex items-center gap-1 rounded-md bg-secondary p-1">
-            {(["lbs", "kg"] as const).map((u) => (
-              <button
-                key={u}
-                onClick={() => unitMutation.mutate(u)}
-                className={cn(
-                  "rounded px-2.5 py-1 text-xs font-semibold uppercase transition-colors",
-                  unit === u
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {u}
-              </button>
-            ))}
-          </div>
-          <Button variant="outline" onClick={() => navigate("/athlete")} className="shrink-0">
-            <ArrowLeft className="h-4 w-4" />
-            <span className="hidden sm:inline">Calendar</span>
-          </Button>
-        </>
+        <div className="flex items-center gap-1 rounded-md bg-secondary p-1">
+          {(["lbs", "kg"] as const).map((u) => (
+            <button
+              key={u}
+              onClick={() => unitMutation.mutate(u)}
+              className={cn(
+                "rounded px-2.5 py-1 text-xs font-semibold uppercase transition-colors",
+                unit === u
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {u}
+            </button>
+          ))}
+        </div>
       }
     >
       {(offline || pendingSync) && (
@@ -914,6 +1013,17 @@ function ExerciseLogContent({
   const [formVideoOpen, setFormVideoOpen] = useState(false);
   const [plateCalcOpen, setPlateCalcOpen] = useState(false);
   const topSetWeight = Math.max(0, ...item.sets.map((s) => parseFloat(s.weight) || 0));
+  // One column per material the exercise actually needs -- not mutually
+  // exclusive, so a combo movement (dumbbell box step-up) shows both a
+  // weight column and a box-height column on the same row.
+  const valueColumns: { type: "weight" | "band" | "box"; label: string }[] = [
+    ...(item.materials.usesWeight ? [{ type: "weight" as const, label: unit }] : []),
+    ...(item.materials.usesBand ? [{ type: "band" as const, label: "Band" }] : []),
+    ...(item.materials.usesBox ? [{ type: "box" as const, label: "Box" }] : []),
+  ];
+  const isBodyweightOnly = valueColumns.length === 0;
+  const gridTemplate = `2.25rem 1fr repeat(${Math.max(valueColumns.length, 1)}, 1fr) 2rem`;
+  const currentBoxUnit = item.sets[0]?.boxHeightUnit ?? "in";
   const qc = useQueryClient();
   const progression = parseProgression(item.prescribedWeight);
   const weeksElapsed = Math.max(0, item.weekNumber - 1);
@@ -1084,44 +1194,58 @@ function ExerciseLogContent({
         </div>
       )}
 
-      <div className="flex items-center justify-between gap-1.5">
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px] uppercase text-muted-foreground">Log as:</span>
-          {(["numeric", "bodyweight", "band"] as const).map((m) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => onUpdateItem({ weightMode: m })}
-              className={cn(
-                "rounded-full border px-2.5 py-0.5 text-[10px] font-semibold capitalize transition-colors",
-                item.weightMode === m
-                  ? "border-primary bg-primary/15 text-primary"
-                  : "border-border text-muted-foreground hover:border-primary/50 hover:text-primary",
-              )}
-            >
-              {m === "numeric" ? `Weight (${unit})` : m}
-            </button>
-          ))}
-        </div>
-        {item.weightMode === "numeric" && (
-          <button
-            type="button"
-            onClick={() => setPlateCalcOpen(true)}
-            className="flex shrink-0 items-center gap-1 rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-muted-foreground hover:border-primary/50 hover:text-primary"
-          >
-            <Layers className="h-3 w-3" />
-            Plates
-          </button>
-        )}
-      </div>
-
       <div>
-        <div className="grid grid-cols-[2.25rem_1fr_1fr_2rem] items-center gap-2 px-0.5 pb-1">
+        <div
+          className="grid items-center gap-2 px-0.5 pb-1"
+          style={{ gridTemplateColumns: gridTemplate }}
+        >
           <span className="text-[10px] font-semibold uppercase text-muted-foreground">Set</span>
           <span className="text-[10px] font-semibold uppercase text-muted-foreground">Reps</span>
-          <span className="text-[10px] font-semibold uppercase text-muted-foreground">
-            {item.weightMode === "numeric" ? unit : item.weightMode === "band" ? "Band" : ""}
-          </span>
+          {isBodyweightOnly ? (
+            <span className="text-[10px] font-semibold uppercase text-muted-foreground">
+              Bodyweight
+            </span>
+          ) : (
+            valueColumns.map((col) => (
+              <div key={col.type} className="flex items-center gap-1">
+                <span className="text-[10px] font-semibold uppercase text-muted-foreground">
+                  {col.label}
+                </span>
+                {col.type === "weight" && (
+                  <button
+                    type="button"
+                    onClick={() => setPlateCalcOpen(true)}
+                    aria-label="Plate and warm-up calculator"
+                    title="Plate and warm-up calculator"
+                    className="text-muted-foreground transition-colors hover:text-primary"
+                  >
+                    <Layers className="h-3 w-3" />
+                  </button>
+                )}
+                {col.type === "box" && (
+                  <div className="flex overflow-hidden rounded border border-border text-[9px] font-semibold">
+                    {(["in", "m"] as const).map((u) => (
+                      <button
+                        key={u}
+                        type="button"
+                        onClick={() => {
+                          for (const s of item.sets) onUpdateSet(s.setNumber, { boxHeightUnit: u });
+                        }}
+                        className={cn(
+                          "px-1 py-0.5 transition-colors",
+                          currentBoxUnit === u
+                            ? "bg-primary text-primary-foreground"
+                            : "text-muted-foreground hover:text-foreground",
+                        )}
+                      >
+                        {u}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))
+          )}
           <span />
         </div>
         <div className="space-y-1.5">
@@ -1132,7 +1256,10 @@ function ExerciseLogContent({
             const isPR = complete && isRepCountPR(item.setHistory, set.reps, item.weightMode, set.weight);
             return (
               <div key={set.setNumber}>
-                <div className="grid grid-cols-[2.25rem_1fr_1fr_2rem] items-center gap-2">
+                <div
+                  className="grid items-center gap-2"
+                  style={{ gridTemplateColumns: gridTemplate }}
+                >
                   <span className="text-sm font-semibold text-muted-foreground">{set.setNumber}</span>
                   <Input
                     placeholder="Reps"
@@ -1140,26 +1267,42 @@ function ExerciseLogContent({
                     onChange={(e) => onUpdateSet(set.setNumber, { reps: e.target.value })}
                     className="h-9 text-sm"
                   />
-                  {item.weightMode === "bodyweight" ? (
+                  {isBodyweightOnly ? (
                     <div className="flex h-9 items-center justify-center rounded-md border border-dashed border-border text-xs text-muted-foreground">
                       Bodyweight
                     </div>
-                  ) : item.weightMode === "band" ? (
-                    <Input
-                      placeholder="e.g. Green"
-                      value={set.weight}
-                      onChange={(e) => onUpdateSet(set.setNumber, { weight: e.target.value })}
-                      className="h-9 text-sm"
-                    />
                   ) : (
-                    <Input
-                      type="number"
-                      inputMode="decimal"
-                      placeholder="0"
-                      value={set.weight}
-                      onChange={(e) => onUpdateSet(set.setNumber, { weight: e.target.value })}
-                      className="h-9 text-sm"
-                    />
+                    valueColumns.map((col) =>
+                      col.type === "weight" ? (
+                        <Input
+                          key="weight"
+                          type="number"
+                          inputMode="decimal"
+                          placeholder="0"
+                          value={set.weight}
+                          onChange={(e) => onUpdateSet(set.setNumber, { weight: e.target.value })}
+                          className="h-9 text-sm"
+                        />
+                      ) : col.type === "band" ? (
+                        <Input
+                          key="band"
+                          placeholder="e.g. Green"
+                          value={set.bandColor}
+                          onChange={(e) => onUpdateSet(set.setNumber, { bandColor: e.target.value })}
+                          className="h-9 text-sm"
+                        />
+                      ) : (
+                        <Input
+                          key="box"
+                          type="number"
+                          inputMode="decimal"
+                          placeholder="Height"
+                          value={set.boxHeight}
+                          onChange={(e) => onUpdateSet(set.setNumber, { boxHeight: e.target.value })}
+                          className="h-9 text-sm"
+                        />
+                      ),
+                    )
                   )}
                   <div
                     className={cn(
@@ -1181,12 +1324,7 @@ function ExerciseLogContent({
                 </div>
                 {historyMatch && !isPR && (
                   <p className="mt-0.5 pl-9 text-[10px] text-muted-foreground">
-                    Last @ {set.reps} reps:{" "}
-                    {historyMatch.weightMode === "numeric"
-                      ? `${historyMatch.weight} ${historyMatch.weightUnit ?? ""}`.trim()
-                      : historyMatch.weightMode === "band"
-                        ? historyMatch.weight
-                        : "Bodyweight"}
+                    Last @ {set.reps} reps: {formatLoad(historyMatch)}
                   </p>
                 )}
                 {item.trackingLevel !== "none" && (

@@ -67,11 +67,18 @@ function initialsFor(name: string): string {
 type RecentWorkoutLog = {
   date: string;
   entries: {
-    weightMode: "numeric" | "bodyweight" | "band";
+    weightMode: "numeric" | "bodyweight" | "band" | "box";
     rpe: number | null;
     programExercise: { exerciseId: number } | null;
     corrective: { exerciseId: number } | null;
-    sets: { reps: string | null; weight: string | null; weightUnit: "lbs" | "kg" | null }[];
+    sets: {
+      reps: string | null;
+      weight: string | null;
+      weightUnit: "lbs" | "kg" | null;
+      bandColor: string | null;
+      boxHeight: string | null;
+      boxHeightUnit: "in" | "m" | null;
+    }[];
   }[];
 };
 
@@ -85,8 +92,11 @@ function extractPerformanceHistory(logs: RecentWorkoutLog[], exerciseId: number)
     date: string;
     reps: string;
     weight: string | null;
-    weightMode: "numeric" | "bodyweight" | "band";
+    weightMode: "numeric" | "bodyweight" | "band" | "box";
     weightUnit: "lbs" | "kg" | null;
+    bandColor: string | null;
+    boxHeight: string | null;
+    boxHeightUnit: "in" | "m" | null;
     rpe: number | null;
   };
   let lastPerformance: {
@@ -94,8 +104,11 @@ function extractPerformanceHistory(logs: RecentWorkoutLog[], exerciseId: number)
     sets: number;
     reps: string | null;
     weight: string | null;
-    weightMode: "numeric" | "bodyweight" | "band";
+    weightMode: "numeric" | "bodyweight" | "band" | "box";
     weightUnit: "lbs" | "kg" | null;
+    bandColor: string | null;
+    boxHeight: string | null;
+    boxHeightUnit: "in" | "m" | null;
     rpe: number | null;
     suggestion: { text: string; suggestedWeight: number | null } | null;
   } | null = null;
@@ -115,6 +128,9 @@ function extractPerformanceHistory(logs: RecentWorkoutLog[], exerciseId: number)
           weight,
           weightMode: entry.weightMode,
           weightUnit: entry.sets[0]?.weightUnit ?? null,
+          bandColor: entry.sets[0]?.bandColor ?? null,
+          boxHeight: entry.sets[0]?.boxHeight ?? null,
+          boxHeightUnit: entry.sets[0]?.boxHeightUnit ?? null,
           rpe: entry.rpe,
           suggestion: storage.suggestNextLoad(entry.rpe, weight, entry.weightMode),
         };
@@ -128,6 +144,9 @@ function extractPerformanceHistory(logs: RecentWorkoutLog[], exerciseId: number)
           weight: set.weight,
           weightMode: entry.weightMode,
           weightUnit: set.weightUnit,
+          bandColor: set.bandColor,
+          boxHeight: set.boxHeight,
+          boxHeightUnit: set.boxHeightUnit,
           rpe: entry.rpe,
         });
         if (setHistory.length >= 200) break outer;
@@ -2517,7 +2536,7 @@ Design a complete draft program matching the coach's request.`;
   suggestNextLoad(
     rpe: number | null,
     weight: string | null,
-    weightMode: "numeric" | "bodyweight" | "band",
+    weightMode: "numeric" | "bodyweight" | "band" | "box",
   ): { text: string; suggestedWeight: number | null } | null {
     if (rpe == null) return null;
     const parsed = weightMode === "numeric" && weight ? parseFloat(weight) : NaN;
@@ -2712,6 +2731,9 @@ Design a complete draft program matching the coach's request.`;
               reps: s.reps ?? null,
               weight: s.weight ?? null,
               weightUnit: entry.weightMode === "numeric" && s.weight ? weightUnit : null,
+              bandColor: s.bandColor ?? null,
+              boxHeight: s.boxHeight ?? null,
+              boxHeightUnit: s.boxHeightUnit ?? null,
               peakVelocityMps: s.peakVelocityMps ?? null,
               meanVelocityMps: s.meanVelocityMps ?? null,
               concentricSeconds: s.concentricSeconds ?? null,
@@ -2740,6 +2762,9 @@ Design a complete draft program matching the coach's request.`;
         reps: workoutSetEntries.reps,
         weight: workoutSetEntries.weight,
         weightUnit: workoutSetEntries.weightUnit,
+        bandColor: workoutSetEntries.bandColor,
+        boxHeight: workoutSetEntries.boxHeight,
+        boxHeightUnit: workoutSetEntries.boxHeightUnit,
         weightMode: workoutLogEntries.weightMode,
         rpe: workoutLogEntries.rpe,
         peakVelocityMps: workoutSetEntries.peakVelocityMps,
@@ -2768,6 +2793,9 @@ Design a complete draft program matching the coach's request.`;
         reps: workoutSetEntries.reps,
         weight: workoutSetEntries.weight,
         weightUnit: workoutSetEntries.weightUnit,
+        bandColor: workoutSetEntries.bandColor,
+        boxHeight: workoutSetEntries.boxHeight,
+        boxHeightUnit: workoutSetEntries.boxHeightUnit,
         weightMode: workoutLogEntries.weightMode,
         rpe: workoutLogEntries.rpe,
         peakVelocityMps: workoutSetEntries.peakVelocityMps,

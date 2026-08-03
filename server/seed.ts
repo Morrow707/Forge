@@ -14,6 +14,19 @@ function videoSearchUrl(name: string) {
   return `https://www.youtube.com/results?search_query=${encodeURIComponent(`${name} exercise tutorial`)}`;
 }
 
+// Derives what an exercise's athlete-facing logging fields should be from
+// its existing equipment/name text -- box combines with weight/bodyweight
+// rather than replacing it (e.g. "Dumbbell Box Step-Up" needs both).
+function deriveMaterials(equipment: string, name: string) {
+  const eq = equipment.toLowerCase();
+  const nm = name.toLowerCase();
+  const usesBodyweight = eq.includes("bodyweight");
+  const usesBand = eq.includes("band");
+  const usesBox = nm.includes("box") || nm.includes("step-up") || nm.includes("step up");
+  const usesWeight = !usesBodyweight && !usesBand;
+  return { usesWeight, usesBodyweight, usesBand, usesBox };
+}
+
 async function main() {
   console.log("Seeding Forge demo data...");
 
@@ -115,6 +128,15 @@ async function main() {
         movementType: "Squat",
         laterality: "bilateral" as const,
         instructions: "Explosive triple extension, soft landing.",
+      },
+      {
+        name: "Dumbbell Box Step-Up",
+        category: "strength" as const,
+        muscleGroup: "Quads",
+        equipment: "Dumbbell",
+        movementType: "Squat",
+        laterality: "unilateral" as const,
+        instructions: "Full foot on the box, drive through the heel to stand, control the step down.",
       },
       {
         name: "Clean & Jerk",
@@ -528,6 +550,27 @@ async function main() {
         videoUrl: videoSearchUrl(ex.name),
       });
       exerciseMap[ex.name] = row.id;
+    }
+
+    // One-time backfill for exercises that already existed before the
+    // materials columns were added -- only touches rows still at the
+    // just-added default (usesWeight true, everything else false), so it
+    // can never clobber a coach's own edit to these fields after the fact.
+    for (const existingEx of await storage.getAllExercises()) {
+      const untouched =
+        existingEx.usesWeight === true &&
+        !existingEx.usesBodyweight &&
+        !existingEx.usesBand &&
+        !existingEx.usesBox;
+      if (!untouched) continue;
+      const derived = deriveMaterials(existingEx.equipment, existingEx.name);
+      const alreadyCorrect =
+        existingEx.usesWeight === derived.usesWeight &&
+        existingEx.usesBodyweight === derived.usesBodyweight &&
+        existingEx.usesBand === derived.usesBand &&
+        existingEx.usesBox === derived.usesBox;
+      if (alreadyCorrect) continue;
+      await storage.updateExercise(existingEx.id, derived);
     }
   }
 

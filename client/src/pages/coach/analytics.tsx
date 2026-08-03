@@ -35,7 +35,10 @@ type AnalyticsPoint = {
   reps: string | null;
   weight: string | null;
   weightUnit: "lbs" | "kg" | null;
-  weightMode: "numeric" | "bodyweight" | "band";
+  bandColor: string | null;
+  boxHeight: string | null;
+  boxHeightUnit: "in" | "m" | null;
+  weightMode: "numeric" | "bodyweight" | "band" | "box";
   rpe: number | null;
   estimatedOneRm: number | null;
   isPR: boolean;
@@ -456,8 +459,10 @@ export default function CoachAnalytics() {
                         {p.weightMode === "numeric"
                           ? `${p.weight ?? "-"} ${p.weightUnit ?? ""}`
                           : p.weightMode === "band"
-                            ? p.weight ?? "-"
-                            : "Bodyweight"}
+                            ? (p.bandColor ?? p.weight ?? "Band")
+                            : p.weightMode === "box"
+                              ? `${p.boxHeight ?? "-"} ${p.boxHeightUnit ?? ""}`
+                              : "Bodyweight"}
                       </td>
                       <td className="py-1.5 pr-3">{p.estimatedOneRm ?? "-"}</td>
                       <td className="py-1.5 pr-3">{p.rpe ?? "-"}</td>
