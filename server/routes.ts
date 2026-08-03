@@ -676,6 +676,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
+  // Same isolation + weekly-cache pattern as /api/athlete/digest -- its own
+  // lazily-fetched endpoint so a slow/unconfigured AI call never blocks the
+  // coach dashboard, and only ever generates (and notifies) once per coach
+  // per week.
+  app.get("/api/coach/digest", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const { digest, isNew } = await storage.getOrCreateCoachDigest(user.id);
+    if (isNew && digest) {
+      await notifyUser(
+        user.id,
+        "digest",
+        "Your Weekly Roster Summary",
+        digest.digest,
+        "/coach/roster",
+      );
+    }
+    res.json(digest ? { digest: digest.digest } : null);
+  });
+
   app.get("/api/coach/teams", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     const teamList = await storage.getTeamsForCoach(user.id);

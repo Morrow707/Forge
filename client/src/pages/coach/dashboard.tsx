@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { EntryPill, type CalendarEntry } from "@/components/calendar-view";
 import { CoachDayEditDialog } from "@/components/coach-day-edit-dialog";
+import { CoachDigestBanner } from "@/components/coach-digest-banner";
 import { useAuth } from "@/hooks/use-auth";
 import { apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
@@ -96,6 +97,8 @@ export default function CoachDashboard() {
   return (
     <AppShell title={`Welcome, ${user?.name?.split(" ")[0] ?? "Coach"}`} fitScreen>
       <div className="flex h-full min-h-0 flex-col gap-3">
+        <CoachDigestBanner />
+
         <Card className="shrink-0">
           <CardHeader className="flex-row items-center justify-between space-y-0 p-3 md:p-4">
             <div>
