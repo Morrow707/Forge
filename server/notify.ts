@@ -16,14 +16,20 @@ export async function notifyUser(
   // Announcements already push through regardless of prefs (see the team
   // board route) -- bypassEmail extends that same emergency-reach intent to
   // email, since an athlete without push enabled would otherwise have no
-  // way to be reached at all.
-  { bypassEmailPref = false }: { bypassEmailPref?: boolean } = {},
+  // way to be reached at all. skipEmail is the opposite override: for
+  // routine, high-frequency events (a regular team board post) email would
+  // be noisy regardless of the user's own preference, so this suppresses it
+  // unconditionally rather than asking notifyEmail to decide.
+  {
+    bypassEmailPref = false,
+    skipEmail = false,
+  }: { bypassEmailPref?: boolean; skipEmail?: boolean } = {},
 ) {
   await storage.createNotification(userId, type, title, body, link);
   await sendPushToUser(userId, { title, body, url: link });
 
   const user = await storage.getUser(userId);
-  if (user && (user.notifyEmail || bypassEmailPref)) {
+  if (!skipEmail && user && (user.notifyEmail || bypassEmailPref)) {
     await sendEmail({
       to: user.email,
       subject: title,

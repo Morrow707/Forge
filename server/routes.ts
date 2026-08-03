@@ -806,6 +806,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ),
         ),
       );
+    } else {
+      // Regular posts still surface in the bell/push inbox for everyone
+      // else on the shared board -- just never by email, since a post here
+      // is routine, not urgent, unlike an announcement.
+      const roster = await storage.getRosterForCoach(user.id);
+      await Promise.all(
+        roster.map((athlete) =>
+          notifyUser(
+            athlete.id,
+            "team_board",
+            `New Team Board post from ${user.name}`,
+            parsed.data.body,
+            "/athlete/team-board",
+            { skipEmail: true },
+          ),
+        ),
+      );
     }
 
     res.status(201).json(post);
@@ -844,6 +861,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // Announcements are coach-only -- ignore the field entirely here rather
     // than trusting the client to not send it.
     const post = await storage.createTeamPost(coach.id, user.id, parsed.data.body, false);
+
+    // Same shared-board broadcast as the coach-side route above: everyone
+    // else watching this board gets a bell/push notification, never email.
+    const roster = await storage.getRosterForCoach(coach.id);
+    const otherRecipients = [
+      { id: coach.id, link: "/coach/team-board" },
+      ...roster.filter((a) => a.id !== user.id).map((a) => ({ id: a.id, link: "/athlete/team-board" })),
+    ];
+    await Promise.all(
+      otherRecipients.map((r) =>
+        notifyUser(
+          r.id,
+          "team_board",
+          `New Team Board post from ${user.name}`,
+          parsed.data.body,
+          r.link,
+          { skipEmail: true },
+        ),
+      ),
+    );
+
     res.status(201).json(post);
   });
 
