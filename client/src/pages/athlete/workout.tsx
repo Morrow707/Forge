@@ -44,10 +44,12 @@ import {
   Crown,
   Calculator,
   CalendarRange,
+  Layers,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import type { PublicUser } from "@shared/schema";
 import { parseProgression } from "@/lib/progression";
+import { PlateCalculatorDialog } from "@/components/plate-calculator-dialog";
 
 type ExerciseInfo = {
   id: number;
@@ -908,6 +910,8 @@ function ExerciseLogContent({
   const isCorrective = item.kind === "corrective";
   const [trackingSet, setTrackingSet] = useState<number | null>(null);
   const [formVideoOpen, setFormVideoOpen] = useState(false);
+  const [plateCalcOpen, setPlateCalcOpen] = useState(false);
+  const topSetWeight = Math.max(0, ...item.sets.map((s) => parseFloat(s.weight) || 0));
   const qc = useQueryClient();
   const progression = parseProgression(item.prescribedWeight);
   const weeksElapsed = Math.max(0, item.weekNumber - 1);
@@ -1078,23 +1082,35 @@ function ExerciseLogContent({
         </div>
       )}
 
-      <div className="flex items-center gap-1.5">
-        <span className="text-[10px] uppercase text-muted-foreground">Log as:</span>
-        {(["numeric", "bodyweight", "band"] as const).map((m) => (
+      <div className="flex items-center justify-between gap-1.5">
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] uppercase text-muted-foreground">Log as:</span>
+          {(["numeric", "bodyweight", "band"] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => onUpdateItem({ weightMode: m })}
+              className={cn(
+                "rounded-full border px-2.5 py-0.5 text-[10px] font-semibold capitalize transition-colors",
+                item.weightMode === m
+                  ? "border-primary bg-primary/15 text-primary"
+                  : "border-border text-muted-foreground hover:border-primary/50 hover:text-primary",
+              )}
+            >
+              {m === "numeric" ? `Weight (${unit})` : m}
+            </button>
+          ))}
+        </div>
+        {item.weightMode === "numeric" && (
           <button
-            key={m}
             type="button"
-            onClick={() => onUpdateItem({ weightMode: m })}
-            className={cn(
-              "rounded-full border px-2.5 py-0.5 text-[10px] font-semibold capitalize transition-colors",
-              item.weightMode === m
-                ? "border-primary bg-primary/15 text-primary"
-                : "border-border text-muted-foreground hover:border-primary/50 hover:text-primary",
-            )}
+            onClick={() => setPlateCalcOpen(true)}
+            className="flex shrink-0 items-center gap-1 rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-muted-foreground hover:border-primary/50 hover:text-primary"
           >
-            {m === "numeric" ? `Weight (${unit})` : m}
+            <Layers className="h-3 w-3" />
+            Plates
           </button>
-        ))}
+        )}
       </div>
 
       <div>
@@ -1221,6 +1237,16 @@ function ExerciseLogContent({
           open={formVideoOpen}
           onOpenChange={setFormVideoOpen}
           onSaved={(url) => postFormVideoMutation.mutate(url)}
+        />
+      )}
+
+      {item.weightMode === "numeric" && (
+        <PlateCalculatorDialog
+          open={plateCalcOpen}
+          onOpenChange={setPlateCalcOpen}
+          exerciseName={item.exerciseName}
+          initialWeight={topSetWeight}
+          unit={unit}
         />
       )}
 
