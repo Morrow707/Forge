@@ -16,7 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { ExercisePickerDialog } from "@/components/exercise-picker-dialog";
 import { WorkoutCommentThread } from "@/components/workout-comment-thread";
 import { ProgressionButton } from "@/components/progression-button";
-import { apiRequest, ApiError } from "@/lib/queryClient";
+import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import {
   computeExerciseLabels,
@@ -109,10 +109,7 @@ export function CoachDayEditDialog({
   const qc = useQueryClient();
   const { data, isLoading } = useQuery<DayDetail>({
     queryKey: ["/api/coach/program-days", programDayId],
-    queryFn: async () => {
-      const res = await apiRequest("GET", `/api/coach/program-days/${programDayId}`);
-      return res.json();
-    },
+    queryFn: () => getJson(`/api/coach/program-days/${programDayId}`),
     enabled: open && programDayId != null,
   });
 
@@ -130,19 +127,13 @@ export function CoachDayEditDialog({
 
   const { data: recentCorrectives = [] } = useQuery<Exercise[]>({
     queryKey: ["/api/coach/athletes", athleteId, "recent-correctives"],
-    queryFn: async () => {
-      const res = await apiRequest("GET", `/api/coach/athletes/${athleteId}/recent-correctives`);
-      return res.json();
-    },
+    queryFn: () => getJson(`/api/coach/athletes/${athleteId}/recent-correctives`),
     enabled: open && athleteId != null,
   });
 
   const { data: program } = useQuery<any>({
     queryKey: ["/api/coach/programs", data?.programId],
-    queryFn: async () => {
-      const res = await apiRequest("GET", `/api/coach/programs/${data!.programId}`);
-      return res.json();
-    },
+    queryFn: () => getJson(`/api/coach/programs/${data!.programId}`),
     enabled: open && data != null,
   });
 

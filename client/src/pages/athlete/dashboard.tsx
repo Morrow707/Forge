@@ -26,7 +26,10 @@ export default function AthleteDashboard() {
       return res.json();
     },
     enabled: Boolean(range.start && range.end),
-    refetchInterval: 10_000,
+    // 60s matches every other poll in the app -- refetchOnWindowFocus
+    // already covers the common "coach changed today's plan while I had
+    // this tab open" case the moment the athlete comes back to look.
+    refetchInterval: 60_000,
     refetchOnWindowFocus: true,
   });
 

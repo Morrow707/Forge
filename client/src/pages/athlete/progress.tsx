@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, getJson } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import { shareOrDownloadFile } from "@/lib/share-file";
 import { toast } from "sonner";
@@ -80,18 +80,12 @@ export default function AthleteProgress() {
 
   const { data, isLoading } = useQuery<ProgressSummary>({
     queryKey: ["/api/athlete/progress"],
-    queryFn: async () => {
-      const res = await apiRequest("GET", "/api/athlete/progress");
-      return res.json();
-    },
+    queryFn: () => getJson("/api/athlete/progress"),
   });
 
   const { data: metrics } = useQuery<BodyMetric[]>({
     queryKey: ["/api/athlete/body-metrics"],
-    queryFn: async () => {
-      const res = await apiRequest("GET", "/api/athlete/body-metrics");
-      return res.json();
-    },
+    queryFn: () => getJson("/api/athlete/body-metrics"),
   });
 
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));

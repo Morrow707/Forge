@@ -6,7 +6,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { apiRequest } from "@/lib/queryClient";
+import { getJson } from "@/lib/queryClient";
 import { format, parseISO } from "date-fns";
 import {
   LineChart,
@@ -52,10 +52,7 @@ export function WellnessHistoryDialog({
 }) {
   const { data = [], isLoading } = useQuery<WellnessEntry[]>({
     queryKey: [fetchUrl],
-    queryFn: async () => {
-      const res = await apiRequest("GET", fetchUrl);
-      return res.json();
-    },
+    queryFn: () => getJson(fetchUrl),
     enabled: open,
   });
 

@@ -11,7 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { apiRequest, ApiError } from "@/lib/queryClient";
+import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Moon, Activity, Brain } from "lucide-react";
@@ -37,10 +37,7 @@ export function WellnessGate() {
 
   const { data, isLoading } = useQuery<WellnessCheckin>({
     queryKey: ["/api/athlete/wellness/today"],
-    queryFn: async () => {
-      const res = await apiRequest("GET", "/api/athlete/wellness/today");
-      return res.json();
-    },
+    queryFn: () => getJson("/api/athlete/wellness/today"),
   });
 
   const submitMutation = useMutation({

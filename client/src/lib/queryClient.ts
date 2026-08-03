@@ -40,6 +40,16 @@ export async function apiRequest(
   return res;
 }
 
+// Shorthand for the "GET a URL, parse JSON" queryFn every manually-keyed
+// query in the app was copy-pasting inline -- use this instead of writing
+// out `async () => { const res = await apiRequest("GET", url); return
+// res.json(); }` again. Not needed for queries that just pass a bare
+// queryKey with no explicit queryFn; those already go through getQueryFn.
+export async function getJson(url: string) {
+  const res = await apiRequest("GET", url);
+  return res.json();
+}
+
 export const getQueryFn: <T>(options?: {
   on401?: "returnNull";
 }) => QueryFunction<T> =
