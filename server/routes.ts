@@ -6,10 +6,11 @@ import multer from "multer";
 import { setupAuth, requireAuth, requireRole } from "./auth";
 import { storage } from "./storage";
 import { buildIcsFeed } from "./ics";
-import { sendPushToUser, getVapidPublicKey } from "./push";
+import { getVapidPublicKey } from "./push";
 import { sendEmail } from "./email";
 import { buildProgressReportEmail } from "./progress-report";
 import { buildRecruitingProfilePdf } from "./recruiting-profile";
+import { notifyUser } from "./notify";
 import {
   insertExerciseSchema,
   programStructureSchema,
@@ -695,20 +696,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (parsed.data.isAnnouncement) {
       const roster = await storage.getRosterForCoach(user.id);
       await Promise.all(
-        roster.map(async (athlete) => {
-          await storage.createNotification(
+        roster.map((athlete) =>
+          notifyUser(
             athlete.id,
             "announcement",
-            `Announcement from ${user.name}`,
+            `📢 Announcement from ${user.name}`,
             parsed.data.body,
             "/athlete/team-board",
-          );
-          await sendPushToUser(athlete.id, {
-            title: `📢 Announcement from ${user.name}`,
-            body: parsed.data.body,
-            url: "/athlete/team-board",
-          });
-        }),
+            { bypassEmailPref: true },
+          ),
+        ),
       );
     }
 
@@ -986,6 +983,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         user.id,
         parsed.data,
       );
+
+      // Symmetric with the athlete->coach direction below -- a coach's
+      // reply (including a drawn video annotation, which arrives as a
+      // comment with an imageUrl) should reach the athlete the same way.
+      const hasVideo = !!parsed.data.videoUrl || !!parsed.data.imageUrl;
+      const title = hasVideo ? "New video from your coach" : "New comment from your coach";
+      const body = `${user.name}: ${parsed.data.body}`;
+      await notifyUser(owned.athleteId, hasVideo ? "video" : "comment", title, body, "/athlete");
+
       res.status(201).json(comment);
     },
   );
@@ -1290,14 +1296,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const hasVideo = !!parsed.data.videoUrl;
       const title = hasVideo ? "New video from an athlete" : "New comment from an athlete";
       const body = `${user.name}: ${parsed.data.body}`;
-      await storage.createNotification(
-        owned.coachId,
-        hasVideo ? "video" : "comment",
-        title,
-        body,
-        "/coach/calendar",
-      );
-      await sendPushToUser(owned.coachId, { title, body, url: "/coach/calendar" });
+      await notifyUser(owned.coachId, hasVideo ? "video" : "comment", title, body, "/coach/calendar");
 
       res.status(201).json(comment);
     },
