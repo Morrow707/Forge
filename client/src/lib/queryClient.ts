@@ -57,10 +57,19 @@ export const getQueryFn: <T>(options?: {
     return res.json();
   };
 
+// Only useAuth's own "/api/auth/me" check wants a 401 treated as the valid,
+// expected answer "no one is logged in" -- every other query in the app is
+// already gated behind ProtectedRoute and expects to be authenticated, so a
+// 401 there means something's genuinely wrong (session expired, or a
+// request raced ahead of a fresh login) and should surface as a query error
+// like any other failure, not silently resolve to null. Returning null from
+// the default queryFn broke that: callers destructuring `data: x = []` only
+// get the default for `undefined`, not `null`, so a raced 401 crashed
+// downstream code that assumed an array.
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      queryFn: getQueryFn({ on401: "returnNull" }),
+      queryFn: getQueryFn(),
       refetchInterval: false,
       refetchOnWindowFocus: false,
       staleTime: 30_000,

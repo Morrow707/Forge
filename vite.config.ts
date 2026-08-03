@@ -54,6 +54,25 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    sourcemap: true,
+    // vendor-charts (recharts) is inherently large but lazy -- only fetched
+    // by the handful of pages that render a chart, never on initial load --
+    // so the default 500kB warning for it is no longer a signal of anything.
+    chunkSizeWarningLimit: 600,
+    rollupOptions: {
+      output: {
+        // Without this, Rollup names a shared vendor chunk after whichever
+        // of its importers it picks arbitrarily -- recharts (only used by
+        // a few history/analytics dialogs) was showing up as a 360kB chunk
+        // named after shared/testing-metrics.ts, a 28-line file that has
+        // nothing to do with charting. Named explicitly so it reads as what
+        // it is and stays a stable, cacheable chunk across deploys.
+        manualChunks(id) {
+          if (id.includes("node_modules/recharts")) return "vendor-charts";
+          if (id.includes("node_modules/date-fns")) return "vendor-date";
+        },
+      },
+    },
   },
   server: {
     fs: {
