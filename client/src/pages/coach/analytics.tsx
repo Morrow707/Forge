@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, getJson } from "@/lib/queryClient";
 import { Users, Gauge, Crown, CalendarDays, TrendingUp } from "lucide-react";
 import {
   LineChart,
@@ -80,10 +80,7 @@ export default function CoachAnalytics() {
 
   const { data: overview = [], isLoading: overviewLoading } = useQuery<RecentSession[]>({
     queryKey: ["/api/coach/analytics/overview", athleteId],
-    queryFn: async () => {
-      const res = await apiRequest("GET", `/api/coach/analytics/overview?athleteId=${athleteId}`);
-      return res.json();
-    },
+    queryFn: () => getJson(`/api/coach/analytics/overview?athleteId=${athleteId}`),
     enabled: !!athleteId && !exerciseId,
   });
 
@@ -508,10 +505,7 @@ function TeamTrends() {
 
   const { data: points = [], isLoading } = useQuery<TrendPoint[]>({
     queryKey: ["/api/coach/testing-trends", metric],
-    queryFn: async () => {
-      const res = await apiRequest("GET", `/api/coach/testing-trends?metric=${metric}`);
-      return res.json();
-    },
+    queryFn: () => getJson(`/api/coach/testing-trends?metric=${metric}`),
   });
 
   const activeMetric = TESTING_METRICS.find((m) => m.key === metric)!;

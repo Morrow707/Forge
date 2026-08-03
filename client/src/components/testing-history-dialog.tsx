@@ -14,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { apiRequest } from "@/lib/queryClient";
+import { getJson } from "@/lib/queryClient";
 import { format, parseISO } from "date-fns";
 import {
   LineChart,
@@ -57,10 +57,7 @@ export function TestingHistoryDialog({
 
   const { data = [], isLoading } = useQuery<TestingResult[]>({
     queryKey: [fetchUrl],
-    queryFn: async () => {
-      const res = await apiRequest("GET", fetchUrl);
-      return res.json();
-    },
+    queryFn: () => getJson(fetchUrl),
     enabled: open,
   });
 

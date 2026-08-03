@@ -13,7 +13,7 @@ import { ExercisePickerDialog } from "@/components/exercise-picker-dialog";
 import { AssignProgramDialog } from "@/components/assign-program-dialog";
 import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
 import { ProgressionButton } from "@/components/progression-button";
-import { apiRequest, ApiError } from "@/lib/queryClient";
+import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import {
   computeExerciseLabels,
@@ -114,10 +114,7 @@ export function ProgramBuilderPage({
 
   const { data: program, isLoading } = useQuery<any>({
     queryKey: [`${apiBase}/programs`, programId],
-    queryFn: async () => {
-      const res = await apiRequest("GET", `${apiBase}/programs/${programId}`);
-      return res.json();
-    },
+    queryFn: () => getJson(`${apiBase}/programs/${programId}`),
   });
   const { data: roster = [] } = useQuery<RosterEntry[]>({
     queryKey: ["/api/coach/roster"],

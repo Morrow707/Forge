@@ -11,7 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
-import { apiRequest } from "@/lib/queryClient";
+import { getJson } from "@/lib/queryClient";
 import { CalendarDays } from "lucide-react";
 
 type RosterEntry = { id: number; name: string };
@@ -32,14 +32,15 @@ export default function CoachCalendar() {
 
   const { data: entries = [], isLoading } = useQuery<CalendarEntry[]>({
     queryKey: ["/api/coach/calendar", range.start, range.end, athleteId],
-    queryFn: async () => {
+    queryFn: () => {
       const params = new URLSearchParams({ start: range.start, end: range.end });
       if (athleteId !== "all") params.set("athleteId", athleteId);
-      const res = await apiRequest("GET", `/api/coach/calendar?${params.toString()}`);
-      return res.json();
+      return getJson(`/api/coach/calendar?${params.toString()}`);
     },
     enabled: Boolean(range.start && range.end),
-    refetchInterval: 10_000,
+    // 60s matches every other poll in the app -- refetchOnWindowFocus
+    // already covers the common "came back to this tab" case.
+    refetchInterval: 60_000,
     refetchOnWindowFocus: true,
   });
 

@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { apiRequest } from "@/lib/queryClient";
+import { getJson } from "@/lib/queryClient";
 import { Trophy, Medal } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { formatHeight } from "@/components/profile-fields-form";
@@ -53,10 +53,7 @@ export default function CoachLeaderboard() {
 
   const { data: entries = [], isLoading } = useQuery<LeaderboardEntry[]>({
     queryKey: ["/api/coach/leaderboard", exerciseId],
-    queryFn: async () => {
-      const res = await apiRequest("GET", `/api/coach/leaderboard?exerciseId=${exerciseId}`);
-      return res.json();
-    },
+    queryFn: () => getJson(`/api/coach/leaderboard?exerciseId=${exerciseId}`),
     enabled: !!exerciseId,
   });
 

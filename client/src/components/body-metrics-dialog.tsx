@@ -17,7 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
 import {
@@ -56,10 +56,7 @@ export function BodyMetricsDialog({
   const qc = useQueryClient();
   const { data, isLoading } = useQuery<BodyMetric[]>({
     queryKey: [fetchUrl],
-    queryFn: async () => {
-      const res = await apiRequest("GET", fetchUrl);
-      return res.json();
-    },
+    queryFn: () => getJson(fetchUrl),
     enabled: open,
   });
 

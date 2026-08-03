@@ -7,7 +7,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { apiRequest } from "@/lib/queryClient";
+import { getJson } from "@/lib/queryClient";
 import { Copy, CalendarDays, CalendarPlus } from "lucide-react";
 import { toast } from "sonner";
 
@@ -29,10 +29,7 @@ export function CalendarLinkDialog({
 }) {
   const { data, isLoading } = useQuery<{ token: string }>({
     queryKey: [fetchUrl],
-    queryFn: async () => {
-      const res = await apiRequest("GET", fetchUrl);
-      return res.json();
-    },
+    queryFn: () => getJson(fetchUrl),
     enabled: open,
   });
 

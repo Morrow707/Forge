@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { apiRequest, ApiError } from "@/lib/queryClient";
+import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
@@ -56,18 +56,12 @@ export function GoalsPanel({
 
   const { data: goals = [], isLoading } = useQuery<Goal[]>({
     queryKey: [goalsUrl],
-    queryFn: async () => {
-      const res = await apiRequest("GET", goalsUrl);
-      return res.json();
-    },
+    queryFn: () => getJson(goalsUrl),
   });
 
   const { data: exercises = [] } = useQuery<ExerciseOption[]>({
     queryKey: [exercisesUrl],
-    queryFn: async () => {
-      const res = await apiRequest("GET", exercisesUrl);
-      return res.json();
-    },
+    queryFn: () => getJson(exercisesUrl),
     enabled: showForm && type === "exercise",
   });
 

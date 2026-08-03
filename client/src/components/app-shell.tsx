@@ -2,7 +2,7 @@ import { type ReactNode, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
-import { apiRequest } from "@/lib/queryClient";
+import { getJson } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import {
   Dumbbell,
@@ -79,10 +79,7 @@ export function AppShell({
         : null;
   const { data: teamBoardUnread } = useQuery<{ hasUnread: boolean }>({
     queryKey: [teamBoardUnreadUrl],
-    queryFn: async () => {
-      const res = await apiRequest("GET", teamBoardUnreadUrl!);
-      return res.json();
-    },
+    queryFn: () => getJson(teamBoardUnreadUrl!),
     enabled: !!teamBoardUnreadUrl,
     refetchInterval: 60_000,
   });

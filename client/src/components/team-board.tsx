@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, getJson } from "@/lib/queryClient";
 import { format, parseISO } from "date-fns";
 import { toast } from "sonner";
 import { Send, MessagesSquare, Megaphone } from "lucide-react";
@@ -31,10 +31,7 @@ export function TeamBoard({ baseUrl, canAnnounce = false }: { baseUrl: string; c
 
   const { data: posts, isLoading } = useQuery<TeamPost[]>({
     queryKey: [baseUrl],
-    queryFn: async () => {
-      const res = await apiRequest("GET", baseUrl);
-      return res.json();
-    },
+    queryFn: () => getJson(baseUrl),
   });
 
   // Marks the board read the instant this page is opened -- clears the "New"
