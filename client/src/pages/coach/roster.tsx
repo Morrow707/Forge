@@ -19,6 +19,7 @@ import { AthleteProfileDialog } from "@/components/athlete-profile-dialog";
 import { CalendarLinkDialog } from "@/components/calendar-link-dialog";
 import { BodyMetricsDialog } from "@/components/body-metrics-dialog";
 import { TestingHistoryDialog } from "@/components/testing-history-dialog";
+import { GoalsDialog } from "@/components/goals-dialog";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { shareOrDownloadFile } from "@/lib/share-file";
 import { cn } from "@/lib/utils";
@@ -38,6 +39,7 @@ import {
   Timer,
   Mail,
   Share2,
+  Target,
 } from "lucide-react";
 
 type HealthStatus = "healthy" | "hurt";
@@ -87,6 +89,7 @@ export default function CoachRoster() {
   const [calendarAthlete, setCalendarAthlete] = useState<RosterEntry | null>(null);
   const [metricsAthlete, setMetricsAthlete] = useState<RosterEntry | null>(null);
   const [testingAthlete, setTestingAthlete] = useState<RosterEntry | null>(null);
+  const [goalsAthlete, setGoalsAthlete] = useState<RosterEntry | null>(null);
   const [sharingProfileId, setSharingProfileId] = useState<number | null>(null);
 
   async function handleShareRecruitingProfile(athlete: RosterEntry) {
@@ -254,6 +257,15 @@ export default function CoachRoster() {
                             onClick={() => setTestingAthlete(a)}
                           >
                             <Timer className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            aria-label={`View ${a.name}'s goals`}
+                            title="Goals"
+                            onClick={() => setGoalsAthlete(a)}
+                          >
+                            <Target className="h-4 w-4" />
                           </Button>
                           <Button
                             size="icon"
@@ -480,6 +492,16 @@ export default function CoachRoster() {
           onOpenChange={(open) => !open && setTestingAthlete(null)}
           athleteName={testingAthlete.name}
           fetchUrl={`/api/coach/roster/${testingAthlete.id}/testing-history`}
+        />
+      )}
+
+      {goalsAthlete && (
+        <GoalsDialog
+          open={goalsAthlete !== null}
+          onOpenChange={(open) => !open && setGoalsAthlete(null)}
+          athleteName={goalsAthlete.name}
+          goalsUrl={`/api/coach/roster/${goalsAthlete.id}/goals`}
+          exercisesUrl={`/api/coach/analytics/exercises?athleteId=${goalsAthlete.id}`}
         />
       )}
     </AppShell>

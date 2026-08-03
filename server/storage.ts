@@ -23,6 +23,7 @@ import {
   teamPosts,
   bodyMetrics,
   testingResults,
+  goals,
   type InsertUser,
 } from "@shared/schema";
 import type {
@@ -38,7 +39,9 @@ import type {
   CreateExerciseReportInput,
   CreateBodyMetricInput,
   TestingMetric,
+  CreateGoalInput,
 } from "@shared/schema";
+import { TESTING_METRICS, testingMetricLowerIsBetter } from "@shared/testing-metrics";
 import { eq, and, inArray, asc, desc, lt, gt, isNull } from "drizzle-orm";
 import {
   generateCoachCode,
@@ -371,6 +374,114 @@ export const storage = {
         date: r.date,
         value: r[metric] as number,
       }));
+  },
+
+  // ---------- Goals ----------
+  // The heaviest weight this athlete has ever logged for an exercise,
+  // regardless of rep count -- a simple, transparent "current best" for
+  // comparing against a flat weight goal, not a 1RM estimate.
+  async getBestLiftForExercise(athleteId: number, exerciseId: number) {
+    const rows = await db
+      .select({
+        weight: workoutSetEntries.weight,
+        weightMode: workoutLogEntries.weightMode,
+      })
+      .from(workoutSetEntries)
+      .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
+      .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
+      .innerJoin(assignments, eq(workoutLogs.assignmentId, assignments.id))
+      .innerJoin(programExercises, eq(workoutLogEntries.programExerciseId, programExercises.id))
+      .where(
+        and(
+          eq(assignments.athleteId, athleteId),
+          eq(programExercises.exerciseId, exerciseId),
+          eq(workoutLogEntries.weightMode, "numeric"),
+        ),
+      );
+
+    let best: number | null = null;
+    for (const r of rows) {
+      const w = parseFloat(r.weight ?? "");
+      if (!Number.isNaN(w) && (best === null || w > best)) best = w;
+    }
+    return best;
+  },
+
+  async createGoal(athleteId: number, createdBy: number, input: CreateGoalInput) {
+    const [row] = await db
+      .insert(goals)
+      .values({
+        athleteId,
+        createdBy,
+        type: input.type,
+        exerciseId: input.type === "exercise" ? input.exerciseId : null,
+        testingMetric: input.type === "testing" ? input.testingMetric : null,
+        targetValue: input.targetValue,
+        targetUnit: input.targetUnit,
+        targetDate: input.targetDate ?? null,
+      })
+      .returning();
+    return row;
+  },
+
+  // Progress toward each goal is computed fresh here rather than stored, so
+  // it can never drift out of sync with the athlete's actual lift history or
+  // current testing numbers.
+  async getGoalsForAthlete(athleteId: number) {
+    const rows = await db.query.goals.findMany({
+      where: eq(goals.athleteId, athleteId),
+      orderBy: desc(goals.createdAt),
+    });
+    const exerciseIds = rows.map((g) => g.exerciseId).filter((id): id is number => id != null);
+    const exerciseNameById = new Map<number, string>();
+    if (exerciseIds.length > 0) {
+      const exerciseRows = await db.query.exercises.findMany({
+        where: inArray(exercises.id, exerciseIds),
+      });
+      for (const e of exerciseRows) exerciseNameById.set(e.id, e.name);
+    }
+    const athlete =
+      rows.some((g) => g.type === "testing") &&
+      (await db.query.users.findFirst({ where: eq(users.id, athleteId) }));
+
+    return Promise.all(
+      rows.map(async (g) => {
+        let currentValue: number | null = null;
+        let exerciseName: string | null = null;
+        if (g.type === "exercise" && g.exerciseId != null) {
+          currentValue = await this.getBestLiftForExercise(athleteId, g.exerciseId);
+          exerciseName = exerciseNameById.get(g.exerciseId) ?? null;
+        } else if (g.type === "testing" && g.testingMetric && athlete) {
+          const value = (athlete as any)[g.testingMetric];
+          currentValue = typeof value === "number" ? value : null;
+        }
+
+        const lowerIsBetter = g.type === "testing" && g.testingMetric
+          ? testingMetricLowerIsBetter(g.testingMetric)
+          : false;
+        const achieved =
+          currentValue != null &&
+          (lowerIsBetter ? currentValue <= g.targetValue : currentValue >= g.targetValue);
+
+        return {
+          id: g.id,
+          type: g.type,
+          exerciseId: g.exerciseId,
+          exerciseName,
+          testingMetric: g.testingMetric,
+          targetValue: g.targetValue,
+          targetUnit: g.targetUnit,
+          targetDate: g.targetDate,
+          createdAt: g.createdAt,
+          currentValue,
+          achieved,
+        };
+      }),
+    );
+  },
+
+  async deleteGoal(athleteId: number, goalId: number) {
+    await db.delete(goals).where(and(eq(goals.id, goalId), eq(goals.athleteId, athleteId)));
   },
 
   // ---------- Teams ----------
