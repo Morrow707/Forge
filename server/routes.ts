@@ -1304,9 +1304,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   );
 
   // ---------------- Notifications ----------------
-  // In-app inbox, available to any authenticated user -- in practice only
-  // coaches ever have entries, since athlete comments/videos are the only
-  // events that create one (see the athlete comments route above).
+  // In-app inbox, available to any authenticated user. Coaches get entries
+  // from athlete comments/videos; athletes get entries from a coach's reply
+  // or a team announcement.
 
   app.get("/api/notifications", requireAuth, async (req, res) => {
     const user = currentUser(req);

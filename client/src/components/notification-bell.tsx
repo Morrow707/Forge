@@ -2,10 +2,11 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { apiRequest } from "@/lib/queryClient";
-import { Bell, MessageSquare, Video } from "lucide-react";
+import { Bell, MessageSquare, Video, Megaphone } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useLocation } from "wouter";
+import { useAuth } from "@/hooks/use-auth";
 
 type NotificationItem = {
   id: number;
@@ -17,10 +18,11 @@ type NotificationItem = {
   createdAt: string;
 };
 
-/** Coach-facing in-app inbox for the two events they asked to hear about --
- * an athlete comments or attaches a video. Never fires for program
- * completions or team-wide activity. */
+/** Shared coach/athlete in-app inbox for the targeted events each side asked
+ * to hear about -- a comment/video reply, or a team announcement. Never
+ * fires for program completions or routine team-wide activity. */
 export function NotificationBell() {
+  const { user } = useAuth();
   const qc = useQueryClient();
   const [, navigate] = useLocation();
   const [open, setOpen] = useState(false);
@@ -52,7 +54,10 @@ export function NotificationBell() {
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
-        if (next && count > 0) markReadMutation.mutate();
+        // Mark read on close, not open -- marking on open would clear the
+        // per-item unread highlight before the user ever sees which ones
+        // were actually new.
+        if (!next && count > 0) markReadMutation.mutate();
       }}
     >
       <PopoverTrigger asChild>
@@ -76,7 +81,9 @@ export function NotificationBell() {
         <div className="max-h-80 overflow-y-auto">
           {notifications.length === 0 && (
             <p className="px-3 py-8 text-center text-sm text-muted-foreground">
-              Nothing yet. You'll see athlete comments and video uploads here.
+              {user?.role === "coach"
+                ? "Nothing yet. You'll see athlete comments and video uploads here."
+                : "Nothing yet. You'll see coach replies and team announcements here."}
             </p>
           )}
           {notifications.map((n) => (
@@ -94,6 +101,8 @@ export function NotificationBell() {
             >
               {n.type === "video" ? (
                 <Video className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+              ) : n.type === "announcement" ? (
+                <Megaphone className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
               ) : (
                 <MessageSquare className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
               )}
