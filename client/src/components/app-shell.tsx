@@ -1,6 +1,8 @@
 import { type ReactNode, useState } from "react";
 import { Link, useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
+import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import {
   Dumbbell,
@@ -68,6 +70,22 @@ export function AppShell({
   const nav =
     user?.role === "coach" ? coachNav : user?.role === "admin" ? adminNav : athleteNav;
 
+  const teamBoardUnreadUrl =
+    user?.role === "coach"
+      ? "/api/coach/team-board/unread"
+      : user?.role === "athlete"
+        ? "/api/athlete/team-board/unread"
+        : null;
+  const { data: teamBoardUnread } = useQuery<{ hasUnread: boolean }>({
+    queryKey: [teamBoardUnreadUrl],
+    queryFn: async () => {
+      const res = await apiRequest("GET", teamBoardUnreadUrl!);
+      return res.json();
+    },
+    enabled: !!teamBoardUnreadUrl,
+    refetchInterval: 60_000,
+  });
+
   function isActive(item: { href: string; exact?: boolean }) {
     return item.exact ? location === item.href : location.startsWith(item.href);
   }
@@ -94,6 +112,7 @@ export function AppShell({
             {nav.map((item) => {
               const Icon = item.icon;
               const active = isActive(item);
+              const showUnreadDot = item.href.endsWith("/team-board") && teamBoardUnread?.hasUnread;
               return (
                 <Link
                   key={item.href}
@@ -107,6 +126,11 @@ export function AppShell({
                 >
                   <Icon className="h-4 w-4" />
                   {item.label}
+                  {showUnreadDot && (
+                    <span className="rounded-full bg-amber-400 px-1.5 py-0.5 text-[9px] font-bold uppercase leading-none text-black">
+                      New
+                    </span>
+                  )}
                 </Link>
               );
             })}
@@ -166,6 +190,7 @@ export function AppShell({
               {nav.map((item) => {
                 const Icon = item.icon;
                 const active = isActive(item);
+                const showUnreadDot = item.href.endsWith("/team-board") && teamBoardUnread?.hasUnread;
                 return (
                   <Link
                     key={item.href}
@@ -180,6 +205,11 @@ export function AppShell({
                   >
                     <Icon className="h-3.5 w-3.5" />
                     {item.label}
+                    {showUnreadDot && (
+                      <span className="rounded-full bg-amber-400 px-1.5 py-0.5 text-[9px] font-bold uppercase leading-none text-black">
+                        New
+                      </span>
+                    )}
                   </Link>
                 );
               })}

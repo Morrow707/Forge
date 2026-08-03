@@ -715,6 +715,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.status(201).json(post);
   });
 
+  app.get("/api/coach/team-board/unread", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const hasUnread = await storage.getTeamBoardHasUnread(user.id, user.id);
+    res.json({ hasUnread });
+  });
+
+  app.post("/api/coach/team-board/read", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    await storage.markTeamBoardRead(user.id);
+    res.status(204).end();
+  });
+
   app.get("/api/athlete/team-board", requireRole("athlete"), async (req, res) => {
     const user = currentUser(req);
     const coaches = await storage.getCoachesForAthlete(user.id);
@@ -737,6 +749,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // than trusting the client to not send it.
     const post = await storage.createTeamPost(coach.id, user.id, parsed.data.body, false);
     res.status(201).json(post);
+  });
+
+  app.get("/api/athlete/team-board/unread", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const coaches = await storage.getCoachesForAthlete(user.id);
+    const coach = coaches[0];
+    if (!coach) return res.json({ hasUnread: false });
+    const hasUnread = await storage.getTeamBoardHasUnread(user.id, coach.id);
+    res.json({ hasUnread });
+  });
+
+  app.post("/api/athlete/team-board/read", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    await storage.markTeamBoardRead(user.id);
+    res.status(204).end();
   });
 
   // ---------------- Coach: Assignments ----------------

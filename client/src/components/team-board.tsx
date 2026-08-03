@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -36,6 +36,14 @@ export function TeamBoard({ baseUrl, canAnnounce = false }: { baseUrl: string; c
       return res.json();
     },
   });
+
+  // Marks the board read the instant this page is opened -- clears the "New"
+  // flag on the nav tab immediately rather than waiting for its next poll.
+  useEffect(() => {
+    apiRequest("POST", `${baseUrl}/read`).then(() => {
+      qc.invalidateQueries({ queryKey: [`${baseUrl}/unread`] });
+    });
+  }, [baseUrl]);
 
   const post = useMutation({
     mutationFn: async () => {

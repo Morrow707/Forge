@@ -111,6 +111,7 @@ ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "notify_email" boolean NOT NULL DEF
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "notify_sms" boolean NOT NULL DEFAULT false;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "health_status" health_status NOT NULL DEFAULT 'healthy';
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "calendar_token" text;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "team_board_read_at" timestamp;
 CREATE UNIQUE INDEX IF NOT EXISTS "users_email_idx" ON "users" ("email");
 CREATE UNIQUE INDEX IF NOT EXISTS "users_coach_code_idx" ON "users" ("coach_code");
 CREATE UNIQUE INDEX IF NOT EXISTS "users_calendar_token_idx" ON "users" ("calendar_token");
