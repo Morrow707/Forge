@@ -1,6 +1,6 @@
 import { createContext, useContext, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiRequest, ApiError } from "@/lib/queryClient";
+import { apiRequest, ApiError, getQueryFn } from "@/lib/queryClient";
 import { toast } from "sonner";
 import type { PublicUser } from "@shared/schema";
 
@@ -71,8 +71,11 @@ function useLogoutMutation() {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  // The one query in the app that wants a 401 treated as valid data --
+  // "no one is logged in" -- rather than an error (see queryClient.ts).
   const { data: user, isLoading } = useQuery<PublicUser | null>({
     queryKey: ["/api/auth/me"],
+    queryFn: getQueryFn({ on401: "returnNull" }),
   });
 
   const loginMutation = useLoginMutation();
