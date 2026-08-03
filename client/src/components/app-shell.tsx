@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils";
 import { EditMyProfileDialog } from "@/components/edit-my-profile-dialog";
 import { NotificationBell } from "@/components/notification-bell";
 import { NotificationSettingsDialog } from "@/components/notification-settings-dialog";
+import { WellnessGate } from "@/components/wellness-gate";
 
 const coachNav = [
   { href: "/coach", label: "Dashboard", icon: Flame, exact: true },
@@ -281,6 +282,7 @@ export function AppShell({
       {user?.role === "athlete" && (
         <EditMyProfileDialog user={user} open={profileOpen} onOpenChange={setProfileOpen} />
       )}
+      {user?.role === "athlete" && <WellnessGate />}
       {(user?.role === "coach" || user?.role === "athlete") && (
         <NotificationSettingsDialog
           user={user}

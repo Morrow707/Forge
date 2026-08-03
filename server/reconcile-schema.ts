@@ -412,6 +412,18 @@ CREATE TABLE IF NOT EXISTS "goals" (
   "created_at" timestamp NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS "goals_athlete_idx" ON "goals" ("athlete_id");
+
+CREATE TABLE IF NOT EXISTS "wellness_checkins" (
+  "id" serial PRIMARY KEY,
+  "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "date" date NOT NULL,
+  "sleep_hours" real NOT NULL,
+  "soreness" integer NOT NULL,
+  "stress" integer NOT NULL,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "wellness_checkins_athlete_idx" ON "wellness_checkins" ("athlete_id");
+CREATE UNIQUE INDEX IF NOT EXISTS "wellness_checkins_athlete_date_idx" ON "wellness_checkins" ("athlete_id", "date");
 `;
 
 async function main() {

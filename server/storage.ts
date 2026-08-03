@@ -24,6 +24,7 @@ import {
   bodyMetrics,
   testingResults,
   goals,
+  wellnessCheckins,
   type InsertUser,
 } from "@shared/schema";
 import type {
@@ -482,6 +483,54 @@ export const storage = {
 
   async deleteGoal(athleteId: number, goalId: number) {
     await db.delete(goals).where(and(eq(goals.id, goalId), eq(goals.athleteId, athleteId)));
+  },
+
+  // ---------- Wellness check-ins ----------
+  async upsertWellnessCheckin(
+    athleteId: number,
+    date: string,
+    input: { sleepHours: number; soreness: number; stress: number },
+  ) {
+    const [row] = await db
+      .insert(wellnessCheckins)
+      .values({ athleteId, date, ...input })
+      .onConflictDoUpdate({
+        target: [wellnessCheckins.athleteId, wellnessCheckins.date],
+        set: input,
+      })
+      .returning();
+    return row;
+  },
+
+  async getWellnessCheckin(athleteId: number, date: string) {
+    return db.query.wellnessCheckins.findFirst({
+      where: and(eq(wellnessCheckins.athleteId, athleteId), eq(wellnessCheckins.date, date)),
+    });
+  },
+
+  async getWellnessHistoryForAthlete(athleteId: number, limit = 14) {
+    return db.query.wellnessCheckins.findMany({
+      where: eq(wellnessCheckins.athleteId, athleteId),
+      orderBy: desc(wellnessCheckins.date),
+      limit,
+    });
+  },
+
+  // Today's snapshot for every roster athlete who has already checked in --
+  // an athlete with no row for the date is simply absent from the result,
+  // kept distinct from a real low score.
+  async getRosterWellnessToday(coachId: number, date: string) {
+    const rows = await db
+      .select({
+        athleteId: wellnessCheckins.athleteId,
+        sleepHours: wellnessCheckins.sleepHours,
+        soreness: wellnessCheckins.soreness,
+        stress: wellnessCheckins.stress,
+      })
+      .from(coachAthletes)
+      .innerJoin(wellnessCheckins, eq(wellnessCheckins.athleteId, coachAthletes.athleteId))
+      .where(and(eq(coachAthletes.coachId, coachId), eq(wellnessCheckins.date, date)));
+    return rows;
   },
 
   // ---------- Teams ----------

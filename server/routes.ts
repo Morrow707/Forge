@@ -34,7 +34,9 @@ import {
   createAnnotationSchema,
   testingTrendsQuerySchema,
   createGoalSchema,
+  submitWellnessCheckinSchema,
 } from "@shared/schema";
+import { computeReadiness } from "@shared/wellness";
 import { z } from "zod";
 
 // Form-check clips are opt-in and athlete-initiated: recorded in the
@@ -74,6 +76,10 @@ const uploadFormVideo = multer({
 
 function currentUser(req: any) {
   return req.user as { id: number; role: "coach" | "athlete" | "admin"; name: string };
+}
+
+function todayIso() {
+  return new Date().toISOString().slice(0, 10);
 }
 
 async function assertOwnsExercise(userId: number, exerciseId: number) {
@@ -620,6 +626,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
       await storage.deleteGoal(athleteId, Number(req.params.goalId));
       res.status(204).end();
+    },
+  );
+
+  // Today's readiness snapshot for the whole roster -- athletes with no
+  // check-in yet for today are simply absent, not shown as "flagged".
+  app.get("/api/coach/roster-wellness", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const rows = await storage.getRosterWellnessToday(user.id, todayIso());
+    res.json(rows.map((r) => ({ ...r, ...computeReadiness(r) })));
+  });
+
+  app.get(
+    "/api/coach/roster/:athleteId/wellness-history",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      const onRoster = await storage.getRosterAthleteForCoach(user.id, athleteId);
+      if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
+      const history = await storage.getWellnessHistoryForAthlete(athleteId);
+      res.json(history.map((h) => ({ ...h, ...computeReadiness(h) })));
     },
   );
 
@@ -1204,6 +1231,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const user = currentUser(req);
     await storage.deleteGoal(user.id, Number(req.params.id));
     res.status(204).end();
+  });
+
+  // Mandatory once-per-day self-report -- the client blocks the rest of the
+  // app (WellnessGate) until this returns a non-null checkin for today.
+  app.get("/api/athlete/wellness/today", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const checkin = await storage.getWellnessCheckin(user.id, todayIso());
+    res.json(checkin ?? null);
+  });
+
+  app.post("/api/athlete/wellness", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = submitWellnessCheckinSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const checkin = await storage.upsertWellnessCheckin(user.id, todayIso(), parsed.data);
+    res.status(201).json(checkin);
+  });
+
+  app.get("/api/athlete/wellness/history", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const history = await storage.getWellnessHistoryForAthlete(user.id);
+    res.json(history.map((h) => ({ ...h, ...computeReadiness(h) })));
   });
 
   app.get("/api/athlete/day", requireRole("athlete"), async (req, res) => {
