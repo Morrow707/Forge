@@ -25,6 +25,7 @@ import {
   testingResults,
   goals,
   wellnessCheckins,
+  readinessBriefings,
   type InsertUser,
 } from "@shared/schema";
 import type {
@@ -43,6 +44,8 @@ import type {
   CreateGoalInput,
 } from "@shared/schema";
 import { TESTING_METRICS, testingMetricLowerIsBetter } from "@shared/testing-metrics";
+import { computeReadiness } from "@shared/wellness";
+import { askClaude } from "./ai";
 import { eq, and, inArray, asc, desc, lt, gt, isNull } from "drizzle-orm";
 import {
   generateCoachCode,
@@ -605,6 +608,68 @@ export const storage = {
       .innerJoin(wellnessCheckins, eq(wellnessCheckins.athleteId, coachAthletes.athleteId))
       .where(and(eq(coachAthletes.coachId, coachId), eq(wellnessCheckins.date, date)));
     return rows;
+  },
+
+  // Cached once generated (see readinessBriefings in schema.ts) -- a day's
+  // check-in and RPE history don't change after the fact, so there's
+  // nothing to gain from re-asking Claude on every view.
+  async getReadinessBriefing(athleteId: number, date: string) {
+    return db.query.readinessBriefings.findFirst({
+      where: and(eq(readinessBriefings.athleteId, athleteId), eq(readinessBriefings.date, date)),
+    });
+  },
+
+  // Grounded only in this athlete's own wellness check-in and recent RPE
+  // history -- never invents exercise specifics it wasn't given. Returns
+  // null (no row written) if there's no wellness check-in yet for this date
+  // or AI isn't configured, so the caller can just render nothing.
+  async generateReadinessBriefing(athleteId: number, date: string) {
+    const wellness = await this.getWellnessCheckin(athleteId, date);
+    if (!wellness) return null;
+
+    const recentLogs = await this.getRecentWorkoutLogsForAthlete(athleteId, date);
+    const recentRpes: number[] = [];
+    outer: for (const log of recentLogs) {
+      for (const entry of log.entries) {
+        if (entry.rpe != null) recentRpes.push(entry.rpe);
+        if (recentRpes.length >= 10) break outer;
+      }
+    }
+
+    const { level } = computeReadiness(wellness);
+    const prompt = `Athlete readiness snapshot for today:
+- Sleep last night: ${wellness.sleepHours} hours
+- Soreness (1=none, 5=very sore): ${wellness.soreness}/5
+- Stress (1=calm, 5=very stressed): ${wellness.stress}/5
+- Computed overall readiness: ${level}
+- Most recent logged RPEs, newest first (out of 10, higher = harder effort): ${
+      recentRpes.length > 0 ? recentRpes.join(", ") : "no recent RPE data logged"
+    }
+
+Write ONE short note (1-2 sentences, plain language, talking directly to the athlete as "you") on how to approach today's training given their recovery state and recent training stress. Be specific and direct, not generic filler. Do not mention or invent specific exercises, weights, or sets -- you were not given today's workout. No preamble or sign-off, just the note itself.`;
+
+    const text = await askClaude(
+      "You are a concise, expert strength and conditioning coach's assistant. You write short, direct, athlete-facing readiness notes grounded only in the data you're given -- never invent data, never give medical advice, never diagnose. If soreness or stress data suggests something concerning, tell the athlete to flag it with their coach rather than offering a workaround.",
+      [{ role: "user", content: prompt }],
+      { maxTokens: 200 },
+    );
+    if (!text) return null;
+
+    const [row] = await db
+      .insert(readinessBriefings)
+      .values({ athleteId, date, briefing: text.trim() })
+      .onConflictDoUpdate({
+        target: [readinessBriefings.athleteId, readinessBriefings.date],
+        set: { briefing: text.trim() },
+      })
+      .returning();
+    return row;
+  },
+
+  async getOrCreateReadinessBriefing(athleteId: number, date: string) {
+    const existing = await this.getReadinessBriefing(athleteId, date);
+    if (existing) return existing;
+    return this.generateReadinessBriefing(athleteId, date);
   },
 
   // ---------- Teams ----------

@@ -50,6 +50,7 @@ import { format, parseISO } from "date-fns";
 import type { PublicUser } from "@shared/schema";
 import { parseProgression } from "@/lib/progression";
 import { PlateCalculatorDialog } from "@/components/plate-calculator-dialog";
+import { ReadinessBanner } from "@/components/readiness-banner";
 
 type ExerciseInfo = {
   id: number;
@@ -678,6 +679,7 @@ export default function AthleteWorkout() {
 
           {viewMode === "overview" ? (
             <div className="space-y-3">
+              <ReadinessBanner date={date} />
               <p className="text-xs text-muted-foreground">
                 Everything for today, A to Z — tap any exercise to prep or start logging.
               </p>

@@ -1257,6 +1257,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(history.map((h) => ({ ...h, ...computeReadiness(h) })));
   });
 
+  // Deliberately its own endpoint, not folded into /api/athlete/day -- an AI
+  // call (or a slow one) here should never add latency to loading the day's
+  // actual workout. Returns null if there's no wellness check-in yet for the
+  // date or AI isn't configured; the client just renders nothing either way.
+  app.get("/api/athlete/readiness", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const date = typeof req.query.date === "string" ? req.query.date : todayIso();
+    const briefing = await storage.getOrCreateReadinessBriefing(user.id, date);
+    res.json(briefing ? { briefing: briefing.briefing } : null);
+  });
+
   app.get("/api/athlete/day", requireRole("athlete"), async (req, res) => {
     const user = currentUser(req);
     const schema = z.object({

@@ -709,6 +709,33 @@ export const submitWellnessCheckinSchema = z.object({
   stress: z.number().int().min(1).max(5),
 });
 
+// AI-generated, one per athlete per date, cached permanently once written
+// (same lazy-materialize-then-cache pattern as testingResults above) rather
+// than regenerated on every view -- a day's wellness check-in and RPE
+// history up to that point don't change after the fact, so there's nothing
+// to gain from re-asking. Never blocks the workout day fetch: this is
+// requested by its own lazy endpoint, not bundled into getWorkoutDayDetail.
+export const readinessBriefings = pgTable(
+  "readiness_briefings",
+  {
+    id: serial("id").primaryKey(),
+    athleteId: integer("athlete_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    date: date("date").notNull(),
+    briefing: text("briefing").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    athleteDateIdx: uniqueIndex("readiness_briefings_athlete_date_idx").on(
+      table.athleteId,
+      table.date,
+    ),
+  }),
+);
+
+export type ReadinessBriefing = typeof readinessBriefings.$inferSelect;
+
 // ---------- Relations ----------
 
 export const usersRelations = relations(users, ({ many }) => ({
