@@ -26,6 +26,8 @@ import {
   goals,
   wellnessCheckins,
   readinessBriefings,
+  athleteDigests,
+  coachDigests,
   type InsertUser,
 } from "@shared/schema";
 import type {
@@ -53,7 +55,7 @@ import {
   hashResetToken,
   generateCalendarToken,
 } from "./auth-utils";
-import { addDays, parseISO, formatISO, isWithinInterval } from "date-fns";
+import { addDays, parseISO, formatISO, isWithinInterval, startOfWeek } from "date-fns";
 
 function initialsFor(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -749,6 +751,91 @@ Write ONE short note (1-2 sentences, plain language, talking directly to the ath
     const existing = await this.getReadinessBriefing(athleteId, date);
     if (existing) return existing;
     return this.generateReadinessBriefing(athleteId, date);
+  },
+
+  // ---------- Weekly AI digests ----------
+  async getAthleteDigest(athleteId: number, weekStart: string) {
+    return db.query.athleteDigests.findFirst({
+      where: and(eq(athleteDigests.athleteId, athleteId), eq(athleteDigests.weekStart, weekStart)),
+    });
+  },
+
+  async generateAthleteDigest(athleteId: number, weekStart: string) {
+    const [summary, streak, wellnessHistory] = await Promise.all([
+      this.getAthleteProgressSummary(athleteId),
+      this.getStreakForAthlete(athleteId),
+      this.getWellnessHistoryForAthlete(athleteId, 7),
+    ]);
+    if (summary.totalWorkoutsCompleted === 0) return null;
+
+    const cutoff = formatISO(addDays(new Date(), 1), { representation: "date" });
+    const logs = await this.getRecentWorkoutLogsForAthlete(athleteId, cutoff);
+    const recentRpes: number[] = [];
+    outer: for (const log of logs) {
+      for (const entry of log.entries) {
+        if (entry.rpe != null) recentRpes.push(entry.rpe);
+        if (recentRpes.length >= 10) break outer;
+      }
+    }
+
+    const wellnessSummary =
+      wellnessHistory.length > 0
+        ? wellnessHistory
+            .map((w) => `${w.date}: sleep ${w.sleepHours}h, soreness ${w.soreness}/5, stress ${w.stress}/5`)
+            .join("; ")
+        : "no wellness check-ins logged recently";
+    const prSummary =
+      summary.recentPRs.length > 0
+        ? summary.recentPRs
+            .slice(0, 5)
+            .map((pr) => `${pr.exerciseName} ${pr.weight}${pr.unit} x ${pr.reps} on ${pr.date}`)
+            .join("; ")
+        : "no new PRs recently";
+
+    const prompt = `Athlete's training data for their weekly summary:
+- Total workouts completed all-time: ${summary.totalWorkoutsCompleted}
+- Workouts this month: ${summary.workoutsThisMonth}
+- Current streak: ${streak.currentStreak} days, ${streak.totalCompleted} total workouts completed
+- Recent PRs (most recent first): ${prSummary}
+- Recent RPE history (most recent first, out of 10, higher = harder effort): ${
+      recentRpes.length > 0 ? recentRpes.join(", ") : "none logged recently"
+    }
+- Recent wellness check-ins: ${wellnessSummary}
+
+Write a short (2-4 sentence) plain-language weekly training summary for this athlete, highlighting real trends from the data above -- progress, effort trend, recovery trend. Be specific and reference actual numbers where relevant. Talk directly to the athlete as "you". No preamble or sign-off, just the summary itself.`;
+
+    const text = await askClaude(
+      "You are a concise, encouraging strength and conditioning coach's assistant writing a weekly training summary. Ground everything strictly in the data given -- never invent numbers, exercises, or events you weren't told about.",
+      [{ role: "user", content: prompt }],
+      { maxTokens: 300 },
+    );
+    if (!text) return null;
+
+    const [row] = await db
+      .insert(athleteDigests)
+      .values({ athleteId, weekStart, digest: text.trim() })
+      .onConflictDoUpdate({
+        target: [athleteDigests.athleteId, athleteDigests.weekStart],
+        set: { digest: text.trim() },
+      })
+      .returning();
+    return row;
+  },
+
+  // Generated lazily on first view each week rather than on a fixed
+  // schedule (no cron in this app) -- isNew tells the route whether to also
+  // fire a notification, so that only happens on the one request that
+  // actually triggered generation, not every subsequent cache hit.
+  async getOrCreateAthleteDigest(
+    athleteId: number,
+  ): Promise<{ digest: (typeof athleteDigests.$inferSelect) | null; isNew: boolean }> {
+    const weekStart = formatISO(startOfWeek(new Date(), { weekStartsOn: 1 }), {
+      representation: "date",
+    });
+    const existing = await this.getAthleteDigest(athleteId, weekStart);
+    if (existing) return { digest: existing, isNew: false };
+    const generated = await this.generateAthleteDigest(athleteId, weekStart);
+    return { digest: generated, isNew: generated != null };
   },
 
   // ---------- Teams ----------

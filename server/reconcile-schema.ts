@@ -447,6 +447,24 @@ CREATE TABLE IF NOT EXISTS "readiness_briefings" (
   "created_at" timestamp NOT NULL DEFAULT now()
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "readiness_briefings_athlete_date_idx" ON "readiness_briefings" ("athlete_id", "date");
+
+CREATE TABLE IF NOT EXISTS "athlete_digests" (
+  "id" serial PRIMARY KEY,
+  "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "week_start" date NOT NULL,
+  "digest" text NOT NULL,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "athlete_digests_athlete_week_idx" ON "athlete_digests" ("athlete_id", "week_start");
+
+CREATE TABLE IF NOT EXISTS "coach_digests" (
+  "id" serial PRIMARY KEY,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "week_start" date NOT NULL,
+  "digest" text NOT NULL,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "coach_digests_coach_week_idx" ON "coach_digests" ("coach_id", "week_start");
 `;
 
 async function main() {

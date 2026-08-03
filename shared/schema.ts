@@ -736,6 +736,49 @@ export const readinessBriefings = pgTable(
 
 export type ReadinessBriefing = typeof readinessBriefings.$inferSelect;
 
+// One per athlete per ISO week (Monday date), cached for the rest of that
+// week once generated -- same lazy-materialize pattern as
+// readinessBriefings, just weekly instead of daily.
+export const athleteDigests = pgTable(
+  "athlete_digests",
+  {
+    id: serial("id").primaryKey(),
+    athleteId: integer("athlete_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    weekStart: date("week_start").notNull(),
+    digest: text("digest").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    athleteWeekIdx: uniqueIndex("athlete_digests_athlete_week_idx").on(
+      table.athleteId,
+      table.weekStart,
+    ),
+  }),
+);
+
+export type AthleteDigest = typeof athleteDigests.$inferSelect;
+
+// One per coach per ISO week -- roster-wide insight rollup, same pattern.
+export const coachDigests = pgTable(
+  "coach_digests",
+  {
+    id: serial("id").primaryKey(),
+    coachId: integer("coach_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    weekStart: date("week_start").notNull(),
+    digest: text("digest").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    coachWeekIdx: uniqueIndex("coach_digests_coach_week_idx").on(table.coachId, table.weekStart),
+  }),
+);
+
+export type CoachDigest = typeof coachDigests.$inferSelect;
+
 // ---------- Relations ----------
 
 export const usersRelations = relations(users, ({ many }) => ({

@@ -1309,6 +1309,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(briefing ? { briefing: briefing.briefing } : null);
   });
 
+  // Same isolation principle as /api/athlete/readiness above -- its own
+  // lazily-fetched endpoint so a slow/unconfigured AI call never blocks the
+  // progress page. Cached per calendar week, so this only ever generates
+  // (and notifies) once per athlete per week.
+  app.get("/api/athlete/digest", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const { digest, isNew } = await storage.getOrCreateAthleteDigest(user.id);
+    if (isNew && digest) {
+      await notifyUser(
+        user.id,
+        "digest",
+        "Your Weekly Training Summary",
+        digest.digest,
+        "/athlete/progress",
+      );
+    }
+    res.json(digest ? { digest: digest.digest } : null);
+  });
+
   app.get("/api/athlete/day", requireRole("athlete"), async (req, res) => {
     const user = currentUser(req);
     const schema = z.object({

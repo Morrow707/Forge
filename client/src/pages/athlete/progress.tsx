@@ -39,6 +39,7 @@ import {
 } from "lucide-react";
 import { GoalsPanel } from "@/components/goals-panel";
 import { StreakBadges } from "@/components/streak-badge";
+import { DigestBanner } from "@/components/digest-banner";
 
 type ProgressSummary = {
   totalWorkoutsCompleted: number;
@@ -143,6 +144,8 @@ export default function AthleteProgress() {
         <div className="h-40 animate-pulse rounded-lg bg-surface" />
       ) : (
         <>
+          <DigestBanner />
+
           <div className="mb-6 grid gap-4 sm:grid-cols-3">
             <Card>
               <CardContent className="flex items-center gap-4 p-5">
