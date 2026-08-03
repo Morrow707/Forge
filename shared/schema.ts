@@ -104,6 +104,9 @@ export const users = pgTable(
     // subscribe feed -- calendar apps re-fetch a plain URL on a timer, they
     // can't carry a session cookie. Lazily generated on first request.
     calendarToken: text("calendar_token"),
+    // When this user last opened the team board -- compared against the
+    // board's newest post to show a "new activity" flag on the nav tab.
+    teamBoardReadAt: timestamp("team_board_read_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({

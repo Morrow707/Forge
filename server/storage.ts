@@ -594,6 +594,25 @@ export const storage = {
     };
   },
 
+  // Whether this user has unseen team board activity -- compares their
+  // last-read timestamp against the board's newest post. A user who has
+  // never opened the board (teamBoardReadAt null) sees a flag as soon as
+  // there's at least one post, not retroactively for old history.
+  async getTeamBoardHasUnread(userId: number, coachId: number) {
+    const user = await db.query.users.findFirst({ where: eq(users.id, userId) });
+    const latest = await db.query.teamPosts.findFirst({
+      where: eq(teamPosts.coachId, coachId),
+      orderBy: desc(teamPosts.createdAt),
+    });
+    if (!latest) return false;
+    if (!user?.teamBoardReadAt) return true;
+    return latest.createdAt > user.teamBoardReadAt;
+  },
+
+  async markTeamBoardRead(userId: number) {
+    await db.update(users).set({ teamBoardReadAt: new Date() }).where(eq(users.id, userId));
+  },
+
   // ---------- Exercises ----------
   // System-wide, unfiltered -- used for one-off seeding/migration scripts
   // that need to know what already exists by name regardless of current
