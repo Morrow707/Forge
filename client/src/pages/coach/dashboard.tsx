@@ -34,6 +34,7 @@ import {
   CalendarDays,
   Mail,
   QrCode,
+  HeartPulse,
 } from "lucide-react";
 import { toast } from "sonner";
 import { addDays, format, formatISO, isToday } from "date-fns";
@@ -65,6 +66,10 @@ export default function CoachDashboard() {
   const { data: teams = [] } = useQuery<TeamSummary[]>({
     queryKey: ["/api/coach/teams"],
   });
+  const { data: wellnessToday = [] } = useQuery<{ level: "green" | "yellow" | "red" }[]>({
+    queryKey: ["/api/coach/roster-wellness"],
+  });
+  const flaggedToday = wellnessToday.filter((w) => w.level === "red").length;
 
   const days = [0, 1, 2].map((offset) => addDays(new Date(), offset));
   const rangeStart = formatISO(days[0], { representation: "date" });
@@ -163,7 +168,7 @@ export default function CoachDashboard() {
           </CardContent>
         </Card>
 
-        <div className="grid shrink-0 gap-3 sm:grid-cols-3">
+        <div className="grid shrink-0 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard icon={Users} label="Athletes" value={roster.length} href="/coach/roster" />
           <StatCard
             icon={ListChecks}
@@ -176,6 +181,12 @@ export default function CoachDashboard() {
             label="Exercises in bank"
             value={exercises.length}
             href="/coach/exercises"
+          />
+          <StatCard
+            icon={HeartPulse}
+            label="Flagged today"
+            value={flaggedToday}
+            href="/coach/roster"
           />
         </div>
 

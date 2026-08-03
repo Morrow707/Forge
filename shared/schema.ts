@@ -613,6 +613,40 @@ export const goals = pgTable(
   }),
 );
 
+// A mandatory once-per-day self-report -- the athlete can't use the rest of
+// the app on a given calendar date until a row exists for that date (gated
+// client-side by WellnessGate). Re-submitting the same date updates that
+// day's answers in place rather than creating a second row.
+export const wellnessCheckins = pgTable(
+  "wellness_checkins",
+  {
+    id: serial("id").primaryKey(),
+    athleteId: integer("athlete_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    date: date("date").notNull(),
+    sleepHours: real("sleep_hours").notNull(),
+    soreness: integer("soreness").notNull(),
+    stress: integer("stress").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    athleteIdx: index("wellness_checkins_athlete_idx").on(table.athleteId),
+    athleteDateIdx: uniqueIndex("wellness_checkins_athlete_date_idx").on(
+      table.athleteId,
+      table.date,
+    ),
+  }),
+);
+
+export type WellnessCheckin = typeof wellnessCheckins.$inferSelect;
+
+export const submitWellnessCheckinSchema = z.object({
+  sleepHours: z.number().min(0).max(24),
+  soreness: z.number().int().min(1).max(5),
+  stress: z.number().int().min(1).max(5),
+});
+
 // ---------- Relations ----------
 
 export const usersRelations = relations(users, ({ many }) => ({

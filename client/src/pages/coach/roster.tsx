@@ -20,6 +20,8 @@ import { CalendarLinkDialog } from "@/components/calendar-link-dialog";
 import { BodyMetricsDialog } from "@/components/body-metrics-dialog";
 import { TestingHistoryDialog } from "@/components/testing-history-dialog";
 import { GoalsDialog } from "@/components/goals-dialog";
+import { WellnessHistoryDialog, READINESS_CLASSNAME } from "@/components/wellness-history-dialog";
+import { READINESS_LABEL, type ReadinessLevel } from "@shared/wellness";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { shareOrDownloadFile } from "@/lib/share-file";
 import { cn } from "@/lib/utils";
@@ -34,6 +36,7 @@ import {
   Copy,
   HeartPulse,
   HeartCrack,
+  Gauge,
   CalendarDays,
   Scale,
   Timer,
@@ -77,6 +80,13 @@ export default function CoachRoster() {
   const { data: programs = [] } = useQuery<ProgramSummary[]>({
     queryKey: ["/api/coach/programs"],
   });
+  const { data: wellnessToday = [] } = useQuery<
+    { athleteId: number; sleepHours: number; soreness: number; stress: number; score: number; level: ReadinessLevel }[]
+  >({
+    queryKey: ["/api/coach/roster-wellness"],
+    refetchInterval: 60_000,
+  });
+  const wellnessByAthlete = new Map(wellnessToday.map((w) => [w.athleteId, w]));
 
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignAthleteIds, setAssignAthleteIds] = useState<number[]>([]);
@@ -90,6 +100,7 @@ export default function CoachRoster() {
   const [metricsAthlete, setMetricsAthlete] = useState<RosterEntry | null>(null);
   const [testingAthlete, setTestingAthlete] = useState<RosterEntry | null>(null);
   const [goalsAthlete, setGoalsAthlete] = useState<RosterEntry | null>(null);
+  const [wellnessAthlete, setWellnessAthlete] = useState<RosterEntry | null>(null);
   const [sharingProfileId, setSharingProfileId] = useState<number | null>(null);
 
   async function handleShareRecruitingProfile(athlete: RosterEntry) {
@@ -230,6 +241,10 @@ export default function CoachRoster() {
                               {a.name}
                             </button>
                             <HealthStatusToggle athleteId={a.id} status={a.healthStatus ?? "healthy"} />
+                            <WellnessBadge
+                              entry={wellnessByAthlete.get(a.id)}
+                              onClick={() => setWellnessAthlete(a)}
+                            />
                           </div>
                           <p className="truncate text-xs text-muted-foreground">{a.email}</p>
                           {(a.sport || a.position) && (
@@ -357,6 +372,10 @@ export default function CoachRoster() {
                           <HealthStatusToggle
                             athleteId={m.athlete.id}
                             status={m.athlete.healthStatus ?? "healthy"}
+                          />
+                          <WellnessBadge
+                            entry={wellnessByAthlete.get(m.athlete.id)}
+                            onClick={() => setWellnessAthlete(m.athlete)}
                           />
                           {m.athlete.sport && (
                             <Badge variant="secondary" className="text-[10px]">
@@ -504,7 +523,46 @@ export default function CoachRoster() {
           exercisesUrl={`/api/coach/analytics/exercises?athleteId=${goalsAthlete.id}`}
         />
       )}
+
+      {wellnessAthlete && (
+        <WellnessHistoryDialog
+          open={wellnessAthlete !== null}
+          onOpenChange={(open) => !open && setWellnessAthlete(null)}
+          athleteName={wellnessAthlete.name}
+          fetchUrl={`/api/coach/roster/${wellnessAthlete.id}/wellness-history`}
+        />
+      )}
     </AppShell>
+  );
+}
+
+// Read-only -- reflects the athlete's own mandatory daily check-in. Absent
+// entirely (not "red") when they haven't checked in yet today, since that's
+// a different fact than a real low score.
+function WellnessBadge({
+  entry,
+  onClick,
+}: {
+  entry?: { level: ReadinessLevel };
+  onClick: () => void;
+}) {
+  if (!entry) return null;
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      aria-label={`${READINESS_LABEL[entry.level]} -- view wellness history`}
+      className={cn(
+        "flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold transition-opacity hover:opacity-80",
+        READINESS_CLASSNAME[entry.level],
+      )}
+    >
+      <Gauge className="h-3 w-3" />
+      {READINESS_LABEL[entry.level]}
+    </button>
   );
 }
 
