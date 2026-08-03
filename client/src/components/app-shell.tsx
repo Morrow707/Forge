@@ -60,7 +60,7 @@ export function AppShell({
   fitScreen,
 }: {
   children: ReactNode;
-  title: string;
+  title: ReactNode;
   actions?: ReactNode;
   /** Constrains content to the viewport instead of letting the page scroll -- opt in per page. */
   fitScreen?: boolean;

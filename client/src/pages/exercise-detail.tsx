@@ -76,6 +76,10 @@ type ExerciseForm = {
   isCorrective: boolean;
   videoUrl: string;
   instructions: string;
+  usesWeight: boolean;
+  usesBodyweight: boolean;
+  usesBand: boolean;
+  usesBox: boolean;
 };
 
 const emptyForm: ExerciseForm = {
@@ -88,6 +92,10 @@ const emptyForm: ExerciseForm = {
   isCorrective: false,
   videoUrl: "",
   instructions: "",
+  usesWeight: true,
+  usesBodyweight: false,
+  usesBand: false,
+  usesBox: false,
 };
 
 function formFrom(ex: ExerciseWithOwnership): ExerciseForm {
@@ -101,6 +109,10 @@ function formFrom(ex: ExerciseWithOwnership): ExerciseForm {
     isCorrective: ex.isCorrective,
     videoUrl: ex.videoUrl ?? "",
     instructions: ex.instructions ?? "",
+    usesWeight: ex.usesWeight,
+    usesBodyweight: ex.usesBodyweight,
+    usesBand: ex.usesBand,
+    usesBox: ex.usesBox,
   };
 }
 
@@ -143,6 +155,10 @@ export function ExerciseDetailPage({
         isCorrective: form.isCorrective,
         videoUrl: form.videoUrl || null,
         instructions: form.instructions || null,
+        usesWeight: form.usesWeight,
+        usesBodyweight: form.usesBodyweight,
+        usesBand: form.usesBand,
+        usesBox: form.usesBox,
       };
       if (isNew) {
         const res = await apiRequest("POST", `${apiBase}/exercises`, payload);
@@ -322,6 +338,19 @@ export function ExerciseDetailPage({
                 <Field label="Laterality" value={exercise.laterality || "—"} />
                 <Field label="Equipment" value={exercise.equipment} />
               </div>
+              <Field
+                label="Logged as"
+                value={
+                  [
+                    exercise.usesWeight && "Weight",
+                    exercise.usesBodyweight && "Bodyweight",
+                    exercise.usesBand && "Band",
+                    exercise.usesBox && "Box height",
+                  ]
+                    .filter(Boolean)
+                    .join(", ") || "—"
+                }
+              />
               {exercise.instructions && (
                 <div>
                   <p className="text-xs font-semibold uppercase text-muted-foreground">
@@ -450,6 +479,46 @@ export function ExerciseDetailPage({
                     onChange={(e) => setForm((f) => ({ ...f, equipment: e.target.value }))}
                     placeholder="e.g. Barbell"
                   />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>What does the athlete log?</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Check every field this exercise actually needs -- the athlete's logging
+                    screen only shows these, nothing else. Check more than one for a combo
+                    movement (e.g. a dumbbell box step-up needs both weight and box height).
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm">
+                      <Checkbox
+                        checked={form.usesWeight}
+                        onCheckedChange={(c) => setForm((f) => ({ ...f, usesWeight: c === true }))}
+                      />
+                      Weight (lbs/kg)
+                    </label>
+                    <label className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm">
+                      <Checkbox
+                        checked={form.usesBodyweight}
+                        onCheckedChange={(c) =>
+                          setForm((f) => ({ ...f, usesBodyweight: c === true }))
+                        }
+                      />
+                      Bodyweight
+                    </label>
+                    <label className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm">
+                      <Checkbox
+                        checked={form.usesBand}
+                        onCheckedChange={(c) => setForm((f) => ({ ...f, usesBand: c === true }))}
+                      />
+                      Band
+                    </label>
+                    <label className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm">
+                      <Checkbox
+                        checked={form.usesBox}
+                        onCheckedChange={(c) => setForm((f) => ({ ...f, usesBox: c === true }))}
+                      />
+                      Box height
+                    </label>
+                  </div>
                 </div>
                 <label className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm">
                   <Checkbox
