@@ -48,7 +48,7 @@ import type {
 import { TESTING_METRICS, testingMetricLowerIsBetter } from "@shared/testing-metrics";
 import { computeReadiness } from "@shared/wellness";
 import { askClaude, askClaudeStructured } from "./ai";
-import { eq, and, inArray, asc, desc, lt, gt, isNull } from "drizzle-orm";
+import { eq, and, inArray, asc, desc, lt, gte, gt, isNull, sql } from "drizzle-orm";
 import {
   generateCoachCode,
   generateResetToken,
@@ -835,6 +835,130 @@ Write a short (2-4 sentence) plain-language weekly training summary for this ath
     const existing = await this.getAthleteDigest(athleteId, weekStart);
     if (existing) return { digest: existing, isNew: false };
     const generated = await this.generateAthleteDigest(athleteId, weekStart);
+    return { digest: generated, isNew: generated != null };
+  },
+
+  async getCoachDigest(coachId: number, weekStart: string) {
+    return db.query.coachDigests.findFirst({
+      where: and(eq(coachDigests.coachId, coachId), eq(coachDigests.weekStart, weekStart)),
+    });
+  },
+
+  async generateCoachDigest(coachId: number, weekStart: string) {
+    const roster = await this.getRosterForCoach(coachId);
+    if (roster.length === 0) return null;
+
+    const weekEnd = formatISO(addDays(parseISO(weekStart), 7), { representation: "date" });
+
+    const [workoutCounts, wellnessRows] = await Promise.all([
+      db
+        .select({ athleteId: workoutLogs.athleteId, count: sql<number>`count(*)::int` })
+        .from(workoutLogs)
+        .innerJoin(coachAthletes, eq(coachAthletes.athleteId, workoutLogs.athleteId))
+        .where(
+          and(
+            eq(coachAthletes.coachId, coachId),
+            eq(workoutLogs.completed, true),
+            gte(workoutLogs.date, weekStart),
+            lt(workoutLogs.date, weekEnd),
+          ),
+        )
+        .groupBy(workoutLogs.athleteId),
+      db
+        .select({
+          athleteId: wellnessCheckins.athleteId,
+          sleepHours: wellnessCheckins.sleepHours,
+          soreness: wellnessCheckins.soreness,
+          stress: wellnessCheckins.stress,
+        })
+        .from(wellnessCheckins)
+        .innerJoin(coachAthletes, eq(coachAthletes.athleteId, wellnessCheckins.athleteId))
+        .where(
+          and(
+            eq(coachAthletes.coachId, coachId),
+            gte(wellnessCheckins.date, weekStart),
+            lt(wellnessCheckins.date, weekEnd),
+          ),
+        ),
+    ]);
+
+    const workoutsByAthlete = new Map(workoutCounts.map((r) => [r.athleteId, r.count]));
+    const totalWorkouts = workoutCounts.reduce((sum, r) => sum + r.count, 0);
+
+    const redDaysByAthlete = new Map<number, number>();
+    for (const w of wellnessRows) {
+      if (computeReadiness(w).level === "red") {
+        redDaysByAthlete.set(w.athleteId, (redDaysByAthlete.get(w.athleteId) ?? 0) + 1);
+      }
+    }
+
+    // One progress-summary lookup per roster athlete to pull this week's PRs
+    // -- fine as a per-athlete loop since this only ever runs once per coach
+    // per week (cached after), never on a hot request path.
+    const prsByAthlete = await Promise.all(
+      roster.map(async (a) => {
+        const summary = await this.getAthleteProgressSummary(a.id);
+        const thisWeek = summary.recentPRs.filter(
+          (pr) => pr.date >= weekStart && pr.date < weekEnd,
+        );
+        return { athlete: a, prs: thisWeek };
+      }),
+    );
+
+    if (totalWorkouts === 0 && wellnessRows.length === 0) return null;
+
+    const noWorkoutsNames = roster
+      .filter((a) => !workoutsByAthlete.has(a.id))
+      .map((a) => a.name);
+    const flaggedNames = roster
+      .filter((a) => (redDaysByAthlete.get(a.id) ?? 0) >= 2)
+      .map((a) => `${a.name} (${redDaysByAthlete.get(a.id)} flagged days)`);
+    const prLines = prsByAthlete
+      .flatMap(({ athlete, prs }) =>
+        prs.map((pr) => `${athlete.name}: ${pr.exerciseName} ${pr.weight}${pr.unit} x ${pr.reps}`),
+      )
+      .slice(0, 10);
+    const perAthleteLines = roster.map(
+      (a) => `${a.name}: ${workoutsByAthlete.get(a.id) ?? 0} workouts logged`,
+    );
+
+    const prompt = `Weekly roster data for a strength coach's team summary:
+- Roster size: ${roster.length} athletes
+- Total workouts logged this week across the roster: ${totalWorkouts}
+- Per-athlete workout counts: ${perAthleteLines.join("; ")}
+- Athletes with zero workouts logged this week: ${noWorkoutsNames.length > 0 ? noWorkoutsNames.join(", ") : "none"}
+- Athletes with 2+ flagged (poor) readiness days this week: ${flaggedNames.length > 0 ? flaggedNames.join(", ") : "none"}
+- New PRs this week: ${prLines.length > 0 ? prLines.join("; ") : "none logged"}
+
+Write a short (3-5 sentence) plain-language weekly summary for the coach, highlighting real trends -- overall roster compliance, standout performances, and anyone who may need a check-in (missed sessions or flagged readiness). Be specific and reference actual names and numbers from the data above. Talk directly to the coach as "you". No preamble or sign-off, just the summary itself.`;
+
+    const text = await askClaude(
+      "You are a concise, direct strength and conditioning assistant coach writing a weekly roster summary for the head coach. Ground everything strictly in the data given -- never invent athletes, numbers, or events you weren't told about. This summary is for the coach's eyes only, to help them decide who to check in with.",
+      [{ role: "user", content: prompt }],
+      { maxTokens: 350 },
+    );
+    if (!text) return null;
+
+    const [row] = await db
+      .insert(coachDigests)
+      .values({ coachId, weekStart, digest: text.trim() })
+      .onConflictDoUpdate({
+        target: [coachDigests.coachId, coachDigests.weekStart],
+        set: { digest: text.trim() },
+      })
+      .returning();
+    return row;
+  },
+
+  async getOrCreateCoachDigest(
+    coachId: number,
+  ): Promise<{ digest: (typeof coachDigests.$inferSelect) | null; isNew: boolean }> {
+    const weekStart = formatISO(startOfWeek(new Date(), { weekStartsOn: 1 }), {
+      representation: "date",
+    });
+    const existing = await this.getCoachDigest(coachId, weekStart);
+    if (existing) return { digest: existing, isNew: false };
+    const generated = await this.generateCoachDigest(coachId, weekStart);
     return { digest: generated, isNew: generated != null };
   },
 
