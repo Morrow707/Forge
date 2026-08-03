@@ -36,6 +36,7 @@ import {
   createGoalSchema,
   suggestGoalTargetSchema,
   sendChatMessageSchema,
+  generateProgramDraftSchema,
   submitWellnessCheckinSchema,
 } from "@shared/schema";
 import { computeReadiness } from "@shared/wellness";
@@ -402,6 +403,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     const program = await storage.createProgramWithStructure(user.id, parsed.data);
     res.status(201).json(program);
+  });
+
+  // Returns a draft only -- nothing is saved here. The client POSTs the
+  // draft to /api/coach/programs itself (same as "Create & Build" or
+  // "Duplicate"), landing the coach in the full builder to review and edit
+  // before it's ever assigned to an athlete.
+  app.post("/api/coach/programs/ai-draft", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = generateProgramDraftSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const draft = await storage.generateProgramDraft(user.id, parsed.data.prompt);
+    res.json(draft);
   });
 
   app.put("/api/coach/programs/:id", requireRole("coach"), async (req, res) => {

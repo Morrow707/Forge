@@ -1260,6 +1260,11 @@ export type Team = typeof teams.$inferSelect;
 export type SignupInput = z.infer<typeof signupSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type ProgramStructureInput = z.infer<typeof programStructureSchema>;
+
+export const generateProgramDraftSchema = z.object({
+  prompt: z.string().trim().min(5).max(500),
+});
+export type GenerateProgramDraftInput = z.infer<typeof generateProgramDraftSchema>;
 export type InsertAssignmentInput = z.infer<typeof insertAssignmentSchema>;
 export type UpdateAssignmentInput = z.infer<typeof updateAssignmentSchema>;
 export type UpdateProgramDayInput = z.infer<typeof updateProgramDaySchema>;
