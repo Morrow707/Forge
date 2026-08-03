@@ -259,92 +259,126 @@ export const programs = pgTable("programs", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-export const programWeeks = pgTable("program_weeks", {
-  id: serial("id").primaryKey(),
-  programId: integer("program_id")
-    .notNull()
-    .references(() => programs.id, { onDelete: "cascade" }),
-  weekNumber: integer("week_number").notNull(),
-  name: text("name"),
-});
+export const programWeeks = pgTable(
+  "program_weeks",
+  {
+    id: serial("id").primaryKey(),
+    programId: integer("program_id")
+      .notNull()
+      .references(() => programs.id, { onDelete: "cascade" }),
+    weekNumber: integer("week_number").notNull(),
+    name: text("name"),
+  },
+  (table) => ({
+    programIdx: index("program_weeks_program_idx").on(table.programId),
+  }),
+);
 
-export const programDays = pgTable("program_days", {
-  id: serial("id").primaryKey(),
-  weekId: integer("week_id")
-    .notNull()
-    .references(() => programWeeks.id, { onDelete: "cascade" }),
-  dayNumber: integer("day_number").notNull(),
-  title: text("title").notNull().default("Training Day"),
-  isRestDay: boolean("is_rest_day").notNull().default(false),
-});
+export const programDays = pgTable(
+  "program_days",
+  {
+    id: serial("id").primaryKey(),
+    weekId: integer("week_id")
+      .notNull()
+      .references(() => programWeeks.id, { onDelete: "cascade" }),
+    dayNumber: integer("day_number").notNull(),
+    title: text("title").notNull().default("Training Day"),
+    isRestDay: boolean("is_rest_day").notNull().default(false),
+  },
+  (table) => ({
+    weekIdx: index("program_days_week_idx").on(table.weekId),
+  }),
+);
 
-export const programExercises = pgTable("program_exercises", {
-  id: serial("id").primaryKey(),
-  dayId: integer("day_id")
-    .notNull()
-    .references(() => programDays.id, { onDelete: "cascade" }),
-  exerciseId: integer("exercise_id")
-    .notNull()
-    .references(() => exercises.id, { onDelete: "cascade" }),
-  orderIndex: integer("order_index").notNull().default(0),
-  sets: integer("sets").notNull().default(3),
-  reps: text("reps").notNull().default("10"),
-  weight: text("weight"),
-  restSeconds: integer("rest_seconds"),
-  notes: text("notes"),
-  // Exercises sharing the same (non-null) supersetGroup value, and adjacent
-  // in orderIndex, are chained together and rendered as one lettered slot
-  // (A1, A2...) instead of separate letters. Opaque token, not a display value.
-  supersetGroup: text("superset_group"),
-  trackingLevel: trackingLevelEnum("tracking_level").notNull().default("none"),
-  videoCheckEnabled: boolean("video_check_enabled").notNull().default(false),
-});
+export const programExercises = pgTable(
+  "program_exercises",
+  {
+    id: serial("id").primaryKey(),
+    dayId: integer("day_id")
+      .notNull()
+      .references(() => programDays.id, { onDelete: "cascade" }),
+    exerciseId: integer("exercise_id")
+      .notNull()
+      .references(() => exercises.id, { onDelete: "cascade" }),
+    orderIndex: integer("order_index").notNull().default(0),
+    sets: integer("sets").notNull().default(3),
+    reps: text("reps").notNull().default("10"),
+    weight: text("weight"),
+    restSeconds: integer("rest_seconds"),
+    notes: text("notes"),
+    // Exercises sharing the same (non-null) supersetGroup value, and adjacent
+    // in orderIndex, are chained together and rendered as one lettered slot
+    // (A1, A2...) instead of separate letters. Opaque token, not a display value.
+    supersetGroup: text("superset_group"),
+    trackingLevel: trackingLevelEnum("tracking_level").notNull().default("none"),
+    videoCheckEnabled: boolean("video_check_enabled").notNull().default(false),
+  },
+  (table) => ({
+    dayIdx: index("program_exercises_day_idx").on(table.dayId),
+  }),
+);
 
-export const assignments = pgTable("assignments", {
-  id: serial("id").primaryKey(),
-  programId: integer("program_id")
-    .notNull()
-    .references(() => programs.id, { onDelete: "cascade" }),
-  athleteId: integer("athlete_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  coachId: integer("coach_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  startDate: date("start_date").notNull(),
-  correctivesEnabled: boolean("correctives_enabled").notNull().default(true),
-  // Manual per-day schedule overrides, keyed by program_day_id (as a
-  // string) -> an explicit calendar date. Lets a coach account for games,
-  // travel, or extra rest by moving individual occurrences off the rigid
-  // "every 7 days from startDate" grid; days with no entry here still fall
-  // back to that computed date.
-  dateOverrides: json("date_overrides").$type<Record<string, string>>(),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+export const assignments = pgTable(
+  "assignments",
+  {
+    id: serial("id").primaryKey(),
+    programId: integer("program_id")
+      .notNull()
+      .references(() => programs.id, { onDelete: "cascade" }),
+    athleteId: integer("athlete_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    coachId: integer("coach_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    startDate: date("start_date").notNull(),
+    correctivesEnabled: boolean("correctives_enabled").notNull().default(true),
+    // Manual per-day schedule overrides, keyed by program_day_id (as a
+    // string) -> an explicit calendar date. Lets a coach account for games,
+    // travel, or extra rest by moving individual occurrences off the rigid
+    // "every 7 days from startDate" grid; days with no entry here still fall
+    // back to that computed date.
+    dateOverrides: json("date_overrides").$type<Record<string, string>>(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    athleteIdx: index("assignments_athlete_idx").on(table.athleteId),
+    coachIdx: index("assignments_coach_idx").on(table.coachId),
+  }),
+);
 
 // Per-athlete, per-day corrective exercises. Kept separate from
 // program_exercises (the shared template) because correctives are a manual
 // judgment call for one specific athlete's instance of the program, not
 // something that should apply to everyone assigned to it.
-export const assignmentCorrectives = pgTable("assignment_correctives", {
-  id: serial("id").primaryKey(),
-  assignmentId: integer("assignment_id")
-    .notNull()
-    .references(() => assignments.id, { onDelete: "cascade" }),
-  programDayId: integer("program_day_id")
-    .notNull()
-    .references(() => programDays.id, { onDelete: "cascade" }),
-  exerciseId: integer("exercise_id")
-    .notNull()
-    .references(() => exercises.id, { onDelete: "cascade" }),
-  orderIndex: integer("order_index").notNull().default(0),
-  sets: integer("sets").notNull().default(3),
-  reps: text("reps").notNull().default("10"),
-  weight: text("weight"),
-  restSeconds: integer("rest_seconds"),
-  notes: text("notes"),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+export const assignmentCorrectives = pgTable(
+  "assignment_correctives",
+  {
+    id: serial("id").primaryKey(),
+    assignmentId: integer("assignment_id")
+      .notNull()
+      .references(() => assignments.id, { onDelete: "cascade" }),
+    programDayId: integer("program_day_id")
+      .notNull()
+      .references(() => programDays.id, { onDelete: "cascade" }),
+    exerciseId: integer("exercise_id")
+      .notNull()
+      .references(() => exercises.id, { onDelete: "cascade" }),
+    orderIndex: integer("order_index").notNull().default(0),
+    sets: integer("sets").notNull().default(3),
+    reps: text("reps").notNull().default("10"),
+    weight: text("weight"),
+    restSeconds: integer("rest_seconds"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    assignmentDayIdx: index("assignment_correctives_assignment_day_idx").on(
+      table.assignmentId,
+      table.programDayId,
+    ),
+  }),
+);
 
 export const workoutLogs = pgTable(
   "workout_logs",
@@ -369,6 +403,10 @@ export const workoutLogs = pgTable(
       table.programDayId,
       table.date,
     ),
+    // Backs getRecentWorkoutLogsForAthlete's "last 60 logs before date X for
+    // this athlete" query -- the single hottest read in the app, run on
+    // every workout day view.
+    athleteDateIdx: index("workout_logs_athlete_date_idx").on(table.athleteId, table.date),
   }),
 );
 
@@ -435,58 +473,82 @@ export const workoutSetEntries = pgTable("workout_set_entries", {
 // flagging a rough set or attaching a form-check video, a coach replying.
 // Scoped to (assignmentId, programDayId) rather than a workoutLog row so the
 // thread exists even before the athlete has logged anything for that day.
-export const workoutComments = pgTable("workout_comments", {
-  id: serial("id").primaryKey(),
-  assignmentId: integer("assignment_id")
-    .notNull()
-    .references(() => assignments.id, { onDelete: "cascade" }),
-  programDayId: integer("program_day_id")
-    .notNull()
-    .references(() => programDays.id, { onDelete: "cascade" }),
-  authorId: integer("author_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  body: text("body").notNull(),
-  videoUrl: text("video_url"),
-  // A coach-drawn markup on a paused frame of the athlete's video -- e.g.
-  // circling a knee valgus moment -- saved as a PNG and attached the same
-  // way a video link is, just a different media type on the same comment.
-  imageUrl: text("image_url"),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+export const workoutComments = pgTable(
+  "workout_comments",
+  {
+    id: serial("id").primaryKey(),
+    assignmentId: integer("assignment_id")
+      .notNull()
+      .references(() => assignments.id, { onDelete: "cascade" }),
+    programDayId: integer("program_day_id")
+      .notNull()
+      .references(() => programDays.id, { onDelete: "cascade" }),
+    authorId: integer("author_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    body: text("body").notNull(),
+    videoUrl: text("video_url"),
+    // A coach-drawn markup on a paused frame of the athlete's video -- e.g.
+    // circling a knee valgus moment -- saved as a PNG and attached the same
+    // way a video link is, just a different media type on the same comment.
+    imageUrl: text("image_url"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    assignmentDayIdx: index("workout_comments_assignment_day_idx").on(
+      table.assignmentId,
+      table.programDayId,
+    ),
+  }),
+);
 
 // In-app notification inbox. Deliberately narrow: only ever created for a
 // coach when an athlete comments or attaches a video, never for program
 // completions or team-wide events -- see the notification-creation call
 // sites in routes.ts for the full (short) list of triggers.
-export const notifications = pgTable("notifications", {
-  id: serial("id").primaryKey(),
-  userId: integer("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  type: text("type").notNull(),
-  title: text("title").notNull(),
-  body: text("body").notNull(),
-  link: text("link"),
-  read: boolean("read").notNull().default(false),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    type: text("type").notNull(),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    link: text("link"),
+    read: boolean("read").notNull().default(false),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    // Covers both the inbox list (userId, ordered by date) and the unread
+    // count/mark-read queries (userId + read=false) -- polled every 60s for
+    // every logged-in coach and athlete.
+    userReadIdx: index("notifications_user_read_idx").on(table.userId, table.read),
+  }),
+);
 
 // One row per browser/device a user has enabled push notifications on --
 // the Web Push standard's subscription object (endpoint + encryption
 // keys), opaque to us, handed to web-push verbatim when sending. A user
 // can have several (phone, laptop, etc); each is removed independently if
 // the push service reports it's gone stale (410/404 on send).
-export const pushSubscriptions = pgTable("push_subscriptions", {
-  id: serial("id").primaryKey(),
-  userId: integer("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  endpoint: text("endpoint").notNull(),
-  p256dh: text("p256dh").notNull(),
-  auth: text("auth").notNull(),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+export const pushSubscriptions = pgTable(
+  "push_subscriptions",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    endpoint: text("endpoint").notNull(),
+    p256dh: text("p256dh").notNull(),
+    auth: text("auth").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    userIdx: index("push_subscriptions_user_idx").on(table.userId),
+  }),
+);
 
 // Single-use, expiring password reset tokens. Only the SHA-256 hash of the
 // token is stored -- same reasoning as password hashing -- so a database
