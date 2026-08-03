@@ -28,6 +28,7 @@ import {
   readinessBriefings,
   athleteDigests,
   coachDigests,
+  athleteChatMessages,
   type InsertUser,
 } from "@shared/schema";
 import type {
@@ -47,7 +48,7 @@ import type {
 } from "@shared/schema";
 import { TESTING_METRICS, testingMetricLowerIsBetter } from "@shared/testing-metrics";
 import { computeReadiness } from "@shared/wellness";
-import { askClaude, askClaudeStructured } from "./ai";
+import { askClaude, askClaudeStructured, aiEnabled } from "./ai";
 import { eq, and, inArray, asc, desc, lt, gte, gt, isNull, sql } from "drizzle-orm";
 import {
   generateCoachCode,
@@ -960,6 +961,107 @@ Write a short (3-5 sentence) plain-language weekly summary for the coach, highli
     if (existing) return { digest: existing, isNew: false };
     const generated = await this.generateCoachDigest(coachId, weekStart);
     return { digest: generated, isNew: generated != null };
+  },
+
+  // ---------- AI chat coach ----------
+  // Every message either side has ever sent, oldest first -- this is never a
+  // private channel (see the schema comment on athleteChatMessages), so this
+  // same query backs both the athlete's own view and the coach's read-only
+  // view of it.
+  async getChatMessagesForAthlete(athleteId: number, limit = 50) {
+    const rows = await db.query.athleteChatMessages.findMany({
+      where: eq(athleteChatMessages.athleteId, athleteId),
+      orderBy: desc(athleteChatMessages.createdAt),
+      limit,
+    });
+    return rows.reverse();
+  },
+
+  // Coach-scoped read of an athlete's chat -- 404s (via null) if the athlete
+  // isn't on this coach's roster, so a coach can never read someone else's.
+  async getChatMessagesForCoachAthlete(coachId: number, athleteId: number) {
+    const onRoster = await this.getRosterAthleteForCoach(coachId, athleteId);
+    if (!onRoster) return null;
+    return this.getChatMessagesForAthlete(athleteId);
+  },
+
+  // Stores the athlete's message no matter what (so the coach's view is
+  // always a complete, honest transcript, even the messages that hit an AI
+  // outage), then grounds a reply in the athlete's own real data -- and,
+  // critically for a minor-athlete-facing feature, never lets that reply
+  // read as an unsupervised directive: anything that would change their
+  // training or nutrition gets framed as something to run by their coach,
+  // never a standalone instruction. The full transcript is always readable
+  // by their coach (see getChatMessagesForCoachAthlete), so this is never a
+  // private, unsupervised channel.
+  async sendAthleteChatMessage(athleteId: number, content: string) {
+    const [userMessage] = await db
+      .insert(athleteChatMessages)
+      .values({ athleteId, role: "athlete", content })
+      .returning();
+
+    if (!aiEnabled) {
+      const [assistantMessage] = await db
+        .insert(athleteChatMessages)
+        .values({
+          athleteId,
+          role: "assistant",
+          content: "Your AI coach isn't set up yet -- reach out to your coach directly for now.",
+        })
+        .returning();
+      return { userMessage, assistantMessage };
+    }
+
+    const today = formatISO(new Date(), { representation: "date" });
+    const [summary, streak, wellnessToday, history] = await Promise.all([
+      this.getAthleteProgressSummary(athleteId),
+      this.getStreakForAthlete(athleteId),
+      this.getWellnessCheckin(athleteId, today),
+      this.getChatMessagesForAthlete(athleteId, 20),
+    ]);
+
+    const prSummary =
+      summary.recentPRs.length > 0
+        ? summary.recentPRs
+            .slice(0, 5)
+            .map((pr) => `${pr.exerciseName} ${pr.weight}${pr.unit} x ${pr.reps} on ${pr.date}`)
+            .join("; ")
+        : "no PRs logged yet";
+    const wellnessSummary = wellnessToday
+      ? `sleep ${wellnessToday.sleepHours}h, soreness ${wellnessToday.soreness}/5, stress ${wellnessToday.stress}/5`
+      : "no check-in logged today";
+
+    const system = `You are Forge's AI training assistant, chatting directly with a young athlete. Ground every answer strictly in the data below -- never invent exercises, numbers, or events you weren't given.
+
+Athlete's data:
+- Total workouts completed all-time: ${summary.totalWorkoutsCompleted}
+- Current streak: ${streak.currentStreak} days
+- Recent PRs: ${prSummary}
+- Today's wellness check-in: ${wellnessSummary}
+
+Hard rules, no exceptions:
+1. Never diagnose an injury or give medical advice. If the athlete mentions pain, injury, or feeling unwell, tell them to stop and tell their coach (or a doctor/trainer for anything serious) -- do not suggest modifications, workarounds, or whether it's safe to continue.
+2. Never tell the athlete to change their training (weight, sets, reps, exercises) or their nutrition as a direct instruction. You can share general, encouraging, educational information, but any specific change must be explicitly framed as "something to bring up with your coach" -- you are never the final word on their program.
+3. This entire conversation is visible to the athlete's coach. That's a good thing, not a secret -- you can mention it naturally if relevant (e.g. when suggesting they loop in their coach).
+4. Keep replies short (2-4 sentences), warm, and direct. Talk to the athlete as "you". No preamble.`;
+
+    const messages = history.map((m) => ({
+      role: (m.role === "athlete" ? "user" : "assistant") as "user" | "assistant",
+      content: m.content,
+    }));
+
+    const text = await askClaude(system, messages, { maxTokens: 300 });
+    const [assistantMessage] = await db
+      .insert(athleteChatMessages)
+      .values({
+        athleteId,
+        role: "assistant",
+        content:
+          text?.trim() ??
+          "Sorry, I couldn't come up with a reply just now -- try again in a bit, or reach out to your coach.",
+      })
+      .returning();
+    return { userMessage, assistantMessage };
   },
 
   // ---------- Teams ----------
