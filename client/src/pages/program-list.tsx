@@ -18,7 +18,7 @@ import { AssignProgramDialog } from "@/components/assign-program-dialog";
 import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { Plus, ListChecks, Trash2, Users, CalendarRange, Send, Copy } from "lucide-react";
+import { Plus, ListChecks, Trash2, Users, CalendarRange, Send, Copy, Sparkles } from "lucide-react";
 
 type ProgramSummary = {
   id: number;
@@ -43,12 +43,14 @@ export function ProgramListPage({
   title,
   emptyStateText,
   showAssign = true,
+  showAiAssist = false,
 }: {
   apiBase: string;
   routeBase: string;
   title: string;
   emptyStateText: string;
   showAssign?: boolean;
+  showAiAssist?: boolean;
 }) {
   const qc = useQueryClient();
   const [, navigate] = useLocation();
@@ -64,6 +66,8 @@ export function ProgramListPage({
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [assignProgramId, setAssignProgramId] = useState<number | null>(null);
+  const [aiDialogOpen, setAiDialogOpen] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState("");
 
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -138,14 +142,51 @@ export function ProgramListPage({
     onError: (err: ApiError) => toast.error(err.message || "Could not duplicate program"),
   });
 
+  // Two steps in one mutation so the button shows a single loading state:
+  // ask the AI for a draft structure, then create a real (fully editable)
+  // program from it exactly the way "Create & Build" does. The coach lands
+  // in the normal builder to review and change anything before it's ever
+  // assigned to an athlete -- this never assigns or publishes anything.
+  const aiDraftMutation = useMutation({
+    mutationFn: async () => {
+      const draftRes = await apiRequest("POST", `${apiBase}/programs/ai-draft`, {
+        prompt: aiPrompt,
+      });
+      const draft = await draftRes.json();
+      if (!draft) return null;
+      const res = await apiRequest("POST", `${apiBase}/programs`, draft);
+      return res.json();
+    },
+    onSuccess: (program) => {
+      if (!program) {
+        toast.error("AI assist isn't available right now");
+        return;
+      }
+      qc.invalidateQueries({ queryKey: [`${apiBase}/programs`] });
+      toast.success("Draft created -- review it before assigning to anyone");
+      setAiDialogOpen(false);
+      setAiPrompt("");
+      navigate(`${routeBase}/${program.id}`);
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Could not generate a draft"),
+  });
+
   return (
     <AppShell
       title={title}
       actions={
-        <Button onClick={() => setDialogOpen(true)}>
-          <Plus className="h-4 w-4" />
-          New Program
-        </Button>
+        <>
+          {showAiAssist && (
+            <Button variant="outline" onClick={() => setAiDialogOpen(true)}>
+              <Sparkles className="h-4 w-4" />
+              AI Assist
+            </Button>
+          )}
+          <Button onClick={() => setDialogOpen(true)}>
+            <Plus className="h-4 w-4" />
+            New Program
+          </Button>
+        </>
       }
     >
       {!isLoading && programs.length === 0 && (
@@ -289,6 +330,53 @@ export function ProgramListPage({
           programs={programs}
           programId={assignProgramId ?? undefined}
         />
+      )}
+
+      {showAiAssist && (
+        <Dialog open={aiDialogOpen} onOpenChange={setAiDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-primary" />
+                AI Program Draft
+              </DialogTitle>
+            </DialogHeader>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!aiPrompt.trim() || aiDraftMutation.isPending) return;
+                aiDraftMutation.mutate();
+              }}
+              className="space-y-4"
+            >
+              <div className="space-y-1.5">
+                <Label htmlFor="ai-prompt">Describe the program you want</Label>
+                <Textarea
+                  id="ai-prompt"
+                  required
+                  value={aiPrompt}
+                  onChange={(e) => setAiPrompt(e.target.value)}
+                  placeholder="e.g. 4-week off-season strength block for a high school basketball team, 4 days a week, minimal equipment"
+                  rows={3}
+                  maxLength={500}
+                />
+                <p className="text-xs text-muted-foreground">
+                  This only creates a draft using exercises already in your bank -- you'll land
+                  in the full builder to review and change anything before assigning it to
+                  anyone.
+                </p>
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setAiDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={aiDraftMutation.isPending || !aiPrompt.trim()}>
+                  {aiDraftMutation.isPending ? "Generating…" : "Generate Draft"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       )}
     </AppShell>
   );

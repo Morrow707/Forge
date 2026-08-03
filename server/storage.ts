@@ -1600,6 +1600,133 @@ Hard rules, no exceptions:
     });
   },
 
+  // Returns a draft program structure shaped exactly like
+  // ProgramStructureInput -- the caller POSTs it to the normal
+  // createProgramWithStructure route just like the manual "Create & Build"
+  // and "Duplicate" flows already do, dropping the coach straight into the
+  // full builder to review, edit, or delete anything before it's ever
+  // assigned to an athlete. This function itself never assigns a program to
+  // anyone -- that stays a separate, explicit coach action.
+  async generateProgramDraft(coachId: number, prompt: string): Promise<ProgramStructureInput | null> {
+    const visibleExercises = await this.getVisibleExercisesForCoach(coachId);
+    if (visibleExercises.length === 0) return null;
+    const validIds = visibleExercises.map((e) => e.id);
+    const catalog = visibleExercises
+      .map((e) => `${e.id}: ${e.name} (${e.category}, ${e.muscleGroup})`)
+      .join("\n");
+
+    const tool = {
+      name: "generate_program_draft",
+      description: "Generates a draft strength & conditioning program structure using only the provided exercise IDs.",
+      input_schema: {
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          description: { type: "string" },
+          weeks: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                weekNumber: { type: "integer" },
+                name: { type: "string" },
+                days: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      dayNumber: { type: "integer" },
+                      title: { type: "string" },
+                      isRestDay: { type: "boolean" },
+                      exercises: {
+                        type: "array",
+                        items: {
+                          type: "object",
+                          properties: {
+                            exerciseId: { type: "integer", enum: validIds },
+                            sets: { type: "integer" },
+                            reps: { type: "string" },
+                            weight: { type: "string" },
+                            restSeconds: { type: "integer" },
+                            notes: { type: "string" },
+                          },
+                          required: ["exerciseId", "sets", "reps"],
+                        },
+                      },
+                    },
+                    required: ["dayNumber", "title", "isRestDay", "exercises"],
+                  },
+                },
+              },
+              required: ["weekNumber", "days"],
+            },
+          },
+        },
+        required: ["name", "weeks"],
+      },
+    };
+
+    const system = `You are a strength and conditioning program design assistant helping a coach draft a new training program. Ground the program entirely in the coach's request and the exercise catalog you're given -- you may ONLY reference exercise IDs from that catalog, never invent an exercise or its ID. Design a sensible, appropriately periodized structure (reasonable set/rep schemes, rest days where appropriate, progression across weeks if multiple weeks are implied). This is a draft the coach will review and edit before it's ever shown to an athlete, so favor a complete, usable starting point over asking clarifying questions.`;
+
+    const userPrompt = `Coach's request: "${prompt}"
+
+Available exercises (id: name (category, muscle group)) -- you may ONLY use exercise IDs from this list:
+${catalog}
+
+Design a complete draft program matching the coach's request.`;
+
+    type RawDraft = {
+      name?: string;
+      description?: string;
+      weeks?: {
+        weekNumber?: number;
+        name?: string;
+        days?: {
+          dayNumber?: number;
+          title?: string;
+          isRestDay?: boolean;
+          exercises?: {
+            exerciseId: number;
+            sets?: number;
+            reps?: string;
+            weight?: string;
+            restSeconds?: number;
+            notes?: string;
+          }[];
+        }[];
+      }[];
+    };
+
+    const draft = await askClaudeStructured<RawDraft>(system, userPrompt, tool, { maxTokens: 4096 });
+    if (!draft) return null;
+
+    const validIdSet = new Set(validIds);
+    return {
+      name: draft.name?.trim() || "AI Draft Program",
+      description: draft.description?.trim() || null,
+      weeks: (draft.weeks ?? []).map((w, wi) => ({
+        weekNumber: w.weekNumber ?? wi + 1,
+        name: w.name ?? null,
+        days: (w.days ?? []).map((d, di) => ({
+          dayNumber: d.dayNumber ?? di + 1,
+          title: d.title?.trim() || "Training Day",
+          isRestDay: Boolean(d.isRestDay),
+          exercises: (d.exercises ?? [])
+            .filter((ex) => validIdSet.has(ex.exerciseId))
+            .map((ex, ei) => ({
+              exerciseId: ex.exerciseId,
+              orderIndex: ei,
+              sets: ex.sets ?? 3,
+              reps: ex.reps || "10",
+              weight: ex.weight || null,
+              restSeconds: ex.restSeconds ?? null,
+              notes: ex.notes || null,
+            })),
+        })),
+      })),
+    };
+  },
+
   async updateProgramStructure(
     programId: number,
     structure: ProgramStructureInput,
