@@ -7,6 +7,7 @@ export default function CoachPrograms() {
       routeBase="/coach/programs"
       title="Programs"
       emptyStateText="No programs yet. Build a training block to start assigning workouts to athletes."
+      showAiAssist
     />
   );
 }
