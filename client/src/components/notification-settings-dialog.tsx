@@ -94,8 +94,9 @@ export function NotificationSettingsDialog({
           <DialogTitle>Notification Settings</DialogTitle>
         </DialogHeader>
         <p className="text-sm text-muted-foreground">
-          You'll only ever hear about an athlete's comment or video upload -- never program
-          completions or team-wide activity.
+          {user.role === "coach"
+            ? "You'll only ever hear about an athlete's comment or video upload -- never program completions or routine team board activity."
+            : "You'll only ever hear about your coach's reply or an emergency team announcement -- never program completions or routine team board activity."}
         </p>
         <div className="space-y-4">
           {isPushSupported() && (

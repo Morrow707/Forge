@@ -38,11 +38,13 @@ import {
   Target,
 } from "lucide-react";
 import { GoalsPanel } from "@/components/goals-panel";
+import { StreakBadges } from "@/components/streak-badge";
 
 type ProgressSummary = {
   totalWorkoutsCompleted: number;
   workoutsThisMonth: number;
   currentStreak: number;
+  totalCompleted: number;
   recentPRs: { exerciseName: string; weight: number; unit: string; reps: string; date: string }[];
   currentLifts: { exerciseName: string; weight: string; unit: string; reps: string; date: string }[];
 };
@@ -186,6 +188,15 @@ export default function AthleteProgress() {
               </CardContent>
             </Card>
           </div>
+
+          {(data?.currentStreak || data?.totalCompleted) && (
+            <div className="mb-6 flex flex-wrap gap-2">
+              <StreakBadges
+                currentStreak={data?.currentStreak ?? 0}
+                totalCompleted={data?.totalCompleted ?? 0}
+              />
+            </div>
+          )}
 
           <div className="grid gap-4 lg:grid-cols-2">
             <Card>

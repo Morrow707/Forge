@@ -152,7 +152,7 @@ export function AppShell({
                   <UserCircle className="h-4 w-4" />
                 </Button>
               )}
-              {user?.role === "coach" && (
+              {(user?.role === "coach" || user?.role === "athlete") && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -171,7 +171,7 @@ export function AppShell({
                 <LogOut className="h-4 w-4" />
               </Button>
             </div>
-            {user?.role === "coach" && <NotificationBell />}
+            {(user?.role === "coach" || user?.role === "athlete") && <NotificationBell />}
             <button
               type="button"
               onClick={() => setMobileNavOpen((v) => !v)}
@@ -233,7 +233,7 @@ export function AppShell({
                     Profile
                   </button>
                 )}
-                {user?.role === "coach" && (
+                {(user?.role === "coach" || user?.role === "athlete") && (
                   <button
                     type="button"
                     onClick={() => {
@@ -281,7 +281,7 @@ export function AppShell({
       {user?.role === "athlete" && (
         <EditMyProfileDialog user={user} open={profileOpen} onOpenChange={setProfileOpen} />
       )}
-      {user?.role === "coach" && (
+      {(user?.role === "coach" || user?.role === "athlete") && (
         <NotificationSettingsDialog
           user={user}
           open={notifSettingsOpen}
