@@ -43,7 +43,9 @@ export const weightModeEnum = pgEnum("weight_mode", [
   "numeric",
   "bodyweight",
   "band",
+  "box",
 ]);
+export const boxHeightUnitEnum = pgEnum("box_height_unit", ["in", "m"]);
 export const lateralityEnum = pgEnum("laterality", ["bilateral", "unilateral"]);
 // Coach-only quick-glance status, toggled by the coach as an athlete gets
 // hurt/recovers -- never surfaced to the athlete themselves (see PublicUser).
@@ -194,6 +196,13 @@ export const exercises = pgTable("exercises", {
   equipment: text("equipment").notNull().default("Barbell"),
   movementType: text("movement_type"),
   laterality: lateralityEnum("laterality"),
+  // What the athlete actually logs for this exercise, set once here by the
+  // coach instead of re-chosen by the athlete on every set -- not mutually
+  // exclusive (a dumbbell box step-up needs both usesWeight and usesBox).
+  usesWeight: boolean("uses_weight").notNull().default(true),
+  usesBodyweight: boolean("uses_bodyweight").notNull().default(false),
+  usesBand: boolean("uses_band").notNull().default(false),
+  usesBox: boolean("uses_box").notNull().default(false),
   isCorrective: boolean("is_corrective").notNull().default(false),
   videoUrl: text("video_url"),
   instructions: text("instructions"),
@@ -458,6 +467,13 @@ export const workoutSetEntries = pgTable("workout_set_entries", {
   // bodyweight/band sets (weightMode lives on the parent log entry) and for
   // rows logged before this column existed.
   weightUnit: weightUnitEnum("weight_unit_at_log"),
+  // Only populated for band/box exercises respectively (see exercises.usesBand
+  // / usesBox) -- independent of weight/weightUnit above so a combo movement
+  // like a dumbbell box step-up can carry both a weight AND a box height on
+  // the same set.
+  bandColor: text("band_color"),
+  boxHeight: text("box_height"),
+  boxHeightUnit: boxHeightUnitEnum("box_height_unit"),
   // Bar-speed/bar-path CV metrics for this set, computed on-device and
   // synced as plain numbers -- never the source video. Null unless the
   // exercise's trackingLevel was "bar_path"/"full" when this set was logged.
@@ -1087,6 +1103,10 @@ export const insertExerciseSchema = createInsertSchema(exercises)
     movementType: z.string().optional().nullable(),
     laterality: z.enum(["bilateral", "unilateral"]).optional().nullable(),
     isCorrective: z.boolean().default(false),
+    usesWeight: z.boolean().default(true),
+    usesBodyweight: z.boolean().default(false),
+    usesBand: z.boolean().default(false),
+    usesBox: z.boolean().default(false),
   });
 
 export const insertProgramSchema = createInsertSchema(programs).pick({
@@ -1205,6 +1225,9 @@ export const setLogInputSchema = z.object({
   setNumber: z.number(),
   reps: z.string().optional().nullable(),
   weight: z.string().optional().nullable(),
+  bandColor: z.string().optional().nullable(),
+  boxHeight: z.string().optional().nullable(),
+  boxHeightUnit: z.enum(["in", "m"]).optional().nullable(),
   peakVelocityMps: z.number().optional().nullable(),
   meanVelocityMps: z.number().optional().nullable(),
   concentricSeconds: z.number().optional().nullable(),
