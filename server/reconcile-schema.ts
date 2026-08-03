@@ -42,6 +42,10 @@ DO $$ BEGIN
   CREATE TYPE "health_status" AS ENUM ('healthy', 'hurt');
 EXCEPTION WHEN duplicate_object THEN null; END $$;
 
+DO $$ BEGIN
+  CREATE TYPE "goal_type" AS ENUM ('exercise', 'testing');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
 -- Owned by connect-pg-simple at runtime; declared here only so it's never
 -- mistaken for an "unclaimed" table by anything diffing live schema state.
 CREATE TABLE IF NOT EXISTS "session" (
@@ -393,6 +397,20 @@ CREATE TABLE IF NOT EXISTS "testing_results" (
 );
 CREATE INDEX IF NOT EXISTS "testing_results_athlete_idx" ON "testing_results" ("athlete_id");
 CREATE UNIQUE INDEX IF NOT EXISTS "testing_results_athlete_date_idx" ON "testing_results" ("athlete_id", "date");
+
+CREATE TABLE IF NOT EXISTS "goals" (
+  "id" serial PRIMARY KEY,
+  "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "created_by" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "type" goal_type NOT NULL,
+  "exercise_id" integer REFERENCES "exercises"("id") ON DELETE CASCADE,
+  "testing_metric" text,
+  "target_value" real NOT NULL,
+  "target_unit" text NOT NULL,
+  "target_date" date,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "goals_athlete_idx" ON "goals" ("athlete_id");
 `;
 
 async function main() {

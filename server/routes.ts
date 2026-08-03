@@ -32,6 +32,7 @@ import {
   createBodyMetricSchema,
   createAnnotationSchema,
   testingTrendsQuerySchema,
+  createGoalSchema,
 } from "@shared/schema";
 import { z } from "zod";
 
@@ -586,6 +587,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
+  app.get("/api/coach/roster/:athleteId/goals", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const athleteId = Number(req.params.athleteId);
+    const onRoster = await storage.getRosterAthleteForCoach(user.id, athleteId);
+    if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
+    const list = await storage.getGoalsForAthlete(athleteId);
+    res.json(list);
+  });
+
+  app.post("/api/coach/roster/:athleteId/goals", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const athleteId = Number(req.params.athleteId);
+    const onRoster = await storage.getRosterAthleteForCoach(user.id, athleteId);
+    if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
+    const parsed = createGoalSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const goal = await storage.createGoal(athleteId, user.id, parsed.data);
+    res.status(201).json(goal);
+  });
+
+  app.delete(
+    "/api/coach/roster/:athleteId/goals/:goalId",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      const onRoster = await storage.getRosterAthleteForCoach(user.id, athleteId);
+      if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
+      await storage.deleteGoal(athleteId, Number(req.params.goalId));
+      res.status(204).end();
+    },
+  );
+
   app.get("/api/coach/teams", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     const teamList = await storage.getTeamsForCoach(user.id);
@@ -1101,6 +1137,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/athlete/body-metrics/:id", requireRole("athlete"), async (req, res) => {
     const user = currentUser(req);
     await storage.deleteBodyMetric(user.id, Number(req.params.id));
+    res.status(204).end();
+  });
+
+  // Exercises this athlete actually has logged history for -- the relevant
+  // picker list for "which lift is this goal about", not the full bank.
+  app.get("/api/athlete/exercises-with-history", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const coaches = await storage.getCoachesForAthlete(user.id);
+    const coach = coaches[0];
+    if (!coach) return res.json([]);
+    const list = await storage.getExercisesWithHistoryForAthlete(coach.id, user.id);
+    res.json(list);
+  });
+
+  app.get("/api/athlete/goals", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const list = await storage.getGoalsForAthlete(user.id);
+    res.json(list);
+  });
+
+  app.post("/api/athlete/goals", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = createGoalSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const goal = await storage.createGoal(user.id, user.id, parsed.data);
+    res.status(201).json(goal);
+  });
+
+  app.delete("/api/athlete/goals/:id", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    await storage.deleteGoal(user.id, Number(req.params.id));
     res.status(204).end();
   });
 

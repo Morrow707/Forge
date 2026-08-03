@@ -35,7 +35,9 @@ import {
   Trash2,
   TrendingUp,
   Share2,
+  Target,
 } from "lucide-react";
+import { GoalsPanel } from "@/components/goals-panel";
 
 type ProgressSummary = {
   totalWorkoutsCompleted: number;
@@ -252,6 +254,24 @@ export default function AthleteProgress() {
               </CardContent>
             </Card>
           </div>
+
+          <Card className="mt-4">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Target className="h-5 w-5 text-primary" />
+                Goals
+              </CardTitle>
+              <CardDescription>
+                Set a target for a lift or testing metric and track progress toward it.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <GoalsPanel
+                goalsUrl="/api/athlete/goals"
+                exercisesUrl="/api/athlete/exercises-with-history"
+              />
+            </CardContent>
+          </Card>
 
           <Card className="mt-4">
             <CardHeader>

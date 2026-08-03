@@ -580,6 +580,36 @@ export const testingResults = pgTable(
   }),
 );
 
+export const goalTypeEnum = pgEnum("goal_type", ["exercise", "testing"]);
+
+// A target the athlete (or their coach) is working toward -- "achieved" is
+// deliberately not a stored column. It's computed fresh each time goals are
+// fetched by comparing targetValue against the athlete's current best (max
+// weight ever logged, for an exercise goal; current profile value, for a
+// testing goal), so it can never drift out of sync with the data it's about.
+export const goals = pgTable(
+  "goals",
+  {
+    id: serial("id").primaryKey(),
+    athleteId: integer("athlete_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdBy: integer("created_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    type: goalTypeEnum("type").notNull(),
+    exerciseId: integer("exercise_id").references(() => exercises.id, { onDelete: "cascade" }),
+    testingMetric: text("testing_metric"),
+    targetValue: real("target_value").notNull(),
+    targetUnit: text("target_unit").notNull(),
+    targetDate: date("target_date"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    athleteIdx: index("goals_athlete_idx").on(table.athleteId),
+  }),
+);
+
 // ---------- Relations ----------
 
 export const usersRelations = relations(users, ({ many }) => ({
@@ -1091,3 +1121,32 @@ export const testingTrendsQuerySchema = z.object({
   ]),
 });
 export type TestingMetric = z.infer<typeof testingTrendsQuerySchema>["metric"];
+
+export const createGoalSchema = z
+  .object({
+    type: z.enum(["exercise", "testing"]),
+    exerciseId: z.coerce.number().optional(),
+    testingMetric: z.enum([
+      "fortyYardDash",
+      "verticalJumpIn",
+      "broadJumpIn",
+      "proAgilitySeconds",
+      "benchMaxLbs",
+      "squatMaxLbs",
+      "deadliftMaxLbs",
+    ]).optional(),
+    targetValue: z.coerce.number().positive(),
+    targetUnit: z.string().trim().min(1).max(10),
+    targetDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date")
+      .optional(),
+  })
+  .refine((data) => (data.type === "exercise" ? data.exerciseId != null : true), {
+    message: "exerciseId is required for exercise goals",
+  })
+  .refine((data) => (data.type === "testing" ? data.testingMetric != null : true), {
+    message: "testingMetric is required for testing goals",
+  });
+export type CreateGoalInput = z.infer<typeof createGoalSchema>;
+export type Goal = typeof goals.$inferSelect;
