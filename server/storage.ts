@@ -58,6 +58,80 @@ function initialsFor(name: string): string {
   return initials || "?";
 }
 
+type RecentWorkoutLog = {
+  date: string;
+  entries: {
+    weightMode: "numeric" | "bodyweight" | "band";
+    rpe: number | null;
+    programExercise: { exerciseId: number } | null;
+    corrective: { exerciseId: number } | null;
+    sets: { reps: string | null; weight: string | null; weightUnit: "lbs" | "kg" | null }[];
+  }[];
+};
+
+// Pure/synchronous -- scans an already-fetched batch of logs (see
+// storage.getRecentWorkoutLogsForAthlete) for one exercise's history. Split
+// out from the DB fetch so a day with N exercises/correctives can reuse a
+// single shared fetch instead of running the same query N times and
+// filtering in memory each time.
+function extractPerformanceHistory(logs: RecentWorkoutLog[], exerciseId: number) {
+  type SetHistoryPoint = {
+    date: string;
+    reps: string;
+    weight: string | null;
+    weightMode: "numeric" | "bodyweight" | "band";
+    weightUnit: "lbs" | "kg" | null;
+    rpe: number | null;
+  };
+  let lastPerformance: {
+    date: string;
+    sets: number;
+    reps: string | null;
+    weight: string | null;
+    weightMode: "numeric" | "bodyweight" | "band";
+    weightUnit: "lbs" | "kg" | null;
+    rpe: number | null;
+    suggestion: { text: string; suggestedWeight: number | null } | null;
+  } | null = null;
+  const setHistory: SetHistoryPoint[] = [];
+
+  outer: for (const log of logs) {
+    for (const entry of log.entries) {
+      const entryExerciseId = entry.programExercise?.exerciseId ?? entry.corrective?.exerciseId;
+      if (entryExerciseId !== exerciseId || entry.sets.length === 0) continue;
+
+      if (!lastPerformance) {
+        const weight = entry.sets[0]?.weight ?? null;
+        lastPerformance = {
+          date: log.date,
+          sets: entry.sets.length,
+          reps: entry.sets[0]?.reps ?? null,
+          weight,
+          weightMode: entry.weightMode,
+          weightUnit: entry.sets[0]?.weightUnit ?? null,
+          rpe: entry.rpe,
+          suggestion: storage.suggestNextLoad(entry.rpe, weight, entry.weightMode),
+        };
+      }
+
+      for (const set of entry.sets) {
+        if (!set.reps) continue;
+        setHistory.push({
+          date: log.date,
+          reps: set.reps,
+          weight: set.weight,
+          weightMode: entry.weightMode,
+          weightUnit: set.weightUnit,
+          rpe: entry.rpe,
+        });
+        if (setHistory.length >= 200) break outer;
+      }
+    }
+  }
+
+  return { lastPerformance, setHistory };
+}
+
 const TESTING_FIELDS = [
   "fortyYardDash",
   "verticalJumpIn",
@@ -1886,18 +1960,14 @@ export const storage = {
       : { text: "Maxed out — consider a lighter set", suggestedWeight: null };
   },
 
-  // Most recent prior time this athlete logged this specific exercise
-  // (across any program/day) for the "LAST: 4x3 @ 415lb" reference line, plus
-  // a flat history of every individual set ever logged for it so the UI can
-  // show "what did I get last time at THIS rep count" per set rather than
-  // one summary for the whole exercise -- a pyramid scheme (8/5/3/1) should
-  // compare each set against its own rep count, not the first set overall.
-  async getPerformanceHistoryForAthlete(
-    athleteId: number,
-    exerciseId: number,
-    beforeDate: string,
-  ) {
-    const logs = await db.query.workoutLogs.findMany({
+  // The shared DB fetch behind performance history -- last 60 logs before a
+  // date, with everything needed to reconstruct per-exercise history from
+  // them in memory (see extractPerformanceHistory above). Deliberately not
+  // filtered by exercise here: a workout day with N exercises calls this
+  // ONCE and reuses the same rows for all of them, instead of re-running
+  // this same query N times and throwing away the overlap every time.
+  async getRecentWorkoutLogsForAthlete(athleteId: number, beforeDate: string) {
+    return db.query.workoutLogs.findMany({
       where: and(eq(workoutLogs.athleteId, athleteId), lt(workoutLogs.date, beforeDate)),
       orderBy: desc(workoutLogs.date),
       limit: 60,
@@ -1911,63 +1981,24 @@ export const storage = {
         },
       },
     });
+  },
 
-    type SetHistoryPoint = {
-      date: string;
-      reps: string;
-      weight: string | null;
-      weightMode: "numeric" | "bodyweight" | "band";
-      weightUnit: "lbs" | "kg" | null;
-      rpe: number | null;
-    };
-    let lastPerformance: {
-      date: string;
-      sets: number;
-      reps: string | null;
-      weight: string | null;
-      weightMode: "numeric" | "bodyweight" | "band";
-      weightUnit: "lbs" | "kg" | null;
-      rpe: number | null;
-      suggestion: { text: string; suggestedWeight: number | null } | null;
-    } | null = null;
-    const setHistory: SetHistoryPoint[] = [];
-
-    for (const log of logs) {
-      for (const entry of log.entries) {
-        const entryExerciseId =
-          entry.programExercise?.exerciseId ?? entry.corrective?.exerciseId;
-        if (entryExerciseId !== exerciseId || entry.sets.length === 0) continue;
-
-        if (!lastPerformance) {
-          const weight = entry.sets[0]?.weight ?? null;
-          lastPerformance = {
-            date: log.date,
-            sets: entry.sets.length,
-            reps: entry.sets[0]?.reps ?? null,
-            weight,
-            weightMode: entry.weightMode,
-            weightUnit: entry.sets[0]?.weightUnit ?? null,
-            rpe: entry.rpe,
-            suggestion: this.suggestNextLoad(entry.rpe, weight, entry.weightMode),
-          };
-        }
-
-        for (const set of entry.sets) {
-          if (!set.reps) continue;
-          setHistory.push({
-            date: log.date,
-            reps: set.reps,
-            weight: set.weight,
-            weightMode: entry.weightMode,
-            weightUnit: set.weightUnit,
-            rpe: entry.rpe,
-          });
-          if (setHistory.length >= 200) break;
-        }
-      }
-    }
-
-    return { lastPerformance, setHistory };
+  // Most recent prior time this athlete logged this specific exercise
+  // (across any program/day) for the "LAST: 4x3 @ 415lb" reference line, plus
+  // a flat history of every individual set ever logged for it so the UI can
+  // show "what did I get last time at THIS rep count" per set rather than
+  // one summary for the whole exercise -- a pyramid scheme (8/5/3/1) should
+  // compare each set against its own rep count, not the first set overall.
+  // Single-exercise convenience wrapper -- getWorkoutDayDetail below fetches
+  // the logs itself once and calls extractPerformanceHistory directly for
+  // each exercise instead of using this, to avoid re-fetching per exercise.
+  async getPerformanceHistoryForAthlete(
+    athleteId: number,
+    exerciseId: number,
+    beforeDate: string,
+  ) {
+    const logs = await this.getRecentWorkoutLogsForAthlete(athleteId, beforeDate);
+    return extractPerformanceHistory(logs, exerciseId);
   },
 
   async getWorkoutDayDetail(
@@ -2010,26 +2041,22 @@ export const storage = {
       with: { entries: { with: { sets: true } } },
     });
 
-    const exercisesWithHistory = await Promise.all(
-      day.exercises.map(async (pe) => {
-        const { lastPerformance, setHistory } = await this.getPerformanceHistoryForAthlete(
-          athleteId,
-          pe.exerciseId,
-          date,
-        );
-        return { ...pe, lastPerformance, setHistory };
-      }),
-    );
-    const correctivesWithHistory = await Promise.all(
-      correctives.map(async (c) => {
-        const { lastPerformance, setHistory } = await this.getPerformanceHistoryForAthlete(
-          athleteId,
-          c.exerciseId,
-          date,
-        );
-        return { ...c, lastPerformance, setHistory };
-      }),
-    );
+    // One shared fetch for every exercise + corrective on this day, instead
+    // of the N nearly-identical queries this used to run (one per exercise,
+    // each re-fetching the same last-60-logs window and only differing in
+    // which exerciseId it filtered for afterward).
+    const recentLogs = await this.getRecentWorkoutLogsForAthlete(athleteId, date);
+    const exercisesWithHistory = day.exercises.map((pe) => {
+      const { lastPerformance, setHistory } = extractPerformanceHistory(
+        recentLogs,
+        pe.exerciseId,
+      );
+      return { ...pe, lastPerformance, setHistory };
+    });
+    const correctivesWithHistory = correctives.map((c) => {
+      const { lastPerformance, setHistory } = extractPerformanceHistory(recentLogs, c.exerciseId);
+      return { ...c, lastPerformance, setHistory };
+    });
 
     const { week, ...dayFields } = day;
     return {

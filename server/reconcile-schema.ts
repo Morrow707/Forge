@@ -424,6 +424,20 @@ CREATE TABLE IF NOT EXISTS "wellness_checkins" (
 );
 CREATE INDEX IF NOT EXISTS "wellness_checkins_athlete_idx" ON "wellness_checkins" ("athlete_id");
 CREATE UNIQUE INDEX IF NOT EXISTS "wellness_checkins_athlete_date_idx" ON "wellness_checkins" ("athlete_id", "date");
+
+-- Performance pass -- Postgres never auto-indexes foreign key columns, and
+-- these hot-path lookups (workout history, comment threads, notification
+-- inbox/unread-count polling, roster/calendar joins) had none.
+CREATE INDEX IF NOT EXISTS "program_weeks_program_idx" ON "program_weeks" ("program_id");
+CREATE INDEX IF NOT EXISTS "program_days_week_idx" ON "program_days" ("week_id");
+CREATE INDEX IF NOT EXISTS "program_exercises_day_idx" ON "program_exercises" ("day_id");
+CREATE INDEX IF NOT EXISTS "assignments_athlete_idx" ON "assignments" ("athlete_id");
+CREATE INDEX IF NOT EXISTS "assignments_coach_idx" ON "assignments" ("coach_id");
+CREATE INDEX IF NOT EXISTS "assignment_correctives_assignment_day_idx" ON "assignment_correctives" ("assignment_id", "program_day_id");
+CREATE INDEX IF NOT EXISTS "workout_logs_athlete_date_idx" ON "workout_logs" ("athlete_id", "date");
+CREATE INDEX IF NOT EXISTS "workout_comments_assignment_day_idx" ON "workout_comments" ("assignment_id", "program_day_id");
+CREATE INDEX IF NOT EXISTS "notifications_user_read_idx" ON "notifications" ("user_id", "read");
+CREATE INDEX IF NOT EXISTS "push_subscriptions_user_idx" ON "push_subscriptions" ("user_id");
 `;
 
 async function main() {
