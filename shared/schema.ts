@@ -1276,3 +1276,27 @@ export const createGoalSchema = z
   });
 export type CreateGoalInput = z.infer<typeof createGoalSchema>;
 export type Goal = typeof goals.$inferSelect;
+
+export const suggestGoalTargetSchema = z
+  .object({
+    type: z.enum(["exercise", "testing"]),
+    exerciseId: z.coerce.number().optional(),
+    testingMetric: z
+      .enum([
+        "fortyYardDash",
+        "verticalJumpIn",
+        "broadJumpIn",
+        "proAgilitySeconds",
+        "benchMaxLbs",
+        "squatMaxLbs",
+        "deadliftMaxLbs",
+      ])
+      .optional(),
+  })
+  .refine((data) => (data.type === "exercise" ? data.exerciseId != null : true), {
+    message: "exerciseId is required for exercise goals",
+  })
+  .refine((data) => (data.type === "testing" ? data.testingMetric != null : true), {
+    message: "testingMetric is required for testing goals",
+  });
+export type SuggestGoalTargetInput = z.infer<typeof suggestGoalTargetSchema>;

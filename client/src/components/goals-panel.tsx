@@ -13,8 +13,8 @@ import {
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { format, parseISO } from "date-fns";
-import { Target, Dumbbell, Trophy, X, Plus } from "lucide-react";
+import { format, parseISO, addDays, formatISO } from "date-fns";
+import { Target, Dumbbell, Trophy, X, Plus, Sparkles } from "lucide-react";
 import { TESTING_METRICS, type TestingMetricKey } from "@shared/testing-metrics";
 
 type ExerciseOption = { id: number; name: string };
@@ -53,6 +53,11 @@ export function GoalsPanel({
   const [targetValue, setTargetValue] = useState("");
   const [targetUnit, setTargetUnit] = useState("lbs");
   const [targetDate, setTargetDate] = useState("");
+  const [suggestion, setSuggestion] = useState<{
+    targetValue: number;
+    timeframeWeeks: number;
+    rationale: string;
+  } | null>(null);
 
   const { data: goals = [], isLoading } = useQuery<Goal[]>({
     queryKey: [goalsUrl],
@@ -70,8 +75,28 @@ export function GoalsPanel({
     setTestingMetric("");
     setTargetValue("");
     setTargetDate("");
+    setSuggestion(null);
     setShowForm(false);
   }
+
+  const suggestMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `${goalsUrl}/suggest`, {
+        type,
+        exerciseId: type === "exercise" ? Number(exerciseId) : undefined,
+        testingMetric: type === "testing" ? testingMetric : undefined,
+      });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      if (!data) {
+        toast.info("Not enough history yet to suggest a target for this.");
+        return;
+      }
+      setSuggestion(data);
+    },
+    onError: () => toast.error("Couldn't get a suggestion right now"),
+  });
 
   const createGoal = useMutation({
     mutationFn: async () => {
@@ -123,7 +148,13 @@ export function GoalsPanel({
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label>Goal type</Label>
-                  <Select value={type} onValueChange={(v) => setType(v as "exercise" | "testing")}>
+                  <Select
+                    value={type}
+                    onValueChange={(v) => {
+                      setType(v as "exercise" | "testing");
+                      setSuggestion(null);
+                    }}
+                  >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -137,7 +168,13 @@ export function GoalsPanel({
                 {type === "exercise" ? (
                   <div className="space-y-1.5">
                     <Label>Exercise</Label>
-                    <Select value={exerciseId} onValueChange={setExerciseId}>
+                    <Select
+                      value={exerciseId}
+                      onValueChange={(v) => {
+                        setExerciseId(v);
+                        setSuggestion(null);
+                      }}
+                    >
                       <SelectTrigger>
                         <SelectValue placeholder="Pick a lift" />
                       </SelectTrigger>
@@ -155,7 +192,10 @@ export function GoalsPanel({
                     <Label>Metric</Label>
                     <Select
                       value={testingMetric}
-                      onValueChange={(v) => setTestingMetric(v as TestingMetricKey)}
+                      onValueChange={(v) => {
+                        setTestingMetric(v as TestingMetricKey);
+                        setSuggestion(null);
+                      }}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Pick a metric" />
@@ -210,6 +250,53 @@ export function GoalsPanel({
                   />
                 </div>
               </div>
+
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={
+                  suggestMutation.isPending ||
+                  (type === "exercise" ? !exerciseId : !testingMetric)
+                }
+                onClick={() => {
+                  setSuggestion(null);
+                  suggestMutation.mutate();
+                }}
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                {suggestMutation.isPending ? "Thinking..." : "Suggest a target"}
+              </Button>
+
+              {suggestion && (
+                <div className="flex items-start gap-2 rounded-md border border-primary/30 bg-primary/5 p-2.5 text-sm">
+                  <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+                  <div className="min-w-0 flex-1">
+                    <p>
+                      <span className="font-semibold">
+                        {suggestion.targetValue} in {suggestion.timeframeWeeks} week
+                        {suggestion.timeframeWeeks === 1 ? "" : "s"}
+                      </span>{" "}
+                      — {suggestion.rationale}
+                    </p>
+                    <button
+                      type="button"
+                      className="mt-1 font-semibold text-primary hover:underline"
+                      onClick={() => {
+                        setTargetValue(String(suggestion.targetValue));
+                        setTargetDate(
+                          formatISO(addDays(new Date(), suggestion.timeframeWeeks * 7), {
+                            representation: "date",
+                          }),
+                        );
+                        setSuggestion(null);
+                      }}
+                    >
+                      Use this
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <div className="flex gap-2">
                 <Button type="submit" size="sm" disabled={createGoal.isPending}>

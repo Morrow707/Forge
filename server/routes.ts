@@ -34,6 +34,7 @@ import {
   createAnnotationSchema,
   testingTrendsQuerySchema,
   createGoalSchema,
+  suggestGoalTargetSchema,
   submitWellnessCheckinSchema,
 } from "@shared/schema";
 import { computeReadiness } from "@shared/wellness";
@@ -615,6 +616,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const goal = await storage.createGoal(athleteId, user.id, parsed.data);
     res.status(201).json(goal);
   });
+
+  // AI-suggested target, grounded in the athlete's own historical trend --
+  // returns null (not an error) if there's no history to extrapolate from
+  // yet or AI isn't configured, so the form just shows no suggestion.
+  app.post(
+    "/api/coach/roster/:athleteId/goals/suggest",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      const onRoster = await storage.getRosterAthleteForCoach(user.id, athleteId);
+      if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
+      const parsed = suggestGoalTargetSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      const suggestion = await storage.suggestGoalTarget(
+        athleteId,
+        parsed.data.type === "exercise"
+          ? { type: "exercise", exerciseId: parsed.data.exerciseId! }
+          : { type: "testing", testingMetric: parsed.data.testingMetric! },
+      );
+      res.json(suggestion);
+    },
+  );
 
   app.delete(
     "/api/coach/roster/:athleteId/goals/:goalId",
@@ -1215,6 +1241,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const user = currentUser(req);
     const list = await storage.getGoalsForAthlete(user.id);
     res.json(list);
+  });
+
+  app.post("/api/athlete/goals/suggest", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = suggestGoalTargetSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const suggestion = await storage.suggestGoalTarget(
+      user.id,
+      parsed.data.type === "exercise"
+        ? { type: "exercise", exerciseId: parsed.data.exerciseId! }
+        : { type: "testing", testingMetric: parsed.data.testingMetric! },
+    );
+    res.json(suggestion);
   });
 
   app.post("/api/athlete/goals", requireRole("athlete"), async (req, res) => {

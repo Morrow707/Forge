@@ -45,7 +45,7 @@ import type {
 } from "@shared/schema";
 import { TESTING_METRICS, testingMetricLowerIsBetter } from "@shared/testing-metrics";
 import { computeReadiness } from "@shared/wellness";
-import { askClaude } from "./ai";
+import { askClaude, askClaudeStructured } from "./ai";
 import { eq, and, inArray, asc, desc, lt, gt, isNull } from "drizzle-orm";
 import {
   generateCoachCode,
@@ -560,6 +560,85 @@ export const storage = {
 
   async deleteGoal(athleteId: number, goalId: number) {
     await db.delete(goals).where(and(eq(goals.id, goalId), eq(goals.athleteId, athleteId)));
+  },
+
+  // Grounded in the athlete's actual historical trend for this exercise/
+  // metric -- extrapolates from real numbers rather than picking a generic
+  // round target. Returns null if there's no history to extrapolate from,
+  // or AI isn't configured; the goal form just doesn't offer a suggestion.
+  async suggestGoalTarget(
+    athleteId: number,
+    input: { type: "exercise"; exerciseId: number } | { type: "testing"; testingMetric: string },
+  ): Promise<{ targetValue: number; timeframeWeeks: number; rationale: string } | null> {
+    let label: string;
+    let trendDescription: string;
+
+    if (input.type === "exercise") {
+      const exercise = await db.query.exercises.findFirst({
+        where: eq(exercises.id, input.exerciseId),
+      });
+      if (!exercise) return null;
+      label = exercise.name;
+
+      const cutoff = formatISO(addDays(new Date(), 1), { representation: "date" });
+      const logs = await this.getRecentWorkoutLogsForAthlete(athleteId, cutoff);
+      const { setHistory } = extractPerformanceHistory(logs, input.exerciseId);
+
+      const bestByDate = new Map<string, number>();
+      for (const s of setHistory) {
+        const w = parseFloat(s.weight ?? "");
+        if (Number.isNaN(w)) continue;
+        const prev = bestByDate.get(s.date);
+        if (prev == null || w > prev) bestByDate.set(s.date, w);
+      }
+      const points = [...bestByDate.entries()].sort(([a], [b]) => a.localeCompare(b));
+      if (points.length === 0) return null;
+      trendDescription = points.map(([date, w]) => `${date}: ${w}`).join(", ");
+    } else {
+      const history = await this.getTestingHistoryForAthlete(athleteId);
+      const points = history
+        .filter((h) => (h as any)[input.testingMetric] != null)
+        .map((h) => `${h.date}: ${(h as any)[input.testingMetric]}`);
+      if (points.length === 0) return null;
+      label = input.testingMetric;
+      trendDescription = points.join(", ");
+    }
+
+    const tool = {
+      name: "suggest_goal_target",
+      description:
+        "Suggest a realistic goal target value and timeframe based on an athlete's historical trend.",
+      input_schema: {
+        type: "object",
+        properties: {
+          targetValue: {
+            type: "number",
+            description: "Suggested target value, in the same unit as the historical data given",
+          },
+          timeframeWeeks: {
+            type: "integer",
+            description: "Realistic number of weeks to reach the target",
+          },
+          rationale: {
+            type: "string",
+            description: "One short sentence explaining the suggestion",
+          },
+        },
+        required: ["targetValue", "timeframeWeeks", "rationale"],
+      },
+    };
+
+    const prompt = `Athlete's historical progression for "${label}" (date: value), oldest first:
+${trendDescription}
+
+Based on this athlete's actual rate of improvement, suggest a realistic target value and a realistic number of weeks to reach it. Extrapolate from their real trend -- don't just add an arbitrary round number. If there's only one data point, suggest a modest, achievable increase rather than guessing at a large jump.`;
+
+    return askClaudeStructured(
+      "You are a strength and conditioning coach's assistant helping set a realistic athlete goal. Ground every suggestion strictly in the historical numbers you're given -- never invent data you weren't given.",
+      prompt,
+      tool,
+      { maxTokens: 300 },
+    );
   },
 
   // ---------- Wellness check-ins ----------
