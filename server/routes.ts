@@ -35,6 +35,7 @@ import {
   testingTrendsQuerySchema,
   createGoalSchema,
   suggestGoalTargetSchema,
+  sendChatMessageSchema,
   submitWellnessCheckinSchema,
 } from "@shared/schema";
 import { computeReadiness } from "@shared/wellness";
@@ -675,6 +676,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(history.map((h) => ({ ...h, ...computeReadiness(h) })));
     },
   );
+
+  // Read-only -- the AI chat coach is never a private, unsupervised channel:
+  // a coach can always read the full transcript of any athlete on their
+  // roster, the same way they can read workout comments.
+  app.get("/api/coach/roster/:athleteId/chat", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const athleteId = Number(req.params.athleteId);
+    const messages = await storage.getChatMessagesForCoachAthlete(user.id, athleteId);
+    if (messages === null) return res.status(404).json({ message: "Athlete not found" });
+    res.json(messages);
+  });
 
   // Same isolation + weekly-cache pattern as /api/athlete/digest -- its own
   // lazily-fetched endpoint so a slow/unconfigured AI call never blocks the
@@ -1345,6 +1357,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
     }
     res.json(digest ? { digest: digest.digest } : null);
+  });
+
+  // Never a private channel -- every message either side sends is readable
+  // by the athlete's coach too (see the matching /api/coach/roster/:id/chat
+  // route below).
+  app.get("/api/athlete/chat", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const messages = await storage.getChatMessagesForAthlete(user.id);
+    res.json(messages);
+  });
+
+  app.post("/api/athlete/chat", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = sendChatMessageSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "Invalid message" });
+    const result = await storage.sendAthleteChatMessage(user.id, parsed.data.content);
+    res.status(201).json(result);
   });
 
   app.get("/api/athlete/day", requireRole("athlete"), async (req, res) => {

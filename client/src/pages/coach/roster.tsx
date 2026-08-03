@@ -21,6 +21,7 @@ import { BodyMetricsDialog } from "@/components/body-metrics-dialog";
 import { TestingHistoryDialog } from "@/components/testing-history-dialog";
 import { GoalsDialog } from "@/components/goals-dialog";
 import { WellnessHistoryDialog, READINESS_CLASSNAME } from "@/components/wellness-history-dialog";
+import { ChatHistoryDialog } from "@/components/chat-history-dialog";
 import { READINESS_LABEL, type ReadinessLevel } from "@shared/wellness";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { shareOrDownloadFile } from "@/lib/share-file";
@@ -43,6 +44,7 @@ import {
   Mail,
   Share2,
   Target,
+  Sparkles,
 } from "lucide-react";
 
 type HealthStatus = "healthy" | "hurt";
@@ -101,6 +103,7 @@ export default function CoachRoster() {
   const [testingAthlete, setTestingAthlete] = useState<RosterEntry | null>(null);
   const [goalsAthlete, setGoalsAthlete] = useState<RosterEntry | null>(null);
   const [wellnessAthlete, setWellnessAthlete] = useState<RosterEntry | null>(null);
+  const [chatAthlete, setChatAthlete] = useState<RosterEntry | null>(null);
   const [sharingProfileId, setSharingProfileId] = useState<number | null>(null);
 
   async function handleShareRecruitingProfile(athlete: RosterEntry) {
@@ -281,6 +284,15 @@ export default function CoachRoster() {
                             onClick={() => setGoalsAthlete(a)}
                           >
                             <Target className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            aria-label={`View ${a.name}'s AI chat`}
+                            title="AI chat"
+                            onClick={() => setChatAthlete(a)}
+                          >
+                            <Sparkles className="h-4 w-4" />
                           </Button>
                           <Button
                             size="icon"
@@ -532,6 +544,13 @@ export default function CoachRoster() {
           fetchUrl={`/api/coach/roster/${wellnessAthlete.id}/wellness-history`}
         />
       )}
+
+      <ChatHistoryDialog
+        open={chatAthlete !== null}
+        onOpenChange={(open) => !open && setChatAthlete(null)}
+        athleteId={chatAthlete?.id ?? null}
+        athleteName={chatAthlete?.name ?? ""}
+      />
     </AppShell>
   );
 }

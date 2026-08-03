@@ -779,6 +779,39 @@ export const coachDigests = pgTable(
 
 export type CoachDigest = typeof coachDigests.$inferSelect;
 
+export const chatRoleEnum = pgEnum("chat_role", ["athlete", "assistant"]);
+
+// Every message either side of the AI chat ever sends, kept permanently --
+// this is never a private channel: the athlete's coach can always read the
+// full transcript (see /api/coach/roster/:athleteId/chat), the same way a
+// coach can see workout comments. Never edited or deleted from either side.
+export const athleteChatMessages = pgTable(
+  "athlete_chat_messages",
+  {
+    id: serial("id").primaryKey(),
+    athleteId: integer("athlete_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    role: chatRoleEnum("role").notNull(),
+    content: text("content").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    athleteIdx: index("athlete_chat_messages_athlete_idx").on(
+      table.athleteId,
+      table.createdAt,
+    ),
+  }),
+);
+
+export type AthleteChatMessage = typeof athleteChatMessages.$inferSelect;
+
+export const sendChatMessageSchema = z.object({
+  content: z.string().trim().min(1).max(2000),
+});
+
+export type SendChatMessageInput = z.infer<typeof sendChatMessageSchema>;
+
 // ---------- Relations ----------
 
 export const usersRelations = relations(users, ({ many }) => ({
