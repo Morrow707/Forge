@@ -53,7 +53,9 @@ async function main() {
   await storage.linkAthleteToCoach(coach.id, athlete.id);
 
   // A pure admin account, shareable the same way the coach/athlete demo
-  // logins are -- no calendar or roster access, just Forge library curation.
+  // logins are -- Forge library curation, plus the same personal
+  // calendar/training/AI-program-chat features every admin account gets
+  // (no roster access, though -- that stays coach-only).
   let demoAdmin = await storage.getUserByEmail("admin@forge.app");
   if (!demoAdmin) {
     demoAdmin = await storage.createUser({

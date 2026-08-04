@@ -29,6 +29,7 @@ import {
   athleteDigests,
   coachDigests,
   athleteChatMessages,
+  programChatMessages,
   type InsertUser,
 } from "@shared/schema";
 import type {
@@ -1805,6 +1806,230 @@ Design a complete draft program matching the coach's request.`;
 
   async deleteProgram(id: number) {
     await db.delete(programs).where(eq(programs.id, id));
+  },
+
+  // ---------- AI conversational program builder (admin only) ----------
+  // Full transcript for a program's AI chat, oldest first.
+  async getProgramChatMessages(programId: number) {
+    const rows = await db.query.programChatMessages.findMany({
+      where: eq(programChatMessages.programId, programId),
+      orderBy: desc(programChatMessages.createdAt),
+    });
+    return rows.reverse();
+  },
+
+  // Admin-only conversational program builder. Every turn, the AI gets the
+  // full chat history plus the program's *current* structure and must emit
+  // a complete replacement structure -- never a diff -- which is applied via
+  // the same wipe-and-rebuild updateProgramStructure the manual builder
+  // uses. Unlike the coach-facing AI Assist (generateProgramDraft, which
+  // only ever returns a draft for the coach to review before it touches a
+  // real program) and the athlete chat (advice-only, never edits a
+  // program), this auto-applies every turn with no review step -- that's
+  // deliberate: it's scoped to the trusted admin role building/editing a
+  // program for their own personal training, not a coach acting on a minor
+  // athlete's behalf.
+  async generateProgramFromChat(programId: number, authorId: number, content: string) {
+    const [userMessage] = await db
+      .insert(programChatMessages)
+      .values({ programId, authorId, role: "user", content })
+      .returning();
+
+    const fail = async (text: string) => {
+      const [assistantMessage] = await db
+        .insert(programChatMessages)
+        .values({ programId, authorId, role: "assistant", content: text })
+        .returning();
+      return { userMessage, assistantMessage, program: await this.getProgramFull(programId) };
+    };
+
+    if (!aiEnabled) {
+      return fail("AI isn't set up yet -- ask whoever manages this Forge instance to configure it.");
+    }
+
+    const [program, history, visibleExercises] = await Promise.all([
+      this.getProgramFull(programId),
+      this.getProgramChatMessages(programId),
+      this.getVisibleExercisesForCoach(authorId),
+    ]);
+    if (!program) return fail("Couldn't find that program anymore.");
+    if (visibleExercises.length === 0) {
+      return fail("There aren't any exercises available to build with yet.");
+    }
+
+    const validIds = visibleExercises.map((e) => e.id);
+    const validIdSet = new Set(validIds);
+    const catalog = visibleExercises
+      .map((e) => `${e.id}: ${e.name} (${e.category}, ${e.muscleGroup})`)
+      .join("\n");
+
+    const currentStructure = {
+      name: program.name,
+      description: program.description,
+      weeks: program.weeks.map((w) => ({
+        weekNumber: w.weekNumber,
+        name: w.name,
+        days: w.days.map((d) => ({
+          dayNumber: d.dayNumber,
+          title: d.title,
+          isRestDay: d.isRestDay,
+          exercises: d.exercises.map((ex) => ({
+            exerciseId: ex.exerciseId,
+            exerciseName: ex.exercise.name,
+            sets: ex.sets,
+            reps: ex.reps,
+            weight: ex.weight,
+            restSeconds: ex.restSeconds,
+            notes: ex.notes,
+            supersetGroup: ex.supersetGroup,
+          })),
+        })),
+      })),
+    };
+
+    const tool = {
+      name: "update_program",
+      description:
+        "Replaces the entire program structure with a new one reflecting the requested changes, and writes a short chat reply summarizing what changed.",
+      input_schema: {
+        type: "object",
+        properties: {
+          summary: {
+            type: "string",
+            description:
+              "A short (1-4 sentence) chat reply describing what you changed and why, written conversationally to the person you're building this for.",
+          },
+          name: { type: "string" },
+          description: { type: "string" },
+          weeks: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                weekNumber: { type: "integer" },
+                name: { type: "string" },
+                days: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      dayNumber: { type: "integer" },
+                      title: { type: "string" },
+                      isRestDay: { type: "boolean" },
+                      exercises: {
+                        type: "array",
+                        items: {
+                          type: "object",
+                          properties: {
+                            exerciseId: { type: "integer", enum: validIds },
+                            sets: { type: "integer" },
+                            reps: { type: "string" },
+                            weight: { type: "string" },
+                            restSeconds: { type: "integer" },
+                            notes: { type: "string" },
+                            supersetGroup: { type: "string" },
+                          },
+                          required: ["exerciseId", "sets", "reps"],
+                        },
+                      },
+                    },
+                    required: ["dayNumber", "title", "isRestDay", "exercises"],
+                  },
+                },
+              },
+              required: ["weekNumber", "days"],
+            },
+          },
+        },
+        required: ["summary", "name", "weeks"],
+      },
+    };
+
+    const system = `You are a strength and conditioning program design assistant, chatting directly with the person who owns this program and trains themselves with it. You may ONLY reference exercise IDs from the catalog you're given -- never invent an exercise or its ID. On every turn you must emit the COMPLETE program structure exactly as it should exist after this turn's changes, not just what changed -- anything you omit will be deleted, so carry forward everything the user didn't ask you to change. Keep sensible periodization (rest days, reasonable set/rep schemes, sensible progression across weeks). Also write a short, conversational summary of what you changed.`;
+
+    const historyText = history
+      .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`)
+      .join("\n");
+
+    const userPrompt = `Available exercises (id: name (category, muscle group)) -- you may ONLY use exercise IDs from this list:
+${catalog}
+
+Current program structure:
+${JSON.stringify(currentStructure)}
+
+Conversation so far:
+${historyText}
+
+Respond to the user's latest message by producing the complete updated program structure and a short summary of what you changed.`;
+
+    type RawUpdate = {
+      summary?: string;
+      name?: string;
+      description?: string;
+      weeks?: {
+        weekNumber?: number;
+        name?: string;
+        days?: {
+          dayNumber?: number;
+          title?: string;
+          isRestDay?: boolean;
+          exercises?: {
+            exerciseId: number;
+            sets?: number;
+            reps?: string;
+            weight?: string;
+            restSeconds?: number;
+            notes?: string;
+            supersetGroup?: string;
+          }[];
+        }[];
+      }[];
+    };
+
+    const result = await askClaudeStructured<RawUpdate>(system, userPrompt, tool, { maxTokens: 4096 });
+    if (!result) {
+      return fail("Sorry, I couldn't come up with an update just now -- try again in a bit.");
+    }
+
+    const structure: ProgramStructureInput = {
+      name: result.name?.trim() || program.name,
+      description: result.description?.trim() || null,
+      weeks: (result.weeks ?? []).map((w, wi) => ({
+        weekNumber: w.weekNumber ?? wi + 1,
+        name: w.name ?? null,
+        days: (w.days ?? []).map((d, di) => ({
+          dayNumber: d.dayNumber ?? di + 1,
+          title: d.title?.trim() || "Training Day",
+          isRestDay: Boolean(d.isRestDay),
+          exercises: (d.exercises ?? [])
+            .filter((ex) => validIdSet.has(ex.exerciseId))
+            .map((ex, ei) => ({
+              exerciseId: ex.exerciseId,
+              orderIndex: ei,
+              sets: ex.sets ?? 3,
+              reps: ex.reps || "10",
+              weight: ex.weight || null,
+              restSeconds: ex.restSeconds ?? null,
+              notes: ex.notes || null,
+              supersetGroup: ex.supersetGroup || null,
+            })),
+        })),
+      })),
+    };
+
+    await this.updateProgramStructure(programId, structure);
+
+    const [assistantMessage] = await db
+      .insert(programChatMessages)
+      .values({
+        programId,
+        authorId,
+        role: "assistant",
+        content: result.summary?.trim() || "Updated the program.",
+      })
+      .returning();
+
+    return { userMessage, assistantMessage, program: await this.getProgramFull(programId) };
   },
 
   async getProgramDayForCoach(coachId: number, dayId: number) {

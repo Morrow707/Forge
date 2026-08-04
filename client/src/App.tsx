@@ -39,6 +39,8 @@ const AdminExerciseDetail = lazy(() => import("@/pages/admin/exercise-detail"));
 const AdminPrograms = lazy(() => import("@/pages/admin/programs"));
 const AdminProgramBuilder = lazy(() => import("@/pages/admin/program-builder"));
 const AdminReviewQueue = lazy(() => import("@/pages/admin/review-queue"));
+const AdminMyCalendar = lazy(() => import("@/pages/admin/my-calendar"));
+const AdminMyWorkout = lazy(() => import("@/pages/admin/my-workout"));
 
 function FullScreenSpinner() {
   return (
@@ -135,6 +137,12 @@ function Router() {
         </Route>
         <Route path="/admin">
           <ProtectedRoute role="admin" component={AdminDashboard} />
+        </Route>
+        <Route path="/admin/my">
+          <ProtectedRoute role="admin" component={AdminMyCalendar} />
+        </Route>
+        <Route path="/admin/my/day/:assignmentId/:programDayId/:date">
+          <ProtectedRoute role="admin" component={AdminMyWorkout} />
         </Route>
         <Route path="/admin/exercises/:id">
           <ProtectedRoute role="admin" component={AdminExerciseDetail} />

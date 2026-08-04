@@ -828,6 +828,41 @@ export const sendChatMessageSchema = z.object({
 
 export type SendChatMessageInput = z.infer<typeof sendChatMessageSchema>;
 
+export const programChatRoleEnum = pgEnum("program_chat_role", ["user", "assistant"]);
+
+// Chat transcript for the conversational AI program builder -- the admin
+// describes what they want, the AI rewrites the program's full structure
+// each turn and replies with a summary. Kept permanently, never edited.
+export const programChatMessages = pgTable(
+  "program_chat_messages",
+  {
+    id: serial("id").primaryKey(),
+    programId: integer("program_id")
+      .notNull()
+      .references(() => programs.id, { onDelete: "cascade" }),
+    authorId: integer("author_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    role: programChatRoleEnum("role").notNull(),
+    content: text("content").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    programIdx: index("program_chat_messages_program_idx").on(
+      table.programId,
+      table.createdAt,
+    ),
+  }),
+);
+
+export type ProgramChatMessage = typeof programChatMessages.$inferSelect;
+
+export const sendProgramChatMessageSchema = z.object({
+  content: z.string().trim().min(1).max(2000),
+});
+
+export type SendProgramChatMessageInput = z.infer<typeof sendProgramChatMessageSchema>;
+
 // ---------- Relations ----------
 
 export const usersRelations = relations(users, ({ many }) => ({

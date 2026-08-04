@@ -18,7 +18,17 @@ import { AssignProgramDialog } from "@/components/assign-program-dialog";
 import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { Plus, ListChecks, Trash2, Users, CalendarRange, Send, Copy, Sparkles } from "lucide-react";
+import {
+  Plus,
+  ListChecks,
+  Trash2,
+  Users,
+  CalendarRange,
+  Send,
+  Copy,
+  Sparkles,
+  CalendarPlus,
+} from "lucide-react";
 
 type ProgramSummary = {
   id: number;
@@ -44,6 +54,7 @@ export function ProgramListPage({
   emptyStateText,
   showAssign = true,
   showAiAssist = false,
+  showSelfAssign = false,
 }: {
   apiBase: string;
   routeBase: string;
@@ -51,6 +62,10 @@ export function ProgramListPage({
   emptyStateText: string;
   showAssign?: boolean;
   showAiAssist?: boolean;
+  /** Admin-only: assigns a program straight to the admin's own calendar
+   * (coachId === athleteId), separate from showAssign's multi-athlete
+   * roster dialog, which doesn't apply to an admin's own training. */
+  showSelfAssign?: boolean;
 }) {
   const qc = useQueryClient();
   const [, navigate] = useLocation();
@@ -68,6 +83,10 @@ export function ProgramListPage({
   const [assignProgramId, setAssignProgramId] = useState<number | null>(null);
   const [aiDialogOpen, setAiDialogOpen] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
+  const [selfAssignProgramId, setSelfAssignProgramId] = useState<number | null>(null);
+  const [selfAssignDate, setSelfAssignDate] = useState(() =>
+    new Date().toISOString().slice(0, 10),
+  );
 
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -169,6 +188,25 @@ export function ProgramListPage({
       navigate(`${routeBase}/${program.id}`);
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not generate a draft"),
+  });
+
+  // Self-assignment: coachId === athleteId, both the admin's own id --
+  // lands the program straight on their personal calendar with no roster
+  // or athlete picker involved.
+  const selfAssignMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `${apiBase}/my/assignments`, {
+        programId: selfAssignProgramId,
+        startDate: selfAssignDate,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/admin/my/calendar"] });
+      toast.success("Added to your calendar");
+      setSelfAssignProgramId(null);
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Could not add to your calendar"),
   });
 
   return (
@@ -273,6 +311,20 @@ export function ProgramListPage({
                     Assign
                   </Button>
                 )}
+                {showSelfAssign && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="w-full"
+                    onClick={() => {
+                      setSelfAssignDate(new Date().toISOString().slice(0, 10));
+                      setSelfAssignProgramId(p.id);
+                    }}
+                  >
+                    <CalendarPlus className="h-3.5 w-3.5" />
+                    Add to My Calendar
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -330,6 +382,52 @@ export function ProgramListPage({
           programs={programs}
           programId={assignProgramId ?? undefined}
         />
+      )}
+
+      {showSelfAssign && (
+        <Dialog
+          open={selfAssignProgramId !== null}
+          onOpenChange={(open) => !open && setSelfAssignProgramId(null)}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Add to My Calendar</DialogTitle>
+            </DialogHeader>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                selfAssignMutation.mutate();
+              }}
+              className="space-y-4"
+            >
+              <div className="space-y-1.5">
+                <Label htmlFor="self-assign-date">Start date</Label>
+                <Input
+                  id="self-assign-date"
+                  type="date"
+                  value={selfAssignDate}
+                  onChange={(e) => setSelfAssignDate(e.target.value)}
+                  required
+                />
+                <p className="text-xs text-muted-foreground">
+                  Day 1 of Week 1 lands on this date.
+                </p>
+              </div>
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setSelfAssignProgramId(null)}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={selfAssignMutation.isPending}>
+                  {selfAssignMutation.isPending ? "Adding…" : "Add to Calendar"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       )}
 
       {showAiAssist && (

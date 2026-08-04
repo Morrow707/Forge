@@ -48,6 +48,7 @@ const athleteNav = [
 
 const adminNav = [
   { href: "/admin", label: "Dashboard", icon: Flame, exact: true },
+  { href: "/admin/my", label: "My Calendar", icon: CalendarDays },
   { href: "/admin/exercises", label: "Forge Library", icon: Dumbbell },
   { href: "/admin/programs", label: "Forge Programs", icon: CalendarRange },
   { href: "/admin/review", label: "Review Queue", icon: ClipboardCheck },

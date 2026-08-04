@@ -38,6 +38,7 @@ import {
   sendChatMessageSchema,
   generateProgramDraftSchema,
   submitWellnessCheckinSchema,
+  sendProgramChatMessageSchema,
 } from "@shared/schema";
 import { computeReadiness } from "@shared/wellness";
 import { z } from "zod";
@@ -105,12 +106,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Deliberately unauthenticated: calendar apps (Google/Apple/Outlook)
   // re-fetch a plain URL on their own schedule and can't carry a session
   // cookie, so access control here is "possession of the unguessable
-  // token" rather than a login. Only ever resolves to an athlete's own
+  // token" rather than a login. Only ever resolves to someone's own
   // training days -- never rest days, to keep a subscribed calendar from
-  // filling up with noise.
+  // filling up with noise. Admins get this too since they can self-assign
+  // programs to their own calendar (see /api/admin/my/*); coaches never
+  // train off their own calendar, so they're not included.
   app.get("/api/calendar/:token.ics", async (req, res) => {
     const user = await storage.getUserByCalendarToken(req.params.token);
-    if (!user || user.role !== "athlete") {
+    if (!user || (user.role !== "athlete" && user.role !== "admin")) {
       return res.status(404).send("Calendar not found");
     }
     const start = new Date();
@@ -297,6 +300,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.status(201).json(program);
   });
 
+  // Same one-shot draft-then-review flow as /api/coach/programs/ai-draft --
+  // nothing is saved here, the client POSTs the draft to /api/admin/programs
+  // itself to land in the full builder before it's ever assigned to anyone.
+  app.post("/api/admin/programs/ai-draft", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = generateProgramDraftSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const draft = await storage.generateProgramDraft(user.id, parsed.data.prompt);
+    res.json(draft);
+  });
+
   app.put("/api/admin/programs/:id", requireRole("admin"), async (req, res) => {
     const user = currentUser(req);
     const id = Number(req.params.id);
@@ -351,6 +367,134 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const updated = await storage.resolveReport(id);
     if (!updated) return res.status(404).json({ message: "Report not found" });
     res.json(updated);
+  });
+
+  // ---------------- Admin: My Training ----------------
+  // The admin's own personal calendar, workout logging, and program
+  // self-assignment -- this is the trusted admin account training itself,
+  // reusing the exact same role-agnostic storage functions the athlete
+  // routes use. Deliberately excludes coach-athlete-only concepts that
+  // don't apply here: no comment thread, no wellness/readiness gate.
+
+  app.get("/api/admin/my/calendar", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const schema = z.object({ start: z.string(), end: z.string() });
+    const parsed = schema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "start and end query params required" });
+    }
+    const entries = await storage.getCalendarForAthlete(
+      user.id,
+      parsed.data.start,
+      parsed.data.end,
+    );
+    res.json(entries);
+  });
+
+  app.get("/api/admin/my/calendar-link", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const token = await storage.getOrCreateCalendarToken(user.id);
+    res.json({ token });
+  });
+
+  app.get("/api/admin/my/day", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const schema = z.object({
+      assignmentId: z.coerce.number(),
+      programDayId: z.coerce.number(),
+      date: z.string(),
+    });
+    const parsed = schema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Missing or invalid query params" });
+    }
+    const detail = await storage.getWorkoutDayDetail(
+      user.id,
+      parsed.data.assignmentId,
+      parsed.data.programDayId,
+      parsed.data.date,
+    );
+    if (!detail) return res.status(404).json({ message: "Workout not found" });
+    res.json(detail);
+  });
+
+  app.post("/api/admin/my/log", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = submitWorkoutLogSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const log = await storage.submitWorkoutLog(user.id, parsed.data);
+    res.status(200).json(log);
+  });
+
+  app.patch("/api/admin/my/preferences", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = updatePreferencesSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const updated = await storage.updateUserPreferences(user.id, parsed.data);
+    const { passwordHash, healthStatus, ...publicUser } = updated;
+    res.json(publicUser);
+  });
+
+  // Self-assignment: coachId and athleteId are both the admin's own id.
+  // Deliberately bypasses the coach roster-membership check that guards
+  // /api/coach/assignments -- an admin is never on their own roster, so
+  // that check would always fail here. getProgramIfUsableByCoach already
+  // covers the real authorization question: their own program, or any
+  // Forge-official one.
+  app.post("/api/admin/my/assignments", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const schema = z.object({
+      programId: z.number(),
+      startDate: z.string(),
+      dateOverrides: z.record(z.string(), z.string()).optional(),
+      correctivesEnabled: z.boolean().default(true),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const usable = await storage.getProgramIfUsableByCoach(user.id, parsed.data.programId);
+    if (!usable) return res.status(404).json({ message: "Program not found" });
+
+    const result = await storage.createAssignment(
+      user.id,
+      parsed.data.programId,
+      [{ athleteId: user.id, correctivesEnabled: parsed.data.correctivesEnabled }],
+      parsed.data.startDate,
+      parsed.data.dateOverrides,
+    );
+    res.status(201).json(result);
+  });
+
+  // ---------------- Admin: Conversational AI program builder ----------------
+  // Chat-driven program editing, scoped to the admin's own programs. Unlike
+  // the coach-facing one-shot AI Assist (/api/coach/programs/ai-draft and
+  // /api/admin/programs/ai-draft above, both draft-then-manual-review),
+  // this auto-applies every turn -- see the storage.generateProgramFromChat
+  // comment for why that's safe here.
+
+  app.get("/api/admin/programs/:id/chat", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const owned = await assertCoachOwnsProgram(user.id, id);
+    if (!owned) return res.status(404).json({ message: "Program not found" });
+    const messages = await storage.getProgramChatMessages(id);
+    res.json(messages);
+  });
+
+  app.post("/api/admin/programs/:id/chat", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const owned = await assertCoachOwnsProgram(user.id, id);
+    if (!owned) return res.status(404).json({ message: "Program not found" });
+    const parsed = sendProgramChatMessageSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "Invalid message" });
+    const result = await storage.generateProgramFromChat(id, user.id, parsed.data.content);
+    res.status(201).json(result);
   });
 
   // ---------------- Coach: Programs ----------------

@@ -8,6 +8,8 @@ export default function AdminPrograms() {
       title="Forge Programs"
       emptyStateText="The Forge program library is empty. Build the first official template for every coach to use."
       showAssign={false}
+      showAiAssist
+      showSelfAssign
     />
   );
 }

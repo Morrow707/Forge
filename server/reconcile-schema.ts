@@ -55,6 +55,10 @@ DO $$ BEGIN
   CREATE TYPE "chat_role" AS ENUM ('athlete', 'assistant');
 EXCEPTION WHEN duplicate_object THEN null; END $$;
 
+DO $$ BEGIN
+  CREATE TYPE "program_chat_role" AS ENUM ('user', 'assistant');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
 -- Owned by connect-pg-simple at runtime; declared here only so it's never
 -- mistaken for an "unclaimed" table by anything diffing live schema state.
 CREATE TABLE IF NOT EXISTS "session" (
@@ -490,6 +494,16 @@ CREATE TABLE IF NOT EXISTS "athlete_chat_messages" (
   "created_at" timestamp NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS "athlete_chat_messages_athlete_idx" ON "athlete_chat_messages" ("athlete_id", "created_at");
+
+CREATE TABLE IF NOT EXISTS "program_chat_messages" (
+  "id" serial PRIMARY KEY,
+  "program_id" integer NOT NULL REFERENCES "programs"("id") ON DELETE CASCADE,
+  "author_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "role" program_chat_role NOT NULL,
+  "content" text NOT NULL,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "program_chat_messages_program_idx" ON "program_chat_messages" ("program_id", "created_at");
 `;
 
 async function main() {
