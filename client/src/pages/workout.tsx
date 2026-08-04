@@ -6,6 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { groupConsecutiveBySupersetGroup, colorForLabel } from "@/lib/supersets";
@@ -15,6 +22,7 @@ import { useWakeLock } from "@/hooks/use-wake-lock";
 import { WorkoutCommentThread } from "@/components/workout-comment-thread";
 import { BarTrackerDialog } from "@/components/bar-tracker-dialog";
 import { FormVideoRecorderDialog } from "@/components/form-video-recorder-dialog";
+import { extractVideoFrames } from "@/lib/video-frames";
 import type { RepMetrics } from "@/lib/bar-tracking";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
@@ -45,6 +53,8 @@ import {
   Calculator,
   CalendarRange,
   Layers,
+  Sparkles,
+  RefreshCw,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import type { PublicUser } from "@shared/schema";
@@ -201,7 +211,13 @@ type LogEntry = {
 };
 
 type DayDetail = {
+  programId: number;
   programName: string;
+  // Only ever true for an admin's own AI-built program (see the schema
+  // comment on programs.aiAuthored) -- gates the "full function" AI form
+  // check on the workout page, since that's the one AI feature in the app
+  // that critiques technique with no human review step.
+  programAiAuthored: boolean;
   correctivesEnabled: boolean;
   day: {
     id: number;
@@ -673,6 +689,16 @@ export function WorkoutPage({
   const currentPage = pages[Math.min(pageIndex, pages.length - 1)];
   const unit = user?.preferredWeightUnit ?? "lbs";
   const stats = computeStats(items);
+  // "comment" (coach-assigned programs) posts the video for the coach to
+  // review, unchanged from before. "ai" only ever applies to an admin's own
+  // AI-authored program (programAiAuthored is never true otherwise -- see
+  // the schema comment on programs.aiAuthored) and sends it straight to the
+  // AI for direct feedback instead, since there's no coach in that loop.
+  const videoCheckMode: "comment" | "ai" | "off" = showComments
+    ? "comment"
+    : data.programAiAuthored
+      ? "ai"
+      : "off";
 
   return (
     <AppShell
@@ -908,7 +934,9 @@ export function WorkoutPage({
                         assignmentId={Number(assignmentId)}
                         programDayId={Number(programDayId)}
                         apiBase={apiBase}
-                        showFormVideoCheck={showComments}
+                        videoCheckMode={videoCheckMode}
+                        programId={data.programId}
+                        dayTitle={data.day.title}
                         onUpdateItem={(patch) => updateItem(item.key, patch)}
                         onUpdateSet={(setNumber, patch) => updateSet(item.key, setNumber, patch)}
                         onAddSet={() => addSet(item.key)}
@@ -1007,7 +1035,9 @@ function ExerciseLogContent({
   assignmentId,
   programDayId,
   apiBase,
-  showFormVideoCheck,
+  videoCheckMode,
+  programId,
+  dayTitle,
   onUpdateItem,
   onUpdateSet,
   onAddSet,
@@ -1020,7 +1050,9 @@ function ExerciseLogContent({
   assignmentId: number;
   programDayId: number;
   apiBase: string;
-  showFormVideoCheck: boolean;
+  videoCheckMode: "comment" | "ai" | "off";
+  programId: number;
+  dayTitle: string;
   onUpdateItem: (patch: Partial<ItemState>) => void;
   onUpdateSet: (setNumber: number, patch: Partial<SetRow>) => void;
   onAddSet: () => void;
@@ -1093,6 +1125,45 @@ function ExerciseLogContent({
     onError: (err: ApiError) => toast.error(err.message || "Could not attach video"),
   });
 
+  const [aiFeedback, setAiFeedback] = useState<string | null>(null);
+  const aiFormCheckPath = `/api/admin/programs/${programId}/form-check`;
+  const aiFormCheckMutation = useMutation({
+    mutationFn: async (videoUrl: string) => {
+      const images = await extractVideoFrames(videoUrl);
+      const res = await apiRequest("POST", aiFormCheckPath, {
+        exerciseName: item.exerciseName,
+        images,
+      });
+      return res.json() as Promise<{ assistantMessage: { content: string } }>;
+    },
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: [`/api/admin/programs/${programId}/chat`] });
+      setAiFeedback(result.assistantMessage.content);
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Could not get AI feedback on that video"),
+  });
+
+  const [swapOpen, setSwapOpen] = useState(false);
+  const [swapReason, setSwapReason] = useState<string | null>(null);
+  const [swapNotes, setSwapNotes] = useState("");
+  const swapMutation = useMutation({
+    mutationFn: async () => {
+      const reasonText = swapReason ?? "the user just doesn't want to do it today";
+      const content = `Swap "${item.exerciseName}" in Week ${item.weekNumber}, "${dayTitle}" (today's session) for a suitable alternative. Reason: ${reasonText}${swapNotes.trim() ? ` -- ${swapNotes.trim()}` : ""}. Only change this one exercise in this specific day; leave every other week and day exactly as they are.`;
+      const res = await apiRequest("POST", `/api/admin/programs/${programId}/chat`, { content });
+      return res.json() as Promise<{ assistantMessage: { content: string } }>;
+    },
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: [`${apiBase}/day`] });
+      qc.invalidateQueries({ queryKey: [`/api/admin/programs/${programId}/chat`] });
+      toast.success(result.assistantMessage.content);
+      setSwapOpen(false);
+      setSwapReason(null);
+      setSwapNotes("");
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Could not ask the AI to swap that"),
+  });
+
   return (
     <div className="space-y-3">
       <div className="flex gap-3">
@@ -1111,9 +1182,20 @@ function ExerciseLogContent({
               <p className="truncate font-semibold">{item.exerciseName}</p>
               {linked && <Link2 className="h-3.5 w-3.5 shrink-0 text-primary" />}
             </div>
-            <Badge variant="outline" className="shrink-0">
-              {item.muscleGroup}
-            </Badge>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <Badge variant="outline">{item.muscleGroup}</Badge>
+              {videoCheckMode === "ai" && (
+                <button
+                  type="button"
+                  aria-label={`Ask AI to swap ${item.exerciseName}`}
+                  title="Ask AI to swap this exercise"
+                  onClick={() => setSwapOpen(true)}
+                  className="text-muted-foreground transition-colors hover:text-primary"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
           </div>
           <p className="text-xs text-muted-foreground">
             Prescribed: {item.prescribedSets} × {item.prescribedReps}
@@ -1200,14 +1282,22 @@ function ExerciseLogContent({
         <p className="text-xs text-muted-foreground">{item.instructions}</p>
       )}
 
-      {item.videoCheckEnabled && showFormVideoCheck && (
+      {item.videoCheckEnabled && videoCheckMode !== "off" && (
         <div className="flex items-center justify-between gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-2.5 py-2">
-          <span className="text-xs font-semibold text-amber-500">
-            Your coach wants a form check video for this exercise
+          <span className="flex items-center gap-1.5 text-xs font-semibold text-amber-500">
+            {videoCheckMode === "ai" && <Sparkles className="h-3.5 w-3.5 shrink-0" />}
+            {videoCheckMode === "ai"
+              ? "Get an AI form check on this exercise"
+              : "Your coach wants a form check video for this exercise"}
           </span>
-          <Button size="sm" variant="secondary" onClick={() => setFormVideoOpen(true)}>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => setFormVideoOpen(true)}
+            disabled={aiFormCheckMutation.isPending}
+          >
             <Video className="h-3.5 w-3.5" />
-            Record / Upload
+            {aiFormCheckMutation.isPending ? "Analyzing…" : "Record / Upload"}
           </Button>
         </div>
       )}
@@ -1390,13 +1480,80 @@ function ExerciseLogContent({
         />
       )}
 
-      {item.videoCheckEnabled && showFormVideoCheck && (
+      {item.videoCheckEnabled && videoCheckMode !== "off" && (
         <FormVideoRecorderDialog
           open={formVideoOpen}
           onOpenChange={setFormVideoOpen}
-          onSaved={(url) => postFormVideoMutation.mutate(url)}
+          onSaved={(url) =>
+            videoCheckMode === "ai"
+              ? aiFormCheckMutation.mutate(url)
+              : postFormVideoMutation.mutate(url)
+          }
         />
       )}
+
+      <Dialog open={aiFeedback !== null} onOpenChange={(open) => !open && setAiFeedback(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-primary" />
+              AI Form Check: {item.exerciseName}
+            </DialogTitle>
+          </DialogHeader>
+          <p className="whitespace-pre-wrap text-sm">{aiFeedback}</p>
+          <p className="text-xs text-muted-foreground">
+            Saved to your AI Program Builder chat for this program too.
+          </p>
+          <DialogFooter>
+            <Button onClick={() => setAiFeedback(null)}>Got it</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={swapOpen} onOpenChange={setSwapOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <RefreshCw className="h-5 w-5 text-primary" />
+              Swap {item.exerciseName}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="flex flex-wrap gap-1.5">
+              {["No equipment today", "Aggravates an injury", "Too easy", "Too hard"].map(
+                (reason) => (
+                  <button
+                    key={reason}
+                    type="button"
+                    onClick={() => setSwapReason(reason)}
+                    className={cn(
+                      "rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors",
+                      swapReason === reason
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border text-muted-foreground hover:border-primary/50 hover:text-primary",
+                    )}
+                  >
+                    {reason}
+                  </button>
+                ),
+              )}
+            </div>
+            <Input
+              value={swapNotes}
+              onChange={(e) => setSwapNotes(e.target.value)}
+              placeholder="Add any details (optional)"
+            />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setSwapOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={() => swapMutation.mutate()} disabled={swapMutation.isPending}>
+              {swapMutation.isPending ? "Asking AI…" : "Ask AI to Swap"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {item.weightMode === "numeric" && (
         <PlateCalculatorDialog

@@ -497,6 +497,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.status(201).json(result);
   });
 
+  // "Full function" AI form check -- see storage.submitFormCheck for why
+  // this is the one place the AI critiques technique with no human review
+  // step, and why that's gated on the program already being AI-authored.
+  app.post("/api/admin/programs/:id/form-check", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const owned = await assertCoachOwnsProgram(user.id, id);
+    if (!owned) return res.status(404).json({ message: "Program not found" });
+    const schema = z.object({
+      exerciseName: z.string().trim().min(1).max(200),
+      images: z
+        .array(
+          z.object({
+            mediaType: z.enum(["image/jpeg", "image/png"]),
+            data: z.string().min(1),
+          }),
+        )
+        .min(1)
+        .max(6),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const result = await storage.submitFormCheck(
+      id,
+      user.id,
+      parsed.data.exerciseName,
+      parsed.data.images,
+    );
+    if (!result) return res.status(400).json({ message: "This program isn't AI-authored yet" });
+    res.status(201).json(result);
+  });
+
   // ---------------- Coach: Programs ----------------
 
   app.get("/api/coach/programs", requireRole("coach"), async (req, res) => {

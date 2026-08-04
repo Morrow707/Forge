@@ -49,7 +49,7 @@ import type {
 } from "@shared/schema";
 import { TESTING_METRICS, testingMetricLowerIsBetter } from "@shared/testing-metrics";
 import { computeReadiness } from "@shared/wellness";
-import { askClaude, askClaudeStructured, aiEnabled } from "./ai";
+import { askClaude, askClaudeStructured, askClaudeVision, aiEnabled } from "./ai";
 import { eq, and, inArray, asc, desc, lt, gte, gt, isNull, sql } from "drizzle-orm";
 import {
   generateCoachCode,
@@ -1882,6 +1882,7 @@ Design a complete draft program matching the coach's request.`;
             restSeconds: ex.restSeconds,
             notes: ex.notes,
             supersetGroup: ex.supersetGroup,
+            videoCheckEnabled: ex.videoCheckEnabled,
           })),
         })),
       })),
@@ -1928,6 +1929,11 @@ Design a complete draft program matching the coach's request.`;
                             restSeconds: { type: "integer" },
                             notes: { type: "string" },
                             supersetGroup: { type: "string" },
+                            videoCheckEnabled: {
+                              type: "boolean",
+                              description:
+                                "Set true when the user asks for a form check / video check on this exercise. This triggers the app's own recording flow and an AI form-check review once they submit a video -- you never generate this feedback yourself, just flip the flag.",
+                            },
                           },
                           required: ["exerciseId", "sets", "reps"],
                         },
@@ -1945,7 +1951,7 @@ Design a complete draft program matching the coach's request.`;
       },
     };
 
-    const system = `You are a strength and conditioning program design assistant, chatting directly with the person who owns this program and trains themselves with it. You may ONLY reference exercise IDs from the catalog you're given -- never invent an exercise or its ID. On every turn you must emit the COMPLETE program structure exactly as it should exist after this turn's changes, not just what changed -- anything you omit will be deleted, so carry forward everything the user didn't ask you to change. Keep sensible periodization (rest days, reasonable set/rep schemes, sensible progression across weeks). Also write a short, conversational summary of what you changed.`;
+    const system = `You are a strength and conditioning program design assistant, chatting directly with the person who owns this program and trains themselves with it. You may ONLY reference exercise IDs from the catalog you're given -- never invent an exercise or its ID. On every turn you must emit the COMPLETE program structure exactly as it should exist after this turn's changes, not just what changed -- anything you omit will be deleted, so carry forward everything the user didn't ask you to change. Keep sensible periodization (rest days, reasonable set/rep schemes, sensible progression across weeks). If they ask for a "form check" or "video check" on an exercise, set that exercise's videoCheckEnabled to true (and leave it true on anything it was already true for, unless they ask you to turn it off). Also write a short, conversational summary of what you changed.`;
 
     const historyText = history
       .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`)
@@ -1981,6 +1987,7 @@ Respond to the user's latest message by producing the complete updated program s
             restSeconds?: number;
             notes?: string;
             supersetGroup?: string;
+            videoCheckEnabled?: boolean;
           }[];
         }[];
       }[];
@@ -2012,12 +2019,16 @@ Respond to the user's latest message by producing the complete updated program s
               restSeconds: ex.restSeconds ?? null,
               notes: ex.notes || null,
               supersetGroup: ex.supersetGroup || null,
+              videoCheckEnabled: ex.videoCheckEnabled ?? false,
             })),
         })),
       })),
     };
 
     await this.updateProgramStructure(programId, structure);
+    // Marks the program as AI-authored permanently -- see the schema
+    // comment on programs.aiAuthored for why this never gets cleared.
+    await db.update(programs).set({ aiAuthored: true }).where(eq(programs.id, programId));
 
     const [assistantMessage] = await db
       .insert(programChatMessages)
@@ -2030,6 +2041,60 @@ Respond to the user's latest message by producing the complete updated program s
       .returning();
 
     return { userMessage, assistantMessage, program: await this.getProgramFull(programId) };
+  },
+
+  // "Full function" AI form check: a direct, unsupervised critique from
+  // still frames of a recorded set, written into the same chat transcript
+  // as the program builder so it reads as one continuous assistant-coach
+  // conversation. Deliberately gated on aiAuthored -- this is the one place
+  // in the app where the AI critiques technique with no human review step
+  // at all, which is only safe because it's scoped to a program the AI
+  // itself already builds/edits for its own owner, never a coach's program
+  // or an athlete under a coach's supervision (compare the athlete chat's
+  // hard rule to never give unsupervised training directives).
+  async submitFormCheck(
+    programId: number,
+    authorId: number,
+    exerciseName: string,
+    images: { mediaType: "image/jpeg" | "image/png"; data: string }[],
+  ) {
+    const program = await this.getProgramFull(programId);
+    if (!program || !program.aiAuthored) return null;
+
+    const [userMessage] = await db
+      .insert(programChatMessages)
+      .values({
+        programId,
+        authorId,
+        role: "user",
+        content: `[Form check requested: ${exerciseName}]`,
+      })
+      .returning();
+
+    const reply = async (text: string) => {
+      const [assistantMessage] = await db
+        .insert(programChatMessages)
+        .values({ programId, authorId, role: "assistant", content: text })
+        .returning();
+      return { userMessage, assistantMessage };
+    };
+
+    if (!aiEnabled || images.length === 0) {
+      return reply("AI isn't set up yet -- ask whoever manages this Forge instance to configure it.");
+    }
+
+    const system = `You are a strength coach reviewing still frames captured from someone's own training video, sent directly to you for feedback with no other coach in the loop -- you are their only coach for this. Give a direct, specific, encouraging critique of their technique on "${exerciseName}": what looks solid, and 1-3 concrete cues to fix anything that doesn't. Base everything strictly on what's visible in the frames -- if the images don't show enough to say anything useful (bad angle, too blurry, wrong exercise), say so plainly instead of guessing. Keep it to 3-5 sentences, talk to them as "you", no preamble.`;
+
+    const text = await askClaudeVision(
+      system,
+      `Here are frames from a set of ${exerciseName}. What do you see?`,
+      images,
+      { maxTokens: 400 },
+    );
+
+    return reply(
+      text?.trim() ?? "Couldn't get a read on that video -- try again with a clearer angle.",
+    );
   },
 
   async getProgramDayForCoach(coachId: number, dayId: number) {
@@ -2888,7 +2953,9 @@ Respond to the user's latest message by producing the complete updated program s
 
     const { week, ...dayFields } = day;
     return {
+      programId: assignment.program.id,
       programName: assignment.program.name,
+      programAiAuthored: assignment.program.aiAuthored,
       correctivesEnabled: assignment.correctivesEnabled,
       day: { ...dayFields, weekNumber: week.weekNumber, exercises: exercisesWithHistory },
       correctives: correctivesWithHistory,

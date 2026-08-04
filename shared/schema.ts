@@ -266,6 +266,14 @@ export const programs = pgTable("programs", {
   name: text("name").notNull(),
   description: text("description"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  // Set once the conversational AI program builder has ever applied a turn
+  // to this program -- never cleared afterward, even if a human edits it by
+  // hand later. Gates the "full function" AI features that skip any human
+  // review step (autonomous form-check feedback, one-tap exercise
+  // substitution): those are only safe to let the AI act on unsupervised
+  // when it's already the program's author, not when it would be silently
+  // rewriting a coach's program for an athlete.
+  aiAuthored: boolean("ai_authored").notNull().default(false),
 });
 
 export const programWeeks = pgTable(

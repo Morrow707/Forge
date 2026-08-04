@@ -213,8 +213,10 @@ CREATE TABLE IF NOT EXISTS "programs" (
   "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
   "name" text NOT NULL,
   "description" text,
-  "created_at" timestamp NOT NULL DEFAULT now()
+  "created_at" timestamp NOT NULL DEFAULT now(),
+  "ai_authored" boolean NOT NULL DEFAULT false
 );
+ALTER TABLE "programs" ADD COLUMN IF NOT EXISTS "ai_authored" boolean NOT NULL DEFAULT false;
 
 CREATE TABLE IF NOT EXISTS "program_weeks" (
   "id" serial PRIMARY KEY,
