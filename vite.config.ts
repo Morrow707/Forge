@@ -41,6 +41,16 @@ export default defineConfig({
         // Vite already code-splits aggressively; keep the same "big client
         // chunks still get precached" behavior generateSW had by default.
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+        // The MediaPipe pose-tracking WASM runtime (copied into public/ by
+        // scripts/copy-mediapipe-wasm.mjs) is 3 files at ~11-12MB each --
+        // an order of magnitude over maximumFileSizeToCacheInBytes above,
+        // which fails the production build rather than just skipping them
+        // (workbox-build treats an oversized file as fatal, not a warning).
+        // They're only needed by the camera bar-tracking feature, not the
+        // app shell, so there's no reason to precache them at install time
+        // anyway -- sw.ts adds a runtime cache for them instead, so they're
+        // still cached after the first time a set gets tracked.
+        globIgnores: ["**/mediapipe-wasm/**"],
       },
     }),
   ],
