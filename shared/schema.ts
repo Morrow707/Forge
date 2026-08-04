@@ -46,6 +46,13 @@ export const weightModeEnum = pgEnum("weight_mode", [
   "box",
 ]);
 export const boxHeightUnitEnum = pgEnum("box_height_unit", ["in", "m"]);
+// An athlete's own after-the-fact tag on one of their per-set form-check
+// videos -- "best" and "worst" are the two ends of the comparison view
+// (see set-video-review.tsx), not a rating scale. At most one set per
+// exercise/day should carry each value, but that's enforced client-side
+// (re-tagging one set clears the flag off whichever set had it), not by a
+// DB constraint -- nothing downstream depends on that invariant holding.
+export const formCheckFlagEnum = pgEnum("form_check_flag", ["best", "worst"]);
 export const lateralityEnum = pgEnum("laterality", ["bilateral", "unilateral"]);
 // Coach-only quick-glance status, toggled by the coach as an athlete gets
 // hurt/recovers -- never surfaced to the athlete themselves (see PublicUser).
@@ -511,6 +518,34 @@ export const workoutSetEntries = pgTable("workout_set_entries", {
   // averaged bar path can't show. Null when one side was out of frame too
   // much of the set to build a trace.
   armPathTrace: json("arm_path_trace"),
+  // Estimated output power from the same tracked trace, using the set's
+  // entered weight as load (mass * 9.81 * concentric velocity) -- null
+  // whenever there's no numeric weight to use as load, same as the other CV
+  // columns above being null when tracking wasn't on. peakPowerWatts pairs
+  // with peakVelocityMps, meanPowerWatts with meanVelocityMps.
+  peakPowerWatts: real("peak_power_watts"),
+  meanPowerWatts: real("mean_power_watts"),
+  // Mean velocity of the eccentric (lowering) phase, averaged across the
+  // set -- the concentric-side numbers above already exist; this is the
+  // other half, matching what velocity-based-training tools like Perch
+  // report as a separate figure rather than folding it into concentric.
+  eccentricMeanVelocityMps: real("eccentric_mean_velocity_mps"),
+  // Average per-rep vertical range of motion for the set, in cm -- distance
+  // traveled during the concentric (lifting) phase, from the same trace
+  // barPathDeviationCm is derived from.
+  romCm: real("rom_cm"),
+  // Fatigue within the set: how much peak concentric velocity dropped from
+  // the first rep to the last, as a percentage. Null for single-rep sets
+  // (nothing to compare against).
+  velocityLossPercent: real("velocity_loss_percent"),
+  // One set can carry an athlete-recorded form-check clip of that specific
+  // set (not just one video per exercise per day) -- see
+  // form-video-recorder-dialog.tsx and set-video-review.tsx. Every
+  // recorded clip is kept; formCheckFlag is how the athlete marks which one
+  // was their best/worst for the side-by-side comparison view, not a
+  // deletion signal.
+  formCheckVideoUrl: text("form_check_video_url"),
+  formCheckFlag: formCheckFlagEnum("form_check_flag"),
 });
 
 // A two-way thread on a specific day of a specific assignment -- an athlete
@@ -1304,6 +1339,16 @@ export const repBreakdownEntrySchema = z.object({
   velocityCurve: z
     .array(z.object({ positionCm: z.number(), velocityMps: z.number() }))
     .optional(),
+  // This rep's vertical range of motion, and (when a load was entered) its
+  // peak concentric power -- same per-rep granularity as the fields above,
+  // just added alongside them rather than as a separate array.
+  romCm: z.number().optional().nullable(),
+  peakPowerWatts: z.number().optional().nullable(),
+  // The eccentric (lowering) phase immediately preceding this rep's
+  // concentric lift -- null for rep 1 when the set starts from a dead
+  // stop (nothing to lower first).
+  eccentricSeconds: z.number().optional().nullable(),
+  eccentricVelocityMps: z.number().optional().nullable(),
 });
 
 export const armPathTraceSchema = z.object({
@@ -1327,6 +1372,13 @@ export const setLogInputSchema = z.object({
   formFaults: z.array(formFaultSchema).optional().nullable(),
   repBreakdown: z.array(repBreakdownEntrySchema).optional().nullable(),
   armPathTrace: armPathTraceSchema.optional().nullable(),
+  peakPowerWatts: z.number().optional().nullable(),
+  meanPowerWatts: z.number().optional().nullable(),
+  eccentricMeanVelocityMps: z.number().optional().nullable(),
+  romCm: z.number().optional().nullable(),
+  velocityLossPercent: z.number().optional().nullable(),
+  formCheckVideoUrl: z.string().trim().max(500).optional().nullable(),
+  formCheckFlag: z.enum(["best", "worst"]).optional().nullable(),
 });
 
 export const logEntryInputSchema = z

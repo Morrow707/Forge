@@ -56,6 +56,11 @@ type AnalyticsPoint = {
     left: { t: number; x: number; y: number }[];
     right: { t: number; x: number; y: number }[];
   } | null;
+  peakPowerWatts: number | null;
+  meanPowerWatts: number | null;
+  eccentricMeanVelocityMps: number | null;
+  romCm: number | null;
+  velocityLossPercent: number | null;
 };
 
 const FAULT_NAMES: Record<string, string> = {
@@ -124,6 +129,9 @@ export default function CoachAnalytics() {
   const hasNumericWeight = chartData.some((p) => p.weightMode === "numeric" && p.weight != null);
   const hasVelocity = chartData.some((p) => p.peakVelocityMps != null);
   const hasPath = chartData.some((p) => p.barPathDeviationCm != null);
+  const hasPower = chartData.some((p) => p.peakPowerWatts != null || p.meanPowerWatts != null);
+  const hasRom = chartData.some((p) => p.romCm != null);
+  const hasVelocityLoss = chartData.some((p) => p.velocityLossPercent != null);
   // The actual x/y shape of the bar's path, not just the scalar deviation
   // number above -- capped to the 5 most recent tracked sets so overlaying
   // them stays readable instead of an unreadable tangle.
@@ -374,7 +382,10 @@ export default function CoachAnalytics() {
             <Card>
               <CardHeader>
                 <CardTitle>Bar Speed</CardTitle>
-                <CardDescription>Peak and mean concentric velocity per tracked set.</CardDescription>
+                <CardDescription>
+                  Peak and mean concentric velocity, plus mean eccentric (lowering) velocity, per
+                  tracked set.
+                </CardDescription>
               </CardHeader>
               <CardContent className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
@@ -400,6 +411,93 @@ export default function CoachAnalytics() {
                       dataKey="meanVelocityMps"
                       name="Mean velocity"
                       stroke="#3b82f6"
+                      strokeWidth={2}
+                      connectNulls
+                      dot={{ r: 3 }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="eccentricMeanVelocityMps"
+                      name="Eccentric velocity"
+                      stroke="#a855f7"
+                      strokeWidth={2}
+                      connectNulls
+                      dot={{ r: 3 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
+          {hasPower && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Power Output</CardTitle>
+                <CardDescription>
+                  Estimated power (load × gravity × concentric velocity) per tracked set --
+                  requires a numeric weight to have been entered for the tracker to estimate
+                  from.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={chartData} margin={{ left: 4, right: 12 }}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                    <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} width={48} unit="W" />
+                    <Tooltip
+                      contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))" }}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <Line
+                      type="monotone"
+                      dataKey="peakPowerWatts"
+                      name="Peak power"
+                      stroke="hsl(var(--primary))"
+                      strokeWidth={2}
+                      connectNulls
+                      dot={{ r: 3 }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="meanPowerWatts"
+                      name="Mean power"
+                      stroke="#3b82f6"
+                      strokeWidth={2}
+                      connectNulls
+                      dot={{ r: 3 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
+          {hasVelocityLoss && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Velocity Loss (Fatigue)</CardTitle>
+                <CardDescription>
+                  How much peak concentric velocity dropped from the first rep to the last, per
+                  tracked set -- the standard within-set fatigue signal in velocity-based
+                  training. Negative means the last rep was actually faster.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="h-56">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={chartData} margin={{ left: 4, right: 12 }}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                    <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} width={40} unit="%" />
+                    <Tooltip
+                      contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))" }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="velocityLossPercent"
+                      name="Velocity loss"
+                      stroke="#ef4444"
                       strokeWidth={2}
                       connectNulls
                       dot={{ r: 3 }}
@@ -615,6 +713,40 @@ export default function CoachAnalytics() {
             </Card>
           )}
 
+          {hasRom && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Range of Motion</CardTitle>
+                <CardDescription>
+                  Average per-rep vertical travel during the concentric (lifting) phase, per
+                  tracked set -- a shrinking number over time can mean the depth is creeping up
+                  even while the weight goes up too.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="h-56">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={chartData} margin={{ left: 4, right: 12 }}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                    <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} width={40} unit="cm" />
+                    <Tooltip
+                      contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))" }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="romCm"
+                      name="Avg. ROM"
+                      stroke="hsl(var(--success))"
+                      strokeWidth={2}
+                      connectNulls
+                      dot={{ r: 3 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
           {faultCodesSeen.length > 0 && (
             <Card>
               <CardHeader>
@@ -667,6 +799,7 @@ export default function CoachAnalytics() {
                     <th className="py-1.5 pr-3">Est. 1RM</th>
                     <th className="py-1.5 pr-3">RPE</th>
                     <th className="py-1.5 pr-3">Peak m/s</th>
+                    <th className="py-1.5 pr-3">Power (W)</th>
                     <th className="py-1.5 pr-3">Path (cm)</th>
                     <th className="py-1.5 pr-3">Form notes</th>
                     <th className="py-1.5">PR</th>
@@ -698,6 +831,7 @@ export default function CoachAnalytics() {
                       <td className="py-1.5 pr-3">{p.estimatedOneRm ?? "-"}</td>
                       <td className="py-1.5 pr-3">{p.rpe ?? "-"}</td>
                       <td className="py-1.5 pr-3">{p.peakVelocityMps ?? "-"}</td>
+                      <td className="py-1.5 pr-3">{p.peakPowerWatts ?? "-"}</td>
                       <td className="py-1.5 pr-3">{p.barPathDeviationCm ?? "-"}</td>
                       <td className="py-1.5 pr-3">
                         {p.formFaults && p.formFaults.length > 0 ? (

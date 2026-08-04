@@ -2113,6 +2113,11 @@ Respond to the user's latest message by producing the complete updated program s
       eccentricSeconds?: number | null;
       barPathDeviationCm?: number | null;
       formFaults?: { code: string; label: string }[] | null;
+      peakPowerWatts?: number | null;
+      meanPowerWatts?: number | null;
+      eccentricMeanVelocityMps?: number | null;
+      romCm?: number | null;
+      velocityLossPercent?: number | null;
     },
   ) {
     const program = await this.getProgramFull(programId);
@@ -2162,6 +2167,19 @@ Respond to the user's latest message by producing the complete updated program s
             : null,
           trackedMetrics.barPathDeviationCm != null
             ? `- Bar path deviation: ${trackedMetrics.barPathDeviationCm}cm from a straight vertical line`
+            : null,
+          trackedMetrics.romCm != null ? `- Range of motion: ${trackedMetrics.romCm}cm per rep` : null,
+          trackedMetrics.peakPowerWatts != null
+            ? `- Peak power output: ${trackedMetrics.peakPowerWatts}W`
+            : null,
+          trackedMetrics.meanPowerWatts != null
+            ? `- Mean power output: ${trackedMetrics.meanPowerWatts}W`
+            : null,
+          trackedMetrics.eccentricMeanVelocityMps != null
+            ? `- Mean eccentric (lowering) speed: ${trackedMetrics.eccentricMeanVelocityMps} m/s`
+            : null,
+          trackedMetrics.velocityLossPercent != null
+            ? `- Velocity loss across the set: ${trackedMetrics.velocityLossPercent}% (fatigue signal, first rep vs last)`
             : null,
           trackedMetrics.formFaults && trackedMetrics.formFaults.length > 0
             ? `- Detected form flags: ${trackedMetrics.formFaults.map((f) => f.label).join("; ")}`
@@ -3129,6 +3147,13 @@ Respond to the user's latest message by producing the complete updated program s
               formFaults: s.formFaults ?? null,
               repBreakdown: s.repBreakdown ?? null,
               armPathTrace: s.armPathTrace ?? null,
+              peakPowerWatts: s.peakPowerWatts ?? null,
+              meanPowerWatts: s.meanPowerWatts ?? null,
+              eccentricMeanVelocityMps: s.eccentricMeanVelocityMps ?? null,
+              romCm: s.romCm ?? null,
+              velocityLossPercent: s.velocityLossPercent ?? null,
+              formCheckVideoUrl: s.formCheckVideoUrl ?? null,
+              formCheckFlag: s.formCheckFlag ?? null,
             })),
           );
         }
@@ -3165,6 +3190,13 @@ Respond to the user's latest message by producing the complete updated program s
         formFaults: workoutSetEntries.formFaults,
         repBreakdown: workoutSetEntries.repBreakdown,
         armPathTrace: workoutSetEntries.armPathTrace,
+        peakPowerWatts: workoutSetEntries.peakPowerWatts,
+        meanPowerWatts: workoutSetEntries.meanPowerWatts,
+        eccentricMeanVelocityMps: workoutSetEntries.eccentricMeanVelocityMps,
+        romCm: workoutSetEntries.romCm,
+        velocityLossPercent: workoutSetEntries.velocityLossPercent,
+        formCheckVideoUrl: workoutSetEntries.formCheckVideoUrl,
+        formCheckFlag: workoutSetEntries.formCheckFlag,
       })
       .from(workoutSetEntries)
       .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
@@ -3200,6 +3232,13 @@ Respond to the user's latest message by producing the complete updated program s
         formFaults: workoutSetEntries.formFaults,
         repBreakdown: workoutSetEntries.repBreakdown,
         armPathTrace: workoutSetEntries.armPathTrace,
+        peakPowerWatts: workoutSetEntries.peakPowerWatts,
+        meanPowerWatts: workoutSetEntries.meanPowerWatts,
+        eccentricMeanVelocityMps: workoutSetEntries.eccentricMeanVelocityMps,
+        romCm: workoutSetEntries.romCm,
+        velocityLossPercent: workoutSetEntries.velocityLossPercent,
+        formCheckVideoUrl: workoutSetEntries.formCheckVideoUrl,
+        formCheckFlag: workoutSetEntries.formCheckFlag,
       })
       .from(workoutSetEntries)
       .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))

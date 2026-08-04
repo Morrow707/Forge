@@ -22,8 +22,10 @@ import { useWakeLock } from "@/hooks/use-wake-lock";
 import { WorkoutCommentThread } from "@/components/workout-comment-thread";
 import { BarTrackerDialog } from "@/components/bar-tracker-dialog";
 import { FormVideoRecorderDialog } from "@/components/form-video-recorder-dialog";
+import { SetVideoPreviewDialog, SetVideoCompareDialog } from "@/components/set-video-review";
 import { extractVideoFrames } from "@/lib/video-frames";
 import type { RepMetrics } from "@/lib/bar-tracking";
+import { toKg } from "@/lib/bar-tracking";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import {
@@ -55,6 +57,7 @@ import {
   Layers,
   Sparkles,
   RefreshCw,
+  GitCompare,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import type { PublicUser } from "@shared/schema";
@@ -193,10 +196,15 @@ type RepBreakdownEntry = {
   meanVelocityMps: number;
   concentricSeconds: number;
   depthDeg?: number | null;
+  romCm?: number | null;
+  peakPowerWatts?: number | null;
+  eccentricSeconds?: number | null;
+  eccentricVelocityMps?: number | null;
 };
 
 type PathPoint = { t: number; x: number; y: number };
 type ArmPathTrace = { left: PathPoint[]; right: PathPoint[] };
+type FormCheckFlag = "best" | "worst" | null;
 
 type SetMetrics = {
   peakVelocityMps: number | null;
@@ -208,6 +216,17 @@ type SetMetrics = {
   formFaults: FormFault[] | null;
   repBreakdown: RepBreakdownEntry[] | null;
   armPathTrace: ArmPathTrace | null;
+  peakPowerWatts: number | null;
+  meanPowerWatts: number | null;
+  eccentricMeanVelocityMps: number | null;
+  romCm: number | null;
+  velocityLossPercent: number | null;
+  // A per-set form-check clip (not the single per-exercise video the app
+  // used to support) -- one exercise with N sets can have up to N of these.
+  // formCheckFlag is the athlete's own best/worst tag for the comparison
+  // view; every recorded clip is kept regardless of whether it's flagged.
+  formCheckVideoUrl: string | null;
+  formCheckFlag: FormCheckFlag;
 };
 
 type LogEntry = {
@@ -313,6 +332,13 @@ function buildItem(
       formFaults: existingSet?.formFaults ?? null,
       repBreakdown: existingSet?.repBreakdown ?? null,
       armPathTrace: existingSet?.armPathTrace ?? null,
+      peakPowerWatts: existingSet?.peakPowerWatts ?? null,
+      meanPowerWatts: existingSet?.meanPowerWatts ?? null,
+      eccentricMeanVelocityMps: existingSet?.eccentricMeanVelocityMps ?? null,
+      romCm: existingSet?.romCm ?? null,
+      velocityLossPercent: existingSet?.velocityLossPercent ?? null,
+      formCheckVideoUrl: existingSet?.formCheckVideoUrl ?? null,
+      formCheckFlag: existingSet?.formCheckFlag ?? null,
     };
   });
   const materials = materialsFrom(prescribed.exercise);
@@ -631,6 +657,13 @@ export function WorkoutPage({
             formFaults: s.formFaults,
             repBreakdown: s.repBreakdown,
             armPathTrace: s.armPathTrace,
+            peakPowerWatts: s.peakPowerWatts,
+            meanPowerWatts: s.meanPowerWatts,
+            eccentricMeanVelocityMps: s.eccentricMeanVelocityMps,
+            romCm: s.romCm,
+            velocityLossPercent: s.velocityLossPercent,
+            formCheckVideoUrl: s.formCheckVideoUrl,
+            formCheckFlag: s.formCheckFlag,
           })),
         })),
       };
@@ -712,6 +745,13 @@ export function WorkoutPage({
               formFaults: null,
               repBreakdown: null,
               armPathTrace: null,
+              peakPowerWatts: null,
+              meanPowerWatts: null,
+              eccentricMeanVelocityMps: null,
+              romCm: null,
+              velocityLossPercent: null,
+              formCheckVideoUrl: null,
+              formCheckFlag: null,
             },
           ],
         };
@@ -1119,7 +1159,14 @@ function ExerciseLogContent({
 }) {
   const isCorrective = item.kind === "corrective";
   const [trackingSet, setTrackingSet] = useState<number | null>(null);
-  const [formVideoOpen, setFormVideoOpen] = useState(false);
+  // Which set the "Record" pill is currently recording for -- one form-check
+  // clip per set now, not one per exercise, so this replaces what used to be
+  // a single boolean. previewSetNumber/compareOpen below are the other two
+  // video-review surfaces: reviewing one already-recorded clip, and
+  // comparing two of them side by side.
+  const [recordingSetNumber, setRecordingSetNumber] = useState<number | null>(null);
+  const [previewSetNumber, setPreviewSetNumber] = useState<number | null>(null);
+  const [compareOpen, setCompareOpen] = useState(false);
   const [plateCalcOpen, setPlateCalcOpen] = useState(false);
   const topSetWeight = Math.max(0, ...item.sets.map((s) => parseFloat(s.weight) || 0));
   // One column per material the exercise actually needs -- not mutually
@@ -1170,9 +1217,9 @@ function ExerciseLogContent({
       : null;
   const commentsPath = `${apiBase}/assignments/${assignmentId}/days/${programDayId}/comments`;
   const postFormVideoMutation = useMutation({
-    mutationFn: async (videoUrl: string) => {
+    mutationFn: async ({ setNumber, videoUrl }: { setNumber: number; videoUrl: string }) => {
       const res = await apiRequest("POST", commentsPath, {
-        body: `Form check: ${item.exerciseName}`,
+        body: `Form check: ${item.exerciseName} — Set ${setNumber}`,
         videoUrl,
       });
       return res.json();
@@ -1187,16 +1234,12 @@ function ExerciseLogContent({
   const [aiFeedback, setAiFeedback] = useState<string | null>(null);
   const aiFormCheckPath = `${programsApiBase}/programs/${programId}/form-check`;
   const aiFormCheckMutation = useMutation({
-    mutationFn: async (videoUrl: string) => {
+    mutationFn: async ({ setNumber, videoUrl }: { setNumber: number; videoUrl: string }) => {
       const images = await extractVideoFrames(videoUrl);
-      // No formal link between a form-check video and a specific set number
-      // (the record button lives at the exercise level) -- the most
-      // recently camera-tracked set for this exercise is the closest real
-      // signal available, so it rides along as grounding context when one
-      // exists.
-      const trackedSet = [...item.sets]
-        .reverse()
-        .find((s) => s.peakVelocityMps != null || s.barPathDeviationCm != null);
+      // Now that a video is captured per set, this is the exact set it came
+      // from -- no more guessing at "the most recently tracked set" for
+      // this exercise.
+      const trackedSet = item.sets.find((s) => s.setNumber === setNumber);
       const res = await apiRequest("POST", aiFormCheckPath, {
         exerciseName: item.exerciseName,
         images,
@@ -1208,6 +1251,11 @@ function ExerciseLogContent({
               eccentricSeconds: trackedSet.eccentricSeconds,
               barPathDeviationCm: trackedSet.barPathDeviationCm,
               formFaults: trackedSet.formFaults,
+              peakPowerWatts: trackedSet.peakPowerWatts,
+              meanPowerWatts: trackedSet.meanPowerWatts,
+              eccentricMeanVelocityMps: trackedSet.eccentricMeanVelocityMps,
+              romCm: trackedSet.romCm,
+              velocityLossPercent: trackedSet.velocityLossPercent,
             }
           : undefined,
       });
@@ -1219,6 +1267,21 @@ function ExerciseLogContent({
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not get AI feedback on that video"),
   });
+
+  // At most one "best" and one "worst" per exercise/day -- re-flagging a
+  // different set clears the old holder of that flag rather than allowing
+  // two sets to claim the same tag.
+  function handleFlagVideo(setNumber: number, flag: FormCheckFlag) {
+    for (const s of item.sets) {
+      if (s.setNumber === setNumber) onUpdateSet(setNumber, { formCheckFlag: flag });
+      else if (s.formCheckFlag === flag && flag != null) onUpdateSet(s.setNumber, { formCheckFlag: null });
+    }
+  }
+
+  const flaggedSetVideos = item.sets
+    .filter((s) => s.formCheckVideoUrl)
+    .map((s) => ({ setNumber: s.setNumber, videoUrl: s.formCheckVideoUrl!, flag: s.formCheckFlag }));
+  const previewSet = previewSetNumber != null ? item.sets.find((s) => s.setNumber === previewSetNumber) : undefined;
 
   const [swapOpen, setSwapOpen] = useState(false);
   const [swapReason, setSwapReason] = useState<string | null>(null);
@@ -1364,18 +1427,15 @@ function ExerciseLogContent({
           <span className="flex items-center gap-1.5 text-xs font-semibold text-amber-500">
             {videoCheckMode === "ai" && <Sparkles className="h-3.5 w-3.5 shrink-0" />}
             {videoCheckMode === "ai"
-              ? "Get an AI form check on this exercise"
-              : "Your coach wants a form check video for this exercise"}
+              ? "Get an AI form check on any set below"
+              : "Your coach wants a form check video -- record any set below"}
           </span>
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={() => setFormVideoOpen(true)}
-            disabled={aiFormCheckMutation.isPending}
-          >
-            <Video className="h-3.5 w-3.5" />
-            {aiFormCheckMutation.isPending ? "Analyzing…" : "Record / Upload"}
-          </Button>
+          {flaggedSetVideos.length > 1 && (
+            <Button size="sm" variant="secondary" onClick={() => setCompareOpen(true)}>
+              <GitCompare className="h-3.5 w-3.5" />
+              Compare Sets
+            </Button>
+          )}
         </div>
       )}
 
@@ -1512,24 +1572,54 @@ function ExerciseLogContent({
                     Last @ {set.reps} reps: {formatLoad(historyMatch)}
                   </p>
                 )}
-                {item.trackingLevel !== "none" && (
-                  <button
-                    type="button"
-                    onClick={() => setTrackingSet(set.setNumber)}
-                    className={cn(
-                      "mt-1 flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold",
-                      tracked
-                        ? "border-success/40 bg-success/10 text-success"
-                        : "border-primary/40 text-primary hover:bg-primary/10",
+                {(item.trackingLevel !== "none" ||
+                  (item.videoCheckEnabled && videoCheckMode !== "off")) && (
+                  <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                    {item.trackingLevel !== "none" && (
+                      <button
+                        type="button"
+                        onClick={() => setTrackingSet(set.setNumber)}
+                        className={cn(
+                          "flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold",
+                          tracked
+                            ? "border-success/40 bg-success/10 text-success"
+                            : "border-primary/40 text-primary hover:bg-primary/10",
+                        )}
+                      >
+                        <Camera className="h-3 w-3" />
+                        {tracked
+                          ? item.trackingLevel === "full" && set.peakVelocityMps != null
+                            ? `${set.peakVelocityMps} m/s peak — retake`
+                            : `Path ${set.barPathDeviationCm} cm — retake`
+                          : "Track this set"}
+                      </button>
                     )}
-                  >
-                    <Camera className="h-3 w-3" />
-                    {tracked
-                      ? item.trackingLevel === "full" && set.peakVelocityMps != null
-                        ? `${set.peakVelocityMps} m/s peak — retake`
-                        : `Path ${set.barPathDeviationCm} cm — retake`
-                      : "Track this set"}
-                  </button>
+                    {item.videoCheckEnabled && videoCheckMode !== "off" && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          set.formCheckVideoUrl
+                            ? setPreviewSetNumber(set.setNumber)
+                            : setRecordingSetNumber(set.setNumber)
+                        }
+                        className={cn(
+                          "flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold",
+                          set.formCheckVideoUrl
+                            ? "border-success/40 bg-success/10 text-success"
+                            : "border-primary/40 text-primary hover:bg-primary/10",
+                        )}
+                      >
+                        <Video className="h-3 w-3" />
+                        {set.formCheckVideoUrl
+                          ? set.formCheckFlag === "best"
+                            ? "Best set video"
+                            : set.formCheckFlag === "worst"
+                              ? "Worst set video"
+                              : "View video"
+                          : "Record form check"}
+                      </button>
+                    )}
+                  </div>
                 )}
                 {set.formFaults && set.formFaults.length > 0 && (
                   <div className="mt-1 flex flex-wrap gap-1 pl-9">
@@ -1557,39 +1647,84 @@ function ExerciseLogContent({
         </div>
       </div>
 
-      {item.trackingLevel !== "none" && (
-        <BarTrackerDialog
-          open={trackingSet !== null}
-          onOpenChange={(open) => !open && setTrackingSet(null)}
-          mode={item.trackingLevel}
-          exerciseName={item.exerciseName}
-          targetReps={parseTargetReps(item.prescribedReps)}
-          onCapture={(metrics: RepMetrics) => {
-            if (trackingSet == null) return;
-            onUpdateSet(trackingSet, {
-              peakVelocityMps: metrics.peakVelocityMps,
-              meanVelocityMps: metrics.meanVelocityMps,
-              concentricSeconds: metrics.concentricSeconds,
-              eccentricSeconds: metrics.eccentricSeconds,
-              barPathDeviationCm: metrics.barPathDeviationCm,
-              barPathTrace: metrics.barPathTrace,
-              formFaults: metrics.formFaults,
-              repBreakdown: metrics.repBreakdown,
-              armPathTrace: metrics.armPathTrace ?? null,
-            });
+      {item.trackingLevel !== "none" &&
+        (() => {
+          const trackedRow = item.sets.find((s) => s.setNumber === trackingSet);
+          const trackedWeight = trackedRow ? parseFloat(trackedRow.weight) : NaN;
+          const loadKg =
+            item.materials.usesWeight && !Number.isNaN(trackedWeight)
+              ? toKg(trackedWeight, unit)
+              : undefined;
+          return (
+            <BarTrackerDialog
+              open={trackingSet !== null}
+              onOpenChange={(open) => !open && setTrackingSet(null)}
+              mode={item.trackingLevel}
+              exerciseName={item.exerciseName}
+              targetReps={parseTargetReps(item.prescribedReps)}
+              loadKg={loadKg}
+              onCapture={(metrics: RepMetrics) => {
+                if (trackingSet == null) return;
+                onUpdateSet(trackingSet, {
+                  peakVelocityMps: metrics.peakVelocityMps,
+                  meanVelocityMps: metrics.meanVelocityMps,
+                  concentricSeconds: metrics.concentricSeconds,
+                  eccentricSeconds: metrics.eccentricSeconds,
+                  barPathDeviationCm: metrics.barPathDeviationCm,
+                  barPathTrace: metrics.barPathTrace,
+                  formFaults: metrics.formFaults,
+                  repBreakdown: metrics.repBreakdown,
+                  armPathTrace: metrics.armPathTrace ?? null,
+                  peakPowerWatts: metrics.peakPowerWatts,
+                  meanPowerWatts: metrics.meanPowerWatts,
+                  eccentricMeanVelocityMps: metrics.eccentricMeanVelocityMps,
+                  romCm: metrics.romCm,
+                  velocityLossPercent: metrics.velocityLossPercent,
+                });
+              }}
+            />
+          );
+        })()}
+
+      {item.videoCheckEnabled && videoCheckMode !== "off" && (
+        <FormVideoRecorderDialog
+          open={recordingSetNumber !== null}
+          onOpenChange={(open) => !open && setRecordingSetNumber(null)}
+          onSaved={(url) => {
+            if (recordingSetNumber == null) return;
+            onUpdateSet(recordingSetNumber, { formCheckVideoUrl: url });
+            if (videoCheckMode === "ai") aiFormCheckMutation.mutate({ setNumber: recordingSetNumber, videoUrl: url });
+            else postFormVideoMutation.mutate({ setNumber: recordingSetNumber, videoUrl: url });
+            setRecordingSetNumber(null);
           }}
         />
       )}
 
-      {item.videoCheckEnabled && videoCheckMode !== "off" && (
-        <FormVideoRecorderDialog
-          open={formVideoOpen}
-          onOpenChange={setFormVideoOpen}
-          onSaved={(url) =>
-            videoCheckMode === "ai"
-              ? aiFormCheckMutation.mutate(url)
-              : postFormVideoMutation.mutate(url)
-          }
+      {previewSet && previewSet.formCheckVideoUrl && (
+        <SetVideoPreviewDialog
+          open={previewSetNumber !== null}
+          onOpenChange={(open) => !open && setPreviewSetNumber(null)}
+          setNumber={previewSet.setNumber}
+          videoUrl={previewSet.formCheckVideoUrl}
+          flag={previewSet.formCheckFlag}
+          onFlag={(flag) => handleFlagVideo(previewSet.setNumber, flag)}
+          onRetake={() => {
+            setPreviewSetNumber(null);
+            setRecordingSetNumber(previewSet.setNumber);
+          }}
+          onRemove={() => {
+            onUpdateSet(previewSet.setNumber, { formCheckVideoUrl: null, formCheckFlag: null });
+            setPreviewSetNumber(null);
+          }}
+        />
+      )}
+
+      {flaggedSetVideos.length > 1 && (
+        <SetVideoCompareDialog
+          open={compareOpen}
+          onOpenChange={setCompareOpen}
+          sets={flaggedSetVideos}
+          onFlag={handleFlagVideo}
         />
       )}
 

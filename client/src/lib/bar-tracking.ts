@@ -4,6 +4,15 @@
 
 export type TrackedPoint = { t: number; x: number; y: number };
 
+const LBS_PER_KG = 2.20462;
+
+// Converts a set's entered weight to kg for summarizeTrackedSet's loadKg --
+// the athlete's weight input is unitless text in whatever unit they prefer,
+// so callers need this rather than assuming kg directly.
+export function toKg(weight: number, unit: "lbs" | "kg"): number {
+  return unit === "kg" ? weight : weight / LBS_PER_KG;
+}
+
 // One "rep" = one concentric (lifting) phase plus whatever phase precedes
 // it -- matches how the live rep counter already counts reps (on the start
 // of each upward movement). depthDeg and velocityCurve are left undefined
@@ -18,6 +27,17 @@ export type RepBreakdown = {
   endT: number;
   depthDeg?: number | null;
   velocityCurve?: { positionCm: number; velocityMps: number }[];
+  // Vertical range of motion for this rep's concentric phase, in cm.
+  romCm: number;
+  // Peak concentric power for this rep -- null whenever the caller didn't
+  // supply a load (summarizeTrackedSet's loadKg), same as the whole-set
+  // power fields below being null in that case.
+  peakPowerWatts: number | null;
+  // The eccentric (lowering) phase immediately before this rep's lift --
+  // null for rep 1 when the set starts from a dead stop, since there's
+  // nothing to lower first.
+  eccentricSeconds: number | null;
+  eccentricVelocityMps: number | null;
 };
 
 export type PathTracePoint = { t: number; x: number; y: number };
@@ -44,6 +64,22 @@ export type RepMetrics = {
   // landmark history, not just the derived (t,x,y) trace this module works
   // with.
   formFaults: { code: string; label: string }[];
+  // Estimated output power (mass * g * concentric velocity) -- null unless
+  // summarizeTrackedSet was given a load, since bodyweight-only sets have
+  // no well-defined external load to base this on.
+  peakPowerWatts: number | null;
+  meanPowerWatts: number | null;
+  // Mean velocity of the eccentric (lowering) phase, averaged across the
+  // set -- the concentric numbers above are the "lift"; this is the other
+  // half, reported separately the way VBT tools like Perch do rather than
+  // folded into a single figure.
+  eccentricMeanVelocityMps: number;
+  // Average per-rep vertical range of motion, in cm.
+  romCm: number;
+  // How much peak concentric velocity dropped from the first rep to the
+  // last, as a percentage -- the standard within-set fatigue signal in
+  // velocity-based training. Null for single-rep sets (nothing to compare).
+  velocityLossPercent: number | null;
 };
 
 // Decimates a raw pixel-space trace to at most ~200 points and converts it
@@ -148,12 +184,19 @@ function segmentPhases(
   return phases;
 }
 
+const GRAVITY_MPS2 = 9.81;
+
 // Turns a raw pixel-space trace for one set into real-world metrics. Returns
 // null when there isn't enough signal to say anything meaningful (marker
 // lost for most of the take, or the athlete stopped before moving).
+// loadKg, when given, is the external load for this set (the athlete's
+// entered weight, converted to kg by the caller) -- power is mass * g *
+// velocity, so it's left null throughout whenever there's no load to use
+// as mass (bodyweight-only sets have no well-defined external load here).
 export function summarizeTrackedSet(
   rawPoints: TrackedPoint[],
   pixelsPerMeter: number,
+  loadKg?: number,
   minRepAmplitudeCm = 5,
 ): RepMetrics | null {
   if (rawPoints.length < 6 || pixelsPerMeter <= 0) return null;
@@ -201,6 +244,17 @@ export function summarizeTrackedSet(
         velocityMps: Math.round(speedsMps[idx] * 100) / 100,
       });
     }
+    // The phase right before this one always alternates direction by
+    // construction (segmentPhases flips direction at every split), so
+    // whenever this rep isn't the very first phase, phaseStats[i - 1] is
+    // guaranteed to be the eccentric that led into it.
+    const pairedEccentric = i > 0 ? phaseStats[i - 1] : null;
+    const romCm =
+      Math.round(
+        (Math.abs(rawPoints[phase.endIdx].y - rawPoints[phase.startIdx].y) / pixelsPerMeter) *
+          1000,
+      ) / 10;
+
     repBreakdown.push({
       repNumber: repBreakdown.length + 1,
       peakVelocityMps: Math.round(phase.peak * 100) / 100,
@@ -209,6 +263,11 @@ export function summarizeTrackedSet(
       startT: rawPoints[repStartIdx].t,
       endT: rawPoints[phase.endIdx].t,
       velocityCurve,
+      romCm,
+      peakPowerWatts:
+        loadKg && loadKg > 0 ? Math.round(loadKg * GRAVITY_MPS2 * phase.peak) : null,
+      eccentricSeconds: pairedEccentric ? Math.round(pairedEccentric.duration * 100) / 100 : null,
+      eccentricVelocityMps: pairedEccentric ? Math.round(pairedEccentric.mean * 100) / 100 : null,
     });
   });
 
@@ -234,10 +293,41 @@ export function summarizeTrackedSet(
         ? Math.round((eccentric.reduce((a, c) => a + c.duration, 0) / eccentric.length) * 100) /
           100
         : 0,
+    eccentricMeanVelocityMps:
+      eccentric.length > 0
+        ? Math.round((eccentric.reduce((a, c) => a + c.mean, 0) / eccentric.length) * 100) / 100
+        : 0,
     barPathDeviationCm: Math.round(barPathDeviationCm * 10) / 10,
     barPathTrace,
     repBreakdown,
     formFaults: [],
+    peakPowerWatts:
+      loadKg && loadKg > 0
+        ? Math.round(loadKg * GRAVITY_MPS2 * Math.max(...concentric.map((c) => c.peak), 0))
+        : null,
+    meanPowerWatts:
+      loadKg && loadKg > 0
+        ? Math.round(
+            loadKg *
+              GRAVITY_MPS2 *
+              (concentric.reduce((a, c) => a + c.mean, 0) / (concentric.length || 1)),
+          )
+        : null,
+    romCm:
+      repBreakdown.length > 0
+        ? Math.round(
+            (repBreakdown.reduce((a, r) => a + r.romCm, 0) / repBreakdown.length) * 10,
+          ) / 10
+        : 0,
+    velocityLossPercent:
+      repBreakdown.length > 1 && repBreakdown[0].peakVelocityMps > 0
+        ? Math.round(
+            ((repBreakdown[0].peakVelocityMps -
+              repBreakdown[repBreakdown.length - 1].peakVelocityMps) /
+              repBreakdown[0].peakVelocityMps) *
+              1000,
+          ) / 10
+        : null,
   };
 }
 

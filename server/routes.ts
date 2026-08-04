@@ -83,6 +83,23 @@ function currentUser(req: any) {
   return req.user as { id: number; role: "coach" | "athlete" | "admin"; name: string };
 }
 
+// The single gate for every Free Agent AI-programs route below -- true iff
+// this athlete currently has zero coaches. Once they join a team they're
+// meant to rely on that coach, not keep a parallel AI track running, so
+// this rejects rather than just hiding a nav link client-side. This is
+// also exactly where a future paywall plugs in (isFreeAgent && hasPaid)
+// without touching any of the routes that call it.
+async function requireFreeAgent(req: any, res: any, next: any) {
+  const user = currentUser(req);
+  const coaches = await storage.getCoachesForAthlete(user.id);
+  if (coaches.length > 0) {
+    return res
+      .status(403)
+      .json({ message: "AI program building is only available while you don't have a coach yet." });
+  }
+  next();
+}
+
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -518,6 +535,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           eccentricSeconds: z.number().optional().nullable(),
           barPathDeviationCm: z.number().optional().nullable(),
           formFaults: formFaultSchema.array().optional().nullable(),
+          peakPowerWatts: z.number().optional().nullable(),
+          meanPowerWatts: z.number().optional().nullable(),
+          eccentricMeanVelocityMps: z.number().optional().nullable(),
+          romCm: z.number().optional().nullable(),
+          velocityLossPercent: z.number().optional().nullable(),
         })
         .optional(),
     });
@@ -1719,13 +1741,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // function" AI features, so an athlete who later joins a team keeps these
   // programs untouched alongside whatever their new coach assigns.
 
-  app.get("/api/athlete/programs", requireRole("athlete"), async (req, res) => {
+  app.get("/api/athlete/programs", requireRole("athlete"), requireFreeAgent, async (req, res) => {
     const user = currentUser(req);
     const list = await storage.getProgramsByCoach(user.id);
     res.json(list);
   });
 
-  app.get("/api/athlete/programs/:id", requireRole("athlete"), async (req, res) => {
+  app.get("/api/athlete/programs/:id", requireRole("athlete"), requireFreeAgent, async (req, res) => {
     const user = currentUser(req);
     const id = Number(req.params.id);
     const program = await assertCoachOwnsProgram(user.id, id);
@@ -1733,7 +1755,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ ...program, isForgeOfficial: false, ownerLabel: "YOU", editable: true });
   });
 
-  app.post("/api/athlete/programs", requireRole("athlete"), async (req, res) => {
+  app.post("/api/athlete/programs", requireRole("athlete"), requireFreeAgent, async (req, res) => {
     const user = currentUser(req);
     const parsed = programStructureSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -1743,7 +1765,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.status(201).json(program);
   });
 
-  app.post("/api/athlete/programs/ai-draft", requireRole("athlete"), async (req, res) => {
+  app.post("/api/athlete/programs/ai-draft", requireRole("athlete"), requireFreeAgent, async (req, res) => {
     const user = currentUser(req);
     const parsed = generateProgramDraftSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -1753,7 +1775,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(draft);
   });
 
-  app.put("/api/athlete/programs/:id", requireRole("athlete"), async (req, res) => {
+  app.put("/api/athlete/programs/:id", requireRole("athlete"), requireFreeAgent, async (req, res) => {
     const user = currentUser(req);
     const id = Number(req.params.id);
     const owned = await assertCoachOwnsProgram(user.id, id);
@@ -1767,7 +1789,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(updated);
   });
 
-  app.delete("/api/athlete/programs/:id", requireRole("athlete"), async (req, res) => {
+  app.delete("/api/athlete/programs/:id", requireRole("athlete"), requireFreeAgent, async (req, res) => {
     const user = currentUser(req);
     const id = Number(req.params.id);
     const owned = await assertCoachOwnsProgram(user.id, id);
@@ -1776,7 +1798,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.status(204).end();
   });
 
-  app.get("/api/athlete/programs/:id/chat", requireRole("athlete"), async (req, res) => {
+  app.get("/api/athlete/programs/:id/chat", requireRole("athlete"), requireFreeAgent, async (req, res) => {
     const user = currentUser(req);
     const id = Number(req.params.id);
     const owned = await assertCoachOwnsProgram(user.id, id);
@@ -1785,7 +1807,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(messages);
   });
 
-  app.post("/api/athlete/programs/:id/chat", requireRole("athlete"), async (req, res) => {
+  app.post("/api/athlete/programs/:id/chat", requireRole("athlete"), requireFreeAgent, async (req, res) => {
     const user = currentUser(req);
     const id = Number(req.params.id);
     const owned = await assertCoachOwnsProgram(user.id, id);
@@ -1799,7 +1821,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // "Full function" AI form check -- see storage.submitFormCheck for why
   // this is the one place the AI critiques technique with no human review
   // step, and why that's gated on the program already being AI-authored.
-  app.post("/api/athlete/programs/:id/form-check", requireRole("athlete"), async (req, res) => {
+  app.post("/api/athlete/programs/:id/form-check", requireRole("athlete"), requireFreeAgent, async (req, res) => {
     const user = currentUser(req);
     const id = Number(req.params.id);
     const owned = await assertCoachOwnsProgram(user.id, id);
@@ -1823,6 +1845,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           eccentricSeconds: z.number().optional().nullable(),
           barPathDeviationCm: z.number().optional().nullable(),
           formFaults: formFaultSchema.array().optional().nullable(),
+          peakPowerWatts: z.number().optional().nullable(),
+          meanPowerWatts: z.number().optional().nullable(),
+          eccentricMeanVelocityMps: z.number().optional().nullable(),
+          romCm: z.number().optional().nullable(),
+          velocityLossPercent: z.number().optional().nullable(),
         })
         .optional(),
     });
@@ -1845,7 +1872,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Same bypass reasoning as /api/admin/my/assignments -- an athlete is
   // never on their own roster, so the coach-roster-membership check that
   // guards /api/coach/assignments would always (incorrectly) fail here.
-  app.post("/api/athlete/my/assignments", requireRole("athlete"), async (req, res) => {
+  app.post("/api/athlete/my/assignments", requireRole("athlete"), requireFreeAgent, async (req, res) => {
     const user = currentUser(req);
     const schema = z.object({
       programId: z.number(),

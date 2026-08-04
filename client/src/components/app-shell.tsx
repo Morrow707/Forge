@@ -72,8 +72,27 @@ export function AppShell({
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [notifSettingsOpen, setNotifSettingsOpen] = useState(false);
+
+  // Same query (and cache) the athlete dashboard's empty-state uses to
+  // decide Free Agent status -- zero coaches linked. The "My Programs" nav
+  // entry only makes sense while that's true: once a coach is on the
+  // account, the AI-programs feature is server-gated off too (see
+  // requireFreeAgent in routes.ts), so leaving the tab visible would just
+  // lead to a 403 instead of actually going away like it's supposed to.
+  const { data: coaches } = useQuery<{ id: number }[]>({
+    queryKey: ["/api/athlete/coaches"],
+    enabled: user?.role === "athlete",
+  });
+  const isFreeAgent = user?.role === "athlete" && !!coaches && coaches.length === 0;
+
   const nav =
-    user?.role === "coach" ? coachNav : user?.role === "admin" ? adminNav : athleteNav;
+    user?.role === "coach"
+      ? coachNav
+      : user?.role === "admin"
+        ? adminNav
+        : isFreeAgent
+          ? athleteNav
+          : athleteNav.filter((item) => item.href !== "/athlete/programs");
 
   const teamBoardUnreadUrl =
     user?.role === "coach"
