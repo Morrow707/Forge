@@ -62,9 +62,10 @@ export function ProgramListPage({
   emptyStateText: string;
   showAssign?: boolean;
   showAiAssist?: boolean;
-  /** Admin-only: assigns a program straight to the admin's own calendar
-   * (coachId === athleteId), separate from showAssign's multi-athlete
-   * roster dialog, which doesn't apply to an admin's own training. */
+  /** Assigns a program straight to the caller's own calendar
+   * (coachId === athleteId) -- admin's own training, or a Free Agent
+   * athlete's self-built program. Separate from showAssign's multi-athlete
+   * roster dialog, which doesn't apply to either of those. */
   showSelfAssign?: boolean;
 }) {
   const qc = useQueryClient();
@@ -190,9 +191,9 @@ export function ProgramListPage({
     onError: (err: ApiError) => toast.error(err.message || "Could not generate a draft"),
   });
 
-  // Self-assignment: coachId === athleteId, both the admin's own id --
-  // lands the program straight on their personal calendar with no roster
-  // or athlete picker involved.
+  // Self-assignment: coachId === athleteId -- lands the program straight on
+  // the caller's own personal calendar with no roster or athlete picker
+  // involved.
   const selfAssignMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", `${apiBase}/my/assignments`, {
@@ -202,7 +203,13 @@ export function ProgramListPage({
       return res.json();
     },
     onSuccess: () => {
+      // The calendar this lands on lives under a different path shape for
+      // each caller (admin's own training is "/api/admin/my/calendar", a
+      // Free Agent athlete's is "/api/athlete/calendar") -- invalidating
+      // both is harmless (a no-op for whichever one has no observers) and
+      // avoids this shared component needing to know which one it's in.
       qc.invalidateQueries({ queryKey: ["/api/admin/my/calendar"] });
+      qc.invalidateQueries({ queryKey: ["/api/athlete/calendar"] });
       toast.success("Added to your calendar");
       setSelfAssignProgramId(null);
     },
