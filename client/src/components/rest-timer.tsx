@@ -3,6 +3,17 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Timer, BellRing } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { playSuccessChime as playChime } from "@/lib/audio-cues";
+import { toast } from "sonner";
+
+// Felt on Android/most PWA contexts (iOS Safari doesn't implement the
+// Vibration API at all, so this silently no-ops there) -- a second,
+// non-audio channel for "rest is over" that doesn't depend on the phone's
+// volume, ringer state, or whatever else might be routing audio.
+function vibrateRestOver() {
+  if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+    navigator.vibrate([300, 150, 300, 150, 300]);
+  }
+}
 
 const PRESETS = [30, 60, 90, 120, 180];
 
@@ -56,9 +67,23 @@ export const RestTimerControl = forwardRef<RestTimerHandle, { defaultSeconds?: n
   useEffect(() => {
     if (!ringing) return;
     playChime();
-    ringIntervalRef.current = setInterval(playChime, 1500);
+    vibrateRestOver();
+    // The bottom-nav pill alone is easy to miss if attention is on the
+    // camera tracker or anywhere else on screen -- a sticky, full-width
+    // toast makes "rest is over" impossible to overlook visually, on top of
+    // the repeating chime + vibration. Stays up (duration: Infinity) until
+    // the athlete dismisses it from either this toast or the pill itself.
+    const toastId = toast.error("Rest time is up!", {
+      duration: Infinity,
+      action: { label: "Dismiss", onClick: () => setRinging(false) },
+    });
+    ringIntervalRef.current = setInterval(() => {
+      playChime();
+      vibrateRestOver();
+    }, 1500);
     return () => {
       if (ringIntervalRef.current) clearInterval(ringIntervalRef.current);
+      toast.dismiss(toastId);
     };
   }, [ringing]);
 

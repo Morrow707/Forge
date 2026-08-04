@@ -31,6 +31,7 @@ import {
   computeRepDepths,
   guessMovementPattern,
   checkFullBodyPose,
+  calibratePixelsPerMeterFromHeight,
   type PoseFrame,
   type MovementGuess,
   type MovementPattern,
@@ -159,6 +160,8 @@ export function BarTrackerDialog({
   onOpenChange,
   mode,
   exerciseName,
+  movementType,
+  athleteHeightCm,
   targetReps,
   loadKg,
   onCapture,
@@ -170,6 +173,13 @@ export function BarTrackerDialog({
   // height, distance, and ground-contact time.
   mode: "bar_path" | "full" | "jump";
   exerciseName: string;
+  // The exercise's movementType (Squat/Hinge/Press/etc.) -- gates which
+  // form faults even make sense to check for (see detectFormFaults).
+  movementType?: string | null;
+  // The athlete's own height in cm, when on file -- lets calibration derive
+  // pixelsPerMeter from the T-pose the pose check already requires instead
+  // of a manual tap-two-points step. Null falls back to manual calibration.
+  athleteHeightCm?: number | null;
   // Auto-stops tracking once this many reps are detected (parsed from the
   // prescribed rep scheme by the caller) -- manual "Stop & Review" always
   // still works too, and non-numeric rep schemes just never trigger this.
@@ -201,6 +211,10 @@ export function BarTrackerDialog({
   const poseCheckGoodSinceRef = useRef<number | null>(null);
   const poseCheckStartRef = useRef(0);
   const poseCheckWarnedRef = useRef(false);
+  // Set the instant the pose check passes, from the athlete's own height --
+  // a ref (not just state) so pixelsPerMeter() can read it synchronously
+  // from inside the tracking rAF loop without waiting on a re-render.
+  const autoPixelsPerMeterRef = useRef<number | null>(null);
 
   const [step, setStep] = useState<Step>("setup");
   const [cameraError, setCameraError] = useState<string | null>(null);
@@ -215,6 +229,10 @@ export function BarTrackerDialog({
   const [calibrationTaps, setCalibrationTaps] = useState<{ x: number; y: number }[]>([]);
   const [calibrationWarning, setCalibrationWarning] = useState<string | null>(null);
   const [referenceCm, setReferenceCm] = useState("220");
+  // Mirrors autoPixelsPerMeterRef for rendering the calibrate step's UI --
+  // true once the pose check has successfully derived a calibration from
+  // the athlete's height, letting them skip manual taps entirely.
+  const [autoCalibratedFromHeight, setAutoCalibratedFromHeight] = useState(false);
   const [liveSpeed, setLiveSpeed] = useState(0);
   const [liveTiltDeg, setLiveTiltDeg] = useState<number | null>(null);
   const [repCount, setRepCount] = useState(0);
@@ -249,6 +267,8 @@ export function BarTrackerDialog({
     poseCheckWarnedRef.current = false;
     setPoseCheckReason(null);
     setPoseCheckTimedOut(false);
+    autoPixelsPerMeterRef.current = null;
+    setAutoCalibratedFromHeight(false);
 
     setModelLoading(true);
     getPoseLandmarker()
@@ -327,16 +347,25 @@ export function BarTrackerDialog({
       if (landmarks) drawSkeleton(ctx, landmarks, overlay.width, overlay.height);
 
       const check = checkFullBodyPose(landmarks);
-      if (check.ready) {
+      // checkFullBodyPose only ever returns ready:true when landmarks was
+      // non-null (its very first check), so `landmarks` is guaranteed here
+      // -- the runtime-landmarks variable just isn't type-linked to
+      // check.ready, hence checking both.
+      if (check.ready && landmarks) {
         setPoseCheckReason(null);
         const now = performance.now();
         if (poseCheckGoodSinceRef.current == null) poseCheckGoodSinceRef.current = now;
         if (now - poseCheckGoodSinceRef.current >= POSE_CHECK_HOLD_MS) {
           playSuccessChime();
+          // Same T-pose moment doubles as calibration when the athlete's
+          // height is on file -- no separate manual tap-two-points step.
+          const auto = calibratePixelsPerMeterFromHeight(landmarks, overlay.height, athleteHeightCm);
+          autoPixelsPerMeterRef.current = auto;
+          setAutoCalibratedFromHeight(auto != null);
           setStep("calibrate");
           return;
         }
-      } else {
+      } else if (!check.ready) {
         poseCheckGoodSinceRef.current = null;
         setPoseCheckReason(check.reason);
         if (!poseCheckWarnedRef.current && performance.now() - poseCheckStartRef.current > POSE_CHECK_TIMEOUT_MS) {
@@ -370,11 +399,16 @@ export function BarTrackerDialog({
   }
 
   function pixelsPerMeter() {
-    if (calibrationTaps.length < 2) return 0;
-    const [p1, p2] = calibrationTaps;
-    const pixelDist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
-    const meters = (Number(referenceCm) || 220) / 100;
-    return pixelDist / meters;
+    // Manual taps always win when present -- tapping two points is the
+    // athlete deliberately overriding the automatic body-based calibration
+    // (e.g. for extra precision against a barbell of known length).
+    if (calibrationTaps.length >= 2) {
+      const [p1, p2] = calibrationTaps;
+      const pixelDist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+      const meters = (Number(referenceCm) || 220) / 100;
+      return pixelDist / meters;
+    }
+    return autoPixelsPerMeterRef.current ?? 0;
   }
 
   function startTracking() {
@@ -496,7 +530,7 @@ export function BarTrackerDialog({
       // Landing mechanics (valgus, forward lean) still matter for a jump;
       // squat-depth judgment and bar-path drift don't -- see the "jump"
       // context branch in detectFormFaults.
-      jumpMetrics.formFaults = detectFormFaults(framesRef.current, 0, "jump");
+      jumpMetrics.formFaults = detectFormFaults(framesRef.current, 0, "jump", movementType);
       if (voiceEnabledRef.current) {
         speak(`Set complete. Best jump ${jumpMetrics.bestJumpHeightCm} centimeters.`);
       }
@@ -511,7 +545,7 @@ export function BarTrackerDialog({
       setStep("calibrate");
       return;
     }
-    metrics.formFaults = detectFormFaults(framesRef.current, metrics.barPathDeviationCm);
+    metrics.formFaults = detectFormFaults(framesRef.current, metrics.barPathDeviationCm, "lift", movementType);
 
     const depths = computeRepDepths(
       framesRef.current,
@@ -630,8 +664,9 @@ export function BarTrackerDialog({
                         : "bg-black/60 text-white",
                     )}
                   >
-                    Bar tilt {Math.abs(liveTiltDeg).toFixed(0)}°{" "}
-                    {Math.abs(liveTiltDeg) > 7 ? (liveTiltDeg > 0 ? "(right low)" : "(left low)") : ""}
+                    {Math.abs(liveTiltDeg) > 7
+                      ? `${Math.abs(liveTiltDeg).toFixed(0)}° toward the ${liveTiltDeg > 0 ? "right" : "left"} arm`
+                      : "Bar level"}
                   </span>
                 </div>
               )}
@@ -710,32 +745,60 @@ export function BarTrackerDialog({
 
         {step === "calibrate" && (
           <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">
-              {calibrationTaps.length === 0
-                ? mode === "jump"
-                  ? "Tap one end of any fixed object of known length in frame (a mat, a yardstick, even your own height marked on a wall)."
-                  : "Tap one end of the bar (or any fixed object of known length)."
-                : calibrationTaps.length === 1
-                  ? "Now tap the other end."
-                  : "Calibration set."}
-            </p>
+            {autoCalibratedFromHeight && calibrationTaps.length === 0 ? (
+              <>
+                <p className="flex items-center gap-2 text-sm font-semibold text-success">
+                  <Check className="h-4 w-4 shrink-0" />
+                  Calibrated automatically from your profile height — ready to go, no marker or
+                  known-length object needed.
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Want to calibrate against a known-length object instead (e.g. an exact barbell
+                  length) for extra precision? Tap one end of it below.
+                </p>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                {calibrationTaps.length === 0
+                  ? mode === "jump"
+                    ? "Tap one end of any fixed object of known length in frame (a mat, a yardstick, even your own height marked on a wall)."
+                    : "Tap one end of the bar (or any fixed object of known length)."
+                  : calibrationTaps.length === 1
+                    ? "Now tap the other end."
+                    : "Calibration set."}
+              </p>
+            )}
             {calibrationWarning && (
               <p className="flex items-center gap-2 text-sm text-amber-500">
                 <AlertTriangle className="h-4 w-4 shrink-0" />
                 {calibrationWarning}
               </p>
             )}
-            <div className="space-y-1.5">
-              <Label className="text-xs uppercase text-muted-foreground">
-                Real-world length between those two points (cm)
-              </Label>
-              <Input
-                type="number"
-                value={referenceCm}
-                onChange={(e) => setReferenceCm(e.target.value)}
-                className="max-w-[10rem]"
-              />
-            </div>
+            {calibrationTaps.length > 0 && (
+              <div className="space-y-1.5">
+                <Label className="text-xs uppercase text-muted-foreground">
+                  Real-world length between those two points (cm)
+                </Label>
+                <Input
+                  type="number"
+                  value={referenceCm}
+                  onChange={(e) => setReferenceCm(e.target.value)}
+                  className="max-w-[10rem]"
+                />
+                {autoCalibratedFromHeight && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCalibrationTaps([]);
+                      setCalibrationWarning(null);
+                    }}
+                    className="text-xs font-semibold text-primary hover:underline"
+                  >
+                    Clear taps, use my height instead
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -907,7 +970,13 @@ export function BarTrackerDialog({
             </>
           )}
           {step === "calibrate" && (
-            <Button onClick={startTracking} disabled={calibrationTaps.length < 2}>
+            <Button
+              onClick={startTracking}
+              disabled={
+                calibrationTaps.length === 1 ||
+                (calibrationTaps.length === 0 && !autoCalibratedFromHeight)
+              }
+            >
               <Video className="h-4 w-4" />
               Start Set
             </Button>

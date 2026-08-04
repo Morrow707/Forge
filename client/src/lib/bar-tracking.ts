@@ -275,10 +275,24 @@ export function summarizeTrackedSet(
     });
   });
 
+  // Robust-statistics approach, not a smoothed max: a wrist briefly
+  // "jumping" to a wrong position for one frame -- e.g. passing in front of
+  // the chest on a bench press -- can throw a single x reading off by a
+  // huge margin, and moving-average smoothing doesn't fix that; it just
+  // spreads the bad frame's influence into its neighbors too (worse still
+  // at the very start/end of the trace, where the averaging window has
+  // fewer real neighbors to dilute it with). The median is unmoved by a
+  // small number of such outliers (its breakdown point is ~50% of the
+  // data), so it anchors "center" reliably even with a few bad frames in
+  // the mix, and the 90th percentile of (raw) deviation from that median
+  // reports how far a genuinely drifting bar path travels while still
+  // excluding the rare single-frame misdetection.
   const xs = rawPoints.map((p) => p.x);
-  const meanX = xs.reduce((a, b) => a + b, 0) / xs.length;
-  const barPathDeviationCm =
-    (Math.max(...xs.map((x) => Math.abs(x - meanX))) / pixelsPerMeter) * 100;
+  const sortedXs = [...xs].sort((a, b) => a - b);
+  const medianX = sortedXs[Math.floor(sortedXs.length / 2)];
+  const sortedDeviations = xs.map((x) => Math.abs(x - medianX)).sort((a, b) => a - b);
+  const p90Idx = Math.min(sortedDeviations.length - 1, Math.floor(sortedDeviations.length * 0.9));
+  const barPathDeviationCm = (sortedDeviations[p90Idx] / pixelsPerMeter) * 100;
 
   const barPathTrace = buildPathTrace(rawPoints, pixelsPerMeter, { x: rawPoints[0].x, y: rawPoints[0].y });
 

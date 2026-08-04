@@ -73,6 +73,7 @@ type ExerciseInfo = {
   equipment: string;
   instructions: string | null;
   videoUrl: string | null;
+  movementType: string | null;
   usesWeight: boolean;
   usesBodyweight: boolean;
   usesBand: boolean;
@@ -306,6 +307,7 @@ type ItemState = {
   equipment: string;
   instructions: string | null;
   videoUrl: string | null;
+  movementType: string | null;
   prescribedSets: number;
   prescribedReps: string;
   prescribedWeight: string | null;
@@ -373,6 +375,7 @@ function buildItem(
     equipment: prescribed.exercise.equipment,
     instructions: prescribed.exercise.instructions,
     videoUrl: prescribed.exercise.videoUrl,
+    movementType: prescribed.exercise.movementType,
     prescribedSets: prescribed.sets,
     prescribedReps: prescribed.reps,
     prescribedWeight: prescribed.weight,
@@ -650,81 +653,187 @@ export function WorkoutPage({
     onError: (err: ApiError) => toast.error(err.message || "Could not update preference"),
   });
 
-  const submitMutation = useMutation({
-    mutationFn: async (completed: boolean) => {
-      const payload = {
-        assignmentId: Number(assignmentId),
-        programDayId: Number(programDayId),
-        date,
-        completed,
-        entries: items.map((it) => ({
-          programExerciseId: it.kind === "exercise" ? it.refId : undefined,
-          correctiveId: it.kind === "corrective" ? it.refId : undefined,
-          weightMode: it.weightMode,
-          rpe: it.rpe ? Number(it.rpe) : null,
-          notes: it.athleteNotes || null,
-          sets: it.sets.map((s) => ({
-            setNumber: s.setNumber,
-            reps: s.reps || null,
-            weight: s.weight || null,
-            bandColor: s.bandColor || null,
-            boxHeight: s.boxHeight || null,
-            boxHeightUnit: s.boxHeight ? s.boxHeightUnit : null,
-            peakVelocityMps: s.peakVelocityMps,
-            meanVelocityMps: s.meanVelocityMps,
-            concentricSeconds: s.concentricSeconds,
-            eccentricSeconds: s.eccentricSeconds,
-            barPathDeviationCm: s.barPathDeviationCm,
-            barPathTrace: s.barPathTrace,
-            formFaults: s.formFaults,
-            repBreakdown: s.repBreakdown,
-            armPathTrace: s.armPathTrace,
-            peakPowerWatts: s.peakPowerWatts,
-            meanPowerWatts: s.meanPowerWatts,
-            eccentricMeanVelocityMps: s.eccentricMeanVelocityMps,
-            romCm: s.romCm,
-            velocityLossPercent: s.velocityLossPercent,
-            formCheckVideoUrl: s.formCheckVideoUrl,
-            formCheckFlag: s.formCheckFlag,
-            jumpHeightCm: s.jumpHeightCm,
-            jumpDistanceCm: s.jumpDistanceCm,
-            groundContactSeconds: s.groundContactSeconds,
-            reactiveStrengthIndex: s.reactiveStrengthIndex,
-            jumpBreakdown: s.jumpBreakdown,
-          })),
+  // Shared by every save path (explicit button taps, debounced autosave, and
+  // the flush-on-close beacon) so they can never drift out of sync with each
+  // other -- takes the items array as a snapshot rather than reading `items`
+  // state directly, since the autosave/capture paths need to save data from
+  // the instant right after a setItems update, before this component has
+  // re-rendered with it.
+  function buildLogPayload(itemsSnapshot: ItemState[], completed: boolean) {
+    return {
+      assignmentId: Number(assignmentId),
+      programDayId: Number(programDayId),
+      date,
+      completed,
+      entries: itemsSnapshot.map((it) => ({
+        programExerciseId: it.kind === "exercise" ? it.refId : undefined,
+        correctiveId: it.kind === "corrective" ? it.refId : undefined,
+        weightMode: it.weightMode,
+        rpe: it.rpe ? Number(it.rpe) : null,
+        notes: it.athleteNotes || null,
+        sets: it.sets.map((s) => ({
+          setNumber: s.setNumber,
+          reps: s.reps || null,
+          weight: s.weight || null,
+          bandColor: s.bandColor || null,
+          boxHeight: s.boxHeight || null,
+          boxHeightUnit: s.boxHeight ? s.boxHeightUnit : null,
+          peakVelocityMps: s.peakVelocityMps,
+          meanVelocityMps: s.meanVelocityMps,
+          concentricSeconds: s.concentricSeconds,
+          eccentricSeconds: s.eccentricSeconds,
+          barPathDeviationCm: s.barPathDeviationCm,
+          barPathTrace: s.barPathTrace,
+          formFaults: s.formFaults,
+          repBreakdown: s.repBreakdown,
+          armPathTrace: s.armPathTrace,
+          peakPowerWatts: s.peakPowerWatts,
+          meanPowerWatts: s.meanPowerWatts,
+          eccentricMeanVelocityMps: s.eccentricMeanVelocityMps,
+          romCm: s.romCm,
+          velocityLossPercent: s.velocityLossPercent,
+          formCheckVideoUrl: s.formCheckVideoUrl,
+          formCheckFlag: s.formCheckFlag,
+          jumpHeightCm: s.jumpHeightCm,
+          jumpDistanceCm: s.jumpDistanceCm,
+          groundContactSeconds: s.groundContactSeconds,
+          reactiveStrengthIndex: s.reactiveStrengthIndex,
+          jumpBreakdown: s.jumpBreakdown,
         })),
-      };
+      })),
+    };
+  }
+
+  const submitMutation = useMutation({
+    mutationFn: async ({
+      completed,
+      itemsSnapshot,
+      silent,
+    }: {
+      completed: boolean;
+      itemsSnapshot?: ItemState[];
+      // Autosaves shouldn't toast on every keystroke-adjacent save or steal
+      // focus with a loading state -- only explicit Save/Complete taps do.
+      silent?: boolean;
+    }) => {
+      const payload = buildLogPayload(itemsSnapshot ?? items, completed);
       try {
         const res = await apiRequest("POST", `${apiBase}/log`, payload);
-        return { synced: true as const, data: await res.json() };
+        return { synced: true as const, data: await res.json(), silent };
       } catch (err) {
         // A real server rejection (bad data, auth, etc) should surface as
         // an error same as always -- only a genuine network failure gets
         // queued for automatic retry.
         if (err instanceof ApiError) throw err;
         queueLog(dayKey, payload);
-        return { synced: false as const, data: null };
+        return { synced: false as const, data: null, silent };
       }
     },
-    onSuccess: ({ synced }, completed) => {
+    onSuccess: ({ synced, silent }, { completed }) => {
+      // The offline banner needs to reflect reality regardless of which
+      // save path triggered it -- only the toast and the query refetch
+      // (items only ever hydrates from `data` once per mount, so refetching
+      // it mid-edit accomplishes nothing but network traffic) are skipped
+      // for a silent autosave.
+      setPendingSync(!synced);
+      if (silent) return;
       qc.invalidateQueries({ queryKey: [`${apiBase}/calendar`] });
       qc.invalidateQueries({ queryKey: [`${apiBase}/day`] });
       if (synced) {
-        setPendingSync(false);
         toast.success(completed ? "Workout marked complete" : "Progress saved");
       } else {
-        setPendingSync(true);
         toast.info("You're offline — saved on this device, will sync automatically");
       }
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not save workout"),
+    onError: (err: ApiError, { silent }) => {
+      if (!silent) toast.error(err.message || "Could not save workout");
+    },
   });
 
-  function updateItem(key: string, patch: Partial<ItemState>) {
-    setItems((prev) => prev.map((it) => (it.key === key ? { ...it, ...patch } : it)));
+  // Kept in sync with `items` on every render so the flush-on-close handler
+  // (registered once, not re-attached on every keystroke) can always read
+  // the latest state without a stale closure.
+  const itemsRef = useRef(items);
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
+
+  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dayCompletedRef = useRef(false);
+  useEffect(() => {
+    dayCompletedRef.current = data?.log?.completed ?? false;
+  }, [data?.log?.completed]);
+
+  // Debounced background save on any field edit -- weight, reps, RPE, notes,
+  // camera-tracked metrics, all of it. Takes the just-computed items array
+  // directly (not the `items` state) so it never races the setItems update
+  // that triggered it. Preserves whatever the day's completed flag already
+  // was rather than forcing it false, so a background save can't silently
+  // un-complete an already-finished workout.
+  function scheduleAutosave(nextItems: ItemState[]) {
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    autosaveTimerRef.current = setTimeout(() => {
+      autosaveTimerRef.current = null;
+      submitMutation.mutate({
+        completed: dayCompletedRef.current,
+        itemsSnapshot: nextItems,
+        silent: true,
+      });
+    }, 1200);
   }
 
-  function updateSet(key: string, setNumber: number, patch: Partial<SetRow>) {
+  // Bypasses the debounce entirely for data that's expensive to redo (a
+  // completed camera-tracked set, a saved form-check video) -- a force-close
+  // landing inside the debounce window would otherwise still lose it.
+  function autosaveNow(nextItems: ItemState[]) {
+    if (autosaveTimerRef.current) {
+      clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
+    submitMutation.mutate({
+      completed: dayCompletedRef.current,
+      itemsSnapshot: nextItems,
+      silent: true,
+    });
+  }
+
+  // Last-resort save for an actual force-close: sendBeacon fires-and-forgets
+  // a request that survives the page tearing down, unlike a normal
+  // fetch/XHR which can get cancelled mid-flight the instant the tab/app
+  // closes. Registered once (not re-attached per keystroke) and always
+  // reads itemsRef.current for the freshest snapshot at the moment it fires.
+  useEffect(() => {
+    function flush() {
+      if (typeof navigator.sendBeacon !== "function") return;
+      const payload = buildLogPayload(itemsRef.current, dayCompletedRef.current);
+      const blob = new Blob([JSON.stringify(payload)], { type: "application/json" });
+      navigator.sendBeacon(`${apiBase}/log`, blob);
+    }
+    function handleVisibilityChange() {
+      if (document.visibilityState === "hidden") flush();
+    }
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("pagehide", flush);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("pagehide", flush);
+    };
+    // apiBase is static for the life of this page; only needs to run once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function updateItem(key: string, patch: Partial<ItemState>) {
+    setItems((prev) => {
+      const next = prev.map((it) => (it.key === key ? { ...it, ...patch } : it));
+      scheduleAutosave(next);
+      return next;
+    });
+  }
+
+  // `immediate` bypasses the debounce for data that's expensive to redo (a
+  // completed camera-tracked capture, a saved form-check video) -- see
+  // autosaveNow's comment for why those can't wait out the debounce window.
+  function updateSet(key: string, setNumber: number, patch: Partial<SetRow>, options?: { immediate?: boolean }) {
     setItems((prev) => {
       let restOnComplete: number | null = null;
       const next = prev.map((it) => {
@@ -743,13 +852,15 @@ export function WorkoutPage({
         };
       });
       if (restOnComplete !== null) restTimerRef.current?.autoStart(restOnComplete);
+      if (options?.immediate) autosaveNow(next);
+      else scheduleAutosave(next);
       return next;
     });
   }
 
   function addSet(key: string) {
-    setItems((prev) =>
-      prev.map((it) => {
+    setItems((prev) => {
+      const next = prev.map((it) => {
         if (it.key !== key) return it;
         const nextNumber = it.sets.length > 0 ? it.sets[it.sets.length - 1].setNumber + 1 : 1;
         return {
@@ -787,14 +898,20 @@ export function WorkoutPage({
             },
           ],
         };
-      }),
-    );
+      });
+      scheduleAutosave(next);
+      return next;
+    });
   }
 
   function removeSet(key: string) {
-    setItems((prev) =>
-      prev.map((it) => (it.key === key && it.sets.length > 1 ? { ...it, sets: it.sets.slice(0, -1) } : it)),
-    );
+    setItems((prev) => {
+      const next = prev.map((it) =>
+        it.key === key && it.sets.length > 1 ? { ...it, sets: it.sets.slice(0, -1) } : it,
+      );
+      scheduleAutosave(next);
+      return next;
+    });
   }
 
   if (isLoading || !data) {
@@ -1017,7 +1134,7 @@ export function WorkoutPage({
                   </Button>
                   <Button
                     className="flex-1"
-                    onClick={() => submitMutation.mutate(true)}
+                    onClick={() => submitMutation.mutate({ completed: true })}
                     disabled={submitMutation.isPending}
                   >
                     <CheckCircle2 className="h-4 w-4" />
@@ -1059,6 +1176,7 @@ export function WorkoutPage({
                         linked={currentPage.kind === "exercise" && currentPage.items.length > 1}
                         badgeLabel={currentPage.labels[item.key]}
                         unit={unit}
+                        athleteHeightCm={user?.heightIn ? user.heightIn * 2.54 : null}
                         assignmentId={Number(assignmentId)}
                         programDayId={Number(programDayId)}
                         apiBase={apiBase}
@@ -1067,7 +1185,7 @@ export function WorkoutPage({
                         programId={data.programId}
                         dayTitle={data.day.title}
                         onUpdateItem={(patch) => updateItem(item.key, patch)}
-                        onUpdateSet={(setNumber, patch) => updateSet(item.key, setNumber, patch)}
+                        onUpdateSet={(setNumber, patch, options) => updateSet(item.key, setNumber, patch, options)}
                         onAddSet={() => addSet(item.key)}
                         onRemoveSet={() => removeSet(item.key)}
                       />
@@ -1080,7 +1198,7 @@ export function WorkoutPage({
                 <Button
                   variant="outline"
                   className="flex-1"
-                  onClick={() => submitMutation.mutate(false)}
+                  onClick={() => submitMutation.mutate({ completed: false })}
                   disabled={submitMutation.isPending}
                 >
                   Save Progress
@@ -1089,7 +1207,7 @@ export function WorkoutPage({
                   <Button
                     className="flex-1"
                     onClick={() => {
-                      submitMutation.mutate(false);
+                      submitMutation.mutate({ completed: false });
                       setPageIndex((p) => p + 1);
                     }}
                     disabled={submitMutation.isPending}
@@ -1101,7 +1219,7 @@ export function WorkoutPage({
                   <Button
                     className="flex-1"
                     onClick={() => {
-                      submitMutation.mutate(true);
+                      submitMutation.mutate({ completed: true });
                       setViewMode("overview");
                     }}
                     disabled={submitMutation.isPending}
@@ -1161,6 +1279,7 @@ function ExerciseLogContent({
   linked,
   badgeLabel,
   unit,
+  athleteHeightCm,
   assignmentId,
   programDayId,
   apiBase,
@@ -1177,6 +1296,10 @@ function ExerciseLogContent({
   linked: boolean;
   badgeLabel: string;
   unit: "lbs" | "kg";
+  // The athlete's own height, converted to cm -- lets the camera tracker
+  // auto-calibrate from the T-pose it already requires instead of a manual
+  // tap-two-points step. Null when the profile has no height on file.
+  athleteHeightCm: number | null;
   assignmentId: number;
   programDayId: number;
   apiBase: string;
@@ -1185,7 +1308,7 @@ function ExerciseLogContent({
   programId: number;
   dayTitle: string;
   onUpdateItem: (patch: Partial<ItemState>) => void;
-  onUpdateSet: (setNumber: number, patch: Partial<SetRow>) => void;
+  onUpdateSet: (setNumber: number, patch: Partial<SetRow>, options?: { immediate?: boolean }) => void;
   onAddSet: () => void;
   onRemoveSet: () => void;
 }) {
@@ -1709,38 +1832,51 @@ function ExerciseLogContent({
               onOpenChange={(open) => !open && setTrackingSet(null)}
               mode={item.trackingLevel}
               exerciseName={item.exerciseName}
+              movementType={item.movementType}
+              athleteHeightCm={athleteHeightCm}
               targetReps={parseTargetReps(item.prescribedReps)}
               loadKg={loadKg}
               onCapture={(metrics: RepMetrics | JumpSetMetrics) => {
                 if (trackingSet == null) return;
                 if ("bestJumpHeightCm" in metrics) {
-                  onUpdateSet(trackingSet, {
-                    jumpHeightCm: metrics.bestJumpHeightCm,
-                    jumpDistanceCm: metrics.bestHorizontalDistanceCm,
-                    groundContactSeconds: metrics.avgGroundContactSeconds,
-                    reactiveStrengthIndex: metrics.reactiveStrengthIndex,
-                    jumpBreakdown: metrics.repBreakdown,
-                    barPathTrace: metrics.pathTrace,
-                    formFaults: metrics.formFaults,
-                  });
+                  onUpdateSet(
+                    trackingSet,
+                    {
+                      jumpHeightCm: metrics.bestJumpHeightCm,
+                      jumpDistanceCm: metrics.bestHorizontalDistanceCm,
+                      groundContactSeconds: metrics.avgGroundContactSeconds,
+                      reactiveStrengthIndex: metrics.reactiveStrengthIndex,
+                      jumpBreakdown: metrics.repBreakdown,
+                      barPathTrace: metrics.pathTrace,
+                      formFaults: metrics.formFaults,
+                    },
+                    // A tracked capture is expensive to redo -- save it the
+                    // instant it lands rather than risk losing it to a
+                    // force-close inside the normal autosave debounce window.
+                    { immediate: true },
+                  );
                   return;
                 }
-                onUpdateSet(trackingSet, {
-                  peakVelocityMps: metrics.peakVelocityMps,
-                  meanVelocityMps: metrics.meanVelocityMps,
-                  concentricSeconds: metrics.concentricSeconds,
-                  eccentricSeconds: metrics.eccentricSeconds,
-                  barPathDeviationCm: metrics.barPathDeviationCm,
-                  barPathTrace: metrics.barPathTrace,
-                  formFaults: metrics.formFaults,
-                  repBreakdown: metrics.repBreakdown,
-                  armPathTrace: metrics.armPathTrace ?? null,
-                  peakPowerWatts: metrics.peakPowerWatts,
-                  meanPowerWatts: metrics.meanPowerWatts,
-                  eccentricMeanVelocityMps: metrics.eccentricMeanVelocityMps,
-                  romCm: metrics.romCm,
-                  velocityLossPercent: metrics.velocityLossPercent,
-                });
+                onUpdateSet(
+                  trackingSet,
+                  {
+                    peakVelocityMps: metrics.peakVelocityMps,
+                    meanVelocityMps: metrics.meanVelocityMps,
+                    concentricSeconds: metrics.concentricSeconds,
+                    eccentricSeconds: metrics.eccentricSeconds,
+                    barPathDeviationCm: metrics.barPathDeviationCm,
+                    barPathTrace: metrics.barPathTrace,
+                    formFaults: metrics.formFaults,
+                    repBreakdown: metrics.repBreakdown,
+                    armPathTrace: metrics.armPathTrace ?? null,
+                    peakPowerWatts: metrics.peakPowerWatts,
+                    meanPowerWatts: metrics.meanPowerWatts,
+                    eccentricMeanVelocityMps: metrics.eccentricMeanVelocityMps,
+                    romCm: metrics.romCm,
+                    velocityLossPercent: metrics.velocityLossPercent,
+                  },
+                  { immediate: true },
+                );
               }}
             />
           );
@@ -1752,7 +1888,7 @@ function ExerciseLogContent({
           onOpenChange={(open) => !open && setRecordingSetNumber(null)}
           onSaved={(url) => {
             if (recordingSetNumber == null) return;
-            onUpdateSet(recordingSetNumber, { formCheckVideoUrl: url });
+            onUpdateSet(recordingSetNumber, { formCheckVideoUrl: url }, { immediate: true });
             if (videoCheckMode === "ai") aiFormCheckMutation.mutate({ setNumber: recordingSetNumber, videoUrl: url });
             else postFormVideoMutation.mutate({ setNumber: recordingSetNumber, videoUrl: url });
             setRecordingSetNumber(null);
