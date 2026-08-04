@@ -98,6 +98,24 @@ export function deriveBarPoint(
   return { x: x * frameWidth, y: y * frameHeight };
 }
 
+// Signed tilt of the wrist-to-wrist line from horizontal, in degrees -- 0 is
+// level, positive means the right hand is lower than the left. This is the
+// same idea as an oriented bounding box around the bar (its rotation angle
+// relative to horizontal), but reuses landmarks we already track every
+// frame instead of needing a separate rotated-object detector. Only
+// meaningful when the hands are meaningfully apart horizontally (i.e. an
+// actual barbell/handle grip), so returns null for single-arm work or any
+// frame where the hands are stacked rather than spread on a bar.
+export function computeBarTiltDegrees(landmarks: NormalizedLandmark[]): number | null {
+  const left = landmarks[POSE_LANDMARKS.LEFT_WRIST];
+  const right = landmarks[POSE_LANDMARKS.RIGHT_WRIST];
+  if (!visible(left) || !visible(right)) return null;
+  const dx = right.x - left.x;
+  const dy = right.y - left.y;
+  if (Math.abs(dx) < 0.05) return null;
+  return (Math.atan2(dy, dx) * 180) / Math.PI;
+}
+
 // Angle in degrees at vertex `b`, given three normalized-space points.
 function angleAtVertex(
   a: { x: number; y: number },
@@ -115,7 +133,7 @@ function angleAtVertex(
 }
 
 export type FormFault = {
-  code: "shallow_depth" | "knee_valgus" | "forward_lean" | "bar_path_drift";
+  code: "shallow_depth" | "knee_valgus" | "forward_lean" | "bar_path_drift" | "bar_tilt";
   label: string;
 };
 
@@ -136,9 +154,13 @@ export function detectFormFaults(
   const kneeAngles: number[] = [];
   const valgusRatios: number[] = [];
   const torsoAngles: number[] = [];
+  const tiltAngles: number[] = [];
 
   for (const frame of frames) {
     const lm = frame.landmarks;
+    const tilt = computeBarTiltDegrees(lm);
+    if (tilt != null) tiltAngles.push(tilt);
+
     const lHip = lm[POSE_LANDMARKS.LEFT_HIP];
     const rHip = lm[POSE_LANDMARKS.RIGHT_HIP];
     const lKnee = lm[POSE_LANDMARKS.LEFT_KNEE];
@@ -213,6 +235,19 @@ export function detectFormFaults(
       code: "bar_path_drift",
       label: `Bar drifted ${barPathDeviationCm}cm off a straight vertical line`,
     });
+  }
+
+  if (tiltAngles.length) {
+    // Worst (largest-magnitude) tilt observed, keeping its sign so the
+    // label can say which side was dropping.
+    const worstTilt = tiltAngles.reduce((worst, t) => (Math.abs(t) > Math.abs(worst) ? t : worst), 0);
+    if (Math.abs(worstTilt) > 7) {
+      const side = worstTilt > 0 ? "right" : "left";
+      faults.push({
+        code: "bar_tilt",
+        label: `Bar tilted ~${Math.round(Math.abs(worstTilt))}° (${side} side dropping)`,
+      });
+    }
   }
 
   return faults;

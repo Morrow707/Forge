@@ -22,6 +22,7 @@ import {
   getPoseLandmarker,
   deriveBarPoint,
   detectFormFaults,
+  computeBarTiltDegrees,
   type PoseFrame,
 } from "@/lib/pose-tracking";
 import { PoseLandmarker, type NormalizedLandmark } from "@mediapipe/tasks-vision";
@@ -112,6 +113,7 @@ export function BarTrackerDialog({
   const [calibrationWarning, setCalibrationWarning] = useState<string | null>(null);
   const [referenceCm, setReferenceCm] = useState("220");
   const [liveSpeed, setLiveSpeed] = useState(0);
+  const [liveTiltDeg, setLiveTiltDeg] = useState<number | null>(null);
   const [repCount, setRepCount] = useState(0);
   const [poseVisible, setPoseVisible] = useState(true);
   const [result, setResult] = useState<RepMetrics | null>(null);
@@ -128,6 +130,7 @@ export function BarTrackerDialog({
     traceRef.current = [];
     framesRef.current = [];
     lastVideoTimeRef.current = -1;
+    setLiveTiltDeg(null);
 
     setModelLoading(true);
     getPoseLandmarker()
@@ -198,6 +201,7 @@ export function BarTrackerDialog({
     lastVideoTimeRef.current = -1;
     repCountRef.current = 0;
     setRepCount(0);
+    setLiveTiltDeg(null);
     tick();
   }
 
@@ -228,6 +232,7 @@ export function BarTrackerDialog({
     const result = landmarker.detectForVideo(video, now);
     const landmarks = result.landmarks[0] ?? null;
     setPoseVisible(!!landmarks);
+    setLiveTiltDeg(landmarks ? computeBarTiltDegrees(landmarks) : null);
 
     if (landmarks) {
       drawSkeleton(ctx, landmarks, overlay.width, overlay.height);
@@ -337,24 +342,41 @@ export function BarTrackerDialog({
           )}
 
           {step === "tracking" && (
-            <div className="absolute inset-x-0 top-0 flex items-center justify-between p-3">
-              <span
-                className={cn(
-                  "rounded-full px-2.5 py-1 text-xs font-bold",
-                  poseVisible ? "bg-success/80 text-success-foreground" : "bg-destructive/80 text-white",
-                )}
-              >
-                {poseVisible ? "Tracking" : "Body not visible"}
-              </span>
-              {mode === "full" && (
-                <span className="rounded-full bg-black/60 px-3 py-1 font-display text-lg font-bold text-white">
-                  {liveSpeed.toFixed(2)} m/s
+            <div className="absolute inset-x-0 top-0 flex flex-col gap-1.5 p-3">
+              <div className="flex items-center justify-between">
+                <span
+                  className={cn(
+                    "rounded-full px-2.5 py-1 text-xs font-bold",
+                    poseVisible ? "bg-success/80 text-success-foreground" : "bg-destructive/80 text-white",
+                  )}
+                >
+                  {poseVisible ? "Tracking" : "Body not visible"}
                 </span>
+                {mode === "full" && (
+                  <span className="rounded-full bg-black/60 px-3 py-1 font-display text-lg font-bold text-white">
+                    {liveSpeed.toFixed(2)} m/s
+                  </span>
+                )}
+                <span className="rounded-full bg-black/60 px-2.5 py-1 text-xs font-bold text-white">
+                  {repCount}
+                  {targetReps ? `/${targetReps}` : ""} reps
+                </span>
+              </div>
+              {liveTiltDeg != null && (
+                <div className="flex justify-center">
+                  <span
+                    className={cn(
+                      "rounded-full px-2.5 py-1 text-[11px] font-semibold",
+                      Math.abs(liveTiltDeg) > 7
+                        ? "bg-amber-500/80 text-black"
+                        : "bg-black/60 text-white",
+                    )}
+                  >
+                    Bar tilt {Math.abs(liveTiltDeg).toFixed(0)}°{" "}
+                    {Math.abs(liveTiltDeg) > 7 ? (liveTiltDeg > 0 ? "(right low)" : "(left low)") : ""}
+                  </span>
+                </div>
               )}
-              <span className="rounded-full bg-black/60 px-2.5 py-1 text-xs font-bold text-white">
-                {repCount}
-                {targetReps ? `/${targetReps}` : ""} reps
-              </span>
             </div>
           )}
 
