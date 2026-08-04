@@ -61,6 +61,15 @@ type AnalyticsPoint = {
   eccentricMeanVelocityMps: number | null;
   romCm: number | null;
   velocityLossPercent: number | null;
+  jumpHeightCm: number | null;
+  jumpDistanceCm: number | null;
+  groundContactSeconds: number | null;
+  reactiveStrengthIndex: number | null;
+  jumpBreakdown: {
+    repNumber: number;
+    jumpHeightCm: number;
+    groundContactSeconds: number | null;
+  }[] | null;
 };
 
 const FAULT_NAMES: Record<string, string> = {
@@ -132,6 +141,10 @@ export default function CoachAnalytics() {
   const hasPower = chartData.some((p) => p.peakPowerWatts != null || p.meanPowerWatts != null);
   const hasRom = chartData.some((p) => p.romCm != null);
   const hasVelocityLoss = chartData.some((p) => p.velocityLossPercent != null);
+  const hasJumpHeight = chartData.some((p) => p.jumpHeightCm != null || p.jumpDistanceCm != null);
+  const hasGroundContact = chartData.some(
+    (p) => p.groundContactSeconds != null || p.reactiveStrengthIndex != null,
+  );
   // The actual x/y shape of the bar's path, not just the scalar deviation
   // number above -- capped to the 5 most recent tracked sets so overlaying
   // them stays readable instead of an unreadable tangle.
@@ -153,7 +166,9 @@ export default function CoachAnalytics() {
   // Form-fault frequency by week, from the same tracked-set history already
   // fetched above -- no separate query needed. Turns one-off in-session
   // flags into a trend a coach can actually program around.
-  const trackedPoints = chartData.filter((p) => p.peakVelocityMps != null || p.barPathDeviationCm != null);
+  const trackedPoints = chartData.filter(
+    (p) => p.peakVelocityMps != null || p.barPathDeviationCm != null || p.jumpHeightCm != null,
+  );
   const faultCodesSeen = Array.from(
     new Set(trackedPoints.flatMap((p) => (p.formFaults ?? []).map((f) => f.code))),
   );
@@ -540,6 +555,96 @@ export default function CoachAnalytics() {
             </Card>
           )}
 
+          {hasJumpHeight && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Jump Height &amp; Distance</CardTitle>
+                <CardDescription>
+                  Flight-time-derived jump height, and horizontal distance for broad jumps, per
+                  tracked set.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={chartData} margin={{ left: 4, right: 12 }}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                    <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} width={40} unit="cm" />
+                    <Tooltip
+                      contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))" }}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <Line
+                      type="monotone"
+                      dataKey="jumpHeightCm"
+                      name="Jump height"
+                      stroke="hsl(var(--primary))"
+                      strokeWidth={2}
+                      connectNulls
+                      dot={{ r: 3 }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="jumpDistanceCm"
+                      name="Broad jump distance"
+                      stroke="#3b82f6"
+                      strokeWidth={2}
+                      connectNulls
+                      dot={{ r: 3 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
+          {hasGroundContact && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Ground Contact &amp; Reactive Strength</CardTitle>
+                <CardDescription>
+                  Time on the ground between jumps, and Reactive Strength Index (jump height ÷
+                  ground contact time) -- the standard power/reactivity metric for repeated
+                  jumps.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="h-56">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={chartData} margin={{ left: 4, right: 12 }}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                    <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                    <YAxis yAxisId="left" tick={{ fontSize: 11 }} width={40} unit="s" />
+                    <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} width={40} />
+                    <Tooltip
+                      contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))" }}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <Line
+                      yAxisId="left"
+                      type="monotone"
+                      dataKey="groundContactSeconds"
+                      name="Ground contact"
+                      stroke="#f59e0b"
+                      strokeWidth={2}
+                      connectNulls
+                      dot={{ r: 3 }}
+                    />
+                    <Line
+                      yAxisId="right"
+                      type="monotone"
+                      dataKey="reactiveStrengthIndex"
+                      name="RSI"
+                      stroke="#a855f7"
+                      strokeWidth={2}
+                      connectNulls
+                      dot={{ r: 3 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
           {pathTraceSets.length > 0 && (
             <Card>
               <CardHeader>
@@ -801,6 +906,7 @@ export default function CoachAnalytics() {
                     <th className="py-1.5 pr-3">Peak m/s</th>
                     <th className="py-1.5 pr-3">Power (W)</th>
                     <th className="py-1.5 pr-3">Path (cm)</th>
+                    <th className="py-1.5 pr-3">Jump (cm)</th>
                     <th className="py-1.5 pr-3">Form notes</th>
                     <th className="py-1.5">PR</th>
                   </tr>
@@ -833,6 +939,7 @@ export default function CoachAnalytics() {
                       <td className="py-1.5 pr-3">{p.peakVelocityMps ?? "-"}</td>
                       <td className="py-1.5 pr-3">{p.peakPowerWatts ?? "-"}</td>
                       <td className="py-1.5 pr-3">{p.barPathDeviationCm ?? "-"}</td>
+                      <td className="py-1.5 pr-3">{p.jumpHeightCm ?? "-"}</td>
                       <td className="py-1.5 pr-3">
                         {p.formFaults && p.formFaults.length > 0 ? (
                           <div className="flex flex-wrap gap-1">

@@ -104,7 +104,11 @@ export function buildPathTrace(
 
 const SMOOTHING_WINDOW = 5;
 
-function movingAverage(values: number[], window: number): number[] {
+// Exported for jump-tracking.ts, which reuses this same smoothing +
+// phase-segmentation pipeline on an ankle trace instead of a wrist/bar
+// trace -- the zigzag logic below has no idea what it's tracking, so
+// there's no reason to duplicate it for a second signal source.
+export function movingAverage(values: number[], window: number): number[] {
   const out: number[] = [];
   for (let i = 0; i < values.length; i++) {
     const start = Math.max(0, i - Math.floor(window / 2));
@@ -135,7 +139,7 @@ function computeSpeeds(points: TrackedPoint[], positions: number[]): number[] {
 // (rather than the most recent extreme) would miss the reversal almost
 // entirely -- it wouldn't register until the *next* phase re-passed the
 // previous phase's starting value.
-function segmentPhases(
+export function segmentPhases(
   positions: number[],
   minAmplitude: number,
 ): { startIdx: number; endIdx: number }[] {

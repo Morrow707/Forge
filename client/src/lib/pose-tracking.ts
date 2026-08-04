@@ -79,6 +79,83 @@ function visible(lm: NormalizedLandmark | undefined): lm is NormalizedLandmark {
   return !!lm && lm.visibility >= MIN_VISIBILITY;
 }
 
+const POSE_CHECK_LANDMARKS = [
+  POSE_LANDMARKS.LEFT_SHOULDER,
+  POSE_LANDMARKS.RIGHT_SHOULDER,
+  POSE_LANDMARKS.LEFT_WRIST,
+  POSE_LANDMARKS.RIGHT_WRIST,
+  POSE_LANDMARKS.LEFT_HIP,
+  POSE_LANDMARKS.RIGHT_HIP,
+  POSE_LANDMARKS.LEFT_KNEE,
+  POSE_LANDMARKS.RIGHT_KNEE,
+  POSE_LANDMARKS.LEFT_ANKLE,
+  POSE_LANDMARKS.RIGHT_ANKLE,
+];
+
+export type PoseCheckReason =
+  | "no_person"
+  | "not_fully_visible"
+  | "too_far"
+  | "arms_not_extended"
+  | "feet_together";
+
+export type PoseCheckResult = { ready: true } | { ready: false; reason: PoseCheckReason };
+
+// Pre-flight "stand in a T-pose" check (see bar-tracker-dialog.tsx's
+// "posecheck" step) -- confirms the whole body is actually visible and the
+// limbs are held clear of the torso before the athlete starts a set,
+// rather than finding out only after tracking that a key landmark was
+// occluded the whole time. Deliberately forgiving about exactly how the
+// arms are extended (out to the sides or raised overhead both pass) since
+// a literal side-on T-pose foreshortens one arm toward the camera --
+// what actually matters is confirming every core joint is visible with
+// limbs away from the body, not matching one specific silhouette. Returns
+// a specific reason on failure so the UI can tell the athlete exactly what
+// to fix (too far, can't see your feet, etc.) instead of a generic retry.
+export function checkFullBodyPose(landmarks: NormalizedLandmark[] | null): PoseCheckResult {
+  if (!landmarks) return { ready: false, reason: "no_person" };
+  if (!POSE_CHECK_LANDMARKS.every((idx) => visible(landmarks[idx]))) {
+    // Missing landmarks from a still, deliberately-posed athlete almost
+    // always means part of them is outside the frame -- the standard fix
+    // is "step back", regardless of which specific joint dropped out.
+    return { ready: false, reason: "not_fully_visible" };
+  }
+
+  const lShoulder = landmarks[POSE_LANDMARKS.LEFT_SHOULDER];
+  const rShoulder = landmarks[POSE_LANDMARKS.RIGHT_SHOULDER];
+  const lWrist = landmarks[POSE_LANDMARKS.LEFT_WRIST];
+  const rWrist = landmarks[POSE_LANDMARKS.RIGHT_WRIST];
+  const lHip = landmarks[POSE_LANDMARKS.LEFT_HIP];
+  const rHip = landmarks[POSE_LANDMARKS.RIGHT_HIP];
+  const lAnkle = landmarks[POSE_LANDMARKS.LEFT_ANKLE];
+  const rAnkle = landmarks[POSE_LANDMARKS.RIGHT_ANKLE];
+
+  const shoulderMid = { x: (lShoulder.x + rShoulder.x) / 2, y: (lShoulder.y + rShoulder.y) / 2 };
+  const hipMid = { x: (lHip.x + rHip.x) / 2, y: (lHip.y + rHip.y) / 2 };
+  const torsoHeight = Math.hypot(shoulderMid.x - hipMid.x, shoulderMid.y - hipMid.y);
+  // Every landmark is visible but the whole body reads tiny in frame --
+  // the opposite problem from not_fully_visible, and needs the opposite
+  // fix (step closer, not back).
+  if (torsoHeight < 0.05) return { ready: false, reason: "too_far" };
+
+  // Wrist at or above shoulder height, not just "far from the shoulder" --
+  // a relaxed arm hanging at the side already puts the wrist roughly one
+  // arm-length (about a torso height) from the shoulder, so distance alone
+  // can't tell "hanging down" from "raised out/overhead" apart. Height
+  // relative to the shoulder can: both a level T-pose and an overhead
+  // raise put the wrist at or above shoulder height, while a hanging arm
+  // never does.
+  const armsExtended =
+    lWrist.y <= lShoulder.y + torsoHeight * 0.15 && rWrist.y <= rShoulder.y + torsoHeight * 0.15;
+  if (!armsExtended) return { ready: false, reason: "arms_not_extended" };
+
+  const hipWidth = Math.abs(rHip.x - lHip.x);
+  const ankleSpread = Math.abs(rAnkle.x - lAnkle.x);
+  if (ankleSpread <= hipWidth * 1.3) return { ready: false, reason: "feet_together" };
+
+  return { ready: true };
+}
+
 // The tracker's "bar point" was always really a stand-in for whatever the
 // athlete is moving -- the wrist midpoint is that same stand-in without
 // needing a physical marker: for barbell/dumbbell lifts it tracks the
@@ -114,6 +191,26 @@ export function computeBarTiltDegrees(landmarks: NormalizedLandmark[]): number |
   const dy = right.y - left.y;
   if (Math.abs(dx) < 0.05) return null;
   return (Math.atan2(dy, dx) * 180) / Math.PI;
+}
+
+// The tracked point for "jump" mode -- the ankle midpoint rather than the
+// wrist midpoint, since a jump has no implement to follow and the ankle
+// joint is the cleanest ground-contact proxy available from the skeleton
+// (it barely moves vertically until push-off, unlike the hip or knee,
+// which shift throughout the crouch). See jump-tracking.ts for how this
+// point's trace becomes flight time, height, and distance.
+export function deriveJumpPoint(
+  landmarks: NormalizedLandmark[],
+  frameWidth: number,
+  frameHeight: number,
+): { x: number; y: number } | null {
+  const left = landmarks[POSE_LANDMARKS.LEFT_ANKLE];
+  const right = landmarks[POSE_LANDMARKS.RIGHT_ANKLE];
+  const points = [left, right].filter(visible);
+  if (points.length === 0) return null;
+  const x = points.reduce((a, p) => a + p.x, 0) / points.length;
+  const y = points.reduce((a, p) => a + p.y, 0) / points.length;
+  return { x: x * frameWidth, y: y * frameHeight };
 }
 
 // Each wrist's own screen-space position, independent of deriveBarPoint's
@@ -200,6 +297,13 @@ export type FormFault = {
 export function detectFormFaults(
   frames: PoseFrame[],
   barPathDeviationCm: number,
+  // "jump" landings/crouches are a different judgment call than a squat's:
+  // a shallow countermovement is normal (even correct) for a vertical
+  // jump, and there's no bar to drift off a straight line -- horizontal
+  // travel during a jump might just be an intentional broad jump. Valgus
+  // and forward-lean still apply to a jump's landing mechanics, so those
+  // stay on regardless of context.
+  context: "lift" | "jump" = "lift",
 ): FormFault[] {
   const faults: FormFault[] = [];
   if (frames.length < 6) return faults;
@@ -251,7 +355,7 @@ export function detectFormFaults(
   // move, so those never get a nonsensical "shallow depth" flag.
   const isKneeDrivenMovement = kneeRangeOfMotion > 25;
 
-  if (isKneeDrivenMovement && minKneeAngle > 100) {
+  if (context === "lift" && isKneeDrivenMovement && minKneeAngle > 100) {
     faults.push({
       code: "shallow_depth",
       label: `Depth: knees only reached ~${Math.round(minKneeAngle)}° -- aim to break parallel`,
@@ -278,7 +382,7 @@ export function detectFormFaults(
     }
   }
 
-  if (barPathDeviationCm > 8) {
+  if (context === "lift" && barPathDeviationCm > 8) {
     faults.push({
       code: "bar_path_drift",
       label: `Bar drifted ${barPathDeviationCm}cm off a straight vertical line`,

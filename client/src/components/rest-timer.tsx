@@ -2,37 +2,9 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "re
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Timer, BellRing } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { playSuccessChime as playChime } from "@/lib/audio-cues";
 
 const PRESETS = [30, 60, 90, 120, 180];
-
-// Web Audio output mixes with any other audio source (music, video, a call)
-// rather than pausing/ducking it, and isn't subject to a silent-mode switch
-// the way an <audio> element can be on iOS -- this is what makes it audible
-// over headphones/media instead of a normal chime getting lost underneath.
-function playChime() {
-  try {
-    const AudioCtx = window.AudioContext ?? (window as any).webkitAudioContext;
-    const ctx = new AudioCtx();
-    // Three quick beeps instead of one soft tone -- easier to notice over
-    // music/headphones, and reads unambiguously as "timer done" rather than
-    // a generic notification sound.
-    [0, 0.25, 0.5].forEach((delay) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.frequency.value = 880;
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      const start = ctx.currentTime + delay;
-      gain.gain.setValueAtTime(0.35, start);
-      gain.gain.exponentialRampToValueAtTime(0.001, start + 0.2);
-      osc.start(start);
-      osc.stop(start + 0.2);
-    });
-    setTimeout(() => ctx.close(), 900);
-  } catch {
-    // Web Audio isn't available in every environment -- the timer still works, just silently.
-  }
-}
 
 function formatClock(seconds: number) {
   const m = Math.floor(seconds / 60);

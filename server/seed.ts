@@ -1090,13 +1090,15 @@ async function main() {
               },
               {
                 dayNumber: 3,
-                title: "Bar Speed Lab",
+                title: "Bar Speed & Jump Lab",
                 isRestDay: false,
                 exercises: [
                   { exerciseId: testExerciseId("Back Squat"), orderIndex: 0, sets: 5, reps: "3", weight: "245 lbs", restSeconds: 180, trackingLevel: "full" },
                   { exerciseId: testExerciseId("Bench Press"), orderIndex: 1, sets: 5, reps: "3", weight: "205 lbs", restSeconds: 180, trackingLevel: "full" },
                   { exerciseId: testExerciseId("Deadlift"), orderIndex: 2, sets: 3, reps: "5", weight: "315 lbs", restSeconds: 180, trackingLevel: "bar_path" },
-                  { exerciseId: testExerciseId("Box Jump"), orderIndex: 3, sets: 4, reps: "5", weight: "Bodyweight", restSeconds: 90, trackingLevel: "full" },
+                  { exerciseId: testExerciseId("Box Jump"), orderIndex: 3, sets: 4, reps: "5", weight: "Bodyweight", restSeconds: 90, trackingLevel: "jump" },
+                  { exerciseId: testExerciseId("Broad Jump"), orderIndex: 4, sets: 3, reps: "3", weight: "Bodyweight", restSeconds: 90, trackingLevel: "jump" },
+                  { exerciseId: testExerciseId("Hex Bar Jump"), orderIndex: 5, sets: 4, reps: "5", weight: "Bodyweight", restSeconds: 90, trackingLevel: "jump" },
                 ],
               },
               { dayNumber: 4, title: "Rest Day", isRestDay: true, exercises: [] },

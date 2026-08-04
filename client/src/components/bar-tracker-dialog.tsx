@@ -20,18 +20,23 @@ import {
   type TrackedPoint,
   type RepMetrics,
 } from "@/lib/bar-tracking";
+import { summarizeJumpSet, type JumpSetMetrics } from "@/lib/jump-tracking";
 import {
   getPoseLandmarker,
   deriveBarPoint,
+  deriveJumpPoint,
   deriveWristPoints,
   detectFormFaults,
   computeBarTiltDegrees,
   computeRepDepths,
   guessMovementPattern,
+  checkFullBodyPose,
   type PoseFrame,
   type MovementGuess,
   type MovementPattern,
+  type PoseCheckReason,
 } from "@/lib/pose-tracking";
+import { playSuccessChime, playErrorTone } from "@/lib/audio-cues";
 import { PoseLandmarker, type NormalizedLandmark } from "@mediapipe/tasks-vision";
 import {
   Camera,
@@ -44,16 +49,24 @@ import {
   Info,
   Volume2,
   VolumeX,
+  SkipForward,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis } from "recharts";
 
-type Step = "setup" | "calibrate" | "tracking" | "review";
+type Step = "setup" | "posecheck" | "calibrate" | "tracking" | "review";
 
 const MIN_VISIBILITY = 0.5;
 const SKELETON_COLOR = "#4ade80";
 const TRAIL_COLOR = "#f97316";
 const TRAIL_MAX_POINTS = 90;
+// How long a good pose has to be held before it counts as confirmed --
+// long enough to rule out a single lucky frame, short enough not to feel
+// like a chore.
+const POSE_CHECK_HOLD_MS = 700;
+// How long to keep checking before flagging that something's probably off
+// (bad angle/distance/occlusion) rather than silently retrying forever.
+const POSE_CHECK_TIMEOUT_MS = 8000;
 
 const VOICE_PREF_KEY = "forge:tracker-voice-cues";
 
@@ -72,6 +85,18 @@ function speak(text: string) {
   utterance.rate = 1.1;
   window.speechSynthesis.speak(utterance);
 }
+
+// A specific, actionable line per pose-check failure reason -- "try again"
+// on its own doesn't tell anyone what to actually change, so this is what
+// turns checkFullBodyPose's diagnosis into something the athlete can act
+// on immediately instead of guessing.
+const POSE_CHECK_MESSAGES: Record<PoseCheckReason, string> = {
+  no_person: "We can't see you at all — make sure you're in frame and there's enough light.",
+  not_fully_visible: "Can't see your whole body — step back so your head, hands, and feet are all in frame.",
+  too_far: "You're too small in frame for an accurate reading — step closer to the camera.",
+  arms_not_extended: "Raise your arms out to the sides (or overhead) and hold.",
+  feet_together: "Stand with your feet spread apart and hold.",
+};
 
 // Loose keyword match from the exercise name to the handful of patterns
 // guessMovementPattern can distinguish -- used only to flag an obvious
@@ -125,6 +150,10 @@ function drawTrail(ctx: CanvasRenderingContext2D, trace: TrackedPoint[]) {
   ctx.stroke();
 }
 
+function isJumpMetrics(r: RepMetrics | JumpSetMetrics): r is JumpSetMetrics {
+  return "bestJumpHeightCm" in r;
+}
+
 export function BarTrackerDialog({
   open,
   onOpenChange,
@@ -136,7 +165,10 @@ export function BarTrackerDialog({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  mode: "bar_path" | "full";
+  // "jump" tracks ankle position for flight phases instead of wrist/bar
+  // position -- see jump-tracking.ts. No implement, no speed/power, just
+  // height, distance, and ground-contact time.
+  mode: "bar_path" | "full" | "jump";
   exerciseName: string;
   // Auto-stops tracking once this many reps are detected (parsed from the
   // prescribed rep scheme by the caller) -- manual "Stop & Review" always
@@ -145,9 +177,9 @@ export function BarTrackerDialog({
   // This set's entered weight, converted to kg by the caller -- lets
   // summarizeTrackedSet estimate power output (mass * g * velocity).
   // Undefined for bodyweight-only sets, which just don't get a power
-  // number, same as any other tracking-off metric.
+  // number, same as any other tracking-off metric. Unused in jump mode.
   loadKg?: number;
-  onCapture: (metrics: RepMetrics) => void;
+  onCapture: (metrics: RepMetrics | JumpSetMetrics) => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
@@ -163,11 +195,23 @@ export function BarTrackerDialog({
   const poseLandmarkerRef = useRef<PoseLandmarker | null>(null);
   const lastVideoTimeRef = useRef(-1);
   const voiceEnabledRef = useRef(loadVoicePref());
+  // Timestamp the current unbroken streak of a good pose-check pose started
+  // -- null whenever the pose isn't currently good, so a single dropped
+  // frame resets the hold instead of counting toward it.
+  const poseCheckGoodSinceRef = useRef<number | null>(null);
+  const poseCheckStartRef = useRef(0);
+  const poseCheckWarnedRef = useRef(false);
 
   const [step, setStep] = useState<Step>("setup");
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [modelLoading, setModelLoading] = useState(true);
   const [tilt, setTilt] = useState<number | null>(null);
+  // Live diagnosis of why the pose check hasn't passed yet -- null once
+  // it's actually ready (or before the first frame comes in). Shown
+  // continuously, not just after a timeout, so the athlete can self-correct
+  // in real time instead of waiting to find out something's wrong.
+  const [poseCheckReason, setPoseCheckReason] = useState<PoseCheckReason | null>(null);
+  const [poseCheckTimedOut, setPoseCheckTimedOut] = useState(false);
   const [calibrationTaps, setCalibrationTaps] = useState<{ x: number; y: number }[]>([]);
   const [calibrationWarning, setCalibrationWarning] = useState<string | null>(null);
   const [referenceCm, setReferenceCm] = useState("220");
@@ -175,7 +219,7 @@ export function BarTrackerDialog({
   const [liveTiltDeg, setLiveTiltDeg] = useState<number | null>(null);
   const [repCount, setRepCount] = useState(0);
   const [poseVisible, setPoseVisible] = useState(true);
-  const [result, setResult] = useState<RepMetrics | null>(null);
+  const [result, setResult] = useState<RepMetrics | JumpSetMetrics | null>(null);
   const [movementGuess, setMovementGuess] = useState<MovementGuess | null>(null);
   const [voiceEnabled, setVoiceEnabled] = useState(loadVoicePref);
 
@@ -201,6 +245,10 @@ export function BarTrackerDialog({
     framesRef.current = [];
     lastVideoTimeRef.current = -1;
     setLiveTiltDeg(null);
+    poseCheckGoodSinceRef.current = null;
+    poseCheckWarnedRef.current = false;
+    setPoseCheckReason(null);
+    setPoseCheckTimedOut(false);
 
     setModelLoading(true);
     getPoseLandmarker()
@@ -233,6 +281,73 @@ export function BarTrackerDialog({
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
   }, [open]);
+
+  function startPoseCheck() {
+    setStep("posecheck");
+    poseCheckGoodSinceRef.current = null;
+    poseCheckWarnedRef.current = false;
+    poseCheckStartRef.current = performance.now();
+    setPoseCheckReason(null);
+    setPoseCheckTimedOut(false);
+    poseCheckTick();
+  }
+
+  function retryPoseCheck() {
+    poseCheckStartRef.current = performance.now();
+    poseCheckWarnedRef.current = false;
+    setPoseCheckTimedOut(false);
+  }
+
+  function skipPoseCheck() {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    setStep("calibrate");
+  }
+
+  function poseCheckTick() {
+    const video = videoRef.current;
+    const overlay = overlayRef.current;
+    const landmarker = poseLandmarkerRef.current;
+    if (!video || !overlay || !landmarker || video.videoWidth === 0) {
+      rafRef.current = requestAnimationFrame(poseCheckTick);
+      return;
+    }
+    if (video.currentTime === lastVideoTimeRef.current) {
+      rafRef.current = requestAnimationFrame(poseCheckTick);
+      return;
+    }
+    lastVideoTimeRef.current = video.currentTime;
+
+    overlay.width = video.videoWidth;
+    overlay.height = video.videoHeight;
+    const ctx = overlay.getContext("2d");
+    if (ctx) {
+      ctx.clearRect(0, 0, overlay.width, overlay.height);
+      const detection = landmarker.detectForVideo(video, performance.now());
+      const landmarks = detection.landmarks[0] ?? null;
+      if (landmarks) drawSkeleton(ctx, landmarks, overlay.width, overlay.height);
+
+      const check = checkFullBodyPose(landmarks);
+      if (check.ready) {
+        setPoseCheckReason(null);
+        const now = performance.now();
+        if (poseCheckGoodSinceRef.current == null) poseCheckGoodSinceRef.current = now;
+        if (now - poseCheckGoodSinceRef.current >= POSE_CHECK_HOLD_MS) {
+          playSuccessChime();
+          setStep("calibrate");
+          return;
+        }
+      } else {
+        poseCheckGoodSinceRef.current = null;
+        setPoseCheckReason(check.reason);
+        if (!poseCheckWarnedRef.current && performance.now() - poseCheckStartRef.current > POSE_CHECK_TIMEOUT_MS) {
+          poseCheckWarnedRef.current = true;
+          playErrorTone();
+          setPoseCheckTimedOut(true);
+        }
+      }
+    }
+    rafRef.current = requestAnimationFrame(poseCheckTick);
+  }
 
   function handleCalibrationTap(e: React.MouseEvent<HTMLDivElement>) {
     if (calibrationTaps.length >= 2 || !videoRef.current) return;
@@ -301,14 +416,20 @@ export function BarTrackerDialog({
     ctx.clearRect(0, 0, overlay.width, overlay.height);
 
     const now = performance.now();
-    const result = landmarker.detectForVideo(video, now);
-    const landmarks = result.landmarks[0] ?? null;
+    const detection = landmarker.detectForVideo(video, now);
+    const landmarks = detection.landmarks[0] ?? null;
     setPoseVisible(!!landmarks);
-    setLiveTiltDeg(landmarks ? computeBarTiltDegrees(landmarks) : null);
+    // Bar tilt is meaningless with no bar in hand -- skip it in jump mode
+    // rather than showing a readout from whatever the arms happen to be
+    // doing mid-jump.
+    setLiveTiltDeg(landmarks && mode !== "jump" ? computeBarTiltDegrees(landmarks) : null);
 
     if (landmarks) {
       drawSkeleton(ctx, landmarks, overlay.width, overlay.height);
-      const point = deriveBarPoint(landmarks, overlay.width, overlay.height);
+      const point =
+        mode === "jump"
+          ? deriveJumpPoint(landmarks, overlay.width, overlay.height)
+          : deriveBarPoint(landmarks, overlay.width, overlay.height);
 
       if (point) {
         const t = now - startTimeRef.current;
@@ -345,7 +466,9 @@ export function BarTrackerDialog({
                 setRepCount(repCountRef.current);
                 if (voiceEnabledRef.current) speak(String(repCountRef.current));
                 if (targetReps && repCountRef.current >= targetReps) {
-                  toast.info(`${targetReps} reps detected — reviewing your set`);
+                  toast.info(
+                    `${targetReps} ${mode === "jump" ? "jumps" : "reps"} detected — reviewing your set`,
+                  );
                   stopTracking();
                   return;
                 }
@@ -362,6 +485,26 @@ export function BarTrackerDialog({
 
   function stopTracking() {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
+
+    if (mode === "jump") {
+      const jumpMetrics = summarizeJumpSet(traceRef.current, pixelsPerMeter());
+      if (!jumpMetrics) {
+        toast.error("Couldn't get a clean read — make sure your feet leave the ground clearly in frame.");
+        setStep("calibrate");
+        return;
+      }
+      // Landing mechanics (valgus, forward lean) still matter for a jump;
+      // squat-depth judgment and bar-path drift don't -- see the "jump"
+      // context branch in detectFormFaults.
+      jumpMetrics.formFaults = detectFormFaults(framesRef.current, 0, "jump");
+      if (voiceEnabledRef.current) {
+        speak(`Set complete. Best jump ${jumpMetrics.bestJumpHeightCm} centimeters.`);
+      }
+      setResult(jumpMetrics);
+      setStep("review");
+      return;
+    }
+
     const metrics = summarizeTrackedSet(traceRef.current, pixelsPerMeter(), loadKg);
     if (!metrics) {
       toast.error("Couldn't get a clean read — try again with your whole body in frame.");
@@ -412,8 +555,10 @@ export function BarTrackerDialog({
     movementGuess.pattern !== "unknown" &&
     !!expectedPattern &&
     movementGuess.pattern !== expectedPattern;
-  const firstRepPeak = result?.repBreakdown[0]?.peakVelocityMps ?? 0;
-  const lastRepCurve = result?.repBreakdown[result.repBreakdown.length - 1]?.velocityCurve ?? [];
+  const liftResult = result && !isJumpMetrics(result) ? result : null;
+  const jumpResult = result && isJumpMetrics(result) ? result : null;
+  const firstRepPeak = liftResult?.repBreakdown[0]?.peakVelocityMps ?? 0;
+  const lastRepCurve = liftResult?.repBreakdown[liftResult.repBreakdown.length - 1]?.velocityCurve ?? [];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -424,9 +569,11 @@ export function BarTrackerDialog({
             Track {exerciseName}
           </DialogTitle>
           <DialogDescription>
-            {mode === "full"
-              ? "Bar speed, tempo, and bar path for this set."
-              : "Bar path for this set — no speed emphasis."}
+            {mode === "jump"
+              ? "Jump height, distance, and ground contact time for this set."
+              : mode === "full"
+                ? "Bar speed, tempo, and bar path for this set."
+                : "Bar path for this set — no speed emphasis."}
           </DialogDescription>
         </DialogHeader>
 
@@ -470,7 +617,7 @@ export function BarTrackerDialog({
                 )}
                 <span className="rounded-full bg-black/60 px-2.5 py-1 text-xs font-bold text-white">
                   {repCount}
-                  {targetReps ? `/${targetReps}` : ""} reps
+                  {targetReps ? `/${targetReps}` : ""} {mode === "jump" ? "jumps" : "reps"}
                 </span>
               </div>
               {liveTiltDeg != null && (
@@ -513,9 +660,9 @@ export function BarTrackerDialog({
         {step === "setup" && !cameraError && (
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              Step back until your whole body is visible, and try to keep the phone level and
-              perpendicular to your movement — an angled camera skews the reading. No marker or
-              tape needed; this tracks your body directly.
+              {mode === "jump"
+                ? "Step back far enough to fit your takeoff spot AND where you'll land in frame, and keep the phone level and perpendicular to your jump. No marker needed; this tracks your body directly."
+                : "Step back until your whole body is visible, and try to keep the phone level and perpendicular to your movement — an angled camera skews the reading. No marker or tape needed; this tracks your body directly."}
             </p>
             {modelLoading && (
               <p className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -533,11 +680,41 @@ export function BarTrackerDialog({
           </div>
         )}
 
+        {step === "posecheck" && (
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Stand in a T-pose (arms out, feet apart) and hold it for a second so we can confirm
+              your whole body is visible before you start.
+            </p>
+            <p
+              className={cn(
+                "flex items-center gap-2 text-sm font-semibold",
+                poseCheckReason ? "text-amber-500" : "text-success",
+              )}
+            >
+              {poseCheckReason ? (
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+              ) : (
+                <Check className="h-4 w-4 shrink-0" />
+              )}
+              {poseCheckReason ? POSE_CHECK_MESSAGES[poseCheckReason] : "Looking good — hold it…"}
+            </p>
+            {poseCheckTimedOut && (
+              <p className="text-xs text-muted-foreground">
+                Still not seeing it after a few tries — fix the camera above, or skip this check
+                and calibrate anyway.
+              </p>
+            )}
+          </div>
+        )}
+
         {step === "calibrate" && (
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
               {calibrationTaps.length === 0
-                ? "Tap one end of the bar (or any fixed object of known length)."
+                ? mode === "jump"
+                  ? "Tap one end of any fixed object of known length in frame (a mat, a yardstick, even your own height marked on a wall)."
+                  : "Tap one end of the bar (or any fixed object of known length)."
                 : calibrationTaps.length === 1
                   ? "Now tap the other end."
                   : "Calibration set."}
@@ -562,54 +739,82 @@ export function BarTrackerDialog({
           </div>
         )}
 
-        {step === "review" && result && (
+        {step === "review" && jumpResult && (
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3 rounded-md border border-border p-3 text-center">
-              {mode === "full" && (
-                <>
-                  <Stat label="Peak Velocity" value={`${result.peakVelocityMps} m/s`} />
-                  <Stat label="Mean Velocity" value={`${result.meanVelocityMps} m/s`} />
-                  <Stat label="Concentric" value={`${result.concentricSeconds}s`} />
-                  <Stat
-                    label="Eccentric"
-                    value={`${result.eccentricSeconds}s @ ${result.eccentricMeanVelocityMps} m/s`}
-                  />
-                  {result.peakPowerWatts != null && (
-                    <Stat label="Peak Power" value={`${result.peakPowerWatts} W`} />
-                  )}
-                  {result.meanPowerWatts != null && (
-                    <Stat label="Mean Power" value={`${result.meanPowerWatts} W`} />
-                  )}
-                  {result.velocityLossPercent != null && (
-                    <Stat
-                      label="Velocity Loss"
-                      value={`${result.velocityLossPercent > 0 ? "-" : "+"}${Math.abs(result.velocityLossPercent)}%`}
-                    />
-                  )}
-                </>
-              )}
-              <Stat label="Avg. ROM" value={`${result.romCm} cm`} />
+              <Stat label="Best Jump Height" value={`${jumpResult.bestJumpHeightCm} cm`} />
               <Stat
-                label="Bar Path Deviation"
-                value={`${result.barPathDeviationCm} cm`}
-                full={mode === "bar_path"}
+                label="Best Distance"
+                value={
+                  jumpResult.bestHorizontalDistanceCm != null
+                    ? `${jumpResult.bestHorizontalDistanceCm} cm`
+                    : "—"
+                }
               />
+              {jumpResult.avgGroundContactSeconds != null && (
+                <Stat label="Avg. Ground Contact" value={`${jumpResult.avgGroundContactSeconds}s`} />
+              )}
+              {jumpResult.reactiveStrengthIndex != null && (
+                <Stat label="Reactive Strength Index" value={`${jumpResult.reactiveStrengthIndex}`} />
+              )}
             </div>
-            {result.formFaults.length > 0 && (
+            <FormFaultBadges faults={jumpResult.formFaults} />
+            {jumpResult.repBreakdown.length > 0 && (
               <div className="space-y-1.5">
-                <p className="flex items-center gap-1.5 text-xs font-semibold uppercase text-amber-500">
-                  <AlertTriangle className="h-3.5 w-3.5" />
-                  Form notes
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {result.formFaults.map((f) => (
-                    <Badge key={f.code} variant="secondary" className="text-xs font-normal">
-                      {f.label}
-                    </Badge>
+                <p className="text-xs font-semibold uppercase text-muted-foreground">Jump by jump</p>
+                <div className="space-y-1 rounded-md border border-border p-2">
+                  {jumpResult.repBreakdown.map((r) => (
+                    <div key={r.repNumber} className="flex items-center justify-between gap-2 text-xs">
+                      <span className="font-semibold">Jump {r.repNumber}</span>
+                      <span className="flex items-center gap-2 text-muted-foreground">
+                        <span>{r.jumpHeightCm} cm</span>
+                        {r.horizontalDistanceCm != null && <span>{r.horizontalDistanceCm} cm dist.</span>}
+                        {r.groundContactSeconds != null && (
+                          <span>{r.groundContactSeconds}s contact</span>
+                        )}
+                      </span>
+                    </div>
                   ))}
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {step === "review" && liftResult && (
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3 rounded-md border border-border p-3 text-center">
+              {mode === "full" && (
+                <>
+                  <Stat label="Peak Velocity" value={`${liftResult.peakVelocityMps} m/s`} />
+                  <Stat label="Mean Velocity" value={`${liftResult.meanVelocityMps} m/s`} />
+                  <Stat label="Concentric" value={`${liftResult.concentricSeconds}s`} />
+                  <Stat
+                    label="Eccentric"
+                    value={`${liftResult.eccentricSeconds}s @ ${liftResult.eccentricMeanVelocityMps} m/s`}
+                  />
+                  {liftResult.peakPowerWatts != null && (
+                    <Stat label="Peak Power" value={`${liftResult.peakPowerWatts} W`} />
+                  )}
+                  {liftResult.meanPowerWatts != null && (
+                    <Stat label="Mean Power" value={`${liftResult.meanPowerWatts} W`} />
+                  )}
+                  {liftResult.velocityLossPercent != null && (
+                    <Stat
+                      label="Velocity Loss"
+                      value={`${liftResult.velocityLossPercent > 0 ? "-" : "+"}${Math.abs(liftResult.velocityLossPercent)}%`}
+                    />
+                  )}
+                </>
+              )}
+              <Stat label="Avg. ROM" value={`${liftResult.romCm} cm`} />
+              <Stat
+                label="Bar Path Deviation"
+                value={`${liftResult.barPathDeviationCm} cm`}
+                full={mode === "bar_path"}
+              />
+            </div>
+            <FormFaultBadges faults={liftResult.formFaults} />
 
             {movementGuess && movementGuess.pattern !== "unknown" && (
               <p
@@ -629,11 +834,11 @@ export function BarTrackerDialog({
               </p>
             )}
 
-            {result.repBreakdown.length > 1 && (
+            {liftResult.repBreakdown.length > 1 && (
               <div className="space-y-1.5">
                 <p className="text-xs font-semibold uppercase text-muted-foreground">Rep by rep</p>
                 <div className="space-y-1 rounded-md border border-border p-2">
-                  {result.repBreakdown.map((r) => {
+                  {liftResult.repBreakdown.map((r) => {
                     const decayPct =
                       mode === "full" && firstRepPeak > 0
                         ? Math.round(((firstRepPeak - r.peakVelocityMps) / firstRepPeak) * 100)
@@ -683,9 +888,23 @@ export function BarTrackerDialog({
 
         <DialogFooter>
           {step === "setup" && (
-            <Button onClick={() => setStep("calibrate")} disabled={!!cameraError || modelLoading}>
+            <Button onClick={startPoseCheck} disabled={!!cameraError || modelLoading}>
               I'm Set Up
             </Button>
+          )}
+          {step === "posecheck" && (
+            <>
+              {poseCheckTimedOut && (
+                <Button variant="outline" onClick={retryPoseCheck}>
+                  <RotateCcw className="h-4 w-4" />
+                  Retry
+                </Button>
+              )}
+              <Button variant={poseCheckTimedOut ? "default" : "ghost"} onClick={skipPoseCheck}>
+                <SkipForward className="h-4 w-4" />
+                Skip this check
+              </Button>
+            </>
           )}
           {step === "calibrate" && (
             <Button onClick={startTracking} disabled={calibrationTaps.length < 2}>
@@ -719,6 +938,25 @@ export function BarTrackerDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function FormFaultBadges({ faults }: { faults: { code: string; label: string }[] }) {
+  if (faults.length === 0) return null;
+  return (
+    <div className="space-y-1.5">
+      <p className="flex items-center gap-1.5 text-xs font-semibold uppercase text-amber-500">
+        <AlertTriangle className="h-3.5 w-3.5" />
+        Form notes
+      </p>
+      <div className="flex flex-wrap gap-1.5">
+        {faults.map((f) => (
+          <Badge key={f.code} variant="secondary" className="text-xs font-normal">
+            {f.label}
+          </Badge>
+        ))}
+      </div>
+    </div>
   );
 }
 

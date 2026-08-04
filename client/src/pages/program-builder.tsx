@@ -53,7 +53,7 @@ import type { Exercise } from "@shared/schema";
 
 type RosterEntry = { id: number; name: string; email: string };
 
-type TrackingLevel = "none" | "bar_path" | "full";
+type TrackingLevel = "none" | "bar_path" | "full" | "jump";
 
 type LocalExercise = {
   key: string;
@@ -676,6 +676,7 @@ function TrackingLevelControl({
     { value: "none", label: "Off", title: "No camera tracking for this exercise" },
     { value: "bar_path", label: "Path", title: "Track bar path only (no speed emphasis)" },
     { value: "full", label: "Full", title: "Track bar speed, tempo, and bar path" },
+    { value: "jump", label: "Jump", title: "Track jump height, distance, and ground contact time" },
   ];
   return (
     <div>

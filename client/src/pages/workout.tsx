@@ -25,6 +25,7 @@ import { FormVideoRecorderDialog } from "@/components/form-video-recorder-dialog
 import { SetVideoPreviewDialog, SetVideoCompareDialog } from "@/components/set-video-review";
 import { extractVideoFrames } from "@/lib/video-frames";
 import type { RepMetrics } from "@/lib/bar-tracking";
+import type { JumpSetMetrics } from "@/lib/jump-tracking";
 import { toKg } from "@/lib/bar-tracking";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
@@ -159,7 +160,7 @@ type SetHistoryPoint = {
   rpe: number | null;
 };
 
-type TrackingLevel = "none" | "bar_path" | "full";
+type TrackingLevel = "none" | "bar_path" | "full" | "jump";
 
 type PrescribedExercise = {
   id: number;
@@ -206,6 +207,15 @@ type PathPoint = { t: number; x: number; y: number };
 type ArmPathTrace = { left: PathPoint[]; right: PathPoint[] };
 type FormCheckFlag = "best" | "worst" | null;
 
+type JumpBreakdownEntry = {
+  repNumber: number;
+  flightSeconds: number;
+  jumpHeightCm: number;
+  peakHeightCm: number;
+  horizontalDistanceCm: number | null;
+  groundContactSeconds: number | null;
+};
+
 type SetMetrics = {
   peakVelocityMps: number | null;
   meanVelocityMps: number | null;
@@ -227,6 +237,13 @@ type SetMetrics = {
   // view; every recorded clip is kept regardless of whether it's flagged.
   formCheckVideoUrl: string | null;
   formCheckFlag: FormCheckFlag;
+  // Jump-mode-only metrics -- barPathTrace is reused for the ankle-height
+  // trace in jump mode rather than adding a redundant trace column.
+  jumpHeightCm: number | null;
+  jumpDistanceCm: number | null;
+  groundContactSeconds: number | null;
+  reactiveStrengthIndex: number | null;
+  jumpBreakdown: JumpBreakdownEntry[] | null;
 };
 
 type LogEntry = {
@@ -339,6 +356,11 @@ function buildItem(
       velocityLossPercent: existingSet?.velocityLossPercent ?? null,
       formCheckVideoUrl: existingSet?.formCheckVideoUrl ?? null,
       formCheckFlag: existingSet?.formCheckFlag ?? null,
+      jumpHeightCm: existingSet?.jumpHeightCm ?? null,
+      jumpDistanceCm: existingSet?.jumpDistanceCm ?? null,
+      groundContactSeconds: existingSet?.groundContactSeconds ?? null,
+      reactiveStrengthIndex: existingSet?.reactiveStrengthIndex ?? null,
+      jumpBreakdown: existingSet?.jumpBreakdown ?? null,
     };
   });
   const materials = materialsFrom(prescribed.exercise);
@@ -664,6 +686,11 @@ export function WorkoutPage({
             velocityLossPercent: s.velocityLossPercent,
             formCheckVideoUrl: s.formCheckVideoUrl,
             formCheckFlag: s.formCheckFlag,
+            jumpHeightCm: s.jumpHeightCm,
+            jumpDistanceCm: s.jumpDistanceCm,
+            groundContactSeconds: s.groundContactSeconds,
+            reactiveStrengthIndex: s.reactiveStrengthIndex,
+            jumpBreakdown: s.jumpBreakdown,
           })),
         })),
       };
@@ -752,6 +779,11 @@ export function WorkoutPage({
               velocityLossPercent: null,
               formCheckVideoUrl: null,
               formCheckFlag: null,
+              jumpHeightCm: null,
+              jumpDistanceCm: null,
+              groundContactSeconds: null,
+              reactiveStrengthIndex: null,
+              jumpBreakdown: null,
             },
           ],
         };
@@ -1496,7 +1528,8 @@ function ExerciseLogContent({
         <div className="space-y-1.5">
           {item.sets.map((set) => {
             const complete = isSetComplete(item, set);
-            const tracked = set.peakVelocityMps != null || set.barPathDeviationCm != null;
+            const tracked =
+              set.peakVelocityMps != null || set.barPathDeviationCm != null || set.jumpHeightCm != null;
             const historyMatch = findHistoryForReps(item.setHistory, set.reps);
             const isPR = complete && isRepCountPR(item.setHistory, set.reps, item.weightMode, set.weight);
             return (
@@ -1588,10 +1621,14 @@ function ExerciseLogContent({
                       >
                         <Camera className="h-3 w-3" />
                         {tracked
-                          ? item.trackingLevel === "full" && set.peakVelocityMps != null
-                            ? `${set.peakVelocityMps} m/s peak — retake`
-                            : `Path ${set.barPathDeviationCm} cm — retake`
-                          : "Track this set"}
+                          ? item.trackingLevel === "jump" && set.jumpHeightCm != null
+                            ? `${set.jumpHeightCm} cm jump — retake`
+                            : item.trackingLevel === "full" && set.peakVelocityMps != null
+                              ? `${set.peakVelocityMps} m/s peak — retake`
+                              : `Path ${set.barPathDeviationCm} cm — retake`
+                          : item.trackingLevel === "jump"
+                            ? "Track this jump"
+                            : "Track this set"}
                       </button>
                     )}
                     {item.videoCheckEnabled && videoCheckMode !== "off" && (
@@ -1641,6 +1678,17 @@ function ExerciseLogContent({
                     ))}
                   </div>
                 )}
+                {set.jumpBreakdown && set.jumpBreakdown.length > 1 && (
+                  <div className="mt-1 flex flex-wrap items-center gap-1 pl-9 text-[9px] text-muted-foreground">
+                    <span className="font-semibold uppercase tracking-wide">Jump by jump</span>
+                    {set.jumpBreakdown.map((j) => (
+                      <span key={j.repNumber} className="rounded bg-secondary px-1.5 py-0.5">
+                        {j.jumpHeightCm} cm
+                        {j.groundContactSeconds != null ? ` · GCT ${j.groundContactSeconds}s` : ""}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })}
@@ -1663,8 +1711,20 @@ function ExerciseLogContent({
               exerciseName={item.exerciseName}
               targetReps={parseTargetReps(item.prescribedReps)}
               loadKg={loadKg}
-              onCapture={(metrics: RepMetrics) => {
+              onCapture={(metrics: RepMetrics | JumpSetMetrics) => {
                 if (trackingSet == null) return;
+                if ("bestJumpHeightCm" in metrics) {
+                  onUpdateSet(trackingSet, {
+                    jumpHeightCm: metrics.bestJumpHeightCm,
+                    jumpDistanceCm: metrics.bestHorizontalDistanceCm,
+                    groundContactSeconds: metrics.avgGroundContactSeconds,
+                    reactiveStrengthIndex: metrics.reactiveStrengthIndex,
+                    jumpBreakdown: metrics.repBreakdown,
+                    barPathTrace: metrics.pathTrace,
+                    formFaults: metrics.formFaults,
+                  });
+                  return;
+                }
                 onUpdateSet(trackingSet, {
                   peakVelocityMps: metrics.peakVelocityMps,
                   meanVelocityMps: metrics.meanVelocityMps,

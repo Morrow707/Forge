@@ -3154,6 +3154,11 @@ Respond to the user's latest message by producing the complete updated program s
               velocityLossPercent: s.velocityLossPercent ?? null,
               formCheckVideoUrl: s.formCheckVideoUrl ?? null,
               formCheckFlag: s.formCheckFlag ?? null,
+              jumpHeightCm: s.jumpHeightCm ?? null,
+              jumpDistanceCm: s.jumpDistanceCm ?? null,
+              groundContactSeconds: s.groundContactSeconds ?? null,
+              reactiveStrengthIndex: s.reactiveStrengthIndex ?? null,
+              jumpBreakdown: s.jumpBreakdown ?? null,
             })),
           );
         }
@@ -3197,6 +3202,11 @@ Respond to the user's latest message by producing the complete updated program s
         velocityLossPercent: workoutSetEntries.velocityLossPercent,
         formCheckVideoUrl: workoutSetEntries.formCheckVideoUrl,
         formCheckFlag: workoutSetEntries.formCheckFlag,
+        jumpHeightCm: workoutSetEntries.jumpHeightCm,
+        jumpDistanceCm: workoutSetEntries.jumpDistanceCm,
+        groundContactSeconds: workoutSetEntries.groundContactSeconds,
+        reactiveStrengthIndex: workoutSetEntries.reactiveStrengthIndex,
+        jumpBreakdown: workoutSetEntries.jumpBreakdown,
       })
       .from(workoutSetEntries)
       .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
@@ -3239,6 +3249,11 @@ Respond to the user's latest message by producing the complete updated program s
         velocityLossPercent: workoutSetEntries.velocityLossPercent,
         formCheckVideoUrl: workoutSetEntries.formCheckVideoUrl,
         formCheckFlag: workoutSetEntries.formCheckFlag,
+        jumpHeightCm: workoutSetEntries.jumpHeightCm,
+        jumpDistanceCm: workoutSetEntries.jumpDistanceCm,
+        groundContactSeconds: workoutSetEntries.groundContactSeconds,
+        reactiveStrengthIndex: workoutSetEntries.reactiveStrengthIndex,
+        jumpBreakdown: workoutSetEntries.jumpBreakdown,
       })
       .from(workoutSetEntries)
       .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))

@@ -60,10 +60,15 @@ export const healthStatusEnum = pgEnum("health_status", ["healthy", "hurt"]);
 // "bar_path" tracks only the bar's path/straightness (movement quality) --
 // no speed emphasis, meant for phases where velocity isn't the point (e.g.
 // rehab/offseason). "full" adds live bar speed, tempo, and velocity-loss.
+// "jump" is a different signal entirely -- no implement to track, so it
+// watches ankle position for flight phases instead of wrist/bar position
+// (see jump-tracking.ts), reporting height/distance/ground-contact instead
+// of velocity/power.
 export const trackingLevelEnum = pgEnum("tracking_level", [
   "none",
   "bar_path",
   "full",
+  "jump",
 ]);
 
 export const users = pgTable(
@@ -546,6 +551,17 @@ export const workoutSetEntries = pgTable("workout_set_entries", {
   // deletion signal.
   formCheckVideoUrl: text("form_check_video_url"),
   formCheckFlag: formCheckFlagEnum("form_check_flag"),
+  // "jump" tracking mode's numbers (see jump-tracking.ts) -- null unless
+  // trackingLevel was "jump" when this set was logged. Best-of-set height
+  // and distance rather than an average, same convention as peakVelocityMps
+  // being the set's best rep. barPathTrace above is reused for the jump's
+  // ankle-height trace (same {t,x,y} shape, just a vertical excursion
+  // instead of horizontal bar drift) rather than adding a redundant column.
+  jumpHeightCm: real("jump_height_cm"),
+  jumpDistanceCm: real("jump_distance_cm"),
+  groundContactSeconds: real("ground_contact_seconds"),
+  reactiveStrengthIndex: real("reactive_strength_index"),
+  jumpBreakdown: json("jump_breakdown"),
 });
 
 // A two-way thread on a specific day of a specific assignment -- an athlete
@@ -1222,7 +1238,7 @@ export const programExerciseInputSchema = z.object({
   restSeconds: z.number().optional().nullable(),
   notes: z.string().optional().nullable(),
   supersetGroup: z.string().optional().nullable(),
-  trackingLevel: z.enum(["none", "bar_path", "full"]).optional(),
+  trackingLevel: z.enum(["none", "bar_path", "full", "jump"]).optional(),
   videoCheckEnabled: z.boolean().optional(),
 });
 
@@ -1356,6 +1372,23 @@ export const armPathTraceSchema = z.object({
   right: z.array(barPathPointSchema),
 });
 
+// One entry per detected jump within a "jump" tracking-mode set -- see
+// jump-tracking.ts's summarizeJumpSet for how these are derived from the
+// ankle-height trace. Distinct from repBreakdownEntrySchema above since a
+// jump has no velocity/power numbers, and a lift rep has no flight or
+// ground-contact time.
+export const jumpBreakdownEntrySchema = z.object({
+  repNumber: z.number(),
+  flightSeconds: z.number(),
+  jumpHeightCm: z.number(),
+  peakHeightCm: z.number(),
+  horizontalDistanceCm: z.number().nullable(),
+  // Time on the ground before this jump's takeoff, measured from the
+  // previous jump's landing -- null for the first jump in the set (nothing
+  // to measure from).
+  groundContactSeconds: z.number().nullable(),
+});
+
 export const setLogInputSchema = z.object({
   setNumber: z.number(),
   reps: z.string().optional().nullable(),
@@ -1379,6 +1412,11 @@ export const setLogInputSchema = z.object({
   velocityLossPercent: z.number().optional().nullable(),
   formCheckVideoUrl: z.string().trim().max(500).optional().nullable(),
   formCheckFlag: z.enum(["best", "worst"]).optional().nullable(),
+  jumpHeightCm: z.number().optional().nullable(),
+  jumpDistanceCm: z.number().optional().nullable(),
+  groundContactSeconds: z.number().optional().nullable(),
+  reactiveStrengthIndex: z.number().optional().nullable(),
+  jumpBreakdown: z.array(jumpBreakdownEntrySchema).optional().nullable(),
 });
 
 export const logEntryInputSchema = z
