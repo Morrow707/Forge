@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { Link, Redirect } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
@@ -6,8 +6,16 @@ import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { Flame, Dumbbell, ClipboardList } from "lucide-react";
+import { Flame, Dumbbell, ClipboardList, Sparkles, Check, Lock } from "lucide-react";
 
 export default function SignupPage() {
   const { user, isLoading, signupMutation } = useAuth();
@@ -21,8 +29,23 @@ export default function SignupPage() {
   const [password, setPassword] = useState("");
   const [coachCode, setCoachCode] = useState(prefilledCode.toUpperCase());
   const [phone, setPhone] = useState("");
+  // Whether the in-flight/just-submitted signup is a no-code athlete
+  // signup -- set synchronously on submit (a ref, not state, so it's
+  // already correct by the time the mutation's success re-render happens,
+  // with no dependency on exactly when React Query's own onSuccess timing
+  // lands relative to a state update from this component).
+  const isFreeAgentAttemptRef = useRef(false);
+  // Flips true once the welcome dialog below has been dismissed -- holds
+  // the redirect for one extra beat after a genuine self-serve Free Agent
+  // signup so they see what that status means before landing in the app,
+  // instead of it only ever coming up later as a surprise 402 on some AI
+  // feature.
+  const [welcomeDismissed, setWelcomeDismissed] = useState(false);
 
   if (!isLoading && user) {
+    if (isFreeAgentAttemptRef.current && !welcomeDismissed) {
+      return <FreeAgentWelcomeDialog onContinue={() => setWelcomeDismissed(true)} />;
+    }
     return (
       <Redirect
         to={user.role === "coach" ? "/coach" : user.role === "admin" ? "/admin" : "/athlete"}
@@ -32,6 +55,7 @@ export default function SignupPage() {
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    isFreeAgentAttemptRef.current = role === "athlete" && !coachCode.trim();
     signupMutation.mutate({
       name,
       email,
@@ -171,5 +195,62 @@ export default function SignupPage() {
         </Card>
       </div>
     </div>
+  );
+}
+
+/** Shown once, right after a self-serve athlete signup with no coach's
+ * invite code -- explains Free Agent status before they ever hit a 402 on
+ * an AI feature that assumes they already know why. Not dismissable except
+ * via the button: there's nothing else on screen underneath it to interact
+ * with, so an accidental outside-click closing it would just be confusing. */
+function FreeAgentWelcomeDialog({ onContinue }: { onContinue: () => void }) {
+  return (
+    <Dialog open onOpenChange={() => {}}>
+      <DialogContent hideClose onEscapeKeyDown={(e) => e.preventDefault()}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Badge className="gap-1.5 bg-primary/15 text-primary hover:bg-primary/15">
+              <Sparkles className="h-3.5 w-3.5" />
+              Free Agent
+            </Badge>
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 text-sm">
+          <p className="text-muted-foreground">
+            You signed up without a coach's invite code, so you're training as a{" "}
+            <strong className="text-foreground">Free Agent</strong> -- that just means no coach
+            is on your account yet. You can join one anytime from your dashboard and nothing
+            you build here goes away when you do.
+          </p>
+          <div className="space-y-2 rounded-md border border-border p-3">
+            <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <Check className="h-3.5 w-3.5 text-primary" />
+              Available now
+            </p>
+            <p className="text-muted-foreground">
+              Build your own programs by hand, duplicate a Forge template, log workouts, track
+              progress, and ask the exercise substitution agent to swap out anything that doesn't
+              work for you.
+            </p>
+          </div>
+          <div className="space-y-2 rounded-md border border-border p-3">
+            <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <Lock className="h-3.5 w-3.5" />
+              Coming soon, as a paid upgrade
+            </p>
+            <p className="text-muted-foreground">
+              The full AI coach -- conversational AI program building, an AI form-check review of
+              your lifts, and the AI chat coach. We're still building out billing for this, so
+              consider it a preview of what's ahead.
+            </p>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button onClick={onContinue} className="w-full">
+            Let's Go
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

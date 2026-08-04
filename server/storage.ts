@@ -2092,6 +2092,95 @@ Respond to the user's latest message by producing the complete updated program s
     return { userMessage, assistantMessage, program: await this.getProgramFull(programId) };
   },
 
+  // Narrow, single-exercise counterpart to generateProgramFromChat -- swaps
+  // exactly one program_exercises row for an AI-suggested alternative
+  // instead of rewriting the whole program. Deliberately its own code path
+  // (not a chat message routed through the full builder) so it can stay
+  // available to a Free Agent even once the general AI program builder/chat
+  // goes behind a paywall -- see requirePaidAiAccess in routes.ts, which
+  // never gates the route that calls this.
+  async substituteExercise(
+    programId: number,
+    programExerciseId: number,
+    authorId: number,
+    reason: string,
+    notes: string,
+  ) {
+    const pe = await db.query.programExercises.findFirst({
+      where: eq(programExercises.id, programExerciseId),
+      with: {
+        exercise: true,
+        day: { with: { week: { with: { program: true } } } },
+      },
+    });
+    // The route already confirmed the caller owns programId -- checking the
+    // exercise resolves to that SAME program (not just some row that
+    // happens to exist) keeps a caller from swapping a row that belongs to
+    // a program they don't own, just by knowing its id.
+    if (!pe || pe.day.week.program.id !== programId) {
+      return { error: "Couldn't find that exercise anymore." };
+    }
+    const fail = (error: string) => ({ error, programId });
+
+    if (!aiEnabled) {
+      return fail("AI isn't set up yet -- ask whoever manages this Forge instance to configure it.");
+    }
+
+    const visibleExercises = await this.getVisibleExercisesForCoach(authorId);
+    const validIds = visibleExercises.filter((e) => e.id !== pe.exerciseId).map((e) => e.id);
+    if (validIds.length === 0) {
+      return fail("There isn't another exercise available to swap in yet.");
+    }
+    const catalog = visibleExercises
+      .map((e) => `${e.id}: ${e.name} (${e.category}, ${e.muscleGroup})`)
+      .join("\n");
+
+    const tool = {
+      name: "substitute_exercise",
+      description:
+        "Picks one replacement exercise from the catalog and writes a short chat reply explaining the swap.",
+      input_schema: {
+        type: "object",
+        properties: {
+          exerciseId: { type: "integer", enum: validIds },
+          summary: {
+            type: "string",
+            description:
+              "A short (1-2 sentence) chat reply telling the athlete what you swapped it for and why.",
+          },
+        },
+        required: ["exerciseId", "summary"],
+      },
+    };
+
+    const system = `You are an exercise substitution assistant, chatting directly with the person who owns this program and trains themselves with it. Given one exercise they want swapped out of today's session, pick the single best replacement from the catalog you're given -- ONLY an exercise ID from that catalog, never invent one. Match the muscle group and training intent of the original as closely as you can given their reason for swapping. Also write a short, conversational one-to-two sentence reply explaining the swap.`;
+
+    const userPrompt = `Available exercises (id: name (category, muscle group)) -- you may ONLY use exercise IDs from this list:
+${catalog}
+
+Swap out "${pe.exercise.name}" (${pe.exercise.category}, ${pe.exercise.muscleGroup}) for a suitable alternative. Reason: ${reason}${notes.trim() ? ` -- ${notes.trim()}` : ""}.`;
+
+    const result = await askClaudeStructured<{ exerciseId?: number; summary?: string }>(
+      system,
+      userPrompt,
+      tool,
+      { maxTokens: 300 },
+    );
+    if (!result?.exerciseId || !validIds.includes(result.exerciseId)) {
+      return fail("Sorry, I couldn't find a good swap just now -- try again in a bit.");
+    }
+
+    await db
+      .update(programExercises)
+      .set({ exerciseId: result.exerciseId })
+      .where(eq(programExercises.id, programExerciseId));
+
+    return {
+      summary: result.summary?.trim() || "Swapped that exercise.",
+      program: await this.getProgramFull(programId),
+    };
+  },
+
   // "Full function" AI form check: a direct, unsupervised critique from
   // still frames of a recorded set, written into the same chat transcript
   // as the program builder so it reads as one continuous assistant-coach

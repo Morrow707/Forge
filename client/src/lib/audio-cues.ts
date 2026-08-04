@@ -2,7 +2,7 @@
 // element) for the same reason: it mixes with whatever else is already
 // playing (music, a call) instead of pausing/ducking it, and isn't subject
 // to a device's silent-mode switch the way an <audio> element is on iOS --
-// so a set-complete or pose-check cue is still audible over headphones or
+// so a set-complete or rest-timer cue is still audible over headphones or
 // music, or with the phone physically muted.
 function getAudioContext(): AudioContext | null {
   try {
@@ -41,20 +41,6 @@ export function playSuccessChime() {
     if (!ctx) return;
     [0, 0.25, 0.5].forEach((delay) => tone(ctx, 880, ctx.currentTime + delay, 0.2));
     setTimeout(() => ctx.close(), 900);
-  } catch {
-    // Web Audio isn't available in every environment -- cues just stay silent.
-  }
-}
-
-/** A lower, buzzier double-tone -- deliberately a different pitch and
- * timbre from the success chime so it reads as "wrong" without needing to
- * read any text on screen. */
-export function playErrorTone() {
-  try {
-    const ctx = getAudioContext();
-    if (!ctx) return;
-    [0, 0.3].forEach((delay) => tone(ctx, 220, ctx.currentTime + delay, 0.25, "sawtooth", 0.3));
-    setTimeout(() => ctx.close(), 700);
   } catch {
     // Web Audio isn't available in every environment -- cues just stay silent.
   }

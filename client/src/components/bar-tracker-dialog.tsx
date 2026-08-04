@@ -30,14 +30,11 @@ import {
   computeBarTiltDegrees,
   computeRepDepths,
   guessMovementPattern,
-  checkFullBodyPose,
   calibratePixelsPerMeterFromHeight,
   type PoseFrame,
   type MovementGuess,
   type MovementPattern,
-  type PoseCheckReason,
 } from "@/lib/pose-tracking";
-import { playSuccessChime, playErrorTone } from "@/lib/audio-cues";
 import { PoseLandmarker, type NormalizedLandmark } from "@mediapipe/tasks-vision";
 import {
   Camera,
@@ -50,24 +47,16 @@ import {
   Info,
   Volume2,
   VolumeX,
-  SkipForward,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis } from "recharts";
 
-type Step = "setup" | "posecheck" | "calibrate" | "tracking" | "review";
+type Step = "setup" | "calibrate" | "tracking" | "review";
 
 const MIN_VISIBILITY = 0.5;
 const SKELETON_COLOR = "#4ade80";
 const TRAIL_COLOR = "#f97316";
 const TRAIL_MAX_POINTS = 90;
-// How long a good pose has to be held before it counts as confirmed --
-// long enough to rule out a single lucky frame, short enough not to feel
-// like a chore.
-const POSE_CHECK_HOLD_MS = 700;
-// How long to keep checking before flagging that something's probably off
-// (bad angle/distance/occlusion) rather than silently retrying forever.
-const POSE_CHECK_TIMEOUT_MS = 8000;
 
 const VOICE_PREF_KEY = "forge:tracker-voice-cues";
 
@@ -86,18 +75,6 @@ function speak(text: string) {
   utterance.rate = 1.1;
   window.speechSynthesis.speak(utterance);
 }
-
-// A specific, actionable line per pose-check failure reason -- "try again"
-// on its own doesn't tell anyone what to actually change, so this is what
-// turns checkFullBodyPose's diagnosis into something the athlete can act
-// on immediately instead of guessing.
-const POSE_CHECK_MESSAGES: Record<PoseCheckReason, string> = {
-  no_person: "We can't see you at all — make sure you're in frame and there's enough light.",
-  not_fully_visible: "Can't see your whole body — step back so your head, hands, and feet are all in frame.",
-  too_far: "You're too small in frame for an accurate reading — step closer to the camera.",
-  arms_not_extended: "Raise your arms out to the sides (or overhead) and hold.",
-  feet_together: "Stand with your feet spread apart and hold.",
-};
 
 // Loose keyword match from the exercise name to the handful of patterns
 // guessMovementPattern can distinguish -- used only to flag an obvious
@@ -205,32 +182,21 @@ export function BarTrackerDialog({
   const poseLandmarkerRef = useRef<PoseLandmarker | null>(null);
   const lastVideoTimeRef = useRef(-1);
   const voiceEnabledRef = useRef(loadVoicePref());
-  // Timestamp the current unbroken streak of a good pose-check pose started
-  // -- null whenever the pose isn't currently good, so a single dropped
-  // frame resets the hold instead of counting toward it.
-  const poseCheckGoodSinceRef = useRef<number | null>(null);
-  const poseCheckStartRef = useRef(0);
-  const poseCheckWarnedRef = useRef(false);
-  // Set the instant the pose check passes, from the athlete's own height --
-  // a ref (not just state) so pixelsPerMeter() can read it synchronously
-  // from inside the tracking rAF loop without waiting on a re-render.
+  // Set continuously in the background from the moment the camera/model are
+  // ready, from the athlete's own height -- a ref (not just state) so
+  // pixelsPerMeter() can read it synchronously from inside the tracking rAF
+  // loop without waiting on a re-render.
   const autoPixelsPerMeterRef = useRef<number | null>(null);
 
   const [step, setStep] = useState<Step>("setup");
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [modelLoading, setModelLoading] = useState(true);
   const [tilt, setTilt] = useState<number | null>(null);
-  // Live diagnosis of why the pose check hasn't passed yet -- null once
-  // it's actually ready (or before the first frame comes in). Shown
-  // continuously, not just after a timeout, so the athlete can self-correct
-  // in real time instead of waiting to find out something's wrong.
-  const [poseCheckReason, setPoseCheckReason] = useState<PoseCheckReason | null>(null);
-  const [poseCheckTimedOut, setPoseCheckTimedOut] = useState(false);
   const [calibrationTaps, setCalibrationTaps] = useState<{ x: number; y: number }[]>([]);
   const [calibrationWarning, setCalibrationWarning] = useState<string | null>(null);
   const [referenceCm, setReferenceCm] = useState("220");
   // Mirrors autoPixelsPerMeterRef for rendering the calibrate step's UI --
-  // true once the pose check has successfully derived a calibration from
+  // true once the background detection loop has derived a calibration from
   // the athlete's height, letting them skip manual taps entirely.
   const [autoCalibratedFromHeight, setAutoCalibratedFromHeight] = useState(false);
   const [liveSpeed, setLiveSpeed] = useState(0);
@@ -263,10 +229,6 @@ export function BarTrackerDialog({
     framesRef.current = [];
     lastVideoTimeRef.current = -1;
     setLiveTiltDeg(null);
-    poseCheckGoodSinceRef.current = null;
-    poseCheckWarnedRef.current = false;
-    setPoseCheckReason(null);
-    setPoseCheckTimedOut(false);
     autoPixelsPerMeterRef.current = null;
     setAutoCalibratedFromHeight(false);
 
@@ -275,6 +237,12 @@ export function BarTrackerDialog({
       .then((landmarker) => {
         poseLandmarkerRef.current = landmarker;
         setModelLoading(false);
+        // Starts as soon as the model's ready (the camera stream may still
+        // be loading -- previewTick's own guard just keeps polling until
+        // both are) rather than waiting for a dedicated "get set up" step,
+        // so the skeleton overlay and auto-calibration are already live by
+        // the time the athlete looks at the setup screen.
+        previewTick();
       })
       .catch(() => {
         setCameraError("Couldn't load the pose-tracking model -- check your connection and retry.");
@@ -302,37 +270,25 @@ export function BarTrackerDialog({
     };
   }, [open]);
 
-  function startPoseCheck() {
-    setStep("posecheck");
-    poseCheckGoodSinceRef.current = null;
-    poseCheckWarnedRef.current = false;
-    poseCheckStartRef.current = performance.now();
-    setPoseCheckReason(null);
-    setPoseCheckTimedOut(false);
-    poseCheckTick();
-  }
-
-  function retryPoseCheck() {
-    poseCheckStartRef.current = performance.now();
-    poseCheckWarnedRef.current = false;
-    setPoseCheckTimedOut(false);
-  }
-
-  function skipPoseCheck() {
-    if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    setStep("calibrate");
-  }
-
-  function poseCheckTick() {
+  // Runs from the moment the model's ready through "setup" and "calibrate"
+  // (stopped by startTracking(), which cancels it before starting the
+  // tracking-phase tick loop instead). Draws the live skeleton overlay --
+  // the athlete's real-time confirmation that tracking is working, with no
+  // separate "hold this pose" step needed for it -- and opportunistically
+  // derives pixels-per-meter from the athlete's height whenever the needed
+  // landmarks are visible, continuously refining it (rather than freezing
+  // on the first reading) so whatever position they're in right as they
+  // tap "Start Set" is what gets used.
+  function previewTick() {
     const video = videoRef.current;
     const overlay = overlayRef.current;
     const landmarker = poseLandmarkerRef.current;
     if (!video || !overlay || !landmarker || video.videoWidth === 0) {
-      rafRef.current = requestAnimationFrame(poseCheckTick);
+      rafRef.current = requestAnimationFrame(previewTick);
       return;
     }
     if (video.currentTime === lastVideoTimeRef.current) {
-      rafRef.current = requestAnimationFrame(poseCheckTick);
+      rafRef.current = requestAnimationFrame(previewTick);
       return;
     }
     lastVideoTimeRef.current = video.currentTime;
@@ -344,38 +300,16 @@ export function BarTrackerDialog({
       ctx.clearRect(0, 0, overlay.width, overlay.height);
       const detection = landmarker.detectForVideo(video, performance.now());
       const landmarks = detection.landmarks[0] ?? null;
-      if (landmarks) drawSkeleton(ctx, landmarks, overlay.width, overlay.height);
-
-      const check = checkFullBodyPose(landmarks);
-      // checkFullBodyPose only ever returns ready:true when landmarks was
-      // non-null (its very first check), so `landmarks` is guaranteed here
-      // -- the runtime-landmarks variable just isn't type-linked to
-      // check.ready, hence checking both.
-      if (check.ready && landmarks) {
-        setPoseCheckReason(null);
-        const now = performance.now();
-        if (poseCheckGoodSinceRef.current == null) poseCheckGoodSinceRef.current = now;
-        if (now - poseCheckGoodSinceRef.current >= POSE_CHECK_HOLD_MS) {
-          playSuccessChime();
-          // Same T-pose moment doubles as calibration when the athlete's
-          // height is on file -- no separate manual tap-two-points step.
-          const auto = calibratePixelsPerMeterFromHeight(landmarks, overlay.height, athleteHeightCm);
+      if (landmarks) {
+        drawSkeleton(ctx, landmarks, overlay.width, overlay.height);
+        const auto = calibratePixelsPerMeterFromHeight(landmarks, overlay.height, athleteHeightCm);
+        if (auto != null) {
           autoPixelsPerMeterRef.current = auto;
-          setAutoCalibratedFromHeight(auto != null);
-          setStep("calibrate");
-          return;
-        }
-      } else if (!check.ready) {
-        poseCheckGoodSinceRef.current = null;
-        setPoseCheckReason(check.reason);
-        if (!poseCheckWarnedRef.current && performance.now() - poseCheckStartRef.current > POSE_CHECK_TIMEOUT_MS) {
-          poseCheckWarnedRef.current = true;
-          playErrorTone();
-          setPoseCheckTimedOut(true);
+          setAutoCalibratedFromHeight(true);
         }
       }
     }
-    rafRef.current = requestAnimationFrame(poseCheckTick);
+    rafRef.current = requestAnimationFrame(previewTick);
   }
 
   function handleCalibrationTap(e: React.MouseEvent<HTMLDivElement>) {
@@ -412,6 +346,10 @@ export function BarTrackerDialog({
   }
 
   function startTracking() {
+    // Stops previewTick's self-perpetuating loop -- otherwise it and the
+    // tracking-phase tick() below would both keep rescheduling themselves
+    // and stomp on the same rafRef/canvas.
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
     setStep("tracking");
     traceRef.current = [];
     leftTraceRef.current = [];
@@ -715,34 +653,6 @@ export function BarTrackerDialog({
           </div>
         )}
 
-        {step === "posecheck" && (
-          <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">
-              Stand in a T-pose (arms out, feet apart) and hold it for a second so we can confirm
-              your whole body is visible before you start.
-            </p>
-            <p
-              className={cn(
-                "flex items-center gap-2 text-sm font-semibold",
-                poseCheckReason ? "text-amber-500" : "text-success",
-              )}
-            >
-              {poseCheckReason ? (
-                <AlertTriangle className="h-4 w-4 shrink-0" />
-              ) : (
-                <Check className="h-4 w-4 shrink-0" />
-              )}
-              {poseCheckReason ? POSE_CHECK_MESSAGES[poseCheckReason] : "Looking good — hold it…"}
-            </p>
-            {poseCheckTimedOut && (
-              <p className="text-xs text-muted-foreground">
-                Still not seeing it after a few tries — fix the camera above, or skip this check
-                and calibrate anyway.
-              </p>
-            )}
-          </div>
-        )}
-
         {step === "calibrate" && (
           <div className="space-y-3">
             {autoCalibratedFromHeight && calibrationTaps.length === 0 ? (
@@ -951,23 +861,9 @@ export function BarTrackerDialog({
 
         <DialogFooter>
           {step === "setup" && (
-            <Button onClick={startPoseCheck} disabled={!!cameraError || modelLoading}>
+            <Button onClick={() => setStep("calibrate")} disabled={!!cameraError || modelLoading}>
               I'm Set Up
             </Button>
-          )}
-          {step === "posecheck" && (
-            <>
-              {poseCheckTimedOut && (
-                <Button variant="outline" onClick={retryPoseCheck}>
-                  <RotateCcw className="h-4 w-4" />
-                  Retry
-                </Button>
-              )}
-              <Button variant={poseCheckTimedOut ? "default" : "ghost"} onClick={skipPoseCheck}>
-                <SkipForward className="h-4 w-4" />
-                Skip this check
-              </Button>
-            </>
           )}
           {step === "calibrate" && (
             <Button

@@ -942,6 +942,14 @@ export const sendProgramChatMessageSchema = z.object({
 
 export type SendProgramChatMessageInput = z.infer<typeof sendProgramChatMessageSchema>;
 
+export const substituteExerciseSchema = z.object({
+  programExerciseId: z.number().int().positive(),
+  reason: z.string().trim().min(1).max(200),
+  notes: z.string().trim().max(500).optional().default(""),
+});
+
+export type SubstituteExerciseInput = z.infer<typeof substituteExerciseSchema>;
+
 // ---------- Relations ----------
 
 export const usersRelations = relations(users, ({ many }) => ({

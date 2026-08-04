@@ -62,9 +62,11 @@ export default function AthleteDashboard() {
           already shown inline by the calendar itself. Showing both here too
           was a redundant, confusing double empty-state. No coach doesn't
           mean no path forward though -- Free Agent status is purely derived
-          (zero rows in coachAthletes for this athlete, nothing stored), and
-          it comes with full access to the AI program builder as the
-          in-the-meantime coaching relationship. */}
+          (zero rows in coachAthletes for this athlete, nothing stored).
+          The full AI program builder/chat/form-check are a paid upgrade for
+          a Free Agent (see requirePaidAiAccess in routes.ts, always false
+          until real billing exists) -- manual programs, Forge templates,
+          and exercise substitution stay free either way. */}
       {!coachesLoading && coaches.length === 0 && (
         <Card className="mt-6">
           <CardContent className="flex flex-col items-center gap-3 py-14 text-center">
@@ -73,18 +75,19 @@ export default function AthleteDashboard() {
               Free Agent
             </Badge>
             <p className="max-w-sm text-muted-foreground">
-              You don't have a coach yet, so the AI is your coach for now -- describe what you
-              want to train and it'll build you a full program, review your form, and adjust as
-              you go.
+              You don't have a coach yet. Build your own program by hand or start from a Forge
+              template, and swap out any exercise that doesn't work for you -- the full AI coach
+              (conversational program building, form-check, and AI chat) is a paid upgrade,
+              coming soon.
             </p>
             <Button asChild>
               <Link href="/athlete/programs">
                 <Sparkles className="h-4 w-4" />
-                Build a Program with AI
+                Build a Program
               </Link>
             </Button>
             <p className="mt-2 text-xs text-muted-foreground">
-              Joining a team later? Your AI-built programs stay right where they are.
+              Joining a team later? Your programs stay right where they are.
             </p>
             <CoachJoinHint />
           </CardContent>

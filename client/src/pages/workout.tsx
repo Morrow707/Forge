@@ -65,6 +65,7 @@ import type { PublicUser } from "@shared/schema";
 import { parseProgression } from "@/lib/progression";
 import { PlateCalculatorDialog } from "@/components/plate-calculator-dialog";
 import { ReadinessBanner } from "@/components/readiness-banner";
+import { WellnessGate } from "@/components/wellness-gate";
 
 type ExerciseInfo = {
   id: number;
@@ -944,22 +945,34 @@ export function WorkoutPage({
     : data.programAiAuthored
       ? "ai"
       : "off";
+  // Exercise substitution is its own always-free feature (see
+  // /swap-exercise in routes.ts, deliberately never behind the AI paywall)
+  // -- it doesn't need the program to be AI-authored the way videoCheckMode
+  // does, just that there's no coach in the loop for this specific day, so
+  // it's the athlete's own call to make.
+  const canSubstituteExercise = !hasCoachForThisProgram;
 
   return (
-    <AppShell
-      title={
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => navigate(routeBase)}
-            aria-label="Back to calendar"
-            className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <ArrowLeft className="h-6 w-6 md:h-7 md:w-7" />
-          </button>
-          <span>{format(parseISO(date), "EEEE, MMM d")}</span>
-        </div>
-      }
+    <>
+      {/* Only for an actual training day -- a rest day has nothing to be
+          ready for, and gating the day's own page (rather than every page
+          in the app, as this used to) means checking the calendar or chat
+          doesn't force a check-in first. */}
+      {user?.role === "athlete" && !data.day.isRestDay && <WellnessGate />}
+      <AppShell
+        title={
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => navigate(routeBase)}
+              aria-label="Back to calendar"
+              className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <ArrowLeft className="h-6 w-6 md:h-7 md:w-7" />
+            </button>
+            <span>{format(parseISO(date), "EEEE, MMM d")}</span>
+          </div>
+        }
       actions={
         <div className="flex items-center gap-1 rounded-md bg-secondary p-1">
           {(["lbs", "kg"] as const).map((u) => (
@@ -1182,8 +1195,8 @@ export function WorkoutPage({
                         apiBase={apiBase}
                         programsApiBase={programsApiBase}
                         videoCheckMode={videoCheckMode}
+                        canSubstituteExercise={canSubstituteExercise}
                         programId={data.programId}
-                        dayTitle={data.day.title}
                         onUpdateItem={(patch) => updateItem(item.key, patch)}
                         onUpdateSet={(setNumber, patch, options) => updateSet(item.key, setNumber, patch, options)}
                         onAddSet={() => addSet(item.key)}
@@ -1270,7 +1283,8 @@ export function WorkoutPage({
           </div>
         </div>
       )}
-    </AppShell>
+      </AppShell>
+    </>
   );
 }
 
@@ -1285,8 +1299,8 @@ function ExerciseLogContent({
   apiBase,
   programsApiBase,
   videoCheckMode,
+  canSubstituteExercise,
   programId,
-  dayTitle,
   onUpdateItem,
   onUpdateSet,
   onAddSet,
@@ -1305,8 +1319,8 @@ function ExerciseLogContent({
   apiBase: string;
   programsApiBase: string;
   videoCheckMode: "comment" | "ai" | "off";
+  canSubstituteExercise: boolean;
   programId: number;
-  dayTitle: string;
   onUpdateItem: (patch: Partial<ItemState>) => void;
   onUpdateSet: (setNumber: number, patch: Partial<SetRow>, options?: { immediate?: boolean }) => void;
   onAddSet: () => void;
@@ -1444,14 +1458,16 @@ function ExerciseLogContent({
   const swapMutation = useMutation({
     mutationFn: async () => {
       const reasonText = swapReason ?? "the user just doesn't want to do it today";
-      const content = `Swap "${item.exerciseName}" in Week ${item.weekNumber}, "${dayTitle}" (today's session) for a suitable alternative. Reason: ${reasonText}${swapNotes.trim() ? ` -- ${swapNotes.trim()}` : ""}. Only change this one exercise in this specific day; leave every other week and day exactly as they are.`;
-      const res = await apiRequest("POST", `${programsApiBase}/programs/${programId}/chat`, { content });
-      return res.json() as Promise<{ assistantMessage: { content: string } }>;
+      const res = await apiRequest("POST", `${programsApiBase}/programs/${programId}/swap-exercise`, {
+        programExerciseId: item.refId,
+        reason: reasonText,
+        notes: swapNotes,
+      });
+      return res.json() as Promise<{ summary: string }>;
     },
     onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: [`${apiBase}/day`] });
-      qc.invalidateQueries({ queryKey: [`${programsApiBase}/programs/${programId}/chat`] });
-      toast.success(result.assistantMessage.content);
+      toast.success(result.summary);
       setSwapOpen(false);
       setSwapReason(null);
       setSwapNotes("");
@@ -1479,7 +1495,7 @@ function ExerciseLogContent({
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
               <Badge variant="outline">{item.muscleGroup}</Badge>
-              {videoCheckMode === "ai" && (
+              {canSubstituteExercise && !isCorrective && (
                 <button
                   type="button"
                   aria-label={`Ask AI to swap ${item.exerciseName}`}
