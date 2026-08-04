@@ -4,13 +4,40 @@
 
 export type TrackedPoint = { t: number; x: number; y: number };
 
+// One "rep" = one concentric (lifting) phase plus whatever phase precedes
+// it -- matches how the live rep counter already counts reps (on the start
+// of each upward movement). depthDeg and velocityCurve are left undefined
+// here and filled in by the caller from pose-tracking.ts, same pattern as
+// formFaults below: this module has no landmark data to compute depth from.
+export type RepBreakdown = {
+  repNumber: number;
+  peakVelocityMps: number;
+  meanVelocityMps: number;
+  concentricSeconds: number;
+  startT: number;
+  endT: number;
+  depthDeg?: number | null;
+  velocityCurve?: { positionCm: number; velocityMps: number }[];
+};
+
+export type PathTracePoint = { t: number; x: number; y: number };
+
 export type RepMetrics = {
   peakVelocityMps: number;
   meanVelocityMps: number;
   concentricSeconds: number;
   eccentricSeconds: number;
   barPathDeviationCm: number;
-  barPathTrace: { t: number; x: number; y: number }[];
+  barPathTrace: PathTracePoint[];
+  // Per-rep numbers for the velocity-decay / depth-consistency breakdown --
+  // the whole-set numbers above stay as they were (best/average across the
+  // set) so nothing downstream that reads them needs to change.
+  repBreakdown: RepBreakdown[];
+  // Populated by the caller (bar-tracker-dialog.tsx tracks each wrist
+  // separately alongside the averaged bar point) rather than computed here,
+  // same reasoning as formFaults below -- null when one side was out of
+  // frame for too much of the set to build a meaningful trace.
+  armPathTrace?: { left: PathTracePoint[]; right: PathTracePoint[] } | null;
   // Populated by the caller from pose-tracking.ts's detectFormFaults --
   // kept as a plain field here (rather than computed inside
   // summarizeTrackedSet) since fault detection needs the full per-frame
@@ -18,6 +45,26 @@ export type RepMetrics = {
   // with.
   formFaults: { code: string; label: string }[];
 };
+
+// Decimates a raw pixel-space trace to at most ~200 points and converts it
+// to cm relative to `origin` -- shared by the averaged bar-path trace and
+// the independent left/right arm-path traces so all three use the same
+// coordinate convention.
+export function buildPathTrace(
+  rawPoints: TrackedPoint[],
+  pixelsPerMeter: number,
+  origin: { x: number; y: number },
+): PathTracePoint[] {
+  if (rawPoints.length === 0 || pixelsPerMeter <= 0) return [];
+  const stride = Math.max(1, Math.floor(rawPoints.length / 200));
+  return rawPoints
+    .filter((_, i) => i % stride === 0)
+    .map((p) => ({
+      t: p.t,
+      x: Math.round(((p.x - origin.x) / pixelsPerMeter) * 1000) / 10,
+      y: Math.round(((p.y - origin.y) / pixelsPerMeter) * 1000) / 10,
+    }));
+}
 
 const SMOOTHING_WINDOW = 5;
 
@@ -123,7 +170,7 @@ export function summarizeTrackedSet(
     const duration = (rawPoints[phase.endIdx].t - rawPoints[phase.startIdx].t) / 1000;
     const peak = slice.length ? Math.max(...slice) : 0;
     const mean = slice.length ? slice.reduce((a, b) => a + b, 0) / slice.length : 0;
-    return { peak, mean, duration };
+    return { peak, mean, duration, startIdx: phase.startIdx, endIdx: phase.endIdx };
   });
 
   // Heuristic: of each pair of adjacent phases, the one with the higher
@@ -131,12 +178,38 @@ export function summarizeTrackedSet(
   // other is eccentric -- there's no way to know "up" vs "down" in image
   // space without knowing the exercise, but concentric-is-faster holds
   // for the compound lifts this feature targets.
-  const concentric: typeof phaseStats = [];
-  const eccentric: typeof phaseStats = [];
-  phaseStats.forEach((phase, i) => {
+  const isConcentric = phaseStats.map((phase, i) => {
     const neighbor = phaseStats[i + 1] ?? phaseStats[i - 1];
-    if (!neighbor || phase.mean >= neighbor.mean) concentric.push(phase);
-    else eccentric.push(phase);
+    return !neighbor || phase.mean >= neighbor.mean;
+  });
+  const concentric = phaseStats.filter((_, i) => isConcentric[i]);
+  const eccentric = phaseStats.filter((_, i) => !isConcentric[i]);
+
+  // One entry per concentric phase, in chronological order -- rep 1, 2, 3...
+  // Each rep's window starts at the beginning of the phase before it (the
+  // bottom of the preceding eccentric, i.e. the bottom of the rep) so depth
+  // and the sticking-point curve cover the whole rep, not just its lockout.
+  const repBreakdown: RepBreakdown[] = [];
+  phaseStats.forEach((phase, i) => {
+    if (!isConcentric[i]) return;
+    const repStartIdx = i > 0 ? phaseStats[i - 1].startIdx : phase.startIdx;
+    const curveStride = Math.max(1, Math.floor((phase.endIdx - phase.startIdx) / 20));
+    const velocityCurve: { positionCm: number; velocityMps: number }[] = [];
+    for (let idx = phase.startIdx; idx <= phase.endIdx; idx += curveStride) {
+      velocityCurve.push({
+        positionCm: Math.round(((rawPoints[idx].y - rawPoints[phase.startIdx].y) / pixelsPerMeter) * -1000) / 10,
+        velocityMps: Math.round(speedsMps[idx] * 100) / 100,
+      });
+    }
+    repBreakdown.push({
+      repNumber: repBreakdown.length + 1,
+      peakVelocityMps: Math.round(phase.peak * 100) / 100,
+      meanVelocityMps: Math.round(phase.mean * 100) / 100,
+      concentricSeconds: Math.round(phase.duration * 100) / 100,
+      startT: rawPoints[repStartIdx].t,
+      endT: rawPoints[phase.endIdx].t,
+      velocityCurve,
+    });
   });
 
   const xs = rawPoints.map((p) => p.x);
@@ -144,16 +217,7 @@ export function summarizeTrackedSet(
   const barPathDeviationCm =
     (Math.max(...xs.map((x) => Math.abs(x - meanX))) / pixelsPerMeter) * 100;
 
-  const startX = rawPoints[0].x;
-  const startY = rawPoints[0].y;
-  const stride = Math.max(1, Math.floor(rawPoints.length / 200));
-  const barPathTrace = rawPoints
-    .filter((_, i) => i % stride === 0)
-    .map((p) => ({
-      t: p.t,
-      x: Math.round(((p.x - startX) / pixelsPerMeter) * 1000) / 10,
-      y: Math.round(((p.y - startY) / pixelsPerMeter) * 1000) / 10,
-    }));
+  const barPathTrace = buildPathTrace(rawPoints, pixelsPerMeter, { x: rawPoints[0].x, y: rawPoints[0].y });
 
   return {
     peakVelocityMps: Math.round((Math.max(...concentric.map((c) => c.peak), 0)) * 100) / 100,
@@ -172,6 +236,7 @@ export function summarizeTrackedSet(
         : 0,
     barPathDeviationCm: Math.round(barPathDeviationCm * 10) / 10,
     barPathTrace,
+    repBreakdown,
     formFaults: [],
   };
 }

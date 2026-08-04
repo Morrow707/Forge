@@ -11,23 +11,42 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import {
   summarizeTrackedSet,
   calibrationQuality,
+  buildPathTrace,
   type TrackedPoint,
   type RepMetrics,
 } from "@/lib/bar-tracking";
 import {
   getPoseLandmarker,
   deriveBarPoint,
+  deriveWristPoints,
   detectFormFaults,
   computeBarTiltDegrees,
+  computeRepDepths,
+  guessMovementPattern,
   type PoseFrame,
+  type MovementGuess,
+  type MovementPattern,
 } from "@/lib/pose-tracking";
 import { PoseLandmarker, type NormalizedLandmark } from "@mediapipe/tasks-vision";
-import { Camera, Video, Square, RotateCcw, Check, AlertTriangle, Sparkles } from "lucide-react";
+import {
+  Camera,
+  Video,
+  Square,
+  RotateCcw,
+  Check,
+  AlertTriangle,
+  Sparkles,
+  Info,
+  Volume2,
+  VolumeX,
+} from "lucide-react";
 import { toast } from "sonner";
+import { ResponsiveContainer, LineChart, Line, XAxis, YAxis } from "recharts";
 
 type Step = "setup" | "calibrate" | "tracking" | "review";
 
@@ -35,6 +54,37 @@ const MIN_VISIBILITY = 0.5;
 const SKELETON_COLOR = "#4ade80";
 const TRAIL_COLOR = "#f97316";
 const TRAIL_MAX_POINTS = 90;
+
+const VOICE_PREF_KEY = "forge:tracker-voice-cues";
+
+function loadVoicePref(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.localStorage.getItem(VOICE_PREF_KEY) === "1";
+}
+
+// Purely a personal convenience during a set (some athletes like a spoken
+// rep count, others find it distracting), so this is a device-level
+// preference, not something synced or shown to a coach.
+function speak(text: string) {
+  if (typeof window === "undefined" || !window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.rate = 1.1;
+  window.speechSynthesis.speak(utterance);
+}
+
+// Loose keyword match from the exercise name to the handful of patterns
+// guessMovementPattern can distinguish -- used only to flag an obvious
+// mismatch ("tracking Bench Press but this moved like a Squat"), not to
+// validate anything precisely.
+function expectedPatternFromName(name: string): MovementPattern | null {
+  const n = name.toLowerCase();
+  if (n.includes("deadlift")) return "deadlift";
+  if (n.includes("squat")) return "squat";
+  if (/overhead|shoulder press|push press|military press/.test(n)) return "overhead_press";
+  if (n.includes("bench") || n.includes("row") || n.includes("press")) return "horizontal_press_or_row";
+  return null;
+}
 
 function drawSkeleton(
   ctx: CanvasRenderingContext2D,
@@ -98,12 +148,15 @@ export function BarTrackerDialog({
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number | null>(null);
   const traceRef = useRef<TrackedPoint[]>([]);
+  const leftTraceRef = useRef<TrackedPoint[]>([]);
+  const rightTraceRef = useRef<TrackedPoint[]>([]);
   const framesRef = useRef<PoseFrame[]>([]);
   const startTimeRef = useRef<number>(0);
   const lastRepDirRef = useRef<1 | -1 | 0>(0);
   const repCountRef = useRef(0);
   const poseLandmarkerRef = useRef<PoseLandmarker | null>(null);
   const lastVideoTimeRef = useRef(-1);
+  const voiceEnabledRef = useRef(loadVoicePref());
 
   const [step, setStep] = useState<Step>("setup");
   const [cameraError, setCameraError] = useState<string | null>(null);
@@ -117,6 +170,14 @@ export function BarTrackerDialog({
   const [repCount, setRepCount] = useState(0);
   const [poseVisible, setPoseVisible] = useState(true);
   const [result, setResult] = useState<RepMetrics | null>(null);
+  const [movementGuess, setMovementGuess] = useState<MovementGuess | null>(null);
+  const [voiceEnabled, setVoiceEnabled] = useState(loadVoicePref);
+
+  function toggleVoice(next: boolean) {
+    setVoiceEnabled(next);
+    voiceEnabledRef.current = next;
+    window.localStorage.setItem(VOICE_PREF_KEY, next ? "1" : "0");
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -125,9 +186,12 @@ export function BarTrackerDialog({
     setCalibrationTaps([]);
     setCalibrationWarning(null);
     setResult(null);
+    setMovementGuess(null);
     setRepCount(0);
     repCountRef.current = 0;
     traceRef.current = [];
+    leftTraceRef.current = [];
+    rightTraceRef.current = [];
     framesRef.current = [];
     lastVideoTimeRef.current = -1;
     setLiveTiltDeg(null);
@@ -195,6 +259,8 @@ export function BarTrackerDialog({
   function startTracking() {
     setStep("tracking");
     traceRef.current = [];
+    leftTraceRef.current = [];
+    rightTraceRef.current = [];
     framesRef.current = [];
     startTimeRef.current = performance.now();
     lastRepDirRef.current = 0;
@@ -245,6 +311,10 @@ export function BarTrackerDialog({
         trace.push({ t, x: point.x, y: point.y });
         framesRef.current.push({ t, landmarks });
 
+        const wrists = deriveWristPoints(landmarks, overlay.width, overlay.height);
+        if (wrists.left) leftTraceRef.current.push({ t, x: wrists.left.x, y: wrists.left.y });
+        if (wrists.right) rightTraceRef.current.push({ t, x: wrists.right.x, y: wrists.right.y });
+
         if (prev) {
           const dt = (t - prev.t) / 1000;
           const ppm = pixelsPerMeter();
@@ -267,6 +337,7 @@ export function BarTrackerDialog({
               if (dir === -1) {
                 repCountRef.current += 1;
                 setRepCount(repCountRef.current);
+                if (voiceEnabledRef.current) speak(String(repCountRef.current));
                 if (targetReps && repCountRef.current >= targetReps) {
                   toast.info(`${targetReps} reps detected — reviewing your set`);
                   stopTracking();
@@ -292,6 +363,31 @@ export function BarTrackerDialog({
       return;
     }
     metrics.formFaults = detectFormFaults(framesRef.current, metrics.barPathDeviationCm);
+
+    const depths = computeRepDepths(
+      framesRef.current,
+      metrics.repBreakdown.map((r) => ({ startT: r.startT, endT: r.endT })),
+    );
+    metrics.repBreakdown = metrics.repBreakdown.map((r, i) => ({ ...r, depthDeg: depths[i] }));
+
+    const ppm = pixelsPerMeter();
+    const origin = { x: traceRef.current[0]?.x ?? 0, y: traceRef.current[0]?.y ?? 0 };
+    metrics.armPathTrace =
+      leftTraceRef.current.length > 1 && rightTraceRef.current.length > 1
+        ? {
+            left: buildPathTrace(leftTraceRef.current, ppm, origin),
+            right: buildPathTrace(rightTraceRef.current, ppm, origin),
+          }
+        : null;
+
+    const guess = guessMovementPattern(framesRef.current);
+    setMovementGuess(guess);
+
+    if (voiceEnabledRef.current) {
+      const count = metrics.formFaults.length;
+      speak(count > 0 ? `Set complete. ${count} form note${count > 1 ? "s" : ""}.` : "Set complete.");
+    }
+
     setResult(metrics);
     setStep("review");
   }
@@ -303,6 +399,15 @@ export function BarTrackerDialog({
     setStep("tracking");
     startTracking();
   }
+
+  const expectedPattern = expectedPatternFromName(exerciseName);
+  const patternMismatch =
+    !!movementGuess &&
+    movementGuess.pattern !== "unknown" &&
+    !!expectedPattern &&
+    movementGuess.pattern !== expectedPattern;
+  const firstRepPeak = result?.repBreakdown[0]?.peakVelocityMps ?? 0;
+  const lastRepCurve = result?.repBreakdown[result.repBreakdown.length - 1]?.velocityCurve ?? [];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -412,6 +517,13 @@ export function BarTrackerDialog({
                 Loading the pose-tracking model…
               </p>
             )}
+            <label className="flex items-center gap-2.5 text-sm">
+              <Checkbox checked={voiceEnabled} onCheckedChange={(c) => toggleVoice(c === true)} />
+              <span className="flex items-center gap-1.5">
+                {voiceEnabled ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
+                Voice rep counts &amp; end-of-set cues (off by default)
+              </span>
+            </label>
           </div>
         )}
 
@@ -473,6 +585,74 @@ export function BarTrackerDialog({
                       {f.label}
                     </Badge>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {movementGuess && movementGuess.pattern !== "unknown" && (
+              <p
+                className={cn(
+                  "flex items-center gap-1.5 text-xs",
+                  patternMismatch ? "font-semibold text-amber-500" : "text-muted-foreground",
+                )}
+              >
+                {patternMismatch ? (
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                ) : (
+                  <Info className="h-3.5 w-3.5 shrink-0" />
+                )}
+                {patternMismatch
+                  ? `Motion looks more like a ${movementGuess.label} — double check you're tracking ${exerciseName}.`
+                  : `Motion pattern: ${movementGuess.label}`}
+              </p>
+            )}
+
+            {result.repBreakdown.length > 1 && (
+              <div className="space-y-1.5">
+                <p className="text-xs font-semibold uppercase text-muted-foreground">Rep by rep</p>
+                <div className="space-y-1 rounded-md border border-border p-2">
+                  {result.repBreakdown.map((r) => {
+                    const decayPct =
+                      mode === "full" && firstRepPeak > 0
+                        ? Math.round(((firstRepPeak - r.peakVelocityMps) / firstRepPeak) * 100)
+                        : 0;
+                    return (
+                      <div key={r.repNumber} className="flex items-center justify-between gap-2 text-xs">
+                        <span className="font-semibold">Rep {r.repNumber}</span>
+                        <span className="flex items-center gap-2 text-muted-foreground">
+                          {mode === "full" && (
+                            <span className={decayPct > 15 ? "font-semibold text-amber-500" : undefined}>
+                              {r.peakVelocityMps} m/s{decayPct > 15 ? ` (-${decayPct}%)` : ""}
+                            </span>
+                          )}
+                          {r.depthDeg != null && <span>{r.depthDeg}° knee</span>}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {mode === "full" && lastRepCurve.length > 1 && (
+              <div className="space-y-1.5">
+                <p className="text-xs font-semibold uppercase text-muted-foreground">
+                  Sticking point (last rep)
+                </p>
+                <div className="h-28">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={lastRepCurve} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+                      <XAxis
+                        dataKey="positionCm"
+                        type="number"
+                        tick={{ fontSize: 9 }}
+                        unit="cm"
+                        tickFormatter={(v: number) => String(Math.round(v))}
+                      />
+                      <YAxis dataKey="velocityMps" tick={{ fontSize: 9 }} unit="m/s" width={40} />
+                      <Line type="monotone" dataKey="velocityMps" stroke="#f97316" dot={false} strokeWidth={2} />
+                    </LineChart>
+                  </ResponsiveContainer>
                 </div>
               </div>
             )}

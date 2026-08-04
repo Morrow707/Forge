@@ -344,6 +344,8 @@ ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "eccentric_seconds" r
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "bar_path_deviation_cm" real;
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "bar_path_trace" json;
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "form_faults" json;
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "rep_breakdown" json;
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "arm_path_trace" json;
 
 CREATE TABLE IF NOT EXISTS "workout_comments" (
   "id" serial PRIMARY KEY,

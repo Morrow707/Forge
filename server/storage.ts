@@ -3122,6 +3122,8 @@ Respond to the user's latest message by producing the complete updated program s
               barPathDeviationCm: s.barPathDeviationCm ?? null,
               barPathTrace: s.barPathTrace ?? null,
               formFaults: s.formFaults ?? null,
+              repBreakdown: s.repBreakdown ?? null,
+              armPathTrace: s.armPathTrace ?? null,
             })),
           );
         }
@@ -3156,6 +3158,8 @@ Respond to the user's latest message by producing the complete updated program s
         barPathDeviationCm: workoutSetEntries.barPathDeviationCm,
         barPathTrace: workoutSetEntries.barPathTrace,
         formFaults: workoutSetEntries.formFaults,
+        repBreakdown: workoutSetEntries.repBreakdown,
+        armPathTrace: workoutSetEntries.armPathTrace,
       })
       .from(workoutSetEntries)
       .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
@@ -3189,6 +3193,8 @@ Respond to the user's latest message by producing the complete updated program s
         barPathDeviationCm: workoutSetEntries.barPathDeviationCm,
         barPathTrace: workoutSetEntries.barPathTrace,
         formFaults: workoutSetEntries.formFaults,
+        repBreakdown: workoutSetEntries.repBreakdown,
+        armPathTrace: workoutSetEntries.armPathTrace,
       })
       .from(workoutSetEntries)
       .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))

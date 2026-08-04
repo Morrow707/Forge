@@ -502,6 +502,15 @@ export const workoutSetEntries = pgTable("workout_set_entries", {
   // pose-tracking.ts's detectFormFaults. Empty/null when nothing was
   // flagged, not just when tracking wasn't on.
   formFaults: json("form_faults"),
+  // Per-rep velocity decay / depth-consistency / sticking-point curve for
+  // this set -- see bar-tracking.ts's RepBreakdown. Null for sets tracked
+  // before this existed, same as the other CV columns above.
+  repBreakdown: json("rep_breakdown"),
+  // Independent left/right wrist path traces (same coordinate convention as
+  // barPathTrace) for spotting side-to-side asymmetry that the single
+  // averaged bar path can't show. Null when one side was out of frame too
+  // much of the set to build a trace.
+  armPathTrace: json("arm_path_trace"),
 });
 
 // A two-way thread on a specific day of a specific assignment -- an athlete
@@ -1284,6 +1293,24 @@ export const formFaultSchema = z.object({
   label: z.string(),
 });
 
+export const repBreakdownEntrySchema = z.object({
+  repNumber: z.number(),
+  peakVelocityMps: z.number(),
+  meanVelocityMps: z.number(),
+  concentricSeconds: z.number(),
+  startT: z.number(),
+  endT: z.number(),
+  depthDeg: z.number().optional().nullable(),
+  velocityCurve: z
+    .array(z.object({ positionCm: z.number(), velocityMps: z.number() }))
+    .optional(),
+});
+
+export const armPathTraceSchema = z.object({
+  left: z.array(barPathPointSchema),
+  right: z.array(barPathPointSchema),
+});
+
 export const setLogInputSchema = z.object({
   setNumber: z.number(),
   reps: z.string().optional().nullable(),
@@ -1298,6 +1325,8 @@ export const setLogInputSchema = z.object({
   barPathDeviationCm: z.number().optional().nullable(),
   barPathTrace: z.array(barPathPointSchema).optional().nullable(),
   formFaults: z.array(formFaultSchema).optional().nullable(),
+  repBreakdown: z.array(repBreakdownEntrySchema).optional().nullable(),
+  armPathTrace: armPathTraceSchema.optional().nullable(),
 });
 
 export const logEntryInputSchema = z

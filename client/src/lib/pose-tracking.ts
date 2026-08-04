@@ -116,6 +116,22 @@ export function computeBarTiltDegrees(landmarks: NormalizedLandmark[]): number |
   return (Math.atan2(dy, dx) * 180) / Math.PI;
 }
 
+// Each wrist's own screen-space position, independent of deriveBarPoint's
+// averaged midpoint -- lets the caller track left/right separately for an
+// asymmetry view instead of only the combined bar path.
+export function deriveWristPoints(
+  landmarks: NormalizedLandmark[],
+  frameWidth: number,
+  frameHeight: number,
+): { left: { x: number; y: number } | null; right: { x: number; y: number } | null } {
+  const left = landmarks[POSE_LANDMARKS.LEFT_WRIST];
+  const right = landmarks[POSE_LANDMARKS.RIGHT_WRIST];
+  return {
+    left: visible(left) ? { x: left.x * frameWidth, y: left.y * frameHeight } : null,
+    right: visible(right) ? { x: right.x * frameWidth, y: right.y * frameHeight } : null,
+  };
+}
+
 // Angle in degrees at vertex `b`, given three normalized-space points.
 function angleAtVertex(
   a: { x: number; y: number },
@@ -130,6 +146,43 @@ function angleAtVertex(
   if (mag1 === 0 || mag2 === 0) return 180;
   const cos = Math.min(1, Math.max(-1, dot / (mag1 * mag2)));
   return (Math.acos(cos) * 180) / Math.PI;
+}
+
+// Knee angle(s) visible in a single frame (0, 1, or 2 -- whichever legs are
+// in frame), shared by detectFormFaults (aggregates across a whole set) and
+// computeRepDepths (aggregates within one rep's time window).
+function frameKneeAngles(lm: NormalizedLandmark[]): number[] {
+  const angles: number[] = [];
+  const lHip = lm[POSE_LANDMARKS.LEFT_HIP];
+  const rHip = lm[POSE_LANDMARKS.RIGHT_HIP];
+  const lKnee = lm[POSE_LANDMARKS.LEFT_KNEE];
+  const rKnee = lm[POSE_LANDMARKS.RIGHT_KNEE];
+  const lAnkle = lm[POSE_LANDMARKS.LEFT_ANKLE];
+  const rAnkle = lm[POSE_LANDMARKS.RIGHT_ANKLE];
+  if (visible(lHip) && visible(lKnee) && visible(lAnkle)) angles.push(angleAtVertex(lHip, lKnee, lAnkle));
+  if (visible(rHip) && visible(rKnee) && visible(rAnkle)) angles.push(angleAtVertex(rHip, rKnee, rAnkle));
+  return angles;
+}
+
+// Deepest (smallest) knee angle reached within each rep's time window --
+// the per-rep companion to the set-wide "shallow_depth" fault, so depth
+// consistency across a set (creeping shallower as fatigue sets in) is
+// visible rep-by-rep instead of only as one worst-case flag for the set.
+// Returns null for a rep where no leg was in frame for its whole window.
+export function computeRepDepths(
+  frames: PoseFrame[],
+  repWindows: { startT: number; endT: number }[],
+): (number | null)[] {
+  return repWindows.map(({ startT, endT }) => {
+    let minAngle: number | null = null;
+    for (const frame of frames) {
+      if (frame.t < startT || frame.t > endT) continue;
+      for (const angle of frameKneeAngles(frame.landmarks)) {
+        if (minAngle === null || angle < minAngle) minAngle = angle;
+      }
+    }
+    return minAngle === null ? null : Math.round(minAngle);
+  });
 }
 
 export type FormFault = {
@@ -161,21 +214,16 @@ export function detectFormFaults(
     const tilt = computeBarTiltDegrees(lm);
     if (tilt != null) tiltAngles.push(tilt);
 
-    const lHip = lm[POSE_LANDMARKS.LEFT_HIP];
-    const rHip = lm[POSE_LANDMARKS.RIGHT_HIP];
     const lKnee = lm[POSE_LANDMARKS.LEFT_KNEE];
     const rKnee = lm[POSE_LANDMARKS.RIGHT_KNEE];
     const lAnkle = lm[POSE_LANDMARKS.LEFT_ANKLE];
     const rAnkle = lm[POSE_LANDMARKS.RIGHT_ANKLE];
+    const lHip = lm[POSE_LANDMARKS.LEFT_HIP];
+    const rHip = lm[POSE_LANDMARKS.RIGHT_HIP];
     const lShoulder = lm[POSE_LANDMARKS.LEFT_SHOULDER];
     const rShoulder = lm[POSE_LANDMARKS.RIGHT_SHOULDER];
 
-    if (visible(lHip) && visible(lKnee) && visible(lAnkle)) {
-      kneeAngles.push(angleAtVertex(lHip, lKnee, lAnkle));
-    }
-    if (visible(rHip) && visible(rKnee) && visible(rAnkle)) {
-      kneeAngles.push(angleAtVertex(rHip, rKnee, rAnkle));
-    }
+    kneeAngles.push(...frameKneeAngles(lm));
 
     // Valgus proxy: knee width vs. ankle width -- a healthy squat keeps
     // knees tracking roughly over the ankles, so this ratio stays near 1;
@@ -251,4 +299,73 @@ export function detectFormFaults(
   }
 
   return faults;
+}
+
+export type MovementPattern = "squat" | "deadlift" | "overhead_press" | "horizontal_press_or_row" | "unknown";
+
+export type MovementGuess = { pattern: MovementPattern; label: string };
+
+// Rule-based motion-signature guess from joint range-of-motion, not a
+// trained classifier -- there's no labeled dataset or training pipeline
+// here, just a handful of heuristics on top of landmarks we already have.
+// Deliberately coarse (can't reliably tell a bench press from a row with a
+// single camera and no idea which way it's pointed) and always shown as an
+// informational guess/sanity-check, never used to silently relabel
+// anything the athlete tracked.
+export function guessMovementPattern(frames: PoseFrame[]): MovementGuess {
+  if (frames.length < 6) return { pattern: "unknown", label: "Not enough motion to guess" };
+
+  let kneeMin = 180;
+  let kneeMax = 0;
+  let torsoMax = 0;
+  let wristYMin = 1;
+  let wristYMax = 0;
+  let wristAboveShoulderCount = 0;
+  let wristSampleCount = 0;
+
+  for (const frame of frames) {
+    const lm = frame.landmarks;
+    for (const angle of frameKneeAngles(lm)) {
+      kneeMin = Math.min(kneeMin, angle);
+      kneeMax = Math.max(kneeMax, angle);
+    }
+
+    const lShoulder = lm[POSE_LANDMARKS.LEFT_SHOULDER];
+    const rShoulder = lm[POSE_LANDMARKS.RIGHT_SHOULDER];
+    const lHip = lm[POSE_LANDMARKS.LEFT_HIP];
+    const rHip = lm[POSE_LANDMARKS.RIGHT_HIP];
+    if (visible(lShoulder) && visible(rShoulder) && visible(lHip) && visible(rHip)) {
+      const shoulderMid = { x: (lShoulder.x + rShoulder.x) / 2, y: (lShoulder.y + rShoulder.y) / 2 };
+      const hipMid = { x: (lHip.x + rHip.x) / 2, y: (lHip.y + rHip.y) / 2 };
+      const dx = shoulderMid.x - hipMid.x;
+      const dy = shoulderMid.y - hipMid.y;
+      torsoMax = Math.max(torsoMax, (Math.atan2(Math.abs(dx), Math.abs(dy)) * 180) / Math.PI);
+
+      for (const w of [lm[POSE_LANDMARKS.LEFT_WRIST], lm[POSE_LANDMARKS.RIGHT_WRIST]]) {
+        if (!visible(w)) continue;
+        wristSampleCount += 1;
+        wristYMin = Math.min(wristYMin, w.y);
+        wristYMax = Math.max(wristYMax, w.y);
+        if (w.y < shoulderMid.y) wristAboveShoulderCount += 1;
+      }
+    }
+  }
+
+  const kneeRangeOfMotion = kneeMax - kneeMin;
+  const wristVerticalRange = wristYMax - wristYMin;
+  const wristMostlyOverhead = wristSampleCount > 0 && wristAboveShoulderCount / wristSampleCount > 0.6;
+
+  if (kneeRangeOfMotion > 30) {
+    // Both fold the knees and hips substantially -- a deadlift keeps the
+    // torso pitched forward well past a squat's comparatively upright depth.
+    if (torsoMax > 40) return { pattern: "deadlift", label: "Deadlift" };
+    return { pattern: "squat", label: "Squat" };
+  }
+
+  if (kneeRangeOfMotion < 15 && wristVerticalRange > 0.08) {
+    if (wristMostlyOverhead) return { pattern: "overhead_press", label: "Overhead Press" };
+    return { pattern: "horizontal_press_or_row", label: "Bench Press / Row" };
+  }
+
+  return { pattern: "unknown", label: "Couldn't guess a movement pattern" };
 }

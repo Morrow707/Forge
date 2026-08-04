@@ -25,7 +25,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from "recharts";
-import { format, parseISO } from "date-fns";
+import { format, parseISO, startOfWeek } from "date-fns";
 import { cn } from "@/lib/utils";
 import { TESTING_METRICS, type TestingMetricKey } from "@shared/testing-metrics";
 
@@ -51,6 +51,19 @@ type AnalyticsPoint = {
   barPathDeviationCm: number | null;
   barPathTrace: { t: number; x: number; y: number }[] | null;
   formFaults: { code: string; label: string }[] | null;
+  repBreakdown: { repNumber: number; peakVelocityMps: number; depthDeg?: number | null }[] | null;
+  armPathTrace: {
+    left: { t: number; x: number; y: number }[];
+    right: { t: number; x: number; y: number }[];
+  } | null;
+};
+
+const FAULT_NAMES: Record<string, string> = {
+  shallow_depth: "Shallow depth",
+  knee_valgus: "Knee valgus",
+  forward_lean: "Forward lean",
+  bar_path_drift: "Bar path drift",
+  bar_tilt: "Bar tilt",
 };
 type RecentSession = {
   date: string;
@@ -117,6 +130,44 @@ export default function CoachAnalytics() {
   const pathTraceSets = chartData
     .filter((p) => p.barPathTrace && p.barPathTrace.length > 1)
     .slice(-5);
+  // Independent left/right wrist paths for the most recent tracked set --
+  // just one set (not overlaid like the bar-path-shape chart above) since
+  // it's already two lines per set and more would be unreadable.
+  const armPathSets = chartData.filter(
+    (p) => p.armPathTrace && p.armPathTrace.left.length > 1 && p.armPathTrace.right.length > 1,
+  );
+  const latestArmPathSet = armPathSets[armPathSets.length - 1];
+  // Velocity decay across reps within the most recent multi-rep tracked set.
+  const repDecaySets = chartData.filter(
+    (p) => p.repBreakdown && p.repBreakdown.length > 1 && p.repBreakdown.some((r) => r.peakVelocityMps > 0),
+  );
+  const latestRepDecaySet = repDecaySets[repDecaySets.length - 1];
+  // Form-fault frequency by week, from the same tracked-set history already
+  // fetched above -- no separate query needed. Turns one-off in-session
+  // flags into a trend a coach can actually program around.
+  const trackedPoints = chartData.filter((p) => p.peakVelocityMps != null || p.barPathDeviationCm != null);
+  const faultCodesSeen = Array.from(
+    new Set(trackedPoints.flatMap((p) => (p.formFaults ?? []).map((f) => f.code))),
+  );
+  const faultWeekBuckets = new Map<string, { total: number; counts: Record<string, number> }>();
+  for (const p of trackedPoints) {
+    const weekKey = format(startOfWeek(parseISO(p.date), { weekStartsOn: 1 }), "yyyy-MM-dd");
+    const bucket = faultWeekBuckets.get(weekKey) ?? { total: 0, counts: {} };
+    bucket.total += 1;
+    for (const f of p.formFaults ?? []) {
+      bucket.counts[f.code] = (bucket.counts[f.code] ?? 0) + 1;
+    }
+    faultWeekBuckets.set(weekKey, bucket);
+  }
+  const faultTrendData = Array.from(faultWeekBuckets.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([weekKey, bucket]) => {
+      const row: Record<string, string | number> = { label: format(parseISO(weekKey), "MMM d") };
+      for (const code of faultCodesSeen) {
+        row[code] = Math.round(((bucket.counts[code] ?? 0) / bucket.total) * 100);
+      }
+      return row;
+    });
   const prCount = chartData.filter((p) => p.isPR).length;
   const unit = chartData.find((p) => p.weightUnit)?.weightUnit ?? "lbs";
   const selectedExerciseName = exercises.find((e) => String(e.id) === exerciseId)?.name;
@@ -441,6 +492,89 @@ export default function CoachAnalytics() {
             </Card>
           )}
 
+          {latestArmPathSet && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Arm Symmetry</CardTitle>
+                <CardDescription>
+                  Left vs. right wrist path for the most recent tracked set (
+                  {format(parseISO(latestArmPathSet.date), "MMM d")} · Set {latestArmPathSet.setNumber}) --
+                  the averaged bar path above can hide one side lagging or drifting differently; this
+                  can't.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="h-72">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ScatterChart margin={{ left: 4, right: 12, top: 8, bottom: 8 }}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                    <XAxis type="number" dataKey="x" name="Horizontal drift" unit="cm" tick={{ fontSize: 11 }} />
+                    <YAxis
+                      type="number"
+                      dataKey="y"
+                      name="Vertical position"
+                      unit="cm"
+                      tick={{ fontSize: 11 }}
+                      width={48}
+                    />
+                    <Tooltip
+                      cursor={{ strokeDasharray: "3 3" }}
+                      contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))" }}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <Scatter
+                      name="Left wrist"
+                      data={latestArmPathSet.armPathTrace!.left}
+                      fill={TREND_COLORS[0]}
+                      line={{ stroke: TREND_COLORS[0] }}
+                      lineType="joint"
+                    />
+                    <Scatter
+                      name="Right wrist"
+                      data={latestArmPathSet.armPathTrace!.right}
+                      fill={TREND_COLORS[1]}
+                      line={{ stroke: TREND_COLORS[1] }}
+                      lineType="joint"
+                    />
+                  </ScatterChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
+          {latestRepDecaySet && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Rep-by-Rep Velocity Decay</CardTitle>
+                <CardDescription>
+                  Peak concentric velocity, rep by rep, for the most recent multi-rep tracked set (
+                  {format(parseISO(latestRepDecaySet.date), "MMM d")} · Set {latestRepDecaySet.setNumber}) --
+                  the drop-off across a set is the actual autoregulation signal, not just the set's
+                  best rep.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="h-56">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={latestRepDecaySet.repBreakdown!} margin={{ left: 4, right: 12 }}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                    <XAxis dataKey="repNumber" tick={{ fontSize: 11 }} tickFormatter={(v) => `Rep ${v}`} />
+                    <YAxis tick={{ fontSize: 11 }} width={48} unit=" m/s" />
+                    <Tooltip
+                      contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))" }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="peakVelocityMps"
+                      name="Peak velocity"
+                      stroke="hsl(var(--primary))"
+                      strokeWidth={2}
+                      dot={{ r: 3 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
           {hasVelocity && (
             <Card>
               <CardHeader>
@@ -475,6 +609,42 @@ export default function CoachAnalytics() {
                       connectNulls
                       dot={{ r: 3 }}
                     />
+                  </LineChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
+          {faultCodesSeen.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Form Fault Trend</CardTitle>
+                <CardDescription>
+                  Share of tracked sets flagging each fault, by week -- turns a one-off in-session
+                  flag into something to actually program around: is it improving, or is it stuck?
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={faultTrendData} margin={{ left: 4, right: 12 }}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                    <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} width={40} unit="%" domain={[0, 100]} />
+                    <Tooltip
+                      contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))" }}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    {faultCodesSeen.map((code, i) => (
+                      <Line
+                        key={code}
+                        type="monotone"
+                        dataKey={code}
+                        name={FAULT_NAMES[code] ?? code}
+                        stroke={TREND_COLORS[i % TREND_COLORS.length]}
+                        strokeWidth={2}
+                        dot={{ r: 3 }}
+                      />
+                    ))}
                   </LineChart>
                 </ResponsiveContainer>
               </CardContent>

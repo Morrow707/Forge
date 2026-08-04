@@ -187,14 +187,27 @@ type PrescribedCorrective = {
 
 type FormFault = { code: string; label: string };
 
+type RepBreakdownEntry = {
+  repNumber: number;
+  peakVelocityMps: number;
+  meanVelocityMps: number;
+  concentricSeconds: number;
+  depthDeg?: number | null;
+};
+
+type PathPoint = { t: number; x: number; y: number };
+type ArmPathTrace = { left: PathPoint[]; right: PathPoint[] };
+
 type SetMetrics = {
   peakVelocityMps: number | null;
   meanVelocityMps: number | null;
   concentricSeconds: number | null;
   eccentricSeconds: number | null;
   barPathDeviationCm: number | null;
-  barPathTrace: { t: number; x: number; y: number }[] | null;
+  barPathTrace: PathPoint[] | null;
   formFaults: FormFault[] | null;
+  repBreakdown: RepBreakdownEntry[] | null;
+  armPathTrace: ArmPathTrace | null;
 };
 
 type LogEntry = {
@@ -292,6 +305,8 @@ function buildItem(
       barPathDeviationCm: existingSet?.barPathDeviationCm ?? null,
       barPathTrace: existingSet?.barPathTrace ?? null,
       formFaults: existingSet?.formFaults ?? null,
+      repBreakdown: existingSet?.repBreakdown ?? null,
+      armPathTrace: existingSet?.armPathTrace ?? null,
     };
   });
   const materials = materialsFrom(prescribed.exercise);
@@ -600,6 +615,8 @@ export function WorkoutPage({
             barPathDeviationCm: s.barPathDeviationCm,
             barPathTrace: s.barPathTrace,
             formFaults: s.formFaults,
+            repBreakdown: s.repBreakdown,
+            armPathTrace: s.armPathTrace,
           })),
         })),
       };
@@ -679,6 +696,8 @@ export function WorkoutPage({
               barPathDeviationCm: null,
               barPathTrace: null,
               formFaults: null,
+              repBreakdown: null,
+              armPathTrace: null,
             },
           ],
         };
@@ -1496,6 +1515,17 @@ function ExerciseLogContent({
                     ))}
                   </div>
                 )}
+                {set.repBreakdown && set.repBreakdown.length > 1 && (
+                  <div className="mt-1 flex flex-wrap items-center gap-1 pl-9 text-[9px] text-muted-foreground">
+                    <span className="font-semibold uppercase tracking-wide">Rep by rep</span>
+                    {set.repBreakdown.map((r) => (
+                      <span key={r.repNumber} className="rounded bg-secondary px-1.5 py-0.5">
+                        {item.trackingLevel === "full" ? `${r.peakVelocityMps} m/s` : `#${r.repNumber}`}
+                        {r.depthDeg != null ? ` · ${r.depthDeg}°` : ""}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })}
@@ -1519,6 +1549,8 @@ function ExerciseLogContent({
               barPathDeviationCm: metrics.barPathDeviationCm,
               barPathTrace: metrics.barPathTrace,
               formFaults: metrics.formFaults,
+              repBreakdown: metrics.repBreakdown,
+              armPathTrace: metrics.armPathTrace ?? null,
             });
           }}
         />
