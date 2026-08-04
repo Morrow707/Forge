@@ -1052,6 +1052,7 @@ async function main() {
   console.log("Seed complete.");
   console.log("Coach login: coach@forge.app / coach123");
   console.log("Athlete login: athlete@forge.app / athlete123");
+  console.log("Free Agent login: freeagent@forge.app / freeagent123");
   console.log(`Coach code: ${coach.coachCode}`);
   process.exit(0);
 }
