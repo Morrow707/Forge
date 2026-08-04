@@ -41,6 +41,7 @@ const coachNav = [
 
 const athleteNav = [
   { href: "/athlete", label: "Calendar", icon: CalendarDays, exact: true },
+  { href: "/athlete/programs", label: "My Programs", icon: ListChecks },
   { href: "/athlete/progress", label: "Progress", icon: LineChart },
   { href: "/athlete/team-board", label: "Team Board", icon: MessagesSquare },
   { href: "/athlete/chat", label: "AI Chat", icon: Sparkles },

@@ -66,6 +66,23 @@ async function main() {
     });
   }
 
+  // A demo Free Agent: a normal athlete account, deliberately never linked
+  // to a coach (no linkAthleteToCoach call below, unlike the athlete demo
+  // account above) -- Free Agent status is purely derived from having zero
+  // coachAthletes rows, not a stored flag, so simply not linking one is the
+  // whole setup. Same sport as the demo athlete/coach's roster for a
+  // consistent demo story.
+  let freeAgent = await storage.getUserByEmail("freeagent@forge.app");
+  if (!freeAgent) {
+    freeAgent = await storage.createUser({
+      email: "freeagent@forge.app",
+      passwordHash: await hashPassword("freeagent123"),
+      name: "Morgan Freeagent",
+      role: "athlete",
+      sport: "Basketball",
+    });
+  }
+
   // Looked up system-wide (not scoped to this coach) since an exercise's
   // owner can change after seeding -- e.g. once transferred to the admin as
   // an official Forge exercise below, it would otherwise look "new" again

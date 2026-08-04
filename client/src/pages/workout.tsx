@@ -229,11 +229,17 @@ type LogEntry = {
 type DayDetail = {
   programId: number;
   programName: string;
-  // Only ever true for an admin's own AI-built program (see the schema
-  // comment on programs.aiAuthored) -- gates the "full function" AI form
-  // check on the workout page, since that's the one AI feature in the app
-  // that critiques technique with no human review step.
+  // Only ever true for an admin's own AI-built program, or now a Free
+  // Agent athlete's own self-built one (see the schema comment on
+  // programs.aiAuthored) -- gates the "full function" AI form check on the
+  // workout page, since that's the one AI feature in the app that critiques
+  // technique with no human review step.
   programAiAuthored: boolean;
+  // True whenever this specific assignment's coachId is the athlete's own
+  // id -- admin's own training, or a Free Agent's self-assigned program
+  // (AI-built or not). The real signal for "is there a human coach behind
+  // this day", independent of whether the program happens to be aiAuthored.
+  isSelfAssigned: boolean;
   correctivesEnabled: boolean;
   day: {
     id: number;
@@ -490,11 +496,19 @@ export function WorkoutPage({
   routeBase,
   showComments = true,
   showReadinessBanner = true,
+  // Where the AI form-check/chat endpoints live -- historically always
+  // "/api/admin" since only admin's own programs could ever be aiAuthored.
+  // Now an athlete's own self-built programs can be too (see
+  // /api/athlete/programs/:id/form-check), so this is its own prop rather
+  // than reusing apiBase, which for admin's personal training is
+  // "/api/admin/my" (a different namespace than where programs live).
+  programsApiBase = "/api/admin",
 }: {
   apiBase: string;
   routeBase: string;
   showComments?: boolean;
   showReadinessBanner?: boolean;
+  programsApiBase?: string;
 }) {
   const { assignmentId, programDayId, date } = useParams<{
     assignmentId: string;
@@ -724,11 +738,19 @@ export function WorkoutPage({
   const unit = user?.preferredWeightUnit ?? "lbs";
   const stats = computeStats(items);
   // "comment" (coach-assigned programs) posts the video for the coach to
-  // review, unchanged from before. "ai" only ever applies to an admin's own
-  // AI-authored program (programAiAuthored is never true otherwise -- see
+  // review, unchanged from before. "ai" applies to any AI-authored program
+  // (admin's own, or now a Free Agent athlete's own self-built one -- see
   // the schema comment on programs.aiAuthored) and sends it straight to the
-  // AI for direct feedback instead, since there's no coach in that loop.
-  const videoCheckMode: "comment" | "ai" | "off" = showComments
+  // AI for direct feedback instead, since there's no coach in that loop for
+  // this specific day. hasCoachForThisProgram keys off isSelfAssigned
+  // (this assignment's coachId is the athlete's own id), not aiAuthored --
+  // a Free Agent's manually-built (non-chat) self-assigned program should
+  // also get "off", not a comment thread with no coach on the other end.
+  // isSelfAssigned is false whenever this specific day was assigned by a
+  // real coach, even if the athlete separately has other self-built
+  // programs -- the two aren't mutually exclusive on the same account.
+  const hasCoachForThisProgram = showComments && !data.isSelfAssigned;
+  const videoCheckMode: "comment" | "ai" | "off" = hasCoachForThisProgram
     ? "comment"
     : data.programAiAuthored
       ? "ai"
@@ -968,6 +990,7 @@ export function WorkoutPage({
                         assignmentId={Number(assignmentId)}
                         programDayId={Number(programDayId)}
                         apiBase={apiBase}
+                        programsApiBase={programsApiBase}
                         videoCheckMode={videoCheckMode}
                         programId={data.programId}
                         dayTitle={data.day.title}
@@ -1022,7 +1045,7 @@ export function WorkoutPage({
       )}
 
       <div className={cn("mt-4", viewMode === "logging" && pages.length > 0 && "pb-14")}>
-        {showComments && (
+        {hasCoachForThisProgram && (
           <WorkoutCommentThread
             role="athlete"
             assignmentId={Number(assignmentId)}
@@ -1069,6 +1092,7 @@ function ExerciseLogContent({
   assignmentId,
   programDayId,
   apiBase,
+  programsApiBase,
   videoCheckMode,
   programId,
   dayTitle,
@@ -1084,6 +1108,7 @@ function ExerciseLogContent({
   assignmentId: number;
   programDayId: number;
   apiBase: string;
+  programsApiBase: string;
   videoCheckMode: "comment" | "ai" | "off";
   programId: number;
   dayTitle: string;
@@ -1160,7 +1185,7 @@ function ExerciseLogContent({
   });
 
   const [aiFeedback, setAiFeedback] = useState<string | null>(null);
-  const aiFormCheckPath = `/api/admin/programs/${programId}/form-check`;
+  const aiFormCheckPath = `${programsApiBase}/programs/${programId}/form-check`;
   const aiFormCheckMutation = useMutation({
     mutationFn: async (videoUrl: string) => {
       const images = await extractVideoFrames(videoUrl);
@@ -1189,7 +1214,7 @@ function ExerciseLogContent({
       return res.json() as Promise<{ assistantMessage: { content: string } }>;
     },
     onSuccess: (result) => {
-      qc.invalidateQueries({ queryKey: [`/api/admin/programs/${programId}/chat`] });
+      qc.invalidateQueries({ queryKey: [`${programsApiBase}/programs/${programId}/chat`] });
       setAiFeedback(result.assistantMessage.content);
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not get AI feedback on that video"),
@@ -1202,12 +1227,12 @@ function ExerciseLogContent({
     mutationFn: async () => {
       const reasonText = swapReason ?? "the user just doesn't want to do it today";
       const content = `Swap "${item.exerciseName}" in Week ${item.weekNumber}, "${dayTitle}" (today's session) for a suitable alternative. Reason: ${reasonText}${swapNotes.trim() ? ` -- ${swapNotes.trim()}` : ""}. Only change this one exercise in this specific day; leave every other week and day exactly as they are.`;
-      const res = await apiRequest("POST", `/api/admin/programs/${programId}/chat`, { content });
+      const res = await apiRequest("POST", `${programsApiBase}/programs/${programId}/chat`, { content });
       return res.json() as Promise<{ assistantMessage: { content: string } }>;
     },
     onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: [`${apiBase}/day`] });
-      qc.invalidateQueries({ queryKey: [`/api/admin/programs/${programId}/chat`] });
+      qc.invalidateQueries({ queryKey: [`${programsApiBase}/programs/${programId}/chat`] });
       toast.success(result.assistantMessage.content);
       setSwapOpen(false);
       setSwapReason(null);

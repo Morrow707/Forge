@@ -1708,6 +1708,168 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
+  // ---------------- Athlete: Conversational AI program builder (Free Agent) ----------------
+  // Same self-service pattern as the admin's own AI program builder above --
+  // any athlete can build and self-assign an AI-authored program for their
+  // own calendar, whether or not they currently have a coach right now. No
+  // human reviews these edits before they apply (see
+  // storage.generateProgramFromChat for why that's safe: it's the athlete's
+  // own account, own data, same as admin's). The per-program aiAuthored flag
+  // -- not the athlete's current coach status -- is what gates the "full
+  // function" AI features, so an athlete who later joins a team keeps these
+  // programs untouched alongside whatever their new coach assigns.
+
+  app.get("/api/athlete/programs", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const list = await storage.getProgramsByCoach(user.id);
+    res.json(list);
+  });
+
+  app.get("/api/athlete/programs/:id", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const program = await assertCoachOwnsProgram(user.id, id);
+    if (!program) return res.status(404).json({ message: "Program not found" });
+    res.json({ ...program, isForgeOfficial: false, ownerLabel: "YOU", editable: true });
+  });
+
+  app.post("/api/athlete/programs", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = programStructureSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const program = await storage.createProgramWithStructure(user.id, parsed.data);
+    res.status(201).json(program);
+  });
+
+  app.post("/api/athlete/programs/ai-draft", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = generateProgramDraftSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const draft = await storage.generateProgramDraft(user.id, parsed.data.prompt);
+    res.json(draft);
+  });
+
+  app.put("/api/athlete/programs/:id", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const owned = await assertCoachOwnsProgram(user.id, id);
+    if (!owned) return res.status(404).json({ message: "Program not found" });
+    const parsed = programStructureSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    await storage.updateProgramStructure(id, parsed.data);
+    const updated = await storage.getProgramFull(id);
+    res.json(updated);
+  });
+
+  app.delete("/api/athlete/programs/:id", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const owned = await assertCoachOwnsProgram(user.id, id);
+    if (!owned) return res.status(404).json({ message: "Program not found" });
+    await storage.deleteProgram(id);
+    res.status(204).end();
+  });
+
+  app.get("/api/athlete/programs/:id/chat", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const owned = await assertCoachOwnsProgram(user.id, id);
+    if (!owned) return res.status(404).json({ message: "Program not found" });
+    const messages = await storage.getProgramChatMessages(id);
+    res.json(messages);
+  });
+
+  app.post("/api/athlete/programs/:id/chat", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const owned = await assertCoachOwnsProgram(user.id, id);
+    if (!owned) return res.status(404).json({ message: "Program not found" });
+    const parsed = sendProgramChatMessageSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "Invalid message" });
+    const result = await storage.generateProgramFromChat(id, user.id, parsed.data.content);
+    res.status(201).json(result);
+  });
+
+  // "Full function" AI form check -- see storage.submitFormCheck for why
+  // this is the one place the AI critiques technique with no human review
+  // step, and why that's gated on the program already being AI-authored.
+  app.post("/api/athlete/programs/:id/form-check", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const owned = await assertCoachOwnsProgram(user.id, id);
+    if (!owned) return res.status(404).json({ message: "Program not found" });
+    const schema = z.object({
+      exerciseName: z.string().trim().min(1).max(200),
+      images: z
+        .array(
+          z.object({
+            mediaType: z.enum(["image/jpeg", "image/png"]),
+            data: z.string().min(1),
+          }),
+        )
+        .min(1)
+        .max(6),
+      trackedMetrics: z
+        .object({
+          peakVelocityMps: z.number().optional().nullable(),
+          meanVelocityMps: z.number().optional().nullable(),
+          concentricSeconds: z.number().optional().nullable(),
+          eccentricSeconds: z.number().optional().nullable(),
+          barPathDeviationCm: z.number().optional().nullable(),
+          formFaults: formFaultSchema.array().optional().nullable(),
+        })
+        .optional(),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const result = await storage.submitFormCheck(
+      id,
+      user.id,
+      parsed.data.exerciseName,
+      parsed.data.images,
+      parsed.data.trackedMetrics,
+    );
+    if (!result) return res.status(400).json({ message: "This program isn't AI-authored yet" });
+    res.status(201).json(result);
+  });
+
+  // Self-assignment: coachId and athleteId are both this athlete's own id.
+  // Same bypass reasoning as /api/admin/my/assignments -- an athlete is
+  // never on their own roster, so the coach-roster-membership check that
+  // guards /api/coach/assignments would always (incorrectly) fail here.
+  app.post("/api/athlete/my/assignments", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const schema = z.object({
+      programId: z.number(),
+      startDate: z.string(),
+      dateOverrides: z.record(z.string(), z.string()).optional(),
+      correctivesEnabled: z.boolean().default(true),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const usable = await storage.getProgramIfUsableByCoach(user.id, parsed.data.programId);
+    if (!usable) return res.status(404).json({ message: "Program not found" });
+
+    const result = await storage.createAssignment(
+      user.id,
+      parsed.data.programId,
+      [{ athleteId: user.id, correctivesEnabled: parsed.data.correctivesEnabled }],
+      parsed.data.startDate,
+      parsed.data.dateOverrides,
+    );
+    res.status(201).json(result);
+  });
+
   // ---------------- Notifications ----------------
   // In-app inbox, available to any authenticated user. Coaches get entries
   // from athlete comments/videos; athletes get entries from a coach's reply

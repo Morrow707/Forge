@@ -3045,6 +3045,11 @@ Respond to the user's latest message by producing the complete updated program s
       programId: assignment.program.id,
       programName: assignment.program.name,
       programAiAuthored: assignment.program.aiAuthored,
+      // True for admin's own training and a Free Agent athlete's self-built
+      // programs alike (coachId === athleteId on the assignment) -- there's
+      // no human coach behind this specific day regardless of who built it,
+      // which is the real signal for whether to show a coach comment thread.
+      isSelfAssigned: assignment.coachId === athleteId,
       correctivesEnabled: assignment.correctivesEnabled,
       day: { ...dayFields, weekNumber: week.weekNumber, exercises: exercisesWithHistory },
       correctives: correctivesWithHistory,
