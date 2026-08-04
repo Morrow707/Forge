@@ -184,10 +184,12 @@ CREATE TABLE IF NOT EXISTS "exercise_submissions" (
   "id" serial PRIMARY KEY,
   "exercise_id" integer NOT NULL REFERENCES "exercises"("id") ON DELETE CASCADE,
   "submitted_by" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "coach_count" integer NOT NULL DEFAULT 1,
   "status" exercise_submission_status NOT NULL DEFAULT 'pending',
   "created_at" timestamp NOT NULL DEFAULT now(),
   "resolved_at" timestamp
 );
+ALTER TABLE "exercise_submissions" ADD COLUMN IF NOT EXISTS "coach_count" integer NOT NULL DEFAULT 1;
 
 DO $$ BEGIN
   CREATE TYPE "exercise_report_status" AS ENUM ('open', 'resolved');

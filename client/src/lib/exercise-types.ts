@@ -4,6 +4,5 @@ export type ExerciseWithOwnership = Exercise & {
   ownerLabel: string;
   isForgeOfficial: boolean;
   editable: boolean;
-  hasPendingSubmission?: boolean;
   hasOpenReport?: boolean;
 };

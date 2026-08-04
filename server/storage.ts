@@ -1270,13 +1270,6 @@ Hard rules, no exceptions:
       with: { coach: true },
     });
     if (!ex) return null;
-    const pendingSubmission = await db.query.exerciseSubmissions.findFirst({
-      where: and(
-        eq(exerciseSubmissions.exerciseId, id),
-        eq(exerciseSubmissions.submittedBy, requestingUserId),
-        eq(exerciseSubmissions.status, "pending"),
-      ),
-    });
     const openReport = await db.query.exerciseReports.findFirst({
       where: and(
         eq(exerciseReports.exerciseId, id),
@@ -1286,7 +1279,6 @@ Hard rules, no exceptions:
     });
     return {
       ...this.withOwnership(ex, requestingUserId),
-      hasPendingSubmission: !!pendingSubmission,
       hasOpenReport: !!openReport,
     };
   },
@@ -1300,6 +1292,7 @@ Hard rules, no exceptions:
       .insert(exercises)
       .values({ ...data, coachId })
       .returning();
+    await this.detectTrendingExercises();
     return row;
   },
 
@@ -1309,6 +1302,7 @@ Hard rules, no exceptions:
       .set(data)
       .where(eq(exercises.id, id))
       .returning();
+    if (data.name !== undefined) await this.detectTrendingExercises();
     return row;
   },
 
@@ -1327,34 +1321,87 @@ Hard rules, no exceptions:
     await db.delete(exercises).where(eq(exercises.id, id));
   },
 
-  // ---------- Exercise submissions (coach -> Forge) ----------
-  async getPendingSubmissionForExercise(exerciseId: number, submittedBy: number) {
-    return db.query.exerciseSubmissions.findFirst({
-      where: and(
-        eq(exerciseSubmissions.exerciseId, exerciseId),
-        eq(exerciseSubmissions.submittedBy, submittedBy),
-        eq(exerciseSubmissions.status, "pending"),
-      ),
-    });
-  },
+  // ---------- Trending exercises (numbers, not opt-in, -> Forge) ----------
+  // No coach ever nominates anything. Whenever two or more different
+  // coaches independently end up with an exercise of the same name (case/
+  // whitespace insensitive), that convergence is itself the signal --
+  // surfaced to the admin as a candidate. Per-coach exercise privacy is
+  // untouched: this only ever compares names, never shows one coach's
+  // exercise details to another, and the admin only ever sees a count, not
+  // which coaches. Runs after every create/rename so the queue stays live;
+  // cheap full-table scan, fine at this app's scale.
+  async detectTrendingExercises() {
+    const tracked = await db
+      .select({
+        id: exerciseSubmissions.id,
+        status: exerciseSubmissions.status,
+        name: exercises.name,
+      })
+      .from(exerciseSubmissions)
+      .innerJoin(exercises, eq(exerciseSubmissions.exerciseId, exercises.id));
+    const resolvedNames = new Set(
+      tracked.filter((r) => r.status !== "pending").map((r) => r.name.trim().toLowerCase()),
+    );
+    const pendingByName = new Map(
+      tracked.filter((r) => r.status === "pending").map((r) => [r.name.trim().toLowerCase(), r.id]),
+    );
 
-  async createExerciseSubmission(exerciseId: number, submittedBy: number) {
-    const [row] = await db
-      .insert(exerciseSubmissions)
-      .values({ exerciseId, submittedBy })
-      .returning();
-    return row;
+    const allExercises = await db.query.exercises.findMany({ with: { coach: true } });
+    const forgeNames = new Set(
+      allExercises
+        .filter((e) => e.coach.role === "admin")
+        .map((e) => e.name.trim().toLowerCase()),
+    );
+
+    const groups = new Map<string, typeof allExercises>();
+    for (const ex of allExercises) {
+      if (ex.coach.role !== "coach") continue;
+      const key = ex.name.trim().toLowerCase();
+      if (resolvedNames.has(key) || forgeNames.has(key)) continue;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(ex);
+    }
+
+    // A pending candidate whose coach count has since dropped below 2
+    // (someone deleted or renamed their copy) no longer belongs in the
+    // queue -- remove it rather than leave a stale nag.
+    for (const [key, pendingId] of pendingByName) {
+      const group = groups.get(key);
+      if (!group || new Set(group.map((e) => e.coachId)).size < 2) {
+        await db.delete(exerciseSubmissions).where(eq(exerciseSubmissions.id, pendingId));
+      }
+    }
+
+    for (const [key, group] of groups) {
+      const distinctCoachIds = new Set(group.map((e) => e.coachId));
+      if (distinctCoachIds.size < 2) continue;
+      const existingId = pendingByName.get(key);
+      if (existingId) {
+        await db
+          .update(exerciseSubmissions)
+          .set({ coachCount: distinctCoachIds.size })
+          .where(eq(exerciseSubmissions.id, existingId));
+      } else {
+        const earliest = group.reduce((a, b) => (a.createdAt < b.createdAt ? a : b));
+        await db.insert(exerciseSubmissions).values({
+          exerciseId: earliest.id,
+          submittedBy: earliest.coachId,
+          coachCount: distinctCoachIds.size,
+        });
+      }
+    }
   },
 
   async getPendingSubmissionsForAdmin() {
     const rows = await db.query.exerciseSubmissions.findMany({
       where: eq(exerciseSubmissions.status, "pending"),
       orderBy: asc(exerciseSubmissions.createdAt),
-      with: { exercise: true, submitter: true },
+      with: { exercise: true },
     });
     return rows.map((r) => ({
       id: r.id,
       createdAt: r.createdAt,
+      coachCount: r.coachCount,
       exercise: {
         id: r.exercise.id,
         name: r.exercise.name,
@@ -1366,17 +1413,19 @@ Hard rules, no exceptions:
         instructions: r.exercise.instructions,
         videoUrl: r.exercise.videoUrl,
       },
-      submitter: { id: r.submitter.id, name: r.submitter.name },
     }));
   },
 
-  async resolveSubmission(id: number, approve: boolean, adminId: number) {
+  async resolveSubmission(id: number, approve: boolean, adminId: number, name?: string) {
     const submission = await db.query.exerciseSubmissions.findFirst({
       where: eq(exerciseSubmissions.id, id),
     });
     if (!submission) return null;
     if (approve) {
-      await db.update(exercises).set({ coachId: adminId }).where(eq(exercises.id, submission.exerciseId));
+      await db
+        .update(exercises)
+        .set({ coachId: adminId, ...(name ? { name } : {}) })
+        .where(eq(exercises.id, submission.exerciseId));
     }
     const [row] = await db
       .update(exerciseSubmissions)

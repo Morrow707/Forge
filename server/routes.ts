@@ -190,19 +190,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.status(204).end();
   });
 
-  app.post("/api/coach/exercises/:id/submit", requireRole("coach"), async (req, res) => {
-    const user = currentUser(req);
-    const id = Number(req.params.id);
-    const owned = await assertOwnsExercise(user.id, id);
-    if (!owned) return res.status(404).json({ message: "Exercise not found" });
-    const existing = await storage.getPendingSubmissionForExercise(id, user.id);
-    if (existing) {
-      return res.status(409).json({ message: "Already submitted, pending review" });
-    }
-    const submission = await storage.createExerciseSubmission(id, user.id);
-    res.status(201).json(submission);
-  });
-
   app.post("/api/coach/exercises/:id/report", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     const id = Number(req.params.id);
@@ -337,8 +324,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ---------------- Admin: Review Queue ----------------
-  // Coaches nominate their own exercises for official Forge status, or
-  // flag a problem with an existing Forge exercise. Both land here.
+  // Two independent feeds land here: exercise names that have caught on
+  // with multiple coaches with no one nominating anything (see
+  // storage.detectTrendingExercises), and coaches flagging a problem with
+  // an existing Forge exercise.
 
   app.get("/api/admin/submissions", requireRole("admin"), async (req, res) => {
     const list = await storage.getPendingSubmissionsForAdmin();
@@ -352,7 +341,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
-    const updated = await storage.resolveSubmission(id, parsed.data.approve, user.id);
+    const updated = await storage.resolveSubmission(id, parsed.data.approve, user.id, parsed.data.name);
     if (!updated) return res.status(404).json({ message: "Submission not found" });
     res.json(updated);
   });

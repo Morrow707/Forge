@@ -215,10 +215,15 @@ export const exerciseSubmissionStatusEnum = pgEnum("exercise_submission_status",
   "rejected",
 ]);
 
-// A coach's own exercise, nominated to become official Forge content.
-// Approving one just hands the exercise's ownership to the admin -- the
-// same coachId column that already drives the FORGE/initials badge, so
-// nothing else needs to change for it to show up as Forge-official.
+// No coach opts into this -- it's populated entirely by
+// storage.detectTrendingExercises whenever two or more different coaches
+// independently end up with an exercise of the same name (case/whitespace
+// insensitive). submittedBy is just the earliest of those coaches, kept as
+// an internal reference (never shown as "submitted by" in the UI); the
+// real signal is coachCount. Approving one still just hands the exercise's
+// ownership to the admin -- the same coachId column that already drives
+// the FORGE/initials badge, so nothing else needs to change for it to show
+// up as Forge-official -- and optionally renames it in the same step.
 export const exerciseSubmissions = pgTable("exercise_submissions", {
   id: serial("id").primaryKey(),
   exerciseId: integer("exercise_id")
@@ -227,6 +232,7 @@ export const exerciseSubmissions = pgTable("exercise_submissions", {
   submittedBy: integer("submitted_by")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
+  coachCount: integer("coach_count").notNull().default(1),
   status: exerciseSubmissionStatusEnum("status").notNull().default("pending"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   resolvedAt: timestamp("resolved_at"),
@@ -1256,6 +1262,10 @@ export const createExerciseReportSchema = z.object({
 
 export const resolveSubmissionSchema = z.object({
   approve: z.boolean(),
+  // Only meaningful when approving -- lets the admin give the exercise its
+  // canonical Forge name in the same action, since it started as one
+  // coach's own private name for it.
+  name: z.string().trim().min(1).max(200).optional(),
 });
 
 export const barPathPointSchema = z.object({
