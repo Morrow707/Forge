@@ -535,6 +535,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           eccentricSeconds: z.number().optional().nullable(),
           barPathDeviationCm: z.number().optional().nullable(),
           formFaults: formFaultSchema.array().optional().nullable(),
+          peakPowerWatts: z.number().optional().nullable(),
+          meanPowerWatts: z.number().optional().nullable(),
+          eccentricMeanVelocityMps: z.number().optional().nullable(),
+          romCm: z.number().optional().nullable(),
+          velocityLossPercent: z.number().optional().nullable(),
         })
         .optional(),
     });
@@ -1840,6 +1845,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           eccentricSeconds: z.number().optional().nullable(),
           barPathDeviationCm: z.number().optional().nullable(),
           formFaults: formFaultSchema.array().optional().nullable(),
+          peakPowerWatts: z.number().optional().nullable(),
+          meanPowerWatts: z.number().optional().nullable(),
+          eccentricMeanVelocityMps: z.number().optional().nullable(),
+          romCm: z.number().optional().nullable(),
+          velocityLossPercent: z.number().optional().nullable(),
         })
         .optional(),
     });

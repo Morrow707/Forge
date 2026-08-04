@@ -131,6 +131,7 @@ export function BarTrackerDialog({
   mode,
   exerciseName,
   targetReps,
+  loadKg,
   onCapture,
 }: {
   open: boolean;
@@ -141,6 +142,11 @@ export function BarTrackerDialog({
   // prescribed rep scheme by the caller) -- manual "Stop & Review" always
   // still works too, and non-numeric rep schemes just never trigger this.
   targetReps?: number;
+  // This set's entered weight, converted to kg by the caller -- lets
+  // summarizeTrackedSet estimate power output (mass * g * velocity).
+  // Undefined for bodyweight-only sets, which just don't get a power
+  // number, same as any other tracking-off metric.
+  loadKg?: number;
   onCapture: (metrics: RepMetrics) => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -356,7 +362,7 @@ export function BarTrackerDialog({
 
   function stopTracking() {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    const metrics = summarizeTrackedSet(traceRef.current, pixelsPerMeter());
+    const metrics = summarizeTrackedSet(traceRef.current, pixelsPerMeter(), loadKg);
     if (!metrics) {
       toast.error("Couldn't get a clean read — try again with your whole body in frame.");
       setStep("calibrate");
@@ -564,9 +570,25 @@ export function BarTrackerDialog({
                   <Stat label="Peak Velocity" value={`${result.peakVelocityMps} m/s`} />
                   <Stat label="Mean Velocity" value={`${result.meanVelocityMps} m/s`} />
                   <Stat label="Concentric" value={`${result.concentricSeconds}s`} />
-                  <Stat label="Eccentric" value={`${result.eccentricSeconds}s`} />
+                  <Stat
+                    label="Eccentric"
+                    value={`${result.eccentricSeconds}s @ ${result.eccentricMeanVelocityMps} m/s`}
+                  />
+                  {result.peakPowerWatts != null && (
+                    <Stat label="Peak Power" value={`${result.peakPowerWatts} W`} />
+                  )}
+                  {result.meanPowerWatts != null && (
+                    <Stat label="Mean Power" value={`${result.meanPowerWatts} W`} />
+                  )}
+                  {result.velocityLossPercent != null && (
+                    <Stat
+                      label="Velocity Loss"
+                      value={`${result.velocityLossPercent > 0 ? "-" : "+"}${Math.abs(result.velocityLossPercent)}%`}
+                    />
+                  )}
                 </>
               )}
+              <Stat label="Avg. ROM" value={`${result.romCm} cm`} />
               <Stat
                 label="Bar Path Deviation"
                 value={`${result.barPathDeviationCm} cm`}

@@ -59,6 +59,10 @@ DO $$ BEGIN
   CREATE TYPE "program_chat_role" AS ENUM ('user', 'assistant');
 EXCEPTION WHEN duplicate_object THEN null; END $$;
 
+DO $$ BEGIN
+  CREATE TYPE "form_check_flag" AS ENUM ('best', 'worst');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
 -- Owned by connect-pg-simple at runtime; declared here only so it's never
 -- mistaken for an "unclaimed" table by anything diffing live schema state.
 CREATE TABLE IF NOT EXISTS "session" (
@@ -346,6 +350,13 @@ ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "bar_path_trace" json
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "form_faults" json;
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "rep_breakdown" json;
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "arm_path_trace" json;
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "peak_power_watts" real;
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "mean_power_watts" real;
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "eccentric_mean_velocity_mps" real;
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "rom_cm" real;
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "velocity_loss_percent" real;
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "form_check_video_url" text;
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "form_check_flag" form_check_flag;
 
 CREATE TABLE IF NOT EXISTS "workout_comments" (
   "id" serial PRIMARY KEY,

@@ -1,0 +1,204 @@
+import { useState } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { cn } from "@/lib/utils";
+import { RotateCcw, Trash2, ThumbsUp, ThumbsDown } from "lucide-react";
+
+export type FlaggedSetVideo = {
+  setNumber: number;
+  videoUrl: string;
+  flag: "best" | "worst" | null;
+};
+
+function FlagButton({
+  active,
+  onClick,
+  icon: Icon,
+  label,
+  activeClass,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: typeof ThumbsUp;
+  label: string;
+  activeClass: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors",
+        active ? activeClass : "border-border text-muted-foreground hover:text-foreground",
+      )}
+    >
+      <Icon className="h-3.5 w-3.5" />
+      {label}
+    </button>
+  );
+}
+
+// Full-screen review of a single set's form-check clip -- opened by tapping
+// a set row's video pill once it already has a recording. Flagging best/worst
+// here is the same action available from the compare dialog below; both
+// just call onFlag, which is responsible for clearing the flag off whichever
+// other set in the exercise previously held it (at most one best and one
+// worst per exercise/day).
+export function SetVideoPreviewDialog({
+  open,
+  onOpenChange,
+  setNumber,
+  videoUrl,
+  flag,
+  onFlag,
+  onRetake,
+  onRemove,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  setNumber: number;
+  videoUrl: string;
+  flag: "best" | "worst" | null;
+  onFlag: (flag: "best" | "worst" | null) => void;
+  onRetake: () => void;
+  onRemove: () => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Set {setNumber} — Form Check</DialogTitle>
+        </DialogHeader>
+        <video src={videoUrl} controls playsInline className="w-full rounded-md bg-black" />
+        <div className="flex items-center justify-center gap-2">
+          <FlagButton
+            active={flag === "best"}
+            onClick={() => onFlag(flag === "best" ? null : "best")}
+            icon={ThumbsUp}
+            label="Best Set"
+            activeClass="border-success bg-success/15 text-success"
+          />
+          <FlagButton
+            active={flag === "worst"}
+            onClick={() => onFlag(flag === "worst" ? null : "worst")}
+            icon={ThumbsDown}
+            label="Worst Set"
+            activeClass="border-destructive bg-destructive/15 text-destructive"
+          />
+        </div>
+        <DialogFooter className="sm:justify-between">
+          <Button variant="ghost" className="text-destructive hover:text-destructive" onClick={onRemove}>
+            <Trash2 className="h-4 w-4" />
+            Remove
+          </Button>
+          <Button variant="outline" onClick={onRetake}>
+            <RotateCcw className="h-4 w-4" />
+            Retake
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function pickDefault(sets: FlaggedSetVideo[], want: "best" | "worst", fallbackIndex: number) {
+  return sets.find((s) => s.flag === want)?.setNumber ?? sets[fallbackIndex]?.setNumber;
+}
+
+// Side-by-side (stacked on mobile) comparison of any two recorded set
+// videos for one exercise -- defaults to the flagged Worst on top and Best
+// on bottom when both exist, since that's the comparison the athlete set
+// the flags up for, but either side can be repointed at any recorded set.
+export function SetVideoCompareDialog({
+  open,
+  onOpenChange,
+  sets,
+  onFlag,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  sets: FlaggedSetVideo[];
+  onFlag: (setNumber: number, flag: "best" | "worst" | null) => void;
+}) {
+  const [leftNumber, setLeftNumber] = useState<number | undefined>(undefined);
+  const [rightNumber, setRightNumber] = useState<number | undefined>(undefined);
+
+  const left = sets.find((s) => s.setNumber === (leftNumber ?? pickDefault(sets, "worst", 0)));
+  const right = sets.find(
+    (s) => s.setNumber === (rightNumber ?? pickDefault(sets, "best", sets.length - 1)),
+  );
+
+  function Slot({ video, onPick }: { video: FlaggedSetVideo | undefined; onPick: (n: number) => void }) {
+    if (!video) return null;
+    return (
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <Select value={String(video.setNumber)} onValueChange={(v) => onPick(Number(v))}>
+            <SelectTrigger className="h-8 w-32 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {sets.map((s) => (
+                <SelectItem key={s.setNumber} value={String(s.setNumber)}>
+                  Set {s.setNumber}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {video.flag && (
+            <Badge
+              className={cn(
+                "gap-1 text-[10px]",
+                video.flag === "best"
+                  ? "bg-success/15 text-success hover:bg-success/15"
+                  : "bg-destructive/15 text-destructive hover:bg-destructive/15",
+              )}
+            >
+              {video.flag === "best" ? <ThumbsUp className="h-3 w-3" /> : <ThumbsDown className="h-3 w-3" />}
+              {video.flag === "best" ? "Best" : "Worst"}
+            </Badge>
+          )}
+        </div>
+        <video src={video.videoUrl} controls playsInline className="w-full rounded-md bg-black" />
+        <div className="flex items-center justify-center gap-2">
+          <FlagButton
+            active={video.flag === "best"}
+            onClick={() => onFlag(video.setNumber, video.flag === "best" ? null : "best")}
+            icon={ThumbsUp}
+            label="Best"
+            activeClass="border-success bg-success/15 text-success"
+          />
+          <FlagButton
+            active={video.flag === "worst"}
+            onClick={() => onFlag(video.setNumber, video.flag === "worst" ? null : "worst")}
+            icon={ThumbsDown}
+            label="Worst"
+            activeClass="border-destructive bg-destructive/15 text-destructive"
+          />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Compare Sets</DialogTitle>
+        </DialogHeader>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Slot video={left} onPick={setLeftNumber} />
+          <Slot video={right} onPick={setRightNumber} />
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
