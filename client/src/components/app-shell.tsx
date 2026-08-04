@@ -41,6 +41,7 @@ const coachNav = [
 
 const athleteNav = [
   { href: "/athlete", label: "Calendar", icon: CalendarDays, exact: true },
+  { href: "/athlete/programs", label: "My Programs", icon: ListChecks },
   { href: "/athlete/progress", label: "Progress", icon: LineChart },
   { href: "/athlete/team-board", label: "Team Board", icon: MessagesSquare },
   { href: "/athlete/chat", label: "AI Chat", icon: Sparkles },
@@ -48,6 +49,7 @@ const athleteNav = [
 
 const adminNav = [
   { href: "/admin", label: "Dashboard", icon: Flame, exact: true },
+  { href: "/admin/my", label: "My Calendar", icon: CalendarDays },
   { href: "/admin/exercises", label: "Forge Library", icon: Dumbbell },
   { href: "/admin/programs", label: "Forge Programs", icon: CalendarRange },
   { href: "/admin/review", label: "Review Queue", icon: ClipboardCheck },

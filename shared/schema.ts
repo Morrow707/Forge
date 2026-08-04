@@ -215,10 +215,15 @@ export const exerciseSubmissionStatusEnum = pgEnum("exercise_submission_status",
   "rejected",
 ]);
 
-// A coach's own exercise, nominated to become official Forge content.
-// Approving one just hands the exercise's ownership to the admin -- the
-// same coachId column that already drives the FORGE/initials badge, so
-// nothing else needs to change for it to show up as Forge-official.
+// No coach opts into this -- it's populated entirely by
+// storage.detectTrendingExercises whenever two or more different coaches
+// independently end up with an exercise of the same name (case/whitespace
+// insensitive). submittedBy is just the earliest of those coaches, kept as
+// an internal reference (never shown as "submitted by" in the UI); the
+// real signal is coachCount. Approving one still just hands the exercise's
+// ownership to the admin -- the same coachId column that already drives
+// the FORGE/initials badge, so nothing else needs to change for it to show
+// up as Forge-official -- and optionally renames it in the same step.
 export const exerciseSubmissions = pgTable("exercise_submissions", {
   id: serial("id").primaryKey(),
   exerciseId: integer("exercise_id")
@@ -227,6 +232,7 @@ export const exerciseSubmissions = pgTable("exercise_submissions", {
   submittedBy: integer("submitted_by")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
+  coachCount: integer("coach_count").notNull().default(1),
   status: exerciseSubmissionStatusEnum("status").notNull().default("pending"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   resolvedAt: timestamp("resolved_at"),
@@ -266,6 +272,14 @@ export const programs = pgTable("programs", {
   name: text("name").notNull(),
   description: text("description"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  // Set once the conversational AI program builder has ever applied a turn
+  // to this program -- never cleared afterward, even if a human edits it by
+  // hand later. Gates the "full function" AI features that skip any human
+  // review step (autonomous form-check feedback, one-tap exercise
+  // substitution): those are only safe to let the AI act on unsupervised
+  // when it's already the program's author, not when it would be silently
+  // rewriting a coach's program for an athlete.
+  aiAuthored: boolean("ai_authored").notNull().default(false),
 });
 
 export const programWeeks = pgTable(
@@ -483,6 +497,20 @@ export const workoutSetEntries = pgTable("workout_set_entries", {
   eccentricSeconds: real("eccentric_seconds"),
   barPathDeviationCm: real("bar_path_deviation_cm"),
   barPathTrace: json("bar_path_trace"),
+  // Heuristic biomechanics flags from on-device pose estimation (squat
+  // depth, knee valgus, forward lean, bar path drift) -- see
+  // pose-tracking.ts's detectFormFaults. Empty/null when nothing was
+  // flagged, not just when tracking wasn't on.
+  formFaults: json("form_faults"),
+  // Per-rep velocity decay / depth-consistency / sticking-point curve for
+  // this set -- see bar-tracking.ts's RepBreakdown. Null for sets tracked
+  // before this existed, same as the other CV columns above.
+  repBreakdown: json("rep_breakdown"),
+  // Independent left/right wrist path traces (same coordinate convention as
+  // barPathTrace) for spotting side-to-side asymmetry that the single
+  // averaged bar path can't show. Null when one side was out of frame too
+  // much of the set to build a trace.
+  armPathTrace: json("arm_path_trace"),
 });
 
 // A two-way thread on a specific day of a specific assignment -- an athlete
@@ -827,6 +855,41 @@ export const sendChatMessageSchema = z.object({
 });
 
 export type SendChatMessageInput = z.infer<typeof sendChatMessageSchema>;
+
+export const programChatRoleEnum = pgEnum("program_chat_role", ["user", "assistant"]);
+
+// Chat transcript for the conversational AI program builder -- the admin
+// describes what they want, the AI rewrites the program's full structure
+// each turn and replies with a summary. Kept permanently, never edited.
+export const programChatMessages = pgTable(
+  "program_chat_messages",
+  {
+    id: serial("id").primaryKey(),
+    programId: integer("program_id")
+      .notNull()
+      .references(() => programs.id, { onDelete: "cascade" }),
+    authorId: integer("author_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    role: programChatRoleEnum("role").notNull(),
+    content: text("content").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    programIdx: index("program_chat_messages_program_idx").on(
+      table.programId,
+      table.createdAt,
+    ),
+  }),
+);
+
+export type ProgramChatMessage = typeof programChatMessages.$inferSelect;
+
+export const sendProgramChatMessageSchema = z.object({
+  content: z.string().trim().min(1).max(2000),
+});
+
+export type SendProgramChatMessageInput = z.infer<typeof sendProgramChatMessageSchema>;
 
 // ---------- Relations ----------
 
@@ -1213,12 +1276,39 @@ export const createExerciseReportSchema = z.object({
 
 export const resolveSubmissionSchema = z.object({
   approve: z.boolean(),
+  // Only meaningful when approving -- lets the admin give the exercise its
+  // canonical Forge name in the same action, since it started as one
+  // coach's own private name for it.
+  name: z.string().trim().min(1).max(200).optional(),
 });
 
 export const barPathPointSchema = z.object({
   t: z.number(),
   x: z.number(),
   y: z.number(),
+});
+
+export const formFaultSchema = z.object({
+  code: z.string(),
+  label: z.string(),
+});
+
+export const repBreakdownEntrySchema = z.object({
+  repNumber: z.number(),
+  peakVelocityMps: z.number(),
+  meanVelocityMps: z.number(),
+  concentricSeconds: z.number(),
+  startT: z.number(),
+  endT: z.number(),
+  depthDeg: z.number().optional().nullable(),
+  velocityCurve: z
+    .array(z.object({ positionCm: z.number(), velocityMps: z.number() }))
+    .optional(),
+});
+
+export const armPathTraceSchema = z.object({
+  left: z.array(barPathPointSchema),
+  right: z.array(barPathPointSchema),
 });
 
 export const setLogInputSchema = z.object({
@@ -1234,6 +1324,9 @@ export const setLogInputSchema = z.object({
   eccentricSeconds: z.number().optional().nullable(),
   barPathDeviationCm: z.number().optional().nullable(),
   barPathTrace: z.array(barPathPointSchema).optional().nullable(),
+  formFaults: z.array(formFaultSchema).optional().nullable(),
+  repBreakdown: z.array(repBreakdownEntrySchema).optional().nullable(),
+  armPathTrace: armPathTraceSchema.optional().nullable(),
 });
 
 export const logEntryInputSchema = z

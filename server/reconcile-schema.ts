@@ -55,6 +55,10 @@ DO $$ BEGIN
   CREATE TYPE "chat_role" AS ENUM ('athlete', 'assistant');
 EXCEPTION WHEN duplicate_object THEN null; END $$;
 
+DO $$ BEGIN
+  CREATE TYPE "program_chat_role" AS ENUM ('user', 'assistant');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
 -- Owned by connect-pg-simple at runtime; declared here only so it's never
 -- mistaken for an "unclaimed" table by anything diffing live schema state.
 CREATE TABLE IF NOT EXISTS "session" (
@@ -180,10 +184,12 @@ CREATE TABLE IF NOT EXISTS "exercise_submissions" (
   "id" serial PRIMARY KEY,
   "exercise_id" integer NOT NULL REFERENCES "exercises"("id") ON DELETE CASCADE,
   "submitted_by" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "coach_count" integer NOT NULL DEFAULT 1,
   "status" exercise_submission_status NOT NULL DEFAULT 'pending',
   "created_at" timestamp NOT NULL DEFAULT now(),
   "resolved_at" timestamp
 );
+ALTER TABLE "exercise_submissions" ADD COLUMN IF NOT EXISTS "coach_count" integer NOT NULL DEFAULT 1;
 
 DO $$ BEGIN
   CREATE TYPE "exercise_report_status" AS ENUM ('open', 'resolved');
@@ -209,8 +215,10 @@ CREATE TABLE IF NOT EXISTS "programs" (
   "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
   "name" text NOT NULL,
   "description" text,
-  "created_at" timestamp NOT NULL DEFAULT now()
+  "created_at" timestamp NOT NULL DEFAULT now(),
+  "ai_authored" boolean NOT NULL DEFAULT false
 );
+ALTER TABLE "programs" ADD COLUMN IF NOT EXISTS "ai_authored" boolean NOT NULL DEFAULT false;
 
 CREATE TABLE IF NOT EXISTS "program_weeks" (
   "id" serial PRIMARY KEY,
@@ -335,6 +343,9 @@ ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "concentric_seconds" 
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "eccentric_seconds" real;
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "bar_path_deviation_cm" real;
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "bar_path_trace" json;
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "form_faults" json;
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "rep_breakdown" json;
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "arm_path_trace" json;
 
 CREATE TABLE IF NOT EXISTS "workout_comments" (
   "id" serial PRIMARY KEY,
@@ -490,6 +501,16 @@ CREATE TABLE IF NOT EXISTS "athlete_chat_messages" (
   "created_at" timestamp NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS "athlete_chat_messages_athlete_idx" ON "athlete_chat_messages" ("athlete_id", "created_at");
+
+CREATE TABLE IF NOT EXISTS "program_chat_messages" (
+  "id" serial PRIMARY KEY,
+  "program_id" integer NOT NULL REFERENCES "programs"("id") ON DELETE CASCADE,
+  "author_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "role" program_chat_role NOT NULL,
+  "content" text NOT NULL,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "program_chat_messages_program_idx" ON "program_chat_messages" ("program_id", "created_at");
 `;
 
 async function main() {

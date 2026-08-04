@@ -1,10 +1,10 @@
 import { ProgramBuilderPage } from "@/pages/program-builder";
 
-export default function AdminProgramBuilder() {
+export default function AthleteProgramBuilder() {
   return (
     <ProgramBuilderPage
-      apiBase="/api/admin"
-      routeBase="/admin/programs"
+      apiBase="/api/athlete"
+      routeBase="/athlete/programs"
       showAssign={false}
       showAiChat
     />

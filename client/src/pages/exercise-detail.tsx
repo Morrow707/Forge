@@ -34,7 +34,6 @@ import {
   Lock,
   Stethoscope,
   Youtube,
-  Sparkles,
   Flag,
   CheckCircle2,
 } from "lucide-react";
@@ -193,17 +192,6 @@ export function ExerciseDetailPage({
 
   const [reportOpen, setReportOpen] = useState(false);
 
-  const submitMutation = useMutation({
-    mutationFn: async () => {
-      await apiRequest("POST", `${apiBase}/exercises/${id}/submit`);
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: [`${apiBase}/exercises/${id}`] });
-      toast.success("Submitted — the admin will review it for the Forge library");
-    },
-    onError: (err: ApiError) => toast.error(err.message || "Could not submit"),
-  });
-
   if (!isNew && isLoading) {
     return (
       <AppShell title="Loading Exercise…">
@@ -293,38 +281,18 @@ export function ExerciseDetailPage({
           </div>
         )}
 
-        {!isNew && exercise && apiBase === "/api/coach" && (
+        {!isNew && exercise && apiBase === "/api/coach" && exercise.isForgeOfficial && (
           <div className="flex flex-wrap items-center gap-2">
-            {exercise.editable && !exercise.isForgeOfficial && (
-              exercise.hasPendingSubmission ? (
-                <Badge variant="secondary" className="gap-1">
-                  <Sparkles className="h-3 w-3" />
-                  Submitted — pending Forge review
-                </Badge>
-              ) : (
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => submitMutation.mutate()}
-                  disabled={submitMutation.isPending}
-                >
-                  <Sparkles className="h-3.5 w-3.5" />
-                  {submitMutation.isPending ? "Submitting…" : "Submit to Forge"}
-                </Button>
-              )
-            )}
-            {exercise.isForgeOfficial && (
-              exercise.hasOpenReport ? (
-                <Badge variant="secondary" className="gap-1">
-                  <CheckCircle2 className="h-3 w-3" />
-                  Reported — thanks!
-                </Badge>
-              ) : (
-                <Button size="sm" variant="outline" onClick={() => setReportOpen(true)}>
-                  <Flag className="h-3.5 w-3.5" />
-                  Report an issue
-                </Button>
-              )
+            {exercise.hasOpenReport ? (
+              <Badge variant="secondary" className="gap-1">
+                <CheckCircle2 className="h-3 w-3" />
+                Reported — thanks!
+              </Badge>
+            ) : (
+              <Button size="sm" variant="outline" onClick={() => setReportOpen(true)}>
+                <Flag className="h-3.5 w-3.5" />
+                Report an issue
+              </Button>
             )}
           </div>
         )}

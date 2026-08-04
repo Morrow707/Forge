@@ -33,12 +33,16 @@ const AthleteProgress = lazy(() => import("@/pages/athlete/progress"));
 const AthleteTeamBoard = lazy(() => import("@/pages/athlete/team-board"));
 const AthleteWorkout = lazy(() => import("@/pages/athlete/workout"));
 const AthleteChat = lazy(() => import("@/pages/athlete/chat"));
+const AthletePrograms = lazy(() => import("@/pages/athlete/programs"));
+const AthleteProgramBuilder = lazy(() => import("@/pages/athlete/program-builder"));
 const AdminDashboard = lazy(() => import("@/pages/admin/dashboard"));
 const AdminExercises = lazy(() => import("@/pages/admin/exercises"));
 const AdminExerciseDetail = lazy(() => import("@/pages/admin/exercise-detail"));
 const AdminPrograms = lazy(() => import("@/pages/admin/programs"));
 const AdminProgramBuilder = lazy(() => import("@/pages/admin/program-builder"));
 const AdminReviewQueue = lazy(() => import("@/pages/admin/review-queue"));
+const AdminMyCalendar = lazy(() => import("@/pages/admin/my-calendar"));
+const AdminMyWorkout = lazy(() => import("@/pages/admin/my-workout"));
 
 function FullScreenSpinner() {
   return (
@@ -130,11 +134,23 @@ function Router() {
         <Route path="/athlete/chat">
           <ProtectedRoute role="athlete" component={AthleteChat} />
         </Route>
+        <Route path="/athlete/programs/:id">
+          <ProtectedRoute role="athlete" component={AthleteProgramBuilder} />
+        </Route>
+        <Route path="/athlete/programs">
+          <ProtectedRoute role="athlete" component={AthletePrograms} />
+        </Route>
         <Route path="/athlete/day/:assignmentId/:programDayId/:date">
           <ProtectedRoute role="athlete" component={AthleteWorkout} />
         </Route>
         <Route path="/admin">
           <ProtectedRoute role="admin" component={AdminDashboard} />
+        </Route>
+        <Route path="/admin/my">
+          <ProtectedRoute role="admin" component={AdminMyCalendar} />
+        </Route>
+        <Route path="/admin/my/day/:assignmentId/:programDayId/:date">
+          <ProtectedRoute role="admin" component={AdminMyWorkout} />
         </Route>
         <Route path="/admin/exercises/:id">
           <ProtectedRoute role="admin" component={AdminExerciseDetail} />

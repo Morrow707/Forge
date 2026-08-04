@@ -1,3 +1,6 @@
+# Build artifact copied from node_modules by scripts/copy-mediapipe-wasm.mjs
+client/public/mediapipe-wasm
+
 # Logs
 logs
 *.log

@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { ExercisePickerDialog } from "@/components/exercise-picker-dialog";
 import { AssignProgramDialog } from "@/components/assign-program-dialog";
+import { ProgramAiChatPanel } from "@/components/program-ai-chat-panel";
 import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
 import { ProgressionButton } from "@/components/progression-button";
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
@@ -98,14 +99,50 @@ function chunkIntoWeeks(days: LocalDay[]) {
   return chunks;
 }
 
+// Shared by the initial load and by the AI chat panel's onApplied callback
+// -- the latter needs to rebuild local state from the fresh program the AI
+// just wrote, immediately and without waiting on a query refetch.
+function stateFromProgram(program: any) {
+  const days: LocalDay[] = [];
+  const weekNames: string[] = [];
+  for (const w of program.weeks) {
+    weekNames.push(w.name ?? `Week ${w.weekNumber}`);
+    for (const d of w.days) {
+      days.push({
+        key: uid(),
+        title: d.title,
+        isRestDay: d.isRestDay,
+        exercises: deriveLinkedToNext(
+          d.exercises.map((pe: any) => ({
+            key: uid(),
+            exerciseId: pe.exercise.id,
+            exerciseName: pe.exercise.name,
+            sets: pe.sets,
+            reps: pe.reps,
+            weight: pe.weight ?? "",
+            restSeconds: pe.restSeconds != null ? String(pe.restSeconds) : "",
+            notes: pe.notes ?? "",
+            supersetGroup: pe.supersetGroup ?? null,
+            trackingLevel: pe.trackingLevel ?? "none",
+            videoCheckEnabled: pe.videoCheckEnabled ?? false,
+          })),
+        ) as LocalExercise[],
+      });
+    }
+  }
+  return { name: program.name as string, description: (program.description as string) ?? "", days, weekNames };
+}
+
 export function ProgramBuilderPage({
   apiBase,
   routeBase,
   showAssign = true,
+  showAiChat = false,
 }: {
   apiBase: string;
   routeBase: string;
   showAssign?: boolean;
+  showAiChat?: boolean;
 }) {
   const { id } = useParams<{ id: string }>();
   const [, navigate] = useLocation();
@@ -132,40 +169,25 @@ export function ProgramBuilderPage({
 
   useEffect(() => {
     if (program && !hydrated) {
-      setName(program.name);
-      setDescription(program.description ?? "");
-      const loadedDays: LocalDay[] = [];
-      const loadedWeekNames: string[] = [];
-      for (const w of program.weeks) {
-        loadedWeekNames.push(w.name ?? `Week ${w.weekNumber}`);
-        for (const d of w.days) {
-          loadedDays.push({
-            key: uid(),
-            title: d.title,
-            isRestDay: d.isRestDay,
-            exercises: deriveLinkedToNext(
-              d.exercises.map((pe: any) => ({
-                key: uid(),
-                exerciseId: pe.exercise.id,
-                exerciseName: pe.exercise.name,
-                sets: pe.sets,
-                reps: pe.reps,
-                weight: pe.weight ?? "",
-                restSeconds: pe.restSeconds != null ? String(pe.restSeconds) : "",
-                notes: pe.notes ?? "",
-                supersetGroup: pe.supersetGroup ?? null,
-                trackingLevel: pe.trackingLevel ?? "none",
-                videoCheckEnabled: pe.videoCheckEnabled ?? false,
-              })),
-            ) as LocalExercise[],
-          });
-        }
-      }
-      setDays(loadedDays);
-      setWeekNames(loadedWeekNames);
+      const state = stateFromProgram(program);
+      setName(state.name);
+      setDescription(state.description);
+      setDays(state.days);
+      setWeekNames(state.weekNames);
       setHydrated(true);
     }
   }, [program, hydrated]);
+
+  // Called by the AI chat panel after each turn with the fresh program it
+  // just wrote -- updates the builder's fields immediately, no refetch
+  // round-trip needed since the chat response already contains the result.
+  function handleChatApplied(updatedProgram: any) {
+    const state = stateFromProgram(updatedProgram);
+    setName(state.name);
+    setDescription(state.description);
+    setDays(state.days);
+    setWeekNames(state.weekNames);
+  }
 
   function updateDay(dayKey: string, updater: (day: LocalDay) => LocalDay) {
     setDays((prev) => prev.map((d) => (d.key === dayKey ? updater(d) : d)));
@@ -273,65 +295,75 @@ export function ProgramBuilderPage({
         </div>
       )}
 
-      <fieldset disabled={!editable} className="contents">
-        <Card className="mb-6">
-          <CardContent className="grid gap-3 p-5 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label>Program name</Label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Description</Label>
-              <Textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                rows={1}
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        {days.length === 0 ? (
-          <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border py-16 text-center text-muted-foreground">
-            <p>No days yet. Add training days one at a time -- no need to plan whole weeks.</p>
-            <Button onClick={addDay}>
-              <Plus className="h-4 w-4" />
-              Add Day
-            </Button>
-          </div>
-        ) : (
-          <div className="space-y-8">
-            {weekChunks.map((chunk, wi) => (
-              <div key={wi}>
-                <Input
-                  value={weekNames[wi] || `Week ${wi + 1}`}
-                  onChange={(e) => renameWeek(wi, e.target.value)}
-                  className="mb-3 h-8 max-w-xs border-none bg-transparent px-0 text-xs font-bold uppercase tracking-wide text-muted-foreground focus-visible:ring-0"
-                />
-                <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
-                  {chunk.map((day, di) => (
-                    <DayCard
-                      key={day.key}
-                      dayNumber={wi * 7 + di + 1}
-                      day={day}
-                      onChange={(updater) => updateDay(day.key, updater)}
-                      onAddExercise={() => setPickerForDay(day.key)}
-                      onRemove={() => removeDay(day.key)}
-                    />
-                  ))}
+      <div className={cn(showAiChat && "grid items-start gap-6 lg:grid-cols-[1fr_380px]")}>
+        <fieldset disabled={!editable} className="contents">
+          <div className="min-w-0">
+            <Card className="mb-6">
+              <CardContent className="grid gap-3 p-5 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label>Program name</Label>
+                  <Input value={name} onChange={(e) => setName(e.target.value)} />
                 </div>
+                <div className="space-y-1.5">
+                  <Label>Description</Label>
+                  <Textarea
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    rows={1}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            {days.length === 0 ? (
+              <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border py-16 text-center text-muted-foreground">
+                <p>No days yet. Add training days one at a time -- no need to plan whole weeks.</p>
+                <Button onClick={addDay}>
+                  <Plus className="h-4 w-4" />
+                  Add Day
+                </Button>
               </div>
-            ))}
+            ) : (
+              <div className="space-y-8">
+                {weekChunks.map((chunk, wi) => (
+                  <div key={wi}>
+                    <Input
+                      value={weekNames[wi] || `Week ${wi + 1}`}
+                      onChange={(e) => renameWeek(wi, e.target.value)}
+                      className="mb-3 h-8 max-w-xs border-none bg-transparent px-0 text-xs font-bold uppercase tracking-wide text-muted-foreground focus-visible:ring-0"
+                    />
+                    <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+                      {chunk.map((day, di) => (
+                        <DayCard
+                          key={day.key}
+                          dayNumber={wi * 7 + di + 1}
+                          day={day}
+                          onChange={(updater) => updateDay(day.key, updater)}
+                          onAddExercise={() => setPickerForDay(day.key)}
+                          onRemove={() => removeDay(day.key)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {days.length > 0 && (
+              <Button variant="outline" className="mt-4" onClick={addDay}>
+                <Plus className="h-4 w-4" />
+                Add Day
+              </Button>
+            )}
+          </div>
+        </fieldset>
+
+        {showAiChat && (
+          <div className="h-[600px] lg:sticky lg:top-24">
+            <ProgramAiChatPanel apiBase={apiBase} programId={programId} onApplied={handleChatApplied} />
           </div>
         )}
-
-        {days.length > 0 && (
-          <Button variant="outline" className="mt-4" onClick={addDay}>
-            <Plus className="h-4 w-4" />
-            Add Day
-          </Button>
-        )}
-      </fieldset>
+      </div>
 
       <ExercisePickerDialog
         apiBase={apiBase}

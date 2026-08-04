@@ -1,15 +1,17 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
+import { Link } from "wouter";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { CalendarView, type CalendarEntry } from "@/components/calendar-view";
 import { CalendarLinkDialog } from "@/components/calendar-link-dialog";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { Dumbbell, CalendarDays } from "lucide-react";
+import { CalendarDays, Sparkles } from "lucide-react";
 
 export default function AthleteDashboard() {
   const [, navigate] = useLocation();
@@ -58,13 +60,31 @@ export default function AthleteDashboard() {
       {/* Only the "you have no coach at all" case gets a big empty state --
           an empty day/week within a real program is just "nothing scheduled",
           already shown inline by the calendar itself. Showing both here too
-          was a redundant, confusing double empty-state. */}
+          was a redundant, confusing double empty-state. No coach doesn't
+          mean no path forward though -- Free Agent status is purely derived
+          (zero rows in coachAthletes for this athlete, nothing stored), and
+          it comes with full access to the AI program builder as the
+          in-the-meantime coaching relationship. */}
       {!coachesLoading && coaches.length === 0 && (
         <Card className="mt-6">
-          <CardContent className="flex flex-col items-center gap-2 py-14 text-center">
-            <Dumbbell className="h-8 w-8 text-muted-foreground" />
-            <p className="text-muted-foreground">
-              Nothing on your calendar yet. Ask your coach to assign you a program.
+          <CardContent className="flex flex-col items-center gap-3 py-14 text-center">
+            <Badge className="gap-1.5 bg-primary/15 text-primary hover:bg-primary/15">
+              <Sparkles className="h-3.5 w-3.5" />
+              Free Agent
+            </Badge>
+            <p className="max-w-sm text-muted-foreground">
+              You don't have a coach yet, so the AI is your coach for now -- describe what you
+              want to train and it'll build you a full program, review your form, and adjust as
+              you go.
+            </p>
+            <Button asChild>
+              <Link href="/athlete/programs">
+                <Sparkles className="h-4 w-4" />
+                Build a Program with AI
+              </Link>
+            </Button>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Joining a team later? Your AI-built programs stay right where they are.
             </p>
             <CoachJoinHint />
           </CardContent>
@@ -106,6 +126,7 @@ function CoachJoinHint() {
       }}
       className="flex items-center gap-2"
     >
+      <span className="text-xs text-muted-foreground">Or join a team:</span>
       <Input
         value={code}
         onChange={(e) => setCode(e.target.value.toUpperCase())}

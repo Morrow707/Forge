@@ -1,13 +1,15 @@
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
-import { Check, X, Pencil, CheckCircle2, Sparkles, Flag, Youtube } from "lucide-react";
+import { Check, X, Pencil, CheckCircle2, TrendingUp, Flag, Youtube, Users } from "lucide-react";
 
 type ExerciseSummary = {
   id: number;
@@ -24,8 +26,8 @@ type ExerciseSummary = {
 type PendingSubmission = {
   id: number;
   createdAt: string;
+  coachCount: number;
   exercise: ExerciseSummary;
-  submitter: { id: number; name: string };
 };
 
 type OpenReport = {
@@ -76,18 +78,19 @@ export default function AdminReviewQueue() {
   const { data: reports = [] } = useQuery<OpenReport[]>({
     queryKey: ["/api/admin/reports"],
   });
+  const [nameEdits, setNameEdits] = useState<Record<number, string>>({});
 
   const resolveSubmission = useMutation({
-    mutationFn: async ({ id, approve }: { id: number; approve: boolean }) => {
-      await apiRequest("POST", `/api/admin/submissions/${id}/resolve`, { approve });
+    mutationFn: async ({ id, approve, name }: { id: number; approve: boolean; name?: string }) => {
+      await apiRequest("POST", `/api/admin/submissions/${id}/resolve`, { approve, name });
     },
     onSuccess: (_data, { approve }) => {
       qc.invalidateQueries({ queryKey: ["/api/admin/submissions"] });
       qc.invalidateQueries({ queryKey: ["/api/admin/exercises"] });
       qc.invalidateQueries({ queryKey: ["/api/coach/exercises"] });
-      toast.success(approve ? "Approved — now official Forge content" : "Rejected");
+      toast.success(approve ? "Approved — now official Forge content" : "Dismissed");
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not resolve submission"),
+    onError: (err: ApiError) => toast.error(err.message || "Could not resolve"),
   });
 
   const resolveReport = useMutation({
@@ -107,18 +110,20 @@ export default function AdminReviewQueue() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-primary" />
-              Forge Submissions ({submissions.length})
+              <TrendingUp className="h-4 w-4 text-primary" />
+              Trending Across Coaches ({submissions.length})
             </CardTitle>
             <CardDescription>
-              Exercises coaches have nominated to become official Forge content. Approving
-              hands ownership to you -- it'll show the FORGE badge for every coach immediately.
+              No one nominated these -- two or more coaches independently added an exercise
+              with this exact name, which is its own signal. Approving adds it to the Forge
+              library (give it a canonical name first if you want) and hands it the FORGE badge
+              for every coach immediately.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
             {submissions.length === 0 && (
               <p className="py-6 text-center text-sm text-muted-foreground">
-                Nothing pending review.
+                Nothing trending right now.
               </p>
             )}
             {submissions.map((s) => (
@@ -126,10 +131,37 @@ export default function AdminReviewQueue() {
                 key={s.id}
                 className="flex flex-col gap-3 rounded-md border border-border p-3 sm:flex-row sm:items-center sm:justify-between"
               >
-                <ExerciseSummaryLine exercise={s.exercise} />
+                <div className="min-w-0 flex-1 space-y-1.5">
+                  <Input
+                    value={nameEdits[s.id] ?? s.exercise.name}
+                    onChange={(e) =>
+                      setNameEdits((prev) => ({ ...prev, [s.id]: e.target.value }))
+                    }
+                    className="h-8 max-w-xs font-semibold"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {s.exercise.muscleGroup} · {s.exercise.equipment}
+                    {s.exercise.movementType ? ` · ${s.exercise.movementType}` : ""}
+                    {s.exercise.laterality ? ` · ${s.exercise.laterality}` : ""}
+                  </p>
+                  {s.exercise.videoUrl && (
+                    <a
+                      href={s.exercise.videoUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                    >
+                      <Youtube className="h-3 w-3" />
+                      Video link
+                    </a>
+                  )}
+                </div>
                 <div className="flex shrink-0 items-center gap-3">
                   <div className="text-right text-xs text-muted-foreground">
-                    <p>{s.submitter.name}</p>
+                    <p className="flex items-center justify-end gap-1 font-semibold text-foreground">
+                      <Users className="h-3 w-3" />
+                      {s.coachCount} coaches
+                    </p>
                     <p>{formatDistanceToNow(new Date(s.createdAt), { addSuffix: true })}</p>
                   </div>
                   <div className="flex gap-1.5">
@@ -141,12 +173,18 @@ export default function AdminReviewQueue() {
                       onClick={() => resolveSubmission.mutate({ id: s.id, approve: false })}
                     >
                       <X className="h-3.5 w-3.5" />
-                      Reject
+                      Dismiss
                     </Button>
                     <Button
                       size="sm"
                       disabled={resolveSubmission.isPending}
-                      onClick={() => resolveSubmission.mutate({ id: s.id, approve: true })}
+                      onClick={() =>
+                        resolveSubmission.mutate({
+                          id: s.id,
+                          approve: true,
+                          name: nameEdits[s.id]?.trim() || undefined,
+                        })
+                      }
                     >
                       <Check className="h-3.5 w-3.5" />
                       Approve

@@ -45,6 +45,56 @@ export async function askClaude(
   }
 }
 
+/** Plain-text completion grounded in one or more images -- e.g. frames
+ * pulled from a form-check video. Images are plain base64 (no data: URL
+ * prefix) with an explicit media type. Returns null on no-config/failure,
+ * same contract as askClaude. */
+export async function askClaudeVision(
+  system: string,
+  text: string,
+  images: { mediaType: "image/jpeg" | "image/png"; data: string }[],
+  { maxTokens = 1024 }: { maxTokens?: number } = {},
+): Promise<string | null> {
+  if (!aiEnabled) return null;
+  try {
+    const res = await fetch(API_URL, {
+      method: "POST",
+      headers: {
+        "x-api-key": apiKey!,
+        "anthropic-version": ANTHROPIC_VERSION,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: maxTokens,
+        system,
+        messages: [
+          {
+            role: "user",
+            content: [
+              ...images.map((img) => ({
+                type: "image",
+                source: { type: "base64", media_type: img.mediaType, data: img.data },
+              })),
+              { type: "text", text },
+            ],
+          },
+        ],
+      }),
+    });
+    if (!res.ok) {
+      console.error("Claude vision request failed:", res.status, await res.text());
+      return null;
+    }
+    const data = await res.json();
+    const textBlock = data.content?.find((b: any) => b.type === "text")?.text;
+    return typeof textBlock === "string" ? textBlock : null;
+  } catch (err: any) {
+    console.error("Claude vision request failed:", err?.message || err);
+    return null;
+  }
+}
+
 /** Structured extraction via forced tool use -- the reliable way to get
  * Claude to return actual JSON matching a shape, rather than asking for JSON
  * in prose and hoping it parses. Returns null on no-config/failure/refusal. */

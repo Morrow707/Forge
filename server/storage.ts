@@ -29,6 +29,7 @@ import {
   athleteDigests,
   coachDigests,
   athleteChatMessages,
+  programChatMessages,
   type InsertUser,
 } from "@shared/schema";
 import type {
@@ -48,7 +49,7 @@ import type {
 } from "@shared/schema";
 import { TESTING_METRICS, testingMetricLowerIsBetter } from "@shared/testing-metrics";
 import { computeReadiness } from "@shared/wellness";
-import { askClaude, askClaudeStructured, aiEnabled } from "./ai";
+import { askClaude, askClaudeStructured, askClaudeVision, aiEnabled } from "./ai";
 import { eq, and, inArray, asc, desc, lt, gte, gt, isNull, sql } from "drizzle-orm";
 import {
   generateCoachCode,
@@ -1269,13 +1270,6 @@ Hard rules, no exceptions:
       with: { coach: true },
     });
     if (!ex) return null;
-    const pendingSubmission = await db.query.exerciseSubmissions.findFirst({
-      where: and(
-        eq(exerciseSubmissions.exerciseId, id),
-        eq(exerciseSubmissions.submittedBy, requestingUserId),
-        eq(exerciseSubmissions.status, "pending"),
-      ),
-    });
     const openReport = await db.query.exerciseReports.findFirst({
       where: and(
         eq(exerciseReports.exerciseId, id),
@@ -1285,7 +1279,6 @@ Hard rules, no exceptions:
     });
     return {
       ...this.withOwnership(ex, requestingUserId),
-      hasPendingSubmission: !!pendingSubmission,
       hasOpenReport: !!openReport,
     };
   },
@@ -1299,6 +1292,7 @@ Hard rules, no exceptions:
       .insert(exercises)
       .values({ ...data, coachId })
       .returning();
+    await this.detectTrendingExercises();
     return row;
   },
 
@@ -1308,6 +1302,7 @@ Hard rules, no exceptions:
       .set(data)
       .where(eq(exercises.id, id))
       .returning();
+    if (data.name !== undefined) await this.detectTrendingExercises();
     return row;
   },
 
@@ -1326,34 +1321,87 @@ Hard rules, no exceptions:
     await db.delete(exercises).where(eq(exercises.id, id));
   },
 
-  // ---------- Exercise submissions (coach -> Forge) ----------
-  async getPendingSubmissionForExercise(exerciseId: number, submittedBy: number) {
-    return db.query.exerciseSubmissions.findFirst({
-      where: and(
-        eq(exerciseSubmissions.exerciseId, exerciseId),
-        eq(exerciseSubmissions.submittedBy, submittedBy),
-        eq(exerciseSubmissions.status, "pending"),
-      ),
-    });
-  },
+  // ---------- Trending exercises (numbers, not opt-in, -> Forge) ----------
+  // No coach ever nominates anything. Whenever two or more different
+  // coaches independently end up with an exercise of the same name (case/
+  // whitespace insensitive), that convergence is itself the signal --
+  // surfaced to the admin as a candidate. Per-coach exercise privacy is
+  // untouched: this only ever compares names, never shows one coach's
+  // exercise details to another, and the admin only ever sees a count, not
+  // which coaches. Runs after every create/rename so the queue stays live;
+  // cheap full-table scan, fine at this app's scale.
+  async detectTrendingExercises() {
+    const tracked = await db
+      .select({
+        id: exerciseSubmissions.id,
+        status: exerciseSubmissions.status,
+        name: exercises.name,
+      })
+      .from(exerciseSubmissions)
+      .innerJoin(exercises, eq(exerciseSubmissions.exerciseId, exercises.id));
+    const resolvedNames = new Set(
+      tracked.filter((r) => r.status !== "pending").map((r) => r.name.trim().toLowerCase()),
+    );
+    const pendingByName = new Map(
+      tracked.filter((r) => r.status === "pending").map((r) => [r.name.trim().toLowerCase(), r.id]),
+    );
 
-  async createExerciseSubmission(exerciseId: number, submittedBy: number) {
-    const [row] = await db
-      .insert(exerciseSubmissions)
-      .values({ exerciseId, submittedBy })
-      .returning();
-    return row;
+    const allExercises = await db.query.exercises.findMany({ with: { coach: true } });
+    const forgeNames = new Set(
+      allExercises
+        .filter((e) => e.coach.role === "admin")
+        .map((e) => e.name.trim().toLowerCase()),
+    );
+
+    const groups = new Map<string, typeof allExercises>();
+    for (const ex of allExercises) {
+      if (ex.coach.role !== "coach") continue;
+      const key = ex.name.trim().toLowerCase();
+      if (resolvedNames.has(key) || forgeNames.has(key)) continue;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(ex);
+    }
+
+    // A pending candidate whose coach count has since dropped below 2
+    // (someone deleted or renamed their copy) no longer belongs in the
+    // queue -- remove it rather than leave a stale nag.
+    for (const [key, pendingId] of pendingByName) {
+      const group = groups.get(key);
+      if (!group || new Set(group.map((e) => e.coachId)).size < 2) {
+        await db.delete(exerciseSubmissions).where(eq(exerciseSubmissions.id, pendingId));
+      }
+    }
+
+    for (const [key, group] of groups) {
+      const distinctCoachIds = new Set(group.map((e) => e.coachId));
+      if (distinctCoachIds.size < 2) continue;
+      const existingId = pendingByName.get(key);
+      if (existingId) {
+        await db
+          .update(exerciseSubmissions)
+          .set({ coachCount: distinctCoachIds.size })
+          .where(eq(exerciseSubmissions.id, existingId));
+      } else {
+        const earliest = group.reduce((a, b) => (a.createdAt < b.createdAt ? a : b));
+        await db.insert(exerciseSubmissions).values({
+          exerciseId: earliest.id,
+          submittedBy: earliest.coachId,
+          coachCount: distinctCoachIds.size,
+        });
+      }
+    }
   },
 
   async getPendingSubmissionsForAdmin() {
     const rows = await db.query.exerciseSubmissions.findMany({
       where: eq(exerciseSubmissions.status, "pending"),
       orderBy: asc(exerciseSubmissions.createdAt),
-      with: { exercise: true, submitter: true },
+      with: { exercise: true },
     });
     return rows.map((r) => ({
       id: r.id,
       createdAt: r.createdAt,
+      coachCount: r.coachCount,
       exercise: {
         id: r.exercise.id,
         name: r.exercise.name,
@@ -1365,17 +1413,19 @@ Hard rules, no exceptions:
         instructions: r.exercise.instructions,
         videoUrl: r.exercise.videoUrl,
       },
-      submitter: { id: r.submitter.id, name: r.submitter.name },
     }));
   },
 
-  async resolveSubmission(id: number, approve: boolean, adminId: number) {
+  async resolveSubmission(id: number, approve: boolean, adminId: number, name?: string) {
     const submission = await db.query.exerciseSubmissions.findFirst({
       where: eq(exerciseSubmissions.id, id),
     });
     if (!submission) return null;
     if (approve) {
-      await db.update(exercises).set({ coachId: adminId }).where(eq(exercises.id, submission.exerciseId));
+      await db
+        .update(exercises)
+        .set({ coachId: adminId, ...(name ? { name } : {}) })
+        .where(eq(exercises.id, submission.exerciseId));
     }
     const [row] = await db
       .update(exerciseSubmissions)
@@ -1805,6 +1855,335 @@ Design a complete draft program matching the coach's request.`;
 
   async deleteProgram(id: number) {
     await db.delete(programs).where(eq(programs.id, id));
+  },
+
+  // ---------- AI conversational program builder (admin only) ----------
+  // Full transcript for a program's AI chat, oldest first.
+  async getProgramChatMessages(programId: number) {
+    const rows = await db.query.programChatMessages.findMany({
+      where: eq(programChatMessages.programId, programId),
+      orderBy: desc(programChatMessages.createdAt),
+    });
+    return rows.reverse();
+  },
+
+  // Admin-only conversational program builder. Every turn, the AI gets the
+  // full chat history plus the program's *current* structure and must emit
+  // a complete replacement structure -- never a diff -- which is applied via
+  // the same wipe-and-rebuild updateProgramStructure the manual builder
+  // uses. Unlike the coach-facing AI Assist (generateProgramDraft, which
+  // only ever returns a draft for the coach to review before it touches a
+  // real program) and the athlete chat (advice-only, never edits a
+  // program), this auto-applies every turn with no review step -- that's
+  // deliberate: it's scoped to the trusted admin role building/editing a
+  // program for their own personal training, not a coach acting on a minor
+  // athlete's behalf.
+  async generateProgramFromChat(programId: number, authorId: number, content: string) {
+    const [userMessage] = await db
+      .insert(programChatMessages)
+      .values({ programId, authorId, role: "user", content })
+      .returning();
+
+    const fail = async (text: string) => {
+      const [assistantMessage] = await db
+        .insert(programChatMessages)
+        .values({ programId, authorId, role: "assistant", content: text })
+        .returning();
+      return { userMessage, assistantMessage, program: await this.getProgramFull(programId) };
+    };
+
+    if (!aiEnabled) {
+      return fail("AI isn't set up yet -- ask whoever manages this Forge instance to configure it.");
+    }
+
+    const [program, history, visibleExercises] = await Promise.all([
+      this.getProgramFull(programId),
+      this.getProgramChatMessages(programId),
+      this.getVisibleExercisesForCoach(authorId),
+    ]);
+    if (!program) return fail("Couldn't find that program anymore.");
+    if (visibleExercises.length === 0) {
+      return fail("There aren't any exercises available to build with yet.");
+    }
+
+    const validIds = visibleExercises.map((e) => e.id);
+    const validIdSet = new Set(validIds);
+    const catalog = visibleExercises
+      .map((e) => `${e.id}: ${e.name} (${e.category}, ${e.muscleGroup})`)
+      .join("\n");
+
+    const currentStructure = {
+      name: program.name,
+      description: program.description,
+      weeks: program.weeks.map((w) => ({
+        weekNumber: w.weekNumber,
+        name: w.name,
+        days: w.days.map((d) => ({
+          dayNumber: d.dayNumber,
+          title: d.title,
+          isRestDay: d.isRestDay,
+          exercises: d.exercises.map((ex) => ({
+            exerciseId: ex.exerciseId,
+            exerciseName: ex.exercise.name,
+            sets: ex.sets,
+            reps: ex.reps,
+            weight: ex.weight,
+            restSeconds: ex.restSeconds,
+            notes: ex.notes,
+            supersetGroup: ex.supersetGroup,
+            videoCheckEnabled: ex.videoCheckEnabled,
+          })),
+        })),
+      })),
+    };
+
+    const tool = {
+      name: "update_program",
+      description:
+        "Replaces the entire program structure with a new one reflecting the requested changes, and writes a short chat reply summarizing what changed.",
+      input_schema: {
+        type: "object",
+        properties: {
+          summary: {
+            type: "string",
+            description:
+              "A short (1-4 sentence) chat reply describing what you changed and why, written conversationally to the person you're building this for.",
+          },
+          name: { type: "string" },
+          description: { type: "string" },
+          weeks: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                weekNumber: { type: "integer" },
+                name: { type: "string" },
+                days: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      dayNumber: { type: "integer" },
+                      title: { type: "string" },
+                      isRestDay: { type: "boolean" },
+                      exercises: {
+                        type: "array",
+                        items: {
+                          type: "object",
+                          properties: {
+                            exerciseId: { type: "integer", enum: validIds },
+                            sets: { type: "integer" },
+                            reps: { type: "string" },
+                            weight: { type: "string" },
+                            restSeconds: { type: "integer" },
+                            notes: { type: "string" },
+                            supersetGroup: { type: "string" },
+                            videoCheckEnabled: {
+                              type: "boolean",
+                              description:
+                                "Set true when the user asks for a form check / video check on this exercise. This triggers the app's own recording flow and an AI form-check review once they submit a video -- you never generate this feedback yourself, just flip the flag.",
+                            },
+                          },
+                          required: ["exerciseId", "sets", "reps"],
+                        },
+                      },
+                    },
+                    required: ["dayNumber", "title", "isRestDay", "exercises"],
+                  },
+                },
+              },
+              required: ["weekNumber", "days"],
+            },
+          },
+        },
+        required: ["summary", "name", "weeks"],
+      },
+    };
+
+    const system = `You are a strength and conditioning program design assistant, chatting directly with the person who owns this program and trains themselves with it. You may ONLY reference exercise IDs from the catalog you're given -- never invent an exercise or its ID. On every turn you must emit the COMPLETE program structure exactly as it should exist after this turn's changes, not just what changed -- anything you omit will be deleted, so carry forward everything the user didn't ask you to change. Keep sensible periodization (rest days, reasonable set/rep schemes, sensible progression across weeks). If they ask for a "form check" or "video check" on an exercise, set that exercise's videoCheckEnabled to true (and leave it true on anything it was already true for, unless they ask you to turn it off). Also write a short, conversational summary of what you changed.`;
+
+    const historyText = history
+      .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`)
+      .join("\n");
+
+    const userPrompt = `Available exercises (id: name (category, muscle group)) -- you may ONLY use exercise IDs from this list:
+${catalog}
+
+Current program structure:
+${JSON.stringify(currentStructure)}
+
+Conversation so far:
+${historyText}
+
+Respond to the user's latest message by producing the complete updated program structure and a short summary of what you changed.`;
+
+    type RawUpdate = {
+      summary?: string;
+      name?: string;
+      description?: string;
+      weeks?: {
+        weekNumber?: number;
+        name?: string;
+        days?: {
+          dayNumber?: number;
+          title?: string;
+          isRestDay?: boolean;
+          exercises?: {
+            exerciseId: number;
+            sets?: number;
+            reps?: string;
+            weight?: string;
+            restSeconds?: number;
+            notes?: string;
+            supersetGroup?: string;
+            videoCheckEnabled?: boolean;
+          }[];
+        }[];
+      }[];
+    };
+
+    const result = await askClaudeStructured<RawUpdate>(system, userPrompt, tool, { maxTokens: 4096 });
+    if (!result) {
+      return fail("Sorry, I couldn't come up with an update just now -- try again in a bit.");
+    }
+
+    const structure: ProgramStructureInput = {
+      name: result.name?.trim() || program.name,
+      description: result.description?.trim() || null,
+      weeks: (result.weeks ?? []).map((w, wi) => ({
+        weekNumber: w.weekNumber ?? wi + 1,
+        name: w.name ?? null,
+        days: (w.days ?? []).map((d, di) => ({
+          dayNumber: d.dayNumber ?? di + 1,
+          title: d.title?.trim() || "Training Day",
+          isRestDay: Boolean(d.isRestDay),
+          exercises: (d.exercises ?? [])
+            .filter((ex) => validIdSet.has(ex.exerciseId))
+            .map((ex, ei) => ({
+              exerciseId: ex.exerciseId,
+              orderIndex: ei,
+              sets: ex.sets ?? 3,
+              reps: ex.reps || "10",
+              weight: ex.weight || null,
+              restSeconds: ex.restSeconds ?? null,
+              notes: ex.notes || null,
+              supersetGroup: ex.supersetGroup || null,
+              videoCheckEnabled: ex.videoCheckEnabled ?? false,
+            })),
+        })),
+      })),
+    };
+
+    await this.updateProgramStructure(programId, structure);
+    // Marks the program as AI-authored permanently -- see the schema
+    // comment on programs.aiAuthored for why this never gets cleared.
+    await db.update(programs).set({ aiAuthored: true }).where(eq(programs.id, programId));
+
+    const [assistantMessage] = await db
+      .insert(programChatMessages)
+      .values({
+        programId,
+        authorId,
+        role: "assistant",
+        content: result.summary?.trim() || "Updated the program.",
+      })
+      .returning();
+
+    return { userMessage, assistantMessage, program: await this.getProgramFull(programId) };
+  },
+
+  // "Full function" AI form check: a direct, unsupervised critique from
+  // still frames of a recorded set, written into the same chat transcript
+  // as the program builder so it reads as one continuous assistant-coach
+  // conversation. Deliberately gated on aiAuthored -- this is the one place
+  // in the app where the AI critiques technique with no human review step
+  // at all, which is only safe because it's scoped to a program the AI
+  // itself already builds/edits for its own owner, never a coach's program
+  // or an athlete under a coach's supervision (compare the athlete chat's
+  // hard rule to never give unsupervised training directives).
+  async submitFormCheck(
+    programId: number,
+    authorId: number,
+    exerciseName: string,
+    images: { mediaType: "image/jpeg" | "image/png"; data: string }[],
+    trackedMetrics?: {
+      peakVelocityMps?: number | null;
+      meanVelocityMps?: number | null;
+      concentricSeconds?: number | null;
+      eccentricSeconds?: number | null;
+      barPathDeviationCm?: number | null;
+      formFaults?: { code: string; label: string }[] | null;
+    },
+  ) {
+    const program = await this.getProgramFull(programId);
+    if (!program || !program.aiAuthored) return null;
+
+    const [userMessage] = await db
+      .insert(programChatMessages)
+      .values({
+        programId,
+        authorId,
+        role: "user",
+        content: `[Form check requested: ${exerciseName}]`,
+      })
+      .returning();
+
+    const reply = async (text: string) => {
+      const [assistantMessage] = await db
+        .insert(programChatMessages)
+        .values({ programId, authorId, role: "assistant", content: text })
+        .returning();
+      return { userMessage, assistantMessage };
+    };
+
+    if (!aiEnabled || images.length === 0) {
+      return reply("AI isn't set up yet -- ask whoever manages this Forge instance to configure it.");
+    }
+
+    // Pose-tracking numbers ground the critique in real geometry instead of
+    // Claude guessing angles from a handful of JPEGs -- when present, this
+    // is quantitative fact about the same set the images were pulled from,
+    // so the system prompt tells the model to defer to it over what the
+    // frames merely suggest.
+    const metricsText = trackedMetrics
+      ? [
+          "Quantitative data from on-device motion tracking for this same set (treat this as ground truth, more reliable than what you can judge from the images alone):",
+          trackedMetrics.peakVelocityMps != null
+            ? `- Peak bar speed: ${trackedMetrics.peakVelocityMps} m/s`
+            : null,
+          trackedMetrics.meanVelocityMps != null
+            ? `- Mean bar speed: ${trackedMetrics.meanVelocityMps} m/s`
+            : null,
+          trackedMetrics.concentricSeconds != null
+            ? `- Concentric time: ${trackedMetrics.concentricSeconds}s`
+            : null,
+          trackedMetrics.eccentricSeconds != null
+            ? `- Eccentric time: ${trackedMetrics.eccentricSeconds}s`
+            : null,
+          trackedMetrics.barPathDeviationCm != null
+            ? `- Bar path deviation: ${trackedMetrics.barPathDeviationCm}cm from a straight vertical line`
+            : null,
+          trackedMetrics.formFaults && trackedMetrics.formFaults.length > 0
+            ? `- Detected form flags: ${trackedMetrics.formFaults.map((f) => f.label).join("; ")}`
+            : trackedMetrics.formFaults
+              ? "- No form flags detected by motion tracking."
+              : null,
+        ]
+          .filter(Boolean)
+          .join("\n")
+      : null;
+
+    const system = `You are a strength coach reviewing still frames captured from someone's own training video, sent directly to you for feedback with no other coach in the loop -- you are their only coach for this. Give a direct, specific, encouraging critique of their technique on "${exerciseName}": what looks solid, and 1-3 concrete cues to fix anything that doesn't.${metricsText ? " You're also given real motion-tracking numbers from the same set -- ground your critique in those over what you merely see in the frames when they'd disagree." : " Base everything strictly on what's visible in the frames -- if the images don't show enough to say anything useful (bad angle, too blurry, wrong exercise), say so plainly instead of guessing."} Keep it to 3-5 sentences, talk to them as "you", no preamble.`;
+
+    const userText = metricsText
+      ? `Here are frames from a set of ${exerciseName}.\n\n${metricsText}`
+      : `Here are frames from a set of ${exerciseName}. What do you see?`;
+
+    const text = await askClaudeVision(system, userText, images, { maxTokens: 400 });
+
+    return reply(
+      text?.trim() ?? "Couldn't get a read on that video -- try again with a clearer angle.",
+    );
   },
 
   async getProgramDayForCoach(coachId: number, dayId: number) {
@@ -2663,7 +3042,14 @@ Design a complete draft program matching the coach's request.`;
 
     const { week, ...dayFields } = day;
     return {
+      programId: assignment.program.id,
       programName: assignment.program.name,
+      programAiAuthored: assignment.program.aiAuthored,
+      // True for admin's own training and a Free Agent athlete's self-built
+      // programs alike (coachId === athleteId on the assignment) -- there's
+      // no human coach behind this specific day regardless of who built it,
+      // which is the real signal for whether to show a coach comment thread.
+      isSelfAssigned: assignment.coachId === athleteId,
       correctivesEnabled: assignment.correctivesEnabled,
       day: { ...dayFields, weekNumber: week.weekNumber, exercises: exercisesWithHistory },
       correctives: correctivesWithHistory,
@@ -2740,6 +3126,9 @@ Design a complete draft program matching the coach's request.`;
               eccentricSeconds: s.eccentricSeconds ?? null,
               barPathDeviationCm: s.barPathDeviationCm ?? null,
               barPathTrace: s.barPathTrace ?? null,
+              formFaults: s.formFaults ?? null,
+              repBreakdown: s.repBreakdown ?? null,
+              armPathTrace: s.armPathTrace ?? null,
             })),
           );
         }
@@ -2772,6 +3161,10 @@ Design a complete draft program matching the coach's request.`;
         concentricSeconds: workoutSetEntries.concentricSeconds,
         eccentricSeconds: workoutSetEntries.eccentricSeconds,
         barPathDeviationCm: workoutSetEntries.barPathDeviationCm,
+        barPathTrace: workoutSetEntries.barPathTrace,
+        formFaults: workoutSetEntries.formFaults,
+        repBreakdown: workoutSetEntries.repBreakdown,
+        armPathTrace: workoutSetEntries.armPathTrace,
       })
       .from(workoutSetEntries)
       .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
@@ -2803,6 +3196,10 @@ Design a complete draft program matching the coach's request.`;
         concentricSeconds: workoutSetEntries.concentricSeconds,
         eccentricSeconds: workoutSetEntries.eccentricSeconds,
         barPathDeviationCm: workoutSetEntries.barPathDeviationCm,
+        barPathTrace: workoutSetEntries.barPathTrace,
+        formFaults: workoutSetEntries.formFaults,
+        repBreakdown: workoutSetEntries.repBreakdown,
+        armPathTrace: workoutSetEntries.armPathTrace,
       })
       .from(workoutSetEntries)
       .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))

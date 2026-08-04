@@ -105,6 +105,7 @@ export default function LoginPage() {
           <p className="mb-1 font-semibold text-foreground">Demo accounts</p>
           <p>Coach: coach@forge.app / coach123</p>
           <p>Athlete: athlete@forge.app / athlete123</p>
+          <p>Free Agent: freeagent@forge.app / freeagent123</p>
         </div>
       </div>
     </div>

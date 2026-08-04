@@ -53,7 +53,9 @@ async function main() {
   await storage.linkAthleteToCoach(coach.id, athlete.id);
 
   // A pure admin account, shareable the same way the coach/athlete demo
-  // logins are -- no calendar or roster access, just Forge library curation.
+  // logins are -- Forge library curation, plus the same personal
+  // calendar/training/AI-program-chat features every admin account gets
+  // (no roster access, though -- that stays coach-only).
   let demoAdmin = await storage.getUserByEmail("admin@forge.app");
   if (!demoAdmin) {
     demoAdmin = await storage.createUser({
@@ -61,6 +63,23 @@ async function main() {
       passwordHash: await hashPassword("admin123"),
       name: "Forge Admin",
       role: "admin",
+    });
+  }
+
+  // A demo Free Agent: a normal athlete account, deliberately never linked
+  // to a coach (no linkAthleteToCoach call below, unlike the athlete demo
+  // account above) -- Free Agent status is purely derived from having zero
+  // coachAthletes rows, not a stored flag, so simply not linking one is the
+  // whole setup. Same sport as the demo athlete/coach's roster for a
+  // consistent demo story.
+  let freeAgent = await storage.getUserByEmail("freeagent@forge.app");
+  if (!freeAgent) {
+    freeAgent = await storage.createUser({
+      email: "freeagent@forge.app",
+      passwordHash: await hashPassword("freeagent123"),
+      name: "Morgan Freeagent",
+      role: "athlete",
+      sport: "Basketball",
     });
   }
 
@@ -1033,6 +1052,7 @@ async function main() {
   console.log("Seed complete.");
   console.log("Coach login: coach@forge.app / coach123");
   console.log("Athlete login: athlete@forge.app / athlete123");
+  console.log("Free Agent login: freeagent@forge.app / freeagent123");
   console.log(`Coach code: ${coach.coachCode}`);
   process.exit(0);
 }
