@@ -16,6 +16,8 @@ import { Users, Gauge, Crown, CalendarDays, TrendingUp } from "lucide-react";
 import {
   LineChart,
   Line,
+  ScatterChart,
+  Scatter,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -47,6 +49,8 @@ type AnalyticsPoint = {
   concentricSeconds: number | null;
   eccentricSeconds: number | null;
   barPathDeviationCm: number | null;
+  barPathTrace: { t: number; x: number; y: number }[] | null;
+  formFaults: { code: string; label: string }[] | null;
 };
 type RecentSession = {
   date: string;
@@ -107,6 +111,12 @@ export default function CoachAnalytics() {
   const hasNumericWeight = chartData.some((p) => p.weightMode === "numeric" && p.weight != null);
   const hasVelocity = chartData.some((p) => p.peakVelocityMps != null);
   const hasPath = chartData.some((p) => p.barPathDeviationCm != null);
+  // The actual x/y shape of the bar's path, not just the scalar deviation
+  // number above -- capped to the 5 most recent tracked sets so overlaying
+  // them stays readable instead of an unreadable tangle.
+  const pathTraceSets = chartData
+    .filter((p) => p.barPathTrace && p.barPathTrace.length > 1)
+    .slice(-5);
   const prCount = chartData.filter((p) => p.isPR).length;
   const unit = chartData.find((p) => p.weightUnit)?.weightUnit ?? "lbs";
   const selectedExerciseName = exercises.find((e) => String(e.id) === exerciseId)?.name;
@@ -381,6 +391,56 @@ export default function CoachAnalytics() {
             </Card>
           )}
 
+          {pathTraceSets.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Bar Path Shape</CardTitle>
+                <CardDescription>
+                  The actual path traced during each set (not just the deviation number) --
+                  horizontal drift vs. vertical position, both in cm from where tracking started.
+                  Overlaying recent sets shows whether the path is repeatable rep to rep.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="h-72">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ScatterChart margin={{ left: 4, right: 12, top: 8, bottom: 8 }}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                    <XAxis
+                      type="number"
+                      dataKey="x"
+                      name="Horizontal drift"
+                      unit="cm"
+                      tick={{ fontSize: 11 }}
+                    />
+                    <YAxis
+                      type="number"
+                      dataKey="y"
+                      name="Vertical position"
+                      unit="cm"
+                      tick={{ fontSize: 11 }}
+                      width={48}
+                    />
+                    <Tooltip
+                      cursor={{ strokeDasharray: "3 3" }}
+                      contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))" }}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    {pathTraceSets.map((p, i) => (
+                      <Scatter
+                        key={`${p.date}-${p.setNumber}`}
+                        name={`${format(parseISO(p.date), "MMM d")} · Set ${p.setNumber}`}
+                        data={p.barPathTrace!}
+                        fill={TREND_COLORS[i % TREND_COLORS.length]}
+                        line={{ stroke: TREND_COLORS[i % TREND_COLORS.length] }}
+                        lineType="joint"
+                      />
+                    ))}
+                  </ScatterChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
           {hasVelocity && (
             <Card>
               <CardHeader>
@@ -438,6 +498,7 @@ export default function CoachAnalytics() {
                     <th className="py-1.5 pr-3">RPE</th>
                     <th className="py-1.5 pr-3">Peak m/s</th>
                     <th className="py-1.5 pr-3">Path (cm)</th>
+                    <th className="py-1.5 pr-3">Form notes</th>
                     <th className="py-1.5">PR</th>
                   </tr>
                 </thead>
@@ -468,6 +529,19 @@ export default function CoachAnalytics() {
                       <td className="py-1.5 pr-3">{p.rpe ?? "-"}</td>
                       <td className="py-1.5 pr-3">{p.peakVelocityMps ?? "-"}</td>
                       <td className="py-1.5 pr-3">{p.barPathDeviationCm ?? "-"}</td>
+                      <td className="py-1.5 pr-3">
+                        {p.formFaults && p.formFaults.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {p.formFaults.map((f) => (
+                              <Badge key={f.code} variant="secondary" className="text-[9px] font-normal">
+                                {f.label}
+                              </Badge>
+                            ))}
+                          </div>
+                        ) : (
+                          "-"
+                        )}
+                      </td>
                       <td className="py-1.5">
                         {p.isPR && <Crown className="h-3.5 w-3.5 text-amber-400" />}
                       </td>

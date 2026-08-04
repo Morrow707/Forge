@@ -2106,6 +2106,14 @@ Respond to the user's latest message by producing the complete updated program s
     authorId: number,
     exerciseName: string,
     images: { mediaType: "image/jpeg" | "image/png"; data: string }[],
+    trackedMetrics?: {
+      peakVelocityMps?: number | null;
+      meanVelocityMps?: number | null;
+      concentricSeconds?: number | null;
+      eccentricSeconds?: number | null;
+      barPathDeviationCm?: number | null;
+      formFaults?: { code: string; label: string }[] | null;
+    },
   ) {
     const program = await this.getProgramFull(programId);
     if (!program || !program.aiAuthored) return null;
@@ -2132,14 +2140,46 @@ Respond to the user's latest message by producing the complete updated program s
       return reply("AI isn't set up yet -- ask whoever manages this Forge instance to configure it.");
     }
 
-    const system = `You are a strength coach reviewing still frames captured from someone's own training video, sent directly to you for feedback with no other coach in the loop -- you are their only coach for this. Give a direct, specific, encouraging critique of their technique on "${exerciseName}": what looks solid, and 1-3 concrete cues to fix anything that doesn't. Base everything strictly on what's visible in the frames -- if the images don't show enough to say anything useful (bad angle, too blurry, wrong exercise), say so plainly instead of guessing. Keep it to 3-5 sentences, talk to them as "you", no preamble.`;
+    // Pose-tracking numbers ground the critique in real geometry instead of
+    // Claude guessing angles from a handful of JPEGs -- when present, this
+    // is quantitative fact about the same set the images were pulled from,
+    // so the system prompt tells the model to defer to it over what the
+    // frames merely suggest.
+    const metricsText = trackedMetrics
+      ? [
+          "Quantitative data from on-device motion tracking for this same set (treat this as ground truth, more reliable than what you can judge from the images alone):",
+          trackedMetrics.peakVelocityMps != null
+            ? `- Peak bar speed: ${trackedMetrics.peakVelocityMps} m/s`
+            : null,
+          trackedMetrics.meanVelocityMps != null
+            ? `- Mean bar speed: ${trackedMetrics.meanVelocityMps} m/s`
+            : null,
+          trackedMetrics.concentricSeconds != null
+            ? `- Concentric time: ${trackedMetrics.concentricSeconds}s`
+            : null,
+          trackedMetrics.eccentricSeconds != null
+            ? `- Eccentric time: ${trackedMetrics.eccentricSeconds}s`
+            : null,
+          trackedMetrics.barPathDeviationCm != null
+            ? `- Bar path deviation: ${trackedMetrics.barPathDeviationCm}cm from a straight vertical line`
+            : null,
+          trackedMetrics.formFaults && trackedMetrics.formFaults.length > 0
+            ? `- Detected form flags: ${trackedMetrics.formFaults.map((f) => f.label).join("; ")}`
+            : trackedMetrics.formFaults
+              ? "- No form flags detected by motion tracking."
+              : null,
+        ]
+          .filter(Boolean)
+          .join("\n")
+      : null;
 
-    const text = await askClaudeVision(
-      system,
-      `Here are frames from a set of ${exerciseName}. What do you see?`,
-      images,
-      { maxTokens: 400 },
-    );
+    const system = `You are a strength coach reviewing still frames captured from someone's own training video, sent directly to you for feedback with no other coach in the loop -- you are their only coach for this. Give a direct, specific, encouraging critique of their technique on "${exerciseName}": what looks solid, and 1-3 concrete cues to fix anything that doesn't.${metricsText ? " You're also given real motion-tracking numbers from the same set -- ground your critique in those over what you merely see in the frames when they'd disagree." : " Base everything strictly on what's visible in the frames -- if the images don't show enough to say anything useful (bad angle, too blurry, wrong exercise), say so plainly instead of guessing."} Keep it to 3-5 sentences, talk to them as "you", no preamble.`;
+
+    const userText = metricsText
+      ? `Here are frames from a set of ${exerciseName}.\n\n${metricsText}`
+      : `Here are frames from a set of ${exerciseName}. What do you see?`;
+
+    const text = await askClaudeVision(system, userText, images, { maxTokens: 400 });
 
     return reply(
       text?.trim() ?? "Couldn't get a read on that video -- try again with a clearer angle.",
@@ -3081,6 +3121,7 @@ Respond to the user's latest message by producing the complete updated program s
               eccentricSeconds: s.eccentricSeconds ?? null,
               barPathDeviationCm: s.barPathDeviationCm ?? null,
               barPathTrace: s.barPathTrace ?? null,
+              formFaults: s.formFaults ?? null,
             })),
           );
         }
@@ -3113,6 +3154,8 @@ Respond to the user's latest message by producing the complete updated program s
         concentricSeconds: workoutSetEntries.concentricSeconds,
         eccentricSeconds: workoutSetEntries.eccentricSeconds,
         barPathDeviationCm: workoutSetEntries.barPathDeviationCm,
+        barPathTrace: workoutSetEntries.barPathTrace,
+        formFaults: workoutSetEntries.formFaults,
       })
       .from(workoutSetEntries)
       .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
@@ -3144,6 +3187,8 @@ Respond to the user's latest message by producing the complete updated program s
         concentricSeconds: workoutSetEntries.concentricSeconds,
         eccentricSeconds: workoutSetEntries.eccentricSeconds,
         barPathDeviationCm: workoutSetEntries.barPathDeviationCm,
+        barPathTrace: workoutSetEntries.barPathTrace,
+        formFaults: workoutSetEntries.formFaults,
       })
       .from(workoutSetEntries)
       .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))

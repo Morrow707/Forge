@@ -497,6 +497,11 @@ export const workoutSetEntries = pgTable("workout_set_entries", {
   eccentricSeconds: real("eccentric_seconds"),
   barPathDeviationCm: real("bar_path_deviation_cm"),
   barPathTrace: json("bar_path_trace"),
+  // Heuristic biomechanics flags from on-device pose estimation (squat
+  // depth, knee valgus, forward lean, bar path drift) -- see
+  // pose-tracking.ts's detectFormFaults. Empty/null when nothing was
+  // flagged, not just when tracking wasn't on.
+  formFaults: json("form_faults"),
 });
 
 // A two-way thread on a specific day of a specific assignment -- an athlete
@@ -1274,6 +1279,11 @@ export const barPathPointSchema = z.object({
   y: z.number(),
 });
 
+export const formFaultSchema = z.object({
+  code: z.string(),
+  label: z.string(),
+});
+
 export const setLogInputSchema = z.object({
   setNumber: z.number(),
   reps: z.string().optional().nullable(),
@@ -1287,6 +1297,7 @@ export const setLogInputSchema = z.object({
   eccentricSeconds: z.number().optional().nullable(),
   barPathDeviationCm: z.number().optional().nullable(),
   barPathTrace: z.array(barPathPointSchema).optional().nullable(),
+  formFaults: z.array(formFaultSchema).optional().nullable(),
 });
 
 export const logEntryInputSchema = z

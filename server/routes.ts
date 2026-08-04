@@ -39,6 +39,7 @@ import {
   generateProgramDraftSchema,
   submitWellnessCheckinSchema,
   sendProgramChatMessageSchema,
+  formFaultSchema,
 } from "@shared/schema";
 import { computeReadiness } from "@shared/wellness";
 import { z } from "zod";
@@ -505,6 +506,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         )
         .min(1)
         .max(6),
+      // The same set's on-device pose-tracking numbers, if it was also
+      // tracked with the camera -- grounds the AI's critique in real
+      // geometry instead of only guessing from the frames. Optional: a
+      // form-check video with no camera tracking on record still works.
+      trackedMetrics: z
+        .object({
+          peakVelocityMps: z.number().optional().nullable(),
+          meanVelocityMps: z.number().optional().nullable(),
+          concentricSeconds: z.number().optional().nullable(),
+          eccentricSeconds: z.number().optional().nullable(),
+          barPathDeviationCm: z.number().optional().nullable(),
+          formFaults: formFaultSchema.array().optional().nullable(),
+        })
+        .optional(),
     });
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) {
@@ -515,6 +530,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       user.id,
       parsed.data.exerciseName,
       parsed.data.images,
+      parsed.data.trackedMetrics,
     );
     if (!result) return res.status(400).json({ message: "This program isn't AI-authored yet" });
     res.status(201).json(result);

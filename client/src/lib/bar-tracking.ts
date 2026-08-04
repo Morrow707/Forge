@@ -11,6 +11,12 @@ export type RepMetrics = {
   eccentricSeconds: number;
   barPathDeviationCm: number;
   barPathTrace: { t: number; x: number; y: number }[];
+  // Populated by the caller from pose-tracking.ts's detectFormFaults --
+  // kept as a plain field here (rather than computed inside
+  // summarizeTrackedSet) since fault detection needs the full per-frame
+  // landmark history, not just the derived (t,x,y) trace this module works
+  // with.
+  formFaults: { code: string; label: string }[];
 };
 
 const SMOOTHING_WINDOW = 5;
@@ -166,6 +172,7 @@ export function summarizeTrackedSet(
         : 0,
     barPathDeviationCm: Math.round(barPathDeviationCm * 10) / 10,
     barPathTrace,
+    formFaults: [],
   };
 }
 

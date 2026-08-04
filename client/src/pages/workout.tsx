@@ -185,6 +185,8 @@ type PrescribedCorrective = {
   setHistory: SetHistoryPoint[];
 };
 
+type FormFault = { code: string; label: string };
+
 type SetMetrics = {
   peakVelocityMps: number | null;
   meanVelocityMps: number | null;
@@ -192,6 +194,7 @@ type SetMetrics = {
   eccentricSeconds: number | null;
   barPathDeviationCm: number | null;
   barPathTrace: { t: number; x: number; y: number }[] | null;
+  formFaults: FormFault[] | null;
 };
 
 type LogEntry = {
@@ -288,6 +291,7 @@ function buildItem(
       eccentricSeconds: existingSet?.eccentricSeconds ?? null,
       barPathDeviationCm: existingSet?.barPathDeviationCm ?? null,
       barPathTrace: existingSet?.barPathTrace ?? null,
+      formFaults: existingSet?.formFaults ?? null,
     };
   });
   const materials = materialsFrom(prescribed.exercise);
@@ -377,6 +381,15 @@ function parsePercentOfOneRm(weightText: string | null) {
 function parseLiteralWeight(weightText: string) {
   const match = weightText.match(/^(\d+(?:\.\d+)?)/);
   return match ? parseFloat(match[1]) : null;
+}
+
+// Leading integer out of a prescribed rep scheme ("5" -> 5, "8-10" -> 8,
+// "AMRAP" -> undefined) -- used only to auto-stop the camera tracker once
+// that many reps are detected. A soft target: the athlete can always stop
+// manually too, and non-numeric schemes just never trigger it.
+function parseTargetReps(repsText: string): number | undefined {
+  const match = repsText.match(/^(\d+)/);
+  return match ? parseInt(match[1], 10) : undefined;
 }
 
 // Epley-estimated 1RM from this athlete's own logged history for the
@@ -586,6 +599,7 @@ export function WorkoutPage({
             eccentricSeconds: s.eccentricSeconds,
             barPathDeviationCm: s.barPathDeviationCm,
             barPathTrace: s.barPathTrace,
+            formFaults: s.formFaults,
           })),
         })),
       };
@@ -664,6 +678,7 @@ export function WorkoutPage({
               eccentricSeconds: null,
               barPathDeviationCm: null,
               barPathTrace: null,
+              formFaults: null,
             },
           ],
         };
@@ -1130,9 +1145,27 @@ function ExerciseLogContent({
   const aiFormCheckMutation = useMutation({
     mutationFn: async (videoUrl: string) => {
       const images = await extractVideoFrames(videoUrl);
+      // No formal link between a form-check video and a specific set number
+      // (the record button lives at the exercise level) -- the most
+      // recently camera-tracked set for this exercise is the closest real
+      // signal available, so it rides along as grounding context when one
+      // exists.
+      const trackedSet = [...item.sets]
+        .reverse()
+        .find((s) => s.peakVelocityMps != null || s.barPathDeviationCm != null);
       const res = await apiRequest("POST", aiFormCheckPath, {
         exerciseName: item.exerciseName,
         images,
+        trackedMetrics: trackedSet
+          ? {
+              peakVelocityMps: trackedSet.peakVelocityMps,
+              meanVelocityMps: trackedSet.meanVelocityMps,
+              concentricSeconds: trackedSet.concentricSeconds,
+              eccentricSeconds: trackedSet.eccentricSeconds,
+              barPathDeviationCm: trackedSet.barPathDeviationCm,
+              formFaults: trackedSet.formFaults,
+            }
+          : undefined,
       });
       return res.json() as Promise<{ assistantMessage: { content: string } }>;
     },
@@ -1454,6 +1487,15 @@ function ExerciseLogContent({
                       : "Track this set"}
                   </button>
                 )}
+                {set.formFaults && set.formFaults.length > 0 && (
+                  <div className="mt-1 flex flex-wrap gap-1 pl-9">
+                    {set.formFaults.map((f) => (
+                      <Badge key={f.code} variant="secondary" className="text-[9px] font-normal">
+                        {f.label}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })}
@@ -1466,6 +1508,7 @@ function ExerciseLogContent({
           onOpenChange={(open) => !open && setTrackingSet(null)}
           mode={item.trackingLevel}
           exerciseName={item.exerciseName}
+          targetReps={parseTargetReps(item.prescribedReps)}
           onCapture={(metrics: RepMetrics) => {
             if (trackingSet == null) return;
             onUpdateSet(trackingSet, {
@@ -1475,6 +1518,7 @@ function ExerciseLogContent({
               eccentricSeconds: metrics.eccentricSeconds,
               barPathDeviationCm: metrics.barPathDeviationCm,
               barPathTrace: metrics.barPathTrace,
+              formFaults: metrics.formFaults,
             });
           }}
         />

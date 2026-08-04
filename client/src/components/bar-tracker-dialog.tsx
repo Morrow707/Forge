@@ -10,52 +10,110 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import {
-  findMarkerCentroid,
   summarizeTrackedSet,
   calibrationQuality,
-  MARKER_COLOR_SWATCH,
-  type MarkerColor,
   type TrackedPoint,
   type RepMetrics,
 } from "@/lib/bar-tracking";
-import { Camera, Video, Square, RotateCcw, Check, AlertTriangle } from "lucide-react";
+import {
+  getPoseLandmarker,
+  deriveBarPoint,
+  detectFormFaults,
+  type PoseFrame,
+} from "@/lib/pose-tracking";
+import { PoseLandmarker, type NormalizedLandmark } from "@mediapipe/tasks-vision";
+import { Camera, Video, Square, RotateCcw, Check, AlertTriangle, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
 type Step = "setup" | "calibrate" | "tracking" | "review";
+
+const MIN_VISIBILITY = 0.5;
+const SKELETON_COLOR = "#4ade80";
+const TRAIL_COLOR = "#f97316";
+const TRAIL_MAX_POINTS = 90;
+
+function drawSkeleton(
+  ctx: CanvasRenderingContext2D,
+  landmarks: NormalizedLandmark[],
+  width: number,
+  height: number,
+) {
+  ctx.strokeStyle = SKELETON_COLOR;
+  ctx.lineWidth = 3;
+  ctx.fillStyle = SKELETON_COLOR;
+
+  for (const { start, end } of PoseLandmarker.POSE_CONNECTIONS) {
+    const a = landmarks[start];
+    const b = landmarks[end];
+    if (!a || !b || a.visibility < MIN_VISIBILITY || b.visibility < MIN_VISIBILITY) continue;
+    ctx.beginPath();
+    ctx.moveTo(a.x * width, a.y * height);
+    ctx.lineTo(b.x * width, b.y * height);
+    ctx.stroke();
+  }
+
+  for (const lm of landmarks) {
+    if (lm.visibility < MIN_VISIBILITY) continue;
+    ctx.beginPath();
+    ctx.arc(lm.x * width, lm.y * height, 4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function drawTrail(ctx: CanvasRenderingContext2D, trace: TrackedPoint[]) {
+  const points = trace.slice(-TRAIL_MAX_POINTS);
+  if (points.length < 2) return;
+  ctx.strokeStyle = TRAIL_COLOR;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
+  for (const p of points.slice(1)) ctx.lineTo(p.x, p.y);
+  ctx.stroke();
+}
 
 export function BarTrackerDialog({
   open,
   onOpenChange,
   mode,
   exerciseName,
+  targetReps,
   onCapture,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   mode: "bar_path" | "full";
   exerciseName: string;
+  // Auto-stops tracking once this many reps are detected (parsed from the
+  // prescribed rep scheme by the caller) -- manual "Stop & Review" always
+  // still works too, and non-numeric rep schemes just never trigger this.
+  targetReps?: number;
   onCapture: (metrics: RepMetrics) => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const overlayRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number | null>(null);
   const traceRef = useRef<TrackedPoint[]>([]);
+  const framesRef = useRef<PoseFrame[]>([]);
   const startTimeRef = useRef<number>(0);
   const lastRepDirRef = useRef<1 | -1 | 0>(0);
+  const repCountRef = useRef(0);
+  const poseLandmarkerRef = useRef<PoseLandmarker | null>(null);
+  const lastVideoTimeRef = useRef(-1);
 
   const [step, setStep] = useState<Step>("setup");
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const [modelLoading, setModelLoading] = useState(true);
   const [tilt, setTilt] = useState<number | null>(null);
   const [calibrationTaps, setCalibrationTaps] = useState<{ x: number; y: number }[]>([]);
   const [calibrationWarning, setCalibrationWarning] = useState<string | null>(null);
   const [referenceCm, setReferenceCm] = useState("220");
-  const [markerColor, setMarkerColor] = useState<MarkerColor>("green");
   const [liveSpeed, setLiveSpeed] = useState(0);
   const [repCount, setRepCount] = useState(0);
-  const [markerVisible, setMarkerVisible] = useState(true);
+  const [poseVisible, setPoseVisible] = useState(true);
   const [result, setResult] = useState<RepMetrics | null>(null);
 
   useEffect(() => {
@@ -66,7 +124,21 @@ export function BarTrackerDialog({
     setCalibrationWarning(null);
     setResult(null);
     setRepCount(0);
+    repCountRef.current = 0;
     traceRef.current = [];
+    framesRef.current = [];
+    lastVideoTimeRef.current = -1;
+
+    setModelLoading(true);
+    getPoseLandmarker()
+      .then((landmarker) => {
+        poseLandmarkerRef.current = landmarker;
+        setModelLoading(false);
+      })
+      .catch(() => {
+        setCameraError("Couldn't load the pose-tracking model -- check your connection and retry.");
+        setModelLoading(false);
+      });
 
     navigator.mediaDevices
       .getUserMedia({ video: { facingMode: "environment" } })
@@ -120,60 +192,88 @@ export function BarTrackerDialog({
   function startTracking() {
     setStep("tracking");
     traceRef.current = [];
+    framesRef.current = [];
     startTimeRef.current = performance.now();
     lastRepDirRef.current = 0;
+    lastVideoTimeRef.current = -1;
+    repCountRef.current = 0;
     setRepCount(0);
     tick();
   }
 
   function tick() {
     const video = videoRef.current;
-    const canvas = canvasRef.current;
-    if (!video || !canvas || video.videoWidth === 0) {
+    const overlay = overlayRef.current;
+    const landmarker = poseLandmarkerRef.current;
+    if (!video || !overlay || !landmarker || video.videoWidth === 0) {
       rafRef.current = requestAnimationFrame(tick);
       return;
     }
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (video.currentTime === lastVideoTimeRef.current) {
+      rafRef.current = requestAnimationFrame(tick);
+      return;
+    }
+    lastVideoTimeRef.current = video.currentTime;
+
+    overlay.width = video.videoWidth;
+    overlay.height = video.videoHeight;
+    const ctx = overlay.getContext("2d");
     if (!ctx) {
       rafRef.current = requestAnimationFrame(tick);
       return;
     }
-    ctx.drawImage(video, 0, 0);
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const centroid = findMarkerCentroid(imageData, markerColor);
-    setMarkerVisible(centroid !== null);
+    ctx.clearRect(0, 0, overlay.width, overlay.height);
 
-    if (centroid) {
-      const t = performance.now() - startTimeRef.current;
-      const trace = traceRef.current;
-      const prev = trace[trace.length - 1];
-      trace.push({ t, x: centroid.x, y: centroid.y });
+    const now = performance.now();
+    const result = landmarker.detectForVideo(video, now);
+    const landmarks = result.landmarks[0] ?? null;
+    setPoseVisible(!!landmarks);
 
-      if (prev) {
-        const dt = (t - prev.t) / 1000;
-        const ppm = pixelsPerMeter();
-        if (dt > 0 && ppm > 0) {
-          const speed = Math.abs(centroid.y - prev.y) / ppm / dt;
-          setLiveSpeed(speed);
+    if (landmarks) {
+      drawSkeleton(ctx, landmarks, overlay.width, overlay.height);
+      const point = deriveBarPoint(landmarks, overlay.width, overlay.height);
+
+      if (point) {
+        const t = now - startTimeRef.current;
+        const trace = traceRef.current;
+        const prev = trace[trace.length - 1];
+        trace.push({ t, x: point.x, y: point.y });
+        framesRef.current.push({ t, landmarks });
+
+        if (prev) {
+          const dt = (t - prev.t) / 1000;
+          const ppm = pixelsPerMeter();
+          if (dt > 0 && ppm > 0) {
+            const speed = Math.abs(point.y - prev.y) / ppm / dt;
+            setLiveSpeed(speed);
+          }
         }
-      }
-      // Cheap live rep counter: count direction reversals bigger than ~4cm,
-      // same idea as segmentPhases but incremental for the live display —
-      // the real, precise segmentation runs once on the full trace at Stop.
-      if (trace.length > 4) {
-        const ppm = pixelsPerMeter();
-        const window5 = trace.slice(-5).map((p) => p.y);
-        const delta = window5[window5.length - 1] - window5[0];
-        if (ppm > 0 && Math.abs(delta) / ppm > 0.04) {
-          const dir = delta > 0 ? 1 : -1;
-          if (lastRepDirRef.current !== dir) {
-            if (dir === -1) setRepCount((c) => c + 1);
-            lastRepDirRef.current = dir;
+        // Cheap live rep counter: count direction reversals bigger than
+        // ~4cm, same idea as segmentPhases but incremental for the live
+        // display -- the real, precise segmentation runs once on the full
+        // trace at Stop.
+        if (trace.length > 4) {
+          const ppm = pixelsPerMeter();
+          const window5 = trace.slice(-5).map((p) => p.y);
+          const delta = window5[window5.length - 1] - window5[0];
+          if (ppm > 0 && Math.abs(delta) / ppm > 0.04) {
+            const dir = delta > 0 ? 1 : -1;
+            if (lastRepDirRef.current !== dir) {
+              if (dir === -1) {
+                repCountRef.current += 1;
+                setRepCount(repCountRef.current);
+                if (targetReps && repCountRef.current >= targetReps) {
+                  toast.info(`${targetReps} reps detected — reviewing your set`);
+                  stopTracking();
+                  return;
+                }
+              }
+              lastRepDirRef.current = dir;
+            }
           }
         }
       }
+      drawTrail(ctx, traceRef.current);
     }
     rafRef.current = requestAnimationFrame(tick);
   }
@@ -182,16 +282,18 @@ export function BarTrackerDialog({
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     const metrics = summarizeTrackedSet(traceRef.current, pixelsPerMeter());
     if (!metrics) {
-      toast.error("Couldn't get a clean read on the marker — try again with better lighting.");
+      toast.error("Couldn't get a clean read — try again with your whole body in frame.");
       setStep("calibrate");
       return;
     }
+    metrics.formFaults = detectFormFaults(framesRef.current, metrics.barPathDeviationCm);
     setResult(metrics);
     setStep("review");
   }
 
   function retry() {
     traceRef.current = [];
+    framesRef.current = [];
     setResult(null);
     setStep("tracking");
     startTracking();
@@ -214,7 +316,7 @@ export function BarTrackerDialog({
 
         <div className="relative overflow-hidden rounded-md bg-black">
           <video ref={videoRef} autoPlay playsInline muted className="w-full" />
-          <canvas ref={canvasRef} className="hidden" />
+          <canvas ref={overlayRef} className="pointer-events-none absolute inset-0 h-full w-full" />
 
           {step === "calibrate" && (
             <div
@@ -239,10 +341,10 @@ export function BarTrackerDialog({
               <span
                 className={cn(
                   "rounded-full px-2.5 py-1 text-xs font-bold",
-                  markerVisible ? "bg-success/80 text-success-foreground" : "bg-destructive/80 text-white",
+                  poseVisible ? "bg-success/80 text-success-foreground" : "bg-destructive/80 text-white",
                 )}
               >
-                {markerVisible ? "Marker locked" : "Marker not visible"}
+                {poseVisible ? "Tracking" : "Body not visible"}
               </span>
               {mode === "full" && (
                 <span className="rounded-full bg-black/60 px-3 py-1 font-display text-lg font-bold text-white">
@@ -250,7 +352,8 @@ export function BarTrackerDialog({
                 </span>
               )}
               <span className="rounded-full bg-black/60 px-2.5 py-1 text-xs font-bold text-white">
-                {repCount} reps
+                {repCount}
+                {targetReps ? `/${targetReps}` : ""} reps
               </span>
             </div>
           )}
@@ -277,32 +380,16 @@ export function BarTrackerDialog({
         {step === "setup" && !cameraError && (
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              Step back until your full range of motion is visible, and try to keep the phone
-              level and perpendicular to the bar path — an angled camera skews the reading.
+              Step back until your whole body is visible, and try to keep the phone level and
+              perpendicular to your movement — an angled camera skews the reading. No marker or
+              tape needed; this tracks your body directly.
             </p>
-            <div className="space-y-1.5">
-              <Label className="text-xs uppercase text-muted-foreground">Marker color</Label>
-              <div className="flex gap-2">
-                {(Object.keys(MARKER_COLOR_SWATCH) as MarkerColor[]).map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    aria-pressed={markerColor === c}
-                    onClick={() => setMarkerColor(c)}
-                    className={cn(
-                      "flex h-8 w-8 items-center justify-center rounded-full border-2",
-                      markerColor === c ? "border-foreground" : "border-transparent",
-                    )}
-                    style={{ backgroundColor: MARKER_COLOR_SWATCH[c] }}
-                    title={c}
-                  />
-                ))}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Put a piece of tape or a band in this color on the bar so it stands out from the
-                background.
+            {modelLoading && (
+              <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Sparkles className="h-3.5 w-3.5 animate-pulse text-primary" />
+                Loading the pose-tracking model…
               </p>
-            </div>
+            )}
           </div>
         )}
 
@@ -336,26 +423,43 @@ export function BarTrackerDialog({
         )}
 
         {step === "review" && result && (
-          <div className="grid grid-cols-2 gap-3 rounded-md border border-border p-3 text-center">
-            {mode === "full" && (
-              <>
-                <Stat label="Peak Velocity" value={`${result.peakVelocityMps} m/s`} />
-                <Stat label="Mean Velocity" value={`${result.meanVelocityMps} m/s`} />
-                <Stat label="Concentric" value={`${result.concentricSeconds}s`} />
-                <Stat label="Eccentric" value={`${result.eccentricSeconds}s`} />
-              </>
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3 rounded-md border border-border p-3 text-center">
+              {mode === "full" && (
+                <>
+                  <Stat label="Peak Velocity" value={`${result.peakVelocityMps} m/s`} />
+                  <Stat label="Mean Velocity" value={`${result.meanVelocityMps} m/s`} />
+                  <Stat label="Concentric" value={`${result.concentricSeconds}s`} />
+                  <Stat label="Eccentric" value={`${result.eccentricSeconds}s`} />
+                </>
+              )}
+              <Stat
+                label="Bar Path Deviation"
+                value={`${result.barPathDeviationCm} cm`}
+                full={mode === "bar_path"}
+              />
+            </div>
+            {result.formFaults.length > 0 && (
+              <div className="space-y-1.5">
+                <p className="flex items-center gap-1.5 text-xs font-semibold uppercase text-amber-500">
+                  <AlertTriangle className="h-3.5 w-3.5" />
+                  Form notes
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {result.formFaults.map((f) => (
+                    <Badge key={f.code} variant="secondary" className="text-xs font-normal">
+                      {f.label}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
             )}
-            <Stat
-              label="Bar Path Deviation"
-              value={`${result.barPathDeviationCm} cm`}
-              full={mode === "bar_path"}
-            />
           </div>
         )}
 
         <DialogFooter>
           {step === "setup" && (
-            <Button onClick={() => setStep("calibrate")} disabled={!!cameraError}>
+            <Button onClick={() => setStep("calibrate")} disabled={!!cameraError || modelLoading}>
               I'm Set Up
             </Button>
           )}
