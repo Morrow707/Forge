@@ -69,6 +69,11 @@ type ExerciseForm = {
   name: string;
   category: string;
   muscleGroup: string;
+  // Comma-separated in the form for a plain text input -- converted to/from
+  // the string[] the API expects on load/save, same idea as a tag input
+  // without needing a dedicated tag-editor component for one rarely-edited
+  // field.
+  secondaryMuscles: string;
   equipment: string;
   movementType: string;
   laterality: string;
@@ -85,6 +90,7 @@ const emptyForm: ExerciseForm = {
   name: "",
   category: "strength",
   muscleGroup: "",
+  secondaryMuscles: "",
   equipment: "",
   movementType: "",
   laterality: "",
@@ -102,6 +108,7 @@ function formFrom(ex: ExerciseWithOwnership): ExerciseForm {
     name: ex.name,
     category: ex.category,
     muscleGroup: ex.muscleGroup,
+    secondaryMuscles: (ex.secondaryMuscles ?? []).join(", "),
     equipment: ex.equipment,
     movementType: ex.movementType ?? "",
     laterality: ex.laterality ?? "",
@@ -148,6 +155,13 @@ export function ExerciseDetailPage({
         name: form.name,
         category: form.category,
         muscleGroup: form.muscleGroup || "Full Body",
+        secondaryMuscles: (() => {
+          const list = form.secondaryMuscles
+            .split(",")
+            .map((m) => m.trim())
+            .filter(Boolean);
+          return list.length > 0 ? list : null;
+        })(),
         equipment: form.equipment || "Bodyweight",
         movementType: form.movementType || null,
         laterality: form.laterality || null,
@@ -306,6 +320,20 @@ export function ExerciseDetailPage({
                 <Field label="Laterality" value={exercise.laterality || "—"} />
                 <Field label="Equipment" value={exercise.equipment} />
               </div>
+              {exercise.secondaryMuscles && exercise.secondaryMuscles.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold uppercase text-muted-foreground">
+                    Also works
+                  </p>
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {exercise.secondaryMuscles.map((m) => (
+                      <Badge key={m} variant="outline">
+                        {m}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
               <Field
                 label="Logged as"
                 value={
@@ -403,6 +431,19 @@ export function ExerciseDetailPage({
                       ))}
                     </datalist>
                   </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="ex-secondary">Also works (optional)</Label>
+                  <Input
+                    id="ex-secondary"
+                    value={form.secondaryMuscles}
+                    onChange={(e) => setForm((f) => ({ ...f, secondaryMuscles: e.target.value }))}
+                    placeholder="e.g. Glutes, Hamstrings, Calves"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Comma-separated secondary muscles worked besides the main body part above --
+                    shown on this exercise's detail page only.
+                  </p>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">

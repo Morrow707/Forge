@@ -205,6 +205,11 @@ export const exercises = pgTable("exercises", {
   name: text("name").notNull(),
   category: exerciseCategoryEnum("category").notNull().default("strength"),
   muscleGroup: text("muscle_group").notNull().default("Full Body"),
+  // Muscles meaningfully worked besides the primary muscleGroup (e.g. a box
+  // step-up's primary is Quads, but Glutes/Hamstrings/Calves all contribute
+  // too) -- purely informational, shown on the exercise detail page only so
+  // it never clutters the compact bank/picker views.
+  secondaryMuscles: json("secondary_muscles").$type<string[]>(),
   equipment: text("equipment").notNull().default("Barbell"),
   movementType: text("movement_type"),
   laterality: lateralityEnum("laterality"),
@@ -1224,6 +1229,7 @@ export const insertExerciseSchema = createInsertSchema(exercises)
   .extend({
     movementType: z.string().optional().nullable(),
     laterality: z.enum(["bilateral", "unilateral"]).optional().nullable(),
+    secondaryMuscles: z.array(z.string().trim().min(1)).max(8).optional().nullable(),
     isCorrective: z.boolean().default(false),
     usesWeight: z.boolean().default(true),
     usesBodyweight: z.boolean().default(false),
