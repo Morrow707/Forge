@@ -98,7 +98,44 @@ export function deriveBarPoint(
   return { x: x * frameWidth, y: y * frameHeight };
 }
 
-// Signed tilt of the wrist-to-wrist line from horizontal, in degrees -- 0 is
+// Average adult acromion (shoulder) height as a fraction of standing height
+// -- a classic anthropometric proportion (Drillis & Contini body-segment
+// data). Used instead of total stature because BlazePose has no "top of
+// head" landmark to anchor a full-height pixel measurement on, and the
+// nose/ear landmarks are too sensitive to head tilt to stand in for it.
+const SHOULDER_HEIGHT_RATIO = 0.818;
+
+// Automatic pixels-per-meter calibration from the athlete's own known
+// height (already on file from their profile), measured against the same
+// T-pose the pre-flight pose check already requires before every set --
+// no separate "tap two points on a known-length object" step needed. That
+// step assumed a barbell-length reference by default and had no sane
+// answer for dumbbells, bodyweight work, or anything else without a long
+// straight edge to tap the ends of; tying calibration to the athlete's own
+// body instead works identically regardless of what (if anything) is in
+// their hands. Returns null when the athlete's height isn't on file or the
+// needed landmarks aren't visible, so the caller can fall back to manual
+// calibration in either case.
+export function calibratePixelsPerMeterFromHeight(
+  landmarks: NormalizedLandmark[],
+  frameHeight: number,
+  athleteHeightCm: number | null | undefined,
+): number | null {
+  if (!athleteHeightCm || athleteHeightCm <= 0) return null;
+  const lShoulder = landmarks[POSE_LANDMARKS.LEFT_SHOULDER];
+  const rShoulder = landmarks[POSE_LANDMARKS.RIGHT_SHOULDER];
+  const lAnkle = landmarks[POSE_LANDMARKS.LEFT_ANKLE];
+  const rAnkle = landmarks[POSE_LANDMARKS.RIGHT_ANKLE];
+  if (!visible(lShoulder) || !visible(rShoulder) || !visible(lAnkle) || !visible(rAnkle)) return null;
+  const shoulderY = (lShoulder.y + rShoulder.y) / 2;
+  const ankleY = (lAnkle.y + rAnkle.y) / 2;
+  const pixelSpan = Math.abs(ankleY - shoulderY) * frameHeight;
+  if (pixelSpan <= 0) return null;
+  const expectedMeters = (athleteHeightCm / 100) * SHOULDER_HEIGHT_RATIO;
+  return pixelSpan / expectedMeters;
+}
+
+// Signed tilt of the wrist-to-wrist LINE from horizontal, in degrees -- 0 is
 // level, positive means the right hand is lower than the left. This is the
 // same idea as an oriented bounding box around the bar (its rotation angle
 // relative to horizontal), but reuses landmarks we already track every
@@ -106,6 +143,18 @@ export function deriveBarPoint(
 // meaningful when the hands are meaningfully apart horizontally (i.e. an
 // actual barbell/handle grip), so returns null for single-arm work or any
 // frame where the hands are stacked rather than spread on a bar.
+//
+// Deliberately atan(dy/dx), not atan2(dy,dx): a line has no direction, only
+// slope, so the sign of dx (which wrist happens to have the larger pixel x)
+// must not affect the magnitude. atan2 over the full vector is direction-
+// sensitive -- whenever the anatomical right wrist sits at a smaller pixel x
+// than the left (the ordinary case when facing the camera, since screen-left
+// is the athlete's own right), it reports an angle near +/-180 for what is
+// actually a nearly level bar. atan(dy/dx) always lands in (-90, 90),
+// correctly describing slope regardless of which wrist is on which side of
+// the frame. The sign is then reattached from the raw dy comparison (which
+// wrist is physically lower in the image) rather than trusted from the atan
+// result, since dividing by a negative dx flips it independently of dy.
 export function computeBarTiltDegrees(landmarks: NormalizedLandmark[]): number | null {
   const left = landmarks[POSE_LANDMARKS.LEFT_WRIST];
   const right = landmarks[POSE_LANDMARKS.RIGHT_WRIST];
@@ -113,7 +162,31 @@ export function computeBarTiltDegrees(landmarks: NormalizedLandmark[]): number |
   const dx = right.x - left.x;
   const dy = right.y - left.y;
   if (Math.abs(dx) < 0.05) return null;
-  return (Math.atan2(dy, dx) * 180) / Math.PI;
+  const magnitude = Math.abs((Math.atan(dy / dx) * 180) / Math.PI);
+  // y increases downward, so a positive dy means the right wrist is lower.
+  if (dy > 0) return magnitude;
+  if (dy < 0) return -magnitude;
+  return 0;
+}
+
+// The tracked point for "jump" mode -- the ankle midpoint rather than the
+// wrist midpoint, since a jump has no implement to follow and the ankle
+// joint is the cleanest ground-contact proxy available from the skeleton
+// (it barely moves vertically until push-off, unlike the hip or knee,
+// which shift throughout the crouch). See jump-tracking.ts for how this
+// point's trace becomes flight time, height, and distance.
+export function deriveJumpPoint(
+  landmarks: NormalizedLandmark[],
+  frameWidth: number,
+  frameHeight: number,
+): { x: number; y: number } | null {
+  const left = landmarks[POSE_LANDMARKS.LEFT_ANKLE];
+  const right = landmarks[POSE_LANDMARKS.RIGHT_ANKLE];
+  const points = [left, right].filter(visible);
+  if (points.length === 0) return null;
+  const x = points.reduce((a, p) => a + p.x, 0) / points.length;
+  const y = points.reduce((a, p) => a + p.y, 0) / points.length;
+  return { x: x * frameWidth, y: y * frameHeight };
 }
 
 // Each wrist's own screen-space position, independent of deriveBarPoint's
@@ -197,9 +270,30 @@ export type FormFault = {
 // broadly applicable (or explicitly gated off when the movement pattern
 // doesn't apply) so this never nags about a fault that doesn't make sense
 // for the exercise being tracked.
+// The only movementType values (see exercises.movementType) a knee-angle
+// fault ever makes sense for -- a Press, Pull, Push, Carry, etc. can jitter
+// past the raw knee-ROM heuristic below from pose noise alone (especially
+// lying on a bench, where the knee-angle estimate is least reliable) with
+// the knees never actually doing anything, and a "knees caving in" flag on
+// a bench press is just wrong regardless of what the numbers say.
+const LOWER_BODY_MOVEMENT_TYPES = new Set(["Squat", "Hinge", "Lunge"]);
+
 export function detectFormFaults(
   frames: PoseFrame[],
   barPathDeviationCm: number,
+  // "jump" landings/crouches are a different judgment call than a squat's:
+  // a shallow countermovement is normal (even correct) for a vertical
+  // jump, and there's no bar to drift off a straight line -- horizontal
+  // travel during a jump might just be an intentional broad jump. Valgus
+  // and forward-lean still apply to a jump's landing mechanics, so those
+  // stay on regardless of context.
+  context: "lift" | "jump" = "lift",
+  // The tracked exercise's movementType, when known -- the primary gate for
+  // whether lower-body checks apply at all. Left undefined by any caller
+  // that doesn't have it (falls back to the ROM heuristic alone, the prior
+  // behavior) rather than required, so this can be threaded through
+  // gradually without breaking existing callers.
+  movementType?: string | null,
 ): FormFault[] {
   const faults: FormFault[] = [];
   if (frames.length < 6) return faults;
@@ -246,12 +340,19 @@ export function detectFormFaults(
 
   const minKneeAngle = kneeAngles.length ? Math.min(...kneeAngles) : 180;
   const kneeRangeOfMotion = kneeAngles.length ? Math.max(...kneeAngles) - minKneeAngle : 0;
-  // Only a squat/lunge-pattern movement bends the knee this much -- skip
-  // lower-body checks entirely for presses, rows, etc. where knees barely
-  // move, so those never get a nonsensical "shallow depth" flag.
-  const isKneeDrivenMovement = kneeRangeOfMotion > 25;
+  // Only a squat/hinge/lunge-pattern movement bends the knee this much --
+  // skip lower-body checks entirely for presses, rows, etc. where knees
+  // barely move, so those never get a nonsensical "shallow depth" flag.
+  // When movementType is known, it's the hard gate (a Press never gets a
+  // knee fault no matter how noisy the angle estimate got); the ROM check
+  // alone is only a fallback for callers that don't have movementType yet.
+  const romSuggestsKneeDriven = kneeRangeOfMotion > 25;
+  const isKneeDrivenMovement =
+    movementType != null
+      ? LOWER_BODY_MOVEMENT_TYPES.has(movementType) && romSuggestsKneeDriven
+      : romSuggestsKneeDriven;
 
-  if (isKneeDrivenMovement && minKneeAngle > 100) {
+  if (context === "lift" && isKneeDrivenMovement && minKneeAngle > 100) {
     faults.push({
       code: "shallow_depth",
       label: `Depth: knees only reached ~${Math.round(minKneeAngle)}° -- aim to break parallel`,
@@ -278,7 +379,7 @@ export function detectFormFaults(
     }
   }
 
-  if (barPathDeviationCm > 8) {
+  if (context === "lift" && barPathDeviationCm > 8) {
     faults.push({
       code: "bar_path_drift",
       label: `Bar drifted ${barPathDeviationCm}cm off a straight vertical line`,
@@ -293,7 +394,7 @@ export function detectFormFaults(
       const side = worstTilt > 0 ? "right" : "left";
       faults.push({
         code: "bar_tilt",
-        label: `Bar tilted ~${Math.round(Math.abs(worstTilt))}° (${side} side dropping)`,
+        label: `Bar tilted ~${Math.round(Math.abs(worstTilt))}° toward the ${side} arm`,
       });
     }
   }

@@ -39,6 +39,7 @@ import {
   generateProgramDraftSchema,
   submitWellnessCheckinSchema,
   sendProgramChatMessageSchema,
+  substituteExerciseSchema,
   formFaultSchema,
 } from "@shared/schema";
 import { computeReadiness } from "@shared/wellness";
@@ -96,6 +97,52 @@ async function requireFreeAgent(req: any, res: any, next: any) {
     return res
       .status(403)
       .json({ message: "AI program building is only available while you don't have a coach yet." });
+  }
+  next();
+}
+
+// The future paywall requireFreeAgent's own comment anticipates: nothing
+// sets this true yet (no billing exists), so every route gated behind it is
+// a hard block for a Free Agent until that's built -- change only this
+// function once real billing exists. Exercise substitution is deliberately
+// never gated by this (see the swap-exercise routes below) so a Free Agent
+// keeps that one AI feature even while everything else here is paywalled.
+async function hasAthletePaidForAiAccess(_athleteId: number): Promise<boolean> {
+  return false;
+}
+
+// Gates the "full function" AI features (program builder chat/draft, AI
+// form-check) for a Free Agent specifically. Only meaningful stacked after
+// requireFreeAgent, which already guarantees the caller has zero coaches by
+// the time this runs.
+async function requirePaidAiAccess(req: any, res: any, next: any) {
+  const user = currentUser(req);
+  const hasPaid = await hasAthletePaidForAiAccess(user.id);
+  if (!hasPaid) {
+    return res.status(402).json({
+      message:
+        "This AI feature is a paid upgrade for Free Agents, coming soon -- exercise substitution stays free, or join a coach for full AI coaching.",
+      freeAgentPaywall: true,
+    });
+  }
+  next();
+}
+
+// Same paywall, but for the general athlete AI chat coach -- unlike the
+// program-builder routes above, this one is otherwise open to every
+// athlete regardless of coach status, so a coached athlete must pass
+// through untouched and only a Free Agent who hasn't paid gets blocked.
+async function requirePaidAiAccessIfFreeAgent(req: any, res: any, next: any) {
+  const user = currentUser(req);
+  const coaches = await storage.getCoachesForAthlete(user.id);
+  if (coaches.length > 0) return next();
+  const hasPaid = await hasAthletePaidForAiAccess(user.id);
+  if (!hasPaid) {
+    return res.status(402).json({
+      message:
+        "The AI chat coach is a paid upgrade for Free Agents, coming soon -- join a coach for coaching in the meantime, or use exercise substitution on your workout page.",
+      freeAgentPaywall: true,
+    });
   }
   next();
 }
@@ -502,6 +549,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!parsed.success) return res.status(400).json({ message: "Invalid message" });
     const result = await storage.generateProgramFromChat(id, user.id, parsed.data.content);
     res.status(201).json(result);
+  });
+
+  // Same dedicated substitution route as the athlete side below -- admin
+  // has no paywall to route around, but the workout page's swap button is
+  // one shared component across both roles, so it needs the same path
+  // shape under both API bases.
+  app.post("/api/admin/programs/:id/swap-exercise", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const owned = await assertCoachOwnsProgram(user.id, id);
+    if (!owned) return res.status(404).json({ message: "Program not found" });
+    const parsed = substituteExerciseSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    const result = await storage.substituteExercise(
+      id,
+      parsed.data.programExerciseId,
+      user.id,
+      parsed.data.reason,
+      parsed.data.notes,
+    );
+    if ("error" in result) return res.status(422).json({ message: result.error });
+    res.status(200).json(result);
   });
 
   // "Full function" AI form check -- see storage.submitFormCheck for why
@@ -1620,19 +1689,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Never a private channel -- every message either side sends is readable
   // by the athlete's coach too (see the matching /api/coach/roster/:id/chat
   // route below).
-  app.get("/api/athlete/chat", requireRole("athlete"), async (req, res) => {
-    const user = currentUser(req);
-    const messages = await storage.getChatMessagesForAthlete(user.id);
-    res.json(messages);
-  });
+  app.get(
+    "/api/athlete/chat",
+    requireRole("athlete"),
+    requirePaidAiAccessIfFreeAgent,
+    async (req, res) => {
+      const user = currentUser(req);
+      const messages = await storage.getChatMessagesForAthlete(user.id);
+      res.json(messages);
+    },
+  );
 
-  app.post("/api/athlete/chat", requireRole("athlete"), async (req, res) => {
-    const user = currentUser(req);
-    const parsed = sendChatMessageSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ message: "Invalid message" });
-    const result = await storage.sendAthleteChatMessage(user.id, parsed.data.content);
-    res.status(201).json(result);
-  });
+  app.post(
+    "/api/athlete/chat",
+    requireRole("athlete"),
+    requirePaidAiAccessIfFreeAgent,
+    async (req, res) => {
+      const user = currentUser(req);
+      const parsed = sendChatMessageSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ message: "Invalid message" });
+      const result = await storage.sendAthleteChatMessage(user.id, parsed.data.content);
+      res.status(201).json(result);
+    },
+  );
 
   app.get("/api/athlete/day", requireRole("athlete"), async (req, res) => {
     const user = currentUser(req);
@@ -1731,15 +1810,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
   );
 
   // ---------------- Athlete: Conversational AI program builder (Free Agent) ----------------
-  // Same self-service pattern as the admin's own AI program builder above --
-  // any athlete can build and self-assign an AI-authored program for their
-  // own calendar, whether or not they currently have a coach right now. No
-  // human reviews these edits before they apply (see
-  // storage.generateProgramFromChat for why that's safe: it's the athlete's
-  // own account, own data, same as admin's). The per-program aiAuthored flag
-  // -- not the athlete's current coach status -- is what gates the "full
-  // function" AI features, so an athlete who later joins a team keeps these
-  // programs untouched alongside whatever their new coach assigns.
+  // Same self-service pattern as the admin's own AI program builder above,
+  // but only for a Free Agent (requireFreeAgent: zero coaches right now) --
+  // once an athlete joins a team they're meant to rely on that coach, not
+  // keep a parallel self-serve programs feature running. The AI-specific
+  // routes below (ai-draft, chat, form-check) are further gated behind
+  // requirePaidAiAccess, a paid-upgrade paywall that's a hard block until
+  // real billing exists; the plain CRUD routes (list/get/create/update/
+  // delete) and the dedicated swap-exercise route stay free for every Free
+  // Agent, so manual program building and exercise substitution always
+  // work. No human reviews an AI edit before it applies (see
+  // storage.generateProgramFromChat for why that's safe: it's the
+  // athlete's own account, own data, same as admin's). The per-program
+  // aiAuthored flag -- not the athlete's current coach status -- is what
+  // gates the "full function" AI form-check, so an athlete who later joins
+  // a team keeps these programs untouched alongside whatever their new
+  // coach assigns.
+
+  // Backs the manual program builder's exercise picker -- same catalog
+  // (own exercises + every Forge-official one) the AI paths already see
+  // via getVisibleExercisesForCoach, just exposed for a human to browse
+  // instead of an AI to reference by id. Free for every Free Agent, same
+  // as the plain CRUD program routes below.
+  app.get("/api/athlete/exercises", requireRole("athlete"), requireFreeAgent, async (req, res) => {
+    const user = currentUser(req);
+    const list = await storage.getVisibleExercisesForCoach(user.id);
+    res.json(list);
+  });
 
   app.get("/api/athlete/programs", requireRole("athlete"), requireFreeAgent, async (req, res) => {
     const user = currentUser(req);
@@ -1765,15 +1862,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.status(201).json(program);
   });
 
-  app.post("/api/athlete/programs/ai-draft", requireRole("athlete"), requireFreeAgent, async (req, res) => {
-    const user = currentUser(req);
-    const parsed = generateProgramDraftSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ message: parsed.error.issues[0]?.message });
-    }
-    const draft = await storage.generateProgramDraft(user.id, parsed.data.prompt);
-    res.json(draft);
-  });
+  app.post(
+    "/api/athlete/programs/ai-draft",
+    requireRole("athlete"),
+    requireFreeAgent,
+    requirePaidAiAccess,
+    async (req, res) => {
+      const user = currentUser(req);
+      const parsed = generateProgramDraftSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      const draft = await storage.generateProgramDraft(user.id, parsed.data.prompt);
+      res.json(draft);
+    },
+  );
 
   app.put("/api/athlete/programs/:id", requireRole("athlete"), requireFreeAgent, async (req, res) => {
     const user = currentUser(req);
@@ -1798,75 +1901,119 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.status(204).end();
   });
 
-  app.get("/api/athlete/programs/:id/chat", requireRole("athlete"), requireFreeAgent, async (req, res) => {
-    const user = currentUser(req);
-    const id = Number(req.params.id);
-    const owned = await assertCoachOwnsProgram(user.id, id);
-    if (!owned) return res.status(404).json({ message: "Program not found" });
-    const messages = await storage.getProgramChatMessages(id);
-    res.json(messages);
-  });
+  app.get(
+    "/api/athlete/programs/:id/chat",
+    requireRole("athlete"),
+    requireFreeAgent,
+    requirePaidAiAccess,
+    async (req, res) => {
+      const user = currentUser(req);
+      const id = Number(req.params.id);
+      const owned = await assertCoachOwnsProgram(user.id, id);
+      if (!owned) return res.status(404).json({ message: "Program not found" });
+      const messages = await storage.getProgramChatMessages(id);
+      res.json(messages);
+    },
+  );
 
-  app.post("/api/athlete/programs/:id/chat", requireRole("athlete"), requireFreeAgent, async (req, res) => {
-    const user = currentUser(req);
-    const id = Number(req.params.id);
-    const owned = await assertCoachOwnsProgram(user.id, id);
-    if (!owned) return res.status(404).json({ message: "Program not found" });
-    const parsed = sendProgramChatMessageSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ message: "Invalid message" });
-    const result = await storage.generateProgramFromChat(id, user.id, parsed.data.content);
-    res.status(201).json(result);
-  });
+  app.post(
+    "/api/athlete/programs/:id/chat",
+    requireRole("athlete"),
+    requireFreeAgent,
+    requirePaidAiAccess,
+    async (req, res) => {
+      const user = currentUser(req);
+      const id = Number(req.params.id);
+      const owned = await assertCoachOwnsProgram(user.id, id);
+      if (!owned) return res.status(404).json({ message: "Program not found" });
+      const parsed = sendProgramChatMessageSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ message: "Invalid message" });
+      const result = await storage.generateProgramFromChat(id, user.id, parsed.data.content);
+      res.status(201).json(result);
+    },
+  );
+
+  // The exercise-substitution agent -- deliberately its own narrow route,
+  // never behind requirePaidAiAccess, so a Free Agent keeps this one AI
+  // feature even with the general program builder/chat paywalled above.
+  app.post(
+    "/api/athlete/programs/:id/swap-exercise",
+    requireRole("athlete"),
+    requireFreeAgent,
+    async (req, res) => {
+      const user = currentUser(req);
+      const id = Number(req.params.id);
+      const owned = await assertCoachOwnsProgram(user.id, id);
+      if (!owned) return res.status(404).json({ message: "Program not found" });
+      const parsed = substituteExerciseSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      const result = await storage.substituteExercise(
+        id,
+        parsed.data.programExerciseId,
+        user.id,
+        parsed.data.reason,
+        parsed.data.notes,
+      );
+      if ("error" in result) return res.status(422).json({ message: result.error });
+      res.status(200).json(result);
+    },
+  );
 
   // "Full function" AI form check -- see storage.submitFormCheck for why
   // this is the one place the AI critiques technique with no human review
   // step, and why that's gated on the program already being AI-authored.
-  app.post("/api/athlete/programs/:id/form-check", requireRole("athlete"), requireFreeAgent, async (req, res) => {
-    const user = currentUser(req);
-    const id = Number(req.params.id);
-    const owned = await assertCoachOwnsProgram(user.id, id);
-    if (!owned) return res.status(404).json({ message: "Program not found" });
-    const schema = z.object({
-      exerciseName: z.string().trim().min(1).max(200),
-      images: z
-        .array(
-          z.object({
-            mediaType: z.enum(["image/jpeg", "image/png"]),
-            data: z.string().min(1),
-          }),
-        )
-        .min(1)
-        .max(6),
-      trackedMetrics: z
-        .object({
-          peakVelocityMps: z.number().optional().nullable(),
-          meanVelocityMps: z.number().optional().nullable(),
-          concentricSeconds: z.number().optional().nullable(),
-          eccentricSeconds: z.number().optional().nullable(),
-          barPathDeviationCm: z.number().optional().nullable(),
-          formFaults: formFaultSchema.array().optional().nullable(),
-          peakPowerWatts: z.number().optional().nullable(),
-          meanPowerWatts: z.number().optional().nullable(),
-          eccentricMeanVelocityMps: z.number().optional().nullable(),
-          romCm: z.number().optional().nullable(),
-          velocityLossPercent: z.number().optional().nullable(),
-        })
-        .optional(),
-    });
-    const parsed = schema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ message: parsed.error.issues[0]?.message });
-    }
-    const result = await storage.submitFormCheck(
-      id,
-      user.id,
-      parsed.data.exerciseName,
-      parsed.data.images,
-      parsed.data.trackedMetrics,
-    );
-    if (!result) return res.status(400).json({ message: "This program isn't AI-authored yet" });
-    res.status(201).json(result);
-  });
+  app.post(
+    "/api/athlete/programs/:id/form-check",
+    requireRole("athlete"),
+    requireFreeAgent,
+    requirePaidAiAccess,
+    async (req, res) => {
+      const user = currentUser(req);
+      const id = Number(req.params.id);
+      const owned = await assertCoachOwnsProgram(user.id, id);
+      if (!owned) return res.status(404).json({ message: "Program not found" });
+      const schema = z.object({
+        exerciseName: z.string().trim().min(1).max(200),
+        images: z
+          .array(
+            z.object({
+              mediaType: z.enum(["image/jpeg", "image/png"]),
+              data: z.string().min(1),
+            }),
+          )
+          .min(1)
+          .max(6),
+        trackedMetrics: z
+          .object({
+            peakVelocityMps: z.number().optional().nullable(),
+            meanVelocityMps: z.number().optional().nullable(),
+            concentricSeconds: z.number().optional().nullable(),
+            eccentricSeconds: z.number().optional().nullable(),
+            barPathDeviationCm: z.number().optional().nullable(),
+            formFaults: formFaultSchema.array().optional().nullable(),
+            peakPowerWatts: z.number().optional().nullable(),
+            meanPowerWatts: z.number().optional().nullable(),
+            eccentricMeanVelocityMps: z.number().optional().nullable(),
+            romCm: z.number().optional().nullable(),
+            velocityLossPercent: z.number().optional().nullable(),
+          })
+          .optional(),
+      });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      const result = await storage.submitFormCheck(
+        id,
+        user.id,
+        parsed.data.exerciseName,
+        parsed.data.images,
+        parsed.data.trackedMetrics,
+      );
+      if (!result) return res.status(400).json({ message: "This program isn't AI-authored yet" });
+      res.status(201).json(result);
+    },
+  );
 
   // Self-assignment: coachId and athleteId are both this athlete's own id.
   // Same bypass reasoning as /api/admin/my/assignments -- an athlete is

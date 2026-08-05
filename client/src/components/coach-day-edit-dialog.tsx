@@ -28,7 +28,7 @@ import { toast } from "sonner";
 import { Plus, Trash2, MoonStar, Link2, Stethoscope, Copy, Clock } from "lucide-react";
 import type { Exercise } from "@shared/schema";
 
-type TrackingLevel = "none" | "bar_path" | "full";
+type TrackingLevel = "none" | "bar_path" | "full" | "jump";
 
 type LocalExercise = {
   key: string;
@@ -826,6 +826,7 @@ function TrackingLevelControl({
     { value: "none", label: "Off", title: "No camera tracking for this exercise" },
     { value: "bar_path", label: "Path", title: "Track bar path only (no speed emphasis)" },
     { value: "full", label: "Full", title: "Track bar speed, tempo, and bar path" },
+    { value: "jump", label: "Jump", title: "Track jump height, distance, and ground contact time" },
   ];
   return (
     <div>

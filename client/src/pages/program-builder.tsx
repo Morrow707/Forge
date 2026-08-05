@@ -53,7 +53,7 @@ import type { Exercise } from "@shared/schema";
 
 type RosterEntry = { id: number; name: string; email: string };
 
-type TrackingLevel = "none" | "bar_path" | "full";
+type TrackingLevel = "none" | "bar_path" | "full" | "jump";
 
 type LocalExercise = {
   key: string;
@@ -359,7 +359,13 @@ export function ProgramBuilderPage({
         </fieldset>
 
         {showAiChat && (
-          <div className="h-[600px] lg:sticky lg:top-24">
+          // flex/flex-col/overflow-hidden here (not just a fixed height) is
+          // load-bearing: ProgramAiChatPanel's Card sizes itself with
+          // flex-1/min-h-0 expecting a flex parent to stretch into -- without
+          // that, the card just grows to fit every message instead of
+          // scrolling internally, and the whole page has to scroll to read
+          // the conversation instead of this box scrolling on its own.
+          <div className="flex h-[75vh] max-h-[720px] flex-col overflow-hidden lg:sticky lg:top-24">
             <ProgramAiChatPanel apiBase={apiBase} programId={programId} onApplied={handleChatApplied} />
           </div>
         )}
@@ -676,6 +682,7 @@ function TrackingLevelControl({
     { value: "none", label: "Off", title: "No camera tracking for this exercise" },
     { value: "bar_path", label: "Path", title: "Track bar path only (no speed emphasis)" },
     { value: "full", label: "Full", title: "Track bar speed, tempo, and bar path" },
+    { value: "jump", label: "Jump", title: "Track jump height, distance, and ground contact time" },
   ];
   return (
     <div>

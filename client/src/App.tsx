@@ -1,7 +1,7 @@
-import { Switch, Route, Redirect } from "wouter";
+import { Switch, Route, Redirect, useLocation } from "wouter";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
-import { lazy, Suspense, type ComponentType } from "react";
+import { lazy, Suspense, useEffect, type ComponentType } from "react";
 import { queryClient } from "@/lib/queryClient";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
 
@@ -83,6 +83,28 @@ function HomeRedirect() {
 }
 
 function Router() {
+  const [location] = useLocation();
+
+  // A Dialog that's still "open" the instant its own success handler
+  // navigates away (e.g. create-program-then-jump-to-the-builder) can leave
+  // Radix's scroll lock -- and its "hide everything else from assistive
+  // tech" pass, which also marks the rest of the page inert/unscrollable --
+  // stuck on, because the dialog's whole subtree gets torn down by the
+  // route change before its own cleanup finishes. Belt-and-suspenders fix:
+  // force-clear all of it on every navigation, since nothing in this app
+  // ever wants body scroll or interaction to stay locked across a route
+  // change (no dialog is legitimately open the instant a new page mounts).
+  useEffect(() => {
+    document.body.style.removeProperty("overflow");
+    document.body.style.removeProperty("padding-right");
+    document.body.style.removeProperty("pointer-events");
+    document.querySelectorAll("[aria-hidden='true'], [data-aria-hidden]").forEach((el) => {
+      el.removeAttribute("aria-hidden");
+      el.removeAttribute("data-aria-hidden");
+    });
+    document.querySelectorAll("[inert]").forEach((el) => el.removeAttribute("inert"));
+  }, [location]);
+
   return (
     <Suspense fallback={<FullScreenSpinner />}>
       <Switch>

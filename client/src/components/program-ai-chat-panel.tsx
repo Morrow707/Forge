@@ -3,10 +3,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { apiRequest, getJson } from "@/lib/queryClient";
+import { apiRequest, getJson, ApiError } from "@/lib/queryClient";
 import { format, parseISO } from "date-fns";
 import { toast } from "sonner";
-import { Send, Sparkles } from "lucide-react";
+import { Send, Sparkles, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type ProgramChatMessage = {
@@ -38,7 +38,7 @@ export function ProgramAiChatPanel({
   const bottomRef = useRef<HTMLDivElement>(null);
   const fetchUrl = `${apiBase}/programs/${programId}/chat`;
 
-  const { data: messages, isLoading } = useQuery<ProgramChatMessage[]>({
+  const { data: messages, isLoading, error } = useQuery<ProgramChatMessage[]>({
     queryKey: [fetchUrl],
     queryFn: () => getJson(fetchUrl),
   });
@@ -59,6 +59,28 @@ export function ProgramAiChatPanel({
     },
     onError: () => toast.error("Couldn't send that -- try again"),
   });
+
+  // A Free Agent who hasn't paid gets a 402 here (see requirePaidAiAccess
+  // in routes.ts) -- that's an expected, permanent state, not a transient
+  // failure, so it gets its own quiet locked-state card instead of an
+  // error. This has to come after every hook above it -- an early return
+  // can never sit between hooks.
+  if (error instanceof ApiError && error.status === 402) {
+    return (
+      <Card className="flex min-h-0 flex-1 flex-col">
+        <CardHeader className="shrink-0">
+          <CardTitle className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-primary" />
+            AI Program Builder
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-1 flex-col items-center justify-center gap-3 py-10 text-center">
+          <Lock className="h-8 w-8 text-muted-foreground" />
+          <p className="max-w-xs text-sm text-muted-foreground">{error.message}</p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className="flex min-h-0 flex-1 flex-col">

@@ -2,37 +2,20 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "re
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Timer, BellRing } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { playSuccessChime as playChime } from "@/lib/audio-cues";
+import { toast } from "sonner";
 
-const PRESETS = [30, 60, 90, 120, 180];
-
-// Web Audio output mixes with any other audio source (music, video, a call)
-// rather than pausing/ducking it, and isn't subject to a silent-mode switch
-// the way an <audio> element can be on iOS -- this is what makes it audible
-// over headphones/media instead of a normal chime getting lost underneath.
-function playChime() {
-  try {
-    const AudioCtx = window.AudioContext ?? (window as any).webkitAudioContext;
-    const ctx = new AudioCtx();
-    // Three quick beeps instead of one soft tone -- easier to notice over
-    // music/headphones, and reads unambiguously as "timer done" rather than
-    // a generic notification sound.
-    [0, 0.25, 0.5].forEach((delay) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.frequency.value = 880;
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      const start = ctx.currentTime + delay;
-      gain.gain.setValueAtTime(0.35, start);
-      gain.gain.exponentialRampToValueAtTime(0.001, start + 0.2);
-      osc.start(start);
-      osc.stop(start + 0.2);
-    });
-    setTimeout(() => ctx.close(), 900);
-  } catch {
-    // Web Audio isn't available in every environment -- the timer still works, just silently.
+// Felt on Android/most PWA contexts (iOS Safari doesn't implement the
+// Vibration API at all, so this silently no-ops there) -- a second,
+// non-audio channel for "rest is over" that doesn't depend on the phone's
+// volume, ringer state, or whatever else might be routing audio.
+function vibrateRestOver() {
+  if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+    navigator.vibrate([300, 150, 300, 150, 300]);
   }
 }
+
+const PRESETS = [30, 60, 90, 120, 180];
 
 function formatClock(seconds: number) {
   const m = Math.floor(seconds / 60);
@@ -84,9 +67,23 @@ export const RestTimerControl = forwardRef<RestTimerHandle, { defaultSeconds?: n
   useEffect(() => {
     if (!ringing) return;
     playChime();
-    ringIntervalRef.current = setInterval(playChime, 1500);
+    vibrateRestOver();
+    // The bottom-nav pill alone is easy to miss if attention is on the
+    // camera tracker or anywhere else on screen -- a sticky, full-width
+    // toast makes "rest is over" impossible to overlook visually, on top of
+    // the repeating chime + vibration. Stays up (duration: Infinity) until
+    // the athlete dismisses it from either this toast or the pill itself.
+    const toastId = toast.error("Rest time is up!", {
+      duration: Infinity,
+      action: { label: "Dismiss", onClick: () => setRinging(false) },
+    });
+    ringIntervalRef.current = setInterval(() => {
+      playChime();
+      vibrateRestOver();
+    }, 1500);
     return () => {
       if (ringIntervalRef.current) clearInterval(ringIntervalRef.current);
+      toast.dismiss(toastId);
     };
   }, [ringing]);
 

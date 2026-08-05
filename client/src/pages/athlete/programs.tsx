@@ -8,7 +8,7 @@ export default function AthletePrograms() {
         apiBase="/api/athlete"
         routeBase="/athlete/programs"
         title="My Programs"
-        emptyStateText="Nothing here yet -- describe what you want to train and the AI will build it, or duplicate a Forge template to start from."
+        emptyStateText="Nothing here yet -- build a program by hand, duplicate a Forge template, or try AI Assist (a paid upgrade, coming soon)."
         showAssign={false}
         showAiAssist
         showSelfAssign

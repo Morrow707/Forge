@@ -42,6 +42,7 @@ EXCEPTION WHEN duplicate_object THEN null; END $$;
 DO $$ BEGIN
   CREATE TYPE "tracking_level" AS ENUM ('none', 'bar_path', 'full');
 EXCEPTION WHEN duplicate_object THEN null; END $$;
+ALTER TYPE "tracking_level" ADD VALUE IF NOT EXISTS 'jump';
 
 DO $$ BEGIN
   CREATE TYPE "health_status" AS ENUM ('healthy', 'hurt');
@@ -179,6 +180,7 @@ ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "uses_weight" boolean NOT NULL 
 ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "uses_bodyweight" boolean NOT NULL DEFAULT false;
 ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "uses_band" boolean NOT NULL DEFAULT false;
 ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "uses_box" boolean NOT NULL DEFAULT false;
+ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "secondary_muscles" json;
 
 DO $$ BEGIN
   CREATE TYPE "exercise_submission_status" AS ENUM ('pending', 'approved', 'rejected');
@@ -357,6 +359,11 @@ ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "rom_cm" real;
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "velocity_loss_percent" real;
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "form_check_video_url" text;
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "form_check_flag" form_check_flag;
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "jump_height_cm" real;
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "jump_distance_cm" real;
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "ground_contact_seconds" real;
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "reactive_strength_index" real;
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "jump_breakdown" json;
 
 CREATE TABLE IF NOT EXISTS "workout_comments" (
   "id" serial PRIMARY KEY,

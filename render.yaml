@@ -36,6 +36,13 @@ services:
         sync: false
       - key: RESEND_FROM_EMAIL
         value: "Forge <onboarding@resend.dev>"
+      # Claude API key powering every AI feature (chat coach, AI program
+      # builder, AI form-check, exercise substitution) -- get one at
+      # https://console.anthropic.com/settings/keys. Every AI feature
+      # silently no-ops with a friendly "AI isn't set up yet" message until
+      # this is set; nothing else in the app is affected.
+      - key: ANTHROPIC_API_KEY
+        sync: false
 
 databases:
   - name: forge-db
