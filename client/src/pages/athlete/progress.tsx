@@ -37,8 +37,10 @@ import {
   TrendingUp,
   Share2,
   Target,
+  Apple,
 } from "lucide-react";
 import { GoalsPanel } from "@/components/goals-panel";
+import { NutritionPanel } from "@/components/nutrition-panel";
 import { StreakBadges } from "@/components/streak-badge";
 import { DigestBanner } from "@/components/digest-banner";
 
@@ -97,6 +99,16 @@ export default function AthleteProgress() {
     queryKey: ["/api/athlete/body-metrics"],
     queryFn: () => getJson("/api/athlete/body-metrics"),
   });
+
+  // Same query/cache app-shell uses for Free Agent status -- a Free Agent
+  // has no coach to set their nutrition targets, so they manage their own
+  // and get the AI Q&A box; a coached athlete gets a read-only view of
+  // whatever their coach has set.
+  const { data: coaches } = useQuery<{ id: number }[]>({
+    queryKey: ["/api/athlete/coaches"],
+    enabled: user?.role === "athlete",
+  });
+  const isFreeAgent = !!coaches && coaches.length === 0;
 
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [weight, setWeight] = useState("");
@@ -290,6 +302,27 @@ export default function AthleteProgress() {
               <GoalsPanel
                 goalsUrl="/api/athlete/goals"
                 exercisesUrl="/api/athlete/exercises-with-history"
+              />
+            </CardContent>
+          </Card>
+
+          <Card className="mt-4">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Apple className="h-5 w-5 text-primary" />
+                Nutrition
+              </CardTitle>
+              <CardDescription>
+                {isFreeAgent
+                  ? "Set your own macro and micro targets, and ask general sports-nutrition questions."
+                  : "Your macro and micro targets, set by your coach."}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <NutritionPanel
+                nutritionUrl="/api/athlete/nutrition"
+                editable={isFreeAgent}
+                askUrl={isFreeAgent ? "/api/athlete/nutrition/ask" : undefined}
               />
             </CardContent>
           </Card>

@@ -763,6 +763,53 @@ export const bodyMetrics = pgTable(
   }),
 );
 
+// One row per athlete, coach-set (or self-set for a Free Agent with no
+// coach -- see updateNutritionTargetsSchema/the athlete nutrition routes)
+// macro and micronutrient targets. Deliberately NOT AI-generated -- the AI
+// only ever explains general sports-nutrition science (see
+// NUTRITION_EDUCATION_PRINCIPLES in server/storage.ts); an actual
+// individualized number here always comes from a human (a coach, ideally
+// backed by a real registered dietitian) plugging in a real plan. "Current
+// targets" only, same "just a profile field" treatment as the users-table
+// testing/combine fields above -- no history, since these change as a real
+// plan is adjusted, not as a trend to chart.
+export const nutritionTargets = pgTable(
+  "nutrition_targets",
+  {
+    id: serial("id").primaryKey(),
+    athleteId: integer("athlete_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // Macros
+    caloriesKcal: integer("calories_kcal"),
+    proteinG: real("protein_g"),
+    carbsG: real("carbs_g"),
+    fatG: real("fat_g"),
+    fiberG: real("fiber_g"),
+    waterOz: real("water_oz"),
+    // Micros most relevant to athletes specifically (bone health, RED-S,
+    // sweat/electrolyte losses) rather than a full multivitamin panel.
+    calciumMg: real("calcium_mg"),
+    ironMg: real("iron_mg"),
+    vitaminDMcg: real("vitamin_d_mcg"),
+    potassiumMg: real("potassium_mg"),
+    magnesiumMg: real("magnesium_mg"),
+    sodiumMg: real("sodium_mg"),
+    vitaminB12Mcg: real("vitamin_b12_mcg"),
+    zincMg: real("zinc_mg"),
+    // Free-form context from whoever set this -- e.g. "per team RD's plan,
+    // reviewed 3/1" or a Free Agent's own notes to themselves.
+    notes: text("notes"),
+    updatedByUserId: integer("updated_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    athleteIdx: uniqueIndex("nutrition_targets_athlete_idx").on(table.athleteId),
+  }),
+);
+
 // Automatic snapshot of the testing/combine fields (see users table above),
 // one row per date whenever a coach actually changes one of those numbers
 // via the roster profile edit -- there's no separate "log a testing day"
@@ -1648,6 +1695,30 @@ export type CreateBodyMetricInput = z.infer<typeof createBodyMetricSchema>;
 export type BodyMetric = typeof bodyMetrics.$inferSelect;
 
 export type TestingResult = typeof testingResults.$inferSelect;
+
+// Every field optional/nullable -- a coach (or a Free Agent editing their
+// own, see the athlete nutrition routes) can set as many or as few of these
+// as they actually have real numbers for; partial data is normal, not an
+// error state.
+export const updateNutritionTargetsSchema = z.object({
+  caloriesKcal: z.coerce.number().int().min(0).max(20000).optional().nullable(),
+  proteinG: z.coerce.number().min(0).max(1000).optional().nullable(),
+  carbsG: z.coerce.number().min(0).max(2000).optional().nullable(),
+  fatG: z.coerce.number().min(0).max(1000).optional().nullable(),
+  fiberG: z.coerce.number().min(0).max(300).optional().nullable(),
+  waterOz: z.coerce.number().min(0).max(1000).optional().nullable(),
+  calciumMg: z.coerce.number().min(0).max(10000).optional().nullable(),
+  ironMg: z.coerce.number().min(0).max(200).optional().nullable(),
+  vitaminDMcg: z.coerce.number().min(0).max(1000).optional().nullable(),
+  potassiumMg: z.coerce.number().min(0).max(20000).optional().nullable(),
+  magnesiumMg: z.coerce.number().min(0).max(5000).optional().nullable(),
+  sodiumMg: z.coerce.number().min(0).max(20000).optional().nullable(),
+  vitaminB12Mcg: z.coerce.number().min(0).max(5000).optional().nullable(),
+  zincMg: z.coerce.number().min(0).max(200).optional().nullable(),
+  notes: z.string().trim().max(1000).optional().nullable(),
+});
+export type UpdateNutritionTargetsInput = z.infer<typeof updateNutritionTargetsSchema>;
+export type NutritionTargets = typeof nutritionTargets.$inferSelect;
 
 export const testingTrendsQuerySchema = z.object({
   metric: z.enum([

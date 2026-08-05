@@ -24,6 +24,7 @@ import {
   teamPosts,
   bodyMetrics,
   testingResults,
+  nutritionTargets,
   goals,
   wellnessCheckins,
   readinessBriefings,
@@ -48,6 +49,7 @@ import type {
   CreateExerciseReportInput,
   CreateBodyMetricInput,
   TestingMetric,
+  UpdateNutritionTargetsInput,
   CreateGoalInput,
   AiKnowledgeMessage,
 } from "@shared/schema";
@@ -338,6 +340,51 @@ function formatSeasonPhase(phase: string | null | undefined): string {
       return "not set -- infer from context, or treat as off-season if nothing suggests otherwise";
   }
 }
+
+// ============================================================================
+// Nutrition education knowledge base (answerNutritionQuestion below).
+// Grounded in the major sports-nutrition consensus documents rather than any
+// single source: the ISSN (International Society of Sports Nutrition)
+// position stands on protein, nutrient timing, and creatine; the joint
+// ACSM/Academy of Nutrition and Dietetics/Dietitians of Canada position
+// stand on nutrition and athletic performance; and the IOC's consensus
+// statement on Relative Energy Deficiency in Sport (RED-S), which is also
+// what FEMALE_ATHLETE_TRAINING_PRINCIPLES above draws on for the training
+// side of the same issue. This is deliberately never used to generate an
+// individualized numeric target -- see the hard rules at the bottom of
+// answerNutritionQuestion's system prompt, and the schema comment on
+// nutritionTargets in shared/schema.ts, for why that stays a human's job.
+const NUTRITION_FUNDAMENTALS_PRINCIPLES = `- Protein: the ISSN position stand puts 1.4-2.0 g/kg/day as sufficient for most exercising adults, with strength/power athletes and anyone in a caloric deficit trending toward the higher end (up to ~2.2 g/kg/day) to protect lean mass. Spreading it across 3-5 meals/snacks (roughly 0.3-0.4 g/kg per serving) drives more muscle protein synthesis over a day than the same total in one or two meals.
+- Carbohydrate needs scale with training load far more than protein does -- general ranges run from ~3-5 g/kg/day for light/skill-based training up to 8-12 g/kg/day for athletes in heavy endurance or two-a-day volume blocks. An athlete who cuts carbs hard while training volume stays high is the single most common way an athlete unintentionally under-recovers.
+- Fat: roughly 20-35% of total energy intake is the standard range from the ACSM/AND/DC position stand -- low enough to leave room for adequate carb/protein, high enough to support hormone production and fat-soluble vitamin absorption. Going much lower than this for an extended period is a red flag, not a sign of discipline.
+- Energy availability (EA) -- calculated as (energy intake minus exercise energy expenditure) divided by fat-free mass -- is the concept that actually matters more than "calories in vs. out": the IOC's RED-S consensus statement flags EA below ~30 kcal/kg fat-free mass/day as the threshold where the body starts down-regulating non-essential functions (bone formation, reproductive hormones, immune function) to cope with the shortfall, regardless of body weight staying stable. This is the same energy-availability concept underlying the RED-S content in the female-athlete training principles above -- it applies to any athlete, not only female athletes, though the diagnostic criteria were first characterized there.
+- Hydration: thirst is a lagging indicator, not a reliable real-time one, once an athlete is already training -- by the time thirst kicks in, meaningful fluid deficit has often already occurred. Sweat rate varies enormously by individual, heat, and sport (roughly 0.5-2+ liters/hour is a common athletic range), so a single fixed daily water number is a rough starting point, not a precise target.
+- Fiber (commonly cited general range ~25-38 g/day depending on total energy intake) supports gut health and satiety, but a very high-fiber, high-volume meal too close to training or competition is a common cause of GI distress -- timing fiber-rich foods away from the pre-training window matters as much as the daily total.`;
+
+const NUTRITION_TIMING_PRINCIPLES = `- Pre-training/pre-competition meals: 3-4 hours out, a higher-carb, moderate-protein, lower-fat and lower-fiber meal is the standard recommendation, since fat and fiber slow gastric emptying and can cause GI discomfort once training starts. Closer to start time (within ~1 hour), a smaller, easily-digested carb source is preferable to a full meal.
+- The so-called "anabolic window" is commonly overstated -- ISSN's nutrient timing position stand is clear that total daily protein and carbohydrate intake matter far more than hitting a rigid 30-minute post-exercise window. That said, getting a normal meal or snack with both carbs and protein within a few hours of a hard session is still good practice, especially when there's a second session or competition within 24 hours and glycogen needs to be replenished quickly.
+- Same-day repeat performance (a tournament with multiple games, or two-a-day training): rapid glycogen resynthesis benefits from roughly 1.0-1.2 g/kg/hour of carbohydrate in the first few hours after the first session, with protein alongside it (a classic reference point is a ~3:1 or 4:1 carb-to-protein ratio) -- this is the one scenario where timing precision genuinely matters more than the rest of the day's total.
+- For continuous or intermittent efforts longer than ~60-90 minutes, in-race/in-game carbohydrate (a sports drink, gel, or even a carbohydrate mouth-rinse when GI tolerance is limited) measurably delays fatigue by sparing glycogen -- this is standard practice in endurance and field/court sports alike, not just marathon-distance events.`;
+
+const NUTRITION_PERIODIZATION_PRINCIPLES = `- Off-season / general preparation: the most flexible window for nutrition just as it is for training volume (see SEASON_PHASE_TRAINING_PRINCIPLES above) -- an athlete deliberately building muscle mass may run a modest caloric surplus here in a way that would be counterproductive to try during a competitive season, and macro timing can be less rigid since recovery demand from games is lowest.
+- Pre-season: as training shifts toward higher-intensity, sport-specific conditioning, carbohydrate needs typically rise to support that work even before competition starts -- an athlete who kept off-season-level carb intake into a suddenly-higher-volume pre-season block is a common way early-season fatigue shows up.
+- In-season: this is a maintenance and recovery-support window, not a building or cutting window -- energy intake should track the real combined demand of games plus practice plus travel, and any deliberate weight change (up or down) is much harder to manage safely without it compromising recovery. An athlete describing being hungrier or more fatigued than usual mid-season is often simply under-fueling relative to a schedule that got heavier, not a signal to eat less.
+- Tapering before a championship push: total energy needs may drop slightly as training volume comes down, but carbohydrate intake generally should NOT be cut proportionally -- glycogen stores still need to be topped off for peak performance, and endurance-heavy sports specifically may use a structured carbohydrate-loading protocol (elevated carb intake, typically 8-12 g/kg/day, for 1-3 days before a long event) to maximize muscle glycogen stores.`;
+
+const NUTRITION_MICRONUTRIENT_PRINCIPLES = `- Iron: at particular risk in menstruating athletes, endurance athletes, and anyone eating a largely plant-based diet (plant/non-heme iron is absorbed less efficiently than heme iron from animal sources). Runners specifically also experience "foot-strike hemolysis" (red blood cell destruction from repeated impact), and endurance training can cause a temporary, usually benign drop in measured hemoglobin from plasma volume expansion ("sports anemia") that looks like anemia on a basic blood count but isn't the same as true iron-deficiency anemia -- distinguishing the two requires actual lab work (ferritin, not just hemoglobin), not guesswork.
+- Calcium and vitamin D together are the two nutrients most directly tied to bone stress injury risk -- this is the same bone-health mechanism the RED-S content above describes, and chronically low intake of either is a real risk factor for stress fractures, not just "eventually a bone density problem in old age."
+- Sodium and other electrolytes: heavy or "salty" sweaters (visible salt residue on skin/clothing after training) lose meaningfully more sodium than average and may need active electrolyte replacement beyond what a normal diet or plain water provides, especially in hot/humid conditions or long sessions. That said, exercise-associated muscle cramping is multifactorial (fatigue and neuromuscular factors play a large role too) -- sodium replacement helps some athletes and does little for others, so it's not a guaranteed fix.
+- Potassium and magnesium are best covered through whole foods (fruits, vegetables, nuts, whole grains) for most athletes rather than requiring supplementation, but intake commonly falls short of general population recommendations even before accounting for athletic sweat losses.
+- Vitamin B12 is essentially only found in animal products in meaningful amounts, so an athlete on a vegan or largely plant-based diet is a specific, identifiable group worth flagging for either fortified foods or supplementation -- not a general population concern.`;
+
+const NUTRITION_SEX_AND_AGE_PRINCIPLES = `- RED-S (Relative Energy Deficiency in Sport, per the IOC consensus statement) is the umbrella concept for what chronic low energy availability does to an athlete's body -- impaired bone health, menstrual dysfunction, suppressed immune function, impaired growth in younger athletes, and ultimately impaired performance despite the athlete often believing they're "doing everything right." It's driven by the energy availability math described above, not body weight or visible leanness -- an athlete who looks and performs fine can still have low EA. This is the same condition the female-athlete training principles above address from the training-load side; nutrition and training load both feed the same underlying energy-availability equation.
+- There is emerging (lower-certainty than the rest of this block) research suggesting carbohydrate and total energy needs may rise somewhat during the luteal phase of the menstrual cycle for some athletes -- worth mentioning as a "some evidence, still developing" point if directly relevant, not as a settled recommendation to restructure someone's whole week around.
+- Youth athletes have proportionally higher energy needs for growth on top of training demands, and restrictive dieting or intentional weight loss in a still-growing athlete carries real risk to that growth and to bone development -- the same posture as the weight-cutting cautions in the combat-sports and age-appropriate training principles elsewhere in this system. Default to a "food first," whole-food-variety framing for youth rather than any structured diet or restriction, and treat a youth athlete describing an intentional cut or skipped meals as something to flag for a coach/parent/doctor, not something to help optimize.`;
+
+const NUTRITION_SUPPLEMENT_PRINCIPLES = `- Creatine monohydrate is the most-researched ergogenic supplement in sports nutrition and, per the ISSN's position stand, one of the few with consistently demonstrated benefit (strength, power, high-intensity repeated-effort capacity) and a strong safety record in healthy individuals, including adolescents in the studies ISSN reviewed. Standard dosing is either a loading phase (~20 g/day split into 4 doses for 5-7 days) followed by a 3-5 g/day maintenance dose, or simply starting at 3-5 g/day and reaching saturation more slowly over 3-4 weeks. Water retention (a few pounds, intracellular, in the muscle) is an expected, benign effect, not a warning sign. Still: any supplement decision for a minor should involve a parent/guardian and ideally a doctor or RD, not just the athlete's own read of the research.
+- Caffeine has good evidence for endurance and repeated-sprint performance at roughly 3-6 mg/kg body mass, taken 30-60 minutes pre-exercise, but individual sensitivity varies enormously and late-day use can wreck sleep quality, which itself is one of the biggest levers on recovery -- worth flagging that tradeoff rather than treating caffeine as a free performance boost.
+- Protein supplements (powders, bars, shakes) are a convenience tool for hitting an already-established protein target, not a requirement -- whole food can meet the same targets, and no supplement outperforms simply hitting the daily total from real food if that's practical for the athlete's schedule.
+- Third-party testing (look for "NSF Certified for Sport" or "Informed-Sport" on the label) is the standard way to reduce the real risk of supplement contamination with banned substances -- this matters most for any athlete subject to drug testing (college, national governing bodies), and "natural" or "proprietary blend" labeling is not a substitute for actual third-party certification.`;
 
 // A program day's calendar date is normally the rigid "every 7 days from
 // startDate" grid -- but a coach can move any individual occurrence (game,
@@ -720,6 +767,37 @@ export const storage = {
     await db
       .delete(bodyMetrics)
       .where(and(eq(bodyMetrics.id, id), eq(bodyMetrics.athleteId, athleteId)));
+  },
+
+  // ---------- Nutrition targets ----------
+  // One row per athlete, always upserted -- there's no "create" vs "update"
+  // distinction the caller needs to think about, since the AI never writes
+  // these (only a coach, or a Free Agent for their own, ever does).
+  async getNutritionTargetsForAthlete(athleteId: number) {
+    return db.query.nutritionTargets.findFirst({
+      where: eq(nutritionTargets.athleteId, athleteId),
+    });
+  },
+
+  async upsertNutritionTargets(
+    athleteId: number,
+    updatedByUserId: number,
+    input: UpdateNutritionTargetsInput,
+  ) {
+    const existing = await this.getNutritionTargetsForAthlete(athleteId);
+    if (existing) {
+      const [row] = await db
+        .update(nutritionTargets)
+        .set({ ...input, updatedByUserId, updatedAt: new Date() })
+        .where(eq(nutritionTargets.athleteId, athleteId))
+        .returning();
+      return row;
+    }
+    const [row] = await db
+      .insert(nutritionTargets)
+      .values({ athleteId, updatedByUserId, ...input })
+      .returning();
+    return row;
   },
 
   // ---------- Testing/combine history ----------
@@ -2593,6 +2671,99 @@ Swap out "${pe.exercise.name}" (${pe.exercise.category}, ${pe.exercise.muscleGro
       summary: result.summary?.trim() || "Swapped that exercise.",
       program: await this.getProgramFull(programId),
     };
+  },
+
+  // ---------- AI nutrition education (Free Agent, free -- see routes.ts) ----------
+  // Single-shot Q&A, same "free AI capability for every Free Agent" tier as
+  // substituteExercise above rather than the paywalled chat/ai-draft/
+  // form-check features -- self-entered nutrition data isn't an AI
+  // capability at all (see upsertNutritionTargets), and this Q&A is
+  // explicitly general education, never an individualized plan, so it's
+  // treated the same low-stakes way exercise substitution is. Grounded in
+  // the NUTRITION_*_PRINCIPLES knowledge base above; the hard rules in the
+  // system prompt below exist specifically because this is legally and
+  // ethically different from the training-focused chat coach -- an AI
+  // giving individualized nutrition/dietetic advice risks both real harm
+  // and unauthorized-practice-of-dietetics exposure in many jurisdictions,
+  // so this function is deliberately built to never do that regardless of
+  // how the question is phrased.
+  async answerNutritionQuestion(athleteId: number, question: string) {
+    if (!aiEnabled) {
+      return {
+        error: "AI isn't set up yet -- ask whoever manages this Forge instance to configure it.",
+      };
+    }
+    const [profile, targets] = await Promise.all([
+      db.query.users.findFirst({
+        where: eq(users.id, athleteId),
+        columns: { age: true, sport: true, position: true, seasonPhase: true },
+      }),
+      this.getNutritionTargetsForAthlete(athleteId),
+    ]);
+
+    const targetsSummary = targets
+      ? [
+          targets.caloriesKcal != null ? `${targets.caloriesKcal} kcal/day` : null,
+          targets.proteinG != null ? `${targets.proteinG}g protein` : null,
+          targets.carbsG != null ? `${targets.carbsG}g carbs` : null,
+          targets.fatG != null ? `${targets.fatG}g fat` : null,
+          targets.fiberG != null ? `${targets.fiberG}g fiber` : null,
+          targets.waterOz != null ? `${targets.waterOz}oz water` : null,
+          targets.calciumMg != null ? `${targets.calciumMg}mg calcium` : null,
+          targets.ironMg != null ? `${targets.ironMg}mg iron` : null,
+          targets.vitaminDMcg != null ? `${targets.vitaminDMcg}mcg vitamin D` : null,
+          targets.potassiumMg != null ? `${targets.potassiumMg}mg potassium` : null,
+          targets.magnesiumMg != null ? `${targets.magnesiumMg}mg magnesium` : null,
+          targets.sodiumMg != null ? `${targets.sodiumMg}mg sodium` : null,
+          targets.vitaminB12Mcg != null ? `${targets.vitaminB12Mcg}mcg B12` : null,
+          targets.zincMg != null ? `${targets.zincMg}mg zinc` : null,
+        ]
+          .filter(Boolean)
+          .join(", ")
+      : null;
+
+    const system = `You are Forge's sports-nutrition education assistant, chatting directly with an athlete who manages their own training (a "Free Agent" -- they may or may not already have a real nutritionist or dietitian; some do). Ground every answer in the knowledge base below, which reflects mainstream, well-established sports-nutrition science (ISSN and ACSM/AND/DC position stands, the IOC's RED-S consensus) -- never fad diets or unproven claims.
+
+Athlete context:
+- Age: ${profile?.age != null ? `${profile.age}` : "not set -- assume a physically mature adult unless the question suggests otherwise"}
+- Sport: ${profile?.sport?.trim() || "not set"}
+- Position: ${profile?.position?.trim() || "not set"}
+- Season phase: ${formatSeasonPhase(profile?.seasonPhase)}
+- Nutrition targets already on file (set by a coach/nutritionist, or by the athlete themselves): ${targetsSummary || "none set yet"}
+
+Knowledge base -- draw on this to explain concepts and answer questions, exactly like a knowledgeable nutrition educator would:
+
+Fundamentals (macros, energy availability, hydration):
+${NUTRITION_FUNDAMENTALS_PRINCIPLES}
+
+Timing (pre/post-training, game-day, same-day repeat performance):
+${NUTRITION_TIMING_PRINCIPLES}
+
+Season-phase periodization -- apply alongside the athlete's season phase above:
+${NUTRITION_PERIODIZATION_PRINCIPLES}
+
+Micronutrients most relevant to athletes:
+${NUTRITION_MICRONUTRIENT_PRINCIPLES}
+
+Sex- and age-specific considerations:
+${NUTRITION_SEX_AND_AGE_PRINCIPLES}
+
+Supplements (creatine, caffeine, protein, third-party testing):
+${NUTRITION_SUPPLEMENT_PRINCIPLES}
+
+Hard rules, no exceptions -- these exist because you are not a registered dietitian and this is not individualized medical or dietetic advice:
+1. NEVER give the athlete a specific individualized number as a prescription -- not a calorie target, not a gram amount of a macro or supplement dosed "for you," nothing framed as their personal plan. You may cite general, well-established ranges from the knowledge base above (e.g. "athletes in your situation often aim for roughly X-Y g/kg"), but always frame it as general information and explicitly point them to their coach, a registered dietitian, or the targets already on file above -- never as a number you personally determined for them. If they already have targets on file, reference those rather than inventing new ones.
+2. NEVER answer a question that describes or implies a medical condition, diagnosed or suspected (diabetes, celiac disease or another food allergy/intolerance, a GI disorder, a heart or kidney condition, pregnancy, or anything else medical) -- immediately and clearly redirect to a doctor or registered dietitian instead of attempting even a general answer, since general sports-nutrition guidance can be actively wrong or unsafe for a real medical condition.
+3. If the question describes or implies disordered eating, compensatory behavior (e.g. purging, extreme restriction, exercising specifically to "make up for" eating), an unhealthy relationship with food or body image, or an intentional rapid weight-cut, do not engage with the specifics of the request at all. Respond with genuine concern, do not provide the requested information even in a "safer" general form, and direct them to talk to their coach, a doctor, a trusted adult, or a resource like the National Eating Disorders Association helpline. This overrides every other rule here.
+4. NEVER suggest a calorie deficit, restrictive diet, or rapid-weight-loss approach for performance or weight-cut purposes -- the same posture as the weight-cutting cautions elsewhere in this platform's coaching knowledge.
+5. Supplement mentions stay within the well-established general ranges in the knowledge base above, always with a "confirm with your coach or doctor before starting anything" caveat -- and if the athlete's age suggests they may be a minor, that caveat becomes explicit: involve a parent/guardian too.
+6. Keep replies short (3-5 sentences) and conversational, talk to the athlete as "you," and only answer questions about nutrition, hydration, or supplements as they relate to training and performance. For anything off-topic (medical questions covered by rule 2, or anything unrelated to sports nutrition), briefly decline and redirect rather than answering it anyway.`;
+
+    const text = await askClaude(system, [{ role: "user", content: question }], { maxTokens: 350 });
+    if (!text?.trim()) {
+      return { error: "Sorry, I couldn't come up with an answer just now -- try again in a bit." };
+    }
+    return { answer: text.trim() };
   },
 
   // ---------- AI knowledge (admin-taught programming principles) ----------

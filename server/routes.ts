@@ -42,6 +42,7 @@ import {
   sendAiKnowledgeChatMessageSchema,
   substituteExerciseSchema,
   formFaultSchema,
+  updateNutritionTargetsSchema,
 } from "@shared/schema";
 import { computeReadiness } from "@shared/wellness";
 import { z } from "zod";
@@ -833,6 +834,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
       if (!updated) return res.status(404).json({ message: "Athlete not found" });
       res.json(updated);
+    },
+  );
+
+  // Coach-set macro/micro targets -- deliberately unfettered (no AI, no
+  // paywall) since a real college program has an actual RD backing these
+  // numbers; the coach is just entering that plan, not the app generating
+  // one. Same roster-membership gate as every other roster sub-resource.
+  app.get(
+    "/api/coach/roster/:athleteId/nutrition",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      const onRoster = await storage.getRosterAthleteForCoach(user.id, athleteId);
+      if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
+      const targets = await storage.getNutritionTargetsForAthlete(athleteId);
+      res.json(targets ?? null);
+    },
+  );
+
+  app.patch(
+    "/api/coach/roster/:athleteId/nutrition",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      const onRoster = await storage.getRosterAthleteForCoach(user.id, athleteId);
+      if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
+      const parsed = updateNutritionTargetsSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      const targets = await storage.upsertNutritionTargets(athleteId, user.id, parsed.data);
+      res.json(targets);
     },
   );
 
@@ -1636,6 +1671,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(publicUser);
   });
 
+  // Read-only for every athlete -- whoever set these (a coach, or the
+  // athlete themselves while a Free Agent) is visible to the athlete either
+  // way, they just can't edit unless the PATCH route below is open to them.
+  app.get("/api/athlete/nutrition", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const targets = await storage.getNutritionTargetsForAthlete(user.id);
+    res.json(targets ?? null);
+  });
+
+  // Free-Agent-only self-edit: manual data entry, not an AI capability, so
+  // it isn't behind requirePaidAiAccess -- a Free Agent with their own real
+  // nutritionist can just use the app the same way a coached athlete's
+  // coach would. Once they join a coach, this stops being reachable
+  // (requireFreeAgent) and the coach's roster route above becomes the only
+  // way to change it, same "hasCoach gates it, not permanent" pattern as
+  // the rest of the Free Agent feature set.
+  app.patch(
+    "/api/athlete/nutrition",
+    requireRole("athlete"),
+    requireFreeAgent,
+    async (req, res) => {
+      const user = currentUser(req);
+      const parsed = updateNutritionTargetsSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      const targets = await storage.upsertNutritionTargets(user.id, user.id, parsed.data);
+      res.json(targets);
+    },
+  );
+
   app.get("/api/athlete/calendar", requireRole("athlete"), async (req, res) => {
     const user = currentUser(req);
     const schema = z.object({ start: z.string(), end: z.string() });
@@ -2090,6 +2156,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         parsed.data.reason,
         parsed.data.notes,
       );
+      if ("error" in result) return res.status(422).json({ message: result.error });
+      res.status(200).json(result);
+    },
+  );
+
+  // Nutrition education Q&A -- same free-for-every-Free-Agent treatment as
+  // swap-exercise above, never behind requirePaidAiAccess: it's general
+  // education, not an individualized plan (see answerNutritionQuestion's
+  // hard rules), so it's kept in the free tier rather than paywalled like
+  // the general chat/ai-draft/form-check features.
+  app.post(
+    "/api/athlete/nutrition/ask",
+    requireRole("athlete"),
+    requireFreeAgent,
+    async (req, res) => {
+      const user = currentUser(req);
+      const schema = z.object({ question: z.string().trim().min(3).max(500) });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Ask a real question (3-500 characters)" });
+      }
+      const result = await storage.answerNutritionQuestion(user.id, parsed.data.question);
       if ("error" in result) return res.status(422).json({ message: result.error });
       res.status(200).json(result);
     },
