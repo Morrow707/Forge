@@ -200,6 +200,38 @@ export const teamMembers = pgTable(
   }),
 );
 
+// Shared coaching staff: lets multiple coach accounts operate as one
+// program (roster, teams, exercises, programs, analytics) instead of one
+// coach owning everything alone -- built for a program with an assistant/
+// position-coach staff, not just a solo coach. primaryCoachId is always the
+// staff's original coach account; every read-side query that scopes by
+// "this coach's data" is widened to the whole staff list via
+// getEffectiveCoachIds (server/storage.ts), so it doesn't matter which
+// staff member created a given athlete link, program, or exercise --
+// everyone on the staff sees the same thing. Joining reuses the primary
+// coach's existing coachCode (the same code an athlete would use to find
+// them) rather than a separate invite-code system.
+export const coachStaff = pgTable(
+  "coach_staff",
+  {
+    id: serial("id").primaryKey(),
+    primaryCoachId: integer("primary_coach_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    staffCoachId: integer("staff_coach_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    pairIdx: uniqueIndex("coach_staff_pair_idx").on(
+      table.primaryCoachId,
+      table.staffCoachId,
+    ),
+    staffIdx: index("coach_staff_staff_idx").on(table.staffCoachId),
+  }),
+);
+
 export const exerciseCategoryEnum = pgEnum("exercise_category", [
   "strength",
   "conditioning",
@@ -1049,6 +1081,19 @@ export const teamMembersRelations = relations(teamMembers, ({ one }) => ({
   athlete: one(users, {
     fields: [teamMembers.athleteId],
     references: [users.id],
+  }),
+}));
+
+export const coachStaffRelations = relations(coachStaff, ({ one }) => ({
+  primaryCoach: one(users, {
+    fields: [coachStaff.primaryCoachId],
+    references: [users.id],
+    relationName: "primaryCoach",
+  }),
+  staffCoach: one(users, {
+    fields: [coachStaff.staffCoachId],
+    references: [users.id],
+    relationName: "staffCoach",
   }),
 }));
 

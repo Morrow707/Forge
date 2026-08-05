@@ -21,11 +21,13 @@ import {
   Settings,
   MessagesSquare,
   Sparkles,
+  UserPlus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { EditMyProfileDialog } from "@/components/edit-my-profile-dialog";
 import { NotificationBell } from "@/components/notification-bell";
 import { NotificationSettingsDialog } from "@/components/notification-settings-dialog";
+import { CoachingStaffDialog } from "@/components/coaching-staff-dialog";
 
 const coachNav = [
   { href: "/coach", label: "Dashboard", icon: Flame, exact: true },
@@ -72,6 +74,7 @@ export function AppShell({
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [notifSettingsOpen, setNotifSettingsOpen] = useState(false);
+  const [coachingStaffOpen, setCoachingStaffOpen] = useState(false);
 
   // Same query (and cache) the athlete dashboard's empty-state uses to
   // decide Free Agent status -- zero coaches linked. The "My Programs" and
@@ -186,6 +189,16 @@ export function AppShell({
                   <Settings className="h-4 w-4" />
                 </Button>
               )}
+              {user?.role === "coach" && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCoachingStaffOpen(true)}
+                  aria-label="Coaching staff"
+                >
+                  <UserPlus className="h-4 w-4" />
+                </Button>
+              )}
               <Button
                 variant="outline"
                 size="sm"
@@ -272,6 +285,19 @@ export function AppShell({
                     Notifications
                   </button>
                 )}
+                {user?.role === "coach" && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCoachingStaffOpen(true);
+                      setMobileNavOpen(false);
+                    }}
+                    className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground"
+                  >
+                    <UserPlus className="h-4 w-4" />
+                    Staff
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => logoutMutation.mutate()}
@@ -313,6 +339,9 @@ export function AppShell({
           open={notifSettingsOpen}
           onOpenChange={setNotifSettingsOpen}
         />
+      )}
+      {user?.role === "coach" && (
+        <CoachingStaffDialog open={coachingStaffOpen} onOpenChange={setCoachingStaffOpen} />
       )}
     </div>
   );

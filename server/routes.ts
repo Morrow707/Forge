@@ -141,15 +141,23 @@ function todayIso() {
   return new Date().toISOString().slice(0, 10);
 }
 
+// Allows any coach on the same staff (see coachStaff / getEffectiveCoachIds
+// in storage.ts) to edit content created by a staff-mate, not just the
+// exact account that created it. A no-op widening for admins/solo coaches,
+// who have no staff.
 async function assertOwnsExercise(userId: number, exerciseId: number) {
   const exercise = await storage.getExercise(exerciseId);
-  if (!exercise || exercise.coachId !== userId) return null;
+  if (!exercise) return null;
+  const coachIds = await storage.getEffectiveCoachIds(userId);
+  if (!coachIds.includes(exercise.coachId)) return null;
   return exercise;
 }
 
 async function assertCoachOwnsProgram(coachId: number, programId: number) {
   const program = await storage.getProgramFull(programId);
-  if (!program || program.coachId !== coachId) return null;
+  if (!program) return null;
+  const coachIds = await storage.getEffectiveCoachIds(coachId);
+  if (!coachIds.includes(program.coachId)) return null;
   return program;
 }
 
@@ -207,7 +215,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const user = currentUser(req);
     const id = Number(req.params.id);
     const exercise = await storage.getExerciseDetail(id, user.id);
-    if (!exercise || (!exercise.isForgeOfficial && exercise.coachId !== user.id)) {
+    if (!exercise || (!exercise.isForgeOfficial && !exercise.editable)) {
       return res.status(404).json({ message: "Exercise not found" });
     }
     res.json(exercise);
@@ -249,7 +257,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const user = currentUser(req);
     const id = Number(req.params.id);
     const exercise = await storage.getExerciseDetail(id, user.id);
-    if (!exercise || (!exercise.isForgeOfficial && exercise.coachId !== user.id)) {
+    if (!exercise || (!exercise.isForgeOfficial && !exercise.editable)) {
       return res.status(404).json({ message: "Exercise not found" });
     }
     const parsed = createExerciseReportSchema.safeParse(req.body);
@@ -736,6 +744,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.status(204).end();
   });
 
+  // ---------------- Coach: Coaching Staff ----------------
+  // Lets a program run with more than one coach account sharing full
+  // access to the same roster/teams/programs/exercises/analytics -- built
+  // for a real coaching staff (assistant/position coaches), not just a
+  // solo coach. See coachStaff in shared/schema.ts and getEffectiveCoachIds
+  // in storage.ts for how membership propagates everywhere else.
+
+  app.get("/api/coach/staff", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const result = await storage.getStaffForCoach(user.id);
+    res.json(result);
+  });
+
+  app.post("/api/coach/staff/join", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const schema = z.object({ code: z.string().trim().min(1) });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invite code required" });
+    }
+    const joined = await storage.joinCoachStaffByCode(user.id, parsed.data.code);
+    if (!joined) {
+      return res.status(400).json({
+        message:
+          "Invalid code, that's your own code, or your account already has its own staff -- leave it first to join another.",
+      });
+    }
+    res.status(201).json({ joined: true });
+  });
+
+  app.delete("/api/coach/staff/:staffCoachId", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    await storage.removeCoachStaff(user.id, Number(req.params.staffCoachId));
+    res.status(204).end();
+  });
+
+  app.post("/api/coach/staff/leave", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    await storage.leaveCoachStaff(user.id);
+    res.status(204).end();
+  });
+
   // ---------------- Coach: Roster & Teams ----------------
 
   app.get("/api/coach/roster", requireRole("coach"), async (req, res) => {
@@ -1056,8 +1106,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.status(201).json(team);
   });
 
+  // assertOwnsTeam guards all three routes below -- none of them previously
+  // checked that :id was a team the calling coach (or their staff) actually
+  // owns, so any authenticated coach could add/remove members on, or
+  // delete, another coach's team just by guessing/incrementing the id.
+  // getTeamsForCoach is already staff-widened, so this covers assistant
+  // coaches for free.
+  async function assertOwnsTeam(coachId: number, teamId: number) {
+    const teams = await storage.getTeamsForCoach(coachId);
+    return teams.some((t) => t.id === teamId);
+  }
+
   app.post("/api/coach/teams/:id/members", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
     const teamId = Number(req.params.id);
+    if (!(await assertOwnsTeam(user.id, teamId))) {
+      return res.status(404).json({ message: "Team not found" });
+    }
     const schema = z.object({ athleteId: z.number() });
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) {
@@ -1071,15 +1136,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "/api/coach/teams/:id/members/:athleteId",
     requireRole("coach"),
     async (req, res) => {
+      const user = currentUser(req);
       const teamId = Number(req.params.id);
       const athleteId = Number(req.params.athleteId);
+      if (!(await assertOwnsTeam(user.id, teamId))) {
+        return res.status(404).json({ message: "Team not found" });
+      }
       await storage.removeAthleteFromTeam(teamId, athleteId);
       res.status(204).end();
     },
   );
 
   app.delete("/api/coach/teams/:id", requireRole("coach"), async (req, res) => {
-    await storage.deleteTeam(Number(req.params.id));
+    const user = currentUser(req);
+    const teamId = Number(req.params.id);
+    if (!(await assertOwnsTeam(user.id, teamId))) {
+      return res.status(404).json({ message: "Team not found" });
+    }
+    await storage.deleteTeam(teamId);
     res.status(204).end();
   });
 

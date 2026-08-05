@@ -169,6 +169,15 @@ CREATE TABLE IF NOT EXISTS "team_members" (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "team_member_pair_idx" ON "team_members" ("team_id", "athlete_id");
 
+CREATE TABLE IF NOT EXISTS "coach_staff" (
+  "id" serial PRIMARY KEY,
+  "primary_coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "staff_coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "coach_staff_pair_idx" ON "coach_staff" ("primary_coach_id", "staff_coach_id");
+CREATE INDEX IF NOT EXISTS "coach_staff_staff_idx" ON "coach_staff" ("staff_coach_id");
+
 CREATE TABLE IF NOT EXISTS "exercises" (
   "id" serial PRIMARY KEY,
   "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
