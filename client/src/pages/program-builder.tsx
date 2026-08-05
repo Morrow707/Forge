@@ -359,7 +359,13 @@ export function ProgramBuilderPage({
         </fieldset>
 
         {showAiChat && (
-          <div className="h-[600px] lg:sticky lg:top-24">
+          // flex/flex-col/overflow-hidden here (not just a fixed height) is
+          // load-bearing: ProgramAiChatPanel's Card sizes itself with
+          // flex-1/min-h-0 expecting a flex parent to stretch into -- without
+          // that, the card just grows to fit every message instead of
+          // scrolling internally, and the whole page has to scroll to read
+          // the conversation instead of this box scrolling on its own.
+          <div className="flex h-[75vh] max-h-[720px] flex-col overflow-hidden lg:sticky lg:top-24">
             <ProgramAiChatPanel apiBase={apiBase} programId={programId} onApplied={handleChatApplied} />
           </div>
         )}
