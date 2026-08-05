@@ -49,6 +49,7 @@ import type {
 } from "@shared/schema";
 import { TESTING_METRICS, testingMetricLowerIsBetter } from "@shared/testing-metrics";
 import { computeReadiness } from "@shared/wellness";
+import { buildAcwrSeries, type DailyLoad, type AcwrPoint } from "@shared/load";
 import { askClaude, askClaudeStructured, askClaudeVision, aiEnabled } from "./ai";
 import { eq, and, inArray, asc, desc, lt, gte, gt, isNull, sql } from "drizzle-orm";
 import {
@@ -3566,6 +3567,106 @@ Swap out "${pe.exercise.name}" (${pe.exercise.category}, ${pe.exercise.muscleGro
         totalVolume,
       };
     });
+  },
+
+  // ---------- Injury/load-management (ACWR, coach-only) ----------
+
+  // One row per calendar day that has ANY logged training in the window,
+  // total volume load (sum of reps*weight across every numeric-weight set
+  // logged that day) -- the same volume-load convention
+  // getRecentSessionsForAthlete already uses above, just grouped and
+  // totaled by day across the whole window instead of by individual
+  // session. Bodyweight/band/box sets contribute zero load here, same
+  // limitation as that existing convention -- a bodyweight-only athlete's
+  // real training load won't show up in this number.
+  async getDailyLoadSeriesForAthlete(athleteId: number, sinceDate: string): Promise<DailyLoad[]> {
+    const logs = await db.query.workoutLogs.findMany({
+      where: and(eq(workoutLogs.athleteId, athleteId), gte(workoutLogs.date, sinceDate)),
+      with: { entries: { with: { sets: true } } },
+    });
+
+    const loadByDate = new Map<string, number>();
+    for (const log of logs) {
+      let dayLoad = 0;
+      for (const entry of log.entries) {
+        for (const set of entry.sets) {
+          const reps = set.reps ? parseInt(set.reps, 10) : NaN;
+          if (Number.isNaN(reps)) continue;
+          if (entry.weightMode === "numeric" && set.weight) {
+            const w = parseFloat(set.weight);
+            if (!Number.isNaN(w)) dayLoad += reps * w;
+          }
+        }
+      }
+      loadByDate.set(log.date, (loadByDate.get(log.date) ?? 0) + dayLoad);
+    }
+    return Array.from(loadByDate.entries()).map(([date, load]) => ({ date, load }));
+  },
+
+  // Acute:chronic workload ratio, day by day, for the analytics page's
+  // trend chart -- see shared/load.ts for the actual ratio/risk math. Fetches
+  // an extra 28 days of history before the display window so even the
+  // first displayed day gets a real 28-day chronic average, not an
+  // artificially short one.
+  async getAcwrHistoryForAthlete(athleteId: number, days = 60): Promise<AcwrPoint[]> {
+    const today = new Date().toISOString().slice(0, 10);
+    const sinceDate = new Date(Date.now() - (days + 28) * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10);
+    const dailyLoads = await this.getDailyLoadSeriesForAthlete(athleteId, sinceDate);
+    return buildAcwrSeries(dailyLoads, today, days);
+  },
+
+  // Current ACWR snapshot for every athlete on this coach's roster -- one
+  // query across the whole roster (matching getRosterWellnessToday's
+  // approach) rather than one query per athlete. An athlete with no
+  // logged training in the window is simply absent from the result, same
+  // "absent means no data yet, not a real zero" convention as wellness.
+  async getRosterAcwrSummary(coachId: number) {
+    const sinceDate = new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const today = new Date().toISOString().slice(0, 10);
+    const rows = await db
+      .select({
+        athleteId: coachAthletes.athleteId,
+        athleteName: users.name,
+        date: workoutLogs.date,
+        weightMode: workoutLogEntries.weightMode,
+        reps: workoutSetEntries.reps,
+        weight: workoutSetEntries.weight,
+      })
+      .from(coachAthletes)
+      .innerJoin(users, eq(users.id, coachAthletes.athleteId))
+      .innerJoin(workoutLogs, eq(workoutLogs.athleteId, coachAthletes.athleteId))
+      .innerJoin(workoutLogEntries, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
+      .innerJoin(workoutSetEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
+      .where(and(eq(coachAthletes.coachId, coachId), gte(workoutLogs.date, sinceDate)));
+
+    const loadByAthleteAndDate = new Map<number, Map<string, number>>();
+    const nameByAthlete = new Map<number, string>();
+    for (const row of rows) {
+      nameByAthlete.set(row.athleteId, row.athleteName);
+      const reps = row.reps ? parseInt(row.reps, 10) : NaN;
+      if (Number.isNaN(reps) || row.weightMode !== "numeric" || !row.weight) continue;
+      const w = parseFloat(row.weight);
+      if (Number.isNaN(w)) continue;
+      const byDate = loadByAthleteAndDate.get(row.athleteId) ?? new Map<string, number>();
+      byDate.set(row.date, (byDate.get(row.date) ?? 0) + reps * w);
+      loadByAthleteAndDate.set(row.athleteId, byDate);
+    }
+
+    const summary: { athleteId: number; athleteName: string; ratio: number | null; level: string }[] = [];
+    for (const [athleteId, byDate] of loadByAthleteAndDate) {
+      const dailyLoads = Array.from(byDate.entries()).map(([date, load]) => ({ date, load }));
+      const series = buildAcwrSeries(dailyLoads, today, 1);
+      const latest = series[series.length - 1];
+      summary.push({
+        athleteId,
+        athleteName: nameByAthlete.get(athleteId)!,
+        ratio: latest.ratio,
+        level: latest.level,
+      });
+    }
+    return summary.sort((a, b) => a.athleteName.localeCompare(b.athleteName));
   },
 
   // ---------- Leaderboard (coach-only) ----------

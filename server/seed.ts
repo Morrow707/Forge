@@ -1675,6 +1675,17 @@ async function main() {
       if (!secondary) continue;
       await storage.updateExercise(existingEx.id, { secondaryMuscles: secondary });
     }
+
+    // One-time backfill for exercises that already existed before the
+    // insert loop above started setting videoUrl -- same "insert loop only
+    // creates missing-by-name rows" gap as secondaryMuscles above, and the
+    // reason some exercises (e.g. Incline Barbell Bench Press) never got a
+    // video link even though newer ones do. Only touches rows still at
+    // null, so a coach's own edit is never overwritten by a later reseed.
+    for (const existingEx of await storage.getAllExercises()) {
+      if (existingEx.videoUrl) continue;
+      await storage.updateExercise(existingEx.id, { videoUrl: videoSearchUrl(existingEx.name) });
+    }
   }
 
   // One-time production fixup: promote scott.morrow@live.com to admin and

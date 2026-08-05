@@ -21,8 +21,10 @@ import { BodyMetricsDialog } from "@/components/body-metrics-dialog";
 import { TestingHistoryDialog } from "@/components/testing-history-dialog";
 import { GoalsDialog } from "@/components/goals-dialog";
 import { WellnessHistoryDialog, READINESS_CLASSNAME } from "@/components/wellness-history-dialog";
+import { AcwrHistoryDialog, ACWR_RISK_CLASSNAME } from "@/components/acwr-history-dialog";
 import { ChatHistoryDialog } from "@/components/chat-history-dialog";
 import { READINESS_LABEL, type ReadinessLevel } from "@shared/wellness";
+import { ACWR_RISK_LABEL, type AcwrRiskLevel } from "@shared/load";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { shareOrDownloadFile } from "@/lib/share-file";
 import { cn } from "@/lib/utils";
@@ -45,6 +47,7 @@ import {
   Share2,
   Target,
   Sparkles,
+  Activity,
 } from "lucide-react";
 
 type HealthStatus = "healthy" | "hurt";
@@ -89,6 +92,13 @@ export default function CoachRoster() {
     refetchInterval: 60_000,
   });
   const wellnessByAthlete = new Map(wellnessToday.map((w) => [w.athleteId, w]));
+  const { data: acwrToday = [] } = useQuery<
+    { athleteId: number; athleteName: string; ratio: number | null; level: AcwrRiskLevel }[]
+  >({
+    queryKey: ["/api/coach/roster-acwr"],
+    refetchInterval: 60_000,
+  });
+  const acwrByAthlete = new Map(acwrToday.map((w) => [w.athleteId, w]));
 
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignAthleteIds, setAssignAthleteIds] = useState<number[]>([]);
@@ -103,6 +113,7 @@ export default function CoachRoster() {
   const [testingAthlete, setTestingAthlete] = useState<RosterEntry | null>(null);
   const [goalsAthlete, setGoalsAthlete] = useState<RosterEntry | null>(null);
   const [wellnessAthlete, setWellnessAthlete] = useState<RosterEntry | null>(null);
+  const [acwrAthlete, setAcwrAthlete] = useState<RosterEntry | null>(null);
   const [chatAthlete, setChatAthlete] = useState<RosterEntry | null>(null);
   const [sharingProfileId, setSharingProfileId] = useState<number | null>(null);
 
@@ -248,6 +259,10 @@ export default function CoachRoster() {
                               entry={wellnessByAthlete.get(a.id)}
                               onClick={() => setWellnessAthlete(a)}
                             />
+                            <AcwrBadge
+                              entry={acwrByAthlete.get(a.id)}
+                              onClick={() => setAcwrAthlete(a)}
+                            />
                           </div>
                           <p className="truncate text-xs text-muted-foreground">{a.email}</p>
                           {(a.sport || a.position) && (
@@ -388,6 +403,10 @@ export default function CoachRoster() {
                           <WellnessBadge
                             entry={wellnessByAthlete.get(m.athlete.id)}
                             onClick={() => setWellnessAthlete(m.athlete)}
+                          />
+                          <AcwrBadge
+                            entry={acwrByAthlete.get(m.athlete.id)}
+                            onClick={() => setAcwrAthlete(m.athlete)}
                           />
                           {m.athlete.sport && (
                             <Badge variant="secondary" className="text-[10px]">
@@ -545,6 +564,15 @@ export default function CoachRoster() {
         />
       )}
 
+      {acwrAthlete && (
+        <AcwrHistoryDialog
+          open={acwrAthlete !== null}
+          onOpenChange={(open) => !open && setAcwrAthlete(null)}
+          athleteName={acwrAthlete.name}
+          fetchUrl={`/api/coach/roster/${acwrAthlete.id}/acwr-history`}
+        />
+      )}
+
       <ChatHistoryDialog
         open={chatAthlete !== null}
         onOpenChange={(open) => !open && setChatAthlete(null)}
@@ -581,6 +609,37 @@ function WellnessBadge({
     >
       <Gauge className="h-3 w-3" />
       {READINESS_LABEL[entry.level]}
+    </button>
+  );
+}
+
+// Coach-only -- flags when an athlete's recent training load has spiked (or
+// crashed) relative to what they've been adapting to. Absent entirely when
+// they haven't logged enough training yet to compute a ratio, same "absent
+// means no data, not a real reading" convention as the wellness badge.
+function AcwrBadge({
+  entry,
+  onClick,
+}: {
+  entry?: { ratio: number | null; level: AcwrRiskLevel };
+  onClick: () => void;
+}) {
+  if (!entry || entry.ratio == null) return null;
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      aria-label={`Training load: ${ACWR_RISK_LABEL[entry.level]} -- view load history`}
+      className={cn(
+        "flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold transition-opacity hover:opacity-80",
+        ACWR_RISK_CLASSNAME[entry.level],
+      )}
+    >
+      <Activity className="h-3 w-3" />
+      {ACWR_RISK_LABEL[entry.level]}
     </button>
   );
 }
