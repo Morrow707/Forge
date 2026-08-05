@@ -8,14 +8,11 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import {
   summarizeTrackedSet,
-  calibrationQuality,
   buildPathTrace,
   type TrackedPoint,
   type RepMetrics,
@@ -30,7 +27,8 @@ import {
   computeBarTiltDegrees,
   computeRepDepths,
   guessMovementPattern,
-  calibratePixelsPerMeterFromHeight,
+  worldVerticalSign,
+  POSE_LANDMARKS,
   type PoseFrame,
   type MovementGuess,
   type MovementPattern,
@@ -51,7 +49,7 @@ import {
 import { toast } from "sonner";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis } from "recharts";
 
-type Step = "setup" | "calibrate" | "tracking" | "review";
+type Step = "setup" | "tracking" | "review";
 
 const MIN_VISIBILITY = 0.5;
 const SKELETON_COLOR = "#4ade80";
@@ -117,7 +115,9 @@ function drawSkeleton(
   }
 }
 
-function drawTrail(ctx: CanvasRenderingContext2D, trace: TrackedPoint[]) {
+type PixelPoint = { x: number; y: number };
+
+function drawTrail(ctx: CanvasRenderingContext2D, trace: PixelPoint[]) {
   const points = trace.slice(-TRAIL_MAX_POINTS);
   if (points.length < 2) return;
   ctx.strokeStyle = TRAIL_COLOR;
@@ -127,6 +127,29 @@ function drawTrail(ctx: CanvasRenderingContext2D, trace: TrackedPoint[]) {
   for (const p of points.slice(1)) ctx.lineTo(p.x, p.y);
   ctx.stroke();
 }
+
+// The on-screen trail overlay needs pixel coordinates to draw with
+// ctx.lineTo, independent of the world-space (meters) trace
+// summarizeTrackedSet/summarizeJumpSet use for the actual metrics -- this
+// derives the same wrist/ankle midpoint but from the normalized image-space
+// landmarks, purely for drawing.
+function pixelPoint(
+  landmarks: NormalizedLandmark[],
+  indices: number[],
+  width: number,
+  height: number,
+): PixelPoint | null {
+  const points = indices
+    .map((i) => landmarks[i])
+    .filter((lm): lm is NormalizedLandmark => !!lm && lm.visibility >= MIN_VISIBILITY);
+  if (points.length === 0) return null;
+  const x = points.reduce((a, p) => a + p.x, 0) / points.length;
+  const y = points.reduce((a, p) => a + p.y, 0) / points.length;
+  return { x: x * width, y: y * height };
+}
+
+const WRIST_INDICES = [POSE_LANDMARKS.LEFT_WRIST, POSE_LANDMARKS.RIGHT_WRIST];
+const ANKLE_INDICES = [POSE_LANDMARKS.LEFT_ANKLE, POSE_LANDMARKS.RIGHT_ANKLE];
 
 function isJumpMetrics(r: RepMetrics | JumpSetMetrics): r is JumpSetMetrics {
   return "bestJumpHeightCm" in r;
@@ -138,7 +161,6 @@ export function BarTrackerDialog({
   mode,
   exerciseName,
   movementType,
-  athleteHeightCm,
   targetReps,
   loadKg,
   onCapture,
@@ -153,10 +175,6 @@ export function BarTrackerDialog({
   // The exercise's movementType (Squat/Hinge/Press/etc.) -- gates which
   // form faults even make sense to check for (see detectFormFaults).
   movementType?: string | null;
-  // The athlete's own height in cm, when on file -- lets calibration derive
-  // pixelsPerMeter from the T-pose the pose check already requires instead
-  // of a manual tap-two-points step. Null falls back to manual calibration.
-  athleteHeightCm?: number | null;
   // Auto-stops tracking once this many reps are detected (parsed from the
   // prescribed rep scheme by the caller) -- manual "Stop & Review" always
   // still works too, and non-numeric rep schemes just never trigger this.
@@ -172,9 +190,14 @@ export function BarTrackerDialog({
   const overlayRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number | null>(null);
+  // World-space (meters) traces -- feed summarizeTrackedSet/summarizeJumpSet
+  // for the actual metrics.
   const traceRef = useRef<TrackedPoint[]>([]);
   const leftTraceRef = useRef<TrackedPoint[]>([]);
   const rightTraceRef = useRef<TrackedPoint[]>([]);
+  // Pixel-space trace, purely for the on-screen trail overlay -- see
+  // pixelPoint() above.
+  const pixelTraceRef = useRef<PixelPoint[]>([]);
   const framesRef = useRef<PoseFrame[]>([]);
   const startTimeRef = useRef<number>(0);
   const lastRepDirRef = useRef<1 | -1 | 0>(0);
@@ -182,23 +205,19 @@ export function BarTrackerDialog({
   const poseLandmarkerRef = useRef<PoseLandmarker | null>(null);
   const lastVideoTimeRef = useRef(-1);
   const voiceEnabledRef = useRef(loadVoicePref());
-  // Set continuously in the background from the moment the camera/model are
-  // ready, from the athlete's own height -- a ref (not just state) so
-  // pixelsPerMeter() can read it synchronously from inside the tracking rAF
-  // loop without waiting on a re-render.
-  const autoPixelsPerMeterRef = useRef<number | null>(null);
+  // Which sign to multiply worldLandmarks' y by so "up" always means a
+  // smaller value, matching the convention every formula in
+  // bar-tracking.ts/jump-tracking.ts assumes -- see worldVerticalSign's own
+  // comment for why this can't just be hard-coded. Refined continuously
+  // from the moment the camera/model are ready (a ref, not state, so the
+  // tracking rAF loop can read it synchronously) and self-corrects if an
+  // early frame read it wrong.
+  const verticalSignRef = useRef<1 | -1>(1);
 
   const [step, setStep] = useState<Step>("setup");
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [modelLoading, setModelLoading] = useState(true);
   const [tilt, setTilt] = useState<number | null>(null);
-  const [calibrationTaps, setCalibrationTaps] = useState<{ x: number; y: number }[]>([]);
-  const [calibrationWarning, setCalibrationWarning] = useState<string | null>(null);
-  const [referenceCm, setReferenceCm] = useState("220");
-  // Mirrors autoPixelsPerMeterRef for rendering the calibrate step's UI --
-  // true once the background detection loop has derived a calibration from
-  // the athlete's height, letting them skip manual taps entirely.
-  const [autoCalibratedFromHeight, setAutoCalibratedFromHeight] = useState(false);
   const [liveSpeed, setLiveSpeed] = useState(0);
   const [liveTiltDeg, setLiveTiltDeg] = useState<number | null>(null);
   const [repCount, setRepCount] = useState(0);
@@ -217,8 +236,6 @@ export function BarTrackerDialog({
     if (!open) return;
     setStep("setup");
     setCameraError(null);
-    setCalibrationTaps([]);
-    setCalibrationWarning(null);
     setResult(null);
     setMovementGuess(null);
     setRepCount(0);
@@ -226,11 +243,11 @@ export function BarTrackerDialog({
     traceRef.current = [];
     leftTraceRef.current = [];
     rightTraceRef.current = [];
+    pixelTraceRef.current = [];
     framesRef.current = [];
     lastVideoTimeRef.current = -1;
     setLiveTiltDeg(null);
-    autoPixelsPerMeterRef.current = null;
-    setAutoCalibratedFromHeight(false);
+    verticalSignRef.current = 1;
 
     setModelLoading(true);
     getPoseLandmarker()
@@ -270,15 +287,14 @@ export function BarTrackerDialog({
     };
   }, [open]);
 
-  // Runs from the moment the model's ready through "setup" and "calibrate"
-  // (stopped by startTracking(), which cancels it before starting the
-  // tracking-phase tick loop instead). Draws the live skeleton overlay --
-  // the athlete's real-time confirmation that tracking is working, with no
-  // separate "hold this pose" step needed for it -- and opportunistically
-  // derives pixels-per-meter from the athlete's height whenever the needed
-  // landmarks are visible, continuously refining it (rather than freezing
-  // on the first reading) so whatever position they're in right as they
-  // tap "Start Set" is what gets used.
+  // Runs from the moment the model's ready through "setup" (stopped by
+  // startTracking(), which cancels it before starting the tracking-phase
+  // tick loop instead). Draws the live skeleton overlay -- the athlete's
+  // real-time confirmation that tracking is working -- and keeps
+  // verticalSignRef refined against the athlete's own posture, so it's
+  // already correct by the time "Start Set" is tapped. There's no
+  // calibration step anymore: worldLandmarks are already real-world meters,
+  // so nothing needs a pixels-per-meter scale factor derived first.
   function previewTick() {
     const video = videoRef.current;
     const overlay = overlayRef.current;
@@ -302,47 +318,12 @@ export function BarTrackerDialog({
       const landmarks = detection.landmarks[0] ?? null;
       if (landmarks) {
         drawSkeleton(ctx, landmarks, overlay.width, overlay.height);
-        const auto = calibratePixelsPerMeterFromHeight(landmarks, overlay.height, athleteHeightCm);
-        if (auto != null) {
-          autoPixelsPerMeterRef.current = auto;
-          setAutoCalibratedFromHeight(true);
-        }
+        const worldLandmarks = detection.worldLandmarks[0];
+        const sign = worldLandmarks ? worldVerticalSign(worldLandmarks) : null;
+        if (sign != null) verticalSignRef.current = sign;
       }
     }
     rafRef.current = requestAnimationFrame(previewTick);
-  }
-
-  function handleCalibrationTap(e: React.MouseEvent<HTMLDivElement>) {
-    if (calibrationTaps.length >= 2 || !videoRef.current) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const scaleX = videoRef.current.videoWidth / rect.width;
-    const scaleY = videoRef.current.videoHeight / rect.height;
-    const point = { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY };
-    const next = [...calibrationTaps, point];
-    setCalibrationTaps(next);
-    if (next.length === 2 && videoRef.current) {
-      const quality = calibrationQuality(next[0], next[1], videoRef.current.videoWidth);
-      setCalibrationWarning(
-        quality === "move_closer"
-          ? "Those two points are close together on screen — move the camera closer for more accurate tracking."
-          : quality === "move_back"
-            ? "Those two points span nearly the whole frame — step back so your full range of motion stays in view."
-            : null,
-      );
-    }
-  }
-
-  function pixelsPerMeter() {
-    // Manual taps always win when present -- tapping two points is the
-    // athlete deliberately overriding the automatic body-based calibration
-    // (e.g. for extra precision against a barbell of known length).
-    if (calibrationTaps.length >= 2) {
-      const [p1, p2] = calibrationTaps;
-      const pixelDist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
-      const meters = (Number(referenceCm) || 220) / 100;
-      return pixelDist / meters;
-    }
-    return autoPixelsPerMeterRef.current ?? 0;
   }
 
   function startTracking() {
@@ -390,35 +371,64 @@ export function BarTrackerDialog({
     const now = performance.now();
     const detection = landmarker.detectForVideo(video, now);
     const landmarks = detection.landmarks[0] ?? null;
+    const worldLandmarks = detection.worldLandmarks[0] ?? null;
     setPoseVisible(!!landmarks);
     // Bar tilt is meaningless with no bar in hand -- skip it in jump mode
     // rather than showing a readout from whatever the arms happen to be
     // doing mid-jump.
     setLiveTiltDeg(landmarks && mode !== "jump" ? computeBarTiltDegrees(landmarks) : null);
 
-    if (landmarks) {
+    if (landmarks && worldLandmarks) {
       drawSkeleton(ctx, landmarks, overlay.width, overlay.height);
-      const point =
-        mode === "jump"
-          ? deriveJumpPoint(landmarks, overlay.width, overlay.height)
-          : deriveBarPoint(landmarks, overlay.width, overlay.height);
 
-      if (point) {
+      const sign = worldVerticalSign(worldLandmarks);
+      if (sign != null) verticalSignRef.current = sign;
+
+      // Pixel-space point purely for the trail overlay -- see pixelPoint()'s
+      // own comment for why this is separate from the world-space point
+      // below.
+      const trailPoint = pixelPoint(
+        landmarks,
+        mode === "jump" ? ANKLE_INDICES : WRIST_INDICES,
+        overlay.width,
+        overlay.height,
+      );
+      if (trailPoint) {
+        pixelTraceRef.current.push({ x: trailPoint.x, y: trailPoint.y });
+      }
+
+      const worldPoint = mode === "jump" ? deriveJumpPoint(worldLandmarks) : deriveBarPoint(worldLandmarks);
+
+      if (worldPoint) {
         const t = now - startTimeRef.current;
         const trace = traceRef.current;
         const prev = trace[trace.length - 1];
-        trace.push({ t, x: point.x, y: point.y });
-        framesRef.current.push({ t, landmarks });
+        const y = verticalSignRef.current * worldPoint.y;
+        trace.push({ t, x: worldPoint.x, y, z: worldPoint.z });
+        framesRef.current.push({ t, landmarks, worldLandmarks });
 
-        const wrists = deriveWristPoints(landmarks, overlay.width, overlay.height);
-        if (wrists.left) leftTraceRef.current.push({ t, x: wrists.left.x, y: wrists.left.y });
-        if (wrists.right) rightTraceRef.current.push({ t, x: wrists.right.x, y: wrists.right.y });
+        const wrists = deriveWristPoints(worldLandmarks);
+        if (wrists.left) {
+          leftTraceRef.current.push({
+            t,
+            x: wrists.left.x,
+            y: verticalSignRef.current * wrists.left.y,
+            z: wrists.left.z,
+          });
+        }
+        if (wrists.right) {
+          rightTraceRef.current.push({
+            t,
+            x: wrists.right.x,
+            y: verticalSignRef.current * wrists.right.y,
+            z: wrists.right.z,
+          });
+        }
 
         if (prev) {
           const dt = (t - prev.t) / 1000;
-          const ppm = pixelsPerMeter();
-          if (dt > 0 && ppm > 0) {
-            const speed = Math.abs(point.y - prev.y) / ppm / dt;
+          if (dt > 0) {
+            const speed = Math.abs(y - prev.y) / dt;
             setLiveSpeed(speed);
           }
         }
@@ -427,10 +437,9 @@ export function BarTrackerDialog({
         // display -- the real, precise segmentation runs once on the full
         // trace at Stop.
         if (trace.length > 4) {
-          const ppm = pixelsPerMeter();
           const window5 = trace.slice(-5).map((p) => p.y);
           const delta = window5[window5.length - 1] - window5[0];
-          if (ppm > 0 && Math.abs(delta) / ppm > 0.04) {
+          if (Math.abs(delta) > 0.04) {
             const dir = delta > 0 ? 1 : -1;
             if (lastRepDirRef.current !== dir) {
               if (dir === -1) {
@@ -450,7 +459,7 @@ export function BarTrackerDialog({
           }
         }
       }
-      drawTrail(ctx, traceRef.current);
+      drawTrail(ctx, pixelTraceRef.current);
     }
     rafRef.current = requestAnimationFrame(tick);
   }
@@ -459,10 +468,10 @@ export function BarTrackerDialog({
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
 
     if (mode === "jump") {
-      const jumpMetrics = summarizeJumpSet(traceRef.current, pixelsPerMeter());
+      const jumpMetrics = summarizeJumpSet(traceRef.current);
       if (!jumpMetrics) {
         toast.error("Couldn't get a clean read — make sure your feet leave the ground clearly in frame.");
-        setStep("calibrate");
+        setStep("setup");
         return;
       }
       // Landing mechanics (valgus, forward lean) still matter for a jump;
@@ -477,10 +486,10 @@ export function BarTrackerDialog({
       return;
     }
 
-    const metrics = summarizeTrackedSet(traceRef.current, pixelsPerMeter(), loadKg);
+    const metrics = summarizeTrackedSet(traceRef.current, loadKg);
     if (!metrics) {
       toast.error("Couldn't get a clean read — try again with your whole body in frame.");
-      setStep("calibrate");
+      setStep("setup");
       return;
     }
     metrics.formFaults = detectFormFaults(framesRef.current, metrics.barPathDeviationCm, "lift", movementType);
@@ -491,13 +500,12 @@ export function BarTrackerDialog({
     );
     metrics.repBreakdown = metrics.repBreakdown.map((r, i) => ({ ...r, depthDeg: depths[i] }));
 
-    const ppm = pixelsPerMeter();
     const origin = { x: traceRef.current[0]?.x ?? 0, y: traceRef.current[0]?.y ?? 0 };
     metrics.armPathTrace =
       leftTraceRef.current.length > 1 && rightTraceRef.current.length > 1
         ? {
-            left: buildPathTrace(leftTraceRef.current, ppm, origin),
-            right: buildPathTrace(rightTraceRef.current, ppm, origin),
+            left: buildPathTrace(leftTraceRef.current, origin),
+            right: buildPathTrace(rightTraceRef.current, origin),
           }
         : null;
 
@@ -553,24 +561,6 @@ export function BarTrackerDialog({
           <video ref={videoRef} autoPlay playsInline muted className="w-full" />
           <canvas ref={overlayRef} className="pointer-events-none absolute inset-0 h-full w-full" />
 
-          {step === "calibrate" && (
-            <div
-              onClick={handleCalibrationTap}
-              className="absolute inset-0 cursor-crosshair"
-            >
-              {calibrationTaps.map((p, i) => (
-                <div
-                  key={i}
-                  className="absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-primary bg-primary/50"
-                  style={{
-                    left: `${(p.x / (videoRef.current?.videoWidth || 1)) * 100}%`,
-                    top: `${(p.y / (videoRef.current?.videoHeight || 1)) * 100}%`,
-                  }}
-                />
-              ))}
-            </div>
-          )}
-
           {step === "tracking" && (
             <div className="absolute inset-x-0 top-0 flex flex-col gap-1.5 p-3">
               <div className="flex items-center justify-between">
@@ -611,7 +601,7 @@ export function BarTrackerDialog({
             </div>
           )}
 
-          {tilt != null && (step === "setup" || step === "calibrate") && (
+          {tilt != null && step === "setup" && (
             <div
               className={cn(
                 "absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full px-3 py-1 text-xs font-semibold",
@@ -650,65 +640,6 @@ export function BarTrackerDialog({
                 Voice rep counts &amp; end-of-set cues (off by default)
               </span>
             </label>
-          </div>
-        )}
-
-        {step === "calibrate" && (
-          <div className="space-y-3">
-            {autoCalibratedFromHeight && calibrationTaps.length === 0 ? (
-              <>
-                <p className="flex items-center gap-2 text-sm font-semibold text-success">
-                  <Check className="h-4 w-4 shrink-0" />
-                  Calibrated automatically from your profile height — ready to go, no marker or
-                  known-length object needed.
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Want to calibrate against a known-length object instead (e.g. an exact barbell
-                  length) for extra precision? Tap one end of it below.
-                </p>
-              </>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                {calibrationTaps.length === 0
-                  ? mode === "jump"
-                    ? "Tap one end of any fixed object of known length in frame (a mat, a yardstick, even your own height marked on a wall)."
-                    : "Tap one end of the bar (or any fixed object of known length)."
-                  : calibrationTaps.length === 1
-                    ? "Now tap the other end."
-                    : "Calibration set."}
-              </p>
-            )}
-            {calibrationWarning && (
-              <p className="flex items-center gap-2 text-sm text-amber-500">
-                <AlertTriangle className="h-4 w-4 shrink-0" />
-                {calibrationWarning}
-              </p>
-            )}
-            {calibrationTaps.length > 0 && (
-              <div className="space-y-1.5">
-                <Label className="text-xs uppercase text-muted-foreground">
-                  Real-world length between those two points (cm)
-                </Label>
-                <Input
-                  type="number"
-                  value={referenceCm}
-                  onChange={(e) => setReferenceCm(e.target.value)}
-                  className="max-w-[10rem]"
-                />
-                {autoCalibratedFromHeight && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCalibrationTaps([]);
-                      setCalibrationWarning(null);
-                    }}
-                    className="text-xs font-semibold text-primary hover:underline"
-                  >
-                    Clear taps, use my height instead
-                  </button>
-                )}
-              </div>
-            )}
           </div>
         )}
 
@@ -861,18 +792,7 @@ export function BarTrackerDialog({
 
         <DialogFooter>
           {step === "setup" && (
-            <Button onClick={() => setStep("calibrate")} disabled={!!cameraError || modelLoading}>
-              I'm Set Up
-            </Button>
-          )}
-          {step === "calibrate" && (
-            <Button
-              onClick={startTracking}
-              disabled={
-                calibrationTaps.length === 1 ||
-                (calibrationTaps.length === 0 && !autoCalibratedFromHeight)
-              }
-            >
+            <Button onClick={startTracking} disabled={!!cameraError || modelLoading}>
               <Video className="h-4 w-4" />
               Start Set
             </Button>

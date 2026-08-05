@@ -2,7 +2,11 @@
 // no DOM/camera access here, so this is easy to reason about and test in
 // isolation from the getUserMedia/canvas plumbing in bar-tracker-dialog.tsx.
 
-export type TrackedPoint = { t: number; x: number; y: number };
+// x/y/z are real-world meters from MediaPipe's worldLandmarks (hip-centered
+// origin), not pixels -- no pixelsPerMeter calibration needed to interpret
+// them. y follows pose-tracking.ts's worldVerticalSign convention (smaller y
+// = higher), applied by the caller before points ever reach this module.
+export type TrackedPoint = { t: number; x: number; y: number; z: number };
 
 const LBS_PER_KG = 2.20462;
 
@@ -82,23 +86,22 @@ export type RepMetrics = {
   velocityLossPercent: number | null;
 };
 
-// Decimates a raw pixel-space trace to at most ~200 points and converts it
-// to cm relative to `origin` -- shared by the averaged bar-path trace and
-// the independent left/right arm-path traces so all three use the same
-// coordinate convention.
+// Decimates a raw world-space (meters) trace to at most ~200 points and
+// converts it to cm relative to `origin` -- shared by the averaged bar-path
+// trace and the independent left/right arm-path traces so all three use the
+// same coordinate convention.
 export function buildPathTrace(
   rawPoints: TrackedPoint[],
-  pixelsPerMeter: number,
   origin: { x: number; y: number },
 ): PathTracePoint[] {
-  if (rawPoints.length === 0 || pixelsPerMeter <= 0) return [];
+  if (rawPoints.length === 0) return [];
   const stride = Math.max(1, Math.floor(rawPoints.length / 200));
   return rawPoints
     .filter((_, i) => i % stride === 0)
     .map((p) => ({
       t: p.t,
-      x: Math.round(((p.x - origin.x) / pixelsPerMeter) * 1000) / 10,
-      y: Math.round(((p.y - origin.y) / pixelsPerMeter) * 1000) / 10,
+      x: Math.round((p.x - origin.x) * 1000) / 10,
+      y: Math.round((p.y - origin.y) * 1000) / 10,
     }));
 }
 
@@ -199,17 +202,16 @@ const GRAVITY_MPS2 = 9.81;
 // as mass (bodyweight-only sets have no well-defined external load here).
 export function summarizeTrackedSet(
   rawPoints: TrackedPoint[],
-  pixelsPerMeter: number,
   loadKg?: number,
   minRepAmplitudeCm = 5,
 ): RepMetrics | null {
-  if (rawPoints.length < 6 || pixelsPerMeter <= 0) return null;
+  if (rawPoints.length < 6) return null;
 
   const ySmoothed = movingAverage(rawPoints.map((p) => p.y), SMOOTHING_WINDOW);
-  const speedsMps = computeSpeeds(rawPoints, ySmoothed).map((v) => v / pixelsPerMeter);
+  const speedsMps = computeSpeeds(rawPoints, ySmoothed);
 
-  const minAmplitudePx = (minRepAmplitudeCm / 100) * pixelsPerMeter;
-  const phases = segmentPhases(ySmoothed, minAmplitudePx);
+  const minAmplitudeM = minRepAmplitudeCm / 100;
+  const phases = segmentPhases(ySmoothed, minAmplitudeM);
   if (phases.length === 0) return null;
 
   const phaseStats = phases.map((phase) => {
@@ -244,7 +246,7 @@ export function summarizeTrackedSet(
     const velocityCurve: { positionCm: number; velocityMps: number }[] = [];
     for (let idx = phase.startIdx; idx <= phase.endIdx; idx += curveStride) {
       velocityCurve.push({
-        positionCm: Math.round(((rawPoints[idx].y - rawPoints[phase.startIdx].y) / pixelsPerMeter) * -1000) / 10,
+        positionCm: Math.round((rawPoints[idx].y - rawPoints[phase.startIdx].y) * -1000) / 10,
         velocityMps: Math.round(speedsMps[idx] * 100) / 100,
       });
     }
@@ -253,11 +255,7 @@ export function summarizeTrackedSet(
     // whenever this rep isn't the very first phase, phaseStats[i - 1] is
     // guaranteed to be the eccentric that led into it.
     const pairedEccentric = i > 0 ? phaseStats[i - 1] : null;
-    const romCm =
-      Math.round(
-        (Math.abs(rawPoints[phase.endIdx].y - rawPoints[phase.startIdx].y) / pixelsPerMeter) *
-          1000,
-      ) / 10;
+    const romCm = Math.round(Math.abs(rawPoints[phase.endIdx].y - rawPoints[phase.startIdx].y) * 1000) / 10;
 
     repBreakdown.push({
       repNumber: repBreakdown.length + 1,
@@ -277,7 +275,7 @@ export function summarizeTrackedSet(
 
   // Robust-statistics approach, not a smoothed max: a wrist briefly
   // "jumping" to a wrong position for one frame -- e.g. passing in front of
-  // the chest on a bench press -- can throw a single x reading off by a
+  // the chest on a bench press -- can throw a single x/z reading off by a
   // huge margin, and moving-average smoothing doesn't fix that; it just
   // spreads the bad frame's influence into its neighbors too (worse still
   // at the very start/end of the trace, where the averaging window has
@@ -286,15 +284,20 @@ export function summarizeTrackedSet(
   // data), so it anchors "center" reliably even with a few bad frames in
   // the mix, and the 90th percentile of (raw) deviation from that median
   // reports how far a genuinely drifting bar path travels while still
-  // excluding the rare single-frame misdetection.
-  const xs = rawPoints.map((p) => p.x);
-  const sortedXs = [...xs].sort((a, b) => a - b);
-  const medianX = sortedXs[Math.floor(sortedXs.length / 2)];
-  const sortedDeviations = xs.map((x) => Math.abs(x - medianX)).sort((a, b) => a - b);
+  // excluding the rare single-frame misdetection. Deviation is now measured
+  // in the full horizontal plane (x and z, i.e. side-to-side AND
+  // forward/backward drift from a straight vertical line) now that real
+  // depth is available -- 2D pixel tracking could only ever see x drift.
+  const medianOf = (values: number[]) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
+  const medianX = medianOf(rawPoints.map((p) => p.x));
+  const medianZ = medianOf(rawPoints.map((p) => p.z));
+  const sortedDeviations = rawPoints
+    .map((p) => Math.hypot(p.x - medianX, p.z - medianZ))
+    .sort((a, b) => a - b);
   const p90Idx = Math.min(sortedDeviations.length - 1, Math.floor(sortedDeviations.length * 0.9));
-  const barPathDeviationCm = (sortedDeviations[p90Idx] / pixelsPerMeter) * 100;
+  const barPathDeviationCm = sortedDeviations[p90Idx] * 100;
 
-  const barPathTrace = buildPathTrace(rawPoints, pixelsPerMeter, { x: rawPoints[0].x, y: rawPoints[0].y });
+  const barPathTrace = buildPathTrace(rawPoints, { x: rawPoints[0].x, y: rawPoints[0].y });
 
   return {
     peakVelocityMps: Math.round((Math.max(...concentric.map((c) => c.peak), 0)) * 100) / 100,
@@ -349,80 +352,3 @@ export function summarizeTrackedSet(
   };
 }
 
-export type MarkerColor = "green" | "pink" | "blue";
-
-export const MARKER_COLOR_SWATCH: Record<MarkerColor, string> = {
-  green: "#22c55e",
-  pink: "#ec4899",
-  blue: "#3b82f6",
-};
-
-const MARKER_HUE_RANGES: Record<MarkerColor, [number, number]> = {
-  green: [80, 160],
-  pink: [280, 340],
-  blue: [190, 250],
-};
-
-function rgbToHsl(r: number, g: number, b: number) {
-  r /= 255;
-  g /= 255;
-  b /= 255;
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  const l = (max + min) / 2;
-  if (max === min) return { h: 0, s: 0, l };
-  const d = max - min;
-  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-  let h: number;
-  if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) * 60;
-  else if (max === g) h = ((b - r) / d + 2) * 60;
-  else h = ((r - g) / d + 4) * 60;
-  return { h, s, l };
-}
-
-// Centroid of pixels matching a bright, saturated marker of the given hue
-// (a piece of tape/a band on the bar) -- not a general object tracker, and
-// deliberately not: this only needs to work for one high-contrast marker
-// placed by the athlete, not arbitrary scenes.
-export function findMarkerCentroid(
-  imageData: ImageData,
-  color: MarkerColor,
-): { x: number; y: number } | null {
-  const [hueMin, hueMax] = MARKER_HUE_RANGES[color];
-  const { data, width, height } = imageData;
-  let sumX = 0;
-  let sumY = 0;
-  let count = 0;
-  // Every 2nd pixel in both dimensions -- 4x fewer comparisons per frame
-  // with negligible centroid error, needed to keep this at camera frame rate.
-  for (let y = 0; y < height; y += 2) {
-    for (let x = 0; x < width; x += 2) {
-      const i = (y * width + x) * 4;
-      const { h, s, l } = rgbToHsl(data[i], data[i + 1], data[i + 2]);
-      if (s > 0.4 && l > 0.25 && l < 0.85 && h >= hueMin && h <= hueMax) {
-        sumX += x;
-        sumY += y;
-        count++;
-      }
-    }
-  }
-  if (count < 8) return null;
-  return { x: sumX / count, y: sumY / count };
-}
-
-export type CalibrationQuality = "move_closer" | "move_back" | "good";
-
-// Sanity-checks the two calibration taps against the frame size -- this is
-// the "right distance" setup guide: if the reference is too small on
-// screen, tracking will be noisy; if it's too large, the athlete's full
-// range of motion probably won't stay in frame.
-export function calibrationQuality(
-  p1: { x: number; y: number },
-  p2: { x: number; y: number },
-  frameWidth: number,
-): CalibrationQuality {
-  const ratio = Math.hypot(p2.x - p1.x, p2.y - p1.y) / frameWidth;
-  if (ratio < 0.15) return "move_closer";
-  if (ratio > 0.92) return "move_back";
-  return "good";
-}

@@ -4,17 +4,20 @@
 // anymore and the tracker gets a real skeleton instead of one blob.
 // Runs entirely client-side (WASM/WebGL), same privacy story as before:
 // only derived numbers ever leave the device, never video or frames.
-import { FilesetResolver, PoseLandmarker, type NormalizedLandmark } from "@mediapipe/tasks-vision";
+import { FilesetResolver, PoseLandmarker, type Landmark, type NormalizedLandmark } from "@mediapipe/tasks-vision";
 
 // Self-hosted (see scripts/copy-mediapipe-wasm.mjs) rather than pointed at a
 // public CDN -- same-origin, no external dependency at runtime, and the PWA
 // service worker can cache it like any other static asset.
 const WASM_BASE_PATH = "/mediapipe-wasm";
-// Google's own hosting for the model weights -- small enough (~5.5MB) that
-// self-hosting isn't worth the repo bloat; this URL is Google's documented,
-// stable distribution point for MediaPipe models.
+// Google's own hosting for the model weights -- the "full" tier trades some
+// latency for meaningfully better landmark accuracy than "lite", which is
+// worth it here since every set is tracked live but scored afterward (no
+// video-call-style real-time constraint), and accurate landmarks matter more
+// than a few extra milliseconds per frame for velocity/ROM/depth numbers a
+// coach will actually make decisions from.
 const MODEL_URL =
-  "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task";
+  "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/latest/pose_landmarker_full.task";
 
 // BlazePose's fixed 33-point topology.
 export const POSE_LANDMARKS = {
@@ -55,7 +58,12 @@ export const POSE_LANDMARKS = {
 
 const MIN_VISIBILITY = 0.5;
 
-export type PoseFrame = { t: number; landmarks: NormalizedLandmark[] };
+// landmarks (normalized image-space) still drive every angle/ratio-based
+// check (knee angle, valgus, torso lean, bar tilt, movement-pattern guess) --
+// those are scale-invariant so 2D projection is fine for them. worldLandmarks
+// (real-world meters, hip-centered) drive every absolute-distance metric
+// (bar path, velocity, ROM, power) -- see deriveBarPoint et al. below.
+export type PoseFrame = { t: number; landmarks: NormalizedLandmark[]; worldLandmarks: Landmark[] };
 
 let landmarkerPromise: Promise<PoseLandmarker> | null = null;
 
@@ -75,64 +83,55 @@ export function getPoseLandmarker(): Promise<PoseLandmarker> {
   return landmarkerPromise;
 }
 
-function visible(lm: NormalizedLandmark | undefined): lm is NormalizedLandmark {
+function visible<T extends { visibility: number }>(lm: T | undefined): lm is T {
   return !!lm && lm.visibility >= MIN_VISIBILITY;
+}
+
+export type WorldPoint = { x: number; y: number; z: number };
+
+function averageWorldPoint(points: (Landmark | undefined)[]): WorldPoint | null {
+  const visiblePoints = points.filter(visible);
+  if (visiblePoints.length === 0) return null;
+  return {
+    x: visiblePoints.reduce((a, p) => a + p.x, 0) / visiblePoints.length,
+    y: visiblePoints.reduce((a, p) => a + p.y, 0) / visiblePoints.length,
+    z: visiblePoints.reduce((a, p) => a + p.z, 0) / visiblePoints.length,
+  };
 }
 
 // The tracker's "bar point" was always really a stand-in for whatever the
 // athlete is moving -- the wrist midpoint is that same stand-in without
 // needing a physical marker: for barbell/dumbbell lifts it tracks the
 // implement almost exactly, and for bodyweight moves it still tracks the
-// athlete's own path.
-export function deriveBarPoint(
-  landmarks: NormalizedLandmark[],
-  frameWidth: number,
-  frameHeight: number,
-): { x: number; y: number } | null {
-  const left = landmarks[POSE_LANDMARKS.LEFT_WRIST];
-  const right = landmarks[POSE_LANDMARKS.RIGHT_WRIST];
-  const points = [left, right].filter(visible);
-  if (points.length === 0) return null;
-  const x = points.reduce((a, p) => a + p.x, 0) / points.length;
-  const y = points.reduce((a, p) => a + p.y, 0) / points.length;
-  return { x: x * frameWidth, y: y * frameHeight };
+// athlete's own path. Real-world meters (hip-centered origin), not pixels --
+// no frame dimensions needed and no calibration step to derive a
+// pixels-per-meter scale factor first.
+export function deriveBarPoint(worldLandmarks: Landmark[]): WorldPoint | null {
+  return averageWorldPoint([worldLandmarks[POSE_LANDMARKS.LEFT_WRIST], worldLandmarks[POSE_LANDMARKS.RIGHT_WRIST]]);
 }
 
-// Average adult acromion (shoulder) height as a fraction of standing height
-// -- a classic anthropometric proportion (Drillis & Contini body-segment
-// data). Used instead of total stature because BlazePose has no "top of
-// head" landmark to anchor a full-height pixel measurement on, and the
-// nose/ear landmarks are too sensitive to head tilt to stand in for it.
-const SHOULDER_HEIGHT_RATIO = 0.818;
-
-// Automatic pixels-per-meter calibration from the athlete's own known
-// height (already on file from their profile), measured against the same
-// T-pose the pre-flight pose check already requires before every set --
-// no separate "tap two points on a known-length object" step needed. That
-// step assumed a barbell-length reference by default and had no sane
-// answer for dumbbells, bodyweight work, or anything else without a long
-// straight edge to tap the ends of; tying calibration to the athlete's own
-// body instead works identically regardless of what (if anything) is in
-// their hands. Returns null when the athlete's height isn't on file or the
-// needed landmarks aren't visible, so the caller can fall back to manual
-// calibration in either case.
-export function calibratePixelsPerMeterFromHeight(
-  landmarks: NormalizedLandmark[],
-  frameHeight: number,
-  athleteHeightCm: number | null | undefined,
-): number | null {
-  if (!athleteHeightCm || athleteHeightCm <= 0) return null;
-  const lShoulder = landmarks[POSE_LANDMARKS.LEFT_SHOULDER];
-  const rShoulder = landmarks[POSE_LANDMARKS.RIGHT_SHOULDER];
-  const lAnkle = landmarks[POSE_LANDMARKS.LEFT_ANKLE];
-  const rAnkle = landmarks[POSE_LANDMARKS.RIGHT_ANKLE];
-  if (!visible(lShoulder) || !visible(rShoulder) || !visible(lAnkle) || !visible(rAnkle)) return null;
+// World landmarks' vertical axis isn't documented as matching (or opposing)
+// normalized image-space landmarks' "y grows downward" convention, and there
+// is no way to confirm it empirically without a live camera + real body in
+// front of it. Rather than hard-code an assumption that could silently
+// invert every velocity/height number, this derives the sign from the
+// athlete's own skeleton each time it's confidently readable: shoulders are
+// physically above hips in every rep of every exercise this feature tracks,
+// so whichever sign makes shoulderY < hipY (matching the image-space
+// convention every downstream formula in bar-tracking.ts/jump-tracking.ts
+// already assumes) is correct for this device/model. Returns null when the
+// shoulder/hip gap is too small to trust (e.g. bent fully over), so the
+// caller should keep its last confident reading rather than latch onto noise.
+export function worldVerticalSign(worldLandmarks: Landmark[]): 1 | -1 | null {
+  const lShoulder = worldLandmarks[POSE_LANDMARKS.LEFT_SHOULDER];
+  const rShoulder = worldLandmarks[POSE_LANDMARKS.RIGHT_SHOULDER];
+  const lHip = worldLandmarks[POSE_LANDMARKS.LEFT_HIP];
+  const rHip = worldLandmarks[POSE_LANDMARKS.RIGHT_HIP];
+  if (!visible(lShoulder) || !visible(rShoulder) || !visible(lHip) || !visible(rHip)) return null;
   const shoulderY = (lShoulder.y + rShoulder.y) / 2;
-  const ankleY = (lAnkle.y + rAnkle.y) / 2;
-  const pixelSpan = Math.abs(ankleY - shoulderY) * frameHeight;
-  if (pixelSpan <= 0) return null;
-  const expectedMeters = (athleteHeightCm / 100) * SHOULDER_HEIGHT_RATIO;
-  return pixelSpan / expectedMeters;
+  const hipY = (lHip.y + rHip.y) / 2;
+  if (Math.abs(shoulderY - hipY) < 0.05) return null;
+  return shoulderY < hipY ? 1 : -1;
 }
 
 // Signed tilt of the wrist-to-wrist LINE from horizontal, in degrees -- 0 is
@@ -175,33 +174,21 @@ export function computeBarTiltDegrees(landmarks: NormalizedLandmark[]): number |
 // (it barely moves vertically until push-off, unlike the hip or knee,
 // which shift throughout the crouch). See jump-tracking.ts for how this
 // point's trace becomes flight time, height, and distance.
-export function deriveJumpPoint(
-  landmarks: NormalizedLandmark[],
-  frameWidth: number,
-  frameHeight: number,
-): { x: number; y: number } | null {
-  const left = landmarks[POSE_LANDMARKS.LEFT_ANKLE];
-  const right = landmarks[POSE_LANDMARKS.RIGHT_ANKLE];
-  const points = [left, right].filter(visible);
-  if (points.length === 0) return null;
-  const x = points.reduce((a, p) => a + p.x, 0) / points.length;
-  const y = points.reduce((a, p) => a + p.y, 0) / points.length;
-  return { x: x * frameWidth, y: y * frameHeight };
+export function deriveJumpPoint(worldLandmarks: Landmark[]): WorldPoint | null {
+  return averageWorldPoint([worldLandmarks[POSE_LANDMARKS.LEFT_ANKLE], worldLandmarks[POSE_LANDMARKS.RIGHT_ANKLE]]);
 }
 
-// Each wrist's own screen-space position, independent of deriveBarPoint's
+// Each wrist's own real-world position, independent of deriveBarPoint's
 // averaged midpoint -- lets the caller track left/right separately for an
 // asymmetry view instead of only the combined bar path.
 export function deriveWristPoints(
-  landmarks: NormalizedLandmark[],
-  frameWidth: number,
-  frameHeight: number,
-): { left: { x: number; y: number } | null; right: { x: number; y: number } | null } {
-  const left = landmarks[POSE_LANDMARKS.LEFT_WRIST];
-  const right = landmarks[POSE_LANDMARKS.RIGHT_WRIST];
+  worldLandmarks: Landmark[],
+): { left: WorldPoint | null; right: WorldPoint | null } {
+  const left = worldLandmarks[POSE_LANDMARKS.LEFT_WRIST];
+  const right = worldLandmarks[POSE_LANDMARKS.RIGHT_WRIST];
   return {
-    left: visible(left) ? { x: left.x * frameWidth, y: left.y * frameHeight } : null,
-    right: visible(right) ? { x: right.x * frameWidth, y: right.y * frameHeight } : null,
+    left: visible(left) ? { x: left.x, y: left.y, z: left.z } : null,
+    right: visible(right) ? { x: right.x, y: right.y, z: right.z } : null,
   };
 }
 
