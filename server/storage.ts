@@ -210,6 +210,25 @@ const AGE_APPROPRIATE_TRAINING_PRINCIPLES = `- Chronological age is a proxy for 
 - Adolescents (roughly early-mid teens through the high-school years, before clear physical maturity): can train with real external load and structured progression, but the method still differs from an adult's -- use the repetition method (submaximal loads, roughly 60-85% of 1RM, 6-15 reps) as the primary way to build strength, not the max-effort method; avoid programming a true 1-3 rep max/near-max attempt as a lift's primary intent. If the request describes an athlete visibly in a rapid-growth phase (recent large height/weight jump, "growing fast," coordination suddenly off), lean the program further toward technique and mobility work and lighten high-impact/max-intensity plyometrics for that block -- rapid limb-length changes are exactly when overuse and growth-related injuries cluster.
 - Adults (physically mature): the max-effort/dynamic-effort and percentage-of-training-max methods above apply as normal, with no additional restriction from this section.`;
 
+// Combat sports (wrestling, boxing, MMA, and grappling arts like BJJ/judo)
+// have a strength-and-conditioning profile that's genuinely different from a
+// field/court sport, not just the same principles with different exercise
+// names. Energy-system guidance follows Joel Jamieson's conditioning model
+// for combat athletes (build the aerobic base first -- it's what drives
+// recovery between exchanges/rounds -- then layer anaerobic alactic power on
+// top of it, rather than training exclusively "hard"). The
+// strength-supports-skill periodization point and the weight-cutting caution
+// are both standard, well-documented combat-sports coaching positions; the
+// weight-cutting language is deliberately written to compose with
+// AGE_APPROPRIATE_TRAINING_PRINCIPLES above, since the NSCA and NATA both
+// specifically warn against rapid weight loss in adolescent wrestlers.
+const COMBAT_SPORTS_TRAINING_PRINCIPLES = `- Combat sports need two energy systems most sport programs don't stack together: a strong aerobic base (it's what lets an athlete recover between rounds/exchanges/scrambles, not just "cardio" for its own sake) and anaerobic alactic power (the explosive burst of a strike, shot, or scramble). Don't program conditioning as pure steady-state OR pure high-intensity intervals alone -- include both, with the aerobic base work as the larger volume share for an athlete who isn't already well-conditioned.
+- Striking power (punches, kicks) comes from hip-shoulder rotational transfer, not arm/shoulder strength -- the same rotational medicine-ball and landmine work already used for baseball/golf athletes (Medicine Ball Rotational Throw, Landmine Rotation, Pallof Press for the anti-rotation control that makes rotation repeatable) applies directly here and should be a staple, not an afterthought.
+- Grip strength and neck strength are sport-specific strength for wrestlers, BJJ, and judo athletes, not optional accessories -- grappling is won and lost in the grip and the clinch. Include carries (Farmer's/Suitcase Carry) and direct neck work (Neck Bridge, Neck Flexion/Lateral Flexion Hold) as a standing part of a grappler's program, not something to cut first when time is short.
+- Explosive hip and leg power (the same triple-extension quality trained by box jumps and broad jumps) is what drives a shot or a level change on a takedown -- keep jump/explosive work in a grappler's program year-round rather than treating it as an off-season-only quality.
+- Strength work exists to support this athlete's skill performance, not to maximize a single lift for its own sake -- unlike a powerlifter, a fighter close to a competition date needs strength volume tapering DOWN as technical sparring/live rounds ramp up, not a peaking max-effort block competing with that sparring load for recovery.
+- Never program or assume a rapid weight-cut (dehydration-based "making weight") protocol -- this is standard practice in wrestling/boxing/MMA culture but both the NSCA and NATA specifically warn against it, especially for adolescent athletes, due to documented harm to growth, cognition, and performance. If a request describes needing to "cut weight" for an athlete who isn't clearly an adult, say in your summary that this should be handled by a coach/medical professional, not programmed here.`;
+
 // A program day's calendar date is normally the rigid "every 7 days from
 // startDate" grid -- but a coach can move any individual occurrence (game,
 // travel, extra rest) via dateOverrides, keyed by program_day_id. Falls
@@ -1787,7 +1806,10 @@ Programming quality rules:
 ${PROGRAM_DESIGN_PRINCIPLES}
 
 Age-appropriate training rules -- apply whenever the request gives any signal the athlete isn't a physically mature adult (a stated age, grade level, "youth," "middle schooler," "13U," etc.):
-${AGE_APPROPRIATE_TRAINING_PRINCIPLES}${adminGuidelines ? `\n\nAdditional guidelines this platform's admin has taught you -- follow these too:\n${adminGuidelines}` : ""}`;
+${AGE_APPROPRIATE_TRAINING_PRINCIPLES}
+
+Combat-sport rules -- apply whenever the request signals wrestling, boxing, MMA, or a grappling art like BJJ/judo/Muay Thai (a named sport, "fighter," "grappler," "striker," an upcoming "weigh-in," etc.):
+${COMBAT_SPORTS_TRAINING_PRINCIPLES}${adminGuidelines ? `\n\nAdditional guidelines this platform's admin has taught you -- follow these too:\n${adminGuidelines}` : ""}`;
 
     const userPrompt = `Coach's request: "${prompt}"
 
@@ -2060,7 +2082,10 @@ Programming quality rules:
 ${PROGRAM_DESIGN_PRINCIPLES}
 
 Age-appropriate training rules -- apply based on the athlete's age given below:
-${AGE_APPROPRIATE_TRAINING_PRINCIPLES}${adminGuidelines ? `\n\nAdditional guidelines this platform's admin has taught you -- follow these too:\n${adminGuidelines}` : ""}`;
+${AGE_APPROPRIATE_TRAINING_PRINCIPLES}
+
+Combat-sport rules -- apply whenever the conversation signals wrestling, boxing, MMA, or a grappling art like BJJ/judo/Muay Thai (a named sport, "fighter," "grappler," "striker," an upcoming "weigh-in," etc.):
+${COMBAT_SPORTS_TRAINING_PRINCIPLES}${adminGuidelines ? `\n\nAdditional guidelines this platform's admin has taught you -- follow these too:\n${adminGuidelines}` : ""}`;
 
     const historyText = history
       .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`)
