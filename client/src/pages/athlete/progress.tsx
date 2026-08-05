@@ -323,6 +323,8 @@ export default function AthleteProgress() {
                 nutritionUrl="/api/athlete/nutrition"
                 editable={isFreeAgent}
                 askUrl={isFreeAgent ? "/api/athlete/nutrition/ask" : undefined}
+                foodLogUrl="/api/athlete/food-log"
+                foodLogEditable
               />
             </CardContent>
           </Card>

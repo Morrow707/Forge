@@ -36,7 +36,12 @@ export function NutritionDialog({
             real nutritionist's plan. The app's AI never generates these numbers.
           </DialogDescription>
         </DialogHeader>
-        <NutritionPanel nutritionUrl={nutritionUrl} editable />
+        <NutritionPanel
+          nutritionUrl={nutritionUrl}
+          editable
+          foodLogUrl={nutritionUrl.replace(/\/nutrition$/, "/food-log")}
+          foodLogEditable={false}
+        />
       </DialogContent>
     </Dialog>
   );

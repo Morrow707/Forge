@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { Sparkles, Apple } from "lucide-react";
+import { FoodLogPanel } from "@/components/food-log-panel";
 
 type NutritionTargets = {
   caloriesKcal: number | null;
@@ -77,10 +78,20 @@ export function NutritionPanel({
   nutritionUrl,
   editable,
   askUrl,
+  foodLogUrl,
+  foodLogEditable,
 }: {
   nutritionUrl: string;
   editable: boolean;
   askUrl?: string;
+  /** Distinct from `editable` above: `editable` is about the *targets*
+   * (a coach or a Free Agent sets those), while food-log editability is
+   * about whether the current viewer IS the athlete -- a coach can view a
+   * coached athlete's food log (foodLogEditable=false) while that same
+   * athlete edits their own targets nowhere (editable=false) but still
+   * logs their own food (foodLogEditable=true) on their own page. */
+  foodLogUrl?: string;
+  foodLogEditable?: boolean;
 }) {
   const qc = useQueryClient();
   const [form, setForm] = useState<FormState>(emptyForm());
@@ -257,6 +268,23 @@ export function NutritionPanel({
             </div>
           )}
         </div>
+      )}
+
+      {foodLogUrl && (
+        <FoodLogPanel
+          fetchUrl={foodLogUrl}
+          editable={!!foodLogEditable}
+          targets={
+            data
+              ? {
+                  caloriesKcal: data.caloriesKcal,
+                  proteinG: data.proteinG,
+                  carbsG: data.carbsG,
+                  fatG: data.fatG,
+                }
+              : null
+          }
+        />
       )}
     </div>
   );

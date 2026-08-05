@@ -36,6 +36,7 @@ import {
   aiKnowledge,
   nutritionKnowledgeMessages,
   nutritionKnowledge,
+  foodLogEntries,
   type InsertUser,
 } from "@shared/schema";
 import type {
@@ -55,7 +56,9 @@ import type {
   CreateGoalInput,
   AiKnowledgeMessage,
   NutritionKnowledgeMessage,
+  CreateFoodLogEntryInput,
 } from "@shared/schema";
+import { lookupBarcode, searchFoodsByName } from "./food-lookup";
 import { TESTING_METRICS, testingMetricLowerIsBetter } from "@shared/testing-metrics";
 import { computeReadiness } from "@shared/wellness";
 import { buildAcwrSeries, type DailyLoad, type AcwrPoint } from "@shared/load";
@@ -801,6 +804,58 @@ export const storage = {
       .values({ athleteId, updatedByUserId, ...input })
       .returning();
     return row;
+  },
+
+  // ---------- Food log ----------
+  // What an athlete actually ate, logged against the nutritionTargets plan
+  // above -- barcode-scan/search results (see server/food-lookup.ts) or
+  // fully manual entries, never AI-generated. Always free for every
+  // athlete, coached or Free Agent (see routes.ts): this is data entry, not
+  // an AI capability, same as manual program building.
+  async getFoodLogForDate(athleteId: number, date: string) {
+    const entries = await db.query.foodLogEntries.findMany({
+      where: and(eq(foodLogEntries.athleteId, athleteId), eq(foodLogEntries.date, date)),
+      orderBy: asc(foodLogEntries.loggedAt),
+    });
+    const totals = entries.reduce(
+      (acc, e) => ({
+        caloriesKcal: acc.caloriesKcal + (e.caloriesKcal ?? 0),
+        proteinG: acc.proteinG + (e.proteinG ?? 0),
+        carbsG: acc.carbsG + (e.carbsG ?? 0),
+        fatG: acc.fatG + (e.fatG ?? 0),
+        fiberG: acc.fiberG + (e.fiberG ?? 0),
+        sodiumMg: acc.sodiumMg + (e.sodiumMg ?? 0),
+      }),
+      { caloriesKcal: 0, proteinG: 0, carbsG: 0, fatG: 0, fiberG: 0, sodiumMg: 0 },
+    );
+    return { entries, totals };
+  },
+
+  async addFoodLogEntry(athleteId: number, input: CreateFoodLogEntryInput) {
+    const [row] = await db
+      .insert(foodLogEntries)
+      .values({ athleteId, ...input })
+      .returning();
+    return row;
+  },
+
+  async deleteFoodLogEntry(athleteId: number, id: number) {
+    const [row] = await db
+      .delete(foodLogEntries)
+      .where(and(eq(foodLogEntries.id, id), eq(foodLogEntries.athleteId, athleteId)))
+      .returning();
+    return !!row;
+  },
+
+  // Thin pass-throughs to food-lookup.ts -- kept here rather than called
+  // directly from routes.ts for the same "routes stay thin, storage owns
+  // external calls" split as askClaude/askClaudeVision above.
+  async lookupFoodBarcode(barcode: string) {
+    return lookupBarcode(barcode);
+  },
+
+  async searchFoods(query: string) {
+    return searchFoodsByName(query);
   },
 
   // ---------- Testing/combine history ----------

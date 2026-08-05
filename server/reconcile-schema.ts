@@ -72,6 +72,10 @@ DO $$ BEGIN
   CREATE TYPE "form_check_flag" AS ENUM ('best', 'worst');
 EXCEPTION WHEN duplicate_object THEN null; END $$;
 
+DO $$ BEGIN
+  CREATE TYPE "food_log_source" AS ENUM ('barcode', 'search', 'manual');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
 -- Owned by connect-pg-simple at runtime; declared here only so it's never
 -- mistaken for an "unclaimed" table by anything diffing live schema state.
 CREATE TABLE IF NOT EXISTS "session" (
@@ -470,6 +474,25 @@ CREATE TABLE IF NOT EXISTS "nutrition_targets" (
   "updated_at" timestamp NOT NULL DEFAULT now()
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "nutrition_targets_athlete_idx" ON "nutrition_targets" ("athlete_id");
+
+CREATE TABLE IF NOT EXISTS "food_log_entries" (
+  "id" serial PRIMARY KEY,
+  "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "date" date NOT NULL,
+  "description" text NOT NULL,
+  "brand" text,
+  "serving_description" text,
+  "calories_kcal" integer,
+  "protein_g" real,
+  "carbs_g" real,
+  "fat_g" real,
+  "fiber_g" real,
+  "sodium_mg" real,
+  "source" food_log_source NOT NULL,
+  "barcode" text,
+  "logged_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "food_log_entries_athlete_date_idx" ON "food_log_entries" ("athlete_id", "date");
 
 CREATE TABLE IF NOT EXISTS "testing_results" (
   "id" serial PRIMARY KEY,
