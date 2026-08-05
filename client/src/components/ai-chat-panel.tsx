@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { apiRequest, getJson, ApiError } from "@/lib/queryClient";
 import { format, parseISO } from "date-fns";
 import { toast } from "sonner";
-import { Send, Sparkles, Eye, Lock } from "lucide-react";
+import { Send, Sparkles, Eye, Lock, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type ChatMessage = {
@@ -130,6 +130,16 @@ export function AiChatPanel({
               </div>
             </div>
           ))}
+          {postUrl && send.isPending && (
+            <div className="flex justify-start">
+              <div className="max-w-[85%] rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
+                <span className="flex items-center gap-1.5 text-muted-foreground">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Thinking...
+                </span>
+              </div>
+            </div>
+          )}
           <div ref={bottomRef} />
         </div>
 

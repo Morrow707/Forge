@@ -12,7 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { apiRequest, getJson } from "@/lib/queryClient";
-import { Users, Gauge, Crown, CalendarDays, TrendingUp } from "lucide-react";
+import { Users, Gauge, Crown, CalendarDays, TrendingUp, Activity } from "lucide-react";
 import {
   LineChart,
   Line,
@@ -28,6 +28,8 @@ import {
 import { format, parseISO, startOfWeek } from "date-fns";
 import { cn } from "@/lib/utils";
 import { TESTING_METRICS, type TestingMetricKey } from "@shared/testing-metrics";
+import { ACWR_RISK_LABEL, type AcwrRiskLevel } from "@shared/load";
+import { ACWR_RISK_CLASSNAME } from "@/components/acwr-history-dialog";
 
 type RosterEntry = { id: number; name: string; email: string };
 type TrackedExercise = { id: number; name: string };
@@ -258,47 +260,51 @@ export default function CoachAnalytics() {
       )}
 
       {athleteId && !exerciseId && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Sessions</CardTitle>
-            <CardDescription>
-              Every exercise this athlete has logged. Pick one above for full history, PRs, and
-              (if tracked) bar speed and path.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {!overviewLoading && overview.length === 0 && (
-              <div className="flex flex-col items-center gap-3 py-10 text-center">
-                <CalendarDays className="h-10 w-10 text-muted-foreground" />
-                <p className="text-muted-foreground">No workouts logged yet.</p>
-              </div>
-            )}
-            <div className="space-y-2">
-              {overview.map((s) => (
-                <div
-                  key={s.date}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border p-3"
-                >
-                  <div>
-                    <p className="text-sm font-semibold">
-                      {format(parseISO(s.date), "EEE, MMM d")} — {s.dayTitle}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {s.exercises.join(", ") || "No exercises logged"}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-3 text-xs text-muted-foreground">
-                    <span>{s.totalReps} reps</span>
-                    {s.totalVolume > 0 && <span>{s.totalVolume.toLocaleString()} vol.</span>}
-                    <Badge variant={s.completed ? "success" : "outline"}>
-                      {s.completed ? "Completed" : "In progress"}
-                    </Badge>
-                  </div>
+        <div className="space-y-4">
+          <AcwrTrendCard athleteId={athleteId} />
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Recent Sessions</CardTitle>
+              <CardDescription>
+                Every exercise this athlete has logged. Pick one above for full history, PRs, and
+                (if tracked) bar speed and path.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {!overviewLoading && overview.length === 0 && (
+                <div className="flex flex-col items-center gap-3 py-10 text-center">
+                  <CalendarDays className="h-10 w-10 text-muted-foreground" />
+                  <p className="text-muted-foreground">No workouts logged yet.</p>
                 </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+              )}
+              <div className="space-y-2">
+                {overview.map((s) => (
+                  <div
+                    key={s.date}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border p-3"
+                  >
+                    <div>
+                      <p className="text-sm font-semibold">
+                        {format(parseISO(s.date), "EEE, MMM d")} — {s.dayTitle}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {s.exercises.join(", ") || "No exercises logged"}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-3 text-xs text-muted-foreground">
+                      <span>{s.totalReps} reps</span>
+                      {s.totalVolume > 0 && <span>{s.totalVolume.toLocaleString()} vol.</span>}
+                      <Badge variant={s.completed ? "success" : "outline"}>
+                        {s.completed ? "Completed" : "In progress"}
+                      </Badge>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       {athleteId && exerciseId && !isLoading && chartData.length === 0 && (
@@ -971,6 +977,106 @@ export default function CoachAnalytics() {
         </TabsContent>
       </Tabs>
     </AppShell>
+  );
+}
+
+type AcwrPoint = {
+  date: string;
+  acuteLoad: number;
+  chronicLoad: number;
+  ratio: number | null;
+  level: AcwrRiskLevel;
+};
+
+/** Acute:chronic training-load ratio for the selected athlete -- a general
+ * injury-risk-management signal (see shared/load.ts), not exercise-specific,
+ * so it lives at the whole-athlete overview level rather than inside a
+ * single exercise's chart. Absent/flat when there isn't enough logged
+ * training yet for a real ratio, same convention as the rest of this page. */
+function AcwrTrendCard({ athleteId }: { athleteId: string }) {
+  const { data: history = [], isLoading } = useQuery<AcwrPoint[]>({
+    queryKey: ["/api/coach/roster", athleteId, "acwr-history"],
+    queryFn: () => getJson(`/api/coach/roster/${athleteId}/acwr-history`),
+    enabled: !!athleteId,
+  });
+
+  const chartData = history.map((p) => ({
+    label: format(parseISO(p.date), "MMM d"),
+    acute: Math.round(p.acuteLoad),
+    chronic: Math.round(p.chronicLoad),
+  }));
+  const latest = history[history.length - 1];
+  const hasEnoughData = history.some((p) => p.acuteLoad > 0 || p.chronicLoad > 0);
+
+  if (isLoading) {
+    return <div className="h-24 animate-pulse rounded-md bg-surface" />;
+  }
+  if (!hasEnoughData) return null;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Activity className="h-5 w-5" />
+          Training Load (ACWR)
+        </CardTitle>
+        <CardDescription>
+          Acute (7-day) vs. chronic (28-day average) load, from logged volume. A general
+          load-management guideline, not a medical diagnosis.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {latest?.ratio != null && (
+          <div className="flex items-center justify-between rounded-md border border-border p-3 text-sm">
+            <span className="text-muted-foreground">Current ratio</span>
+            <div className="flex items-center gap-2">
+              <span className="font-semibold">{latest.ratio.toFixed(2)}</span>
+              <span
+                className={cn(
+                  "rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                  ACWR_RISK_CLASSNAME[latest.level],
+                )}
+              >
+                {ACWR_RISK_LABEL[latest.level]}
+              </span>
+            </div>
+          </div>
+        )}
+        <div className="h-56">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={chartData} margin={{ left: 4, right: 12 }}>
+              <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+              <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 11 }} width={40} />
+              <Tooltip
+                contentStyle={{
+                  background: "hsl(var(--card))",
+                  border: "1px solid hsl(var(--border))",
+                }}
+              />
+              <Legend wrapperStyle={{ fontSize: 12 }} />
+              <Line
+                type="monotone"
+                dataKey="acute"
+                name="Acute (7d)"
+                stroke="hsl(var(--primary))"
+                strokeWidth={2}
+                dot={false}
+              />
+              <Line
+                type="monotone"
+                dataKey="chronic"
+                name="Chronic (28d avg)"
+                stroke="hsl(var(--muted-foreground))"
+                strokeWidth={2}
+                strokeDasharray="4 3"
+                dot={false}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

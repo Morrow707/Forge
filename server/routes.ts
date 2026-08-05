@@ -955,6 +955,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
+  // Current acute:chronic workload ratio for every roster athlete with any
+  // logged training in the last 28 days -- an athlete with nothing logged
+  // is simply absent, same "absent means no data yet" convention as
+  // roster-wellness above, not shown as flagged.
+  app.get("/api/coach/roster-acwr", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const rows = await storage.getRosterAcwrSummary(user.id);
+    res.json(rows);
+  });
+
+  app.get(
+    "/api/coach/roster/:athleteId/acwr-history",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      const onRoster = await storage.getRosterAthleteForCoach(user.id, athleteId);
+      if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
+      const history = await storage.getAcwrHistoryForAthlete(athleteId);
+      res.json(history);
+    },
+  );
+
   // Read-only -- the AI chat coach is never a private, unsupervised channel:
   // a coach can always read the full transcript of any athlete on their
   // roster, the same way they can read workout comments.
