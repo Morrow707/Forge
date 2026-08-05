@@ -12,6 +12,7 @@ export default function AdminAiKnowledge() {
       <AdminTeachChatPanel
         fetchUrl="/api/admin/ai-knowledge"
         postUrl="/api/admin/ai-knowledge/chat"
+        applyUrl="/api/admin/ai-knowledge/apply"
         chatTitle="Teach the AI Program Builder"
         chatDescription="Describe programming principles, corrections, or preferences -- every AI-generated program on this platform (every coach and athlete) will follow them from now on."
         emptyStateHint={'Nothing taught yet -- try something like "Bulgarian split squats are a secondary lift on leg day, not a true accessory -- sequence them right after the main squat or deadlift."'}

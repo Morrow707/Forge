@@ -40,6 +40,7 @@ import {
   submitWellnessCheckinSchema,
   sendProgramChatMessageSchema,
   sendAiKnowledgeChatMessageSchema,
+  applyKnowledgeProposalSchema,
   substituteExerciseSchema,
   formFaultSchema,
   updateNutritionTargetsSchema,
@@ -648,6 +649,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.status(201).json(result);
   });
 
+  // Commits a guidelines rewrite the chat above proposed -- the admin has
+  // seen the diff client-side and is choosing to apply it. Nothing reaches
+  // aiKnowledge (read platform-wide by every program-generation prompt)
+  // without this explicit step.
+  app.post("/api/admin/ai-knowledge/apply", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = applyKnowledgeProposalSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "Invalid guidelines" });
+    const result = await storage.applyAiKnowledgeProposal(user.id, parsed.data.guidelines);
+    res.status(201).json(result);
+  });
+
   // Same admin-teaching pattern, for the nutrition education AI
   // (answerNutritionQuestion) instead of the program builder -- see
   // storage.getNutritionKnowledgeGuidelines, read by every nutrition Q&A
@@ -662,6 +675,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const parsed = sendAiKnowledgeChatMessageSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: "Invalid message" });
     const result = await storage.updateNutritionKnowledgeFromChat(user.id, parsed.data.content);
+    res.status(201).json(result);
+  });
+
+  // Commits a guidelines rewrite the chat above proposed -- see the ai-knowledge
+  // apply route's comment; same pattern, for nutritionKnowledge instead.
+  app.post("/api/admin/nutrition-knowledge/apply", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = applyKnowledgeProposalSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "Invalid guidelines" });
+    const result = await storage.applyNutritionKnowledgeProposal(user.id, parsed.data.guidelines);
     res.status(201).json(result);
   });
 
