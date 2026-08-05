@@ -63,10 +63,10 @@ export default function AthleteDashboard() {
           was a redundant, confusing double empty-state. No coach doesn't
           mean no path forward though -- Free Agent status is purely derived
           (zero rows in coachAthletes for this athlete, nothing stored).
-          The AI program builder and AI form-check are a paid upgrade for a
-          Free Agent (see requirePaidAiAccess in routes.ts, always false
+          The full AI program builder/chat/form-check are a paid upgrade for
+          a Free Agent (see requirePaidAiAccess in routes.ts, always false
           until real billing exists) -- manual programs, Forge templates,
-          exercise substitution, and the AI chat coach stay free either way. */}
+          and exercise substitution stay free either way. */}
       {!coachesLoading && coaches.length === 0 && (
         <Card className="mt-6">
           <CardContent className="flex flex-col items-center gap-3 py-14 text-center">
@@ -76,8 +76,8 @@ export default function AthleteDashboard() {
             </Badge>
             <p className="max-w-sm text-muted-foreground">
               You don't have a coach yet. Build your own program by hand or start from a Forge
-              template, swap out any exercise that doesn't work for you, and ask the AI chat coach
-              anything -- conversational AI program building and AI form-check are a paid upgrade,
+              template, and swap out any exercise that doesn't work for you -- the full AI coach
+              (conversational program building, form-check, and AI chat) is a paid upgrade,
               coming soon.
             </p>
             <Button asChild>
