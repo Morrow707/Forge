@@ -21,8 +21,8 @@ export type JumpRep = {
   // Two independent estimates of the same thing, kept separate rather than
   // averaged: flight-time-derived height is the standard video-based jump
   // testing method (what apps like My Jump validate against force plates),
-  // while peak displacement is a simpler cross-check using the same
-  // pixelsPerMeter calibration bar tracking already relies on.
+  // while peak displacement is a simpler cross-check straight off the
+  // world-space ankle trace.
   jumpHeightCm: number;
   peakHeightCm: number;
   // Null when the camera axis shows negligible horizontal travel (a
@@ -56,18 +56,17 @@ export type JumpSetMetrics = {
 // kinematics, not force or power.
 export function summarizeJumpSet(
   rawPoints: TrackedPoint[],
-  pixelsPerMeter: number,
   minFlightAmplitudeCm = 8,
 ): JumpSetMetrics | null {
-  if (rawPoints.length < 6 || pixelsPerMeter <= 0) return null;
+  if (rawPoints.length < 6) return null;
 
   const ySmoothed = movingAverage(rawPoints.map((p) => p.y), SMOOTHING_WINDOW);
-  const minAmplitudePx = (minFlightAmplitudeCm / 100) * pixelsPerMeter;
+  const minAmplitudeM = minFlightAmplitudeCm / 100;
   // A fraction of the minimum flight amplitude, used both as the
   // takeoff/landing trigger threshold and as the jitter tolerance the
   // baseline is allowed to drift by while grounded -- small enough to catch
   // a real push-off promptly, large enough to ignore pose-noise sway.
-  const triggerPx = minAmplitudePx * 0.3;
+  const triggerM = minAmplitudeM * 0.3;
 
   const reps: JumpRep[] = [];
   let previousLandingT: number | null = null;
@@ -82,14 +81,14 @@ export function summarizeJumpSet(
 
   for (let i = 1; i < ySmoothed.length; i++) {
     if (state === "grounded") {
-      if (Math.abs(ySmoothed[i] - baseline) < triggerPx) {
+      if (Math.abs(ySmoothed[i] - baseline) < triggerM) {
         // Still standing -- let the baseline track slow drift/jitter so a
         // long stand between jumps doesn't accumulate a false takeoff.
         baseline = ySmoothed[i];
         baselineIdx = i;
         continue;
       }
-      if (baseline - ySmoothed[i] >= triggerPx) {
+      if (baseline - ySmoothed[i] >= triggerM) {
         state = "airborne";
         takeoffIdx = baselineIdx; // last confirmed-grounded frame, not this one
         peakIdx = i;
@@ -111,14 +110,14 @@ export function summarizeJumpSet(
         if (flightSeconds > 0) {
           const jumpHeightCm = (GRAVITY_MPS2 * flightSeconds * flightSeconds * 100) / 8;
 
-          const peakHeightCm = Math.max(0, ((baseline - ySmoothed[peakIdx]) / pixelsPerMeter) * 100);
+          const peakHeightCm = Math.max(0, (baseline - ySmoothed[peakIdx]) * 100);
 
           // Below ~5cm is just normal in-place sway, not an intentional
           // broad jump -- reporting a noisy "distance" on a vertical-only
           // jump would be misleading, so this stays null rather than a
           // small stray number.
-          const horizontalPx = Math.abs(rawPoints[landingIdx].x - rawPoints[takeoffIdx].x);
-          const horizontalDistanceCmRaw = (horizontalPx / pixelsPerMeter) * 100;
+          const horizontalM = Math.abs(rawPoints[landingIdx].x - rawPoints[takeoffIdx].x);
+          const horizontalDistanceCmRaw = horizontalM * 100;
           const horizontalDistanceCm =
             horizontalDistanceCmRaw >= 5 ? Math.round(horizontalDistanceCmRaw * 10) / 10 : null;
 
@@ -168,7 +167,7 @@ export function summarizeJumpSet(
     avgGroundContactSeconds,
     reactiveStrengthIndex,
     repBreakdown: reps,
-    pathTrace: buildPathTrace(rawPoints, pixelsPerMeter, { x: rawPoints[0].x, y: rawPoints[0].y }),
+    pathTrace: buildPathTrace(rawPoints, { x: rawPoints[0].x, y: rawPoints[0].y }),
     formFaults: [],
   };
 }

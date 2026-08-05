@@ -1194,7 +1194,6 @@ export function WorkoutPage({
                         linked={currentPage.kind === "exercise" && currentPage.items.length > 1}
                         badgeLabel={currentPage.labels[item.key]}
                         unit={unit}
-                        athleteHeightCm={user?.heightIn ? user.heightIn * 2.54 : null}
                         assignmentId={Number(assignmentId)}
                         programDayId={Number(programDayId)}
                         apiBase={apiBase}
@@ -1290,7 +1289,6 @@ function ExerciseLogContent({
   linked,
   badgeLabel,
   unit,
-  athleteHeightCm,
   assignmentId,
   programDayId,
   apiBase,
@@ -1307,10 +1305,6 @@ function ExerciseLogContent({
   linked: boolean;
   badgeLabel: string;
   unit: "lbs" | "kg";
-  // The athlete's own height, converted to cm -- lets the camera tracker
-  // auto-calibrate from the T-pose it already requires instead of a manual
-  // tap-two-points step. Null when the profile has no height on file.
-  athleteHeightCm: number | null;
   assignmentId: number;
   programDayId: number;
   apiBase: string;
@@ -1846,7 +1840,6 @@ function ExerciseLogContent({
               mode={item.trackingLevel}
               exerciseName={item.exerciseName}
               movementType={item.movementType}
-              athleteHeightCm={athleteHeightCm}
               targetReps={parseTargetReps(item.prescribedReps)}
               loadKg={loadKg}
               onCapture={(metrics: RepMetrics | JumpSetMetrics) => {
