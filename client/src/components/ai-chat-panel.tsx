@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { apiRequest, getJson, ApiError } from "@/lib/queryClient";
 import { format, parseISO } from "date-fns";
 import { toast } from "sonner";
-import { Send, Sparkles, Eye, Lock, Loader2 } from "lucide-react";
+import { Send, Sparkles, Eye, Lock, Loader2, Copy, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type ChatMessage = {
@@ -32,7 +32,15 @@ export function AiChatPanel({
 }) {
   const qc = useQueryClient();
   const [content, setContent] = useState("");
+  const [copiedId, setCopiedId] = useState<number | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  function handleCopy(message: ChatMessage) {
+    navigator.clipboard.writeText(message.content);
+    toast.success("Message copied");
+    setCopiedId(message.id);
+    setTimeout(() => setCopiedId((current) => (current === message.id ? null : current)), 1500);
+  }
 
   const { data: messages, isLoading, error } = useQuery<ChatMessage[]>({
     queryKey: [fetchUrl],
@@ -112,12 +120,28 @@ export function AiChatPanel({
             >
               <div
                 className={cn(
-                  "max-w-[85%] rounded-lg px-3 py-2 text-sm",
+                  "group relative max-w-[85%] rounded-lg px-3 py-2 pr-7 text-sm",
                   m.role === "athlete"
                     ? "bg-primary text-primary-foreground"
                     : "border border-primary/30 bg-primary/5",
                 )}
               >
+                <button
+                  type="button"
+                  onClick={() => handleCopy(m)}
+                  aria-label="Copy message"
+                  title="Copy"
+                  className={cn(
+                    "absolute right-1.5 top-1.5 rounded p-0.5 opacity-60 transition-opacity hover:opacity-100",
+                    m.role === "athlete" ? "text-primary-foreground" : "text-muted-foreground",
+                  )}
+                >
+                  {copiedId === m.id ? (
+                    <Check className="h-3.5 w-3.5" />
+                  ) : (
+                    <Copy className="h-3.5 w-3.5" />
+                  )}
+                </button>
                 <p className="whitespace-pre-wrap">{m.content}</p>
                 <p
                   className={cn(
