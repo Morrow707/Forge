@@ -49,6 +49,10 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN null; END $$;
 
 DO $$ BEGIN
+  CREATE TYPE "season_phase" AS ENUM ('off_season', 'pre_season', 'in_season', 'taper');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+DO $$ BEGIN
   CREATE TYPE "goal_type" AS ENUM ('exercise', 'testing');
 EXCEPTION WHEN duplicate_object THEN null; END $$;
 
@@ -101,6 +105,7 @@ CREATE TABLE IF NOT EXISTS "users" (
   "body_weight_lbs" real,
   "sport" text,
   "position" text,
+  "season_phase" season_phase,
   "forty_yard_dash" real,
   "vertical_jump_in" real,
   "broad_jump_in" real,
@@ -121,6 +126,7 @@ ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "height_in" integer;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "body_weight_lbs" real;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "sport" text;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "position" text;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "season_phase" season_phase;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "forty_yard_dash" real;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "vertical_jump_in" real;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "broad_jump_in" real;

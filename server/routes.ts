@@ -351,7 +351,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
-    const draft = await storage.generateProgramDraft(user.id, parsed.data.prompt);
+    // Self-service: this account is both the "coach" building it and the
+    // athlete it's for, so its own profile (sport/position/age/season) is
+    // exactly what the AI should read -- always safe since it's their own id.
+    const draft = await storage.generateProgramDraft(user.id, parsed.data.prompt, user.id);
     res.json(draft);
   });
 
@@ -697,7 +700,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
-    const draft = await storage.generateProgramDraft(user.id, parsed.data.prompt);
+    // athleteId is optional and only ever read from inside generateProgramDraft
+    // if it's the caller's own id or a real roster relationship -- an
+    // unrelated id just falls back to no profile, never an error, since
+    // this is best-effort personalization, not an authorization boundary
+    // guarding sensitive data.
+    const draft = await storage.generateProgramDraft(
+      user.id,
+      parsed.data.prompt,
+      parsed.data.athleteId,
+    );
     res.json(draft);
   });
 
@@ -1910,7 +1922,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!parsed.success) {
         return res.status(400).json({ message: parsed.error.issues[0]?.message });
       }
-      const draft = await storage.generateProgramDraft(user.id, parsed.data.prompt);
+      const draft = await storage.generateProgramDraft(user.id, parsed.data.prompt, user.id);
       res.json(draft);
     },
   );
