@@ -152,7 +152,7 @@ async function main() {
         equipment: "Bodyweight",
         movementType: "Squat",
         laterality: "bilateral" as const,
-        sports: ["Volleyball", "Basketball", "Track & Field"],
+        sports: ["Volleyball", "Basketball", "Track & Field", "Wrestling", "MMA"],
         instructions: "Explosive triple extension, soft landing.",
       },
       {
@@ -292,7 +292,7 @@ async function main() {
         equipment: "Bodyweight",
         movementType: "Hinge",
         laterality: "bilateral" as const,
-        sports: ["Track & Field", "Football", "Volleyball", "Basketball"],
+        sports: ["Track & Field", "Football", "Volleyball", "Basketball", "Wrestling", "MMA"],
         instructions: "Load hips back, swing arms, jump for maximum distance, stick the landing.",
       },
       {
@@ -346,7 +346,7 @@ async function main() {
         equipment: "Bodyweight",
         movementType: "Lunge",
         laterality: "unilateral" as const,
-        sports: ["Soccer", "Ice Hockey", "Basketball", "Wrestling"],
+        sports: ["Soccer", "Ice Hockey", "Basketball", "Wrestling", "MMA", "Martial Arts"],
         instructions: "Wide stance, sit into one hip keeping the other leg straight, chest tall.",
       },
       {
@@ -407,7 +407,7 @@ async function main() {
         equipment: "Dumbbell",
         movementType: "Carry",
         laterality: "bilateral" as const,
-        sports: ["Wrestling", "Football", "Track & Field"],
+        sports: ["Wrestling", "Football", "Track & Field", "MMA", "Martial Arts"],
         instructions: "Heavy dumbbells at sides, walk tall with a braced core for distance or time.",
       },
       {
@@ -478,6 +478,7 @@ async function main() {
         equipment: "Dumbbell",
         movementType: "Carry",
         laterality: "unilateral" as const,
+        sports: ["Wrestling", "MMA", "Martial Arts"],
         instructions: "One heavy dumbbell at your side, walk tall without leaning, resist tipping.",
       },
       {
@@ -498,7 +499,7 @@ async function main() {
         equipment: "Band",
         movementType: "Rotation",
         laterality: "unilateral" as const,
-        sports: ["Baseball", "Softball", "Golf", "Tennis", "Ice Hockey"],
+        sports: ["Baseball", "Softball", "Golf", "Tennis", "Ice Hockey", "Boxing", "MMA"],
         instructions: "Band anchored to your side, press straight out and resist rotating toward it.",
       },
       {
@@ -569,6 +570,7 @@ async function main() {
         equipment: "Bodyweight",
         movementType: "Isometric",
         laterality: "bilateral" as const,
+        sports: ["Wrestling", "MMA", "Martial Arts", "Football"],
         instructions: "Gentle manual resistance against the forehead, hold a neutral neck position.",
       },
       {
@@ -578,6 +580,7 @@ async function main() {
         equipment: "Bodyweight",
         movementType: "Isometric",
         laterality: "unilateral" as const,
+        sports: ["Wrestling", "MMA", "Martial Arts", "Football"],
         instructions: "Gentle manual resistance against the side of the head, hold without shrugging.",
       },
       {
@@ -1527,7 +1530,7 @@ async function main() {
         equipment: "Barbell",
         movementType: "Rotation",
         laterality: "unilateral" as const,
-        sports: ["Baseball", "Softball", "Golf", "Tennis", "Ice Hockey"],
+        sports: ["Baseball", "Softball", "Golf", "Tennis", "Ice Hockey", "Boxing", "MMA"],
         instructions: "Hold the end of a landmine bar with both hands, rotate it side to side at hip height, control each swing.",
       },
       {
@@ -1548,6 +1551,7 @@ async function main() {
         equipment: "Machine",
         movementType: "Push",
         laterality: "bilateral" as const,
+        sports: ["Football", "Wrestling", "MMA"],
         instructions: "Low shin angle, drive through the balls of the feet with short powerful steps.",
       },
       {
@@ -1558,6 +1562,7 @@ async function main() {
         equipment: "Machine",
         movementType: "Carry",
         laterality: "bilateral" as const,
+        sports: ["Football", "Wrestling", "MMA"],
         instructions: "Harness or rope attached to the sled, walk backward or forward driving through the legs.",
       },
       {
@@ -1568,6 +1573,7 @@ async function main() {
         equipment: "Rope",
         movementType: "Activation",
         laterality: "bilateral" as const,
+        sports: ["Wrestling", "MMA", "Boxing"],
         instructions: "Alternate slamming the ropes as hard as possible for the prescribed time, stay low in an athletic stance.",
       },
       {
@@ -1598,7 +1604,7 @@ async function main() {
         equipment: "Medicine Ball",
         movementType: "Rotation",
         laterality: "bilateral" as const,
-        sports: ["Baseball", "Softball", "Football", "Basketball", "Wrestling"],
+        sports: ["Baseball", "Softball", "Football", "Basketball", "Wrestling", "MMA", "Boxing"],
         instructions: "Raise the ball overhead and slam it down as hard as possible, catch the bounce and reset.",
       },
       {
@@ -1609,7 +1615,7 @@ async function main() {
         equipment: "Medicine Ball",
         movementType: "Rotation",
         laterality: "unilateral" as const,
-        sports: ["Baseball", "Softball", "Golf", "Tennis", "Lacrosse"],
+        sports: ["Baseball", "Softball", "Golf", "Tennis", "Lacrosse", "Boxing", "MMA"],
         instructions: "Rotate away from a wall then explosively throw the ball into it, catch and repeat.",
       },
       {
@@ -1751,8 +1757,30 @@ async function main() {
         equipment: "Bodyweight",
         movementType: "Isometric",
         laterality: "bilateral" as const,
-        sports: ["Wrestling", "Football"],
+        sports: ["Wrestling", "Football", "MMA", "Martial Arts"],
         instructions: "Supporting weight on the head and feet only, arch the back and hold, then rock gently forward and back. Builds the neck strength wrestling and football collisions demand -- start with short holds (20-30s) supported by the hands before removing hand support, and never load this with added weight until neck strength is well established.",
+      },
+      {
+        name: "Sprawl",
+        category: "conditioning" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Core", "Glutes", "Quads", "Shoulders"],
+        equipment: "Bodyweight",
+        movementType: "Hinge",
+        laterality: "bilateral" as const,
+        sports: ["Wrestling", "MMA", "Martial Arts"],
+        instructions: "From standing, snap the hips back and drop the chest to the floor into a front-plank position, then explosively recover to standing. The core takedown-defense reaction in wrestling and MMA -- train it for speed off the hips, not just as a conditioning finisher.",
+      },
+      {
+        name: "Bear Crawl",
+        category: "conditioning" as const,
+        muscleGroup: "Core",
+        secondaryMuscles: ["Shoulders", "Quads", "Glutes"],
+        equipment: "Bodyweight",
+        movementType: "Carry",
+        laterality: "bilateral" as const,
+        sports: ["Wrestling", "MMA", "Martial Arts", "Football"],
+        instructions: "Hands and feet on the floor, knees hovering just off the ground, crawl forward with opposite hand and foot moving together while keeping the hips level. Builds the ground-based scrambling strength grappling exchanges demand -- keep the hips down, don't let them pike up.",
       },
       {
         name: "Hollow Body Hold",
@@ -1783,6 +1811,7 @@ async function main() {
         equipment: "Kettlebell",
         movementType: "Isometric",
         laterality: "unilateral" as const,
+        sports: ["Wrestling", "MMA", "Martial Arts"],
         instructions: "From lying to standing while keeping a weight locked out overhead the entire time, reverse to return to the floor.",
       },
     ];
@@ -1836,19 +1865,28 @@ async function main() {
     }
 
     // One-time backfill for exercises that already existed before sports
-    // tags were added -- same "insert loop only creates missing-by-name
-    // rows" gap as secondaryMuscles above. Only touches rows still at null,
-    // so a coach's own edit is never overwritten by a later reseed.
+    // tags were added, or whose seed entry has since had more sports added
+    // to it (e.g. an exercise tagged for baseball earlier also picking up a
+    // combat-sports tag later) -- same "insert loop only creates
+    // missing-by-name rows" gap as secondaryMuscles above, but unlike that
+    // null-checked backfill this one unions in any seed-declared sport not
+    // already on the row, rather than skipping once anything is set. Only
+    // ever adds tags, never removes one, so it can't undo a deliberate
+    // removal -- safe here because the shared Forge-official library is
+    // admin-only editable (see transferExerciseOwnership below), not
+    // something individual coaches can customize per-row.
     const seedSportsByName = new Map(
       seedExercises
         .filter((ex) => ex.sports && ex.sports.length > 0)
         .map((ex) => [ex.name, ex.sports as string[]]),
     );
     for (const existingEx of await storage.getAllExercises()) {
-      if (existingEx.sports) continue;
-      const sports = seedSportsByName.get(existingEx.name);
-      if (!sports) continue;
-      await storage.updateExercise(existingEx.id, { sports });
+      const seedSports = seedSportsByName.get(existingEx.name);
+      if (!seedSports) continue;
+      const current = existingEx.sports ?? [];
+      const missing = seedSports.filter((s) => !current.includes(s));
+      if (missing.length === 0) continue;
+      await storage.updateExercise(existingEx.id, { sports: [...current, ...missing] });
     }
 
     // One-time backfill for exercises that already existed before the
