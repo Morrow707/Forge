@@ -1,7 +1,7 @@
-import { Switch, Route, Redirect } from "wouter";
+import { Switch, Route, Redirect, useLocation } from "wouter";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
-import { lazy, Suspense, type ComponentType } from "react";
+import { lazy, Suspense, useEffect, type ComponentType } from "react";
 import { queryClient } from "@/lib/queryClient";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
 
@@ -83,6 +83,20 @@ function HomeRedirect() {
 }
 
 function Router() {
+  const [location] = useLocation();
+
+  // A Dialog that's still "open" the instant its own success handler
+  // navigates away (e.g. create-program-then-jump-to-the-builder) can leave
+  // Radix's scroll lock stuck on <body> -- the dialog's whole subtree gets
+  // torn down by the route change before its own close cleanup finishes.
+  // Belt-and-suspenders fix: force-clear it on every navigation, since
+  // nothing in this app ever wants body scroll to stay locked across a
+  // route change.
+  useEffect(() => {
+    document.body.style.removeProperty("overflow");
+    document.body.style.removeProperty("padding-right");
+  }, [location]);
+
   return (
     <Suspense fallback={<FullScreenSpinner />}>
       <Switch>
