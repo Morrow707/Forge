@@ -36,6 +36,7 @@ const coachNav = [
   { href: "/coach/programs", label: "Programs", icon: ListChecks },
   { href: "/coach/exercises", label: "Exercise Bank", icon: Dumbbell },
   { href: "/coach/roster", label: "Roster & Teams", icon: Users },
+  { href: "/coach/nutrition", label: "Nutrition", icon: Apple },
   { href: "/coach/analytics", label: "Analytics", icon: LineChart },
   { href: "/coach/leaderboard", label: "Leaderboard", icon: Trophy },
   { href: "/coach/team-board", label: "Team Board", icon: MessagesSquare },
@@ -45,6 +46,7 @@ const athleteNav = [
   { href: "/athlete", label: "Calendar", icon: CalendarDays, exact: true },
   { href: "/athlete/programs", label: "My Programs", icon: ListChecks },
   { href: "/athlete/progress", label: "Progress", icon: LineChart },
+  { href: "/athlete/nutrition", label: "Nutrition", icon: Apple },
   { href: "/athlete/team-board", label: "Team Board", icon: MessagesSquare },
   { href: "/athlete/chat", label: "AI Chat", icon: Sparkles },
 ];
