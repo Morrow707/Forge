@@ -2,6 +2,7 @@ import { db } from "./db";
 import {
   users,
   coachAthletes,
+  coachStaff,
   teams,
   teamMembers,
   exercises,
@@ -485,10 +486,35 @@ export const storage = {
     return row;
   },
 
+  // Resolves the full set of coach ids that should see identical data --
+  // this coach's own id, plus every other coach sharing the same staff (see
+  // coachStaff in shared/schema.ts, and the "Coaching staff" section below).
+  // A solo coach with no staff just gets back [coachId]. Every roster/
+  // teams/exercises/programs/assignments/analytics query in this file
+  // resolves this internally, so joining or leaving a staff changes
+  // visibility everywhere at once without any call site needing to know
+  // staffing exists.
+  async getEffectiveCoachIds(coachId: number): Promise<number[]> {
+    const asStaff = await db.query.coachStaff.findFirst({
+      where: eq(coachStaff.staffCoachId, coachId),
+    });
+    const primaryId = asStaff?.primaryCoachId ?? coachId;
+    const staffRows = await db.query.coachStaff.findMany({
+      where: eq(coachStaff.primaryCoachId, primaryId),
+    });
+    return Array.from(new Set([primaryId, ...staffRows.map((r) => r.staffCoachId)]));
+  },
+
+  // Scoped to the whole staff (not just the exact coachId passed in) so an
+  // athlete can never end up with two coachAthletes rows for the same
+  // staff -- one per coach who happened to link them -- which would
+  // otherwise double-count them in every roster/ACWR/wellness query below
+  // that joins through this table.
   async linkAthleteToCoach(coachId: number, athleteId: number) {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
     const existing = await db.query.coachAthletes.findFirst({
       where: and(
-        eq(coachAthletes.coachId, coachId),
+        inArray(coachAthletes.coachId, coachIds),
         eq(coachAthletes.athleteId, athleteId),
       ),
     });
@@ -501,6 +527,7 @@ export const storage = {
   },
 
   async getRosterForCoach(coachId: number) {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
     const rows = await db
       .select({
         id: users.id,
@@ -524,14 +551,16 @@ export const storage = {
       })
       .from(coachAthletes)
       .innerJoin(users, eq(coachAthletes.athleteId, users.id))
-      .where(eq(coachAthletes.coachId, coachId))
+      .where(inArray(coachAthletes.coachId, coachIds))
       .orderBy(asc(users.name));
     return rows;
   },
 
-  // Single roster athlete's full profile, scoped to this coach -- returns
-  // null if the athlete isn't on the coach's roster so callers can 404.
+  // Single roster athlete's full profile, scoped to this coach's whole
+  // staff -- returns null if the athlete isn't on the staff's roster so
+  // callers can 404.
   async getRosterAthleteForCoach(coachId: number, athleteId: number) {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
     const rows = await db
       .select({
         id: users.id,
@@ -555,7 +584,7 @@ export const storage = {
       })
       .from(coachAthletes)
       .innerJoin(users, eq(coachAthletes.athleteId, users.id))
-      .where(and(eq(coachAthletes.coachId, coachId), eq(coachAthletes.athleteId, athleteId)));
+      .where(and(inArray(coachAthletes.coachId, coachIds), eq(coachAthletes.athleteId, athleteId)));
     return rows[0] ?? null;
   },
 
@@ -583,6 +612,84 @@ export const storage = {
       .innerJoin(users, eq(coachAthletes.coachId, users.id))
       .where(eq(coachAthletes.athleteId, athleteId));
     return rows;
+  },
+
+  // ---------- Coaching staff (assistant coaches sharing one roster) ----------
+  // See coachStaff in shared/schema.ts and getEffectiveCoachIds above for
+  // how membership changes visibility everywhere. This section is just the
+  // join/leave/remove/list surface.
+
+  // A coach joins another coach's staff using that coach's own coachCode --
+  // the same code an athlete would use to find them -- rather than a
+  // separate invite-code system. If the code's owner is themselves staff
+  // under someone else, this resolves to that person's actual primary so
+  // the whole org always converges on one head coach.
+  async joinCoachStaffByCode(joiningCoachId: number, code: string) {
+    const target = await this.getUserByCoachCode(code);
+    if (!target || target.role !== "coach") return null;
+    if (target.id === joiningCoachId) return null;
+    const asStaff = await db.query.coachStaff.findFirst({
+      where: eq(coachStaff.staffCoachId, target.id),
+    });
+    const resolvedPrimaryId = asStaff?.primaryCoachId ?? target.id;
+    if (resolvedPrimaryId === joiningCoachId) return null; // already the primary of this exact org
+    const existing = await db.query.coachStaff.findFirst({
+      where: and(
+        eq(coachStaff.primaryCoachId, resolvedPrimaryId),
+        eq(coachStaff.staffCoachId, joiningCoachId),
+      ),
+    });
+    if (existing) return existing;
+    // A coach who was themselves a primary with their own staff can't also
+    // become someone else's staff member -- that would need merging two
+    // orgs' worth of athletes/programs under one id, which is a much bigger
+    // operation than a simple join. Keep it to one level: solo coaches (or
+    // coaches with no staff of their own yet) can join; coaches who already
+    // have staff of their own cannot.
+    const ownStaff = await db.query.coachStaff.findFirst({
+      where: eq(coachStaff.primaryCoachId, joiningCoachId),
+    });
+    if (ownStaff) return null;
+    const [row] = await db
+      .insert(coachStaff)
+      .values({ primaryCoachId: resolvedPrimaryId, staffCoachId: joiningCoachId })
+      .returning();
+    return row;
+  },
+
+  // Every coach on this org's staff (excluding the primary) -- for the
+  // "Coaching Staff" settings list.
+  async getStaffForCoach(coachId: number) {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    const primaryId = coachIds[0];
+    const rows = await db.query.coachStaff.findMany({
+      where: eq(coachStaff.primaryCoachId, primaryId),
+      with: { staffCoach: { columns: { id: true, name: true, email: true } } },
+    });
+    return {
+      primaryCoachId: primaryId,
+      staff: rows.map((r) => r.staffCoach),
+    };
+  },
+
+  // The primary removes a specific staff member. No-op (not an error) if
+  // that id isn't actually staff under this primary, so a double-click
+  // can't produce a confusing error.
+  async removeCoachStaff(primaryCoachId: number, staffCoachId: number) {
+    await db
+      .delete(coachStaff)
+      .where(
+        and(
+          eq(coachStaff.primaryCoachId, primaryCoachId),
+          eq(coachStaff.staffCoachId, staffCoachId),
+        ),
+      );
+  },
+
+  // A staff member leaves voluntarily -- same delete, keyed the other way
+  // round so the caller doesn't need to already know their own primary.
+  async leaveCoachStaff(staffCoachId: number) {
+    await db.delete(coachStaff).where(eq(coachStaff.staffCoachId, staffCoachId));
   },
 
   // ---------- Body metrics (weight/composition over time, no photos) ----------
@@ -871,6 +978,7 @@ Based on this athlete's actual rate of improvement, suggest a realistic target v
   // an athlete with no row for the date is simply absent from the result,
   // kept distinct from a real low score.
   async getRosterWellnessToday(coachId: number, date: string) {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
     const rows = await db
       .select({
         athleteId: wellnessCheckins.athleteId,
@@ -880,7 +988,7 @@ Based on this athlete's actual rate of improvement, suggest a realistic target v
       })
       .from(coachAthletes)
       .innerJoin(wellnessCheckins, eq(wellnessCheckins.athleteId, coachAthletes.athleteId))
-      .where(and(eq(coachAthletes.coachId, coachId), eq(wellnessCheckins.date, date)));
+      .where(and(inArray(coachAthletes.coachId, coachIds), eq(wellnessCheckins.date, date)));
     return rows;
   },
 
@@ -1040,6 +1148,7 @@ Write a short (2-4 sentence) plain-language weekly training summary for this ath
   async generateCoachDigest(coachId: number, weekStart: string) {
     const roster = await this.getRosterForCoach(coachId);
     if (roster.length === 0) return null;
+    const athleteIds = roster.map((a) => a.id);
 
     const weekEnd = formatISO(addDays(parseISO(weekStart), 7), { representation: "date" });
 
@@ -1047,10 +1156,9 @@ Write a short (2-4 sentence) plain-language weekly training summary for this ath
       db
         .select({ athleteId: workoutLogs.athleteId, count: sql<number>`count(*)::int` })
         .from(workoutLogs)
-        .innerJoin(coachAthletes, eq(coachAthletes.athleteId, workoutLogs.athleteId))
         .where(
           and(
-            eq(coachAthletes.coachId, coachId),
+            inArray(workoutLogs.athleteId, athleteIds),
             eq(workoutLogs.completed, true),
             gte(workoutLogs.date, weekStart),
             lt(workoutLogs.date, weekEnd),
@@ -1065,10 +1173,9 @@ Write a short (2-4 sentence) plain-language weekly training summary for this ath
           stress: wellnessCheckins.stress,
         })
         .from(wellnessCheckins)
-        .innerJoin(coachAthletes, eq(coachAthletes.athleteId, wellnessCheckins.athleteId))
         .where(
           and(
-            eq(coachAthletes.coachId, coachId),
+            inArray(wellnessCheckins.athleteId, athleteIds),
             gte(wellnessCheckins.date, weekStart),
             lt(wellnessCheckins.date, weekEnd),
           ),
@@ -1277,8 +1384,9 @@ Hard rules, no exceptions:
 
   // ---------- Teams ----------
   async getTeamsForCoach(coachId: number) {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
     const rows = await db.query.teams.findMany({
-      where: eq(teams.coachId, coachId),
+      where: inArray(teams.coachId, coachIds),
       with: { members: { with: { athlete: true } } },
       orderBy: asc(teams.name),
     });
@@ -1351,8 +1459,9 @@ Hard rules, no exceptions:
 
   // ---------- Team board (shared Q&A, not private messaging) ----------
   async getTeamBoardPosts(coachId: number) {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
     const rows = await db.query.teamPosts.findMany({
-      where: eq(teamPosts.coachId, coachId),
+      where: inArray(teamPosts.coachId, coachIds),
       orderBy: desc(teamPosts.createdAt),
       with: { author: true },
     });
@@ -1390,9 +1499,10 @@ Hard rules, no exceptions:
   // never opened the board (teamBoardReadAt null) sees a flag as soon as
   // there's at least one post, not retroactively for old history.
   async getTeamBoardHasUnread(userId: number, coachId: number) {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
     const user = await db.query.users.findFirst({ where: eq(users.id, userId) });
     const latest = await db.query.teamPosts.findFirst({
-      where: eq(teamPosts.coachId, coachId),
+      where: inArray(teamPosts.coachId, coachIds),
       orderBy: desc(teamPosts.createdAt),
     });
     if (!latest) return false;
@@ -1420,6 +1530,10 @@ Hard rules, no exceptions:
   withOwnership<T extends { coachId: number; coach: { name: string; role: string } }>(
     ex: T,
     requestingUserId: number,
+    // Any other coachId in here (i.e. a staff-mate's) is just as editable as
+    // the requester's own -- defaults to just the requester for callers that
+    // haven't resolved staff (e.g. getExerciseDetail below).
+    editableCoachIds: number[] = [requestingUserId],
   ) {
     const { coach, ...rest } = ex;
     const isForgeOfficial = coach.role === "admin";
@@ -1427,32 +1541,36 @@ Hard rules, no exceptions:
       ...rest,
       isForgeOfficial,
       ownerLabel: isForgeOfficial ? "FORGE" : initialsFor(coach.name),
-      editable: rest.coachId === requestingUserId,
+      editable: editableCoachIds.includes(rest.coachId),
     };
   },
 
-  // A coach's own bank plus every Forge-official exercise -- what a coach
-  // sees in their exercise bank and the program-builder picker.
+  // A coach's own (and their staff's) bank plus every Forge-official
+  // exercise -- what a coach sees in their exercise bank and the
+  // program-builder picker.
   async getVisibleExercisesForCoach(coachId: number) {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
     const admins = await db.query.users.findMany({ where: eq(users.role, "admin") });
-    const ownerIds = Array.from(new Set([coachId, ...admins.map((a) => a.id)]));
+    const ownerIds = Array.from(new Set([...coachIds, ...admins.map((a) => a.id)]));
     const rows = await db.query.exercises.findMany({
       where: inArray(exercises.coachId, ownerIds),
       orderBy: desc(exercises.createdAt),
       with: { coach: true },
     });
-    return rows.map((ex) => this.withOwnership(ex, coachId));
+    return rows.map((ex) => this.withOwnership(ex, coachId, coachIds));
   },
 
-  // Exercises a specific user (coach or admin) personally created -- an
-  // admin's own bank is exactly their Forge library, nothing shared in.
+  // Exercises owned by a specific user's whole staff -- an admin's own bank
+  // is exactly their Forge library, nothing shared in (admins have no
+  // staff, so getEffectiveCoachIds is a no-op for them).
   async getExercisesByCoach(coachId: number) {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
     const rows = await db.query.exercises.findMany({
-      where: eq(exercises.coachId, coachId),
+      where: inArray(exercises.coachId, coachIds),
       orderBy: desc(exercises.createdAt),
       with: { coach: true },
     });
-    return rows.map((ex) => this.withOwnership(ex, coachId));
+    return rows.map((ex) => this.withOwnership(ex, coachId, coachIds));
   },
 
   async getExerciseDetail(id: number, requestingUserId: number) {
@@ -1468,8 +1586,9 @@ Hard rules, no exceptions:
         eq(exerciseReports.status, "open"),
       ),
     });
+    const coachIds = await this.getEffectiveCoachIds(requestingUserId);
     return {
-      ...this.withOwnership(ex, requestingUserId),
+      ...this.withOwnership(ex, requestingUserId, coachIds),
       hasOpenReport: !!openReport,
     };
   },
@@ -1689,11 +1808,13 @@ Hard rules, no exceptions:
     return db.query.programs.findMany();
   },
 
-  // A single owner's own programs -- used by both a coach's private bank
-  // and an admin's Forge program library (same query, different owner id).
+  // A single owner's (and their staff's) own programs -- used by both a
+  // coach's private bank and an admin's Forge program library (same query,
+  // different owner id; admins have no staff so this is a no-op for them).
   async getProgramsByCoach(coachId: number) {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
     const progs = await db.query.programs.findMany({
-      where: eq(programs.coachId, coachId),
+      where: inArray(programs.coachId, coachIds),
       with: {
         weeks: { with: { days: true } },
         assignments: true,
@@ -1714,8 +1835,9 @@ Hard rules, no exceptions:
   // A coach's own programs plus every Forge-official (admin-created) one --
   // same Forge-tagging model as getVisibleExercisesForCoach.
   async getVisibleProgramsForCoach(coachId: number) {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
     const admins = await db.query.users.findMany({ where: eq(users.role, "admin") });
-    const ownerIds = Array.from(new Set([coachId, ...admins.map((a) => a.id)]));
+    const ownerIds = Array.from(new Set([...coachIds, ...admins.map((a) => a.id)]));
     const progs = await db.query.programs.findMany({
       where: inArray(programs.coachId, ownerIds),
       with: {
@@ -1726,7 +1848,7 @@ Hard rules, no exceptions:
       orderBy: desc(programs.createdAt),
     });
     return progs.map((p) => {
-      const { weeks, assignments, ...ownership } = this.withOwnership(p, coachId);
+      const { weeks, assignments, ...ownership } = this.withOwnership(p, coachId, coachIds);
       return {
         ...ownership,
         weekCount: weeks.length,
@@ -1785,13 +1907,15 @@ Hard rules, no exceptions:
     });
     if (!program) return null;
     const isForgeOfficial = program.coach.role === "admin";
-    if (program.coachId !== requestingUserId && !isForgeOfficial) return null;
-    return this.withOwnership(program, requestingUserId);
+    const coachIds = await this.getEffectiveCoachIds(requestingUserId);
+    if (!coachIds.includes(program.coachId) && !isForgeOfficial) return null;
+    return this.withOwnership(program, requestingUserId, coachIds);
   },
 
-  // A program a coach may assign to their athletes -- their own, or any
-  // Forge-official template. Distinct from edit/delete ownership, which
-  // stays strictly "created by this exact user" (assertCoachOwnsProgram).
+  // A program a coach (or their staff) may assign to their athletes --
+  // their own, or any Forge-official template. Distinct from edit/delete
+  // ownership, which stays strictly "created by someone on this staff"
+  // (assertCoachOwnsProgram in routes.ts).
   async getProgramIfUsableByCoach(coachId: number, programId: number) {
     const program = await db.query.programs.findFirst({
       where: eq(programs.id, programId),
@@ -1799,7 +1923,8 @@ Hard rules, no exceptions:
     });
     if (!program) return null;
     const isForgeOfficial = program.coach.role === "admin";
-    if (program.coachId !== coachId && !isForgeOfficial) return null;
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    if (!coachIds.includes(program.coachId) && !isForgeOfficial) return null;
     return program;
   },
 
@@ -2700,7 +2825,8 @@ Respond to the admin's latest message by producing the complete updated guidelin
         week: { with: { program: true } },
       },
     });
-    if (!day || day.week.program.coachId !== coachId) return undefined;
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    if (!day || !coachIds.includes(day.week.program.coachId)) return undefined;
     return {
       id: day.id,
       title: day.title,
@@ -2715,10 +2841,10 @@ Respond to the admin's latest message by producing the complete updated guidelin
 
   // Read-only counterpart to getProgramDayForCoach -- also allows viewing a
   // day (and posting/reading comments on it) for a Forge-official program
-  // the coach has assigned to one of their athletes, even though they don't
-  // own the program itself. Editing (getProgramDayForCoach, used by the PUT
-  // route) stays strictly owner-only so a coach can never modify shared
-  // official content just because they assigned it.
+  // the coach (or their staff) has assigned to one of their athletes, even
+  // though they don't own the program itself. Editing (getProgramDayForCoach,
+  // used by the PUT route) stays strictly staff-owner-only so a coach can
+  // never modify shared official content just because they assigned it.
   async getProgramDayForCoachView(coachId: number, dayId: number) {
     const day = await db.query.programDays.findFirst({
       where: eq(programDays.id, dayId),
@@ -2731,10 +2857,11 @@ Respond to the admin's latest message by producing the complete updated guidelin
       },
     });
     if (!day) return undefined;
-    if (day.week.program.coachId !== coachId) {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    if (!coachIds.includes(day.week.program.coachId)) {
       const hasAssignment = await db.query.assignments.findFirst({
         where: and(
-          eq(assignments.coachId, coachId),
+          inArray(assignments.coachId, coachIds),
           eq(assignments.programId, day.week.program.id),
         ),
       });
@@ -2813,8 +2940,9 @@ Respond to the admin's latest message by producing the complete updated guidelin
   },
 
   async getAssignmentForCoach(coachId: number, assignmentId: number) {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
     return db.query.assignments.findFirst({
-      where: and(eq(assignments.id, assignmentId), eq(assignments.coachId, coachId)),
+      where: and(eq(assignments.id, assignmentId), inArray(assignments.coachId, coachIds)),
     });
   },
 
@@ -2828,8 +2956,9 @@ Respond to the admin's latest message by producing the complete updated guidelin
   },
 
   async getAssignmentsForCoach(coachId: number) {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
     const rows = await db.query.assignments.findMany({
-      where: eq(assignments.coachId, coachId),
+      where: inArray(assignments.coachId, coachIds),
       with: { program: true, athlete: true },
       orderBy: desc(assignments.createdAt),
     });
@@ -3019,6 +3148,7 @@ Respond to the admin's latest message by producing the complete updated guidelin
     athleteId: number,
     limit = 10,
   ) {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
     const rows = await db
       .select({
         exerciseId: assignmentCorrectives.exerciseId,
@@ -3026,7 +3156,7 @@ Respond to the admin's latest message by producing the complete updated guidelin
       })
       .from(assignmentCorrectives)
       .innerJoin(assignments, eq(assignmentCorrectives.assignmentId, assignments.id))
-      .where(and(eq(assignments.athleteId, athleteId), eq(assignments.coachId, coachId)))
+      .where(and(eq(assignments.athleteId, athleteId), inArray(assignments.coachId, coachIds)))
       .orderBy(desc(assignmentCorrectives.createdAt));
 
     const seen = new Set<number>();
@@ -3320,10 +3450,11 @@ Respond to the admin's latest message by producing the complete updated guidelin
     rangeEnd: string,
     athleteId?: number,
   ) {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
     const coachAssignments = await db.query.assignments.findMany({
       where: athleteId
-        ? and(eq(assignments.coachId, coachId), eq(assignments.athleteId, athleteId))
-        : eq(assignments.coachId, coachId),
+        ? and(inArray(assignments.coachId, coachIds), eq(assignments.athleteId, athleteId))
+        : inArray(assignments.coachId, coachIds),
       with: {
         athlete: true,
         program: {
@@ -3659,6 +3790,7 @@ Respond to the admin's latest message by producing the complete updated guidelin
   // estimated 1RM (Epley), PR flags, and CV metrics when present. Athletes
   // never see this rollup -- only the live number during their own set.
   async getExerciseAnalyticsForCoach(coachId: number, athleteId: number, exerciseId: number) {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
     const peRows = await db
       .select({
         date: workoutLogs.date,
@@ -3700,7 +3832,7 @@ Respond to the admin's latest message by producing the complete updated guidelin
       .innerJoin(programExercises, eq(workoutLogEntries.programExerciseId, programExercises.id))
       .where(
         and(
-          eq(assignments.coachId, coachId),
+          inArray(assignments.coachId, coachIds),
           eq(assignments.athleteId, athleteId),
           eq(programExercises.exerciseId, exerciseId),
         ),
@@ -3750,7 +3882,7 @@ Respond to the admin's latest message by producing the complete updated guidelin
       )
       .where(
         and(
-          eq(assignments.coachId, coachId),
+          inArray(assignments.coachId, coachIds),
           eq(assignments.athleteId, athleteId),
           eq(assignmentCorrectives.exerciseId, exerciseId),
         ),
@@ -3928,6 +4060,7 @@ Respond to the admin's latest message by producing the complete updated guidelin
   // for, scoped to this coach -- not just CV-tracked ones, so the coach can
   // drill into plain weight/PR history too.
   async getExercisesWithHistoryForAthlete(coachId: number, athleteId: number) {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
     const peRows = await db
       .selectDistinct({ id: exercises.id, name: exercises.name })
       .from(workoutSetEntries)
@@ -3936,7 +4069,7 @@ Respond to the admin's latest message by producing the complete updated guidelin
       .innerJoin(assignments, eq(workoutLogs.assignmentId, assignments.id))
       .innerJoin(programExercises, eq(workoutLogEntries.programExerciseId, programExercises.id))
       .innerJoin(exercises, eq(programExercises.exerciseId, exercises.id))
-      .where(and(eq(assignments.coachId, coachId), eq(assignments.athleteId, athleteId)));
+      .where(and(inArray(assignments.coachId, coachIds), eq(assignments.athleteId, athleteId)));
 
     const correctiveRows = await db
       .selectDistinct({ id: exercises.id, name: exercises.name })
@@ -3949,7 +4082,7 @@ Respond to the admin's latest message by producing the complete updated guidelin
         eq(workoutLogEntries.correctiveId, assignmentCorrectives.id),
       )
       .innerJoin(exercises, eq(assignmentCorrectives.exerciseId, exercises.id))
-      .where(and(eq(assignments.coachId, coachId), eq(assignments.athleteId, athleteId)));
+      .where(and(inArray(assignments.coachId, coachIds), eq(assignments.athleteId, athleteId)));
 
     const byId = new Map<number, string>();
     for (const r of [...peRows, ...correctiveRows]) byId.set(r.id, r.name);
@@ -3962,10 +4095,11 @@ Respond to the admin's latest message by producing the complete updated guidelin
   // sessions across everything this athlete has logged, so picking an
   // athlete is never a dead end even before drilling into one exercise.
   async getRecentSessionsForAthlete(coachId: number, athleteId: number, limit = 8) {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
     const owned = await db
       .select({ id: assignments.id })
       .from(assignments)
-      .where(and(eq(assignments.coachId, coachId), eq(assignments.athleteId, athleteId)));
+      .where(and(inArray(assignments.coachId, coachIds), eq(assignments.athleteId, athleteId)));
     const assignmentIds = owned.map((a) => a.id);
     if (assignmentIds.length === 0) return [];
 
@@ -4070,6 +4204,7 @@ Respond to the admin's latest message by producing the complete updated guidelin
   // logged training in the window is simply absent from the result, same
   // "absent means no data yet, not a real zero" convention as wellness.
   async getRosterAcwrSummary(coachId: number) {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
     const sinceDate = new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const today = new Date().toISOString().slice(0, 10);
     const rows = await db
@@ -4086,7 +4221,7 @@ Respond to the admin's latest message by producing the complete updated guidelin
       .innerJoin(workoutLogs, eq(workoutLogs.athleteId, coachAthletes.athleteId))
       .innerJoin(workoutLogEntries, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
       .innerJoin(workoutSetEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
-      .where(and(eq(coachAthletes.coachId, coachId), gte(workoutLogs.date, sinceDate)));
+      .where(and(inArray(coachAthletes.coachId, coachIds), gte(workoutLogs.date, sinceDate)));
 
     const loadByAthleteAndDate = new Map<number, Map<string, number>>();
     const nameByAthlete = new Map<number, string>();
@@ -4122,6 +4257,7 @@ Respond to the admin's latest message by producing the complete updated guidelin
   // the leaderboard's exercise picker, same shape as the per-athlete
   // analytics picker but not scoped to one athlete.
   async getLeaderboardExercisesForCoach(coachId: number) {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
     const peRows = await db
       .selectDistinct({ id: exercises.id, name: exercises.name })
       .from(workoutSetEntries)
@@ -4130,7 +4266,7 @@ Respond to the admin's latest message by producing the complete updated guidelin
       .innerJoin(assignments, eq(workoutLogs.assignmentId, assignments.id))
       .innerJoin(programExercises, eq(workoutLogEntries.programExerciseId, programExercises.id))
       .innerJoin(exercises, eq(programExercises.exerciseId, exercises.id))
-      .where(eq(assignments.coachId, coachId));
+      .where(inArray(assignments.coachId, coachIds));
 
     const correctiveRows = await db
       .selectDistinct({ id: exercises.id, name: exercises.name })
@@ -4143,7 +4279,7 @@ Respond to the admin's latest message by producing the complete updated guidelin
         eq(workoutLogEntries.correctiveId, assignmentCorrectives.id),
       )
       .innerJoin(exercises, eq(assignmentCorrectives.exerciseId, exercises.id))
-      .where(eq(assignments.coachId, coachId));
+      .where(inArray(assignments.coachId, coachIds));
 
     const byId = new Map<number, string>();
     for (const r of [...peRows, ...correctiveRows]) byId.set(r.id, r.name);
@@ -4237,6 +4373,7 @@ Respond to the admin's latest message by producing the complete updated guidelin
   },
 
   async getLeaderboardForExercise(coachId: number, exerciseId: number) {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
     const peRows = await db
       .select({
         athleteId: assignments.athleteId,
@@ -4251,7 +4388,7 @@ Respond to the admin's latest message by producing the complete updated guidelin
       .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
       .innerJoin(assignments, eq(workoutLogs.assignmentId, assignments.id))
       .innerJoin(programExercises, eq(workoutLogEntries.programExerciseId, programExercises.id))
-      .where(and(eq(assignments.coachId, coachId), eq(programExercises.exerciseId, exerciseId)));
+      .where(and(inArray(assignments.coachId, coachIds), eq(programExercises.exerciseId, exerciseId)));
 
     const correctiveRows = await db
       .select({
@@ -4271,7 +4408,7 @@ Respond to the admin's latest message by producing the complete updated guidelin
         eq(workoutLogEntries.correctiveId, assignmentCorrectives.id),
       )
       .where(
-        and(eq(assignments.coachId, coachId), eq(assignmentCorrectives.exerciseId, exerciseId)),
+        and(inArray(assignments.coachId, coachIds), eq(assignmentCorrectives.exerciseId, exerciseId)),
       );
 
     const bestByAthlete = new Map<
