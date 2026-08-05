@@ -810,6 +810,60 @@ export const nutritionTargets = pgTable(
   }),
 );
 
+export const foodLogSourceEnum = pgEnum("food_log_source", ["barcode", "search", "manual"]);
+
+// One row per logged food item, on a given calendar date -- never an AI
+// capability (see server/food-lookup.ts): barcode/name lookups just proxy a
+// public food database (Open Food Facts, USDA FoodData Central) for
+// convenience, same way the plate calculator looks up known plate weights.
+// Always free for every athlete, coached or Free Agent -- this is what an
+// athlete logs against the nutritionTargets a coach (or the athlete
+// themselves) already set, the same "coach sets the plan, human enters the
+// data" split as everywhere else in nutrition tracking.
+export const foodLogEntries = pgTable(
+  "food_log_entries",
+  {
+    id: serial("id").primaryKey(),
+    athleteId: integer("athlete_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    date: date("date").notNull(),
+    description: text("description").notNull(),
+    brand: text("brand"),
+    servingDescription: text("serving_description"),
+    caloriesKcal: integer("calories_kcal"),
+    proteinG: real("protein_g"),
+    carbsG: real("carbs_g"),
+    fatG: real("fat_g"),
+    fiberG: real("fiber_g"),
+    sodiumMg: real("sodium_mg"),
+    source: foodLogSourceEnum("source").notNull(),
+    barcode: text("barcode"),
+    loggedAt: timestamp("logged_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    athleteDateIdx: index("food_log_entries_athlete_date_idx").on(table.athleteId, table.date),
+  }),
+);
+
+export type FoodLogEntry = typeof foodLogEntries.$inferSelect;
+
+export const createFoodLogEntrySchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date"),
+  description: z.string().trim().min(1).max(200),
+  brand: z.string().trim().max(120).optional().nullable(),
+  servingDescription: z.string().trim().max(120).optional().nullable(),
+  caloriesKcal: z.coerce.number().min(0).max(10000).optional().nullable(),
+  proteinG: z.coerce.number().min(0).max(1000).optional().nullable(),
+  carbsG: z.coerce.number().min(0).max(2000).optional().nullable(),
+  fatG: z.coerce.number().min(0).max(1000).optional().nullable(),
+  fiberG: z.coerce.number().min(0).max(300).optional().nullable(),
+  sodiumMg: z.coerce.number().min(0).max(20000).optional().nullable(),
+  source: z.enum(["barcode", "search", "manual"]),
+  barcode: z.string().trim().max(64).optional().nullable(),
+});
+export type CreateFoodLogEntryInput = z.infer<typeof createFoodLogEntrySchema>;
+
 // Automatic snapshot of the testing/combine fields (see users table above),
 // one row per date whenever a coach actually changes one of those numbers
 // via the roster profile edit -- there's no separate "log a testing day"

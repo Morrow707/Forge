@@ -43,6 +43,7 @@ import {
   substituteExerciseSchema,
   formFaultSchema,
   updateNutritionTargetsSchema,
+  createFoodLogEntrySchema,
 } from "@shared/schema";
 import { computeReadiness } from "@shared/wellness";
 import { z } from "zod";
@@ -888,6 +889,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
+  // Read-only view of what the athlete has actually logged against the
+  // targets above -- same roster-membership gate, no write access (a coach
+  // never edits an athlete's food log, only the athlete does).
+  app.get(
+    "/api/coach/roster/:athleteId/food-log",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      const onRoster = await storage.getRosterAthleteForCoach(user.id, athleteId);
+      if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
+      const date = typeof req.query.date === "string" ? req.query.date : todayIso();
+      const result = await storage.getFoodLogForDate(athleteId, date);
+      res.json(result);
+    },
+  );
+
   app.get(
     "/api/coach/roster/:athleteId/calendar-link",
     requireRole("coach"),
@@ -1718,6 +1736,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(targets);
     },
   );
+
+  // Food log -- every athlete, coached or Free Agent, can log what they ate
+  // against the targets above. This is data entry (a barcode/name lookup is
+  // just a convenience proxy to a public food database, never an AI call --
+  // see server/food-lookup.ts), so unlike the nutrition Q&A below it's
+  // never gated behind requireFreeAgent or requirePaidAiAccess.
+  app.get("/api/athlete/food-log", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const date = typeof req.query.date === "string" ? req.query.date : todayIso();
+    const result = await storage.getFoodLogForDate(user.id, date);
+    res.json(result);
+  });
+
+  app.post("/api/athlete/food-log", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = createFoodLogEntrySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const entry = await storage.addFoodLogEntry(user.id, parsed.data);
+    res.status(201).json(entry);
+  });
+
+  app.delete("/api/athlete/food-log/:id", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const ok = await storage.deleteFoodLogEntry(user.id, id);
+    if (!ok) return res.status(404).json({ message: "Entry not found" });
+    res.status(204).end();
+  });
+
+  // Barcode/name lookups -- proxy to Open Food Facts/USDA FoodData Central
+  // (see server/food-lookup.ts), not tied to any one athlete's data, so no
+  // ownership check beyond being logged in as an athlete.
+  app.get("/api/athlete/food/lookup-barcode", requireRole("athlete"), async (req, res) => {
+    const barcode = typeof req.query.barcode === "string" ? req.query.barcode.trim() : "";
+    if (!barcode) return res.status(400).json({ message: "barcode query param required" });
+    const result = await storage.lookupFoodBarcode(barcode);
+    if (!result) {
+      return res.status(404).json({ message: "Couldn't find that product -- try search or enter it manually." });
+    }
+    res.json(result);
+  });
+
+  app.get("/api/athlete/food/search", requireRole("athlete"), async (req, res) => {
+    const query = typeof req.query.q === "string" ? req.query.q.trim() : "";
+    if (query.length < 2) return res.status(400).json({ message: "Enter at least 2 characters" });
+    const results = await storage.searchFoods(query);
+    res.json(results);
+  });
 
   app.get("/api/athlete/calendar", requireRole("athlete"), async (req, res) => {
     const user = currentUser(req);
