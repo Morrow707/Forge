@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 import { Search, Dumbbell, Stethoscope } from "lucide-react";
 import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
 import type { ExerciseWithOwnership as Exercise } from "@/lib/exercise-types";
-import { MOVEMENT_TYPES, MUSCLE_GROUPS } from "@/lib/exercise-taxonomy";
+import { MOVEMENT_TYPES, MUSCLE_GROUPS, SPORTS } from "@/lib/exercise-taxonomy";
 import { FilterChipGroup, toggleInSet } from "@/components/filter-chip-group";
 
 const CATEGORIES = ["strength", "conditioning", "olympic", "accessory", "mobility", "plyometric"];
@@ -41,6 +41,7 @@ export function ExercisePickerDialog({
   const [movementFilter, setMovementFilter] = useState<Set<string>>(new Set());
   const [muscleGroupFilter, setMuscleGroupFilter] = useState<Set<string>>(new Set());
   const [lateralityFilter, setLateralityFilter] = useState<Set<string>>(new Set());
+  const [sportFilter, setSportFilter] = useState<Set<string>>(new Set());
   const [onlyCorrectives, setOnlyCorrectives] = useState(correctivesOnly);
 
   useEffect(() => {
@@ -52,6 +53,11 @@ export function ExercisePickerDialog({
       Array.from(new Set([...MUSCLE_GROUPS, ...exercises.map((e) => e.muscleGroup)])).sort(),
     [exercises],
   );
+  const sportOptions = useMemo(
+    () =>
+      Array.from(new Set([...SPORTS, ...exercises.flatMap((e) => e.sports ?? [])])).sort(),
+    [exercises],
+  );
 
   const filtered = useMemo(
     () =>
@@ -59,7 +65,8 @@ export function ExercisePickerDialog({
         const matchesSearch =
           !search ||
           ex.name.toLowerCase().includes(search.toLowerCase()) ||
-          ex.muscleGroup.toLowerCase().includes(search.toLowerCase());
+          ex.muscleGroup.toLowerCase().includes(search.toLowerCase()) ||
+          (ex.sports ?? []).some((s) => s.toLowerCase().includes(search.toLowerCase()));
         const matchesCategory = categoryFilter.size === 0 || categoryFilter.has(ex.category);
         const matchesMovement =
           movementFilter.size === 0 ||
@@ -69,6 +76,8 @@ export function ExercisePickerDialog({
         const matchesLaterality =
           lateralityFilter.size === 0 ||
           (ex.laterality != null && lateralityFilter.has(ex.laterality));
+        const matchesSport =
+          sportFilter.size === 0 || (ex.sports ?? []).some((s) => sportFilter.has(s));
         const matchesCorrective = !onlyCorrectives || ex.isCorrective;
         return (
           matchesSearch &&
@@ -76,6 +85,7 @@ export function ExercisePickerDialog({
           matchesMovement &&
           matchesMuscleGroup &&
           matchesLaterality &&
+          matchesSport &&
           matchesCorrective
         );
       }),
@@ -86,6 +96,7 @@ export function ExercisePickerDialog({
       movementFilter,
       muscleGroupFilter,
       lateralityFilter,
+      sportFilter,
       onlyCorrectives,
     ],
   );
@@ -146,6 +157,13 @@ export function ExercisePickerDialog({
             options={bodyParts}
             selected={muscleGroupFilter}
             onToggle={(v) => toggleInSet(setMuscleGroupFilter, v)}
+            className="col-span-2"
+          />
+          <FilterChipGroup
+            label="Sport"
+            options={sportOptions}
+            selected={sportFilter}
+            onToggle={(v) => toggleInSet(setSportFilter, v)}
             className="col-span-2"
           />
         </div>

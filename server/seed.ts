@@ -152,6 +152,7 @@ async function main() {
         equipment: "Bodyweight",
         movementType: "Squat",
         laterality: "bilateral" as const,
+        sports: ["Volleyball", "Basketball", "Track & Field"],
         instructions: "Explosive triple extension, soft landing.",
       },
       {
@@ -214,6 +215,7 @@ async function main() {
         movementType: "Activation",
         laterality: "unilateral" as const,
         isCorrective: true,
+        sports: ["Baseball", "Softball", "Volleyball", "Swimming", "Tennis"],
         instructions: "Elbow pinned to side at 90°, rotate forearm out slowly, control the return.",
       },
       {
@@ -269,6 +271,7 @@ async function main() {
         movementType: "Isometric",
         laterality: "bilateral" as const,
         isCorrective: true,
+        sports: ["Soccer", "Ice Hockey", "Field Hockey", "Football", "Track & Field", "Basketball"],
         instructions: "Anchor ankles, lower torso as slowly as possible, catch yourself at the bottom.",
       },
       {
@@ -289,6 +292,7 @@ async function main() {
         equipment: "Bodyweight",
         movementType: "Hinge",
         laterality: "bilateral" as const,
+        sports: ["Track & Field", "Football", "Volleyball", "Basketball"],
         instructions: "Load hips back, swing arms, jump for maximum distance, stick the landing.",
       },
       {
@@ -331,6 +335,7 @@ async function main() {
         movementType: "Isometric",
         laterality: "unilateral" as const,
         isCorrective: true,
+        sports: ["Soccer", "Ice Hockey", "Field Hockey", "Basketball"],
         instructions: "Top foot on the bench, hold a straight line from shoulder to ankle.",
       },
       {
@@ -341,6 +346,7 @@ async function main() {
         equipment: "Bodyweight",
         movementType: "Lunge",
         laterality: "unilateral" as const,
+        sports: ["Soccer", "Ice Hockey", "Basketball", "Wrestling"],
         instructions: "Wide stance, sit into one hip keeping the other leg straight, chest tall.",
       },
       {
@@ -401,6 +407,7 @@ async function main() {
         equipment: "Dumbbell",
         movementType: "Carry",
         laterality: "bilateral" as const,
+        sports: ["Wrestling", "Football", "Track & Field"],
         instructions: "Heavy dumbbells at sides, walk tall with a braced core for distance or time.",
       },
       {
@@ -491,6 +498,7 @@ async function main() {
         equipment: "Band",
         movementType: "Rotation",
         laterality: "unilateral" as const,
+        sports: ["Baseball", "Softball", "Golf", "Tennis", "Ice Hockey"],
         instructions: "Band anchored to your side, press straight out and resist rotating toward it.",
       },
       {
@@ -726,6 +734,7 @@ async function main() {
         movementType: "Pull",
         laterality: "bilateral" as const,
         isCorrective: true,
+        sports: ["Baseball", "Softball", "Volleyball", "Swimming", "Tennis", "Football"],
         instructions: "Rope at face height, pull apart toward your ears, elbows high.",
       },
       {
@@ -813,6 +822,7 @@ async function main() {
         movementType: "Activation",
         laterality: "unilateral" as const,
         isCorrective: true,
+        sports: ["Baseball", "Softball", "Volleyball", "Swimming", "Tennis"],
         instructions: "Elbow pinned to side at 90°, rotate forearm in across the body slowly, control the return.",
       },
       {
@@ -824,6 +834,7 @@ async function main() {
         movementType: "Activation",
         laterality: "bilateral" as const,
         isCorrective: true,
+        sports: ["Baseball", "Softball", "Volleyball", "Swimming", "Tennis"],
         instructions: "Face down on an incline bench, raise light weights overhead in a Y shape, squeeze shoulder blades down and back.",
       },
       {
@@ -835,6 +846,7 @@ async function main() {
         movementType: "Activation",
         laterality: "bilateral" as const,
         isCorrective: true,
+        sports: ["Baseball", "Softball", "Volleyball", "Swimming", "Tennis"],
         instructions: "Face down on an incline bench, raise light weights out to the sides in a T shape, pause at the top.",
       },
       {
@@ -846,6 +858,7 @@ async function main() {
         movementType: "Mobility",
         laterality: "bilateral" as const,
         isCorrective: true,
+        sports: ["Baseball", "Softball", "Volleyball", "Swimming", "Tennis"],
         instructions: "Back and arms flat against a wall in a goalpost position, slide arms overhead keeping contact, slide back down.",
       },
       {
@@ -857,6 +870,7 @@ async function main() {
         movementType: "Activation",
         laterality: "bilateral" as const,
         isCorrective: true,
+        sports: ["Baseball", "Softball", "Volleyball", "Swimming", "Tennis"],
         instructions: "Forearms on the wall, push through the forearms to round the upper back, protracting the shoulder blades.",
       },
       {
@@ -867,6 +881,7 @@ async function main() {
         movementType: "Mobility",
         laterality: "unilateral" as const,
         isCorrective: true,
+        sports: ["Baseball", "Softball", "Volleyball", "Swimming", "Tennis"],
         instructions: "Lying on your side, pin the upper arm at 90°, gently press the forearm toward the floor to stretch the back of the shoulder.",
       },
       {
@@ -988,6 +1003,7 @@ async function main() {
         movementType: "Isometric",
         laterality: "unilateral" as const,
         isCorrective: true,
+        sports: ["Volleyball", "Basketball", "Soccer", "Ice Hockey", "Gymnastics"],
         instructions: "Balance on one leg, reach the free foot out to tap the floor in front, to the side, and behind, resetting balance each time.",
       },
       {
@@ -999,6 +1015,7 @@ async function main() {
         movementType: "Squat",
         laterality: "unilateral" as const,
         isCorrective: true,
+        sports: ["Volleyball", "Basketball", "Soccer", "Ice Hockey"],
         instructions: "Step off a low box and land on one leg, holding the landing for 2-3s -- knee tracking over the toes, no inward collapse. Neuromuscular landing-mechanics work for jump-sport knee/ACL health, not a power exercise -- keep the box low and the focus on control.",
       },
       {
@@ -1510,6 +1527,7 @@ async function main() {
         equipment: "Barbell",
         movementType: "Rotation",
         laterality: "unilateral" as const,
+        sports: ["Baseball", "Softball", "Golf", "Tennis", "Ice Hockey"],
         instructions: "Hold the end of a landmine bar with both hands, rotate it side to side at hip height, control each swing.",
       },
       {
@@ -1580,6 +1598,7 @@ async function main() {
         equipment: "Medicine Ball",
         movementType: "Rotation",
         laterality: "bilateral" as const,
+        sports: ["Baseball", "Softball", "Football", "Basketball", "Wrestling"],
         instructions: "Raise the ball overhead and slam it down as hard as possible, catch the bounce and reset.",
       },
       {
@@ -1590,6 +1609,7 @@ async function main() {
         equipment: "Medicine Ball",
         movementType: "Rotation",
         laterality: "unilateral" as const,
+        sports: ["Baseball", "Softball", "Golf", "Tennis", "Lacrosse"],
         instructions: "Rotate away from a wall then explosively throw the ball into it, catch and repeat.",
       },
       {
@@ -1600,6 +1620,7 @@ async function main() {
         equipment: "Medicine Ball",
         movementType: "Rotation",
         laterality: "unilateral" as const,
+        sports: ["Baseball", "Softball"],
         instructions: "Ball loaded at the back hip during your stride, then fire it into a wall or partner by sequencing hips before shoulders. Trains the hip-shoulder separation baseball hitting and throwing both rely on -- let the legs and hips start the throw, not the arms.",
       },
       {
@@ -1620,6 +1641,7 @@ async function main() {
         equipment: "Bodyweight",
         movementType: "Squat",
         laterality: "bilateral" as const,
+        sports: ["Volleyball", "Basketball", "Track & Field"],
         instructions: "Step off a box, land softly, and immediately explode upward with minimal ground contact time.",
       },
       {
@@ -1630,6 +1652,7 @@ async function main() {
         equipment: "Bodyweight",
         movementType: "Squat",
         laterality: "bilateral" as const,
+        sports: ["Volleyball", "Basketball"],
         instructions: "A 3-step approach (step, step, plant both feet) into a max-effort two-foot vertical jump, swinging both arms hard. The volleyball/basketball attack-jump pattern -- score the approach speed and the plant, not just the jump.",
       },
       {
@@ -1640,6 +1663,7 @@ async function main() {
         equipment: "Bodyweight",
         movementType: "Squat",
         laterality: "bilateral" as const,
+        sports: ["Volleyball", "Basketball", "Track & Field"],
         instructions: "Jump straight up, drive both knees to the chest, and land soft with knees tracking over the toes before resetting. A landing-mechanics and reactive-power drill for jump-sport athletes -- prioritize a controlled landing over jump height.",
       },
       {
@@ -1650,7 +1674,96 @@ async function main() {
         equipment: "Bodyweight",
         movementType: "Lunge",
         laterality: "unilateral" as const,
+        sports: ["Soccer", "Ice Hockey", "Basketball", "Football", "Tennis"],
         instructions: "Push explosively sideways off one leg, stick the landing on the other before bounding back.",
+      },
+      {
+        name: "Skater Squat",
+        category: "accessory" as const,
+        muscleGroup: "Quads",
+        secondaryMuscles: ["Glutes", "Hamstrings", "Ankle"],
+        equipment: "Bodyweight",
+        movementType: "Squat",
+        laterality: "unilateral" as const,
+        sports: ["Ice Hockey", "Basketball", "Soccer"],
+        instructions: "Single-leg squat with the back leg trailing behind and across, touching the heel down lightly for balance. Builds the single-leg strength a skating stride depends on -- hold a wall or rail if balance is the limiter, not the leg strength.",
+      },
+      {
+        name: "Pro Agility Shuttle",
+        category: "conditioning" as const,
+        muscleGroup: "Quads",
+        secondaryMuscles: ["Glutes", "Hamstrings", "Calves", "Core"],
+        equipment: "Bodyweight",
+        movementType: "Lunge",
+        laterality: "bilateral" as const,
+        sports: ["Football", "Basketball", "Soccer", "Baseball", "Softball", "Lacrosse"],
+        instructions: "The 5-10-5: start in the middle of three lines 5 yards apart, sprint 5 yards to one side and touch the line, change direction and sprint 10 yards to the far line and touch it, then sprint back 5 yards through the start. Score the cut, not just the sprint speed.",
+      },
+      {
+        name: "Lateral Shuffle",
+        category: "conditioning" as const,
+        muscleGroup: "Glutes",
+        secondaryMuscles: ["Quads", "Adductors", "Calves"],
+        equipment: "Bodyweight",
+        movementType: "Lunge",
+        laterality: "bilateral" as const,
+        sports: ["Basketball", "Soccer", "Football", "Ice Hockey", "Tennis"],
+        instructions: "Low athletic stance, shuffle laterally without crossing your feet or letting your hips rise. Defensive-footwork conditioning -- stay low and reactive rather than covering ground fast and upright.",
+      },
+      {
+        name: "A-Skip",
+        category: "mobility" as const,
+        muscleGroup: "Hip Flexors",
+        secondaryMuscles: ["Glutes", "Calves"],
+        equipment: "Bodyweight",
+        movementType: "Mobility",
+        laterality: "unilateral" as const,
+        sports: ["Track & Field", "Football", "Soccer", "Basketball"],
+        instructions: "Skip forward driving one knee up to hip height while the opposite arm swings, upright posture, quick ground contact. A sprint-mechanics drill for knee lift and posture, usually part of a speed-day warmup.",
+      },
+      {
+        name: "B-Skip",
+        category: "mobility" as const,
+        muscleGroup: "Hamstrings",
+        secondaryMuscles: ["Hip Flexors", "Glutes", "Calves"],
+        equipment: "Bodyweight",
+        movementType: "Mobility",
+        laterality: "unilateral" as const,
+        sports: ["Track & Field"],
+        instructions: "Same drive as an A-Skip, but extend the lifted leg out before snapping it down and back underneath the hips, toe up. Teaches the active ground-strike sprinters need instead of reaching/overstriding.",
+      },
+      {
+        name: "Wall Sprint Drill",
+        category: "mobility" as const,
+        muscleGroup: "Hip Flexors",
+        secondaryMuscles: ["Quads", "Calves"],
+        equipment: "Bodyweight",
+        movementType: "Isometric",
+        laterality: "unilateral" as const,
+        sports: ["Track & Field", "Football", "Soccer", "Basketball"],
+        instructions: "Lean into a wall at a steep forward angle, hands supporting at shoulder height, and cycle the legs through sprint drive mechanics without traveling forward. Teaches front-side mechanics and pushing back into the ground -- the acceleration-phase posture every field-sport sprint starts from.",
+      },
+      {
+        name: "Neck Bridge",
+        category: "mobility" as const,
+        muscleGroup: "Neck",
+        secondaryMuscles: ["Traps", "Lower Back"],
+        equipment: "Bodyweight",
+        movementType: "Isometric",
+        laterality: "bilateral" as const,
+        sports: ["Wrestling", "Football"],
+        instructions: "Supporting weight on the head and feet only, arch the back and hold, then rock gently forward and back. Builds the neck strength wrestling and football collisions demand -- start with short holds (20-30s) supported by the hands before removing hand support, and never load this with added weight until neck strength is well established.",
+      },
+      {
+        name: "Hollow Body Hold",
+        category: "accessory" as const,
+        muscleGroup: "Abs",
+        secondaryMuscles: ["Hip Flexors", "Lower Back"],
+        equipment: "Bodyweight",
+        movementType: "Isometric",
+        laterality: "bilateral" as const,
+        sports: ["Gymnastics", "Cheerleading", "Volleyball", "Swimming"],
+        instructions: "Lying on your back, press the lower back into the floor and lift shoulders and legs a few inches off the ground, arms overhead. The foundational full-body tension position gymnastics and cheer skills are built on -- hold without letting the lower back arch off the floor.",
       },
       {
         name: "Power Clean",
@@ -1720,6 +1833,22 @@ async function main() {
       const secondary = seedSecondaryByName.get(existingEx.name);
       if (!secondary) continue;
       await storage.updateExercise(existingEx.id, { secondaryMuscles: secondary });
+    }
+
+    // One-time backfill for exercises that already existed before sports
+    // tags were added -- same "insert loop only creates missing-by-name
+    // rows" gap as secondaryMuscles above. Only touches rows still at null,
+    // so a coach's own edit is never overwritten by a later reseed.
+    const seedSportsByName = new Map(
+      seedExercises
+        .filter((ex) => ex.sports && ex.sports.length > 0)
+        .map((ex) => [ex.name, ex.sports as string[]]),
+    );
+    for (const existingEx of await storage.getAllExercises()) {
+      if (existingEx.sports) continue;
+      const sports = seedSportsByName.get(existingEx.name);
+      if (!sports) continue;
+      await storage.updateExercise(existingEx.id, { sports });
     }
 
     // One-time backfill for exercises that already existed before the

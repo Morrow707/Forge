@@ -38,7 +38,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import type { ExerciseWithOwnership } from "@/lib/exercise-types";
-import { MOVEMENT_TYPES, MUSCLE_GROUPS } from "@/lib/exercise-taxonomy";
+import { MOVEMENT_TYPES, MUSCLE_GROUPS, SPORTS } from "@/lib/exercise-taxonomy";
 
 const ISSUE_TYPES = [
   { value: "broken_video", label: "Broken video link" },
@@ -74,6 +74,10 @@ type ExerciseForm = {
   // without needing a dedicated tag-editor component for one rarely-edited
   // field.
   secondaryMuscles: string;
+  // Same comma-separated-text-input idea as secondaryMuscles above -- which
+  // sports this exercise is worth surfacing for when a coach searches/
+  // filters by sport (e.g. "Copenhagen Plank" -> "Soccer, Hockey").
+  sports: string;
   equipment: string;
   movementType: string;
   laterality: string;
@@ -91,6 +95,7 @@ const emptyForm: ExerciseForm = {
   category: "strength",
   muscleGroup: "",
   secondaryMuscles: "",
+  sports: "",
   equipment: "",
   movementType: "",
   laterality: "",
@@ -109,6 +114,7 @@ function formFrom(ex: ExerciseWithOwnership): ExerciseForm {
     category: ex.category,
     muscleGroup: ex.muscleGroup,
     secondaryMuscles: (ex.secondaryMuscles ?? []).join(", "),
+    sports: (ex.sports ?? []).join(", "),
     equipment: ex.equipment,
     movementType: ex.movementType ?? "",
     laterality: ex.laterality ?? "",
@@ -159,6 +165,13 @@ export function ExerciseDetailPage({
           const list = form.secondaryMuscles
             .split(",")
             .map((m) => m.trim())
+            .filter(Boolean);
+          return list.length > 0 ? list : null;
+        })(),
+        sports: (() => {
+          const list = form.sports
+            .split(",")
+            .map((s) => s.trim())
             .filter(Boolean);
           return list.length > 0 ? list : null;
         })(),
@@ -334,6 +347,18 @@ export function ExerciseDetailPage({
                   </div>
                 </div>
               )}
+              {exercise.sports && exercise.sports.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold uppercase text-muted-foreground">Sports</p>
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {exercise.sports.map((s) => (
+                      <Badge key={s} variant="secondary">
+                        {s}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
               <Field
                 label="Logged as"
                 value={
@@ -443,6 +468,25 @@ export function ExerciseDetailPage({
                   <p className="text-xs text-muted-foreground">
                     Comma-separated secondary muscles worked besides the main body part above --
                     shown on this exercise's detail page only.
+                  </p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="ex-sports">Sports (optional)</Label>
+                  <Input
+                    id="ex-sports"
+                    list="sports-list"
+                    value={form.sports}
+                    onChange={(e) => setForm((f) => ({ ...f, sports: e.target.value }))}
+                    placeholder="e.g. Baseball, Softball"
+                  />
+                  <datalist id="sports-list">
+                    {SPORTS.map((s) => (
+                      <option key={s} value={s} />
+                    ))}
+                  </datalist>
+                  <p className="text-xs text-muted-foreground">
+                    Comma-separated sports this exercise is worth surfacing for -- lets coaches
+                    filter/search the exercise bank by sport.
                   </p>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
