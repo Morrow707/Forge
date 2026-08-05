@@ -11,8 +11,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
 import { apiRequest, getJson } from "@/lib/queryClient";
-import { Users, Gauge, Crown, CalendarDays, TrendingUp, Activity } from "lucide-react";
+import { Users, Gauge, Crown, CalendarDays, TrendingUp, Activity, SlidersHorizontal } from "lucide-react";
 import {
   LineChart,
   Line,
@@ -90,6 +93,87 @@ type RecentSession = {
   totalVolume: number;
 };
 
+// Every chart a coach can turn off in the exercise-detail view below. Keyed
+// so hidden choices persist in localStorage as a plain string[] -- a global
+// display preference, not tied to any one athlete/exercise.
+const CHART_OPTIONS = [
+  { key: "weight", label: "Weight & Est. 1RM" },
+  { key: "velocity", label: "Bar Speed" },
+  { key: "power", label: "Power Output" },
+  { key: "velocityLoss", label: "Velocity Loss" },
+  { key: "path", label: "Bar Path Deviation" },
+  { key: "jump", label: "Jump Height & Distance" },
+  { key: "groundContact", label: "Ground Contact & RSI" },
+  { key: "pathShape", label: "Bar Path Shape" },
+  { key: "armSymmetry", label: "Arm Symmetry" },
+  { key: "repDecay", label: "Rep-by-Rep Velocity Decay" },
+  { key: "tempo", label: "Tempo" },
+  { key: "rom", label: "Range of Motion" },
+  { key: "faultTrend", label: "Form Fault Trend" },
+  { key: "table", label: "Every Data Point (raw table)" },
+] as const;
+type ChartKey = (typeof CHART_OPTIONS)[number]["key"];
+const HIDDEN_CHARTS_STORAGE_KEY = "forge-analytics-hidden-charts";
+
+function loadHiddenCharts(): Set<ChartKey> {
+  try {
+    const raw = localStorage.getItem(HIDDEN_CHARTS_STORAGE_KEY);
+    if (!raw) return new Set();
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? new Set(parsed as ChartKey[]) : new Set();
+  } catch {
+    return new Set();
+  }
+}
+
+/** Popover of checkboxes letting a coach hide charts they don't care about
+ * for a given exercise -- everything's visible by default, this is purely
+ * an opt-out so nothing new here requires the coach to go find a setting. */
+function ChartVisibilityMenu({
+  hidden,
+  onChange,
+}: {
+  hidden: Set<ChartKey>;
+  onChange: (next: Set<ChartKey>) => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  function toggle(key: ChartKey) {
+    const next = new Set(hidden);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    onChange(next);
+    localStorage.setItem(HIDDEN_CHARTS_STORAGE_KEY, JSON.stringify(Array.from(next)));
+  }
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button type="button" variant="outline" size="sm" className="gap-1.5">
+          <SlidersHorizontal className="h-3.5 w-3.5" />
+          Customize charts
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-72" align="end">
+        <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
+          Show / hide charts
+        </p>
+        <div className="max-h-80 space-y-2 overflow-y-auto">
+          {CHART_OPTIONS.map((opt) => (
+            <label
+              key={opt.key}
+              className="flex items-center gap-2 text-sm hover:cursor-pointer"
+            >
+              <Checkbox checked={!hidden.has(opt.key)} onCheckedChange={() => toggle(opt.key)} />
+              {opt.label}
+            </label>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 /** Coach-only performance history -- weight, PRs, and (when tracked)
  * velocity/bar-path/tempo for one athlete's exercise. Deliberately has no
  * athlete-facing equivalent -- athletes only see the live number during
@@ -97,6 +181,7 @@ type RecentSession = {
 export default function CoachAnalytics() {
   const [athleteId, setAthleteId] = useState<string>("");
   const [exerciseId, setExerciseId] = useState<string>("");
+  const [hiddenCharts, setHiddenCharts] = useState<Set<ChartKey>>(() => loadHiddenCharts());
 
   const { data: roster = [] } = useQuery<RosterEntry[]>({
     queryKey: ["/api/coach/roster"],
@@ -318,17 +403,20 @@ export default function CoachAnalytics() {
 
       {athleteId && exerciseId && chartData.length > 0 && (
         <div className="space-y-4">
-          <div className="flex items-center gap-3">
-            <h2 className="font-display text-xl font-bold uppercase">{selectedExerciseName}</h2>
-            {prCount > 0 && (
-              <Badge className="gap-1 bg-amber-400 text-black hover:bg-amber-400">
-                <Crown className="h-3.5 w-3.5" />
-                {prCount} PR{prCount === 1 ? "" : "s"}
-              </Badge>
-            )}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <h2 className="font-display text-xl font-bold uppercase">{selectedExerciseName}</h2>
+              {prCount > 0 && (
+                <Badge className="gap-1 bg-amber-400 text-black hover:bg-amber-400">
+                  <Crown className="h-3.5 w-3.5" />
+                  {prCount} PR{prCount === 1 ? "" : "s"}
+                </Badge>
+              )}
+            </div>
+            <ChartVisibilityMenu hidden={hiddenCharts} onChange={setHiddenCharts} />
           </div>
 
-          {hasNumericWeight && (
+          {hasNumericWeight && !hiddenCharts.has("weight") && (
             <Card>
               <CardHeader>
                 <CardTitle>Weight &amp; Estimated 1RM</CardTitle>
@@ -399,7 +487,7 @@ export default function CoachAnalytics() {
             </Card>
           )}
 
-          {hasVelocity && (
+          {hasVelocity && !hiddenCharts.has("velocity") && (
             <Card>
               <CardHeader>
                 <CardTitle>Bar Speed</CardTitle>
@@ -451,7 +539,7 @@ export default function CoachAnalytics() {
             </Card>
           )}
 
-          {hasPower && (
+          {hasPower && !hiddenCharts.has("power") && (
             <Card>
               <CardHeader>
                 <CardTitle>Power Output</CardTitle>
@@ -495,7 +583,7 @@ export default function CoachAnalytics() {
             </Card>
           )}
 
-          {hasVelocityLoss && (
+          {hasVelocityLoss && !hiddenCharts.has("velocityLoss") && (
             <Card>
               <CardHeader>
                 <CardTitle>Velocity Loss (Fatigue)</CardTitle>
@@ -529,7 +617,7 @@ export default function CoachAnalytics() {
             </Card>
           )}
 
-          {hasPath && (
+          {hasPath && !hiddenCharts.has("path") && (
             <Card>
               <CardHeader>
                 <CardTitle>Bar Path Deviation</CardTitle>
@@ -561,7 +649,7 @@ export default function CoachAnalytics() {
             </Card>
           )}
 
-          {hasJumpHeight && (
+          {hasJumpHeight && !hiddenCharts.has("jump") && (
             <Card>
               <CardHeader>
                 <CardTitle>Jump Height &amp; Distance</CardTitle>
@@ -604,7 +692,7 @@ export default function CoachAnalytics() {
             </Card>
           )}
 
-          {hasGroundContact && (
+          {hasGroundContact && !hiddenCharts.has("groundContact") && (
             <Card>
               <CardHeader>
                 <CardTitle>Ground Contact &amp; Reactive Strength</CardTitle>
@@ -651,7 +739,7 @@ export default function CoachAnalytics() {
             </Card>
           )}
 
-          {pathTraceSets.length > 0 && (
+          {pathTraceSets.length > 0 && !hiddenCharts.has("pathShape") && (
             <Card>
               <CardHeader>
                 <CardTitle>Bar Path Shape</CardTitle>
@@ -701,7 +789,7 @@ export default function CoachAnalytics() {
             </Card>
           )}
 
-          {latestArmPathSet && (
+          {latestArmPathSet && !hiddenCharts.has("armSymmetry") && (
             <Card>
               <CardHeader>
                 <CardTitle>Arm Symmetry</CardTitle>
@@ -750,7 +838,7 @@ export default function CoachAnalytics() {
             </Card>
           )}
 
-          {latestRepDecaySet && (
+          {latestRepDecaySet && !hiddenCharts.has("repDecay") && (
             <Card>
               <CardHeader>
                 <CardTitle>Rep-by-Rep Velocity Decay</CardTitle>
@@ -784,7 +872,7 @@ export default function CoachAnalytics() {
             </Card>
           )}
 
-          {hasVelocity && (
+          {hasVelocity && !hiddenCharts.has("tempo") && (
             <Card>
               <CardHeader>
                 <CardTitle>Tempo</CardTitle>
@@ -824,7 +912,7 @@ export default function CoachAnalytics() {
             </Card>
           )}
 
-          {hasRom && (
+          {hasRom && !hiddenCharts.has("rom") && (
             <Card>
               <CardHeader>
                 <CardTitle>Range of Motion</CardTitle>
@@ -858,7 +946,7 @@ export default function CoachAnalytics() {
             </Card>
           )}
 
-          {faultCodesSeen.length > 0 && (
+          {faultCodesSeen.length > 0 && !hiddenCharts.has("faultTrend") && (
             <Card>
               <CardHeader>
                 <CardTitle>Form Fault Trend</CardTitle>
@@ -894,6 +982,7 @@ export default function CoachAnalytics() {
             </Card>
           )}
 
+          {!hiddenCharts.has("table") && (
           <Card>
             <CardHeader>
               <CardTitle>Every Data Point</CardTitle>
@@ -968,6 +1057,7 @@ export default function CoachAnalytics() {
               </table>
             </CardContent>
           </Card>
+          )}
         </div>
       )}
         </TabsContent>

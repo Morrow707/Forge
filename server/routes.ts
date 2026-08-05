@@ -1590,6 +1590,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ ...summary, ...streak });
   });
 
+  // Backs the "see the trend" click on an exercise in the athlete's own
+  // Recent PRs list -- scoped to their own id, no athleteId to validate.
+  app.get("/api/athlete/exercise-history", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const schema = z.object({ exerciseId: z.coerce.number() });
+    const parsed = schema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "exerciseId query param required" });
+    }
+    const history = await storage.getExerciseHistoryForAthlete(user.id, parsed.data.exerciseId);
+    res.json(history);
+  });
+
   app.get("/api/athlete/recruiting-profile.pdf", requireRole("athlete"), async (req, res) => {
     const user = currentUser(req);
     const [profile, summary] = await Promise.all([

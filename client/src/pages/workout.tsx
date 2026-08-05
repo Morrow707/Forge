@@ -714,7 +714,9 @@ export function WorkoutPage({
       completed: boolean;
       itemsSnapshot?: ItemState[];
       // Autosaves shouldn't toast on every keystroke-adjacent save or steal
-      // focus with a loading state -- only explicit Save/Complete taps do.
+      // focus with a loading state -- only the explicit "Mark Workout
+      // Complete" tap does, since that's a real state transition worth
+      // confirming, not just a background save.
       silent?: boolean;
     }) => {
       const payload = buildLogPayload(itemsSnapshot ?? items, completed);
@@ -1160,7 +1162,10 @@ export function WorkoutPage({
             <div className="space-y-2">
               <button
                 type="button"
-                onClick={() => setViewMode("overview")}
+                onClick={() => {
+                  autosaveNow(items);
+                  setViewMode("overview");
+                }}
                 className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
               >
                 <ArrowLeft className="h-3.5 w-3.5" />
@@ -1207,19 +1212,11 @@ export function WorkoutPage({
               </Card>
 
               <div className="flex flex-col gap-2 sm:flex-row">
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={() => submitMutation.mutate({ completed: false })}
-                  disabled={submitMutation.isPending}
-                >
-                  Save Progress
-                </Button>
                 {pageIndex < pages.length - 1 ? (
                   <Button
                     className="flex-1"
                     onClick={() => {
-                      submitMutation.mutate({ completed: false });
+                      autosaveNow(items);
                       setPageIndex((p) => p + 1);
                     }}
                     disabled={submitMutation.isPending}
