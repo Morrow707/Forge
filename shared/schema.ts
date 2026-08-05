@@ -947,6 +947,48 @@ export const sendProgramChatMessageSchema = z.object({
 
 export type SendProgramChatMessageInput = z.infer<typeof sendProgramChatMessageSchema>;
 
+export const aiKnowledgeChatRoleEnum = pgEnum("ai_knowledge_chat_role", ["admin", "assistant"]);
+
+// Chat transcript for the admin teaching the AI program builder general
+// programming knowledge (e.g. "Bulgarian split squats are a secondary lift
+// on leg day, not a true accessory") -- separate from programChatMessages
+// above, which edits one specific program. This conversation edits
+// aiKnowledge.guidelines instead, which every program-generation prompt
+// reads and applies platform-wide. Global, not per-athlete/per-program --
+// there's only ever one admin-facing knowledge conversation.
+export const aiKnowledgeMessages = pgTable(
+  "ai_knowledge_messages",
+  {
+    id: serial("id").primaryKey(),
+    authorId: integer("author_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    role: aiKnowledgeChatRoleEnum("role").notNull(),
+    content: text("content").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    createdIdx: index("ai_knowledge_messages_created_idx").on(table.createdAt),
+  }),
+);
+
+export type AiKnowledgeMessage = typeof aiKnowledgeMessages.$inferSelect;
+
+// Singleton row (always id 1) holding the AI's current living programming
+// guidelines, rewritten in full on every admin chat turn -- same "emit the
+// complete state, not a diff" pattern as programChatMessages/programs.
+export const aiKnowledge = pgTable("ai_knowledge", {
+  id: integer("id").primaryKey(),
+  guidelines: text("guidelines").notNull().default(""),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const sendAiKnowledgeChatMessageSchema = z.object({
+  content: z.string().trim().min(1).max(2000),
+});
+
+export type SendAiKnowledgeChatMessageInput = z.infer<typeof sendAiKnowledgeChatMessageSchema>;
+
 export const substituteExerciseSchema = z.object({
   programExerciseId: z.number().int().positive(),
   reason: z.string().trim().min(1).max(200),

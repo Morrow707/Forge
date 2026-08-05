@@ -61,6 +61,10 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN null; END $$;
 
 DO $$ BEGIN
+  CREATE TYPE "ai_knowledge_chat_role" AS ENUM ('admin', 'assistant');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+DO $$ BEGIN
   CREATE TYPE "form_check_flag" AS ENUM ('best', 'worst');
 EXCEPTION WHEN duplicate_object THEN null; END $$;
 
@@ -529,6 +533,24 @@ CREATE TABLE IF NOT EXISTS "program_chat_messages" (
   "created_at" timestamp NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS "program_chat_messages_program_idx" ON "program_chat_messages" ("program_id", "created_at");
+
+CREATE TABLE IF NOT EXISTS "ai_knowledge_messages" (
+  "id" serial PRIMARY KEY,
+  "author_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "role" ai_knowledge_chat_role NOT NULL,
+  "content" text NOT NULL,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "ai_knowledge_messages_created_idx" ON "ai_knowledge_messages" ("created_at");
+
+-- Singleton row (always id 1) holding the AI's current living programming
+-- guidelines, taught by the admin via ai_knowledge_messages above.
+CREATE TABLE IF NOT EXISTS "ai_knowledge" (
+  "id" integer PRIMARY KEY,
+  "guidelines" text NOT NULL DEFAULT '',
+  "updated_at" timestamp NOT NULL DEFAULT now()
+);
+INSERT INTO "ai_knowledge" ("id", "guidelines") VALUES (1, '') ON CONFLICT ("id") DO NOTHING;
 `;
 
 async function main() {
