@@ -84,19 +84,20 @@ function currentUser(req: any) {
   return req.user as { id: number; role: "coach" | "athlete" | "admin"; name: string };
 }
 
-// The single gate for every Free Agent AI-programs route below -- true iff
-// this athlete currently has zero coaches. Once they join a team they're
-// meant to rely on that coach, not keep a parallel AI track running, so
-// this rejects rather than just hiding a nav link client-side. This is
-// also exactly where a future paywall plugs in (isFreeAgent && hasPaid)
-// without touching any of the routes that call it.
+// The single gate for every Free Agent AI route below (program building AND
+// the general AI chat coach) -- true iff this athlete currently has zero
+// coaches. Once they join a team, the coach is their guidance now, not the
+// AI -- this rejects rather than just hiding a nav link client-side, so a
+// stale bookmark/tab open from before they joined a coach can't keep using
+// it. This is also exactly where a future paywall plugs in (isFreeAgent &&
+// hasPaid) without touching any of the routes that call it.
 async function requireFreeAgent(req: any, res: any, next: any) {
   const user = currentUser(req);
   const coaches = await storage.getCoachesForAthlete(user.id);
   if (coaches.length > 0) {
     return res
       .status(403)
-      .json({ message: "AI program building is only available while you don't have a coach yet." });
+      .json({ message: "This AI feature is only available while you don't have a coach yet." });
   }
   next();
 }
@@ -112,35 +113,17 @@ async function hasAthletePaidForAiAccess(_athleteId: number): Promise<boolean> {
 }
 
 // Gates the "full function" AI features (program builder chat/draft, AI
-// form-check) for a Free Agent specifically. Only meaningful stacked after
-// requireFreeAgent, which already guarantees the caller has zero coaches by
-// the time this runs.
+// form-check, the general AI chat coach) for a Free Agent specifically.
+// Only meaningful stacked after requireFreeAgent, which already guarantees
+// the caller has zero coaches by the time this runs -- a coached athlete
+// never reaches this paywall at all, they're already rejected upstream.
 async function requirePaidAiAccess(req: any, res: any, next: any) {
   const user = currentUser(req);
   const hasPaid = await hasAthletePaidForAiAccess(user.id);
   if (!hasPaid) {
     return res.status(402).json({
       message:
-        "This AI feature is a paid upgrade for Free Agents, coming soon -- exercise substitution stays free, or join a coach for full AI coaching.",
-      freeAgentPaywall: true,
-    });
-  }
-  next();
-}
-
-// Same paywall, but for the general athlete AI chat coach -- unlike the
-// program-builder routes above, this one is otherwise open to every
-// athlete regardless of coach status, so a coached athlete must pass
-// through untouched and only a Free Agent who hasn't paid gets blocked.
-async function requirePaidAiAccessIfFreeAgent(req: any, res: any, next: any) {
-  const user = currentUser(req);
-  const coaches = await storage.getCoachesForAthlete(user.id);
-  if (coaches.length > 0) return next();
-  const hasPaid = await hasAthletePaidForAiAccess(user.id);
-  if (!hasPaid) {
-    return res.status(402).json({
-      message:
-        "The AI chat coach is a paid upgrade for Free Agents, coming soon -- join a coach for coaching in the meantime, or use exercise substitution on your workout page.",
+        "This AI feature is a paid upgrade for Free Agents, coming soon -- exercise substitution stays free in the meantime.",
       freeAgentPaywall: true,
     });
   }
@@ -1688,11 +1671,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Never a private channel -- every message either side sends is readable
   // by the athlete's coach too (see the matching /api/coach/roster/:id/chat
-  // route below).
+  // route below), which stays true for a Free-Agent-era history even after
+  // they join a coach. Gated the same as the AI-programs routes above: a
+  // Free Agent is the only one who ever reaches requirePaidAiAccess here --
+  // requireFreeAgent already rejects a coached athlete before that, since
+  // the coach is their guidance now, not the AI.
   app.get(
     "/api/athlete/chat",
     requireRole("athlete"),
-    requirePaidAiAccessIfFreeAgent,
+    requireFreeAgent,
+    requirePaidAiAccess,
     async (req, res) => {
       const user = currentUser(req);
       const messages = await storage.getChatMessagesForAthlete(user.id);
@@ -1703,7 +1691,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post(
     "/api/athlete/chat",
     requireRole("athlete"),
-    requirePaidAiAccessIfFreeAgent,
+    requireFreeAgent,
+    requirePaidAiAccess,
     async (req, res) => {
       const user = currentUser(req);
       const parsed = sendChatMessageSchema.safeParse(req.body);

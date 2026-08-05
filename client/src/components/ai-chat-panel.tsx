@@ -56,11 +56,12 @@ export function AiChatPanel({
     onError: () => toast.error("Couldn't send that -- try again"),
   });
 
-  // A Free Agent who hasn't paid gets a 402 here (see
-  // requirePaidAiAccessIfFreeAgent in routes.ts) -- expected and permanent
-  // until they join a coach or pay, so it gets its own card instead of
-  // rendering an empty chat with no explanation. This has to come after
-  // every hook above it -- an early return can never sit between hooks.
+  // A Free Agent who hasn't paid gets a 402 here (see requirePaidAiAccess in
+  // routes.ts) -- expected and permanent until they pay, so it gets its own
+  // card instead of rendering an empty chat with no explanation. A coached
+  // athlete never reaches this at all (FreeAgentGate keeps this component
+  // from even mounting for them). This has to come after every hook above
+  // it -- an early return can never sit between hooks.
   if (error instanceof ApiError && error.status === 402) {
     return (
       <Card className="flex min-h-0 flex-1 flex-col">
@@ -89,7 +90,7 @@ export function AiChatPanel({
           <Eye className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <span>
             {postUrl
-              ? "Ask about your training, recovery, or progress. Your coach can see this whole conversation."
+              ? "Ask about your training, recovery, or progress. If you join a coach later, they'll be able to see this conversation."
               : `${athleteName ?? "This athlete"}'s conversation with the AI training chat -- always visible to you as their coach.`}
           </span>
         </CardDescription>
