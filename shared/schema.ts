@@ -1127,8 +1127,12 @@ export const aiKnowledgeMessages = pgTable(
 export type AiKnowledgeMessage = typeof aiKnowledgeMessages.$inferSelect;
 
 // Singleton row (always id 1) holding the AI's current living programming
-// guidelines, rewritten in full on every admin chat turn -- same "emit the
-// complete state, not a diff" pattern as programChatMessages/programs.
+// guidelines. Each admin chat turn proposes a full rewrite of this document
+// (see storage.updateAiKnowledgeFromChat) but only commits it here once the
+// admin reviews a diff and explicitly applies it (applyAiKnowledgeProposal)
+// -- there's no in-between "patch" representation for free text the way
+// programChatMessages/programs has for structured program data, so the
+// safety net is a human review step instead of a structural one.
 export const aiKnowledge = pgTable("ai_knowledge", {
   id: integer("id").primaryKey(),
   guidelines: text("guidelines").notNull().default(""),
@@ -1140,6 +1144,12 @@ export const sendAiKnowledgeChatMessageSchema = z.object({
 });
 
 export type SendAiKnowledgeChatMessageInput = z.infer<typeof sendAiKnowledgeChatMessageSchema>;
+
+export const applyKnowledgeProposalSchema = z.object({
+  guidelines: z.string().trim().min(1).max(20000),
+});
+
+export type ApplyKnowledgeProposalInput = z.infer<typeof applyKnowledgeProposalSchema>;
 
 // Same admin-teaching pattern as aiKnowledge/aiKnowledgeMessages above, but
 // for the nutrition education AI (answerNutritionQuestion) instead of the

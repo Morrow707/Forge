@@ -7,7 +7,7 @@ import { apiRequest, getJson } from "@/lib/queryClient";
 import { copyToClipboard } from "@/lib/clipboard";
 import { format, parseISO } from "date-fns";
 import { toast } from "sonner";
-import { Send, Sparkles, Loader2, Copy, Check, BookOpen } from "lucide-react";
+import { Send, Sparkles, Loader2, Copy, Check, BookOpen, Eye } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type KnowledgeMessage = {
@@ -17,16 +17,23 @@ type KnowledgeMessage = {
   createdAt: string;
 };
 
-type KnowledgeState = { guidelines: string; messages: KnowledgeMessage[] };
+type DiffPart = { value: string; added?: boolean; removed?: boolean };
+type Proposal = { text: string; diff: DiffPart[] };
+
+type KnowledgeState = { guidelines: string; messages: KnowledgeMessage[]; proposal?: Proposal | null };
 
 /** Shared chat UI for every "admin teaches an AI a living guidelines
  * document" feature on this platform (program builder, nutrition
- * education, ...). Each caller just points it at its own fetch/post
- * endpoints and supplies the copy -- the underlying pattern (rewrite the
- * complete guidelines document each turn, never a diff) is identical. */
+ * education, ...). Each caller just points it at its own fetch/post/apply
+ * endpoints and supplies the copy. A chat turn only ever PROPOSES a full
+ * rewrite of the guidelines document (see the `proposal` field) -- nothing
+ * reaches the live document read by every AI answer until the admin reviews
+ * the diff below and hits Apply, so a plausible-but-wrong rewrite (or one
+ * that quietly dropped an earlier rule) never takes effect unseen. */
 export function AdminTeachChatPanel({
   fetchUrl,
   postUrl,
+  applyUrl,
   chatTitle,
   chatDescription,
   emptyStateHint,
@@ -37,6 +44,7 @@ export function AdminTeachChatPanel({
 }: {
   fetchUrl: string;
   postUrl: string;
+  applyUrl: string;
   chatTitle: string;
   chatDescription: string;
   emptyStateHint: string;
@@ -48,6 +56,7 @@ export function AdminTeachChatPanel({
   const qc = useQueryClient();
   const [content, setContent] = useState("");
   const [copiedId, setCopiedId] = useState<number | null>(null);
+  const [proposal, setProposal] = useState<Proposal | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const { data, isLoading } = useQuery<KnowledgeState>({
@@ -64,13 +73,27 @@ export function AdminTeachChatPanel({
   const send = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", postUrl, { content });
+      return res.json() as Promise<KnowledgeState & { adminMessage: KnowledgeMessage; assistantMessage: KnowledgeMessage }>;
+    },
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: [fetchUrl] });
+      setContent("");
+      setProposal(result.proposal ?? null);
+    },
+    onError: () => toast.error("Couldn't send that -- try again"),
+  });
+
+  const apply = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", applyUrl, { guidelines: proposal!.text });
       return res.json();
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [fetchUrl] });
-      setContent("");
+      setProposal(null);
+      toast.success("Applied");
     },
-    onError: () => toast.error("Couldn't send that -- try again"),
+    onError: () => toast.error("Couldn't apply that -- try again"),
   });
 
   async function handleCopy(message: KnowledgeMessage) {
@@ -153,6 +176,41 @@ export function AdminTeachChatPanel({
             )}
             <div ref={bottomRef} />
           </div>
+
+          {proposal && (
+            <div className="shrink-0 space-y-2 rounded-md border border-primary/30 bg-primary/5 p-3">
+              <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-primary">
+                <Eye className="h-3.5 w-3.5" />
+                Review before this takes effect
+              </p>
+              <div className="max-h-40 overflow-y-auto rounded bg-background/60 p-2 font-mono text-xs leading-relaxed">
+                {proposal.diff.map((part, i) =>
+                  part.value.split("\n").filter((line, li, arr) => !(li === arr.length - 1 && line === "")).map((line, li) => (
+                    <div
+                      key={`${i}-${li}`}
+                      className={cn(
+                        "whitespace-pre-wrap",
+                        part.added && "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
+                        part.removed && "bg-red-500/15 text-red-600 line-through dark:text-red-400",
+                      )}
+                    >
+                      {part.added ? "+ " : part.removed ? "- " : "  "}
+                      {line}
+                    </div>
+                  )),
+                )}
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button type="button" variant="ghost" size="sm" onClick={() => setProposal(null)}>
+                  Discard
+                </Button>
+                <Button type="button" size="sm" onClick={() => apply.mutate()} disabled={apply.isPending}>
+                  {apply.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                  Apply
+                </Button>
+              </div>
+            </div>
+          )}
 
           <form
             onSubmit={(e) => {

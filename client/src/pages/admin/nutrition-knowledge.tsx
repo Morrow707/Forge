@@ -17,6 +17,7 @@ export default function AdminNutritionKnowledge() {
       <AdminTeachChatPanel
         fetchUrl="/api/admin/nutrition-knowledge"
         postUrl="/api/admin/nutrition-knowledge/chat"
+        applyUrl="/api/admin/nutrition-knowledge/apply"
         chatTitle="Teach the Nutrition AI"
         chatDescription="Describe nutrition standards, corrections, or preferences -- every answer the nutrition education AI gives a Free Agent will follow them from now on. Its core safety rules (no individualized prescriptions, medical/disordered-eating redirects) always stay in place regardless of what's taught here."
         emptyStateHint={'Nothing taught yet -- try something like "For in-season team-sport athletes, emphasize same-day carb replenishment over strict daily totals."'}
