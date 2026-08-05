@@ -1,5 +1,12 @@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export type ProfileFieldsValue = {
   name: string;
@@ -8,6 +15,10 @@ export type ProfileFieldsValue = {
   bodyWeightLbs: string;
   sport: string;
   position: string;
+  // "" means unset; otherwise one of the seasonPhaseEnum values (snake_case,
+  // matching the DB) -- fed straight to the AI so it doesn't have to guess
+  // or ask where in the season this athlete currently is.
+  seasonPhase: string;
   fortyYardDash: string;
   verticalJumpIn: string;
   broadJumpIn: string;
@@ -24,6 +35,7 @@ export const emptyProfileFields: ProfileFieldsValue = {
   bodyWeightLbs: "",
   sport: "",
   position: "",
+  seasonPhase: "",
   fortyYardDash: "",
   verticalJumpIn: "",
   broadJumpIn: "",
@@ -32,6 +44,13 @@ export const emptyProfileFields: ProfileFieldsValue = {
   squatMaxLbs: "",
   deadliftMaxLbs: "",
 };
+
+const SEASON_PHASE_OPTIONS = [
+  { value: "off_season", label: "Off-season" },
+  { value: "pre_season", label: "Pre-season" },
+  { value: "in_season", label: "In-season" },
+  { value: "taper", label: "Taper / playoffs" },
+];
 
 export function ProfileFieldsForm({
   value,
@@ -76,6 +95,27 @@ export function ProfileFieldsForm({
             onChange={(e) => onChange({ ...value, position: e.target.value })}
             placeholder="e.g. Linebacker"
           />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor={`${idPrefix}-season`}>Season phase</Label>
+          <Select
+            value={value.seasonPhase || "unset"}
+            onValueChange={(v) =>
+              onChange({ ...value, seasonPhase: v === "unset" ? "" : v })
+            }
+          >
+            <SelectTrigger id={`${idPrefix}-season`}>
+              <SelectValue placeholder="Not set" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="unset">Not set</SelectItem>
+              {SEASON_PHASE_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value}>
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div className="space-y-1.5">
           <Label htmlFor={`${idPrefix}-age`}>Age</Label>

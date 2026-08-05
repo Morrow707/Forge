@@ -25,6 +25,7 @@ export type ProfileAthlete = {
   bodyWeightLbs?: number | null;
   sport?: string | null;
   position?: string | null;
+  seasonPhase?: string | null;
   fortyYardDash?: number | null;
   verticalJumpIn?: number | null;
   broadJumpIn?: number | null;
@@ -43,6 +44,7 @@ function toFormValue(athlete: ProfileAthlete | null): ProfileFieldsValue {
     bodyWeightLbs: athlete.bodyWeightLbs != null ? String(athlete.bodyWeightLbs) : "",
     sport: athlete.sport ?? "",
     position: athlete.position ?? "",
+    seasonPhase: athlete.seasonPhase ?? "",
     fortyYardDash: athlete.fortyYardDash != null ? String(athlete.fortyYardDash) : "",
     verticalJumpIn: athlete.verticalJumpIn != null ? String(athlete.verticalJumpIn) : "",
     broadJumpIn: athlete.broadJumpIn != null ? String(athlete.broadJumpIn) : "",
@@ -78,6 +80,7 @@ export function AthleteProfileDialog({
         bodyWeightLbs: value.bodyWeightLbs.trim() ? Number(value.bodyWeightLbs) : null,
         sport: value.sport.trim() || null,
         position: value.position.trim() || null,
+        seasonPhase: value.seasonPhase.trim() || null,
         fortyYardDash: value.fortyYardDash.trim() ? Number(value.fortyYardDash) : null,
         verticalJumpIn: value.verticalJumpIn.trim() ? Number(value.verticalJumpIn) : null,
         broadJumpIn: value.broadJumpIn.trim() ? Number(value.broadJumpIn) : null,

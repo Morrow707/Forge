@@ -61,6 +61,7 @@ type RosterEntry = {
   bodyWeightLbs?: number | null;
   sport?: string | null;
   position?: string | null;
+  seasonPhase?: string | null;
   fortyYardDash?: number | null;
   verticalJumpIn?: number | null;
   broadJumpIn?: number | null;

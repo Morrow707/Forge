@@ -57,6 +57,17 @@ export const lateralityEnum = pgEnum("laterality", ["bilateral", "unilateral"]);
 // Coach-only quick-glance status, toggled by the coach as an athlete gets
 // hurt/recovers -- never surfaced to the athlete themselves (see PublicUser).
 export const healthStatusEnum = pgEnum("health_status", ["healthy", "hurt"]);
+// Where the athlete currently is in their competitive calendar -- feeds the
+// AI's SEASON_PHASE_TRAINING_PRINCIPLES directly instead of relying on the
+// athlete/coach happening to mention it in free text. Self-reported, same
+// "just a profile field" treatment as sport/position below; null means
+// unset, not "off-season" -- the AI still asks/infers from context when null.
+export const seasonPhaseEnum = pgEnum("season_phase", [
+  "off_season",
+  "pre_season",
+  "in_season",
+  "taper",
+]);
 // "bar_path" tracks only the bar's path/straightness (movement quality) --
 // no speed emphasis, meant for phases where velocity isn't the point (e.g.
 // rehab/offseason). "full" adds live bar speed, tempo, and velocity-loss.
@@ -91,6 +102,7 @@ export const users = pgTable(
     bodyWeightLbs: real("body_weight_lbs"),
     sport: text("sport"),
     position: text("position"),
+    seasonPhase: seasonPhaseEnum("season_phase"),
     // Coach-entered testing/combine snapshot -- a fast manual number from a
     // testing day (tryouts, combine, quick assessment), deliberately
     // separate from and not derived from actual logged workout sets (which
@@ -1251,6 +1263,7 @@ export const updateProfileSchema = z.object({
   bodyWeightLbs: z.number().min(0).max(1500).optional().nullable(),
   sport: z.string().trim().max(60).optional().nullable(),
   position: z.string().trim().max(60).optional().nullable(),
+  seasonPhase: z.enum(["off_season", "pre_season", "in_season", "taper"]).optional().nullable(),
   fortyYardDash: z.number().min(0).max(20).optional().nullable(),
   verticalJumpIn: z.number().min(0).max(60).optional().nullable(),
   broadJumpIn: z.number().min(0).max(200).optional().nullable(),
@@ -1533,6 +1546,11 @@ export type ProgramStructureInput = z.infer<typeof programStructureSchema>;
 
 export const generateProgramDraftSchema = z.object({
   prompt: z.string().trim().min(5).max(500),
+  // Optional -- lets a coach point the draft at one specific roster athlete
+  // so the AI can read that athlete's real profile (sport/position/age/
+  // season) instead of guessing from the prompt text alone. Omitted for the
+  // normal "build a reusable program, assign it later" flow.
+  athleteId: z.number().int().positive().optional(),
 });
 export type GenerateProgramDraftInput = z.infer<typeof generateProgramDraftSchema>;
 export type InsertAssignmentInput = z.infer<typeof insertAssignmentSchema>;

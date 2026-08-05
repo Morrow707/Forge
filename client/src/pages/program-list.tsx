@@ -14,6 +14,13 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { AssignProgramDialog } from "@/components/assign-program-dialog";
 import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
 import { apiRequest, ApiError } from "@/lib/queryClient";
@@ -84,6 +91,10 @@ export function ProgramListPage({
   const [assignProgramId, setAssignProgramId] = useState<number | null>(null);
   const [aiDialogOpen, setAiDialogOpen] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
+  // Only meaningful for the coach ("build for a roster athlete") case --
+  // admin/Free Agent self-service always builds for themselves (see
+  // aiDraftMutation), so this stays unused there.
+  const [aiAthleteId, setAiAthleteId] = useState<number | null>(null);
   const [selfAssignProgramId, setSelfAssignProgramId] = useState<number | null>(null);
   const [selfAssignDate, setSelfAssignDate] = useState(() =>
     new Date().toISOString().slice(0, 10),
@@ -171,22 +182,28 @@ export function ProgramListPage({
     mutationFn: async () => {
       const draftRes = await apiRequest("POST", `${apiBase}/programs/ai-draft`, {
         prompt: aiPrompt,
+        athleteId: aiAthleteId ?? undefined,
       });
-      const draft = await draftRes.json();
+      const draft: { structure: unknown; note: string | null } | null = await draftRes.json();
       if (!draft) return null;
-      const res = await apiRequest("POST", `${apiBase}/programs`, draft);
-      return res.json();
+      const res = await apiRequest("POST", `${apiBase}/programs`, draft.structure);
+      const program = await res.json();
+      return { program, note: draft.note };
     },
-    onSuccess: (program) => {
-      if (!program) {
+    onSuccess: (result) => {
+      if (!result?.program) {
         toast.error("AI assist isn't available right now");
         return;
       }
       qc.invalidateQueries({ queryKey: [`${apiBase}/programs`] });
       toast.success("Draft created -- review it before assigning to anyone");
+      if (result.note) {
+        toast.info(result.note, { duration: 10000 });
+      }
       setAiDialogOpen(false);
       setAiPrompt("");
-      navigate(`${routeBase}/${program.id}`);
+      setAiAthleteId(null);
+      navigate(`${routeBase}/${result.program.id}`);
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not generate a draft"),
   });
@@ -471,6 +488,32 @@ export function ProgramListPage({
                   anyone.
                 </p>
               </div>
+              {showAssign && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="ai-athlete">Building for (optional)</Label>
+                  <Select
+                    value={aiAthleteId != null ? String(aiAthleteId) : "none"}
+                    onValueChange={(v) => setAiAthleteId(v === "none" ? null : Number(v))}
+                  >
+                    <SelectTrigger id="ai-athlete">
+                      <SelectValue placeholder="No specific athlete" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No specific athlete</SelectItem>
+                      {roster.map((a) => (
+                        <SelectItem key={a.id} value={String(a.id)}>
+                          {a.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Pick one roster athlete and the AI reads their real profile (sport, position,
+                    age, season) instead of guessing. Leave blank for a reusable program you'll
+                    assign to multiple athletes later.
+                  </p>
+                </div>
+              )}
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setAiDialogOpen(false)}>
                   Cancel
