@@ -24,6 +24,7 @@ const CoachExerciseDetail = lazy(() => import("@/pages/coach/exercise-detail"));
 const CoachPrograms = lazy(() => import("@/pages/coach/programs"));
 const CoachProgramBuilder = lazy(() => import("@/pages/coach/program-builder"));
 const CoachRoster = lazy(() => import("@/pages/coach/roster"));
+const CoachNutrition = lazy(() => import("@/pages/coach/nutrition"));
 const CoachCalendar = lazy(() => import("@/pages/coach/calendar"));
 const CoachAnalytics = lazy(() => import("@/pages/coach/analytics"));
 const CoachLeaderboard = lazy(() => import("@/pages/coach/leaderboard"));
@@ -33,6 +34,7 @@ const AthleteProgress = lazy(() => import("@/pages/athlete/progress"));
 const AthleteTeamBoard = lazy(() => import("@/pages/athlete/team-board"));
 const AthleteWorkout = lazy(() => import("@/pages/athlete/workout"));
 const AthleteChat = lazy(() => import("@/pages/athlete/chat"));
+const AthleteNutrition = lazy(() => import("@/pages/athlete/nutrition"));
 const AthletePrograms = lazy(() => import("@/pages/athlete/programs"));
 const AthleteProgramBuilder = lazy(() => import("@/pages/athlete/program-builder"));
 const AdminDashboard = lazy(() => import("@/pages/admin/dashboard"));
@@ -137,6 +139,9 @@ function Router() {
         <Route path="/coach/roster">
           <ProtectedRoute role="coach" component={CoachRoster} />
         </Route>
+        <Route path="/coach/nutrition">
+          <ProtectedRoute role="coach" component={CoachNutrition} />
+        </Route>
         <Route path="/coach/analytics">
           <ProtectedRoute role="coach" component={CoachAnalytics} />
         </Route>
@@ -151,6 +156,9 @@ function Router() {
         </Route>
         <Route path="/athlete/progress">
           <ProtectedRoute role="athlete" component={AthleteProgress} />
+        </Route>
+        <Route path="/athlete/nutrition">
+          <ProtectedRoute role="athlete" component={AthleteNutrition} />
         </Route>
         <Route path="/athlete/team-board">
           <ProtectedRoute role="athlete" component={AthleteTeamBoard} />
