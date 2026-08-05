@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { ExercisePickerDialog } from "@/components/exercise-picker-dialog";
 import { WorkoutCommentThread } from "@/components/workout-comment-thread";
 import { ProgressionButton } from "@/components/progression-button";
+import { VideoTrackingToggle } from "@/components/video-tracking-toggle";
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import {
@@ -42,6 +43,10 @@ type LocalExercise = {
   linkedToNext: boolean;
   trackingLevel: TrackingLevel;
   videoCheckEnabled: boolean;
+  // Drives which camera pipeline "Video" turns on for this exercise (see
+  // VideoTrackingToggle) -- jump-style tracking for a plyometric exercise,
+  // full bar tracking for everything else.
+  category: string | null;
 };
 
 type LocalCorrective = {
@@ -166,6 +171,7 @@ export function CoachDayEditDialog({
             supersetGroup: pe.supersetGroup,
             trackingLevel: pe.trackingLevel ?? "none",
             videoCheckEnabled: pe.videoCheckEnabled ?? false,
+            category: pe.exercise.category ?? null,
           })),
         ),
       );
@@ -428,30 +434,16 @@ export function CoachDayEditDialog({
                               </div>
                             </div>
                           </div>
-                          <div className="mt-1.5 flex items-end gap-3">
-                            <TrackingLevelControl
-                              value={ex.trackingLevel}
-                              onChange={(trackingLevel) =>
+                          <div className="mt-1.5">
+                            <VideoTrackingToggle
+                              trackingLevel={ex.trackingLevel}
+                              category={ex.category}
+                              onChange={(patch) =>
                                 setExercises((prev) =>
-                                  prev.map((e) => (e.key === ex.key ? { ...e, trackingLevel } : e)),
+                                  prev.map((e) => (e.key === ex.key ? { ...e, ...patch } : e)),
                                 )
                               }
                             />
-                            <label className="mb-[3px] flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                              <Checkbox
-                                checked={ex.videoCheckEnabled}
-                                onCheckedChange={(checked) =>
-                                  setExercises((prev) =>
-                                    prev.map((e) =>
-                                      e.key === ex.key
-                                        ? { ...e, videoCheckEnabled: checked === true }
-                                        : e,
-                                    ),
-                                  )
-                                }
-                              />
-                              Require form-check video
-                            </label>
                           </div>
                         </div>
                         {i < exercises.length - 1 && (
@@ -763,6 +755,7 @@ export function CoachDayEditDialog({
               linkedToNext: false,
               trackingLevel: "none",
               videoCheckEnabled: false,
+              category: exercise.category ?? null,
             },
           ]);
         }}
@@ -815,41 +808,3 @@ function MiniField({
   );
 }
 
-function TrackingLevelControl({
-  value,
-  onChange,
-}: {
-  value: TrackingLevel;
-  onChange: (v: TrackingLevel) => void;
-}) {
-  const options: { value: TrackingLevel; label: string; title: string }[] = [
-    { value: "none", label: "Off", title: "No camera tracking for this exercise" },
-    { value: "bar_path", label: "Path", title: "Track bar path only (no speed emphasis)" },
-    { value: "full", label: "Full", title: "Track bar speed, tempo, and bar path" },
-    { value: "jump", label: "Jump", title: "Track jump height, distance, and ground contact time" },
-  ];
-  return (
-    <div>
-      <span className="mb-0.5 block text-[10px] uppercase text-muted-foreground">Tracking</span>
-      <div className="flex gap-1">
-        {options.map((opt) => (
-          <button
-            key={opt.value}
-            type="button"
-            title={opt.title}
-            aria-pressed={value === opt.value}
-            onClick={() => onChange(opt.value)}
-            className={cn(
-              "rounded border px-2 py-1 text-[10px] font-semibold transition-colors",
-              value === opt.value
-                ? "border-primary bg-primary text-primary-foreground"
-                : "border-border text-muted-foreground hover:border-primary/50 hover:text-primary",
-            )}
-          >
-            {opt.label}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
