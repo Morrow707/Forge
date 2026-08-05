@@ -11,7 +11,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { Plus, Trash2, Dumbbell, Search, Video, Stethoscope } from "lucide-react";
 import type { ExerciseWithOwnership } from "@/lib/exercise-types";
-import { MOVEMENT_TYPES, MUSCLE_GROUPS } from "@/lib/exercise-taxonomy";
+import { MOVEMENT_TYPES, MUSCLE_GROUPS, SPORTS } from "@/lib/exercise-taxonomy";
 import { FilterChipGroup, toggleInSet } from "@/components/filter-chip-group";
 import { toast } from "sonner";
 import { ApiError } from "@/lib/queryClient";
@@ -59,11 +59,17 @@ export function ExerciseBankPage({
   const [movementFilter, setMovementFilter] = useState<Set<string>>(new Set());
   const [muscleGroupFilter, setMuscleGroupFilter] = useState<Set<string>>(new Set());
   const [lateralityFilter, setLateralityFilter] = useState<Set<string>>(new Set());
+  const [sportFilter, setSportFilter] = useState<Set<string>>(new Set());
   const [correctivesOnly, setCorrectivesOnly] = useState(false);
 
   const bodyParts = useMemo(
     () =>
       Array.from(new Set([...MUSCLE_GROUPS, ...exercises.map((e) => e.muscleGroup)])).sort(),
+    [exercises],
+  );
+  const sportOptions = useMemo(
+    () =>
+      Array.from(new Set([...SPORTS, ...exercises.flatMap((e) => e.sports ?? [])])).sort(),
     [exercises],
   );
 
@@ -72,13 +78,16 @@ export function ExerciseBankPage({
       const matchesSearch =
         !search ||
         ex.name.toLowerCase().includes(search.toLowerCase()) ||
-        ex.muscleGroup.toLowerCase().includes(search.toLowerCase());
+        ex.muscleGroup.toLowerCase().includes(search.toLowerCase()) ||
+        (ex.sports ?? []).some((s) => s.toLowerCase().includes(search.toLowerCase()));
       const matchesCategory = categoryFilter.size === 0 || categoryFilter.has(ex.category);
       const matchesMovement =
         movementFilter.size === 0 || (ex.movementType != null && movementFilter.has(ex.movementType));
       const matchesMuscleGroup = muscleGroupFilter.size === 0 || muscleGroupFilter.has(ex.muscleGroup);
       const matchesLaterality =
         lateralityFilter.size === 0 || (ex.laterality != null && lateralityFilter.has(ex.laterality));
+      const matchesSport =
+        sportFilter.size === 0 || (ex.sports ?? []).some((s) => sportFilter.has(s));
       const matchesCorrective = !correctivesOnly || ex.isCorrective;
       return (
         matchesSearch &&
@@ -86,6 +95,7 @@ export function ExerciseBankPage({
         matchesMovement &&
         matchesMuscleGroup &&
         matchesLaterality &&
+        matchesSport &&
         matchesCorrective
       );
     });
@@ -96,6 +106,7 @@ export function ExerciseBankPage({
     movementFilter,
     muscleGroupFilter,
     lateralityFilter,
+    sportFilter,
     correctivesOnly,
   ]);
 
@@ -124,7 +135,7 @@ export function ExerciseBankPage({
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search exercises or body part…"
+            placeholder="Search exercises, body part, or sport…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
@@ -170,6 +181,13 @@ export function ExerciseBankPage({
             options={bodyParts}
             selected={muscleGroupFilter}
             onToggle={(v) => toggleInSet(setMuscleGroupFilter, v)}
+            className="sm:col-span-3"
+          />
+          <FilterChipGroup
+            label="Sport"
+            options={sportOptions}
+            selected={sportFilter}
+            onToggle={(v) => toggleInSet(setSportFilter, v)}
             className="sm:col-span-3"
           />
         </div>

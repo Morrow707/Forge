@@ -1727,7 +1727,7 @@ Hard rules, no exceptions:
     if (visibleExercises.length === 0) return null;
     const validIds = visibleExercises.map((e) => e.id);
     const catalog = visibleExercises
-      .map((e) => `${e.id}: ${e.name} (${e.category}, ${e.muscleGroup}, ${e.movementType || "unclassified"} movement)`)
+      .map((e) => `${e.id}: ${e.name} (${e.category}, ${e.muscleGroup}, ${e.movementType || "unclassified"} movement${e.sports && e.sports.length > 0 ? `, sports: ${e.sports.join("/")}` : ""})`)
       .join("\n");
 
     const tool = {
@@ -1963,7 +1963,7 @@ Design a complete draft program matching the coach's request.`;
     const validIds = visibleExercises.map((e) => e.id);
     const validIdSet = new Set(validIds);
     const catalog = visibleExercises
-      .map((e) => `${e.id}: ${e.name} (${e.category}, ${e.muscleGroup}, ${e.movementType || "unclassified"} movement)`)
+      .map((e) => `${e.id}: ${e.name} (${e.category}, ${e.muscleGroup}, ${e.movementType || "unclassified"} movement${e.sports && e.sports.length > 0 ? `, sports: ${e.sports.join("/")}` : ""})`)
       .join("\n");
 
     const currentStructure = {
@@ -2194,7 +2194,7 @@ Respond to the user's latest message by producing the complete updated program s
       return fail("There isn't another exercise available to swap in yet.");
     }
     const catalog = visibleExercises
-      .map((e) => `${e.id}: ${e.name} (${e.category}, ${e.muscleGroup}, ${e.movementType || "unclassified"} movement)`)
+      .map((e) => `${e.id}: ${e.name} (${e.category}, ${e.muscleGroup}, ${e.movementType || "unclassified"} movement${e.sports && e.sports.length > 0 ? `, sports: ${e.sports.join("/")}` : ""})`)
       .join("\n");
 
     const tool = {

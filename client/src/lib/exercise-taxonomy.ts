@@ -12,6 +12,26 @@ export const MOVEMENT_TYPES = [
   "Activation",
 ];
 
+export const SPORTS = [
+  "Football",
+  "Basketball",
+  "Baseball",
+  "Softball",
+  "Soccer",
+  "Volleyball",
+  "Wrestling",
+  "Track & Field",
+  "Swimming",
+  "Lacrosse",
+  "Ice Hockey",
+  "Field Hockey",
+  "Tennis",
+  "Golf",
+  "Cross Country",
+  "Gymnastics",
+  "Cheerleading",
+];
+
 export const MUSCLE_GROUPS = [
   "Quads",
   "Hamstrings",

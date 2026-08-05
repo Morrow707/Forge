@@ -185,6 +185,7 @@ ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "uses_bodyweight" boolean NOT N
 ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "uses_band" boolean NOT NULL DEFAULT false;
 ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "uses_box" boolean NOT NULL DEFAULT false;
 ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "secondary_muscles" json;
+ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "sports" json;
 
 DO $$ BEGIN
   CREATE TYPE "exercise_submission_status" AS ENUM ('pending', 'approved', 'rejected');

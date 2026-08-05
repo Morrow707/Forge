@@ -210,6 +210,13 @@ export const exercises = pgTable("exercises", {
   // too) -- purely informational, shown on the exercise detail page only so
   // it never clutters the compact bank/picker views.
   secondaryMuscles: json("secondary_muscles").$type<string[]>(),
+  // Which sports an exercise is particularly relevant to (e.g. Copenhagen
+  // Plank -> Soccer, Hockey; Medicine Ball Scoop Toss -> Baseball, Softball)
+  // -- purely a search/filter aid, not exhaustive or exclusive. Most generic
+  // strength exercises are left untagged since they don't differentiate by
+  // sport; this is reserved for exercises a coach would actually search by
+  // sport name to find.
+  sports: json("sports").$type<string[]>(),
   equipment: text("equipment").notNull().default("Barbell"),
   movementType: text("movement_type"),
   laterality: lateralityEnum("laterality"),
@@ -1272,6 +1279,7 @@ export const insertExerciseSchema = createInsertSchema(exercises)
     movementType: z.string().optional().nullable(),
     laterality: z.enum(["bilateral", "unilateral"]).optional().nullable(),
     secondaryMuscles: z.array(z.string().trim().min(1)).max(8).optional().nullable(),
+    sports: z.array(z.string().trim().min(1)).max(8).optional().nullable(),
     isCorrective: z.boolean().default(false),
     usesWeight: z.boolean().default(true),
     usesBodyweight: z.boolean().default(false),
