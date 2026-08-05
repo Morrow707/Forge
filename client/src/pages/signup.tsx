@@ -229,8 +229,8 @@ function FreeAgentWelcomeDialog({ onContinue }: { onContinue: () => void }) {
             </p>
             <p className="text-muted-foreground">
               Build your own programs by hand, duplicate a Forge template, log workouts, track
-              progress, and ask the exercise substitution agent to swap out anything that doesn't
-              work for you.
+              progress, ask the exercise substitution agent to swap out anything that doesn't work
+              for you, and chat with the AI training coach anytime.
             </p>
           </div>
           <div className="space-y-2 rounded-md border border-border p-3">
@@ -239,9 +239,8 @@ function FreeAgentWelcomeDialog({ onContinue }: { onContinue: () => void }) {
               Coming soon, as a paid upgrade
             </p>
             <p className="text-muted-foreground">
-              The full AI coach -- conversational AI program building, an AI form-check review of
-              your lifts, and the AI chat coach. We're still building out billing for this, so
-              consider it a preview of what's ahead.
+              Conversational AI program building and an AI form-check review of your lifts. We're
+              still building out billing for this, so consider it a preview of what's ahead.
             </p>
           </div>
         </div>

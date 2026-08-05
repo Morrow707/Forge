@@ -3,10 +3,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { apiRequest, getJson, ApiError } from "@/lib/queryClient";
+import { apiRequest, getJson } from "@/lib/queryClient";
 import { format, parseISO } from "date-fns";
 import { toast } from "sonner";
-import { Send, Sparkles, Eye, Lock } from "lucide-react";
+import { Send, Sparkles, Eye } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type ChatMessage = {
@@ -34,7 +34,7 @@ export function AiChatPanel({
   const [content, setContent] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  const { data: messages, isLoading, error } = useQuery<ChatMessage[]>({
+  const { data: messages, isLoading } = useQuery<ChatMessage[]>({
     queryKey: [fetchUrl],
     queryFn: () => getJson(fetchUrl),
     refetchInterval: postUrl ? false : 30_000,
@@ -55,29 +55,6 @@ export function AiChatPanel({
     },
     onError: () => toast.error("Couldn't send that -- try again"),
   });
-
-  // A Free Agent who hasn't paid gets a 402 here (see requirePaidAiAccess in
-  // routes.ts) -- expected and permanent until they pay, so it gets its own
-  // card instead of rendering an empty chat with no explanation. A coached
-  // athlete never reaches this at all (FreeAgentGate keeps this component
-  // from even mounting for them). This has to come after every hook above
-  // it -- an early return can never sit between hooks.
-  if (error instanceof ApiError && error.status === 402) {
-    return (
-      <Card className="flex min-h-0 flex-1 flex-col">
-        <CardHeader className="shrink-0">
-          <CardTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-primary" />
-            AI Training Chat
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-1 flex-col items-center justify-center gap-3 py-10 text-center">
-          <Lock className="h-8 w-8 text-muted-foreground" />
-          <p className="max-w-xs text-sm text-muted-foreground">{error.message}</p>
-        </CardContent>
-      </Card>
-    );
-  }
 
   return (
     <Card className="flex min-h-0 flex-1 flex-col">
