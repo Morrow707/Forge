@@ -102,7 +102,19 @@ async function main() {
         equipment: "Barbell",
         movementType: "Squat",
         laterality: "bilateral" as const,
+        sports: ["Powerlifting"],
         instructions: "Bar on back, hips and knees drive together, chest up.",
+      },
+      {
+        name: "Box Squat",
+        category: "strength" as const,
+        muscleGroup: "Quads",
+        secondaryMuscles: ["Glutes", "Hamstrings", "Lower Back"],
+        equipment: "Barbell",
+        movementType: "Squat",
+        laterality: "bilateral" as const,
+        sports: ["Powerlifting"],
+        instructions: "Sit back to a box at or just below parallel, pause with tension held, then drive up without relaxing at the bottom. A Westside Barbell staple for building out-of-the-hole strength -- the exact spot most missed squats fail -- and for teaching a lifter to sit back into the hips instead of just bending the knees.",
       },
       {
         name: "Bench Press",
@@ -112,6 +124,7 @@ async function main() {
         equipment: "Barbell",
         movementType: "Push",
         laterality: "bilateral" as const,
+        sports: ["Powerlifting"],
         instructions: "Retract shoulder blades, lower bar to chest, press up.",
       },
       {
@@ -122,6 +135,7 @@ async function main() {
         equipment: "Barbell",
         movementType: "Hinge",
         laterality: "bilateral" as const,
+        sports: ["Powerlifting", "Rowing"],
         instructions: "Neutral spine, drive through the floor, hips and shoulders rise together.",
       },
       {
@@ -152,7 +166,7 @@ async function main() {
         equipment: "Bodyweight",
         movementType: "Squat",
         laterality: "bilateral" as const,
-        sports: ["Volleyball", "Basketball", "Track & Field", "Wrestling", "MMA"],
+        sports: ["Volleyball", "Basketball", "Track & Field", "Wrestling", "MMA", "Rugby"],
         instructions: "Explosive triple extension, soft landing.",
       },
       {
@@ -173,6 +187,7 @@ async function main() {
         equipment: "Barbell",
         movementType: "Pull",
         laterality: "bilateral" as const,
+        sports: ["Olympic Weightlifting"],
         instructions: "Pull, receive in front rack, dip and drive overhead.",
       },
       {
@@ -193,6 +208,7 @@ async function main() {
         movementType: "Mobility",
         laterality: "unilateral" as const,
         isCorrective: true,
+        sports: ["Olympic Weightlifting"],
         instructions: "Knee-to-wall drive, keep heel down, 10 slow reps each side.",
       },
       {
@@ -215,7 +231,7 @@ async function main() {
         movementType: "Activation",
         laterality: "unilateral" as const,
         isCorrective: true,
-        sports: ["Baseball", "Softball", "Volleyball", "Swimming", "Tennis"],
+        sports: ["Baseball", "Softball", "Volleyball", "Swimming", "Tennis", "Water Polo", "Badminton"],
         instructions: "Elbow pinned to side at 90°, rotate forearm out slowly, control the return.",
       },
       {
@@ -238,6 +254,7 @@ async function main() {
         movementType: "Mobility",
         laterality: "unilateral" as const,
         isCorrective: true,
+        sports: ["Olympic Weightlifting", "Diving"],
         instructions: "Lunge forward, drop back hand to floor, rotate front elbow to the sky, hold 2s.",
       },
       // Expanded library: at least two exercises for every muscle group,
@@ -250,7 +267,19 @@ async function main() {
         equipment: "Dumbbell",
         movementType: "Squat",
         laterality: "bilateral" as const,
+        sports: ["Cycling"],
         instructions: "Hold dumbbell at chest, squat between the knees, elbows brush inner thighs at the bottom.",
+      },
+      {
+        name: "Wall Sit",
+        category: "accessory" as const,
+        muscleGroup: "Quads",
+        secondaryMuscles: ["Glutes", "Core"],
+        equipment: "Bodyweight",
+        movementType: "Isometric",
+        laterality: "bilateral" as const,
+        sports: ["Skiing", "Snowboarding", "Cycling"],
+        instructions: "Back flat against a wall, thighs parallel to the floor, hold. Builds the isometric quad endurance skiing's tuck/turn position and cycling's sustained pedal-stroke both demand.",
       },
       {
         name: "Bulgarian Split Squat",
@@ -260,6 +289,7 @@ async function main() {
         equipment: "Dumbbell",
         movementType: "Lunge",
         laterality: "unilateral" as const,
+        sports: ["Skiing", "Snowboarding", "Cycling", "Fencing"],
         instructions: "Rear foot elevated, drop straight down through the front leg, torso tall.",
       },
       {
@@ -292,7 +322,7 @@ async function main() {
         equipment: "Bodyweight",
         movementType: "Hinge",
         laterality: "bilateral" as const,
-        sports: ["Track & Field", "Football", "Volleyball", "Basketball", "Wrestling", "MMA"],
+        sports: ["Track & Field", "Football", "Volleyball", "Basketball", "Wrestling", "MMA", "Rugby"],
         instructions: "Load hips back, swing arms, jump for maximum distance, stick the landing.",
       },
       {
@@ -303,6 +333,7 @@ async function main() {
         equipment: "Machine",
         movementType: "Press",
         laterality: "bilateral" as const,
+        sports: ["Cycling"],
         instructions: "Full stretch at the bottom, rise onto toes, pause at the top.",
       },
       {
@@ -324,6 +355,7 @@ async function main() {
         movementType: "Mobility",
         laterality: "unilateral" as const,
         isCorrective: true,
+        sports: ["Olympic Weightlifting"],
         instructions: "Rear foot up on a wall or bench, drive hips forward, keep torso upright.",
       },
       {
@@ -346,7 +378,7 @@ async function main() {
         equipment: "Bodyweight",
         movementType: "Lunge",
         laterality: "unilateral" as const,
-        sports: ["Soccer", "Ice Hockey", "Basketball", "Wrestling", "MMA", "Martial Arts"],
+        sports: ["Soccer", "Ice Hockey", "Basketball", "Wrestling", "MMA", "Martial Arts", "Skiing", "Snowboarding"],
         instructions: "Wide stance, sit into one hip keeping the other leg straight, chest tall.",
       },
       {
@@ -367,6 +399,7 @@ async function main() {
         equipment: "Barbell",
         movementType: "Pull",
         laterality: "bilateral" as const,
+        sports: ["Rowing"],
         instructions: "Hinge to near-parallel, row bar to lower ribs, squeeze shoulder blades.",
       },
       {
@@ -407,7 +440,7 @@ async function main() {
         equipment: "Dumbbell",
         movementType: "Carry",
         laterality: "bilateral" as const,
-        sports: ["Wrestling", "Football", "Track & Field", "MMA", "Martial Arts"],
+        sports: ["Wrestling", "Football", "Track & Field", "MMA", "Martial Arts", "Rugby", "Rowing"],
         instructions: "Heavy dumbbells at sides, walk tall with a braced core for distance or time.",
       },
       {
@@ -448,7 +481,19 @@ async function main() {
         equipment: "Barbell",
         movementType: "Push",
         laterality: "bilateral" as const,
+        sports: ["Powerlifting"],
         instructions: "Hands just inside shoulder width, elbows tucked, press to lockout.",
+      },
+      {
+        name: "Paused Bench Press",
+        category: "strength" as const,
+        muscleGroup: "Chest",
+        secondaryMuscles: ["Shoulders", "Triceps", "Core"],
+        equipment: "Barbell",
+        movementType: "Push",
+        laterality: "bilateral" as const,
+        sports: ["Powerlifting"],
+        instructions: "Lower to the chest and hold a dead stop for 1-2 seconds -- no bounce -- before pressing up. Trains the exact no-touch-and-go standard used in competition, and builds the off-the-chest strength that's the most common bench sticking point.",
       },
       {
         name: "Tricep Rope Pushdown",
@@ -499,7 +544,7 @@ async function main() {
         equipment: "Band",
         movementType: "Rotation",
         laterality: "unilateral" as const,
-        sports: ["Baseball", "Softball", "Golf", "Tennis", "Ice Hockey", "Boxing", "MMA"],
+        sports: ["Baseball", "Softball", "Golf", "Tennis", "Ice Hockey", "Boxing", "MMA", "Diving"],
         instructions: "Band anchored to your side, press straight out and resist rotating toward it.",
       },
       {
@@ -570,7 +615,7 @@ async function main() {
         equipment: "Bodyweight",
         movementType: "Isometric",
         laterality: "bilateral" as const,
-        sports: ["Wrestling", "MMA", "Martial Arts", "Football"],
+        sports: ["Wrestling", "MMA", "Martial Arts", "Football", "Rugby"],
         instructions: "Gentle manual resistance against the forehead, hold a neutral neck position.",
       },
       {
@@ -580,7 +625,7 @@ async function main() {
         equipment: "Bodyweight",
         movementType: "Isometric",
         laterality: "unilateral" as const,
-        sports: ["Wrestling", "MMA", "Martial Arts", "Football"],
+        sports: ["Wrestling", "MMA", "Martial Arts", "Football", "Rugby"],
         instructions: "Gentle manual resistance against the side of the head, hold without shrugging.",
       },
       {
@@ -602,7 +647,74 @@ async function main() {
         equipment: "Barbell",
         movementType: "Pull",
         laterality: "bilateral" as const,
+        sports: ["Olympic Weightlifting"],
         instructions: "Wide grip, pull the bar from the floor to overhead in one continuous motion.",
+      },
+      {
+        name: "Hang Snatch",
+        category: "olympic" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Quads", "Glutes", "Traps", "Shoulders", "Back", "Core"],
+        equipment: "Barbell",
+        movementType: "Pull",
+        laterality: "bilateral" as const,
+        sports: ["Olympic Weightlifting"],
+        instructions: "Start with the bar at the hang position above the knee, drive the hips forward and pull the bar overhead. Removes the pull off the floor to isolate and groove the second-pull power phase -- a staple technical variation, not a lesser version of the lift.",
+      },
+      {
+        name: "Snatch Pull",
+        category: "olympic" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Quads", "Glutes", "Traps", "Back", "Core"],
+        equipment: "Barbell",
+        movementType: "Pull",
+        laterality: "bilateral" as const,
+        sports: ["Olympic Weightlifting"],
+        instructions: "Snatch grip, pull the bar from the floor to full triple extension and a high shrug without dropping under it. Trains the pulling strength and speed behind the snatch at loads that can exceed the full lift, without the catch.",
+      },
+      {
+        name: "Hang Clean",
+        category: "olympic" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Quads", "Glutes", "Traps", "Back", "Core"],
+        equipment: "Barbell",
+        movementType: "Pull",
+        laterality: "bilateral" as const,
+        sports: ["Olympic Weightlifting"],
+        instructions: "Start with the bar at the hang position above the knee, drive the hips forward and receive the bar in a front rack. The clean's equivalent of the hang snatch -- isolates the second pull for lifters still grooving the full lift from the floor.",
+      },
+      {
+        name: "Clean Pull",
+        category: "olympic" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Quads", "Glutes", "Traps", "Back", "Core"],
+        equipment: "Barbell",
+        movementType: "Pull",
+        laterality: "bilateral" as const,
+        sports: ["Olympic Weightlifting"],
+        instructions: "Clean grip, pull the bar from the floor to full triple extension and a high shrug without dropping under it or receiving it in the rack.",
+      },
+      {
+        name: "Overhead Squat",
+        category: "olympic" as const,
+        muscleGroup: "Quads",
+        secondaryMuscles: ["Glutes", "Shoulders", "Core", "Adductors"],
+        equipment: "Barbell",
+        movementType: "Squat",
+        laterality: "bilateral" as const,
+        sports: ["Olympic Weightlifting"],
+        instructions: "Bar locked out overhead in a wide snatch grip, squat to full depth while keeping the bar stacked over the mid-foot. Trains the exact receiving position the snatch demands -- ankle, hip, thoracic, and shoulder mobility all limit this before strength does, so don't load past what clean positions allow.",
+      },
+      {
+        name: "Split Jerk",
+        category: "olympic" as const,
+        muscleGroup: "Shoulders",
+        secondaryMuscles: ["Triceps", "Quads", "Glutes", "Core"],
+        equipment: "Barbell",
+        movementType: "Press",
+        laterality: "bilateral" as const,
+        sports: ["Olympic Weightlifting"],
+        instructions: "From the front rack, dip and drive the bar overhead while splitting one foot forward and one back to receive it locked out, then recover the feet together. The jerk half of the clean & jerk, trained on its own so the drive and footwork can be grooved at heavier loads than the full lift allows.",
       },
       {
         name: "Assault Bike Intervals",
@@ -636,6 +748,7 @@ async function main() {
         equipment: "Barbell",
         movementType: "Press",
         laterality: "bilateral" as const,
+        sports: ["Olympic Weightlifting"],
         instructions: "Dip through the knees, drive the bar overhead with leg drive, lock out overhead.",
       },
       {
@@ -726,6 +839,7 @@ async function main() {
         equipment: "Cable",
         movementType: "Pull",
         laterality: "bilateral" as const,
+        sports: ["Rowing"],
         instructions: "Sit tall, row the handle to your torso, squeeze shoulder blades without leaning back.",
       },
       {
@@ -737,7 +851,7 @@ async function main() {
         movementType: "Pull",
         laterality: "bilateral" as const,
         isCorrective: true,
-        sports: ["Baseball", "Softball", "Volleyball", "Swimming", "Tennis", "Football"],
+        sports: ["Baseball", "Softball", "Volleyball", "Swimming", "Tennis", "Football", "Water Polo", "Badminton"],
         instructions: "Rope at face height, pull apart toward your ears, elbows high.",
       },
       {
@@ -748,6 +862,7 @@ async function main() {
         equipment: "Barbell",
         movementType: "Pull",
         laterality: "bilateral" as const,
+        sports: ["Rowing"],
         instructions: "Bar starts dead on the floor each rep, torso near-parallel, row explosively to the lower ribs.",
       },
       {
@@ -768,6 +883,7 @@ async function main() {
         equipment: "Barbell",
         movementType: "Squat",
         laterality: "bilateral" as const,
+        sports: ["Olympic Weightlifting"],
         instructions: "Bar in the front rack, elbows high, sit between the knees keeping the torso upright.",
       },
       {
@@ -778,6 +894,7 @@ async function main() {
         equipment: "Barbell",
         movementType: "Hinge",
         laterality: "bilateral" as const,
+        sports: ["Rowing"],
         instructions: "Soft knees, push hips back and lower the bar along your legs, drive hips forward to stand.",
       },
       {
@@ -825,7 +942,7 @@ async function main() {
         movementType: "Activation",
         laterality: "unilateral" as const,
         isCorrective: true,
-        sports: ["Baseball", "Softball", "Volleyball", "Swimming", "Tennis"],
+        sports: ["Baseball", "Softball", "Volleyball", "Swimming", "Tennis", "Water Polo", "Badminton"],
         instructions: "Elbow pinned to side at 90°, rotate forearm in across the body slowly, control the return.",
       },
       {
@@ -837,7 +954,7 @@ async function main() {
         movementType: "Activation",
         laterality: "bilateral" as const,
         isCorrective: true,
-        sports: ["Baseball", "Softball", "Volleyball", "Swimming", "Tennis"],
+        sports: ["Baseball", "Softball", "Volleyball", "Swimming", "Tennis", "Water Polo", "Badminton"],
         instructions: "Face down on an incline bench, raise light weights overhead in a Y shape, squeeze shoulder blades down and back.",
       },
       {
@@ -849,7 +966,7 @@ async function main() {
         movementType: "Activation",
         laterality: "bilateral" as const,
         isCorrective: true,
-        sports: ["Baseball", "Softball", "Volleyball", "Swimming", "Tennis"],
+        sports: ["Baseball", "Softball", "Volleyball", "Swimming", "Tennis", "Water Polo", "Badminton"],
         instructions: "Face down on an incline bench, raise light weights out to the sides in a T shape, pause at the top.",
       },
       {
@@ -861,7 +978,7 @@ async function main() {
         movementType: "Mobility",
         laterality: "bilateral" as const,
         isCorrective: true,
-        sports: ["Baseball", "Softball", "Volleyball", "Swimming", "Tennis"],
+        sports: ["Baseball", "Softball", "Volleyball", "Swimming", "Tennis", "Olympic Weightlifting", "Water Polo", "Badminton"],
         instructions: "Back and arms flat against a wall in a goalpost position, slide arms overhead keeping contact, slide back down.",
       },
       {
@@ -873,7 +990,7 @@ async function main() {
         movementType: "Activation",
         laterality: "bilateral" as const,
         isCorrective: true,
-        sports: ["Baseball", "Softball", "Volleyball", "Swimming", "Tennis"],
+        sports: ["Baseball", "Softball", "Volleyball", "Swimming", "Tennis", "Water Polo", "Badminton"],
         instructions: "Forearms on the wall, push through the forearms to round the upper back, protracting the shoulder blades.",
       },
       {
@@ -884,7 +1001,7 @@ async function main() {
         movementType: "Mobility",
         laterality: "unilateral" as const,
         isCorrective: true,
-        sports: ["Baseball", "Softball", "Volleyball", "Swimming", "Tennis"],
+        sports: ["Baseball", "Softball", "Volleyball", "Swimming", "Tennis", "Water Polo", "Badminton"],
         instructions: "Lying on your side, pin the upper arm at 90°, gently press the forearm toward the floor to stretch the back of the shoulder.",
       },
       {
@@ -1006,7 +1123,7 @@ async function main() {
         movementType: "Isometric",
         laterality: "unilateral" as const,
         isCorrective: true,
-        sports: ["Volleyball", "Basketball", "Soccer", "Ice Hockey", "Gymnastics"],
+        sports: ["Volleyball", "Basketball", "Soccer", "Ice Hockey", "Gymnastics", "Diving", "Skiing", "Snowboarding"],
         instructions: "Balance on one leg, reach the free foot out to tap the floor in front, to the side, and behind, resetting balance each time.",
       },
       {
@@ -1018,7 +1135,7 @@ async function main() {
         movementType: "Squat",
         laterality: "unilateral" as const,
         isCorrective: true,
-        sports: ["Volleyball", "Basketball", "Soccer", "Ice Hockey"],
+        sports: ["Volleyball", "Basketball", "Soccer", "Ice Hockey", "Snowboarding", "Skiing"],
         instructions: "Step off a low box and land on one leg, holding the landing for 2-3s -- knee tracking over the toes, no inward collapse. Neuromuscular landing-mechanics work for jump-sport knee/ACL health, not a power exercise -- keep the box low and the focus on control.",
       },
       {
@@ -1153,6 +1270,7 @@ async function main() {
         equipment: "Barbell",
         movementType: "Hinge",
         laterality: "bilateral" as const,
+        sports: ["Powerlifting"],
         instructions: "Wide stance, hands inside the knees, drive through the floor keeping the chest tall.",
       },
       {
@@ -1163,6 +1281,7 @@ async function main() {
         equipment: "Dumbbell",
         movementType: "Lunge",
         laterality: "unilateral" as const,
+        sports: ["Fencing"],
         instructions: "Step forward into a lunge, drive through the front heel to bring the back foot through to the next step.",
       },
       {
@@ -1173,6 +1292,7 @@ async function main() {
         equipment: "Dumbbell",
         movementType: "Lunge",
         laterality: "unilateral" as const,
+        sports: ["Fencing"],
         instructions: "Step backward into a lunge, front knee tracks over the foot, drive back to standing.",
       },
       {
@@ -1183,6 +1303,7 @@ async function main() {
         equipment: "Bodyweight",
         movementType: "Lunge",
         laterality: "unilateral" as const,
+        sports: ["Fencing", "Badminton", "Tennis"],
         instructions: "Step wide to one side, sit into that hip keeping the other leg straight, push back to center.",
       },
       {
@@ -1203,6 +1324,7 @@ async function main() {
         equipment: "Dumbbell",
         movementType: "Hinge",
         laterality: "unilateral" as const,
+        sports: ["Skiing", "Cycling", "Fencing"],
         instructions: "Hinge over one leg as the other extends back for balance, keep hips square, return to standing.",
       },
       {
@@ -1272,6 +1394,7 @@ async function main() {
         equipment: "Barbell",
         movementType: "Push",
         laterality: "bilateral" as const,
+        sports: ["Powerlifting"],
         instructions: "Lying on the floor, lower until the upper arms touch down, press up without arching off the floor.",
       },
       {
@@ -1352,6 +1475,7 @@ async function main() {
         equipment: "Barbell",
         movementType: "Pull",
         laterality: "bilateral" as const,
+        sports: ["Rowing"],
         instructions: "Chest over the bar, row to the sternum keeping the torso still, control the descent.",
       },
       {
@@ -1382,7 +1506,19 @@ async function main() {
         equipment: "Barbell",
         movementType: "Hinge",
         laterality: "bilateral" as const,
+        sports: ["Powerlifting"],
         instructions: "Bar set just below the knee in a rack, hinge and pull to full lockout, control the return.",
+      },
+      {
+        name: "Deficit Deadlift",
+        category: "strength" as const,
+        muscleGroup: "Hamstrings",
+        secondaryMuscles: ["Glutes", "Lower Back", "Traps", "Quads", "Core"],
+        equipment: "Barbell",
+        movementType: "Hinge",
+        laterality: "bilateral" as const,
+        sports: ["Powerlifting"],
+        instructions: "Stand on a 1-2 inch platform to increase the pull's range of motion, keeping the same setup and bracing as a normal deadlift. Overloads the hardest part of the pull -- getting the bar moving off the floor -- for a lifter whose deadlift breaks down at the start rather than the lockout.",
       },
       {
         name: "Reverse-Grip Lat Pulldown",
@@ -1551,7 +1687,7 @@ async function main() {
         equipment: "Machine",
         movementType: "Push",
         laterality: "bilateral" as const,
-        sports: ["Football", "Wrestling", "MMA"],
+        sports: ["Football", "Wrestling", "MMA", "Rugby"],
         instructions: "Low shin angle, drive through the balls of the feet with short powerful steps.",
       },
       {
@@ -1562,7 +1698,7 @@ async function main() {
         equipment: "Machine",
         movementType: "Carry",
         laterality: "bilateral" as const,
-        sports: ["Football", "Wrestling", "MMA"],
+        sports: ["Football", "Wrestling", "MMA", "Rugby", "Rowing"],
         instructions: "Harness or rope attached to the sled, walk backward or forward driving through the legs.",
       },
       {
@@ -1604,7 +1740,7 @@ async function main() {
         equipment: "Medicine Ball",
         movementType: "Rotation",
         laterality: "bilateral" as const,
-        sports: ["Baseball", "Softball", "Football", "Basketball", "Wrestling", "MMA", "Boxing"],
+        sports: ["Baseball", "Softball", "Football", "Basketball", "Wrestling", "MMA", "Boxing", "Rugby"],
         instructions: "Raise the ball overhead and slam it down as hard as possible, catch the bounce and reset.",
       },
       {
@@ -1691,7 +1827,7 @@ async function main() {
         equipment: "Bodyweight",
         movementType: "Squat",
         laterality: "unilateral" as const,
-        sports: ["Ice Hockey", "Basketball", "Soccer"],
+        sports: ["Ice Hockey", "Basketball", "Soccer", "Skiing", "Snowboarding"],
         instructions: "Single-leg squat with the back leg trailing behind and across, touching the heel down lightly for balance. Builds the single-leg strength a skating stride depends on -- hold a wall or rail if balance is the limiter, not the leg strength.",
       },
       {
@@ -1702,7 +1838,7 @@ async function main() {
         equipment: "Bodyweight",
         movementType: "Lunge",
         laterality: "bilateral" as const,
-        sports: ["Football", "Basketball", "Soccer", "Baseball", "Softball", "Lacrosse"],
+        sports: ["Football", "Basketball", "Soccer", "Baseball", "Softball", "Lacrosse", "Badminton", "Rugby"],
         instructions: "The 5-10-5: start in the middle of three lines 5 yards apart, sprint 5 yards to one side and touch the line, change direction and sprint 10 yards to the far line and touch it, then sprint back 5 yards through the start. Score the cut, not just the sprint speed.",
       },
       {
@@ -1713,7 +1849,7 @@ async function main() {
         equipment: "Bodyweight",
         movementType: "Lunge",
         laterality: "bilateral" as const,
-        sports: ["Basketball", "Soccer", "Football", "Ice Hockey", "Tennis"],
+        sports: ["Basketball", "Soccer", "Football", "Ice Hockey", "Tennis", "Badminton"],
         instructions: "Low athletic stance, shuffle laterally without crossing your feet or letting your hips rise. Defensive-footwork conditioning -- stay low and reactive rather than covering ground fast and upright.",
       },
       {
@@ -1757,7 +1893,7 @@ async function main() {
         equipment: "Bodyweight",
         movementType: "Isometric",
         laterality: "bilateral" as const,
-        sports: ["Wrestling", "Football", "MMA", "Martial Arts"],
+        sports: ["Wrestling", "Football", "MMA", "Martial Arts", "Rugby"],
         instructions: "Supporting weight on the head and feet only, arch the back and hold, then rock gently forward and back. Builds the neck strength wrestling and football collisions demand -- start with short holds (20-30s) supported by the hands before removing hand support, and never load this with added weight until neck strength is well established.",
       },
       {
@@ -1779,7 +1915,7 @@ async function main() {
         equipment: "Bodyweight",
         movementType: "Carry",
         laterality: "bilateral" as const,
-        sports: ["Wrestling", "MMA", "Martial Arts", "Football"],
+        sports: ["Wrestling", "MMA", "Martial Arts", "Football", "Rugby"],
         instructions: "Hands and feet on the floor, knees hovering just off the ground, crawl forward with opposite hand and foot moving together while keeping the hips level. Builds the ground-based scrambling strength grappling exchanges demand -- keep the hips down, don't let them pike up.",
       },
       {
@@ -1790,7 +1926,7 @@ async function main() {
         equipment: "Bodyweight",
         movementType: "Isometric",
         laterality: "bilateral" as const,
-        sports: ["Gymnastics", "Cheerleading", "Volleyball", "Swimming"],
+        sports: ["Gymnastics", "Cheerleading", "Volleyball", "Swimming", "Diving"],
         instructions: "Lying on your back, press the lower back into the floor and lift shoulders and legs a few inches off the ground, arms overhead. The foundational full-body tension position gymnastics and cheer skills are built on -- hold without letting the lower back arch off the floor.",
       },
       {
@@ -1801,6 +1937,7 @@ async function main() {
         equipment: "Barbell",
         movementType: "Pull",
         laterality: "bilateral" as const,
+        sports: ["Olympic Weightlifting", "Football", "Rugby"],
         instructions: "Pull the bar from the floor and receive it in a front-rack quarter squat, stand to finish.",
       },
       {

@@ -229,6 +229,47 @@ const COMBAT_SPORTS_TRAINING_PRINCIPLES = `- Combat sports need two energy syste
 - Strength work exists to support this athlete's skill performance, not to maximize a single lift for its own sake -- unlike a powerlifter, a fighter close to a competition date needs strength volume tapering DOWN as technical sparring/live rounds ramp up, not a peaking max-effort block competing with that sparring load for recovery.
 - Never program or assume a rapid weight-cut (dehydration-based "making weight") protocol -- this is standard practice in wrestling/boxing/MMA culture but both the NSCA and NATA specifically warn against it, especially for adolescent athletes, due to documented harm to growth, cognition, and performance. If a request describes needing to "cut weight" for an athlete who isn't clearly an adult, say in your summary that this should be handled by a coach/medical professional, not programmed here.`;
 
+// Powerlifting and Olympic weightlifting are the one category where the
+// barbell lift ISN'T preparation for a separate sport skill -- it IS the
+// sport, contested for a 1RM total. That flips several defaults from
+// PROGRAM_DESIGN_PRINCIPLES/AGE_APPROPRIATE_TRAINING_PRINCIPLES above, which
+// is why this gets its own block instead of just being "strength training
+// but more." The two sports are frequently confused with each other (both
+// are barbell sports run out of the same gyms) but are contested completely
+// differently and need different programming:
+//   - Powerlifting = squat, bench press, deadlift, each for a single best
+//     attempt, added together into a total. The max-effort/dynamic-effort
+//     conjugate split already established in PROGRAM_DESIGN_PRINCIPLES
+//     (Westside Barbell, Louie Simmons) is this sport's native training
+//     method, not just "one option" -- for a physically mature competitive
+//     powerlifter, true 1-3 rep max-effort work should be a routine, central
+//     part of programming, not something used sparingly. Dynamic-effort work
+//     (Louie Simmons' compensatory acceleration training: moving ~50-60% of
+//     a lifter's squat/bench max, or ~60% of their deadlift max, as fast as
+//     possible for low reps) is the other half of the same system and
+//     develops the rate of force development a max-effort lift alone won't.
+//   - Olympic weightlifting = the snatch and the clean & jerk, also
+//     contested for a 1RM total, but far more technical/skill-dependent per
+//     unit of strength than powerlifting -- USAW and NSCA coaching resources
+//     both treat weightlifting as a technical sport with a strength
+//     component, not a strength sport with a technical component, and
+//     program the competition lifts and their derivatives at much higher
+//     weekly frequency (often daily) at moderate loads to groove technique,
+//     rather than powerlifting's lower-frequency, higher-intensity approach
+//     to its three lifts.
+// The youth-appropriateness bullet is a deliberate correction: the Olympic
+// lifts have a lingering (and NSCA-contradicted) reputation as dangerous for
+// young athletes, when the position stand actually recommends them --
+// coached through a load/complexity progression -- as some of the best
+// power-development tools available for that population.
+const STRENGTH_SPORT_TRAINING_PRINCIPLES = `- For a powerlifter, train the exact competition version of each lift the athlete actually competes in (their preferred squat stance/bar position -- low-bar vs high-bar back squat --, a paused competition-style bench press, and their competition deadlift stance -- conventional or sumo), not a generic variant, since a lift that's never practiced in its competition form doesn't transfer as well on meet day.
+- Build a powerlifter's accessory selection around their specific weak point in each lift rather than generic assistance work: slow or missed out of the hole on squat calls for box squats or pause squats; weak off the chest on bench calls for close-grip bench, floor press, or paused bench; a lockout that grinds or fails on deadlift calls for rack pulls or deficit deadlifts. Ask what part of the lift breaks down, or infer it from what the request describes, and target that specifically.
+- For a powerlifter with a meet date, shift programming over the training block from higher-volume, moderate-intensity general strength work toward a peaking phase of low-volume, high-intensity, competition-lift-specific work in the final weeks, then taper volume sharply in the last 7-10 days before the meet while keeping some high intensity in to stay sharp -- don't keep high training volume right up to competition.
+- For an Olympic weightlifter, the snatch and clean & jerk (and their close derivatives -- hang variations, pulls from the floor or from blocks, overhead squats) are the primary training means, not "extra assistance" layered on top of generic strength work -- program them at high weekly frequency and prioritize technical quality over simply adding weight, since this sport rewards technique-per-pound more than raw strength does.
+- Front squat is nearly as central to a weightlifter's programming as the competition lifts themselves (it's the receiving position of the clean), and back squat, snatch pulls, and clean pulls round out the core strength work -- these are main lifts for this athlete, not accessories.
+- An Olympic weightlifter's mobility is a hard prerequisite, not optional maintenance work: ankle dorsiflexion and hip mobility limit squat depth in both lifts, thoracic extension and shoulder overhead mobility limit the locked-out overhead receiving position in the snatch, and any deficit here caps how well the athlete can even get into the required positions regardless of strength. Proactively include mobility work this athlete already has in their program (Ankle Dorsiflexion Mobilization, World's Greatest Stretch, Couch Stretch, Scapular Wall Slide) rather than only adding it after something starts hurting.
+- Despite a lingering reputation as unsafe for young athletes, the Olympic lifts are specifically endorsed by the NSCA's youth resistance training position stand as excellent power-development tools for adolescents and even children, when taught through a progression (technique with an empty bar or PVC pipe first, hang position before pulling from the floor, load added only after technical competency) rather than loaded before the technique is sound. Don't avoid teaching snatch/clean & jerk derivatives to a younger athlete purely because of the lift's reputation -- gate it on demonstrated technique, same as anything else in AGE_APPROPRIATE_TRAINING_PRINCIPLES above.`;
+
 // A program day's calendar date is normally the rigid "every 7 days from
 // startDate" grid -- but a coach can move any individual occurrence (game,
 // travel, extra rest) via dateOverrides, keyed by program_day_id. Falls
@@ -1809,7 +1850,10 @@ Age-appropriate training rules -- apply whenever the request gives any signal th
 ${AGE_APPROPRIATE_TRAINING_PRINCIPLES}
 
 Combat-sport rules -- apply whenever the request signals wrestling, boxing, MMA, or a grappling art like BJJ/judo/Muay Thai (a named sport, "fighter," "grappler," "striker," an upcoming "weigh-in," etc.):
-${COMBAT_SPORTS_TRAINING_PRINCIPLES}${adminGuidelines ? `\n\nAdditional guidelines this platform's admin has taught you -- follow these too:\n${adminGuidelines}` : ""}`;
+${COMBAT_SPORTS_TRAINING_PRINCIPLES}
+
+Powerlifting / Olympic weightlifting rules -- apply whenever the request signals either sport by name, or describes training for a meet/competition total, squat/bench/deadlift maxes, or the snatch/clean & jerk specifically:
+${STRENGTH_SPORT_TRAINING_PRINCIPLES}${adminGuidelines ? `\n\nAdditional guidelines this platform's admin has taught you -- follow these too:\n${adminGuidelines}` : ""}`;
 
     const userPrompt = `Coach's request: "${prompt}"
 
@@ -2085,7 +2129,10 @@ Age-appropriate training rules -- apply based on the athlete's age given below:
 ${AGE_APPROPRIATE_TRAINING_PRINCIPLES}
 
 Combat-sport rules -- apply whenever the conversation signals wrestling, boxing, MMA, or a grappling art like BJJ/judo/Muay Thai (a named sport, "fighter," "grappler," "striker," an upcoming "weigh-in," etc.):
-${COMBAT_SPORTS_TRAINING_PRINCIPLES}${adminGuidelines ? `\n\nAdditional guidelines this platform's admin has taught you -- follow these too:\n${adminGuidelines}` : ""}`;
+${COMBAT_SPORTS_TRAINING_PRINCIPLES}
+
+Powerlifting / Olympic weightlifting rules -- apply whenever the conversation signals either sport by name, or describes training for a meet/competition total, squat/bench/deadlift maxes, or the snatch/clean & jerk specifically:
+${STRENGTH_SPORT_TRAINING_PRINCIPLES}${adminGuidelines ? `\n\nAdditional guidelines this platform's admin has taught you -- follow these too:\n${adminGuidelines}` : ""}`;
 
     const historyText = history
       .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`)
