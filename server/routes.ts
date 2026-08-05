@@ -647,6 +647,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.status(201).json(result);
   });
 
+  // Same admin-teaching pattern, for the nutrition education AI
+  // (answerNutritionQuestion) instead of the program builder -- see
+  // storage.getNutritionKnowledgeGuidelines, read by every nutrition Q&A
+  // answer platform-wide.
+  app.get("/api/admin/nutrition-knowledge", requireRole("admin"), async (_req, res) => {
+    const result = await storage.getNutritionKnowledgeChat();
+    res.json(result);
+  });
+
+  app.post("/api/admin/nutrition-knowledge/chat", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = sendAiKnowledgeChatMessageSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "Invalid message" });
+    const result = await storage.updateNutritionKnowledgeFromChat(user.id, parsed.data.content);
+    res.status(201).json(result);
+  });
+
   // ---------------- Coach: Programs ----------------
 
   app.get("/api/coach/programs", requireRole("coach"), async (req, res) => {
@@ -2161,15 +2178,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
-  // Nutrition education Q&A -- same free-for-every-Free-Agent treatment as
-  // swap-exercise above, never behind requirePaidAiAccess: it's general
-  // education, not an individualized plan (see answerNutritionQuestion's
-  // hard rules), so it's kept in the free tier rather than paywalled like
-  // the general chat/ai-draft/form-check features.
+  // Nutrition education Q&A -- a "full function" AI feature like the
+  // general chat/ai-draft/form-check, so it's paywalled the same way
+  // (unlike swap-exercise, which stays free). Free Agent only: a coached
+  // athlete's actual plan is their coach's call, not the AI's, and the
+  // coach never reaches this route at all (requireFreeAgent already
+  // guarantees that upstream).
   app.post(
     "/api/athlete/nutrition/ask",
     requireRole("athlete"),
     requireFreeAgent,
+    requirePaidAiAccess,
     async (req, res) => {
       const user = currentUser(req);
       const schema = z.object({ question: z.string().trim().min(3).max(500) });

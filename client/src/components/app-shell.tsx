@@ -22,6 +22,7 @@ import {
   MessagesSquare,
   Sparkles,
   UserPlus,
+  Apple,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { EditMyProfileDialog } from "@/components/edit-my-profile-dialog";
@@ -55,6 +56,7 @@ const adminNav = [
   { href: "/admin/programs", label: "Forge Programs", icon: CalendarRange },
   { href: "/admin/review", label: "Review Queue", icon: ClipboardCheck },
   { href: "/admin/ai-knowledge", label: "Teach AI", icon: Sparkles },
+  { href: "/admin/nutrition-knowledge", label: "Teach Nutrition AI", icon: Apple },
 ];
 
 export function AppShell({
