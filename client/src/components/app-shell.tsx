@@ -160,7 +160,9 @@ export function AppShell({
             <div className="hidden items-center gap-3 md:flex">
               <div className="min-w-0 text-right">
                 <p className="truncate text-sm font-semibold">{user?.name}</p>
-                <p className="truncate text-xs capitalize text-muted-foreground">{user?.role}</p>
+                <p className="truncate text-xs capitalize text-muted-foreground">
+                  {isFreeAgent ? "Free Agent" : user?.role}
+                </p>
               </div>
               {user?.role === "athlete" && (
                 <Button
@@ -237,7 +239,9 @@ export function AppShell({
             <div className="mt-3 flex items-center justify-between border-t border-border pt-3">
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold">{user?.name}</p>
-                <p className="truncate text-xs capitalize text-muted-foreground">{user?.role}</p>
+                <p className="truncate text-xs capitalize text-muted-foreground">
+                  {isFreeAgent ? "Free Agent" : user?.role}
+                </p>
               </div>
               <div className="flex items-center gap-3">
                 {user?.role === "athlete" && (
