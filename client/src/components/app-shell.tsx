@@ -52,6 +52,7 @@ const adminNav = [
   { href: "/admin/exercises", label: "Forge Library", icon: Dumbbell },
   { href: "/admin/programs", label: "Forge Programs", icon: CalendarRange },
   { href: "/admin/review", label: "Review Queue", icon: ClipboardCheck },
+  { href: "/admin/ai-knowledge", label: "Teach AI", icon: Sparkles },
 ];
 
 export function AppShell({

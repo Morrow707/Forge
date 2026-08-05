@@ -39,6 +39,7 @@ import {
   generateProgramDraftSchema,
   submitWellnessCheckinSchema,
   sendProgramChatMessageSchema,
+  sendAiKnowledgeChatMessageSchema,
   substituteExerciseSchema,
   formFaultSchema,
 } from "@shared/schema";
@@ -613,6 +614,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       parsed.data.trackedMetrics,
     );
     if (!result) return res.status(400).json({ message: "This program isn't AI-authored yet" });
+    res.status(201).json(result);
+  });
+
+  // Admin teaches the AI program builder general programming knowledge
+  // (exercise sequencing, fatigue management, etc.) through its own chat,
+  // separate from editing any one program. Global and platform-wide -- see
+  // storage.getAiKnowledgeGuidelines, which every program-generation prompt
+  // reads and applies for every coach and athlete, not just the admin.
+  app.get("/api/admin/ai-knowledge", requireRole("admin"), async (_req, res) => {
+    const result = await storage.getAiKnowledgeChat();
+    res.json(result);
+  });
+
+  app.post("/api/admin/ai-knowledge/chat", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = sendAiKnowledgeChatMessageSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "Invalid message" });
+    const result = await storage.updateAiKnowledgeFromChat(user.id, parsed.data.content);
     res.status(201).json(result);
   });
 
