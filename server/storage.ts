@@ -3811,14 +3811,17 @@ Respond to the admin's latest message by producing the complete updated guidelin
       .filter((r) => r.weightMode === "numeric" && r.weight && r.reps)
       .sort((a, b) => a.date.localeCompare(b.date) || a.setNumber - b.setNumber);
 
+    // A PR is still tracked per exact rep count internally (a 5-rep best and
+    // a 1-rep best are different achievements), but the athlete-facing list
+    // below collapses to one row per exercise -- their most recent PR at any
+    // rep count -- so hitting several rep-range PRs on the same lift doesn't
+    // flood the list with near-duplicate rows. Full rep-by-rep PR history
+    // still lives in the coach's analytics page (getExerciseAnalyticsForCoach).
     const bestByKey = new Map<string, number>();
-    const prEvents: {
-      exerciseName: string;
-      weight: number;
-      unit: string;
-      reps: string;
-      date: string;
-    }[] = [];
+    const latestPrByExercise = new Map<
+      number,
+      { exerciseId: number; exerciseName: string; weight: number; unit: string; reps: string; date: string }
+    >();
     for (const r of sorted) {
       const weight = parseFloat(r.weight!);
       if (Number.isNaN(weight)) continue;
@@ -3826,7 +3829,8 @@ Respond to the admin's latest message by producing the complete updated guidelin
       const prevBest = bestByKey.get(key) ?? -Infinity;
       if (weight > prevBest) {
         bestByKey.set(key, weight);
-        prEvents.push({
+        latestPrByExercise.set(r.exerciseId, {
+          exerciseId: r.exerciseId,
           exerciseName: r.exerciseName,
           weight,
           unit: r.weightUnit ?? "lbs",
@@ -3835,7 +3839,9 @@ Respond to the admin's latest message by producing the complete updated guidelin
         });
       }
     }
-    const recentPRs = prEvents.reverse().slice(0, 10);
+    const recentPRs = Array.from(latestPrByExercise.values())
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .slice(0, 10);
 
     const latestByExercise = new Map<number, (typeof sorted)[number]>();
     for (const r of sorted) latestByExercise.set(r.exerciseId, r);
@@ -3861,6 +3867,61 @@ Respond to the admin's latest message by producing the complete updated guidelin
       recentPRs,
       currentLifts,
     };
+  },
+
+  // Backs the "see the trend" click from the athlete's own Recent PRs list --
+  // deliberately just weight/est.-1RM over time, not the full velocity/bar-
+  // path/tempo breakdown, which stays coach-only via
+  // getExerciseAnalyticsForCoach above. Scoped to the athlete's own id from
+  // their session, never a caller-supplied athlete, so there's no
+  // cross-athlete lookup to guard against here.
+  async getExerciseHistoryForAthlete(athleteId: number, exerciseId: number) {
+    const rows = await db
+      .select({
+        date: workoutLogs.date,
+        setNumber: workoutSetEntries.setNumber,
+        reps: workoutSetEntries.reps,
+        weight: workoutSetEntries.weight,
+        weightUnit: workoutSetEntries.weightUnit,
+        weightMode: workoutLogEntries.weightMode,
+      })
+      .from(workoutSetEntries)
+      .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
+      .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
+      .innerJoin(assignments, eq(workoutLogs.assignmentId, assignments.id))
+      .innerJoin(programExercises, eq(workoutLogEntries.programExerciseId, programExercises.id))
+      .where(and(eq(assignments.athleteId, athleteId), eq(programExercises.exerciseId, exerciseId)));
+
+    const sorted = rows
+      .filter((r) => r.weightMode === "numeric" && r.weight && r.reps)
+      .sort((a, b) => a.date.localeCompare(b.date) || a.setNumber - b.setNumber);
+
+    const bestByReps = new Map<string, number>();
+    return sorted.map((r) => {
+      const weight = parseFloat(r.weight!);
+      const reps = parseInt(r.reps!, 10);
+      const estimatedOneRm =
+        !Number.isNaN(weight) && !Number.isNaN(reps) && reps > 0
+          ? Math.round(weight * (1 + reps / 30) * 10) / 10
+          : null;
+      let isPR = false;
+      if (!Number.isNaN(weight)) {
+        const prevBest = bestByReps.get(r.reps!) ?? -Infinity;
+        if (weight > prevBest) {
+          isPR = true;
+          bestByReps.set(r.reps!, weight);
+        }
+      }
+      return {
+        date: r.date,
+        setNumber: r.setNumber,
+        reps: r.reps,
+        weight,
+        weightUnit: r.weightUnit ?? "lbs",
+        estimatedOneRm,
+        isPR,
+      };
+    });
   },
 
   // Every distinct exercise this athlete has ever logged at least one set

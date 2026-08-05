@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -46,7 +47,14 @@ type ProgressSummary = {
   workoutsThisMonth: number;
   currentStreak: number;
   totalCompleted: number;
-  recentPRs: { exerciseName: string; weight: number; unit: string; reps: string; date: string }[];
+  recentPRs: {
+    exerciseId: number;
+    exerciseName: string;
+    weight: number;
+    unit: string;
+    reps: string;
+    date: string;
+  }[];
   currentLifts: { exerciseName: string; weight: string; unit: string; reps: string; date: string }[];
 };
 
@@ -63,6 +71,7 @@ export default function AthleteProgress() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [sharingProfile, setSharingProfile] = useState(false);
+  const [trendExercise, setTrendExercise] = useState<{ id: number; name: string } | null>(null);
 
   async function handleShareProfile() {
     setSharingProfile(true);
@@ -202,7 +211,9 @@ export default function AthleteProgress() {
                   <Crown className="h-5 w-5 text-primary" />
                   Recent PRs
                 </CardTitle>
-                <CardDescription>Your latest personal records, most recent first.</CardDescription>
+                <CardDescription>
+                  Your current best on each lift, most recent first -- tap one to see the trend.
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-2">
                 {!data?.recentPRs.length && (
@@ -211,9 +222,11 @@ export default function AthleteProgress() {
                   </p>
                 )}
                 {data?.recentPRs.map((pr, i) => (
-                  <div
+                  <button
                     key={i}
-                    className="flex items-center justify-between rounded-md border border-border p-3"
+                    type="button"
+                    onClick={() => setTrendExercise({ id: pr.exerciseId, name: pr.exerciseName })}
+                    className="flex w-full items-center justify-between rounded-md border border-border p-3 text-left transition-colors hover:border-primary/50 hover:bg-surface"
                   >
                     <div>
                       <p className="font-semibold">{pr.exerciseName}</p>
@@ -224,7 +237,7 @@ export default function AthleteProgress() {
                     <p className="font-display text-lg font-bold text-primary">
                       {pr.weight} {pr.unit} × {pr.reps}
                     </p>
-                  </div>
+                  </button>
                 ))}
               </CardContent>
             </Card>
@@ -431,6 +444,103 @@ export default function AthleteProgress() {
           </Card>
         </>
       )}
+
+      <ExerciseTrendDialog
+        exercise={trendExercise}
+        onOpenChange={(open) => {
+          if (!open) setTrendExercise(null);
+        }}
+      />
     </AppShell>
+  );
+}
+
+type ExerciseHistoryPoint = {
+  date: string;
+  weight: number;
+  weightUnit: "lbs" | "kg";
+  estimatedOneRm: number | null;
+  isPR: boolean;
+};
+
+/** The one piece of "growth over time" this deliberately limited page shows --
+ * just weight & est. 1RM for the exercise tapped in Recent PRs. Everything
+ * else (velocity, bar path, tempo) stays coach-only in the full analytics
+ * page. */
+function ExerciseTrendDialog({
+  exercise,
+  onOpenChange,
+}: {
+  exercise: { id: number; name: string } | null;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const { data: history = [], isLoading } = useQuery<ExerciseHistoryPoint[]>({
+    queryKey: ["/api/athlete/exercise-history", exercise?.id],
+    queryFn: () => getJson(`/api/athlete/exercise-history?exerciseId=${exercise!.id}`),
+    enabled: exercise != null,
+  });
+
+  const chartData = history.map((p) => ({
+    label: format(parseISO(p.date), "MMM d"),
+    weight: p.weight,
+    estimatedOneRm: p.estimatedOneRm,
+    isPR: p.isPR,
+  }));
+  const unit = history.find((p) => p.weightUnit)?.weightUnit ?? "lbs";
+
+  return (
+    <Dialog open={exercise != null} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{exercise?.name} — Growth Trend</DialogTitle>
+        </DialogHeader>
+        {isLoading ? (
+          <div className="h-64 animate-pulse rounded-md bg-surface" />
+        ) : chartData.length === 0 ? (
+          <p className="py-10 text-center text-sm text-muted-foreground">
+            Not enough logged sets yet to show a trend.
+          </p>
+        ) : (
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={chartData} margin={{ left: 4, right: 12 }}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} width={44} />
+                <Tooltip
+                  contentStyle={{
+                    background: "hsl(var(--card))",
+                    border: "1px solid hsl(var(--border))",
+                  }}
+                  formatter={(value: unknown, name: unknown, item: any) => [
+                    `${value} ${unit}${item?.payload?.isPR ? " — PR!" : ""}`,
+                    String(name),
+                  ]}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="weight"
+                  name="Weight"
+                  stroke="hsl(var(--primary))"
+                  strokeWidth={2}
+                  connectNulls
+                  dot={{ r: 3 }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="estimatedOneRm"
+                  name="Est. 1RM"
+                  stroke="#3b82f6"
+                  strokeWidth={1.5}
+                  strokeDasharray="4 3"
+                  connectNulls
+                  dot={{ r: 2 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
