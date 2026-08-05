@@ -268,6 +268,7 @@ async function main() {
         equipment: "Bodyweight",
         movementType: "Isometric",
         laterality: "bilateral" as const,
+        isCorrective: true,
         instructions: "Anchor ankles, lower torso as slowly as possible, catch yourself at the bottom.",
       },
       {
@@ -318,6 +319,7 @@ async function main() {
         equipment: "Bodyweight",
         movementType: "Mobility",
         laterality: "unilateral" as const,
+        isCorrective: true,
         instructions: "Rear foot up on a wall or bench, drive hips forward, keep torso upright.",
       },
       {
@@ -328,6 +330,7 @@ async function main() {
         equipment: "Bench",
         movementType: "Isometric",
         laterality: "unilateral" as const,
+        isCorrective: true,
         instructions: "Top foot on the bench, hold a straight line from shoulder to ankle.",
       },
       {
@@ -528,6 +531,7 @@ async function main() {
         equipment: "Bodyweight",
         movementType: "Isometric",
         laterality: "unilateral" as const,
+        isCorrective: true,
         instructions: "Stack feet, prop up on one elbow, hold a straight line from head to feet.",
       },
       {
@@ -721,6 +725,7 @@ async function main() {
         equipment: "Cable",
         movementType: "Pull",
         laterality: "bilateral" as const,
+        isCorrective: true,
         instructions: "Rope at face height, pull apart toward your ears, elbows high.",
       },
       {
@@ -984,6 +989,17 @@ async function main() {
         laterality: "unilateral" as const,
         isCorrective: true,
         instructions: "Balance on one leg, reach the free foot out to tap the floor in front, to the side, and behind, resetting balance each time.",
+      },
+      {
+        name: "Single-Leg Landing Hold",
+        category: "plyometric" as const,
+        muscleGroup: "Quads",
+        secondaryMuscles: ["Glutes", "Hamstrings", "Ankle"],
+        equipment: "Bodyweight",
+        movementType: "Squat",
+        laterality: "unilateral" as const,
+        isCorrective: true,
+        instructions: "Step off a low box and land on one leg, holding the landing for 2-3s -- knee tracking over the toes, no inward collapse. Neuromuscular landing-mechanics work for jump-sport knee/ACL health, not a power exercise -- keep the box low and the focus on control.",
       },
       {
         name: "Open Book Stretch",
@@ -1577,6 +1593,16 @@ async function main() {
         instructions: "Rotate away from a wall then explosively throw the ball into it, catch and repeat.",
       },
       {
+        name: "Medicine Ball Scoop Toss",
+        category: "conditioning" as const,
+        muscleGroup: "Hips",
+        secondaryMuscles: ["Core", "Shoulders", "Glutes"],
+        equipment: "Medicine Ball",
+        movementType: "Rotation",
+        laterality: "unilateral" as const,
+        instructions: "Ball loaded at the back hip during your stride, then fire it into a wall or partner by sequencing hips before shoulders. Trains the hip-shoulder separation baseball hitting and throwing both rely on -- let the legs and hips start the throw, not the arms.",
+      },
+      {
         name: "Wall Ball",
         category: "conditioning" as const,
         muscleGroup: "Quads",
@@ -1595,6 +1621,26 @@ async function main() {
         movementType: "Squat",
         laterality: "bilateral" as const,
         instructions: "Step off a box, land softly, and immediately explode upward with minimal ground contact time.",
+      },
+      {
+        name: "Approach Jump",
+        category: "plyometric" as const,
+        muscleGroup: "Quads",
+        secondaryMuscles: ["Glutes", "Hamstrings", "Calves"],
+        equipment: "Bodyweight",
+        movementType: "Squat",
+        laterality: "bilateral" as const,
+        instructions: "A 3-step approach (step, step, plant both feet) into a max-effort two-foot vertical jump, swinging both arms hard. The volleyball/basketball attack-jump pattern -- score the approach speed and the plant, not just the jump.",
+      },
+      {
+        name: "Tuck Jump",
+        category: "plyometric" as const,
+        muscleGroup: "Quads",
+        secondaryMuscles: ["Core", "Hip Flexors", "Calves"],
+        equipment: "Bodyweight",
+        movementType: "Squat",
+        laterality: "bilateral" as const,
+        instructions: "Jump straight up, drive both knees to the chest, and land soft with knees tracking over the toes before resetting. A landing-mechanics and reactive-power drill for jump-sport athletes -- prioritize a controlled landing over jump height.",
       },
       {
         name: "Lateral Bound",
@@ -1685,6 +1731,26 @@ async function main() {
     for (const existingEx of await storage.getAllExercises()) {
       if (existingEx.videoUrl) continue;
       await storage.updateExercise(existingEx.id, { videoUrl: videoSearchUrl(existingEx.name) });
+    }
+
+    // One-time backfill for exercises that already existed before this PT
+    // audit flagged them as correctives (e.g. Side Plank/Face Pull/Nordic
+    // Hamstring Curl were always legitimate corrective work, just never
+    // tagged, so they were invisible to the dedicated "Add Corrective"
+    // picker). Unlike the null-checked backfills above, isCorrective is a
+    // boolean with no "untouched" state to detect -- this only ever flips
+    // false to true, never true to false, so a coach who deliberately
+    // un-flagged one of these names keeps that decision reverted on the
+    // next reseed. Acceptable here since the shared exercise library is
+    // admin-only editable (see transferExerciseOwnership below), not
+    // something individual coaches can toggle.
+    const seedCorrectiveNames = new Set(
+      seedExercises.filter((ex) => ex.isCorrective).map((ex) => ex.name),
+    );
+    for (const existingEx of await storage.getAllExercises()) {
+      if (existingEx.isCorrective) continue;
+      if (!seedCorrectiveNames.has(existingEx.name)) continue;
+      await storage.updateExercise(existingEx.id, { isCorrective: true });
     }
   }
 
