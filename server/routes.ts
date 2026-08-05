@@ -81,7 +81,7 @@ const uploadFormVideo = multer({
 });
 
 function currentUser(req: any) {
-  return req.user as { id: number; role: "coach" | "athlete" | "admin"; name: string };
+  return req.user as { id: number; role: "coach" | "athlete" | "admin"; name: string; email: string };
 }
 
 // The single gate for every Free Agent AI route below (program building AND
@@ -102,14 +102,20 @@ async function requireFreeAgent(req: any, res: any, next: any) {
   next();
 }
 
+// The seeded demo Free Agent account (see server/seed.ts) is the one
+// deliberate exception to the paywall below -- it's used for demoing/
+// testing the full Free Agent AI experience without real billing existing
+// yet, so it's treated as permanently "paid." No other account gets this.
+const COMPED_FREE_AGENT_EMAILS = new Set(["freeagent@forge.app"]);
+
 // The future paywall requireFreeAgent's own comment anticipates: nothing
 // sets this true yet (no billing exists), so every route gated behind it is
 // a hard block for a Free Agent until that's built -- change only this
 // function once real billing exists. Exercise substitution is deliberately
 // never gated by this (see the swap-exercise routes below) so a Free Agent
 // keeps that one AI feature even while everything else here is paywalled.
-async function hasAthletePaidForAiAccess(_athleteId: number): Promise<boolean> {
-  return false;
+async function hasAthletePaidForAiAccess(_athleteId: number, email: string): Promise<boolean> {
+  return COMPED_FREE_AGENT_EMAILS.has(email);
 }
 
 // Gates the "full function" AI features (program builder chat/draft, AI
@@ -119,7 +125,7 @@ async function hasAthletePaidForAiAccess(_athleteId: number): Promise<boolean> {
 // never reaches this paywall at all, they're already rejected upstream.
 async function requirePaidAiAccess(req: any, res: any, next: any) {
   const user = currentUser(req);
-  const hasPaid = await hasAthletePaidForAiAccess(user.id);
+  const hasPaid = await hasAthletePaidForAiAccess(user.id, user.email);
   if (!hasPaid) {
     return res.status(402).json({
       message:
