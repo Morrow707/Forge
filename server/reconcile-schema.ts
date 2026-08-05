@@ -590,6 +590,24 @@ CREATE TABLE IF NOT EXISTS "ai_knowledge" (
   "updated_at" timestamp NOT NULL DEFAULT now()
 );
 INSERT INTO "ai_knowledge" ("id", "guidelines") VALUES (1, '') ON CONFLICT ("id") DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS "nutrition_knowledge_messages" (
+  "id" serial PRIMARY KEY,
+  "author_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "role" ai_knowledge_chat_role NOT NULL,
+  "content" text NOT NULL,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "nutrition_knowledge_messages_created_idx" ON "nutrition_knowledge_messages" ("created_at");
+
+-- Singleton row (always id 1) holding the nutrition AI's current living
+-- guidelines, taught by the admin via nutrition_knowledge_messages above.
+CREATE TABLE IF NOT EXISTS "nutrition_knowledge" (
+  "id" integer PRIMARY KEY,
+  "guidelines" text NOT NULL DEFAULT '',
+  "updated_at" timestamp NOT NULL DEFAULT now()
+);
+INSERT INTO "nutrition_knowledge" ("id", "guidelines") VALUES (1, '') ON CONFLICT ("id") DO NOTHING;
 `;
 
 async function main() {

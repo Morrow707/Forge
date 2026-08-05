@@ -1087,6 +1087,37 @@ export const sendAiKnowledgeChatMessageSchema = z.object({
 
 export type SendAiKnowledgeChatMessageInput = z.infer<typeof sendAiKnowledgeChatMessageSchema>;
 
+// Same admin-teaching pattern as aiKnowledge/aiKnowledgeMessages above, but
+// for the nutrition education AI (answerNutritionQuestion) instead of the
+// program builder -- a separate conversation and a separate living
+// guidelines document, since the two AIs serve completely different
+// knowledge domains and the admin may want to teach them independently.
+export const nutritionKnowledgeMessages = pgTable(
+  "nutrition_knowledge_messages",
+  {
+    id: serial("id").primaryKey(),
+    authorId: integer("author_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    role: aiKnowledgeChatRoleEnum("role").notNull(),
+    content: text("content").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    createdIdx: index("nutrition_knowledge_messages_created_idx").on(table.createdAt),
+  }),
+);
+
+export type NutritionKnowledgeMessage = typeof nutritionKnowledgeMessages.$inferSelect;
+
+// Singleton row (always id 1) holding the nutrition AI's current living
+// guidelines, rewritten in full on every admin chat turn.
+export const nutritionKnowledge = pgTable("nutrition_knowledge", {
+  id: integer("id").primaryKey(),
+  guidelines: text("guidelines").notNull().default(""),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 export const substituteExerciseSchema = z.object({
   programExerciseId: z.number().int().positive(),
   reason: z.string().trim().min(1).max(200),
