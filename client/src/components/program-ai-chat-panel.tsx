@@ -8,6 +8,7 @@ import { format, parseISO } from "date-fns";
 import { toast } from "sonner";
 import { Send, Sparkles, Lock, Loader2, Copy, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { copyToClipboard } from "@/lib/clipboard";
 
 type ProgramChatMessage = {
   id: number;
@@ -39,8 +40,12 @@ export function ProgramAiChatPanel({
   const bottomRef = useRef<HTMLDivElement>(null);
   const fetchUrl = `${apiBase}/programs/${programId}/chat`;
 
-  function handleCopy(message: ProgramChatMessage) {
-    navigator.clipboard.writeText(message.content);
+  async function handleCopy(message: ProgramChatMessage) {
+    const copied = await copyToClipboard(message.content);
+    if (!copied) {
+      toast.error("Couldn't copy -- try selecting the text instead");
+      return;
+    }
     toast.success("Message copied");
     setCopiedId(message.id);
     setTimeout(() => setCopiedId((current) => (current === message.id ? null : current)), 1500);
@@ -116,7 +121,7 @@ export function ProgramAiChatPanel({
             >
               <div
                 className={cn(
-                  "group relative max-w-[85%] rounded-lg px-3 py-2 pr-7 text-sm",
+                  "group relative max-w-[85%] rounded-lg px-3 py-2 pr-8 text-sm",
                   m.role === "user"
                     ? "bg-primary text-primary-foreground"
                     : "border border-primary/30 bg-primary/5",
@@ -128,7 +133,7 @@ export function ProgramAiChatPanel({
                   aria-label="Copy message"
                   title="Copy"
                   className={cn(
-                    "absolute right-1.5 top-1.5 rounded p-0.5 opacity-60 transition-opacity hover:opacity-100",
+                    "absolute right-0.5 top-0.5 rounded p-2 opacity-70 transition-opacity hover:opacity-100",
                     m.role === "user" ? "text-primary-foreground" : "text-muted-foreground",
                   )}
                 >
