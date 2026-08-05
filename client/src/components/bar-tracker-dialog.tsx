@@ -18,6 +18,7 @@ import {
   type RepMetrics,
 } from "@/lib/bar-tracking";
 import { summarizeJumpSet, type JumpSetMetrics } from "@/lib/jump-tracking";
+import { refineBarHeightFromEdges } from "@/lib/bar-edge-detection";
 import {
   getPoseLandmarker,
   deriveBarPoint,
@@ -222,6 +223,12 @@ export function BarTrackerDialog({
   const [liveTiltDeg, setLiveTiltDeg] = useState<number | null>(null);
   const [repCount, setRepCount] = useState(0);
   const [poseVisible, setPoseVisible] = useState(true);
+  // Whether refineBarHeightFromEdges found a confident real bar edge on the
+  // most recent frame -- purely informational, so the athlete can see
+  // whether tracking is reading the actual bar or has fallen back to the
+  // wrist-only estimate (e.g. a bare hand exercise, poor lighting, or the
+  // bar out of the search window).
+  const [barEdgeDetected, setBarEdgeDetected] = useState(false);
   const [result, setResult] = useState<RepMetrics | JumpSetMetrics | null>(null);
   const [movementGuess, setMovementGuess] = useState<MovementGuess | null>(null);
   const [voiceEnabled, setVoiceEnabled] = useState(loadVoicePref);
@@ -247,6 +254,7 @@ export function BarTrackerDialog({
     framesRef.current = [];
     lastVideoTimeRef.current = -1;
     setLiveTiltDeg(null);
+    setBarEdgeDetected(false);
     verticalSignRef.current = 1;
 
     setModelLoading(true);
@@ -342,6 +350,7 @@ export function BarTrackerDialog({
     repCountRef.current = 0;
     setRepCount(0);
     setLiveTiltDeg(null);
+    setBarEdgeDetected(false);
     tick();
   }
 
@@ -377,6 +386,7 @@ export function BarTrackerDialog({
     // rather than showing a readout from whatever the arms happen to be
     // doing mid-jump.
     setLiveTiltDeg(landmarks && mode !== "jump" ? computeBarTiltDegrees(landmarks) : null);
+    if (!landmarks || !worldLandmarks) setBarEdgeDetected(false);
 
     if (landmarks && worldLandmarks) {
       drawSkeleton(ctx, landmarks, overlay.width, overlay.height);
@@ -403,7 +413,16 @@ export function BarTrackerDialog({
         const t = now - startTimeRef.current;
         const trace = traceRef.current;
         const prev = trace[trace.length - 1];
-        const y = verticalSignRef.current * worldPoint.y;
+        // Wrist height stands in for bar height by default, but the wrist
+        // joint and the bar itself aren't at the same point -- grip
+        // thickness and wrist flexion shift them apart. When there's a
+        // confident real pixel edge nearby (the bar's actual rim against
+        // the background), use that instead; jump mode has no bar to find
+        // an edge of, so it's skipped there.
+        const edgeOffset =
+          mode === "jump" ? null : refineBarHeightFromEdges(video, landmarks, worldLandmarks);
+        setBarEdgeDetected(edgeOffset != null);
+        const y = verticalSignRef.current * worldPoint.y + (edgeOffset ?? 0);
         trace.push({ t, x: worldPoint.x, y, z: worldPoint.z });
         framesRef.current.push({ t, landmarks, worldLandmarks });
 
@@ -595,6 +614,18 @@ export function BarTrackerDialog({
                     {Math.abs(liveTiltDeg) > 7
                       ? `${Math.abs(liveTiltDeg).toFixed(0)}° toward the ${liveTiltDeg > 0 ? "right" : "left"} arm`
                       : "Bar level"}
+                  </span>
+                </div>
+              )}
+              {mode !== "jump" && (
+                <div className="flex justify-center">
+                  <span
+                    className={cn(
+                      "rounded-full px-2.5 py-1 text-[11px] font-semibold",
+                      barEdgeDetected ? "bg-success/80 text-success-foreground" : "bg-black/40 text-white/70",
+                    )}
+                  >
+                    {barEdgeDetected ? "Bar detected" : "Estimating from grip"}
                   </span>
                 </div>
               )}
