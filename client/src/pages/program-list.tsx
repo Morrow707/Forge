@@ -62,6 +62,7 @@ export function ProgramListPage({
   showAssign = true,
   showAiAssist = false,
   showSelfAssign = false,
+  aiFirstCreate = false,
 }: {
   apiBase: string;
   routeBase: string;
@@ -74,6 +75,13 @@ export function ProgramListPage({
    * athlete's self-built program. Separate from showAssign's multi-athlete
    * roster dialog, which doesn't apply to either of those. */
   showSelfAssign?: boolean;
+  /** Skips the name/description dialog entirely -- "New Program" creates a
+   * blank program under a placeholder name and lands straight in the
+   * builder, where the AI chat panel (see ProgramAiChatPanel) is what
+   * actually starts the conversation. Used instead of showAiAssist for a
+   * Free Agent, who isn't expected to design a program from a blank editor
+   * -- there's exactly one path in, and it's AI-first. */
+  aiFirstCreate?: boolean;
 }) {
   const qc = useQueryClient();
   const [, navigate] = useLocation();
@@ -101,9 +109,9 @@ export function ProgramListPage({
   );
 
   const createMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (overrideName?: string) => {
       const res = await apiRequest("POST", `${apiBase}/programs`, {
-        name,
+        name: overrideName ?? name,
         description,
         weeks: [],
       });
@@ -244,7 +252,12 @@ export function ProgramListPage({
               AI Assist
             </Button>
           )}
-          <Button onClick={() => setDialogOpen(true)}>
+          <Button
+            onClick={() =>
+              aiFirstCreate ? createMutation.mutate("New Program") : setDialogOpen(true)
+            }
+            disabled={aiFirstCreate && createMutation.isPending}
+          >
             <Plus className="h-4 w-4" />
             New Program
           </Button>
@@ -256,7 +269,12 @@ export function ProgramListPage({
           <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
             <ListChecks className="h-10 w-10 text-muted-foreground" />
             <p className="text-muted-foreground">{emptyStateText}</p>
-            <Button onClick={() => setDialogOpen(true)}>
+            <Button
+              onClick={() =>
+                aiFirstCreate ? createMutation.mutate("New Program") : setDialogOpen(true)
+              }
+              disabled={aiFirstCreate && createMutation.isPending}
+            >
               <Plus className="h-4 w-4" />
               New Program
             </Button>
@@ -363,7 +381,7 @@ export function ProgramListPage({
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              createMutation.mutate();
+              createMutation.mutate(undefined);
             }}
             className="space-y-4"
           >
