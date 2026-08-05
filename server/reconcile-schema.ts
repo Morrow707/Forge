@@ -448,6 +448,29 @@ CREATE TABLE IF NOT EXISTS "body_metrics" (
 );
 CREATE INDEX IF NOT EXISTS "body_metrics_athlete_idx" ON "body_metrics" ("athlete_id");
 
+CREATE TABLE IF NOT EXISTS "nutrition_targets" (
+  "id" serial PRIMARY KEY,
+  "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "calories_kcal" integer,
+  "protein_g" real,
+  "carbs_g" real,
+  "fat_g" real,
+  "fiber_g" real,
+  "water_oz" real,
+  "calcium_mg" real,
+  "iron_mg" real,
+  "vitamin_d_mcg" real,
+  "potassium_mg" real,
+  "magnesium_mg" real,
+  "sodium_mg" real,
+  "vitamin_b12_mcg" real,
+  "zinc_mg" real,
+  "notes" text,
+  "updated_by_user_id" integer REFERENCES "users"("id") ON DELETE SET NULL,
+  "updated_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "nutrition_targets_athlete_idx" ON "nutrition_targets" ("athlete_id");
+
 CREATE TABLE IF NOT EXISTS "testing_results" (
   "id" serial PRIMARY KEY,
   "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
