@@ -43,6 +43,14 @@ services:
       # this is set; nothing else in the app is affected.
       - key: ANTHROPIC_API_KEY
         sync: false
+      # USDA FoodData Central key for the food-log barcode/name lookup
+      # fallback -- free at https://fdc.nal.usda.gov/api-key-signup. Open
+      # Food Facts (no key needed) already covers most packaged-food
+      # barcodes on its own; this just adds USDA's branded/generic data as
+      # a second source. Barcode scanning and manual entry both work with
+      # this unset.
+      - key: USDA_FDC_API_KEY
+        sync: false
 
 databases:
   - name: forge-db
