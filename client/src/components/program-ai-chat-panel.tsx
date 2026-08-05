@@ -111,7 +111,9 @@ export function ProgramAiChatPanel({
           {isLoading && <div className="h-24 animate-pulse rounded-md bg-surface" />}
           {!isLoading && !messages?.length && (
             <p className="py-8 text-center text-sm text-muted-foreground">
-              No messages yet -- describe the program you want to build or change.
+              Tell me what you want to build: your main goal, how many days a week you can
+              train, your experience level, and any equipment limits. I'll ask if I need
+              anything else before building your program.
             </p>
           )}
           {messages?.map((m) => (

@@ -127,10 +127,67 @@ export async function askClaudeStructured<T>(
       return null;
     }
     const data = await res.json();
+    // A response cut off mid-tool-call means `input` is incomplete/garbage
+    // JSON -- treating that as a real result is how a truncated "emit the
+    // complete structure" response ends up silently deleting whatever
+    // didn't fit. Callers should get the same "couldn't do it, try again"
+    // failure they'd get from any other bad response, not corrupt data.
+    if (data.stop_reason === "max_tokens") {
+      console.error("Claude structured request truncated at max_tokens -- discarding partial result");
+      return null;
+    }
     const toolUse = data.content?.find((b: any) => b.type === "tool_use");
     return (toolUse?.input as T) ?? null;
   } catch (err: any) {
     console.error("Claude structured request failed:", err?.message || err);
+    return null;
+  }
+}
+
+/** Like askClaudeStructured, but offers Claude a choice between multiple
+ * tools (tool_choice: "auto") instead of forcing exactly one -- lets the
+ * model genuinely just reply/ask a question via a no-op tool on a turn
+ * where it shouldn't touch anything yet, rather than being forced to
+ * produce a real change (or a guess) on every single turn. Returns which
+ * tool was called alongside its input so the caller can branch on it. */
+export async function askClaudeWithTools<T = any>(
+  system: string,
+  userPrompt: string,
+  tools: { name: string; description: string; input_schema: Record<string, unknown> }[],
+  { maxTokens = 1024 }: { maxTokens?: number } = {},
+): Promise<{ toolName: string; input: T } | null> {
+  if (!aiEnabled) return null;
+  try {
+    const res = await fetch(API_URL, {
+      method: "POST",
+      headers: {
+        "x-api-key": apiKey!,
+        "anthropic-version": ANTHROPIC_VERSION,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: maxTokens,
+        system,
+        messages: [{ role: "user", content: userPrompt }],
+        tools,
+        tool_choice: { type: "auto" },
+      }),
+    });
+    if (!res.ok) {
+      console.error("Claude tool-use request failed:", res.status, await res.text());
+      return null;
+    }
+    const data = await res.json();
+    if (data.stop_reason === "max_tokens") {
+      console.error("Claude tool-use request truncated at max_tokens -- discarding partial result");
+      return null;
+    }
+    const toolUse = data.content?.find((b: any) => b.type === "tool_use");
+    if (!toolUse) return null;
+    return { toolName: toolUse.name as string, input: toolUse.input as T };
+  } catch (err: any) {
+    console.error("Claude tool-use request failed:", err?.message || err);
     return null;
   }
 }

@@ -8,9 +8,9 @@ export default function AthletePrograms() {
         apiBase="/api/athlete"
         routeBase="/athlete/programs"
         title="My Programs"
-        emptyStateText="Nothing here yet -- build a program by hand, duplicate a Forge template, or try AI Assist (a paid upgrade, coming soon)."
+        emptyStateText="Nothing here yet -- hit New Program and the AI will ask what you're trying to achieve, then build it with you."
         showAssign={false}
-        showAiAssist
+        aiFirstCreate
         showSelfAssign
       />
     </FreeAgentGate>

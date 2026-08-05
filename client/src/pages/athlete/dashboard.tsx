@@ -11,7 +11,7 @@ import { CalendarView, type CalendarEntry } from "@/components/calendar-view";
 import { CalendarLinkDialog } from "@/components/calendar-link-dialog";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { CalendarDays, Sparkles } from "lucide-react";
+import { CalendarDays } from "lucide-react";
 
 export default function AthleteDashboard() {
   const [, navigate] = useLocation();
@@ -65,25 +65,26 @@ export default function AthleteDashboard() {
           (zero rows in coachAthletes for this athlete, nothing stored).
           The full AI program builder/chat/form-check are a paid upgrade for
           a Free Agent (see requirePaidAiAccess in routes.ts, always false
-          until real billing exists) -- manual programs, Forge templates,
-          and exercise substitution stay free either way. */}
+          until real billing exists) -- Forge templates and exercise
+          substitution stay free either way. Deliberately no AI branding or
+          entry point here (no Sparkles icon, no "AI" in the copy) -- the AI
+          program builder lives exclusively on the Programs page (see
+          aiFirstCreate in program-list.tsx); this is just a plain link over. */}
       {!coachesLoading && coaches.length === 0 && (
         <Card className="mt-6">
           <CardContent className="flex flex-col items-center gap-3 py-14 text-center">
             <Badge className="gap-1.5 bg-primary/15 text-primary hover:bg-primary/15">
-              <Sparkles className="h-3.5 w-3.5" />
               Free Agent
             </Badge>
             <p className="max-w-sm text-muted-foreground">
-              You don't have a coach yet. Build your own program by hand or start from a Forge
-              template, and swap out any exercise that doesn't work for you -- the full AI coach
-              (conversational program building, form-check, and AI chat) is a paid upgrade,
-              coming soon.
+              You don't have a coach yet. Head to My Programs to build one -- start from a Forge
+              template and swap out any exercise that doesn't work for you, or let the AI ask a
+              few questions and build it with you (a paid upgrade, coming soon).
             </p>
             <Button asChild>
               <Link href="/athlete/programs">
-                <Sparkles className="h-4 w-4" />
-                Build a Program
+                <CalendarDays className="h-4 w-4" />
+                Go to My Programs
               </Link>
             </Button>
             <p className="mt-2 text-xs text-muted-foreground">
