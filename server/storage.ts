@@ -427,17 +427,46 @@ const NUTRITION_SUPPLEMENT_PRINCIPLES = `- Creatine monohydrate is the most-rese
 // A program day's calendar date is normally the rigid "every 7 days from
 // startDate" grid -- but a coach can move any individual occurrence (game,
 // travel, extra rest) via dateOverrides, keyed by program_day_id. Falls
-// back to the grid whenever a day has no override.
+// back to the grid whenever a day has no override. calendarWeekNumber is
+// the assignment's own week counter (see assignmentWeekOccurrences below),
+// not the program's native week number -- they're only the same thing on
+// an assignment's first pass through the program. applyOverride is false
+// on every cycle after the first, since a dateOverride is keyed by
+// program_day_id, which repeats every cycle -- applying it on every cycle
+// would drag every repeat of that day onto the same one-off date.
 function resolveAssignmentDate(
   assignment: { startDate: string; dateOverrides?: Record<string, string> | null },
-  weekNumber: number,
+  calendarWeekNumber: number,
   dayNumber: number,
   programDayId: number,
+  applyOverride: boolean,
 ): Date {
-  const override = assignment.dateOverrides?.[String(programDayId)];
+  const override = applyOverride ? assignment.dateOverrides?.[String(programDayId)] : undefined;
   if (override) return parseISO(override);
-  const offset = (weekNumber - 1) * 7 + (dayNumber - 1);
+  const offset = (calendarWeekNumber - 1) * 7 + (dayNumber - 1);
   return addDays(parseISO(assignment.startDate), offset);
+}
+
+// Expands a program's own week pattern into `durationWeeks` calendar weeks
+// by repeating it end-to-end -- durationWeeks=1 (every pre-migration row's
+// backfilled value) visits each of the program's own weeks exactly once,
+// identical to the only behavior that existed before durationWeeks was
+// added. A 4-native-week program with durationWeeks=3 repeats all 4 weeks
+// 3 times over (12 calendar weeks total), not "cut off after 3 weeks."
+function* assignmentWeekOccurrences<Week extends { weekNumber: number }>(
+  weeks: Week[],
+  durationWeeks: number,
+): Generator<{ week: Week; calendarWeekNumber: number; isFirstCycle: boolean }> {
+  if (weeks.length === 0) return;
+  for (let cycle = 0; cycle < durationWeeks; cycle++) {
+    for (const week of weeks) {
+      yield {
+        week,
+        calendarWeekNumber: cycle * weeks.length + week.weekNumber,
+        isFirstCycle: cycle === 0,
+      };
+    }
+  }
 }
 
 type MergeableDay = {
@@ -4659,6 +4688,7 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
     athletes: { athleteId: number; correctivesEnabled: boolean }[],
     startDate: string,
     dateOverrides?: Record<string, string>,
+    durationWeeks = 1,
   ) {
     // Re-assigning a program an athlete already has (or has finished) is
     // intentional -- e.g. running the same block again -- so every request
@@ -4674,6 +4704,7 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
               athleteId: a.athleteId,
               startDate,
               correctivesEnabled: a.correctivesEnabled,
+              durationWeeks,
               dateOverrides: dateOverrides && Object.keys(dateOverrides).length ? dateOverrides : null,
             })),
           )
@@ -5171,9 +5202,12 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
     const entries: CalendarEntry[] = [];
 
     for (const a of athleteAssignments) {
-      for (const week of a.program.weeks) {
+      for (const { week, calendarWeekNumber, isFirstCycle } of assignmentWeekOccurrences(
+        a.program.weeks,
+        a.durationWeeks,
+      )) {
         for (const day of week.days) {
-          const date = resolveAssignmentDate(a, week.weekNumber, day.dayNumber, day.id);
+          const date = resolveAssignmentDate(a, calendarWeekNumber, day.dayNumber, day.id, isFirstCycle);
           if (isWithinInterval(date, { start, end })) {
             entries.push({
               date: formatISO(date, { representation: "date" }),
@@ -5266,9 +5300,12 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
     const entries: CoachCalendarEntry[] = [];
 
     for (const a of coachAssignments) {
-      for (const week of a.program.weeks) {
+      for (const { week, calendarWeekNumber, isFirstCycle } of assignmentWeekOccurrences(
+        a.program.weeks,
+        a.durationWeeks,
+      )) {
         for (const day of week.days) {
-          const date = resolveAssignmentDate(a, week.weekNumber, day.dayNumber, day.id);
+          const date = resolveAssignmentDate(a, calendarWeekNumber, day.dayNumber, day.id, isFirstCycle);
           if (isWithinInterval(date, { start, end })) {
             entries.push({
               date: formatISO(date, { representation: "date" }),
@@ -6597,11 +6634,14 @@ ${catalog}`;
         byDate = new Map();
         scheduledByAthlete.set(a.athleteId, byDate);
       }
-      for (const week of a.program.weeks) {
+      for (const { week, calendarWeekNumber, isFirstCycle } of assignmentWeekOccurrences(
+        a.program.weeks,
+        a.durationWeeks,
+      )) {
         for (const day of week.days) {
           if (day.isRestDay) continue;
           const dateStr = formatISO(
-            resolveAssignmentDate(a, week.weekNumber, day.dayNumber, day.id),
+            resolveAssignmentDate(a, calendarWeekNumber, day.dayNumber, day.id, isFirstCycle),
             { representation: "date" },
           );
           if (dateStr <= today && !byDate.has(dateStr)) {

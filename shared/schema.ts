@@ -581,11 +581,21 @@ export const assignments = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     startDate: date("start_date").notNull(),
     correctivesEnabled: boolean("correctives_enabled").notNull().default(true),
+    // How many times to repeat the program's own week pattern end-to-end,
+    // not "how many weeks to cut it off at" -- 1 (the default, and every
+    // pre-migration row's backfilled value) means "the program's own weeks,
+    // once through," identical to the only behavior that existed before
+    // this column. A 4-native-week program assigned with durationWeeks=3
+    // runs all 4 weeks, 3 times over (12 calendar weeks total), which is
+    // what lets a coach repeat a periodized block without re-assigning it
+    // every time it finishes. See resolveAssignmentDate in storage.ts.
+    durationWeeks: integer("duration_weeks").notNull().default(1),
     // Manual per-day schedule overrides, keyed by program_day_id (as a
     // string) -> an explicit calendar date. Lets a coach account for games,
     // travel, or extra rest by moving individual occurrences off the rigid
     // "every 7 days from startDate" grid; days with no entry here still fall
-    // back to that computed date.
+    // back to that computed date. Only ever applied to the first cycle
+    // through the program's weeks -- see resolveAssignmentDate.
     dateOverrides: json("date_overrides").$type<Record<string, string>>(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
@@ -1912,6 +1922,9 @@ export const programStructureSchema = z.object({
 export const insertAssignmentSchema = z.object({
   programId: z.number(),
   startDate: z.string(),
+  // How many times to repeat the program's own week pattern -- see the
+  // durationWeeks column comment in the assignments table.
+  durationWeeks: z.number().int().min(1).max(12).default(1),
   // Optional manual schedule -- programDayId (as a string key) -> an
   // explicit date, for days that shouldn't land on the rigid "every 7 days
   // from startDate" grid (games, travel, an extra rest day). Applied the
