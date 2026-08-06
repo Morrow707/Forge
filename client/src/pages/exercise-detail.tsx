@@ -39,7 +39,15 @@ import {
 } from "lucide-react";
 import type { ExerciseWithOwnership } from "@/lib/exercise-types";
 import { MOVEMENT_TYPES, MUSCLE_GROUPS, SPORTS } from "@/lib/exercise-taxonomy";
-import { CATEGORY_BADGE_CLASS } from "@/lib/exercise-colors";
+import {
+  CATEGORY_BADGE_CLASS,
+  CATEGORY_FILTER_ACTIVE_CLASS,
+  MOVEMENT_FILTER_ACTIVE_CLASS,
+  LATERALITY_FILTER_ACTIVE_CLASS,
+  MUSCLE_FILTER_ACTIVE_CLASS,
+  SPORT_FILTER_ACTIVE_CLASS,
+} from "@/lib/exercise-colors";
+import { FilterChipGroup, RadioChipGroup } from "@/components/filter-chip-group";
 
 const ISSUE_TYPES = [
   { value: "broken_video", label: "Broken video link" },
@@ -61,15 +69,12 @@ type ExerciseForm = {
   name: string;
   category: string;
   muscleGroup: string;
-  // Comma-separated in the form for a plain text input -- converted to/from
-  // the string[] the API expects on load/save, same idea as a tag input
-  // without needing a dedicated tag-editor component for one rarely-edited
-  // field.
-  secondaryMuscles: string;
-  // Same comma-separated-text-input idea as secondaryMuscles above -- which
-  // sports this exercise is worth surfacing for when a coach searches/
-  // filters by sport (e.g. "Copenhagen Plank" -> "Soccer, Hockey").
-  sports: string;
+  // Button multi-select now, not a comma-separated text input -- a Set
+  // reads/writes naturally against FilterChipGroup's toggle model.
+  secondaryMuscles: Set<string>;
+  // Which sports this exercise is worth surfacing for when a coach
+  // searches/filters by sport (e.g. "Copenhagen Plank" -> Soccer, Hockey).
+  sports: Set<string>;
   equipment: string;
   movementType: string;
   laterality: string;
@@ -86,8 +91,8 @@ const emptyForm: ExerciseForm = {
   name: "",
   category: "strength",
   muscleGroup: "",
-  secondaryMuscles: "",
-  sports: "",
+  secondaryMuscles: new Set(),
+  sports: new Set(),
   equipment: "",
   movementType: "",
   laterality: "",
@@ -105,8 +110,8 @@ function formFrom(ex: ExerciseWithOwnership): ExerciseForm {
     name: ex.name,
     category: ex.category,
     muscleGroup: ex.muscleGroup,
-    secondaryMuscles: (ex.secondaryMuscles ?? []).join(", "),
-    sports: (ex.sports ?? []).join(", "),
+    secondaryMuscles: new Set(ex.secondaryMuscles ?? []),
+    sports: new Set(ex.sports ?? []),
     equipment: ex.equipment,
     movementType: ex.movementType ?? "",
     laterality: ex.laterality ?? "",
@@ -153,20 +158,8 @@ export function ExerciseDetailPage({
         name: form.name,
         category: form.category,
         muscleGroup: form.muscleGroup || "Full Body",
-        secondaryMuscles: (() => {
-          const list = form.secondaryMuscles
-            .split(",")
-            .map((m) => m.trim())
-            .filter(Boolean);
-          return list.length > 0 ? list : null;
-        })(),
-        sports: (() => {
-          const list = form.sports
-            .split(",")
-            .map((s) => s.trim())
-            .filter(Boolean);
-          return list.length > 0 ? list : null;
-        })(),
+        secondaryMuscles: form.secondaryMuscles.size > 0 ? Array.from(form.secondaryMuscles) : null,
+        sports: form.sports.size > 0 ? Array.from(form.sports) : null,
         equipment: form.equipment || "Bodyweight",
         movementType: form.movementType || null,
         laterality: form.laterality || null,
@@ -414,108 +407,84 @@ export function ExerciseDetailPage({
                     placeholder="e.g. Barbell Back Squat"
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <Label>Category</Label>
-                    <Select
-                      value={form.category}
-                      onValueChange={(v) => setForm((f) => ({ ...f, category: v }))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {CATEGORIES.map((c) => (
-                          <SelectItem key={c} value={c} className="capitalize">
-                            {c}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="ex-muscle">Body part</Label>
-                    <Input
-                      id="ex-muscle"
-                      list="body-parts"
-                      value={form.muscleGroup}
-                      onChange={(e) => setForm((f) => ({ ...f, muscleGroup: e.target.value }))}
-                      placeholder="e.g. Legs, Ankle, T-Spine"
-                    />
-                    <datalist id="body-parts">
-                      {MUSCLE_GROUPS.map((b) => (
-                        <option key={b} value={b} />
-                      ))}
-                    </datalist>
-                  </div>
-                </div>
+                <RadioChipGroup
+                  label="Category"
+                  options={[...CATEGORIES]}
+                  value={form.category}
+                  onChange={(v) => setForm((f) => ({ ...f, category: v }))}
+                  optionColorClass={(v) => CATEGORY_FILTER_ACTIVE_CLASS[v]}
+                />
+                <RadioChipGroup
+                  label="Body part"
+                  options={
+                    form.muscleGroup && !MUSCLE_GROUPS.includes(form.muscleGroup)
+                      ? [form.muscleGroup, ...MUSCLE_GROUPS]
+                      : MUSCLE_GROUPS
+                  }
+                  value={form.muscleGroup}
+                  onChange={(v) => setForm((f) => ({ ...f, muscleGroup: v }))}
+                  colorClass={MUSCLE_FILTER_ACTIVE_CLASS}
+                />
                 <div className="space-y-1.5">
-                  <Label htmlFor="ex-secondary">Also works (optional)</Label>
-                  <Input
-                    id="ex-secondary"
-                    value={form.secondaryMuscles}
-                    onChange={(e) => setForm((f) => ({ ...f, secondaryMuscles: e.target.value }))}
-                    placeholder="e.g. Glutes, Hamstrings, Calves"
+                  <FilterChipGroup
+                    label="Also works (optional)"
+                    options={MUSCLE_GROUPS.filter((m) => m !== form.muscleGroup)}
+                    selected={form.secondaryMuscles}
+                    onToggle={(v) =>
+                      setForm((f) => {
+                        const next = new Set(f.secondaryMuscles);
+                        if (next.has(v)) next.delete(v);
+                        else next.add(v);
+                        return { ...f, secondaryMuscles: next };
+                      })
+                    }
+                    colorClass={MUSCLE_FILTER_ACTIVE_CLASS}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Comma-separated secondary muscles worked besides the main body part above --
-                    shown on this exercise's detail page only.
+                    Secondary muscles worked besides the main body part above -- shown on this
+                    exercise's detail page only.
                   </p>
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="ex-sports">Sports (optional)</Label>
-                  <Input
-                    id="ex-sports"
-                    list="sports-list"
-                    value={form.sports}
-                    onChange={(e) => setForm((f) => ({ ...f, sports: e.target.value }))}
-                    placeholder="e.g. Baseball, Softball"
+                  <FilterChipGroup
+                    label="Sports (optional)"
+                    options={SPORTS}
+                    selected={form.sports}
+                    onToggle={(v) =>
+                      setForm((f) => {
+                        const next = new Set(f.sports);
+                        if (next.has(v)) next.delete(v);
+                        else next.add(v);
+                        return { ...f, sports: next };
+                      })
+                    }
+                    colorClass={SPORT_FILTER_ACTIVE_CLASS}
                   />
-                  <datalist id="sports-list">
-                    {SPORTS.map((s) => (
-                      <option key={s} value={s} />
-                    ))}
-                  </datalist>
                   <p className="text-xs text-muted-foreground">
-                    Comma-separated sports this exercise is worth surfacing for -- lets coaches
-                    filter/search the exercise bank by sport.
+                    Sports this exercise is worth surfacing for -- lets coaches filter/search the
+                    exercise bank by sport.
                   </p>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="ex-movement">Movement type</Label>
-                    <Input
-                      id="ex-movement"
-                      list="movement-types"
-                      value={form.movementType}
-                      onChange={(e) => setForm((f) => ({ ...f, movementType: e.target.value }))}
-                      placeholder="e.g. Hinge"
-                    />
-                    <datalist id="movement-types">
-                      {MOVEMENT_TYPES.map((m) => (
-                        <option key={m} value={m} />
-                      ))}
-                    </datalist>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Laterality</Label>
-                    <Select
-                      value={form.laterality || "none"}
-                      onValueChange={(v) =>
-                        setForm((f) => ({ ...f, laterality: v === "none" ? "" : v }))
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="N/A" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">N/A</SelectItem>
-                        <SelectItem value="bilateral">Bilateral</SelectItem>
-                        <SelectItem value="unilateral">Unilateral</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
+                <RadioChipGroup
+                  label="Movement type"
+                  options={
+                    form.movementType && !MOVEMENT_TYPES.includes(form.movementType)
+                      ? [form.movementType, ...MOVEMENT_TYPES]
+                      : MOVEMENT_TYPES
+                  }
+                  value={form.movementType}
+                  onChange={(v) => setForm((f) => ({ ...f, movementType: v }))}
+                  colorClass={MOVEMENT_FILTER_ACTIVE_CLASS}
+                  allowNone
+                />
+                <RadioChipGroup
+                  label="Laterality"
+                  options={["bilateral", "unilateral"]}
+                  value={form.laterality}
+                  onChange={(v) => setForm((f) => ({ ...f, laterality: v }))}
+                  colorClass={LATERALITY_FILTER_ACTIVE_CLASS}
+                  allowNone
+                />
                 <div className="space-y-1.5">
                   <Label htmlFor="ex-equipment">Equipment</Label>
                   <Input
