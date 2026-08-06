@@ -10,10 +10,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { apiRequest, getJson } from "@/lib/queryClient";
+import { apiRequest, getJson, ApiError } from "@/lib/queryClient";
 import { BarcodeScanner } from "@/lib/barcode-scanner";
+import { capturePhotoFromVideo, downscalePhotoFile, type CapturedPhoto } from "@/lib/photo-capture";
 import { toast } from "sonner";
-import { Camera, Search, Pencil, Loader2, Plus } from "lucide-react";
+import { Camera, Search, Pencil, Loader2, Plus, ImagePlus, Upload, X } from "lucide-react";
 
 type FoodCandidate = {
   description: string;
@@ -28,8 +29,8 @@ type FoodCandidate = {
   barcode: string | null;
 };
 
-type Mode = "scan" | "search" | "manual" | "confirm";
-type Source = "barcode" | "search" | "manual";
+type Mode = "scan" | "search" | "manual" | "confirm" | "photo" | "photo-review";
+type Source = "barcode" | "search" | "manual" | "photo";
 
 function emptyManual(): FoodCandidate {
   return {
@@ -48,10 +49,13 @@ function emptyManual(): FoodCandidate {
 
 /** Camera-first food logging -- scan a barcode (Open Food Facts, falling
  * back to USDA FoodData Central if configured -- see server/food-lookup.ts)
- * for the common case of packaged food, with search-by-name and full
- * manual entry as fallbacks for anything without a barcode. Never an AI
- * capability -- see foodLogEntries' schema comment -- so it's free for
- * every athlete regardless of coach/paywall status. */
+ * for the common case of packaged food, snap a photo of a plate for anything
+ * without a barcode (see server/storage.ts analyzeMealPhoto -- the one AI
+ * call in this dialog), with search-by-name and full manual entry as further
+ * fallbacks. Every mode logs through the same foodLogEntries table and is
+ * free for every athlete regardless of coach/paywall status -- see that
+ * schema's comment for why the photo path is the one exception to "never an
+ * AI capability" and why that doesn't change the access story. */
 export function FoodScannerDialog({
   open,
   onOpenChange,
@@ -70,8 +74,14 @@ export function FoodScannerDialog({
   const [searchResults, setSearchResults] = useState<FoodCandidate[]>([]);
   const [searching, setSearching] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [analyzingPhoto, setAnalyzingPhoto] = useState(false);
+  const [photoItems, setPhotoItems] = useState<FoodCandidate[]>([]);
   const videoRef = useRef<HTMLVideoElement>(null);
   const scannerRef = useRef<BarcodeScanner | null>(null);
+  const photoVideoRef = useRef<HTMLVideoElement>(null);
+  const photoStreamRef = useRef<MediaStream | null>(null);
+  const photoFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!open) {
@@ -81,6 +91,9 @@ export function FoodScannerDialog({
       setSearchQuery("");
       setSearchResults([]);
       setCameraError(null);
+      setPhotoError(null);
+      setPhotoItems([]);
+      setAnalyzingPhoto(false);
       return;
     }
   }, [open]);
@@ -119,6 +132,40 @@ export function FoodScannerDialog({
       scanner.stop();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, mode]);
+
+  // Plain getUserMedia preview for the photo mode -- no continuous decoding
+  // needed like the barcode scanner above, just a live view to capture one
+  // still frame from on demand.
+  useEffect(() => {
+    if (!open || mode !== "photo") {
+      photoStreamRef.current?.getTracks().forEach((t) => t.stop());
+      photoStreamRef.current = null;
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment" },
+        });
+        if (cancelled) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        photoStreamRef.current = stream;
+        if (photoVideoRef.current) photoVideoRef.current.srcObject = stream;
+      } catch {
+        if (!cancelled) {
+          setPhotoError("Couldn't access the camera -- check permissions, or upload a photo instead.");
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+      photoStreamRef.current?.getTracks().forEach((t) => t.stop());
+      photoStreamRef.current = null;
+    };
   }, [open, mode]);
 
   async function handleBarcodeDetected(barcode: string) {
@@ -185,6 +232,75 @@ export function FoodScannerDialog({
     onError: () => toast.error("Couldn't log that -- try again"),
   });
 
+  async function analyzePhoto(photo: CapturedPhoto) {
+    setAnalyzingPhoto(true);
+    setPhotoError(null);
+    try {
+      const res = await apiRequest("POST", "/api/athlete/food/analyze-photo", { images: [photo] });
+      const data: { items: FoodCandidate[] } = await res.json();
+      setPhotoItems(data.items);
+      setMode("photo-review");
+    } catch (err) {
+      const message =
+        err instanceof ApiError ? err.message : "Couldn't analyze that photo -- try again or enter it manually.";
+      setPhotoError(message);
+    } finally {
+      setAnalyzingPhoto(false);
+    }
+  }
+
+  function handleTakePhoto() {
+    if (!photoVideoRef.current) return;
+    analyzePhoto(capturePhotoFromVideo(photoVideoRef.current));
+  }
+
+  async function handlePhotoFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    try {
+      const photo = await downscalePhotoFile(file);
+      await analyzePhoto(photo);
+    } catch {
+      setPhotoError("Couldn't read that image -- try another one.");
+    }
+  }
+
+  function updatePhotoItem(index: number, patch: Partial<FoodCandidate>) {
+    setPhotoItems((items) => items.map((it, i) => (i === index ? { ...it, ...patch } : it)));
+  }
+
+  function removePhotoItem(index: number) {
+    setPhotoItems((items) => items.filter((_, i) => i !== index));
+  }
+
+  const logPhotoItemsMutation = useMutation({
+    mutationFn: async () => {
+      for (const item of photoItems) {
+        await apiRequest("POST", "/api/athlete/food-log", {
+          date,
+          description: item.description,
+          brand: item.brand,
+          servingDescription: item.servingDescription,
+          caloriesKcal: item.caloriesKcal,
+          proteinG: item.proteinG,
+          carbsG: item.carbsG,
+          fatG: item.fatG,
+          fiberG: item.fiberG,
+          sodiumMg: item.sodiumMg,
+          source: "photo",
+          barcode: null,
+        });
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/athlete/food-log"] });
+      toast.success(photoItems.length > 1 ? `Logged ${photoItems.length} items` : "Logged");
+      onOpenChange(false);
+    },
+    onError: () => toast.error("Couldn't log one or more of those items -- try again"),
+  });
+
   function pickSearchResult(result: FoodCandidate) {
     setCandidate(result);
     setSource("search");
@@ -222,6 +338,18 @@ export function FoodScannerDialog({
             <p className="text-center text-xs text-muted-foreground">
               Hold a barcode steady in the frame
             </p>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={() => {
+                setPhotoError(null);
+                setMode("photo");
+              }}
+            >
+              <ImagePlus className="h-4 w-4" />
+              No barcode? Snap a photo of the meal
+            </Button>
             <div className="flex gap-2">
               <Button type="button" variant="outline" className="flex-1" onClick={() => setMode("search")}>
                 <Search className="h-4 w-4" />
@@ -230,6 +358,144 @@ export function FoodScannerDialog({
               <Button type="button" variant="outline" className="flex-1" onClick={startManualEntry}>
                 <Pencil className="h-4 w-4" />
                 Enter manually
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {mode === "photo" && (
+          <div className="space-y-3">
+            <div className="relative overflow-hidden rounded-md border border-border bg-black">
+              <video ref={photoVideoRef} autoPlay playsInline muted className="w-full" />
+              {analyzingPhoto && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/70 text-white">
+                  <Loader2 className="h-6 w-6 animate-spin" />
+                  <p className="text-sm">Identifying what's on the plate…</p>
+                </div>
+              )}
+            </div>
+            {photoError && <p className="text-sm text-destructive">{photoError}</p>}
+            <p className="text-center text-xs text-muted-foreground">
+              Fit the whole plate in frame, then take the photo
+            </p>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                className="flex-1"
+                onClick={handleTakePhoto}
+                disabled={analyzingPhoto}
+              >
+                <Camera className="h-4 w-4" />
+                Take Photo
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1"
+                onClick={() => photoFileInputRef.current?.click()}
+                disabled={analyzingPhoto}
+              >
+                <Upload className="h-4 w-4" />
+                Upload
+              </Button>
+              <input
+                ref={photoFileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handlePhotoFileSelected}
+              />
+            </div>
+            <Button type="button" variant="ghost" size="sm" onClick={() => setMode("scan")}>
+              <Camera className="h-3.5 w-3.5" />
+              Back to scanning
+            </Button>
+          </div>
+        )}
+
+        {mode === "photo-review" && (
+          <div className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              Review and adjust the estimates below -- these are Claude's best guess from the
+              photo, not a database lookup.
+            </p>
+            <div className="max-h-96 space-y-3 overflow-y-auto">
+              {photoItems.length === 0 && (
+                <p className="py-6 text-center text-sm text-muted-foreground">
+                  Nothing left to log --{" "}
+                  <button type="button" className="underline" onClick={() => setMode("photo")}>
+                    try another photo
+                  </button>
+                  .
+                </p>
+              )}
+              {photoItems.map((item, i) => (
+                <div key={i} className="space-y-2 rounded-md border border-border p-2.5">
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={item.description}
+                      onChange={(e) => updatePhotoItem(i, { description: e.target.value })}
+                      className="flex-1"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      aria-label="Remove item"
+                      onClick={() => removePhotoItem(i)}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <Input
+                    value={item.servingDescription ?? ""}
+                    onChange={(e) => updatePhotoItem(i, { servingDescription: e.target.value })}
+                    placeholder="Portion, e.g. 1 cup"
+                    className="text-xs"
+                  />
+                  <div className="grid grid-cols-3 gap-2">
+                    {(
+                      [
+                        ["caloriesKcal", "Calories"],
+                        ["proteinG", "Protein (g)"],
+                        ["carbsG", "Carbs (g)"],
+                        ["fatG", "Fat (g)"],
+                        ["fiberG", "Fiber (g)"],
+                        ["sodiumMg", "Sodium (mg)"],
+                      ] as const
+                    ).map(([key, label]) => (
+                      <div key={key} className="space-y-1">
+                        <Label htmlFor={`photo-${i}-${key}`} className="text-xs">
+                          {label}
+                        </Label>
+                        <Input
+                          id={`photo-${i}-${key}`}
+                          type="number"
+                          inputMode="decimal"
+                          min={0}
+                          value={item[key] ?? ""}
+                          onChange={(e) =>
+                            updatePhotoItem(i, { [key]: e.target.value ? Number(e.target.value) : null })
+                          }
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <Button type="button" variant="ghost" onClick={() => setMode("photo")}>
+                Retake
+              </Button>
+              <Button
+                type="button"
+                className="flex-1"
+                disabled={photoItems.length === 0 || logPhotoItemsMutation.isPending}
+                onClick={() => logPhotoItemsMutation.mutate()}
+              >
+                <Plus className="h-4 w-4" />
+                Log {photoItems.length > 1 ? `${photoItems.length} Items` : "Item"}
               </Button>
             </div>
           </div>

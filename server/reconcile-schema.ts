@@ -95,6 +95,7 @@ EXCEPTION WHEN duplicate_object THEN null; END $$;
 DO $$ BEGIN
   CREATE TYPE "food_log_source" AS ENUM ('barcode', 'search', 'manual');
 EXCEPTION WHEN duplicate_object THEN null; END $$;
+ALTER TYPE "food_log_source" ADD VALUE IF NOT EXISTS 'photo';
 
 DO $$ BEGIN
   CREATE TYPE "periodization_phase" AS ENUM ('accumulation', 'intensification', 'realization', 'deload', 'taper');
