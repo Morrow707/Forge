@@ -739,6 +739,11 @@ CREATE TABLE IF NOT EXISTS "nutrition_knowledge" (
   "updated_at" timestamp NOT NULL DEFAULT now()
 );
 INSERT INTO "nutrition_knowledge" ("id", "guidelines") VALUES (1, '') ON CONFLICT ("id") DO NOTHING;
+
+DO $$ BEGIN
+  CREATE TYPE "gender" AS ENUM ('male', 'female', 'non_binary', 'prefer_not_to_say');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "gender" gender;
 `;
 
 async function main() {

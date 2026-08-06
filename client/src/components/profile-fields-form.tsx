@@ -11,6 +11,7 @@ import {
 export type ProfileFieldsValue = {
   name: string;
   age: string;
+  gender: string;
   heightIn: string;
   bodyWeightLbs: string;
   sport: string;
@@ -31,6 +32,7 @@ export type ProfileFieldsValue = {
 export const emptyProfileFields: ProfileFieldsValue = {
   name: "",
   age: "",
+  gender: "",
   heightIn: "",
   bodyWeightLbs: "",
   sport: "",
@@ -50,6 +52,13 @@ const SEASON_PHASE_OPTIONS = [
   { value: "pre_season", label: "Pre-season" },
   { value: "in_season", label: "In-season" },
   { value: "taper", label: "Taper / playoffs" },
+];
+
+const GENDER_OPTIONS = [
+  { value: "male", label: "Male" },
+  { value: "female", label: "Female" },
+  { value: "non_binary", label: "Non-binary" },
+  { value: "prefer_not_to_say", label: "Prefer not to say" },
 ];
 
 export function ProfileFieldsForm({
@@ -128,6 +137,25 @@ export function ProfileFieldsForm({
             value={value.age}
             onChange={(e) => onChange({ ...value, age: e.target.value })}
           />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor={`${idPrefix}-gender`}>Gender</Label>
+          <Select
+            value={value.gender || "unset"}
+            onValueChange={(v) => onChange({ ...value, gender: v === "unset" ? "" : v })}
+          >
+            <SelectTrigger id={`${idPrefix}-gender`}>
+              <SelectValue placeholder="Not set" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="unset">Not set</SelectItem>
+              {GENDER_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value}>
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div className="space-y-1.5">
           <Label htmlFor={`${idPrefix}-height`}>Height (inches)</Label>

@@ -69,6 +69,16 @@ export const seasonPhaseEnum = pgEnum("season_phase", [
   "in_season",
   "taper",
 ]);
+// Self-reported, same "just a profile field" treatment as sport/position
+// above -- null means unset. Collected specifically so it's available (only
+// ever in aggregate, never alongside a name) for the admin's platform-wide
+// trends view; not otherwise used by any per-athlete feature today.
+export const genderEnum = pgEnum("gender", [
+  "male",
+  "female",
+  "non_binary",
+  "prefer_not_to_say",
+]);
 // Classic block-periodization phase for a coach-defined training block
 // (a run of one or more weeks grouped under one goal) -- distinct from
 // seasonPhase above, which is the athlete's competitive-calendar context,
@@ -119,6 +129,7 @@ export const users = pgTable(
     // a coach managing their roster. Used for roster/team identification
     // and the coach-only leaderboard; meaningless for coach/admin accounts.
     age: integer("age"),
+    gender: genderEnum("gender"),
     heightIn: integer("height_in"),
     bodyWeightLbs: real("body_weight_lbs"),
     sport: text("sport"),
@@ -1804,6 +1815,7 @@ export const updatePreferencesSchema = z.object({
 export const updateProfileSchema = z.object({
   name: z.string().trim().min(1).max(100).optional(),
   age: z.number().int().min(0).max(120).optional().nullable(),
+  gender: z.enum(["male", "female", "non_binary", "prefer_not_to_say"]).optional().nullable(),
   heightIn: z.number().int().min(0).max(120).optional().nullable(),
   bodyWeightLbs: z.number().min(0).max(1500).optional().nullable(),
   sport: z.string().trim().max(60).optional().nullable(),
