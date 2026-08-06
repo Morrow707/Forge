@@ -1,12 +1,20 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getJson } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { RadioChipGroup } from "@/components/filter-chip-group";
 import {
   rollUpMuscleLoad,
   muscleHeatColor,
   MUSCLE_REGION_LABEL,
   type MuscleRegion,
 } from "@shared/muscle-map";
+
+const MUSCLE_LOAD_WINDOW_OPTIONS = [
+  { label: "28d", days: 28 },
+  { label: "90d", days: 90 },
+  { label: "180d", days: 180 },
+];
 
 const GRAY = "hsl(var(--muted))";
 
@@ -113,18 +121,18 @@ function BodySvg({
  * their own real hot/cold spots rather than one washed out next to the
  * other (see muscleHeatColor). */
 export function MuscleHeatMap({ athleteId }: { athleteId: string }) {
+  const [windowDays, setWindowDays] = useState(28);
   const { data: rawByGroup, isLoading } = useQuery<Record<string, number>>({
-    queryKey: ["/api/coach/roster", athleteId, "muscle-load"],
-    queryFn: () => getJson(`/api/coach/roster/${athleteId}/muscle-load`),
+    queryKey: ["/api/coach/roster", athleteId, "muscle-load", windowDays],
+    queryFn: () => getJson(`/api/coach/roster/${athleteId}/muscle-load?days=${windowDays}`),
     enabled: !!athleteId,
   });
 
-  if (isLoading) {
+  if (isLoading && !rawByGroup) {
     return <div className="h-24 animate-pulse rounded-md bg-surface" />;
   }
-  if (!rawByGroup || Object.keys(rawByGroup).length === 0) return null;
 
-  const byRegion = rollUpMuscleLoad(rawByGroup);
+  const byRegion = rollUpMuscleLoad(rawByGroup ?? {});
   const entries = Object.entries(byRegion) as [MuscleRegion, number][];
   const max = Math.max(...entries.map(([, v]) => v), 0);
   const colorByRegion = new Map<MuscleRegion, string>(
@@ -132,45 +140,67 @@ export function MuscleHeatMap({ athleteId }: { athleteId: string }) {
   );
   const countByRegion = new Map<MuscleRegion, number>(entries);
   const sorted = [...entries].sort((a, b) => b[1] - a[1]);
+  const windowLabel = MUSCLE_LOAD_WINDOW_OPTIONS.find((o) => o.days === windowDays)?.label ?? "28d";
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Muscle Load Map</CardTitle>
-        <CardDescription>
-          Last 28 days of logged sets by muscle group, weighted by primary vs. secondary role in
-          each exercise. Color is relative to this athlete's own busiest region.
-        </CardDescription>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <CardTitle>Muscle Load Map</CardTitle>
+            <CardDescription>
+              Last {windowDays} days of logged sets by muscle group, weighted by primary vs.
+              secondary role in each exercise. Color is relative to this athlete's own busiest
+              region.
+            </CardDescription>
+          </div>
+          <RadioChipGroup
+            label=""
+            className="[&>p]:hidden"
+            options={MUSCLE_LOAD_WINDOW_OPTIONS.map((o) => o.label)}
+            value={windowLabel}
+            onChange={(label) => {
+              const match = MUSCLE_LOAD_WINDOW_OPTIONS.find((o) => o.label === label);
+              if (match) setWindowDays(match.days);
+            }}
+          />
+        </div>
       </CardHeader>
       <CardContent>
-        <div className="grid gap-4 sm:grid-cols-[auto_auto_1fr] sm:items-start">
-          <div className="mx-auto w-32 sm:w-36">
-            <BodySvg shapes={FRONT_SHAPES} colorByRegion={colorByRegion} countByRegion={countByRegion} />
-            <p className="mt-1 text-center text-[10px] uppercase tracking-wide text-muted-foreground">
-              Front
-            </p>
+        {entries.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">
+            No sets logged in the last {windowDays} days -- try a wider window.
+          </p>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-[auto_auto_1fr] sm:items-start">
+            <div className="mx-auto w-32 sm:w-36">
+              <BodySvg shapes={FRONT_SHAPES} colorByRegion={colorByRegion} countByRegion={countByRegion} />
+              <p className="mt-1 text-center text-[10px] uppercase tracking-wide text-muted-foreground">
+                Front
+              </p>
+            </div>
+            <div className="mx-auto w-32 sm:w-36">
+              <BodySvg shapes={BACK_SHAPES} colorByRegion={colorByRegion} countByRegion={countByRegion} />
+              <p className="mt-1 text-center text-[10px] uppercase tracking-wide text-muted-foreground">
+                Back
+              </p>
+            </div>
+            <div className="space-y-1.5 self-center">
+              {sorted.map(([region, count]) => (
+                <div key={region} className="flex items-center gap-2 text-sm">
+                  <span
+                    className="h-3 w-3 shrink-0 rounded-sm"
+                    style={{ background: muscleHeatColor(max > 0 ? count / max : 0) }}
+                  />
+                  <span className="text-foreground">{MUSCLE_REGION_LABEL[region]}</span>
+                  <span className="ml-auto text-xs text-muted-foreground">
+                    {Math.round(count)} sets
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
-          <div className="mx-auto w-32 sm:w-36">
-            <BodySvg shapes={BACK_SHAPES} colorByRegion={colorByRegion} countByRegion={countByRegion} />
-            <p className="mt-1 text-center text-[10px] uppercase tracking-wide text-muted-foreground">
-              Back
-            </p>
-          </div>
-          <div className="space-y-1.5 self-center">
-            {sorted.map(([region, count]) => (
-              <div key={region} className="flex items-center gap-2 text-sm">
-                <span
-                  className="h-3 w-3 shrink-0 rounded-sm"
-                  style={{ background: muscleHeatColor(max > 0 ? count / max : 0) }}
-                />
-                <span className="text-foreground">{MUSCLE_REGION_LABEL[region]}</span>
-                <span className="ml-auto text-xs text-muted-foreground">
-                  {Math.round(count)} sets
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
+        )}
       </CardContent>
     </Card>
   );

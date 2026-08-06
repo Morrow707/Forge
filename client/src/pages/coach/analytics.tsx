@@ -243,7 +243,7 @@ export default function CoachAnalytics() {
 
   const { data: overview = [], isLoading: overviewLoading } = useQuery<RecentSession[]>({
     queryKey: ["/api/coach/analytics/overview", athleteId],
-    queryFn: () => getJson(`/api/coach/analytics/overview?athleteId=${athleteId}`),
+    queryFn: () => getJson(`/api/coach/analytics/overview?athleteId=${athleteId}&limit=100`),
     enabled: !!athleteId && !exerciseId,
   });
 
@@ -1376,10 +1376,18 @@ type AcwrPoint = {
  * so it lives at the whole-athlete overview level rather than inside a
  * single exercise's chart. Absent/flat when there isn't enough logged
  * training yet for a real ratio, same convention as the rest of this page. */
+const ACWR_WINDOW_OPTIONS = [
+  { label: "30d", days: 30 },
+  { label: "60d", days: 60 },
+  { label: "90d", days: 90 },
+  { label: "180d", days: 180 },
+];
+
 function AcwrTrendCard({ athleteId }: { athleteId: string }) {
+  const [windowDays, setWindowDays] = useState(60);
   const { data: history = [], isLoading } = useQuery<AcwrPoint[]>({
-    queryKey: ["/api/coach/roster", athleteId, "acwr-history"],
-    queryFn: () => getJson(`/api/coach/roster/${athleteId}/acwr-history`),
+    queryKey: ["/api/coach/roster", athleteId, "acwr-history", windowDays],
+    queryFn: () => getJson(`/api/coach/roster/${athleteId}/acwr-history?days=${windowDays}`),
     enabled: !!athleteId,
   });
 
@@ -1391,73 +1399,94 @@ function AcwrTrendCard({ athleteId }: { athleteId: string }) {
   const latest = history[history.length - 1];
   const hasEnoughData = history.some((p) => p.acuteLoad > 0 || p.chronicLoad > 0);
 
-  if (isLoading) {
+  if (isLoading && history.length === 0) {
     return <div className="h-24 animate-pulse rounded-md bg-surface" />;
   }
-  if (!hasEnoughData) return null;
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Activity className="h-5 w-5" />
-          Training Load (ACWR)
-        </CardTitle>
-        <CardDescription>
-          Acute (7-day) vs. chronic (28-day average) load, from logged volume. A general
-          load-management guideline, not a medical diagnosis.
-        </CardDescription>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Activity className="h-5 w-5" />
+              Training Load (ACWR)
+            </CardTitle>
+            <CardDescription>
+              Acute (7-day) vs. chronic (28-day average) load, from logged volume. A general
+              load-management guideline, not a medical diagnosis.
+            </CardDescription>
+          </div>
+          <RadioChipGroup
+            label=""
+            className="[&>p]:hidden"
+            options={ACWR_WINDOW_OPTIONS.map((o) => o.label)}
+            value={ACWR_WINDOW_OPTIONS.find((o) => o.days === windowDays)?.label ?? "60d"}
+            onChange={(label) => {
+              const match = ACWR_WINDOW_OPTIONS.find((o) => o.label === label);
+              if (match) setWindowDays(match.days);
+            }}
+          />
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {latest?.ratio != null && (
-          <div className="flex items-center justify-between rounded-md border border-border p-3 text-sm">
-            <span className="text-muted-foreground">Current ratio</span>
-            <div className="flex items-center gap-2">
-              <span className="font-semibold">{latest.ratio.toFixed(2)}</span>
-              <span
-                className={cn(
-                  "rounded-full px-2 py-0.5 text-[10px] font-semibold",
-                  ACWR_RISK_CLASSNAME[latest.level],
-                )}
-              >
-                {ACWR_RISK_LABEL[latest.level]}
-              </span>
+        {!hasEnoughData ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">
+            No training load logged in the last {windowDays} days -- try a wider window.
+          </p>
+        ) : (
+          <>
+            {latest?.ratio != null && (
+              <div className="flex items-center justify-between rounded-md border border-border p-3 text-sm">
+                <span className="text-muted-foreground">Current ratio</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold">{latest.ratio.toFixed(2)}</span>
+                  <span
+                    className={cn(
+                      "rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                      ACWR_RISK_CLASSNAME[latest.level],
+                    )}
+                  >
+                    {ACWR_RISK_LABEL[latest.level]}
+                  </span>
+                </div>
+              </div>
+            )}
+            <div className="h-56">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={chartData} margin={{ left: 4, right: 12 }}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                  <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} width={40} />
+                  <Tooltip
+                    contentStyle={{
+                      background: "hsl(var(--card))",
+                      border: "1px solid hsl(var(--border))",
+                    }}
+                  />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <Line
+                    type="monotone"
+                    dataKey="acute"
+                    name="Acute (7d)"
+                    stroke="hsl(var(--primary))"
+                    strokeWidth={2}
+                    dot={false}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="chronic"
+                    name="Chronic (28d avg)"
+                    stroke="hsl(var(--muted-foreground))"
+                    strokeWidth={2}
+                    strokeDasharray="4 3"
+                    dot={false}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
             </div>
-          </div>
+          </>
         )}
-        <div className="h-56">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData} margin={{ left: 4, right: 12 }}>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-              <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} width={40} />
-              <Tooltip
-                contentStyle={{
-                  background: "hsl(var(--card))",
-                  border: "1px solid hsl(var(--border))",
-                }}
-              />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Line
-                type="monotone"
-                dataKey="acute"
-                name="Acute (7d)"
-                stroke="hsl(var(--primary))"
-                strokeWidth={2}
-                dot={false}
-              />
-              <Line
-                type="monotone"
-                dataKey="chronic"
-                name="Chronic (28d avg)"
-                stroke="hsl(var(--muted-foreground))"
-                strokeWidth={2}
-                strokeDasharray="4 3"
-                dot={false}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
       </CardContent>
     </Card>
   );
@@ -1470,10 +1499,18 @@ type WeeklyLoadPoint = { weekStart: string; totalVolume: number; totalSets: numb
  * not exercise-specific, since it's meant to answer "is this athlete's
  * overall training getting heavier/lighter over time," not one lift's
  * progression (that's what the per-exercise chart further down is for). */
+const WEEKLY_LOAD_WINDOW_OPTIONS = [
+  { label: "8wk", weeks: 8 },
+  { label: "12wk", weeks: 12 },
+  { label: "26wk", weeks: 26 },
+  { label: "52wk", weeks: 52 },
+];
+
 function WeeklyLoadTrendCard({ athleteId }: { athleteId: string }) {
+  const [windowWeeks, setWindowWeeks] = useState(12);
   const { data: series = [], isLoading } = useQuery<WeeklyLoadPoint[]>({
-    queryKey: ["/api/coach/roster", athleteId, "weekly-load"],
-    queryFn: () => getJson(`/api/coach/roster/${athleteId}/weekly-load`),
+    queryKey: ["/api/coach/roster", athleteId, "weekly-load", windowWeeks],
+    queryFn: () => getJson(`/api/coach/roster/${athleteId}/weekly-load?weeks=${windowWeeks}`),
     enabled: !!athleteId,
   });
 
@@ -1485,57 +1522,76 @@ function WeeklyLoadTrendCard({ athleteId }: { athleteId: string }) {
   }));
   const hasEnoughData = series.some((p) => p.totalVolume > 0);
 
-  if (isLoading) {
+  if (isLoading && series.length === 0) {
     return <div className="h-24 animate-pulse rounded-md bg-surface" />;
   }
-  if (!hasEnoughData) return null;
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Weight className="h-5 w-5" />
-          Volume & Intensity
-        </CardTitle>
-        <CardDescription>
-          Weekly training load -- total volume lifted (bars) vs. average weight per rep (line).
-          Only counts sets logged with a numeric weight.
-        </CardDescription>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Weight className="h-5 w-5" />
+              Volume & Intensity
+            </CardTitle>
+            <CardDescription>
+              Weekly training load -- total volume lifted (bars) vs. average weight per rep
+              (line). Only counts sets logged with a numeric weight.
+            </CardDescription>
+          </div>
+          <RadioChipGroup
+            label=""
+            className="[&>p]:hidden"
+            options={WEEKLY_LOAD_WINDOW_OPTIONS.map((o) => o.label)}
+            value={WEEKLY_LOAD_WINDOW_OPTIONS.find((o) => o.weeks === windowWeeks)?.label ?? "12wk"}
+            onChange={(label) => {
+              const match = WEEKLY_LOAD_WINDOW_OPTIONS.find((o) => o.label === label);
+              if (match) setWindowWeeks(match.weeks);
+            }}
+          />
+        </div>
       </CardHeader>
       <CardContent>
-        <div className="h-64">
-          <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={chartData} margin={{ left: 4, right: 12 }}>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-              <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-              <YAxis yAxisId="volume" tick={{ fontSize: 11 }} width={50} />
-              <YAxis yAxisId="intensity" orientation="right" tick={{ fontSize: 11 }} width={50} />
-              <Tooltip
-                contentStyle={{
-                  background: "hsl(var(--card))",
-                  border: "1px solid hsl(var(--border))",
-                }}
-              />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Bar
-                yAxisId="volume"
-                dataKey="volume"
-                name="Total Volume"
-                fill="hsl(var(--primary))"
-                radius={[3, 3, 0, 0]}
-              />
-              <Line
-                yAxisId="intensity"
-                type="monotone"
-                dataKey="intensity"
-                name="Avg Load/Rep"
-                stroke="hsl(var(--muted-foreground))"
-                strokeWidth={2}
-                dot={{ r: 3 }}
-              />
-            </ComposedChart>
-          </ResponsiveContainer>
-        </div>
+        {!hasEnoughData ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">
+            No training load logged in the last {windowWeeks} weeks -- try a wider window.
+          </p>
+        ) : (
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={chartData} margin={{ left: 4, right: 12 }}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                <YAxis yAxisId="volume" tick={{ fontSize: 11 }} width={50} />
+                <YAxis yAxisId="intensity" orientation="right" tick={{ fontSize: 11 }} width={50} />
+                <Tooltip
+                  contentStyle={{
+                    background: "hsl(var(--card))",
+                    border: "1px solid hsl(var(--border))",
+                  }}
+                />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+                <Bar
+                  yAxisId="volume"
+                  dataKey="volume"
+                  name="Total Volume"
+                  fill="hsl(var(--primary))"
+                  radius={[3, 3, 0, 0]}
+                />
+                <Line
+                  yAxisId="intensity"
+                  type="monotone"
+                  dataKey="intensity"
+                  name="Avg Load/Rep"
+                  stroke="hsl(var(--muted-foreground))"
+                  strokeWidth={2}
+                  dot={{ r: 3 }}
+                />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

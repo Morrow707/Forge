@@ -1310,7 +1310,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const athleteId = Number(req.params.athleteId);
       const onRoster = await storage.getRosterAthleteForCoach(user.id, athleteId);
       if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
-      const history = await storage.getAcwrHistoryForAthlete(athleteId);
+      const schema = z.object({ days: z.coerce.number().min(14).max(180).optional() });
+      const parsed = schema.safeParse(req.query);
+      const history = await storage.getAcwrHistoryForAthlete(
+        athleteId,
+        parsed.success ? parsed.data.days : undefined,
+      );
       res.json(history);
     },
   );
@@ -1323,7 +1328,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const athleteId = Number(req.params.athleteId);
       const onRoster = await storage.getRosterAthleteForCoach(user.id, athleteId);
       if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
-      const series = await storage.getWeeklyLoadForAthlete(user.id, athleteId);
+      const schema = z.object({ weeks: z.coerce.number().min(4).max(52).optional() });
+      const parsed = schema.safeParse(req.query);
+      const series = await storage.getWeeklyLoadForAthlete(
+        user.id,
+        athleteId,
+        parsed.success ? parsed.data.weeks : undefined,
+      );
       res.json(series);
     },
   );
@@ -2009,12 +2020,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/coach/analytics/overview", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
-    const schema = z.object({ athleteId: z.coerce.number() });
+    const schema = z.object({
+      athleteId: z.coerce.number(),
+      limit: z.coerce.number().min(1).max(200).optional(),
+    });
     const parsed = schema.safeParse(req.query);
     if (!parsed.success) {
       return res.status(400).json({ message: "athleteId query param required" });
     }
-    const sessions = await storage.getRecentSessionsForAthlete(user.id, parsed.data.athleteId);
+    const sessions = await storage.getRecentSessionsForAthlete(
+      user.id,
+      parsed.data.athleteId,
+      parsed.data.limit,
+    );
     res.json(sessions);
   });
 
