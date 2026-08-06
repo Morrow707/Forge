@@ -3,7 +3,6 @@ import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { getJson } from "@/lib/queryClient";
-import { Button } from "@/components/ui/button";
 import {
   Dumbbell,
   ListChecks,
@@ -24,6 +23,8 @@ import {
   UserPlus,
   Apple,
   BarChart3,
+  ChevronDown,
+  type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { EditMyProfileDialog } from "@/components/edit-my-profile-dialog";
@@ -31,11 +32,27 @@ import { NotificationBell } from "@/components/notification-bell";
 import { NotificationSettingsDialog } from "@/components/notification-settings-dialog";
 import { CoachingStaffDialog } from "@/components/coaching-staff-dialog";
 
-const coachNav = [
+type NavItem = {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+  exact?: boolean;
+  /** For a nav item that stands in for more than one route (e.g. Library
+   * covers both /coach/programs and /coach/exercises) -- highlights the tab
+   * whenever the current location starts with ANY of these, instead of just
+   * `href`. */
+  matchPrefixes?: string[];
+};
+
+const coachNav: NavItem[] = [
   { href: "/coach", label: "Dashboard", icon: Flame, exact: true },
   { href: "/coach/calendar", label: "Calendar", icon: CalendarDays },
-  { href: "/coach/programs", label: "Programs", icon: ListChecks },
-  { href: "/coach/exercises", label: "Exercise Bank", icon: Dumbbell },
+  {
+    href: "/coach/programs",
+    label: "Library",
+    icon: Dumbbell,
+    matchPrefixes: ["/coach/programs", "/coach/exercises"],
+  },
   { href: "/coach/roster", label: "Roster & Teams", icon: Users },
   { href: "/coach/nutrition", label: "Nutrition", icon: Apple },
   { href: "/coach/analytics", label: "Analytics", icon: LineChart },
@@ -43,7 +60,7 @@ const coachNav = [
   { href: "/coach/team-board", label: "Team Board", icon: MessagesSquare },
 ];
 
-const athleteNav = [
+const athleteNav: NavItem[] = [
   { href: "/athlete", label: "Calendar", icon: CalendarDays, exact: true },
   { href: "/athlete/programs", label: "My Programs", icon: ListChecks },
   { href: "/athlete/progress", label: "Progress", icon: LineChart },
@@ -52,7 +69,7 @@ const athleteNav = [
   { href: "/athlete/chat", label: "AI Chat", icon: Sparkles },
 ];
 
-const adminNav = [
+const adminNav: NavItem[] = [
   { href: "/admin", label: "Dashboard", icon: Flame, exact: true },
   { href: "/admin/my", label: "My Calendar", icon: CalendarDays },
   { href: "/admin/exercises", label: "Forge Library", icon: Dumbbell },
@@ -67,11 +84,16 @@ export function AppShell({
   children,
   title,
   actions,
+  subheader,
   fitScreen,
 }: {
   children: ReactNode;
   title: ReactNode;
   actions?: ReactNode;
+  /** Thin strip rendered between the title header and the page content --
+   * used for a tab switcher (see LibraryTabs) that a page wants visible
+   * without cramming it into the title `<h1>` itself. */
+  subheader?: ReactNode;
   /** Constrains content to the viewport instead of letting the page scroll -- opt in per page. */
   fitScreen?: boolean;
 }) {
@@ -81,6 +103,7 @@ export function AppShell({
   const [profileOpen, setProfileOpen] = useState(false);
   const [notifSettingsOpen, setNotifSettingsOpen] = useState(false);
   const [coachingStaffOpen, setCoachingStaffOpen] = useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
 
   // Same query (and cache) the athlete dashboard's empty-state uses to
   // decide Free Agent status -- zero coaches linked. The "My Programs" and
@@ -117,7 +140,8 @@ export function AppShell({
     refetchInterval: 60_000,
   });
 
-  function isActive(item: { href: string; exact?: boolean }) {
+  function isActive(item: NavItem) {
+    if (item.matchPrefixes) return item.matchPrefixes.some((p) => location.startsWith(p));
     return item.exact ? location === item.href : location.startsWith(item.href);
   }
 
@@ -141,12 +165,12 @@ export function AppShell({
 
           {/* justify-start, not center -- when every item fits this looks
               identical either way, but once the roster grows past what
-              fits (coach nav can run to 9 items), centering an overflowing
-              flex row clips it evenly from BOTH edges with no visible cue
-              that there's more to scroll to. Left-aligned overflows the
-              same way a normal scrollable list does: nothing missing on
-              the left, a natural scroll to reveal the rest on the right. */}
-          <nav className="hidden min-w-0 flex-1 items-center justify-start gap-1 overflow-x-auto md:flex">
+              fits, centering an overflowing flex row clips it evenly from
+              BOTH edges with no visible cue that there's more to scroll to.
+              Left-aligned overflows the same way a normal scrollable list
+              does: nothing missing on the left, a natural scroll to reveal
+              the rest on the right. */}
+          <nav className="hidden min-w-0 flex-1 items-center justify-start gap-0.5 overflow-x-auto md:flex">
             {nav.map((item) => {
               const Icon = item.icon;
               const active = isActive(item);
@@ -156,7 +180,7 @@ export function AppShell({
                   key={item.href}
                   href={item.href}
                   className={cn(
-                    "flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-2 text-sm font-semibold transition-colors",
+                    "flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md px-2.5 py-2 text-sm font-semibold transition-colors",
                     active
                       ? "bg-primary text-primary-foreground"
                       : "text-muted-foreground hover:bg-surface-elevated hover:text-foreground",
@@ -174,52 +198,97 @@ export function AppShell({
             })}
           </nav>
 
-          <div className="flex shrink-0 items-center gap-3">
-            <div className="hidden items-center gap-3 md:flex">
-              <div className="min-w-0 text-right">
-                <p className="truncate text-sm font-semibold">{user?.name}</p>
-                <p className="truncate text-xs capitalize text-muted-foreground">
-                  {isFreeAgent ? "Free Agent" : user?.role}
-                </p>
-              </div>
-              {user?.role === "athlete" && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setProfileOpen(true)}
-                  aria-label="Edit profile"
-                >
-                  <UserCircle className="h-4 w-4" />
-                </Button>
-              )}
-              {(user?.role === "coach" || user?.role === "athlete") && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setNotifSettingsOpen(true)}
-                  aria-label="Notification settings"
-                >
-                  <Settings className="h-4 w-4" />
-                </Button>
-              )}
-              {user?.role === "coach" && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCoachingStaffOpen(true)}
-                  aria-label="Coaching staff"
-                >
-                  <UserPlus className="h-4 w-4" />
-                </Button>
-              )}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => logoutMutation.mutate()}
-                aria-label="Log out"
+          <div className="flex shrink-0 items-center gap-2">
+            {/* Hoverable on desktop (mouse enter/leave), click-toggleable for
+                touch, since touch devices never fire hover -- the trigger's
+                own onClick covers that case. Keeps Settings/Coaching
+                Staff/Logout out of the top bar so they stop competing with
+                the nav tabs for width; the notifications bell deliberately
+                stays outside this menu; see NotificationBell below,
+                unmoved. */}
+            <div
+              className="relative hidden md:block"
+              onMouseEnter={() => setAccountMenuOpen(true)}
+              onMouseLeave={() => setAccountMenuOpen(false)}
+            >
+              <button
+                type="button"
+                onClick={() => setAccountMenuOpen((v) => !v)}
+                aria-haspopup="menu"
+                aria-expanded={accountMenuOpen}
+                className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 hover:bg-surface-elevated"
               >
-                <LogOut className="h-4 w-4" />
-              </Button>
+                <span className="min-w-0 text-right">
+                  <span className="block truncate text-sm font-semibold">{user?.name}</span>
+                  <span className="block truncate text-xs capitalize text-muted-foreground">
+                    {isFreeAgent ? "Free Agent" : user?.role}
+                  </span>
+                </span>
+                <ChevronDown
+                  className={cn(
+                    "h-4 w-4 shrink-0 text-muted-foreground transition-transform",
+                    accountMenuOpen && "rotate-180",
+                  )}
+                />
+              </button>
+              {accountMenuOpen && (
+                <div
+                  role="menu"
+                  className="absolute right-0 top-full z-40 mt-1 w-64 overflow-hidden rounded-md border border-border bg-surface shadow-lg"
+                >
+                  {user?.role === "athlete" && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setProfileOpen(true);
+                        setAccountMenuOpen(false);
+                      }}
+                      className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-foreground hover:bg-surface-elevated"
+                    >
+                      <UserCircle className="h-4 w-4" />
+                      Edit profile
+                    </button>
+                  )}
+                  {(user?.role === "coach" || user?.role === "athlete") && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setNotifSettingsOpen(true);
+                        setAccountMenuOpen(false);
+                      }}
+                      className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-foreground hover:bg-surface-elevated"
+                    >
+                      <Settings className="h-4 w-4" />
+                      Notification settings
+                    </button>
+                  )}
+                  {user?.role === "coach" && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setCoachingStaffOpen(true);
+                        setAccountMenuOpen(false);
+                      }}
+                      className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-foreground hover:bg-surface-elevated"
+                    >
+                      <UserPlus className="h-4 w-4" />
+                      Coaching staff
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => logoutMutation.mutate()}
+                    className="flex w-full items-center gap-2 border-t border-border px-4 py-2.5 text-left text-sm font-medium text-destructive hover:bg-surface-elevated"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    Log out
+                  </button>
+                </div>
+              )}
             </div>
             {(user?.role === "coach" || user?.role === "athlete") && <NotificationBell />}
             <button
@@ -332,6 +401,11 @@ export function AppShell({
           </h1>
           <div className="flex min-w-0 items-center gap-2 overflow-x-auto">{actions}</div>
         </header>
+        {subheader && (
+          <div className="shrink-0 border-b border-border bg-background px-4 py-2 md:px-8">
+            {subheader}
+          </div>
+        )}
         <main
           className={cn(
             fitScreen

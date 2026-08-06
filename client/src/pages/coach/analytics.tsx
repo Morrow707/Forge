@@ -28,6 +28,7 @@ import {
   Video,
   ThumbsUp,
   ThumbsDown,
+  Target,
 } from "lucide-react";
 import {
   LineChart,
@@ -49,6 +50,7 @@ import { TESTING_METRICS, type TestingMetricKey } from "@shared/testing-metrics"
 import { ACWR_RISK_LABEL, type AcwrRiskLevel } from "@shared/load";
 import { ACWR_RISK_CLASSNAME } from "@/components/acwr-history-dialog";
 import { MuscleHeatMap } from "@/components/muscle-heat-map";
+import { GoalsPanel } from "@/components/goals-panel";
 
 type RosterEntry = { id: number; name: string; email: string };
 type TrackedExercise = { id: number; name: string };
@@ -402,6 +404,25 @@ export default function CoachAnalytics() {
           <AcwrTrendCard athleteId={athleteId} />
           <WeeklyLoadTrendCard athleteId={athleteId} />
           <MuscleHeatMap athleteId={athleteId} />
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Target className="h-4 w-4" />
+                Goals
+              </CardTitle>
+              <CardDescription>
+                Set a target lift or testing metric for this athlete and track their progress
+                toward it.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <GoalsPanel
+                goalsUrl={`/api/coach/roster/${athleteId}/goals`}
+                exercisesUrl={`/api/coach/analytics/exercises?athleteId=${athleteId}`}
+              />
+            </CardContent>
+          </Card>
 
           <Card>
             <CardHeader>
