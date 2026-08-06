@@ -371,6 +371,18 @@ CREATE TABLE IF NOT EXISTS "assignment_correctives" (
   "created_at" timestamp NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS "assignment_exercise_overrides" (
+  "id" serial PRIMARY KEY,
+  "assignment_id" integer NOT NULL REFERENCES "assignments"("id") ON DELETE CASCADE,
+  "program_day_id" integer NOT NULL REFERENCES "program_days"("id") ON DELETE CASCADE,
+  "program_exercise_id" integer NOT NULL REFERENCES "program_exercises"("id") ON DELETE CASCADE,
+  "substitute_exercise_id" integer NOT NULL REFERENCES "exercises"("id") ON DELETE CASCADE,
+  "reason" text,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "assignment_exercise_overrides_assignment_day_idx" ON "assignment_exercise_overrides" ("assignment_id", "program_day_id");
+CREATE UNIQUE INDEX IF NOT EXISTS "assignment_exercise_overrides_unique_idx" ON "assignment_exercise_overrides" ("assignment_id", "program_day_id", "program_exercise_id");
+
 CREATE TABLE IF NOT EXISTS "workout_logs" (
   "id" serial PRIMARY KEY,
   "assignment_id" integer NOT NULL REFERENCES "assignments"("id") ON DELETE CASCADE,
