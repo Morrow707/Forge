@@ -96,6 +96,10 @@ DO $$ BEGIN
   CREATE TYPE "food_log_source" AS ENUM ('barcode', 'search', 'manual');
 EXCEPTION WHEN duplicate_object THEN null; END $$;
 
+DO $$ BEGIN
+  CREATE TYPE "periodization_phase" AS ENUM ('accumulation', 'intensification', 'realization', 'deload', 'taper');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
 -- Owned by connect-pg-simple at runtime; declared here only so it's never
 -- mistaken for an "unclaimed" table by anything diffing live schema state.
 CREATE TABLE IF NOT EXISTS "session" (
@@ -284,12 +288,25 @@ CREATE TABLE IF NOT EXISTS "programs" (
 );
 ALTER TABLE "programs" ADD COLUMN IF NOT EXISTS "ai_authored" boolean NOT NULL DEFAULT false;
 
+CREATE TABLE IF NOT EXISTS "program_blocks" (
+  "id" serial PRIMARY KEY,
+  "program_id" integer NOT NULL REFERENCES "programs"("id") ON DELETE CASCADE,
+  "name" text NOT NULL,
+  "phase" periodization_phase,
+  "order_index" integer NOT NULL DEFAULT 0,
+  "notes" text
+);
+CREATE INDEX IF NOT EXISTS "program_blocks_program_idx" ON "program_blocks" ("program_id");
+
 CREATE TABLE IF NOT EXISTS "program_weeks" (
   "id" serial PRIMARY KEY,
   "program_id" integer NOT NULL REFERENCES "programs"("id") ON DELETE CASCADE,
   "week_number" integer NOT NULL,
-  "name" text
+  "name" text,
+  "block_id" integer REFERENCES "program_blocks"("id") ON DELETE SET NULL
 );
+ALTER TABLE "program_weeks" ADD COLUMN IF NOT EXISTS "block_id" integer REFERENCES "program_blocks"("id") ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS "program_weeks_block_idx" ON "program_weeks" ("block_id");
 
 CREATE TABLE IF NOT EXISTS "program_days" (
   "id" serial PRIMARY KEY,

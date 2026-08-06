@@ -69,6 +69,26 @@ export const seasonPhaseEnum = pgEnum("season_phase", [
   "in_season",
   "taper",
 ]);
+// Classic block-periodization phase for a coach-defined training block
+// (a run of one or more weeks grouped under one goal) -- distinct from
+// seasonPhase above, which is the athlete's competitive-calendar context,
+// not a property of any one program.
+export const PERIODIZATION_PHASES = [
+  "accumulation",
+  "intensification",
+  "realization",
+  "deload",
+  "taper",
+] as const;
+export type PeriodizationPhase = (typeof PERIODIZATION_PHASES)[number];
+export const periodizationPhaseEnum = pgEnum("periodization_phase", PERIODIZATION_PHASES);
+export const PERIODIZATION_PHASE_LABEL: Record<PeriodizationPhase, string> = {
+  accumulation: "Accumulation",
+  intensification: "Intensification",
+  realization: "Realization",
+  deload: "Deload",
+  taper: "Taper",
+};
 // "bar_path" tracks only the bar's path/straightness (movement quality) --
 // no speed emphasis, meant for phases where velocity isn't the point (e.g.
 // rehab/offseason). "full" adds live bar speed, tempo, and velocity-loss.
@@ -418,6 +438,27 @@ export const programs = pgTable("programs", {
   aiAuthored: boolean("ai_authored").notNull().default(false),
 });
 
+// A named, phase-tagged span of one or more weeks within a program (e.g.
+// "Hypertrophy Block" / accumulation, "Peaking Block" / realization) --
+// purely an organizational overlay on top of the existing week-chunking, so
+// a program with no blocks defined behaves exactly as before.
+export const programBlocks = pgTable(
+  "program_blocks",
+  {
+    id: serial("id").primaryKey(),
+    programId: integer("program_id")
+      .notNull()
+      .references(() => programs.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    phase: periodizationPhaseEnum("phase"),
+    orderIndex: integer("order_index").notNull().default(0),
+    notes: text("notes"),
+  },
+  (table) => ({
+    programIdx: index("program_blocks_program_idx").on(table.programId),
+  }),
+);
+
 export const programWeeks = pgTable(
   "program_weeks",
   {
@@ -427,9 +468,14 @@ export const programWeeks = pgTable(
       .references(() => programs.id, { onDelete: "cascade" }),
     weekNumber: integer("week_number").notNull(),
     name: text("name"),
+    // Null means "not part of any block" -- most weeks in most programs,
+    // since blocks are opt-in. Set null (not cascaded) if its block is
+    // deleted, so the weeks themselves are never lost.
+    blockId: integer("block_id").references(() => programBlocks.id, { onDelete: "set null" }),
   },
   (table) => ({
     programIdx: index("program_weeks_program_idx").on(table.programId),
+    blockIdx: index("program_weeks_block_idx").on(table.blockId),
   }),
 );
 
@@ -1459,7 +1505,13 @@ export const exerciseReportsRelations = relations(exerciseReports, ({ one }) => 
 export const programsRelations = relations(programs, ({ one, many }) => ({
   coach: one(users, { fields: [programs.coachId], references: [users.id] }),
   weeks: many(programWeeks),
+  blocks: many(programBlocks),
   assignments: many(assignments),
+}));
+
+export const programBlocksRelations = relations(programBlocks, ({ one, many }) => ({
+  program: one(programs, { fields: [programBlocks.programId], references: [programs.id] }),
+  weeks: many(programWeeks),
 }));
 
 export const programWeeksRelations = relations(
@@ -1468,6 +1520,10 @@ export const programWeeksRelations = relations(
     program: one(programs, {
       fields: [programWeeks.programId],
       references: [programs.id],
+    }),
+    block: one(programBlocks, {
+      fields: [programWeeks.blockId],
+      references: [programBlocks.id],
     }),
     days: many(programDays),
   }),
@@ -1710,12 +1766,24 @@ export const programWeekInputSchema = z.object({
   id: z.number().optional(),
   weekNumber: z.number(),
   name: z.string().optional().nullable(),
+  // Index into the sibling `blocks` array on programStructureSchema below,
+  // not a database id -- blocks are wiped and rebuilt in the same
+  // save as weeks/days, so there's no stable id to reference until after
+  // the insert. Null/omitted means this week isn't part of any block.
+  blockIndex: z.number().optional().nullable(),
   days: z.array(programDayInputSchema).default([]),
+});
+
+export const programBlockInputSchema = z.object({
+  name: z.string().min(1),
+  phase: z.enum(PERIODIZATION_PHASES).optional().nullable(),
+  notes: z.string().optional().nullable(),
 });
 
 export const programStructureSchema = z.object({
   name: z.string().min(1),
   description: z.string().optional().nullable(),
+  blocks: z.array(programBlockInputSchema).default([]),
   weeks: z.array(programWeekInputSchema).default([]),
 });
 

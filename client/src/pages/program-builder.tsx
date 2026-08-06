@@ -9,6 +9,13 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ExercisePickerDialog } from "@/components/exercise-picker-dialog";
 import { AssignProgramDialog } from "@/components/assign-program-dialog";
 import { ProgramAiChatPanel } from "@/components/program-ai-chat-panel";
@@ -49,8 +56,14 @@ import {
   Link2,
   Send,
   Lock,
+  Layers,
 } from "lucide-react";
 import type { Exercise } from "@shared/schema";
+import {
+  PERIODIZATION_PHASES,
+  PERIODIZATION_PHASE_LABEL,
+  type PeriodizationPhase,
+} from "@shared/schema";
 
 type RosterEntry = { id: number; name: string; email: string };
 
@@ -85,8 +98,27 @@ type LocalDay = {
   exercises: LocalExercise[];
 };
 
+type LocalBlock = {
+  key: string;
+  name: string;
+  phase: PeriodizationPhase | null;
+  notes: string;
+};
+
+const PHASE_CLASSNAME: Record<PeriodizationPhase, string> = {
+  accumulation: "bg-emerald-400/15 text-emerald-400",
+  intensification: "bg-amber-400/15 text-amber-400",
+  realization: "bg-primary/15 text-primary",
+  deload: "bg-sky-400/15 text-sky-400",
+  taper: "bg-violet-400/15 text-violet-400",
+};
+
 function uid() {
   return crypto.randomUUID();
+}
+
+function makeBlock(): LocalBlock {
+  return { key: uid(), name: "New Block", phase: null, notes: "" };
 }
 
 function makeDay(): LocalDay {
@@ -108,10 +140,22 @@ function chunkIntoWeeks(days: LocalDay[]) {
 // -- the latter needs to rebuild local state from the fresh program the AI
 // just wrote, immediately and without waiting on a query refetch.
 function stateFromProgram(program: any) {
+  const blocks: LocalBlock[] = (program.blocks ?? []).map((b: any) => ({
+    key: uid(),
+    name: b.name,
+    phase: b.phase ?? null,
+    notes: b.notes ?? "",
+  }));
+  const blockKeyByServerId = new Map<number, string>(
+    (program.blocks ?? []).map((b: any, i: number) => [b.id, blocks[i].key]),
+  );
+
   const days: LocalDay[] = [];
   const weekNames: string[] = [];
+  const weekBlockKeys: (string | null)[] = [];
   for (const w of program.weeks) {
     weekNames.push(w.name ?? `Week ${w.weekNumber}`);
+    weekBlockKeys.push(w.blockId != null ? (blockKeyByServerId.get(w.blockId) ?? null) : null);
     for (const d of w.days) {
       days.push({
         key: uid(),
@@ -136,7 +180,14 @@ function stateFromProgram(program: any) {
       });
     }
   }
-  return { name: program.name as string, description: (program.description as string) ?? "", days, weekNames };
+  return {
+    name: program.name as string,
+    description: (program.description as string) ?? "",
+    days,
+    weekNames,
+    blocks,
+    weekBlockKeys,
+  };
 }
 
 export function ProgramBuilderPage({
@@ -169,6 +220,8 @@ export function ProgramBuilderPage({
   const [description, setDescription] = useState("");
   const [days, setDays] = useState<LocalDay[]>([]);
   const [weekNames, setWeekNames] = useState<string[]>([]);
+  const [blocks, setBlocks] = useState<LocalBlock[]>([]);
+  const [weekBlockKeys, setWeekBlockKeys] = useState<(string | null)[]>([]);
   const [pickerForDay, setPickerForDay] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
@@ -180,6 +233,8 @@ export function ProgramBuilderPage({
       setDescription(state.description);
       setDays(state.days);
       setWeekNames(state.weekNames);
+      setBlocks(state.blocks);
+      setWeekBlockKeys(state.weekBlockKeys);
       setHydrated(true);
     }
   }, [program, hydrated]);
@@ -193,6 +248,8 @@ export function ProgramBuilderPage({
     setDescription(state.description);
     setDays(state.days);
     setWeekNames(state.weekNames);
+    setBlocks(state.blocks);
+    setWeekBlockKeys(state.weekBlockKeys);
   }
 
   function updateDay(dayKey: string, updater: (day: LocalDay) => LocalDay) {
@@ -205,6 +262,27 @@ export function ProgramBuilderPage({
 
   function removeDay(dayKey: string) {
     setDays((prev) => prev.filter((d) => d.key !== dayKey));
+  }
+
+  function addBlock() {
+    setBlocks((prev) => [...prev, makeBlock()]);
+  }
+
+  function updateBlock(blockKey: string, updater: (block: LocalBlock) => LocalBlock) {
+    setBlocks((prev) => prev.map((b) => (b.key === blockKey ? updater(b) : b)));
+  }
+
+  function removeBlock(blockKey: string) {
+    setBlocks((prev) => prev.filter((b) => b.key !== blockKey));
+    setWeekBlockKeys((prev) => prev.map((k) => (k === blockKey ? null : k)));
+  }
+
+  function setWeekBlock(weekIndex: number, blockKey: string | null) {
+    setWeekBlockKeys((prev) => {
+      const next = [...prev];
+      next[weekIndex] = blockKey;
+      return next;
+    });
   }
 
   function renameWeek(weekIndex: number, value: string) {
@@ -222,9 +300,18 @@ export function ProgramBuilderPage({
       const payload = {
         name,
         description,
+        blocks: blocks.map((b) => ({
+          name: b.name,
+          phase: b.phase,
+          notes: b.notes || null,
+        })),
         weeks: weekChunks.map((chunk, wi) => ({
           weekNumber: wi + 1,
           name: weekNames[wi] || `Week ${wi + 1}`,
+          blockIndex:
+            weekBlockKeys[wi] != null
+              ? blocks.findIndex((b) => b.key === weekBlockKeys[wi])
+              : null,
           days: chunk.map((d, di) => ({
             dayNumber: di + 1,
             title: d.title,
@@ -321,6 +408,79 @@ export function ProgramBuilderPage({
               </CardContent>
             </Card>
 
+            <Card className="mb-6">
+              <CardContent className="space-y-3 p-5">
+                <div className="flex items-center justify-between">
+                  <Label className="flex items-center gap-1.5">
+                    <Layers className="h-4 w-4" />
+                    Training Blocks
+                  </Label>
+                  <Button size="sm" variant="outline" onClick={addBlock}>
+                    <Plus className="h-4 w-4" />
+                    Add Block
+                  </Button>
+                </div>
+                {blocks.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    Optional -- group weeks into named phases (Hypertrophy, Peaking, Deload...) to
+                    plan periodization. Assign a block to each week below once you've added one.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {blocks.map((block) => (
+                      <div
+                        key={block.key}
+                        className="flex flex-wrap items-center gap-2 rounded-md border border-border p-2"
+                      >
+                        <Input
+                          value={block.name}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            updateBlock(block.key, (b) => ({ ...b, name: val }));
+                          }}
+                          className="h-8 max-w-[220px]"
+                        />
+                        <Select
+                          value={block.phase ?? "none"}
+                          onValueChange={(val) =>
+                            updateBlock(block.key, (b) => ({
+                              ...b,
+                              phase: val === "none" ? null : (val as PeriodizationPhase),
+                            }))
+                          }
+                        >
+                          <SelectTrigger className="h-8 w-[160px]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">No phase</SelectItem>
+                            {PERIODIZATION_PHASES.map((p) => (
+                              <SelectItem key={p} value={p}>
+                                {PERIODIZATION_PHASE_LABEL[p]}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {block.phase && (
+                          <Badge className={cn("border-none", PHASE_CLASSNAME[block.phase])}>
+                            {PERIODIZATION_PHASE_LABEL[block.phase]}
+                          </Badge>
+                        )}
+                        <button
+                          type="button"
+                          aria-label={`Remove ${block.name} block`}
+                          onClick={() => removeBlock(block.key)}
+                          className="ml-auto text-muted-foreground hover:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
             {days.length === 0 ? (
               <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border py-16 text-center text-muted-foreground">
                 <p>No days yet. Add training days one at a time -- no need to plan whole weeks.</p>
@@ -331,13 +491,40 @@ export function ProgramBuilderPage({
               </div>
             ) : (
               <div className="space-y-8">
-                {weekChunks.map((chunk, wi) => (
+                {weekChunks.map((chunk, wi) => {
+                  const weekBlock = blocks.find((b) => b.key === weekBlockKeys[wi]);
+                  return (
                   <div key={wi}>
-                    <Input
-                      value={weekNames[wi] || `Week ${wi + 1}`}
-                      onChange={(e) => renameWeek(wi, e.target.value)}
-                      className="mb-3 h-8 max-w-xs border-none bg-transparent px-0 text-xs font-bold uppercase tracking-wide text-muted-foreground focus-visible:ring-0"
-                    />
+                    <div className="mb-3 flex flex-wrap items-center gap-2">
+                      <Input
+                        value={weekNames[wi] || `Week ${wi + 1}`}
+                        onChange={(e) => renameWeek(wi, e.target.value)}
+                        className="h-8 max-w-xs border-none bg-transparent px-0 text-xs font-bold uppercase tracking-wide text-muted-foreground focus-visible:ring-0"
+                      />
+                      {blocks.length > 0 && (
+                        <Select
+                          value={weekBlockKeys[wi] ?? "none"}
+                          onValueChange={(val) => setWeekBlock(wi, val === "none" ? null : val)}
+                        >
+                          <SelectTrigger className="h-7 w-[160px] text-xs">
+                            <SelectValue placeholder="No block" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">No block</SelectItem>
+                            {blocks.map((b) => (
+                              <SelectItem key={b.key} value={b.key}>
+                                {b.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                      {weekBlock?.phase && (
+                        <Badge className={cn("border-none", PHASE_CLASSNAME[weekBlock.phase])}>
+                          {PERIODIZATION_PHASE_LABEL[weekBlock.phase]}
+                        </Badge>
+                      )}
+                    </div>
                     <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
                       {chunk.map((day, di) => (
                         <DayCard
@@ -351,7 +538,8 @@ export function ProgramBuilderPage({
                       ))}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 
