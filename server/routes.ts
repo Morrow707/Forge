@@ -1289,6 +1289,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
+  app.get(
+    "/api/coach/roster/:athleteId/muscle-load",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      const onRoster = await storage.getRosterAthleteForCoach(user.id, athleteId);
+      if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
+      const schema = z.object({ days: z.coerce.number().min(1).max(180).optional() });
+      const parsed = schema.safeParse(req.query);
+      const tally = await storage.getMuscleLoadForAthlete(
+        user.id,
+        athleteId,
+        parsed.success ? parsed.data.days : undefined,
+      );
+      res.json(tally);
+    },
+  );
+
   // Read-only -- the AI chat coach is never a private, unsupervised channel:
   // a coach can always read the full transcript of any athlete on their
   // roster, the same way they can read workout comments.

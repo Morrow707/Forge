@@ -5530,6 +5530,56 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
     return buildWeeklyLoadSeries(dailyLoads, weeks, today);
   },
 
+  // Raw weighted set counts per muscle-group string (exercises.muscleGroup /
+  // secondaryMuscles vocabulary) for the analytics page's body-map heat
+  // chart -- shared/muscle-map.ts rolls this up into the smaller set of
+  // regions actually drawn. A set counts fully toward its exercise's
+  // primary muscle and at half weight toward each secondary muscle, since
+  // an exercise's secondary movers get real but lesser stimulus than the
+  // muscle it's actually programmed for.
+  async getMuscleLoadForAthlete(
+    coachId: number,
+    athleteId: number,
+    days = 28,
+  ): Promise<Record<string, number>> {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    const owned = await db
+      .select({ id: assignments.id })
+      .from(assignments)
+      .where(and(inArray(assignments.coachId, coachIds), eq(assignments.athleteId, athleteId)));
+    const assignmentIds = owned.map((a) => a.id);
+    if (assignmentIds.length === 0) return {};
+
+    const sinceDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const logs = await db.query.workoutLogs.findMany({
+      where: and(inArray(workoutLogs.assignmentId, assignmentIds), gte(workoutLogs.date, sinceDate)),
+      with: {
+        entries: {
+          with: {
+            sets: true,
+            programExercise: { with: { exercise: true } },
+            corrective: { with: { exercise: true } },
+          },
+        },
+      },
+    });
+
+    const tally: Record<string, number> = {};
+    for (const log of logs) {
+      for (const entry of log.entries) {
+        const exercise = entry.programExercise?.exercise ?? entry.corrective?.exercise;
+        if (!exercise) continue;
+        const setCount = entry.sets.length;
+        if (setCount === 0) continue;
+        tally[exercise.muscleGroup] = (tally[exercise.muscleGroup] ?? 0) + setCount;
+        for (const secondary of exercise.secondaryMuscles ?? []) {
+          tally[secondary] = (tally[secondary] ?? 0) + setCount * 0.5;
+        }
+      }
+    }
+    return tally;
+  },
+
   // Current ACWR snapshot for every athlete on this coach's roster -- one
   // query across the whole roster (matching getRosterWellnessToday's
   // approach) rather than one query per athlete. An athlete with no

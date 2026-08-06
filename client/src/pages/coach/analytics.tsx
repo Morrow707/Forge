@@ -35,6 +35,7 @@ import { cn } from "@/lib/utils";
 import { TESTING_METRICS, type TestingMetricKey } from "@shared/testing-metrics";
 import { ACWR_RISK_LABEL, type AcwrRiskLevel } from "@shared/load";
 import { ACWR_RISK_CLASSNAME } from "@/components/acwr-history-dialog";
+import { MuscleHeatMap } from "@/components/muscle-heat-map";
 
 type RosterEntry = { id: number; name: string; email: string };
 type TrackedExercise = { id: number; name: string };
@@ -350,6 +351,7 @@ export default function CoachAnalytics() {
         <div className="space-y-4">
           <AcwrTrendCard athleteId={athleteId} />
           <WeeklyLoadTrendCard athleteId={athleteId} />
+          <MuscleHeatMap athleteId={athleteId} />
 
           <Card>
             <CardHeader>
