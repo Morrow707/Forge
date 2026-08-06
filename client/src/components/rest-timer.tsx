@@ -79,22 +79,26 @@ export const RestTimerControl = forwardRef<RestTimerHandle, { defaultSeconds?: n
 
   // A tiny bottom-nav pill is easy to miss if attention is on the camera
   // tracker, a comment thread, or anywhere else on screen -- both the
-  // running countdown and the "time's up" state below render as a portal
-  // to document.body instead of inline in this component's normal position.
-  // A plain `fixed inset-0` here isn't enough on its own: this component
-  // sits inside AppShell's scroll area, and any ancestor with a transform,
-  // filter, or backdrop-filter (several show up between here and <body> in
-  // this app) turns into a containing block for fixed descendants, which
-  // silently clips them to that ancestor instead of the true viewport --
-  // confirmed happening here, the sticky top header was rendering above the
-  // "rest over" overlay instead of being covered by it. The portal sidesteps
-  // that entirely. The small inline control below the portal calls stays in
-  // its normal spot for the bottom nav row's layout. The overlay's
-  // audio/vibration are still bound by whatever the phone's ringer/silent
-  // switch and Web Audio allow (see audio-cues.ts) -- no web API lets a page
-  // or installed PWA override that on iOS, so a muted phone genuinely won't
-  // make sound no matter how the tone is built; that's a WebKit platform
-  // ceiling, not something fixable in this file.
+  // running countdown and the "time's up" state below render centered over
+  // the whole viewport, as a portal to document.body instead of inline in
+  // this component's normal position. A plain `fixed inset-0` here isn't
+  // enough on its own: this component sits inside AppShell's scroll area,
+  // and any ancestor with a transform, filter, or backdrop-filter (several
+  // show up between here and <body> in this app) turns into a containing
+  // block for fixed descendants, which silently clips them to that ancestor
+  // instead of the true viewport -- confirmed happening here, the sticky top
+  // header was rendering above the "rest over" overlay instead of being
+  // covered by it. The portal sidesteps that entirely, and since this
+  // component instance is mounted once for the whole logging session (not
+  // remounted per exercise page), both overlays stay centered and running
+  // no matter how far the athlete scrolls or how many times they tap
+  // Back/Next between exercises. The small inline control below the portal
+  // calls stays in its normal spot for the bottom nav row's layout. The
+  // overlay's audio/vibration are still bound by whatever the phone's
+  // ringer/silent switch and Web Audio allow (see audio-cues.ts) -- no web
+  // API lets a page or installed PWA override that on iOS, so a muted phone
+  // genuinely won't make sound no matter how the tone is built; that's a
+  // WebKit platform ceiling, not something fixable in this file.
   if (ringing) {
     return (
       <>
@@ -111,13 +115,13 @@ export const RestTimerControl = forwardRef<RestTimerHandle, { defaultSeconds?: n
             role="alertdialog"
             aria-label="Rest time is up"
             onClick={() => setRinging(false)}
-            className="fixed inset-0 z-[100] flex flex-col items-center justify-center gap-6 bg-destructive px-6 text-center"
+            className="fixed inset-0 z-[100] flex flex-col items-center justify-center gap-6 bg-primary px-6 text-center"
           >
-            <BellRing className="h-20 w-20 animate-bounce text-destructive-foreground" />
-            <p className="font-display text-6xl font-extrabold leading-none text-destructive-foreground">
+            <BellRing className="h-20 w-20 text-primary-foreground" />
+            <p className="font-display text-6xl font-extrabold leading-none text-primary-foreground">
               Rest Over
             </p>
-            <p className="text-lg font-semibold text-destructive-foreground/80">
+            <p className="text-lg font-semibold text-primary-foreground/80">
               Time to get back to it
             </p>
             <button
@@ -126,7 +130,7 @@ export const RestTimerControl = forwardRef<RestTimerHandle, { defaultSeconds?: n
                 e.stopPropagation();
                 setRinging(false);
               }}
-              className="mt-4 rounded-full bg-destructive-foreground px-10 py-4 text-lg font-bold text-destructive shadow-lg"
+              className="mt-4 rounded-full bg-primary-foreground px-10 py-4 text-lg font-bold text-primary shadow-lg"
             >
               Dismiss
             </button>
@@ -149,21 +153,19 @@ export const RestTimerControl = forwardRef<RestTimerHandle, { defaultSeconds?: n
           {formatClock(remaining)}
         </button>
         {createPortal(
-          <div className="pointer-events-none fixed inset-x-0 bottom-16 z-[100] flex justify-center px-4">
-            <div className="pointer-events-auto flex items-center gap-4 rounded-2xl border border-primary/40 bg-surface/95 px-6 py-3 shadow-xl backdrop-blur">
-              <Timer className="h-7 w-7 shrink-0 text-primary" />
-              <div className="text-left">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Resting
-                </p>
-                <p className="font-display text-4xl font-extrabold leading-none tabular-nums text-primary">
-                  {formatClock(remaining)}
-                </p>
-              </div>
+          <div className="pointer-events-none fixed inset-0 z-[100] flex items-center justify-center px-4">
+            <div className="pointer-events-auto flex flex-col items-center gap-2 rounded-3xl border border-primary/40 bg-surface/95 px-10 py-8 text-center shadow-2xl backdrop-blur">
+              <Timer className="h-8 w-8 text-primary" />
+              <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Resting
+              </p>
+              <p className="font-display text-7xl font-extrabold leading-none tabular-nums text-primary">
+                {formatClock(remaining)}
+              </p>
               <button
                 type="button"
                 onClick={() => setRemaining(null)}
-                className="ml-2 text-xs font-semibold text-muted-foreground underline"
+                className="mt-2 text-sm font-semibold text-muted-foreground underline"
               >
                 Skip
               </button>
