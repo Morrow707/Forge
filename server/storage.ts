@@ -8,6 +8,7 @@ import {
   teamChallenges,
   exercises,
   programs,
+  programBlocks,
   programWeeks,
   programDays,
   programExercises,
@@ -2665,6 +2666,7 @@ Athlete's data:
     return db.query.programs.findFirst({
       where: eq(programs.id, id),
       with: {
+        blocks: { orderBy: asc(programBlocks.orderIndex) },
         weeks: {
           orderBy: asc(programWeeks.weekNumber),
           with: {
@@ -2692,6 +2694,7 @@ Athlete's data:
       where: eq(programs.id, id),
       with: {
         coach: true,
+        blocks: { orderBy: asc(programBlocks.orderIndex) },
         weeks: {
           orderBy: asc(programWeeks.weekNumber),
           with: {
@@ -2745,6 +2748,21 @@ Athlete's data:
         })
         .returning();
 
+      const blockIds: number[] = [];
+      for (const [i, block] of structure.blocks.entries()) {
+        const [blockRow] = await tx
+          .insert(programBlocks)
+          .values({
+            programId: program.id,
+            name: block.name,
+            phase: block.phase ?? null,
+            orderIndex: i,
+            notes: block.notes ?? null,
+          })
+          .returning();
+        blockIds.push(blockRow.id);
+      }
+
       for (const week of structure.weeks) {
         const [weekRow] = await tx
           .insert(programWeeks)
@@ -2752,6 +2770,7 @@ Athlete's data:
             programId: program.id,
             weekNumber: week.weekNumber,
             name: week.name ?? null,
+            blockId: week.blockIndex != null ? (blockIds[week.blockIndex] ?? null) : null,
           })
           .returning();
 
@@ -2945,6 +2964,7 @@ Design a complete draft program matching the coach's request.`;
       structure: {
         name: draft.name?.trim() || "AI Draft Program",
         description: draft.description?.trim() || null,
+        blocks: [],
         weeks: (draft.weeks ?? []).map((w, wi) => ({
           weekNumber: w.weekNumber ?? wi + 1,
           name: w.name ?? null,
@@ -2982,8 +3002,28 @@ Design a complete draft program matching the coach's request.`;
         })
         .where(eq(programs.id, programId));
 
-      // Simplest consistent approach: wipe and rebuild the structure.
+      // Simplest consistent approach: wipe and rebuild the structure. Weeks
+      // are deleted before blocks (not the reverse) since program_weeks'
+      // block_id is ON DELETE SET NULL, not cascade -- deleting blocks first
+      // would just null out weeks we're about to delete anyway, but doing it
+      // in this order keeps the intent obvious.
       await tx.delete(programWeeks).where(eq(programWeeks.programId, programId));
+      await tx.delete(programBlocks).where(eq(programBlocks.programId, programId));
+
+      const blockIds: number[] = [];
+      for (const [i, block] of structure.blocks.entries()) {
+        const [blockRow] = await tx
+          .insert(programBlocks)
+          .values({
+            programId,
+            name: block.name,
+            phase: block.phase ?? null,
+            orderIndex: i,
+            notes: block.notes ?? null,
+          })
+          .returning();
+        blockIds.push(blockRow.id);
+      }
 
       for (const week of structure.weeks) {
         const [weekRow] = await tx
@@ -2992,6 +3032,7 @@ Design a complete draft program matching the coach's request.`;
             programId,
             weekNumber: week.weekNumber,
             name: week.name ?? null,
+            blockId: week.blockIndex != null ? (blockIds[week.blockIndex] ?? null) : null,
           })
           .returning();
 
@@ -3305,10 +3346,26 @@ Respond to the user's latest message by calling ask_question or update_program.`
     }
     const update = parsedUpdate.data;
 
+    // The AI only ever edits exercises/days, never blocks -- carry the
+    // program's existing block assignments through untouched by re-deriving
+    // each week's blockIndex from its pre-update blockId. A week the AI adds
+    // fresh has no prior entry here, so it comes through as unblocked (null),
+    // same as manually adding a week in the builder would.
+    const blocks = program.blocks.map((b) => ({ name: b.name, phase: b.phase, notes: b.notes }));
+    const blockIdToIndex = new Map(program.blocks.map((b, i) => [b.id, i]));
+    const blockIdByWeekNumber = new Map(program.weeks.map((w) => [w.weekNumber, w.blockId]));
+
     const structure: ProgramStructureInput = {
       name: update.name?.trim() || program.name,
       description: update.description?.trim() || program.description,
-      weeks: applyProgramWeekUpdates(program.weeks, update.weekUpdates ?? [], validIdSet),
+      blocks,
+      weeks: applyProgramWeekUpdates(program.weeks, update.weekUpdates ?? [], validIdSet).map((w) => {
+        const blockId = blockIdByWeekNumber.get(w.weekNumber);
+        return {
+          ...w,
+          blockIndex: blockId != null ? (blockIdToIndex.get(blockId) ?? null) : null,
+        };
+      }),
     };
 
     await this.updateProgramStructure(programId, structure);

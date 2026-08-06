@@ -2086,6 +2086,7 @@ async function main() {
     program = await storage.createProgramWithStructure(coach.id, {
       name: "Forge Strength Block",
       description: "4-day full body strength & conditioning program.",
+      blocks: [],
       weeks: [
         {
           weekNumber: 1,
@@ -2356,6 +2357,7 @@ async function main() {
         name: "Test Program",
         description:
           "A deliberately exhaustive program covering every Forge feature in one block: plain strength logging, multi-group supersets, bar-path/full velocity tracking, video-check uploads, %1RM auto-resolution, manual corrective work, and a big multi-exercise day.",
+        blocks: [],
         weeks: [
           {
             weekNumber: 1,
