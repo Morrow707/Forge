@@ -15,12 +15,14 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { apiRequest, getJson } from "@/lib/queryClient";
-import { Users, Gauge, Crown, CalendarDays, TrendingUp, Activity, SlidersHorizontal } from "lucide-react";
+import { Users, Gauge, Crown, CalendarDays, TrendingUp, Activity, SlidersHorizontal, Weight } from "lucide-react";
 import {
   LineChart,
   Line,
   ScatterChart,
   Scatter,
+  ComposedChart,
+  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -347,6 +349,7 @@ export default function CoachAnalytics() {
       {athleteId && !exerciseId && (
         <div className="space-y-4">
           <AcwrTrendCard athleteId={athleteId} />
+          <WeeklyLoadTrendCard athleteId={athleteId} />
 
           <Card>
             <CardHeader>
@@ -1163,6 +1166,84 @@ function AcwrTrendCard({ athleteId }: { athleteId: string }) {
                 dot={false}
               />
             </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+type WeeklyLoadPoint = { weekStart: string; totalVolume: number; totalSets: number; avgIntensity: number };
+
+/** Week-by-week volume (total load lifted) and intensity (average load per
+ * rep) for the selected athlete -- whole-athlete like the ACWR chart above,
+ * not exercise-specific, since it's meant to answer "is this athlete's
+ * overall training getting heavier/lighter over time," not one lift's
+ * progression (that's what the per-exercise chart further down is for). */
+function WeeklyLoadTrendCard({ athleteId }: { athleteId: string }) {
+  const { data: series = [], isLoading } = useQuery<WeeklyLoadPoint[]>({
+    queryKey: ["/api/coach/roster", athleteId, "weekly-load"],
+    queryFn: () => getJson(`/api/coach/roster/${athleteId}/weekly-load`),
+    enabled: !!athleteId,
+  });
+
+  const chartData = series.map((p) => ({
+    label: format(parseISO(p.weekStart), "MMM d"),
+    volume: Math.round(p.totalVolume),
+    intensity: Math.round(p.avgIntensity),
+    sets: p.totalSets,
+  }));
+  const hasEnoughData = series.some((p) => p.totalVolume > 0);
+
+  if (isLoading) {
+    return <div className="h-24 animate-pulse rounded-md bg-surface" />;
+  }
+  if (!hasEnoughData) return null;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Weight className="h-5 w-5" />
+          Volume & Intensity
+        </CardTitle>
+        <CardDescription>
+          Weekly training load -- total volume lifted (bars) vs. average weight per rep (line).
+          Only counts sets logged with a numeric weight.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="h-64">
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={chartData} margin={{ left: 4, right: 12 }}>
+              <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+              <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+              <YAxis yAxisId="volume" tick={{ fontSize: 11 }} width={50} />
+              <YAxis yAxisId="intensity" orientation="right" tick={{ fontSize: 11 }} width={50} />
+              <Tooltip
+                contentStyle={{
+                  background: "hsl(var(--card))",
+                  border: "1px solid hsl(var(--border))",
+                }}
+              />
+              <Legend wrapperStyle={{ fontSize: 12 }} />
+              <Bar
+                yAxisId="volume"
+                dataKey="volume"
+                name="Total Volume"
+                fill="hsl(var(--primary))"
+                radius={[3, 3, 0, 0]}
+              />
+              <Line
+                yAxisId="intensity"
+                type="monotone"
+                dataKey="intensity"
+                name="Avg Load/Rep"
+                stroke="hsl(var(--muted-foreground))"
+                strokeWidth={2}
+                dot={{ r: 3 }}
+              />
+            </ComposedChart>
           </ResponsiveContainer>
         </div>
       </CardContent>
