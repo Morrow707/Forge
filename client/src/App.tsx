@@ -11,6 +11,7 @@ import { AuthProvider, useAuth } from "@/hooks/use-auth";
 // below is lazy -- an athlete's phone shouldn't have to download the coach
 // program builder, analytics charts, or the CV bar-tracking pipeline just
 // to see their calendar.
+import LandingPage from "@/pages/landing";
 import LoginPage from "@/pages/login";
 import AdminLoginPage from "@/pages/admin-login";
 import SignupPage from "@/pages/signup";
@@ -83,7 +84,11 @@ function ProtectedRoute({
 function HomeRedirect() {
   const { user, isLoading } = useAuth();
   if (isLoading) return <FullScreenSpinner />;
-  if (!user) return <Redirect to="/login" />;
+  // Logged-out visitors land on the marketing page instead of being bounced
+  // straight to the login form -- "/" is the front door now, not just a
+  // redirect stub. Anyone already signed in still goes straight to their
+  // own dashboard, same as before.
+  if (!user) return <LandingPage />;
   return <Redirect to={homeFor(user.role)} />;
 }
 
