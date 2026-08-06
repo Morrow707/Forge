@@ -168,6 +168,55 @@ export function computeBarTiltDegrees(landmarks: NormalizedLandmark[]): number |
   return 0;
 }
 
+// Enough coverage from head to ankle that the wrist/ankle point the tracker
+// actually follows is reliably readable through a full rep -- deliberately
+// not every one of the 33 landmarks (a foot slightly out of frame shouldn't
+// block auto-start; see isFullBodyInFrame below).
+const FULL_BODY_CHECKPOINTS = [
+  POSE_LANDMARKS.NOSE,
+  POSE_LANDMARKS.LEFT_SHOULDER,
+  POSE_LANDMARKS.RIGHT_SHOULDER,
+  POSE_LANDMARKS.LEFT_HIP,
+  POSE_LANDMARKS.RIGHT_HIP,
+  POSE_LANDMARKS.LEFT_KNEE,
+  POSE_LANDMARKS.RIGHT_KNEE,
+  POSE_LANDMARKS.LEFT_ANKLE,
+  POSE_LANDMARKS.RIGHT_ANKLE,
+];
+
+// Whether a whole person is currently readable in frame -- the automatic
+// half of what used to be a manual "does this look right?" check a second
+// person had to make by looking at the screen (the athlete, mid-lift, can't
+// look at their own phone). Driving auto-start off this instead means
+// propping the phone up and walking into position is enough; nobody has to
+// watch the preview or tap anything.
+export function isFullBodyInFrame(landmarks: NormalizedLandmark[]): boolean {
+  return FULL_BODY_CHECKPOINTS.every((i) => visible(landmarks[i]));
+}
+
+export type CameraAlignment = { aligned: boolean; reason: "ok" | "angled" | "unknown" };
+
+// Whether the camera is roughly square to the athlete rather than shooting
+// from an oblique angle -- an angled camera is the single biggest source of
+// bad bar-path/velocity numbers this pipeline has no other way to correct
+// for (parallax makes a straight bar path look like it drifted, and
+// foreshortens real distance travelled, which throws off velocity and ROM
+// together). Uses the world-landmark depth (z) gap between the two
+// shoulders as a proxy: squared up to the camera, both shoulders sit at
+// roughly the same distance from the lens; rotated even a modest amount,
+// one shoulder measurably nears the camera while the other falls away.
+// Compared against shoulder WIDTH (x), not an absolute distance, so this
+// self-scales for however far back the athlete happens to be standing.
+export function assessCameraAlignment(worldLandmarks: Landmark[]): CameraAlignment {
+  const lShoulder = worldLandmarks[POSE_LANDMARKS.LEFT_SHOULDER];
+  const rShoulder = worldLandmarks[POSE_LANDMARKS.RIGHT_SHOULDER];
+  if (!visible(lShoulder) || !visible(rShoulder)) return { aligned: false, reason: "unknown" };
+  const shoulderWidth = Math.abs(lShoulder.x - rShoulder.x);
+  if (shoulderWidth < 0.05) return { aligned: false, reason: "unknown" };
+  const depthGap = Math.abs(lShoulder.z - rShoulder.z);
+  return depthGap / shoulderWidth > 0.5 ? { aligned: false, reason: "angled" } : { aligned: true, reason: "ok" };
+}
+
 // The tracked point for "jump" mode -- the ankle midpoint rather than the
 // wrist midpoint, since a jump has no implement to follow and the ankle
 // joint is the cleanest ground-contact proxy available from the skeleton

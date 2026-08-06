@@ -105,6 +105,42 @@ export function buildPathTrace(
     }));
 }
 
+// A brief camera dropout (an arm crossing in front of the bar, a chalk
+// cloud, a lighting flicker) shouldn't corrupt what comes out the other
+// end: with no interpolation, the next confident point after a gap looks
+// like the bar teleported there in a single frame, and peak velocity gets
+// computed from that one oversized step -- a fake spike with nothing to do
+// with how the athlete actually moved. Below OCCLUSION_MIN_GAP_MS this
+// never fires (that's just ordinary frame-to-frame spacing); above
+// OCCLUSION_MAX_GAP_MS the dropout is long enough that guessing what
+// happened in between would fabricate more than it recovers, so the caller
+// sees the real gap untouched, same as before this existed.
+const OCCLUSION_MIN_GAP_MS = 70;
+const OCCLUSION_MAX_GAP_MS = 200;
+const OCCLUSION_STEP_MS = 33;
+
+// Linearly-interpolated points to splice in between `prev` and `curr` when
+// the gap between them looks like a brief dropout rather than real motion
+// -- empty array (nothing to insert) otherwise. Caller pushes these before
+// pushing `curr` itself; `prev`/`curr` are never duplicated or altered.
+export function interpolateOcclusionGap(prev: TrackedPoint, curr: TrackedPoint): TrackedPoint[] {
+  const gap = curr.t - prev.t;
+  if (gap < OCCLUSION_MIN_GAP_MS || gap > OCCLUSION_MAX_GAP_MS) return [];
+  const steps = Math.floor(gap / OCCLUSION_STEP_MS);
+  if (steps < 2) return [];
+  const points: TrackedPoint[] = [];
+  for (let i = 1; i < steps; i++) {
+    const frac = i / steps;
+    points.push({
+      t: prev.t + gap * frac,
+      x: prev.x + (curr.x - prev.x) * frac,
+      y: prev.y + (curr.y - prev.y) * frac,
+      z: prev.z + (curr.z - prev.z) * frac,
+    });
+  }
+  return points;
+}
+
 const SMOOTHING_WINDOW = 5;
 
 // Exported for jump-tracking.ts, which reuses this same smoothing +
