@@ -14,7 +14,9 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { RadioChipGroup } from "@/components/filter-chip-group";
 import { apiRequest, getJson } from "@/lib/queryClient";
 import {
   Users,
@@ -29,6 +31,7 @@ import {
   ThumbsUp,
   ThumbsDown,
   Target,
+  Search,
 } from "lucide-react";
 import {
   LineChart,
@@ -209,6 +212,7 @@ function ChartVisibilityMenu({
  * their own set, this page is where the history/coaching value lives. */
 export default function CoachAnalytics() {
   const [athleteId, setAthleteId] = useState<string>("");
+  const [athleteSearch, setAthleteSearch] = useState("");
   const [exerciseId, setExerciseId] = useState<string>("");
   const [hiddenCharts, setHiddenCharts] = useState<Set<ChartKey>>(() => loadHiddenCharts());
   // Read-only preview of an athlete's per-set form-check clip from the raw
@@ -336,6 +340,9 @@ export default function CoachAnalytics() {
   const prCount = chartData.filter((p) => p.isPR).length;
   const unit = chartData.find((p) => p.weightUnit)?.weightUnit ?? "lbs";
   const selectedExerciseName = exercises.find((e) => String(e.id) === exerciseId)?.name;
+  const filteredRoster = athleteSearch.trim()
+    ? roster.filter((a) => a.name.toLowerCase().includes(athleteSearch.trim().toLowerCase()))
+    : roster;
 
   function handleAthleteChange(value: string) {
     setAthleteId(value);
@@ -354,12 +361,24 @@ export default function CoachAnalytics() {
       <div className="mb-6 grid gap-3 sm:grid-cols-2">
         <div className="space-y-1.5">
           <label className="text-xs font-semibold uppercase text-muted-foreground">Athlete</label>
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={athleteSearch}
+              onChange={(e) => setAthleteSearch(e.target.value)}
+              placeholder="Search athletes…"
+              className="mb-1.5 h-8 pl-8 text-sm"
+            />
+          </div>
           <Select value={athleteId} onValueChange={handleAthleteChange}>
             <SelectTrigger>
               <SelectValue placeholder="Select an athlete" />
             </SelectTrigger>
             <SelectContent>
-              {roster.map((a) => (
+              {filteredRoster.length === 0 && (
+                <p className="px-2 py-1.5 text-sm text-muted-foreground">No athletes match</p>
+              )}
+              {filteredRoster.map((a) => (
                 <SelectItem key={a.id} value={String(a.id)}>
                   {a.name}
                 </SelectItem>
@@ -371,20 +390,25 @@ export default function CoachAnalytics() {
           <label className="text-xs font-semibold uppercase text-muted-foreground">
             Exercise (optional)
           </label>
-          <Select value={exerciseId} onValueChange={setExerciseId} disabled={!athleteId}>
-            <SelectTrigger>
-              <SelectValue
-                placeholder={athleteId ? "All exercises (recent sessions)" : "Pick an athlete first"}
+          {athleteId ? (
+            exercises.length > 0 ? (
+              <RadioChipGroup
+                label=""
+                className="[&>p]:hidden"
+                options={exercises.map((e) => e.name)}
+                value={exercises.find((e) => String(e.id) === exerciseId)?.name ?? ""}
+                onChange={(name) => {
+                  const match = exercises.find((e) => e.name === name);
+                  setExerciseId(match ? String(match.id) : "");
+                }}
+                allowNone
               />
-            </SelectTrigger>
-            <SelectContent>
-              {exercises.map((e) => (
-                <SelectItem key={e.id} value={String(e.id)}>
-                  {e.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            ) : (
+              <p className="text-sm text-muted-foreground">No tracked exercises yet</p>
+            )
+          ) : (
+            <p className="text-sm text-muted-foreground">Pick an athlete first</p>
+          )}
         </div>
       </div>
 
@@ -1555,21 +1579,15 @@ function TeamTrends() {
 
   return (
     <div className="space-y-4">
-      <div className="max-w-xs space-y-1.5">
-        <label className="text-xs font-semibold uppercase text-muted-foreground">Metric</label>
-        <Select value={metric} onValueChange={(v) => setMetric(v as TestingMetricKey)}>
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {TESTING_METRICS.map((m) => (
-              <SelectItem key={m.key} value={m.key}>
-                {m.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      <RadioChipGroup
+        label="Metric"
+        options={TESTING_METRICS.map((m) => m.label)}
+        value={activeMetric.label}
+        onChange={(label) => {
+          const match = TESTING_METRICS.find((m) => m.label === label);
+          if (match) setMetric(match.key);
+        }}
+      />
 
       {!isLoading && athletes.length === 0 ? (
         <Card>
