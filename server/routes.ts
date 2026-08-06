@@ -7,6 +7,7 @@ import { setupAuth, requireAuth, requireRole } from "./auth";
 import { storage } from "./storage";
 import { buildIcsFeed } from "./ics";
 import { getVapidPublicKey } from "./push";
+import { scheduleRestOverPush, cancelRestOverPush } from "./rest-timer-push";
 import { sendEmail } from "./email";
 import { buildProgressReportEmail } from "./progress-report";
 import { buildRecruitingProfilePdf } from "./recruiting-profile";
@@ -2944,6 +2945,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
     await storage.removePushSubscription(parsed.data.endpoint);
+    res.status(204).end();
+  });
+
+  // Backs the rest timer's lock-screen notification (see rest-timer.tsx and
+  // rest-timer-push.ts) -- a client-side countdown can't fire anything once
+  // the phone locks and the tab's JS gets suspended, so this schedules a
+  // real push, delivered by the OS, as the one channel that still reaches
+  // the athlete. No-ops server-side (via sendPushToUser) if the athlete
+  // never enabled push at all, so the client doesn't need to check first.
+  app.post("/api/athlete/rest-timer/schedule-push", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const schema = z.object({
+      seconds: z.number().int().min(1).max(600),
+      url: z.string().max(300).optional(),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    scheduleRestOverPush(user.id, parsed.data.seconds, parsed.data.url);
+    res.status(204).end();
+  });
+
+  app.post("/api/athlete/rest-timer/cancel-push", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    cancelRestOverPush(user.id);
     res.status(204).end();
   });
 
