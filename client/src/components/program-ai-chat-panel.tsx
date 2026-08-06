@@ -19,12 +19,13 @@ type ProgramChatMessage = {
 
 /** Conversational AI program builder -- describe what you want, the AI
  * rewrites the whole program structure and replies with a summary, applied
- * immediately (no draft/review step). Scoped to the admin's own programs;
- * unlike the coach-facing one-shot AI Assist, there's no separate "review
- * before it touches a real program" gate here since this is the trusted
- * admin building for themselves, not a coach acting on an athlete's behalf.
- * `onApplied` is called with the fresh program returned by each turn so the
- * builder can update its fields immediately, without waiting on a refetch. */
+ * immediately (no separate draft/review step). Used by admin (their own
+ * Forge library), a Free Agent (their own program), and a coach (a program
+ * on their roster) alike -- for a coach this has the same blast radius as
+ * their own manual edit + Save Program already does to the same program, so
+ * there's nothing extra to gate here. `onApplied` is called with the fresh
+ * program returned by each turn so the builder can update its fields
+ * immediately, without waiting on a refetch. */
 export function ProgramAiChatPanel({
   apiBase,
   programId,
