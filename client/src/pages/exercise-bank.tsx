@@ -13,6 +13,15 @@ import { Plus, Trash2, Dumbbell, Search, Video, Stethoscope } from "lucide-react
 import type { ExerciseWithOwnership } from "@/lib/exercise-types";
 import { MOVEMENT_TYPES, MUSCLE_GROUPS, SPORTS } from "@/lib/exercise-taxonomy";
 import { FilterChipGroup, toggleInSet } from "@/components/filter-chip-group";
+import {
+  CATEGORY_BADGE_CLASS,
+  CATEGORY_FILTER_ACTIVE_CLASS,
+  MOVEMENT_FILTER_ACTIVE_CLASS,
+  LATERALITY_FILTER_ACTIVE_CLASS,
+  MUSCLE_FILTER_ACTIVE_CLASS,
+  SPORT_FILTER_ACTIVE_CLASS,
+  OWNER_FILTER_ACTIVE_CLASS,
+} from "@/lib/exercise-colors";
 import { toast } from "sonner";
 import { ApiError } from "@/lib/queryClient";
 
@@ -24,15 +33,6 @@ const CATEGORIES = [
   "mobility",
   "plyometric",
 ] as const;
-
-const categoryColors: Record<string, string> = {
-  strength: "bg-primary/15 text-primary",
-  conditioning: "bg-success/15 text-success",
-  olympic: "bg-blue-500/15 text-blue-400",
-  accessory: "bg-purple-500/15 text-purple-400",
-  mobility: "bg-cyan-500/15 text-cyan-400",
-  plyometric: "bg-amber-500/15 text-amber-400",
-};
 
 /** Exercise bank list, shared by the coach ("your bank + shared Forge
  * library") and admin ("your Forge library only") experiences -- same
@@ -60,6 +60,7 @@ export function ExerciseBankPage({
   const [muscleGroupFilter, setMuscleGroupFilter] = useState<Set<string>>(new Set());
   const [lateralityFilter, setLateralityFilter] = useState<Set<string>>(new Set());
   const [sportFilter, setSportFilter] = useState<Set<string>>(new Set());
+  const [ownerFilter, setOwnerFilter] = useState<Set<string>>(new Set());
   const [correctivesOnly, setCorrectivesOnly] = useState(false);
 
   const bodyParts = useMemo(
@@ -70,6 +71,13 @@ export function ExerciseBankPage({
   const sportOptions = useMemo(
     () =>
       Array.from(new Set([...SPORTS, ...exercises.flatMap((e) => e.sports ?? [])])).sort(),
+    [exercises],
+  );
+  // Only ever "FORGE" or a coach's initials (see ownerLabel in storage.ts) --
+  // lets a coach isolate exercises a specific assistant coach on their staff
+  // made without sifting through the much larger shared Forge library.
+  const ownerOptions = useMemo(
+    () => Array.from(new Set(exercises.map((e) => e.ownerLabel))).sort(),
     [exercises],
   );
 
@@ -88,6 +96,7 @@ export function ExerciseBankPage({
         lateralityFilter.size === 0 || (ex.laterality != null && lateralityFilter.has(ex.laterality));
       const matchesSport =
         sportFilter.size === 0 || (ex.sports ?? []).some((s) => sportFilter.has(s));
+      const matchesOwner = ownerFilter.size === 0 || ownerFilter.has(ex.ownerLabel);
       const matchesCorrective = !correctivesOnly || ex.isCorrective;
       return (
         matchesSearch &&
@@ -96,6 +105,7 @@ export function ExerciseBankPage({
         matchesMuscleGroup &&
         matchesLaterality &&
         matchesSport &&
+        matchesOwner &&
         matchesCorrective
       );
     });
@@ -107,6 +117,7 @@ export function ExerciseBankPage({
     muscleGroupFilter,
     lateralityFilter,
     sportFilter,
+    ownerFilter,
     correctivesOnly,
   ]);
 
@@ -131,7 +142,7 @@ export function ExerciseBankPage({
         </Button>
       }
     >
-      <div className="mb-5 space-y-3">
+      <div className="mb-4 space-y-3">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -141,18 +152,25 @@ export function ExerciseBankPage({
             className="pl-9"
           />
         </div>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        {/* flex-wrap, not a fixed-column grid -- a grid column stays as wide
+            as its widest sibling even when a group like Laterality only has
+            two short chips in it, which left big dead gaps next to short
+            groups. This lets each group take only the width its own chips
+            need and wrap naturally. */}
+        <div className="flex flex-wrap gap-x-6 gap-y-2">
           <FilterChipGroup
             label="Category"
             options={[...CATEGORIES]}
             selected={categoryFilter}
             onToggle={(v) => toggleInSet(setCategoryFilter, v)}
+            optionColorClass={(v) => CATEGORY_FILTER_ACTIVE_CLASS[v]}
           />
           <FilterChipGroup
             label="Movement"
             options={MOVEMENT_TYPES}
             selected={movementFilter}
             onToggle={(v) => toggleInSet(setMovementFilter, v)}
+            colorClass={MOVEMENT_FILTER_ACTIVE_CLASS}
           />
           <div className="space-y-2">
             <FilterChipGroup
@@ -160,13 +178,14 @@ export function ExerciseBankPage({
               options={["bilateral", "unilateral"]}
               selected={lateralityFilter}
               onToggle={(v) => toggleInSet(setLateralityFilter, v)}
+              colorClass={LATERALITY_FILTER_ACTIVE_CLASS}
             />
             <button
               type="button"
               onClick={() => setCorrectivesOnly((v) => !v)}
               aria-pressed={correctivesOnly}
               className={cn(
-                "flex w-full items-center justify-center gap-1 rounded-full border px-2 py-1 text-[11px] font-medium transition-colors",
+                "flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-medium transition-colors",
                 correctivesOnly
                   ? "border-cyan-500 bg-cyan-500/15 text-cyan-400"
                   : "border-border text-muted-foreground hover:border-cyan-500/50 hover:text-cyan-400",
@@ -177,20 +196,27 @@ export function ExerciseBankPage({
             </button>
           </div>
           <FilterChipGroup
-            label="Muscle"
-            options={bodyParts}
-            selected={muscleGroupFilter}
-            onToggle={(v) => toggleInSet(setMuscleGroupFilter, v)}
-            className="sm:col-span-3"
-          />
-          <FilterChipGroup
-            label="Sport"
-            options={sportOptions}
-            selected={sportFilter}
-            onToggle={(v) => toggleInSet(setSportFilter, v)}
-            className="sm:col-span-3"
+            label="Created By"
+            options={ownerOptions}
+            selected={ownerFilter}
+            onToggle={(v) => toggleInSet(setOwnerFilter, v)}
+            colorClass={OWNER_FILTER_ACTIVE_CLASS}
           />
         </div>
+        <FilterChipGroup
+          label="Muscle"
+          options={bodyParts}
+          selected={muscleGroupFilter}
+          onToggle={(v) => toggleInSet(setMuscleGroupFilter, v)}
+          colorClass={MUSCLE_FILTER_ACTIVE_CLASS}
+        />
+        <FilterChipGroup
+          label="Sport"
+          options={sportOptions}
+          selected={sportFilter}
+          onToggle={(v) => toggleInSet(setSportFilter, v)}
+          colorClass={SPORT_FILTER_ACTIVE_CLASS}
+        />
       </div>
 
       {!isLoading && filtered.length === 0 && (
@@ -229,7 +255,7 @@ export function ExerciseBankPage({
                       isForgeOfficial={ex.isForgeOfficial}
                       ownerLabel={ex.ownerLabel}
                     />
-                    <Badge className={categoryColors[ex.category]} variant="default">
+                    <Badge className={CATEGORY_BADGE_CLASS[ex.category]} variant="default">
                       {ex.category}
                     </Badge>
                     {ex.isCorrective && (
