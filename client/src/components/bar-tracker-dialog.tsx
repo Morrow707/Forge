@@ -14,11 +14,14 @@ import { cn } from "@/lib/utils";
 import {
   summarizeTrackedSet,
   buildPathTrace,
+  interpolateOcclusionGap,
   type TrackedPoint,
   type RepMetrics,
 } from "@/lib/bar-tracking";
 import { summarizeJumpSet, type JumpSetMetrics } from "@/lib/jump-tracking";
 import { refineBarHeightFromEdges } from "@/lib/bar-edge-detection";
+import { PoseSmoother } from "@/lib/one-euro-filter";
+import { playSuccessChime } from "@/lib/audio-cues";
 import {
   getPoseLandmarker,
   deriveBarPoint,
@@ -29,12 +32,14 @@ import {
   computeRepDepths,
   guessMovementPattern,
   worldVerticalSign,
+  isFullBodyInFrame,
+  assessCameraAlignment,
   POSE_LANDMARKS,
   type PoseFrame,
   type MovementGuess,
   type MovementPattern,
 } from "@/lib/pose-tracking";
-import { PoseLandmarker, type NormalizedLandmark } from "@mediapipe/tasks-vision";
+import { PoseLandmarker, type NormalizedLandmark, type Landmark } from "@mediapipe/tasks-vision";
 import {
   Camera,
   Video,
@@ -214,8 +219,34 @@ export function BarTrackerDialog({
   // tracking rAF loop can read it synchronously) and self-corrects if an
   // early frame read it wrong.
   const verticalSignRef = useRef<1 | -1>(1);
+  // Mirrors `step` for the previewTick/tick rAF loops -- those closures are
+  // captured once (when the loop starts) and keep calling themselves
+  // recursively, so reading React state `step` inside them would see
+  // whatever it was at that moment forever, not its current value. See
+  // changeStep() below, the only place this is written.
+  const stepRef = useRef<Step>("setup");
+  // One filter set per landmark stream, purely for what's drawn/read out
+  // live -- see one-euro-filter.ts's own comment for why a moving average
+  // (already used for the saved metrics) isn't a good fit for a live view.
+  const displaySmootherRef = useRef(new PoseSmoother());
+  const worldSmootherRef = useRef(new PoseSmoother());
+  const lastDisplayYRef = useRef<number | null>(null);
+  const lastDisplayTRef = useRef(0);
+  // Automatic pre-flight readiness: how long the athlete has continuously
+  // been fully in frame with the camera roughly square to them -- once that
+  // holds for READY_HOLD_MS, tracking starts on its own (see
+  // beginAutoStart) instead of requiring someone to watch the screen and
+  // tap Start Set, which never worked for an athlete tracking themselves
+  // alone.
+  const readyStartTimeRef = useRef<number | null>(null);
+  const autoStartTriggeredRef = useRef(false);
+  const autoStartTimersRef = useRef<number[]>([]);
 
-  const [step, setStep] = useState<Step>("setup");
+  const [step, setStepState] = useState<Step>("setup");
+  function changeStep(next: Step) {
+    stepRef.current = next;
+    setStepState(next);
+  }
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [modelLoading, setModelLoading] = useState(true);
   const [tilt, setTilt] = useState<number | null>(null);
@@ -223,6 +254,8 @@ export function BarTrackerDialog({
   const [liveTiltDeg, setLiveTiltDeg] = useState<number | null>(null);
   const [repCount, setRepCount] = useState(0);
   const [poseVisible, setPoseVisible] = useState(true);
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const [alignmentHint, setAlignmentHint] = useState<string | null>(null);
   // Whether refineBarHeightFromEdges found a confident real bar edge on the
   // most recent frame -- purely informational, so the athlete can see
   // whether tracking is reading the actual bar or has fallen back to the
@@ -241,7 +274,7 @@ export function BarTrackerDialog({
 
   useEffect(() => {
     if (!open) return;
-    setStep("setup");
+    changeStep("setup");
     setCameraError(null);
     setResult(null);
     setMovementGuess(null);
@@ -256,6 +289,15 @@ export function BarTrackerDialog({
     setLiveTiltDeg(null);
     setBarEdgeDetected(false);
     verticalSignRef.current = 1;
+    displaySmootherRef.current.reset();
+    worldSmootherRef.current.reset();
+    lastDisplayYRef.current = null;
+    readyStartTimeRef.current = null;
+    autoStartTriggeredRef.current = false;
+    autoStartTimersRef.current.forEach((id) => window.clearTimeout(id));
+    autoStartTimersRef.current = [];
+    setCountdown(null);
+    setAlignmentHint(null);
 
     setModelLoading(true);
     getPoseLandmarker()
@@ -292,6 +334,10 @@ export function BarTrackerDialog({
       streamRef.current?.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      // Closing mid-countdown shouldn't leave a startTracking() call queued
+      // up to fire against a dialog nobody's looking at anymore.
+      autoStartTimersRef.current.forEach((id) => window.clearTimeout(id));
+      autoStartTimersRef.current = [];
     };
   }, [open]);
 
@@ -322,16 +368,98 @@ export function BarTrackerDialog({
     const ctx = overlay.getContext("2d");
     if (ctx) {
       ctx.clearRect(0, 0, overlay.width, overlay.height);
-      const detection = landmarker.detectForVideo(video, performance.now());
+      const now = performance.now();
+      const detection = landmarker.detectForVideo(video, now);
       const landmarks = detection.landmarks[0] ?? null;
+      const worldLandmarks = detection.worldLandmarks[0] ?? null;
       if (landmarks) {
-        drawSkeleton(ctx, landmarks, overlay.width, overlay.height);
-        const worldLandmarks = detection.worldLandmarks[0];
+        // Smoothed purely for the on-screen preview -- see one-euro-filter.ts.
+        drawSkeleton(ctx, displaySmootherRef.current.smooth(landmarks, now), overlay.width, overlay.height);
         const sign = worldLandmarks ? worldVerticalSign(worldLandmarks) : null;
         if (sign != null) verticalSignRef.current = sign;
       }
+      evaluateAutoStartReadiness(landmarks, worldLandmarks, now);
     }
     rafRef.current = requestAnimationFrame(previewTick);
+  }
+
+  const READY_HOLD_MS = 900;
+
+  // The automatic half of what used to be a manual "does this look right?"
+  // check -- previously a second person had to look at the screen and
+  // confirm the athlete was framed correctly before tapping Start Set,
+  // which never worked for someone tracking themselves alone. Once the
+  // whole body is in frame AND the camera looks roughly square to the
+  // athlete (see assessCameraAlignment) continuously for READY_HOLD_MS,
+  // tracking starts on its own with an audible countdown -- nobody has to
+  // watch the screen or touch the phone. Still runs (not gated on having
+  // already triggered) once counting down, so stepping out of frame mid-
+  // countdown cancels it rather than starting on an empty rack.
+  function evaluateAutoStartReadiness(
+    landmarks: NormalizedLandmark[] | null,
+    worldLandmarks: Landmark[] | null,
+    now: number,
+  ) {
+    if (stepRef.current !== "setup") return;
+
+    const bodyIn = !!landmarks && isFullBodyInFrame(landmarks);
+    const alignment = worldLandmarks ? assessCameraAlignment(worldLandmarks) : null;
+    const ready = bodyIn && (alignment?.aligned ?? false);
+
+    if (!autoStartTriggeredRef.current) {
+      setAlignmentHint(
+        alignment && !alignment.aligned
+          ? "Camera looks angled -- try to face it squarely for accurate readings"
+          : null,
+      );
+    }
+
+    if (ready) {
+      if (readyStartTimeRef.current == null) readyStartTimeRef.current = now;
+      if (!autoStartTriggeredRef.current && now - readyStartTimeRef.current >= READY_HOLD_MS) {
+        beginAutoStart();
+      }
+      return;
+    }
+
+    readyStartTimeRef.current = null;
+    if (autoStartTriggeredRef.current) cancelAutoStart();
+  }
+
+  function beginAutoStart() {
+    autoStartTriggeredRef.current = true;
+    setAlignmentHint(null);
+    playSuccessChime();
+    let n = 3;
+    setCountdown(n);
+    // Always spoken, unlike every other speak() call in this component --
+    // the voice-cues preference below is for optional in-set flourishes
+    // (rep counts, a "set complete" line); this countdown is the only
+    // signal a solo athlete standing away from the phone gets that
+    // tracking is about to start, so it isn't optional the same way.
+    speak(String(n));
+    const scheduleNext = () => {
+      const id = window.setTimeout(() => {
+        n -= 1;
+        if (n > 0) {
+          setCountdown(n);
+          speak(String(n));
+          scheduleNext();
+        } else {
+          setCountdown(null);
+          startTracking();
+        }
+      }, 800);
+      autoStartTimersRef.current.push(id);
+    };
+    scheduleNext();
+  }
+
+  function cancelAutoStart() {
+    autoStartTimersRef.current.forEach((id) => window.clearTimeout(id));
+    autoStartTimersRef.current = [];
+    autoStartTriggeredRef.current = false;
+    setCountdown(null);
   }
 
   function startTracking() {
@@ -339,7 +467,14 @@ export function BarTrackerDialog({
     // tracking-phase tick() below would both keep rescheduling themselves
     // and stomp on the same rafRef/canvas.
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    setStep("tracking");
+    // In case this was reached by tapping Start Set manually while an auto
+    // countdown was already running -- don't leave a stray timeout that'd
+    // call startTracking() a second time mid-set.
+    autoStartTimersRef.current.forEach((id) => window.clearTimeout(id));
+    autoStartTimersRef.current = [];
+    setCountdown(null);
+    lastDisplayYRef.current = null;
+    changeStep("tracking");
     traceRef.current = [];
     leftTraceRef.current = [];
     rightTraceRef.current = [];
@@ -382,29 +517,57 @@ export function BarTrackerDialog({
     const landmarks = detection.landmarks[0] ?? null;
     const worldLandmarks = detection.worldLandmarks[0] ?? null;
     setPoseVisible(!!landmarks);
+
+    // Smoothed copies purely for what's drawn or read out live (skeleton,
+    // bar trail, live speed/tilt) -- framesRef and the trace below keep
+    // reading the raw detection every frame, so the numbers a coach later
+    // sees are exactly as accurate as before any of this smoothing existed.
+    const displayLandmarks = landmarks ? displaySmootherRef.current.smooth(landmarks, now) : null;
+    const displayWorldLandmarks = worldLandmarks
+      ? worldSmootherRef.current.smooth(worldLandmarks, now)
+      : null;
+
     // Bar tilt is meaningless with no bar in hand -- skip it in jump mode
     // rather than showing a readout from whatever the arms happen to be
     // doing mid-jump.
-    setLiveTiltDeg(landmarks && mode !== "jump" ? computeBarTiltDegrees(landmarks) : null);
+    setLiveTiltDeg(displayLandmarks && mode !== "jump" ? computeBarTiltDegrees(displayLandmarks) : null);
     if (!landmarks || !worldLandmarks) setBarEdgeDetected(false);
 
-    if (landmarks && worldLandmarks) {
-      drawSkeleton(ctx, landmarks, overlay.width, overlay.height);
+    if (landmarks && worldLandmarks && displayLandmarks && displayWorldLandmarks) {
+      drawSkeleton(ctx, displayLandmarks, overlay.width, overlay.height);
 
       const sign = worldVerticalSign(worldLandmarks);
       if (sign != null) verticalSignRef.current = sign;
 
       // Pixel-space point purely for the trail overlay -- see pixelPoint()'s
       // own comment for why this is separate from the world-space point
-      // below.
+      // below. Drawn from the smoothed landmarks so the trail doesn't
+      // visibly jitter even though the recorded trace (below) doesn't use
+      // them.
       const trailPoint = pixelPoint(
-        landmarks,
+        displayLandmarks,
         mode === "jump" ? ANKLE_INDICES : WRIST_INDICES,
         overlay.width,
         overlay.height,
       );
       if (trailPoint) {
         pixelTraceRef.current.push({ x: trailPoint.x, y: trailPoint.y });
+      }
+
+      // Live speed reads the smoothed point so the on-screen number holds
+      // steady instead of flickering frame to frame -- the recorded trace
+      // below (and the final saved peak/mean velocity) stays on the raw
+      // point, untouched.
+      const displayWorldPoint =
+        mode === "jump" ? deriveJumpPoint(displayWorldLandmarks) : deriveBarPoint(displayWorldLandmarks);
+      if (displayWorldPoint) {
+        const displayY = verticalSignRef.current * displayWorldPoint.y;
+        if (lastDisplayYRef.current != null) {
+          const dt = (now - lastDisplayTRef.current) / 1000;
+          if (dt > 0) setLiveSpeed(Math.abs(displayY - lastDisplayYRef.current) / dt);
+        }
+        lastDisplayYRef.current = displayY;
+        lastDisplayTRef.current = now;
       }
 
       const worldPoint = mode === "jump" ? deriveJumpPoint(worldLandmarks) : deriveBarPoint(worldLandmarks);
@@ -423,34 +586,40 @@ export function BarTrackerDialog({
           mode === "jump" ? null : refineBarHeightFromEdges(video, landmarks, worldLandmarks);
         setBarEdgeDetected(edgeOffset != null);
         const y = verticalSignRef.current * worldPoint.y + (edgeOffset ?? 0);
-        trace.push({ t, x: worldPoint.x, y, z: worldPoint.z });
+        const point = { t, x: worldPoint.x, y, z: worldPoint.z };
+        // A brief camera dropout right before this point (an arm crossing
+        // the bar, a chalk cloud) shouldn't read as one giant instantaneous
+        // jump once it resolves -- see interpolateOcclusionGap's own
+        // comment for why only a short gap gets bridged this way.
+        if (prev) for (const gapPoint of interpolateOcclusionGap(prev, point)) trace.push(gapPoint);
+        trace.push(point);
         framesRef.current.push({ t, landmarks, worldLandmarks });
 
         const wrists = deriveWristPoints(worldLandmarks);
         if (wrists.left) {
-          leftTraceRef.current.push({
+          const leftPoint = {
             t,
             x: wrists.left.x,
             y: verticalSignRef.current * wrists.left.y,
             z: wrists.left.z,
-          });
+          };
+          const prevLeft = leftTraceRef.current[leftTraceRef.current.length - 1];
+          if (prevLeft) for (const g of interpolateOcclusionGap(prevLeft, leftPoint)) leftTraceRef.current.push(g);
+          leftTraceRef.current.push(leftPoint);
         }
         if (wrists.right) {
-          rightTraceRef.current.push({
+          const rightPoint = {
             t,
             x: wrists.right.x,
             y: verticalSignRef.current * wrists.right.y,
             z: wrists.right.z,
-          });
+          };
+          const prevRight = rightTraceRef.current[rightTraceRef.current.length - 1];
+          if (prevRight)
+            for (const g of interpolateOcclusionGap(prevRight, rightPoint)) rightTraceRef.current.push(g);
+          rightTraceRef.current.push(rightPoint);
         }
 
-        if (prev) {
-          const dt = (t - prev.t) / 1000;
-          if (dt > 0) {
-            const speed = Math.abs(y - prev.y) / dt;
-            setLiveSpeed(speed);
-          }
-        }
         // Cheap live rep counter: count direction reversals bigger than
         // ~4cm, same idea as segmentPhases but incremental for the live
         // display -- the real, precise segmentation runs once on the full
@@ -490,7 +659,7 @@ export function BarTrackerDialog({
       const jumpMetrics = summarizeJumpSet(traceRef.current);
       if (!jumpMetrics) {
         toast.error("Couldn't get a clean read — make sure your feet leave the ground clearly in frame.");
-        setStep("setup");
+        changeStep("setup");
         return;
       }
       // Landing mechanics (valgus, forward lean) still matter for a jump;
@@ -501,14 +670,14 @@ export function BarTrackerDialog({
         speak(`Set complete. Best jump ${jumpMetrics.bestJumpHeightCm} centimeters.`);
       }
       setResult(jumpMetrics);
-      setStep("review");
+      changeStep("review");
       return;
     }
 
     const metrics = summarizeTrackedSet(traceRef.current, loadKg);
     if (!metrics) {
       toast.error("Couldn't get a clean read — try again with your whole body in frame.");
-      setStep("setup");
+      changeStep("setup");
       return;
     }
     metrics.formFaults = detectFormFaults(framesRef.current, metrics.barPathDeviationCm, "lift", movementType);
@@ -537,14 +706,14 @@ export function BarTrackerDialog({
     }
 
     setResult(metrics);
-    setStep("review");
+    changeStep("review");
   }
 
   function retry() {
     traceRef.current = [];
     framesRef.current = [];
     setResult(null);
-    setStep("tracking");
+    changeStep("tracking");
     startTracking();
   }
 
@@ -632,6 +801,20 @@ export function BarTrackerDialog({
             </div>
           )}
 
+          {step === "setup" && countdown != null && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+              <span className="font-display text-7xl font-extrabold text-white drop-shadow-lg">
+                {countdown}
+              </span>
+            </div>
+          )}
+
+          {step === "setup" && countdown == null && alignmentHint && (
+            <div className="absolute top-3 left-1/2 -translate-x-1/2 rounded-full bg-amber-500/80 px-3 py-1 text-xs font-semibold text-black">
+              {alignmentHint}
+            </div>
+          )}
+
           {tilt != null && step === "setup" && (
             <div
               className={cn(
@@ -657,6 +840,7 @@ export function BarTrackerDialog({
               {mode === "jump"
                 ? "Step back far enough to fit your takeoff spot AND where you'll land in frame, and keep the phone level and perpendicular to your jump. No marker needed; this tracks your body directly."
                 : "Step back until your whole body is visible, and try to keep the phone level and perpendicular to your movement — an angled camera skews the reading. No marker or tape needed; this tracks your body directly."}
+              {" "}Prop the phone up and get in position — tracking starts on its own once you're set up, no need to touch it again.
             </p>
             {modelLoading && (
               <p className="flex items-center gap-2 text-xs text-muted-foreground">
