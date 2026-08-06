@@ -65,6 +65,14 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN null; END $$;
 
 DO $$ BEGIN
+  CREATE TYPE "trophy_category" AS ENUM ('workout_count', 'streak', 'pr_count');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE "trophy_tier" AS ENUM ('bronze', 'silver', 'gold');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+DO $$ BEGIN
   CREATE TYPE "chat_role" AS ENUM ('athlete', 'assistant');
 EXCEPTION WHEN duplicate_object THEN null; END $$;
 
@@ -558,6 +566,19 @@ CREATE TABLE IF NOT EXISTS "cara_sessions" (
 );
 CREATE INDEX IF NOT EXISTS "cara_sessions_athlete_idx" ON "cara_sessions" ("athlete_id");
 CREATE INDEX IF NOT EXISTS "cara_sessions_open_idx" ON "cara_sessions" ("athlete_id", "ended_at");
+
+CREATE TABLE IF NOT EXISTS "athlete_trophies" (
+  "id" serial PRIMARY KEY,
+  "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "key" text NOT NULL,
+  "category" trophy_category NOT NULL,
+  "tier" trophy_tier NOT NULL,
+  "label" text NOT NULL,
+  "threshold" integer NOT NULL,
+  "unlocked_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "athlete_trophies_athlete_idx" ON "athlete_trophies" ("athlete_id");
+CREATE UNIQUE INDEX IF NOT EXISTS "athlete_trophies_athlete_key_idx" ON "athlete_trophies" ("athlete_id", "key");
 
 -- Performance pass -- Postgres never auto-indexes foreign key columns, and
 -- these hot-path lookups (workout history, comment threads, notification

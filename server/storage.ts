@@ -28,6 +28,7 @@ import {
   goals,
   wellnessCheckins,
   caraSessions,
+  athleteTrophies,
   readinessBriefings,
   athleteDigests,
   coachDigests,
@@ -63,6 +64,7 @@ import { lookupBarcode, searchFoodsByName } from "./food-lookup";
 import { TESTING_METRICS, testingMetricLowerIsBetter } from "@shared/testing-metrics";
 import { computeReadiness } from "@shared/wellness";
 import { buildAcwrSeries, type DailyLoad, type AcwrPoint } from "@shared/load";
+import { ALL_TROPHY_DEFINITIONS } from "@shared/achievements";
 import { askClaude, askClaudeStructured, askClaudeWithTools, askClaudeVision, aiEnabled, fastModel, type SystemPrompt } from "./ai";
 import { eq, and, inArray, asc, desc, lt, gte, gt, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -5231,7 +5233,7 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
 
   async getStreakForAthlete(athleteId: number) {
     const map = await this.computeStreaks([athleteId]);
-    return map.get(athleteId) ?? { currentStreak: 0, totalCompleted: 0 };
+    return map.get(athleteId) ?? { currentStreak: 0, longestStreak: 0, totalCompleted: 0 };
   },
 
   async computeStreaks(athleteIds: number[]) {
@@ -5281,22 +5283,131 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
       completedCountByAthlete.set(athleteId, (completedCountByAthlete.get(athleteId) ?? 0) + 1);
     }
 
-    const result = new Map<number, { currentStreak: number; totalCompleted: number }>();
+    const result = new Map<
+      number,
+      { currentStreak: number; longestStreak: number; totalCompleted: number }
+    >();
     for (const athleteId of athleteIds) {
       const byDate = scheduledByAthlete.get(athleteId) ?? new Map();
-      const sortedDates = Array.from(byDate.keys()).sort((a, b) => b.localeCompare(a));
+      const sortedDatesDesc = Array.from(byDate.keys()).sort((a, b) => b.localeCompare(a));
       let currentStreak = 0;
-      for (const date of sortedDates) {
+      for (const date of sortedDatesDesc) {
         const { assignmentId, programDayId } = byDate.get(date)!;
         if (completedKeys.has(`${assignmentId}:${programDayId}:${date}`)) currentStreak++;
         else break;
       }
+      // Longest streak ever, not just the current run -- walked forward
+      // chronologically so a streak that broke months ago still counts
+      // toward a trophy earned back then.
+      const sortedDatesAsc = [...sortedDatesDesc].reverse();
+      let longestStreak = 0;
+      let run = 0;
+      for (const date of sortedDatesAsc) {
+        const { assignmentId, programDayId } = byDate.get(date)!;
+        if (completedKeys.has(`${assignmentId}:${programDayId}:${date}`)) {
+          run++;
+          longestStreak = Math.max(longestStreak, run);
+        } else {
+          run = 0;
+        }
+      }
       result.set(athleteId, {
         currentStreak,
+        longestStreak: Math.max(longestStreak, currentStreak),
         totalCompleted: completedCountByAthlete.get(athleteId) ?? 0,
       });
     }
     return result;
+  },
+
+  // Total number of times this athlete has ever set a weight PR at a given
+  // rep count, across every exercise -- same "best-by-(exercise, unit, reps)
+  // walked chronologically" logic used for the athlete's own Recent PRs list
+  // and the coach's per-exercise history, just counting occurrences instead
+  // of collecting the rows themselves.
+  async getTotalPrCountForAthlete(athleteId: number) {
+    const rows = await db
+      .select({
+        date: workoutLogs.date,
+        setNumber: workoutSetEntries.setNumber,
+        reps: workoutSetEntries.reps,
+        weight: workoutSetEntries.weight,
+        weightUnit: workoutSetEntries.weightUnit,
+        weightMode: workoutLogEntries.weightMode,
+        exerciseId: exercises.id,
+      })
+      .from(workoutSetEntries)
+      .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
+      .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
+      .innerJoin(assignments, eq(workoutLogs.assignmentId, assignments.id))
+      .innerJoin(programExercises, eq(workoutLogEntries.programExerciseId, programExercises.id))
+      .innerJoin(exercises, eq(programExercises.exerciseId, exercises.id))
+      .where(eq(assignments.athleteId, athleteId));
+
+    const sorted = rows
+      .filter((r) => r.weightMode === "numeric" && r.weight && r.reps)
+      .sort((a, b) => a.date.localeCompare(b.date) || a.setNumber - b.setNumber);
+
+    const bestByKey = new Map<string, number>();
+    let prCount = 0;
+    for (const r of sorted) {
+      const weight = parseFloat(r.weight!);
+      if (Number.isNaN(weight)) continue;
+      const key = `${r.exerciseId}-${r.weightUnit}-${r.reps}`;
+      const prevBest = bestByKey.get(key) ?? -Infinity;
+      if (weight > prevBest) {
+        bestByKey.set(key, weight);
+        prCount++;
+      }
+    }
+    return prCount;
+  },
+
+  // Lazily evaluated the same way CARA's idle sweep is: no background job
+  // infrastructure exists here, so this runs inline whenever an athlete's
+  // stats could plausibly have crossed a new threshold (workout completion,
+  // or a direct fetch of their trophy case) and just no-ops for everyone
+  // else. Idempotent via the (athleteId, key) unique index -- safe to call
+  // as often as we like. Trophies are additive-only: a row, once inserted,
+  // is never removed even if the underlying stat later regresses (a broken
+  // streak keeps the streak trophies it already earned).
+  async checkAndAwardTrophies(athleteId: number) {
+    const [{ longestStreak, totalCompleted }, totalPRs, existing] = await Promise.all([
+      this.getStreakForAthlete(athleteId),
+      this.getTotalPrCountForAthlete(athleteId),
+      db.query.athleteTrophies.findMany({ where: eq(athleteTrophies.athleteId, athleteId) }),
+    ]);
+    const existingKeys = new Set(existing.map((t) => t.key));
+    const currentByCategory = {
+      workout_count: totalCompleted,
+      streak: longestStreak,
+      pr_count: totalPRs,
+    };
+
+    const toInsert = ALL_TROPHY_DEFINITIONS.filter(
+      (def) => !existingKeys.has(def.key) && currentByCategory[def.category] >= def.threshold,
+    );
+    if (toInsert.length === 0) return { newlyUnlocked: [], all: existing };
+
+    const inserted = await db
+      .insert(athleteTrophies)
+      .values(
+        toInsert.map((def) => ({
+          athleteId,
+          key: def.key,
+          category: def.category,
+          tier: def.tier,
+          label: def.label,
+          threshold: def.threshold,
+        })),
+      )
+      .returning();
+    return { newlyUnlocked: inserted, all: [...existing, ...inserted] };
+  },
+
+  async getTrophiesForAthlete(athleteId: number) {
+    const { all } = await this.checkAndAwardTrophies(athleteId);
+    return all.sort((a, b) => b.unlockedAt.getTime() - a.unlockedAt.getTime());
   },
 
   async getLeaderboardForExercise(coachId: number, exerciseId: number) {
