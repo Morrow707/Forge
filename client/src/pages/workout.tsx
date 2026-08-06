@@ -1142,19 +1142,22 @@ export function WorkoutPage({
                         type="button"
                         onClick={() => openPage(i)}
                         className={cn(
-                          "flex w-full items-center gap-3 rounded-md border p-3 text-left transition-colors hover:border-primary/50",
+                          "flex w-full items-start gap-3 rounded-md border p-3 text-left transition-colors hover:border-primary/50",
                           page.kind === "corrective"
                             ? "border-cyan-900/40 bg-cyan-950/10"
                             : "border-border",
                         )}
                       >
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            {page.kind === "corrective" && (
-                              <Stethoscope className="h-4 w-4 shrink-0 text-cyan-400" />
-                            )}
-                            {page.items.map((it) => (
-                              <span key={it.key} className="flex items-center gap-1.5 text-sm font-semibold">
+                        <div className="min-w-0 flex-1 space-y-2">
+                          {page.kind === "corrective" && (
+                            <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-cyan-400">
+                              <Stethoscope className="h-3.5 w-3.5 shrink-0" />
+                              Correctives
+                            </p>
+                          )}
+                          {page.items.map((it) => (
+                            <div key={it.key}>
+                              <span className="flex items-center gap-1.5 text-sm font-semibold">
                                 <span
                                   className={cn(
                                     "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-extrabold",
@@ -1167,11 +1170,12 @@ export function WorkoutPage({
                                 </span>
                                 {it.exerciseName}
                               </span>
-                            ))}
-                          </div>
-                          <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                            {page.items.map((it) => it.equipment).join(" · ")}
-                          </p>
+                              <p className="pl-9 text-xs font-semibold text-muted-foreground">
+                                {it.prescribedSets} × {it.prescribedReps}
+                                {it.prescribedWeight ? ` @ ${it.prescribedWeight}` : ""}
+                              </p>
+                            </div>
+                          ))}
                         </div>
                         <div
                           className={cn(
@@ -1263,12 +1267,12 @@ export function WorkoutPage({
                     className="flex-1"
                     onClick={() => {
                       autosaveNow(items);
-                      setPageIndex((p) => p + 1);
+                      setViewMode("overview");
                     }}
                     disabled={submitMutation.isPending}
                   >
                     <CheckCircle2 className="h-4 w-4" />
-                    Complete &amp; Next
+                    Done — Back to Workout
                   </Button>
                 ) : (
                   <Button
@@ -1375,6 +1379,37 @@ function ExerciseLogContent({
   const [compareOpen, setCompareOpen] = useState(false);
   const [plateCalcOpen, setPlateCalcOpen] = useState(false);
   const topSetWeight = Math.max(0, ...item.sets.map((s) => parseFloat(s.weight) || 0));
+  // Only a real barbell (or hex/trap bar, loaded the same way) has plates
+  // to calculate -- a cable stack, dumbbells, or a machine's weight isn't
+  // stacked in matched pairs on either side of anything.
+  const usesPlateCalc =
+    item.weightMode === "numeric" && (item.equipment === "Barbell" || item.equipment === "Trap Bar");
+  // Tracks which sets currently hold a weight the athlete never actually
+  // typed -- only a value carried forward by handleWeightChange below.
+  // Lets a later edit keep overwriting that whole inherited chain (see
+  // there for why a plain "only fill in empty sets" rule isn't enough).
+  const autoFilledWeightSetsRef = useRef<Set<number>>(new Set());
+
+  // Most working sets in a block use the same weight, so entering it once
+  // should carry forward instead of making the athlete retype it every
+  // set. Propagates into every following set that's still empty or still
+  // holding an earlier carried-forward value, and stops at the first set
+  // the athlete has deliberately put their own number into -- so editing
+  // set 2 from 135 to 185 pushes 185 into sets 3+ (still inherited), but
+  // never touches a set 4 the athlete already set to 225 by hand.
+  function handleWeightChange(setNumber: number, value: string) {
+    onUpdateSet(setNumber, { weight: value });
+    autoFilledWeightSetsRef.current.delete(setNumber);
+    if (value.trim() === "") return;
+    for (const s of item.sets) {
+      if (s.setNumber <= setNumber) continue;
+      const isEmpty = s.weight.trim() === "";
+      const wasAutoFilled = autoFilledWeightSetsRef.current.has(s.setNumber);
+      if (!isEmpty && !wasAutoFilled) break;
+      onUpdateSet(s.setNumber, { weight: value });
+      autoFilledWeightSetsRef.current.add(s.setNumber);
+    }
+  }
   // One column per material the exercise actually needs -- not mutually
   // exclusive, so a combo movement (dumbbell box step-up) shows both a
   // weight column and a box-height column on the same row.
@@ -1700,7 +1735,7 @@ function ExerciseLogContent({
           <span />
         </div>
         <div className="space-y-1.5">
-          {item.sets.map((set, setIndex) => {
+          {item.sets.map((set) => {
             const complete = isSetComplete(item, set);
             const tracked =
               set.peakVelocityMps != null || set.barPathDeviationCm != null || set.jumpHeightCm != null;
@@ -1732,7 +1767,7 @@ function ExerciseLogContent({
                           inputMode="decimal"
                           placeholder={historyMatch?.weight || item.lastPerformance?.weight || "0"}
                           value={set.weight}
-                          onChange={(e) => onUpdateSet(set.setNumber, { weight: e.target.value })}
+                          onChange={(e) => handleWeightChange(set.setNumber, e.target.value)}
                           className="h-9 text-sm"
                         />
                       ) : col.type === "band" ? (
@@ -1781,7 +1816,7 @@ function ExerciseLogContent({
                 )}
                 {(item.trackingLevel !== "none" ||
                   (item.videoCheckEnabled && videoCheckMode !== "off") ||
-                  (setIndex === 0 && item.weightMode === "numeric")) && (
+                  usesPlateCalc) && (
                   <div className="mt-1 flex flex-wrap items-center gap-1.5">
                     {item.trackingLevel !== "none" && (
                       <button
@@ -1831,7 +1866,7 @@ function ExerciseLogContent({
                           : "Record & Analyze"}
                       </button>
                     )}
-                    {setIndex === 0 && item.weightMode === "numeric" && (
+                    {usesPlateCalc && (
                       <button
                         type="button"
                         onClick={() => setPlateCalcOpen(true)}
@@ -2048,7 +2083,7 @@ function ExerciseLogContent({
         </DialogContent>
       </Dialog>
 
-      {item.weightMode === "numeric" && (
+      {usesPlateCalc && (
         <PlateCalculatorDialog
           open={plateCalcOpen}
           onOpenChange={setPlateCalcOpen}
