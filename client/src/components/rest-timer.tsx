@@ -4,6 +4,23 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Timer, BellRing } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { playRestOverAlarm } from "@/lib/audio-cues";
+import { apiRequest } from "@/lib/queryClient";
+
+// Backs up the in-page countdown with a real OS push notification so a
+// locked phone (whose JS timers get throttled/suspended) still gets a "rest
+// over" alert on the lock screen. Fire-and-forget: if the athlete hasn't
+// opted into push, or push isn't configured on the server, these just fail
+// silently and the in-page alert/chime is all they get, same as before.
+function schedulePushForRest(seconds: number) {
+  apiRequest("POST", "/api/athlete/rest-timer/schedule-push", {
+    seconds,
+    url: window.location.pathname,
+  }).catch(() => {});
+}
+
+function cancelPushForRest() {
+  apiRequest("POST", "/api/athlete/rest-timer/cancel-push").catch(() => {});
+}
 
 // Felt on Android/most PWA contexts. iOS Safari has never implemented the
 // Vibration API at all -- in *any* context, tab or installed-to-homescreen
@@ -46,6 +63,7 @@ export const RestTimerControl = forwardRef<RestTimerHandle, { defaultSeconds?: n
       if (!seconds || seconds <= 0) return;
       setRemaining((current) => {
         if (current !== null || ringing) return current;
+        schedulePushForRest(seconds);
         return seconds;
       });
     },
@@ -98,7 +116,13 @@ export const RestTimerControl = forwardRef<RestTimerHandle, { defaultSeconds?: n
   // ringer/silent switch and Web Audio allow (see audio-cues.ts) -- no web
   // API lets a page or installed PWA override that on iOS, so a muted phone
   // genuinely won't make sound no matter how the tone is built; that's a
-  // WebKit platform ceiling, not something fixable in this file.
+  // WebKit platform ceiling, not something fixable in this file. None of
+  // that matters if the phone is locked, though: locking suspends this
+  // page's JS timers entirely, so a countdown started right before a lock
+  // may never reach this code at all. schedulePushForRest backs that case
+  // with a real server-scheduled push, delivered by the OS rather than this
+  // page, which is what actually reaches a lock screen -- see
+  // server/rest-timer-push.ts.
   if (ringing) {
     return (
       <>
@@ -146,7 +170,10 @@ export const RestTimerControl = forwardRef<RestTimerHandle, { defaultSeconds?: n
       <>
         <button
           type="button"
-          onClick={() => setRemaining(null)}
+          onClick={() => {
+            setRemaining(null);
+            cancelPushForRest();
+          }}
           className="flex items-center gap-1.5 text-sm font-semibold text-primary"
         >
           <Timer className="h-4 w-4" />
@@ -164,7 +191,10 @@ export const RestTimerControl = forwardRef<RestTimerHandle, { defaultSeconds?: n
               </p>
               <button
                 type="button"
-                onClick={() => setRemaining(null)}
+                onClick={() => {
+                  setRemaining(null);
+                  cancelPushForRest();
+                }}
                 className="mt-2 text-sm font-semibold text-muted-foreground underline"
               >
                 Skip
@@ -200,6 +230,7 @@ export const RestTimerControl = forwardRef<RestTimerHandle, { defaultSeconds?: n
               type="button"
               onClick={() => {
                 setRemaining(s);
+                schedulePushForRest(s);
                 setOpen(false);
               }}
               className={cn(
