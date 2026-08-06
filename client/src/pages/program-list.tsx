@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { AppShell } from "@/components/app-shell";
@@ -63,6 +63,7 @@ export function ProgramListPage({
   showAiAssist = false,
   showSelfAssign = false,
   aiFirstCreate = false,
+  libraryTabs,
 }: {
   apiBase: string;
   routeBase: string;
@@ -70,6 +71,9 @@ export function ProgramListPage({
   emptyStateText: string;
   showAssign?: boolean;
   showAiAssist?: boolean;
+  /** Renders the Programs/Exercise Bank tab strip under the title -- only
+   * the coach's Library page passes this (see LibraryTabs). */
+  libraryTabs?: ReactNode;
   /** Assigns a program straight to the caller's own calendar
    * (coachId === athleteId) -- admin's own training, or a Free Agent
    * athlete's self-built program. Separate from showAssign's multi-athlete
@@ -244,6 +248,7 @@ export function ProgramListPage({
   return (
     <AppShell
       title={title}
+      subheader={libraryTabs}
       actions={
         <>
           {showAiAssist && (

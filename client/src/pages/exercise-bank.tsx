@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, Link } from "wouter";
 import { AppShell } from "@/components/app-shell";
@@ -42,11 +42,15 @@ export function ExerciseBankPage({
   routeBase,
   title,
   emptyStateText,
+  libraryTabs,
 }: {
   apiBase: string;
   routeBase: string;
   title: string;
   emptyStateText: string;
+  /** Renders the Programs/Exercise Bank tab strip under the title -- only
+   * the coach's Library page passes this (see LibraryTabs). */
+  libraryTabs?: ReactNode;
 }) {
   const qc = useQueryClient();
   const [, navigate] = useLocation();
@@ -135,6 +139,7 @@ export function ExerciseBankPage({
   return (
     <AppShell
       title={title}
+      subheader={libraryTabs}
       actions={
         <Button onClick={() => navigate(`${routeBase}/new`)}>
           <Plus className="h-4 w-4" />
