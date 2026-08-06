@@ -6,8 +6,16 @@ import { Label } from "@/components/ui/label";
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { Moon, Activity, Brain, Pencil, X } from "lucide-react";
-import { SORENESS_SCALE, STRESS_SCALE } from "@shared/wellness";
+import { Moon, Activity, Brain, Droplets, Focus, Pencil, X } from "lucide-react";
+import {
+  SORENESS_SCALE,
+  STRESS_SCALE,
+  HYDRATION_SCALE,
+  MENTAL_FOCUS_SCALE,
+  BODY_PAIN_PARTS,
+  computeReadiness,
+  READINESS_LABEL,
+} from "@shared/wellness";
 
 type WellnessCheckin = {
   id: number;
@@ -15,6 +23,9 @@ type WellnessCheckin = {
   sleepHours: number;
   soreness: number;
   stress: number;
+  hydration: number;
+  mentalFocus: number;
+  bodyPainMap: string[];
 } | null;
 
 /** Inline, always-editable check-in card for today's training session --
@@ -22,7 +33,9 @@ type WellnessCheckin = {
  * edit, in case an athlete under- or over-estimated how sore or stressed
  * they were), or the open form when there's nothing on file yet. Never
  * blocks the rest of the page: the workout underneath is fully usable
- * either way. */
+ * either way. The 0-100 readiness score and its inputs always show in the
+ * collapsed summary; the body-part pain map is deliberately left out of it
+ * and only ever appears in the expanded edit form. */
 export function WellnessGate() {
   const qc = useQueryClient();
   const { data, isLoading } = useQuery<WellnessCheckin>({
@@ -34,6 +47,9 @@ export function WellnessGate() {
   const [sleepHours, setSleepHours] = useState("");
   const [soreness, setSoreness] = useState<number | null>(null);
   const [stress, setStress] = useState<number | null>(null);
+  const [hydration, setHydration] = useState<number | null>(null);
+  const [mentalFocus, setMentalFocus] = useState<number | null>(null);
+  const [bodyPainMap, setBodyPainMap] = useState<string[]>([]);
 
   // Re-sync the editable fields from whatever's on file whenever it
   // changes (first load, or right after a save) so opening the editor
@@ -43,6 +59,9 @@ export function WellnessGate() {
       setSleepHours(String(data.sleepHours));
       setSoreness(data.soreness);
       setStress(data.stress);
+      setHydration(data.hydration);
+      setMentalFocus(data.mentalFocus);
+      setBodyPainMap(data.bodyPainMap);
     }
   }, [data]);
 
@@ -52,6 +71,9 @@ export function WellnessGate() {
         sleepHours: Number(sleepHours),
         soreness,
         stress,
+        hydration,
+        mentalFocus,
+        bodyPainMap,
       });
       return res.json();
     },
@@ -77,9 +99,12 @@ export function WellnessGate() {
     sleepValue >= 0 &&
     sleepValue <= 24 &&
     soreness != null &&
-    stress != null;
+    stress != null &&
+    hydration != null &&
+    mentalFocus != null;
 
   if (data && !editing) {
+    const { score, level } = computeReadiness(data);
     return (
       <button
         type="button"
@@ -87,6 +112,10 @@ export function WellnessGate() {
         className="flex w-full items-center justify-between gap-3 rounded-lg border border-border bg-surface px-3 py-2.5 text-left transition-colors hover:border-primary/40"
       >
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+          <span className="flex items-center gap-1.5 text-xs font-bold text-foreground">
+            {score}/100
+            <span className="font-semibold text-muted-foreground">{READINESS_LABEL[level]}</span>
+          </span>
           <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
             <Moon className="h-3.5 w-3.5 shrink-0" /> {data.sleepHours}h sleep
           </span>
@@ -97,6 +126,14 @@ export function WellnessGate() {
           <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
             <Brain className="h-3.5 w-3.5 shrink-0" />
             {STRESS_SCALE.find((s) => s.value === data.stress)?.label}
+          </span>
+          <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+            <Droplets className="h-3.5 w-3.5 shrink-0" />
+            {HYDRATION_SCALE.find((s) => s.value === data.hydration)?.label}
+          </span>
+          <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+            <Focus className="h-3.5 w-3.5 shrink-0" />
+            {MENTAL_FOCUS_SCALE.find((s) => s.value === data.mentalFocus)?.label}
           </span>
         </div>
         <span className="flex shrink-0 items-center gap-1 text-xs font-semibold text-primary">
@@ -114,7 +151,7 @@ export function WellnessGate() {
             Daily Check-In
           </p>
           <p className="text-xs text-muted-foreground">
-            Takes 10 seconds and helps your coach see how you're recovering.
+            Takes 20 seconds and helps your coach see how you're recovering.
           </p>
         </div>
         {data && (
@@ -158,6 +195,48 @@ export function WellnessGate() {
           value={stress}
           onChange={setStress}
         />
+        <ScaleField
+          label="Hydration"
+          icon={Droplets}
+          scale={HYDRATION_SCALE}
+          value={hydration}
+          onChange={setHydration}
+        />
+        <ScaleField
+          label="Mental Focus"
+          icon={Focus}
+          scale={MENTAL_FOCUS_SCALE}
+          value={mentalFocus}
+          onChange={setMentalFocus}
+        />
+      </div>
+      <div className="space-y-1.5">
+        <Label className="text-xs">Anything hurting today? (optional)</Label>
+        <div className="flex flex-wrap gap-1.5">
+          {BODY_PAIN_PARTS.map((part) => {
+            const active = bodyPainMap.includes(part.key);
+            return (
+              <button
+                key={part.key}
+                type="button"
+                aria-pressed={active}
+                onClick={() =>
+                  setBodyPainMap((prev) =>
+                    active ? prev.filter((k) => k !== part.key) : [...prev, part.key],
+                  )
+                }
+                className={cn(
+                  "rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors",
+                  active
+                    ? "border-destructive bg-destructive/15 text-destructive"
+                    : "border-border text-muted-foreground hover:border-primary/50",
+                )}
+              >
+                {active ? `${part.label} ✓` : part.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
       <Button
         className="w-full sm:w-auto"

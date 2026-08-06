@@ -548,8 +548,14 @@ CREATE TABLE IF NOT EXISTS "wellness_checkins" (
   "sleep_hours" real NOT NULL,
   "soreness" integer NOT NULL,
   "stress" integer NOT NULL,
+  "hydration" integer NOT NULL DEFAULT 3,
+  "mental_focus" integer NOT NULL DEFAULT 3,
+  "body_pain_map" json NOT NULL DEFAULT '[]',
   "created_at" timestamp NOT NULL DEFAULT now()
 );
+ALTER TABLE "wellness_checkins" ADD COLUMN IF NOT EXISTS "hydration" integer NOT NULL DEFAULT 3;
+ALTER TABLE "wellness_checkins" ADD COLUMN IF NOT EXISTS "mental_focus" integer NOT NULL DEFAULT 3;
+ALTER TABLE "wellness_checkins" ADD COLUMN IF NOT EXISTS "body_pain_map" json NOT NULL DEFAULT '[]';
 CREATE INDEX IF NOT EXISTS "wellness_checkins_athlete_idx" ON "wellness_checkins" ("athlete_id");
 CREATE UNIQUE INDEX IF NOT EXISTS "wellness_checkins_athlete_date_idx" ON "wellness_checkins" ("athlete_id", "date");
 

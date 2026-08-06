@@ -1296,7 +1296,14 @@ Based on this athlete's actual rate of improvement, suggest a realistic target v
   async upsertWellnessCheckin(
     athleteId: number,
     date: string,
-    input: { sleepHours: number; soreness: number; stress: number },
+    input: {
+      sleepHours: number;
+      soreness: number;
+      stress: number;
+      hydration: number;
+      mentalFocus: number;
+      bodyPainMap: string[];
+    },
   ) {
     const [row] = await db
       .insert(wellnessCheckins)
@@ -1334,6 +1341,9 @@ Based on this athlete's actual rate of improvement, suggest a realistic target v
         sleepHours: wellnessCheckins.sleepHours,
         soreness: wellnessCheckins.soreness,
         stress: wellnessCheckins.stress,
+        hydration: wellnessCheckins.hydration,
+        mentalFocus: wellnessCheckins.mentalFocus,
+        bodyPainMap: wellnessCheckins.bodyPainMap,
       })
       .from(coachAthletes)
       .innerJoin(wellnessCheckins, eq(wellnessCheckins.athleteId, coachAthletes.athleteId))
@@ -1580,17 +1590,24 @@ Based on this athlete's actual rate of improvement, suggest a realistic target v
       }
     }
 
-    const { level } = computeReadiness(wellness);
+    const { score, level } = computeReadiness(wellness);
+    const painNote =
+      wellness.bodyPainMap.length > 0
+        ? wellness.bodyPainMap.join(", ")
+        : "none flagged";
     const prompt = `Athlete readiness snapshot for today:
 - Sleep last night: ${wellness.sleepHours} hours
 - Soreness (1=none, 5=very sore): ${wellness.soreness}/5
 - Stress (1=calm, 5=very stressed): ${wellness.stress}/5
-- Computed overall readiness: ${level}
+- Hydration (1=dehydrated, 5=excellent): ${wellness.hydration}/5
+- Mental focus (1=scattered, 5=locked in): ${wellness.mentalFocus}/5
+- Body areas flagged as painful today: ${painNote}
+- Computed overall readiness: ${score}/100 (${level})
 - Most recent logged RPEs, newest first (out of 10, higher = harder effort): ${
       recentRpes.length > 0 ? recentRpes.join(", ") : "no recent RPE data logged"
     }
 
-Write ONE short note (1-2 sentences, plain language, talking directly to the athlete as "you") on how to approach today's training given their recovery state and recent training stress. Be specific and direct, not generic filler. Do not mention or invent specific exercises, weights, or sets -- you were not given today's workout. No preamble or sign-off, just the note itself.`;
+Write ONE short note (1-2 sentences, plain language, talking directly to the athlete as "you") on how to approach today's training given their recovery state and recent training stress. Be specific and direct, not generic filler. Do not mention or invent specific exercises, weights, or sets -- you were not given today's workout. If a body area was flagged as painful, acknowledge it and suggest they mention it to their coach rather than offering a medical workaround yourself. No preamble or sign-off, just the note itself.`;
 
     const text = await askClaude(
       "You are a concise, expert strength and conditioning coach's assistant. You write short, direct, athlete-facing readiness notes grounded only in the data you're given -- never invent data, never give medical advice, never diagnose. If soreness or stress data suggests something concerning, tell the athlete to flag it with their coach rather than offering a workaround.",
@@ -1733,6 +1750,9 @@ Write a short (2-4 sentence) plain-language weekly training summary for this ath
           sleepHours: wellnessCheckins.sleepHours,
           soreness: wellnessCheckins.soreness,
           stress: wellnessCheckins.stress,
+          hydration: wellnessCheckins.hydration,
+          mentalFocus: wellnessCheckins.mentalFocus,
+          bodyPainMap: wellnessCheckins.bodyPainMap,
         })
         .from(wellnessCheckins)
         .where(

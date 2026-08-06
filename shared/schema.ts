@@ -16,6 +16,7 @@ import {
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import { BODY_PAIN_PARTS } from "./wellness";
 
 // Owned and populated by connect-pg-simple at runtime, not by our own code --
 // declared here purely so drizzle-kit's live-diff sees it as an already-
@@ -949,6 +950,12 @@ export const wellnessCheckins = pgTable(
     sleepHours: real("sleep_hours").notNull(),
     soreness: integer("soreness").notNull(),
     stress: integer("stress").notNull(),
+    hydration: integer("hydration").notNull().default(3),
+    mentalFocus: integer("mental_focus").notNull().default(3),
+    // Which body parts the athlete flagged as hurting today -- only ever
+    // shown/edited in the expanded check-in form, never the collapsed
+    // one-line summary. Empty array is the common case (nothing hurts).
+    bodyPainMap: json("body_pain_map").$type<string[]>().notNull().default([]),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({
@@ -966,6 +973,9 @@ export const submitWellnessCheckinSchema = z.object({
   sleepHours: z.number().min(0).max(24),
   soreness: z.number().int().min(1).max(5),
   stress: z.number().int().min(1).max(5),
+  hydration: z.number().int().min(1).max(5).default(3),
+  mentalFocus: z.number().int().min(1).max(5).default(3),
+  bodyPainMap: z.array(z.string()).max(BODY_PAIN_PARTS.length).default([]),
 });
 
 export const caraActivityTypeEnum = pgEnum("cara_activity_type", [
