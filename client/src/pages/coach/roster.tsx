@@ -92,7 +92,14 @@ export default function CoachRoster() {
     queryKey: ["/api/coach/programs"],
   });
   const { data: wellnessToday = [] } = useQuery<
-    { athleteId: number; sleepHours: number; soreness: number; stress: number; score: number; level: ReadinessLevel }[]
+    {
+      athleteId: number;
+      sleepHours: number;
+      soreness: number;
+      stress: number;
+      score: number;
+      level: ReadinessLevel;
+    }[]
   >({
     queryKey: ["/api/coach/roster-wellness"],
     refetchInterval: 60_000,
@@ -639,7 +646,7 @@ function WellnessBadge({
   entry,
   onClick,
 }: {
-  entry?: { level: ReadinessLevel };
+  entry?: { score: number; level: ReadinessLevel };
   onClick: () => void;
 }) {
   if (!entry) return null;
@@ -650,14 +657,14 @@ function WellnessBadge({
         e.stopPropagation();
         onClick();
       }}
-      aria-label={`${READINESS_LABEL[entry.level]} -- view wellness history`}
+      aria-label={`Readiness ${entry.score}/100, ${READINESS_LABEL[entry.level]} -- view wellness history`}
       className={cn(
         "flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold transition-opacity hover:opacity-80",
         READINESS_CLASSNAME[entry.level],
       )}
     >
       <Gauge className="h-3 w-3" />
-      {READINESS_LABEL[entry.level]}
+      {entry.score} · {READINESS_LABEL[entry.level]}
     </button>
   );
 }

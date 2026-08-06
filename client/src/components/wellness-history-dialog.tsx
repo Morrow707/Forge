@@ -18,7 +18,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { HeartPulse } from "lucide-react";
-import { READINESS_LABEL, type ReadinessLevel } from "@shared/wellness";
+import { READINESS_LABEL, BODY_PAIN_PARTS, type ReadinessLevel } from "@shared/wellness";
 import { cn } from "@/lib/utils";
 
 type WellnessEntry = {
@@ -27,6 +27,9 @@ type WellnessEntry = {
   sleepHours: number;
   soreness: number;
   stress: number;
+  hydration: number;
+  mentalFocus: number;
+  bodyPainMap: string[];
   score: number;
   level: ReadinessLevel;
 };
@@ -58,7 +61,7 @@ export function WellnessHistoryDialog({
 
   const chartData = [...data].reverse().map((e) => ({
     label: format(parseISO(e.date), "MMM d"),
-    value: Math.round(e.score * 10) / 10,
+    value: e.score,
   }));
 
   return (
@@ -88,7 +91,7 @@ export function WellnessHistoryDialog({
                   <LineChart data={chartData} margin={{ left: 4, right: 12 }}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                     <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                    <YAxis tick={{ fontSize: 11 }} width={24} domain={[1, 5]} />
+                    <YAxis tick={{ fontSize: 11 }} width={28} domain={[0, 100]} />
                     <Tooltip
                       contentStyle={{
                         background: "hsl(var(--card))",
@@ -121,10 +124,15 @@ export function WellnessHistoryDialog({
                         READINESS_CLASSNAME[e.level],
                       )}
                     >
-                      {READINESS_LABEL[e.level]}
+                      {e.score}/100 · {READINESS_LABEL[e.level]}
                     </span>
                     <span className="text-xs text-muted-foreground">
-                      {e.sleepHours}h sleep · Soreness {e.soreness}/5 · Stress {e.stress}/5
+                      {e.sleepHours}h sleep · Soreness {e.soreness}/5 · Stress {e.stress}/5 ·
+                      Hydration {e.hydration}/5 · Focus {e.mentalFocus}/5
+                      {e.bodyPainMap.length > 0 &&
+                        ` · Pain: ${e.bodyPainMap
+                          .map((k) => BODY_PAIN_PARTS.find((p) => p.key === k)?.label ?? k)
+                          .join(", ")}`}
                     </span>
                   </div>
                   <span className="shrink-0 text-xs text-muted-foreground">
