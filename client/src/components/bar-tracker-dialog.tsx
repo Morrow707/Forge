@@ -30,6 +30,7 @@ import {
   detectFormFaults,
   computeBarTiltDegrees,
   computeRepDepths,
+  computeLegDriveAsymmetry,
   guessMovementPattern,
   worldVerticalSign,
   isFullBodyInFrame,
@@ -167,6 +168,7 @@ export function BarTrackerDialog({
   mode,
   exerciseName,
   movementType,
+  laterality,
   targetReps,
   loadKg,
   onCapture,
@@ -181,6 +183,11 @@ export function BarTrackerDialog({
   // The exercise's movementType (Squat/Hinge/Press/etc.) -- gates which
   // form faults even make sense to check for (see detectFormFaults).
   movementType?: string | null;
+  // "unilateral" exercises (single-leg squats, lunges) load one leg at a
+  // time across reps/sets rather than both at once, so a same-rep left-vs-
+  // right comparison wouldn't mean anything -- gates leg-drive asymmetry
+  // tracking off for those, alongside the movementType check.
+  laterality?: string | null;
   // Auto-stops tracking once this many reps are detected (parsed from the
   // prescribed rep scheme by the caller) -- manual "Stop & Review" always
   // still works too, and non-numeric rep schemes just never trigger this.
@@ -688,6 +695,22 @@ export function BarTrackerDialog({
     );
     metrics.repBreakdown = metrics.repBreakdown.map((r, i) => ({ ...r, depthDeg: depths[i] }));
 
+    // Only meaningful for a bilateral lower-body lift -- a Lunge or any
+    // unilateral exercise loads one leg at a time across reps, so comparing
+    // "left vs right within this rep" wouldn't measure anything real.
+    if (movementType === "Squat" && laterality !== "unilateral") {
+      const legDrive = computeLegDriveAsymmetry(
+        framesRef.current,
+        metrics.repBreakdown.map((r) => ({ startT: r.startT, endT: r.endT })),
+      );
+      const validEntries = legDrive
+        .map((d, i) => (d ? { repNumber: metrics.repBreakdown[i].repNumber, ...d } : null))
+        .filter((d): d is NonNullable<typeof d> => d !== null);
+      metrics.legDriveAsymmetry = validEntries.length > 0 ? validEntries : null;
+    } else {
+      metrics.legDriveAsymmetry = null;
+    }
+
     const origin = { x: traceRef.current[0]?.x ?? 0, y: traceRef.current[0]?.y ?? 0 };
     metrics.armPathTrace =
       leftTraceRef.current.length > 1 && rightTraceRef.current.length > 1
@@ -727,6 +750,14 @@ export function BarTrackerDialog({
   const jumpResult = result && isJumpMetrics(result) ? result : null;
   const firstRepPeak = liftResult?.repBreakdown[0]?.peakVelocityMps ?? 0;
   const lastRepCurve = liftResult?.repBreakdown[liftResult.repBreakdown.length - 1]?.velocityCurve ?? [];
+  const legDriveByRep = new Map((liftResult?.legDriveAsymmetry ?? []).map((d) => [d.repNumber, d]));
+  const avgLegAsymmetry =
+    liftResult?.legDriveAsymmetry && liftResult.legDriveAsymmetry.length > 0
+      ? Math.round(
+          liftResult.legDriveAsymmetry.reduce((sum, d) => sum + d.asymmetryPercent, 0) /
+            liftResult.legDriveAsymmetry.length,
+        )
+      : null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -935,6 +966,22 @@ export function BarTrackerDialog({
             </div>
             <FormFaultBadges faults={liftResult.formFaults} />
 
+            {avgLegAsymmetry != null && (
+              <p
+                className={cn(
+                  "flex items-center gap-1.5 text-xs",
+                  avgLegAsymmetry >= 15 ? "font-semibold text-amber-500" : "text-muted-foreground",
+                )}
+              >
+                {avgLegAsymmetry >= 15 ? (
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                ) : (
+                  <Info className="h-3.5 w-3.5 shrink-0" />
+                )}
+                Leg drive: {avgLegAsymmetry}% avg. imbalance
+              </p>
+            )}
+
             {movementGuess && movementGuess.pattern !== "unknown" && (
               <p
                 className={cn(
@@ -972,6 +1019,18 @@ export function BarTrackerDialog({
                             </span>
                           )}
                           {r.depthDeg != null && <span>{r.depthDeg}° knee</span>}
+                          {legDriveByRep.has(r.repNumber) && (
+                            <span
+                              className={
+                                legDriveByRep.get(r.repNumber)!.asymmetryPercent >= 15
+                                  ? "font-semibold text-amber-500"
+                                  : undefined
+                              }
+                            >
+                              {legDriveByRep.get(r.repNumber)!.dominantSide === "left" ? "R" : "L"} weaker{" "}
+                              {legDriveByRep.get(r.repNumber)!.asymmetryPercent}%
+                            </span>
+                          )}
                         </span>
                       </div>
                     );

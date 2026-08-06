@@ -80,6 +80,7 @@ type ExerciseInfo = {
   instructions: string | null;
   videoUrl: string | null;
   movementType: string | null;
+  laterality: string | null;
   usesWeight: boolean;
   usesBodyweight: boolean;
   usesBand: boolean;
@@ -223,6 +224,14 @@ type JumpBreakdownEntry = {
   groundContactSeconds: number | null;
 };
 
+type LegDriveAsymmetryEntry = {
+  repNumber: number;
+  leftDriveDegPerSec: number;
+  rightDriveDegPerSec: number;
+  asymmetryPercent: number;
+  dominantSide: "left" | "right";
+};
+
 type SetMetrics = {
   peakVelocityMps: number | null;
   meanVelocityMps: number | null;
@@ -251,6 +260,10 @@ type SetMetrics = {
   groundContactSeconds: number | null;
   reactiveStrengthIndex: number | null;
   jumpBreakdown: JumpBreakdownEntry[] | null;
+  // Per-rep left/right knee-drive comparison for bilateral lower-body lifts
+  // -- see pose-tracking.ts's computeLegDriveAsymmetry. Null unless the
+  // exercise's movementType/laterality made a same-rep comparison valid.
+  legDriveAsymmetry: LegDriveAsymmetryEntry[] | null;
 };
 
 type LogEntry = {
@@ -314,6 +327,7 @@ type ItemState = {
   instructions: string | null;
   videoUrl: string | null;
   movementType: string | null;
+  laterality: string | null;
   prescribedSets: number;
   prescribedReps: string;
   prescribedWeight: string | null;
@@ -369,6 +383,7 @@ function buildItem(
       groundContactSeconds: existingSet?.groundContactSeconds ?? null,
       reactiveStrengthIndex: existingSet?.reactiveStrengthIndex ?? null,
       jumpBreakdown: existingSet?.jumpBreakdown ?? null,
+      legDriveAsymmetry: existingSet?.legDriveAsymmetry ?? null,
     };
   });
   const materials = materialsFrom(prescribed.exercise);
@@ -382,6 +397,7 @@ function buildItem(
     instructions: prescribed.exercise.instructions,
     videoUrl: prescribed.exercise.videoUrl,
     movementType: prescribed.exercise.movementType,
+    laterality: prescribed.exercise.laterality,
     prescribedSets: prescribed.sets,
     prescribedReps: prescribed.reps,
     prescribedWeight: prescribed.weight,
@@ -750,6 +766,7 @@ export function WorkoutPage({
           groundContactSeconds: s.groundContactSeconds,
           reactiveStrengthIndex: s.reactiveStrengthIndex,
           jumpBreakdown: s.jumpBreakdown,
+          legDriveAsymmetry: s.legDriveAsymmetry,
         })),
       })),
     };
@@ -954,6 +971,7 @@ export function WorkoutPage({
               groundContactSeconds: null,
               reactiveStrengthIndex: null,
               jumpBreakdown: null,
+              legDriveAsymmetry: null,
             },
           ],
         };
@@ -1976,6 +1994,7 @@ function ExerciseLogContent({
               mode={item.trackingLevel}
               exerciseName={item.exerciseName}
               movementType={item.movementType}
+              laterality={item.laterality}
               targetReps={parseTargetReps(item.prescribedReps)}
               loadKg={loadKg}
               onCapture={(metrics: RepMetrics | JumpSetMetrics) => {
@@ -2016,6 +2035,7 @@ function ExerciseLogContent({
                     eccentricMeanVelocityMps: metrics.eccentricMeanVelocityMps,
                     romCm: metrics.romCm,
                     velocityLossPercent: metrics.velocityLossPercent,
+                    legDriveAsymmetry: metrics.legDriveAsymmetry ?? null,
                   },
                   { immediate: true },
                 );

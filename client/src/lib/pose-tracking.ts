@@ -294,6 +294,98 @@ export function computeRepDepths(
   });
 }
 
+// Knee angle(s) kept per-side rather than pooled -- the leg-drive-asymmetry
+// companion to frameKneeAngles above, which deliberately discards which leg
+// a given angle came from.
+function frameKneeAnglesBySide(lm: NormalizedLandmark[]): { left: number | null; right: number | null } {
+  const lHip = lm[POSE_LANDMARKS.LEFT_HIP];
+  const rHip = lm[POSE_LANDMARKS.RIGHT_HIP];
+  const lKnee = lm[POSE_LANDMARKS.LEFT_KNEE];
+  const rKnee = lm[POSE_LANDMARKS.RIGHT_KNEE];
+  const lAnkle = lm[POSE_LANDMARKS.LEFT_ANKLE];
+  const rAnkle = lm[POSE_LANDMARKS.RIGHT_ANKLE];
+  return {
+    left: visible(lHip) && visible(lKnee) && visible(lAnkle) ? angleAtVertex(lHip, lKnee, lAnkle) : null,
+    right: visible(rHip) && visible(rKnee) && visible(rAnkle) ? angleAtVertex(rHip, rKnee, rAnkle) : null,
+  };
+}
+
+export type LegDriveAsymmetry = {
+  leftDriveDegPerSec: number;
+  rightDriveDegPerSec: number;
+  asymmetryPercent: number;
+  dominantSide: "left" | "right";
+};
+
+// A rep's drive phase needs at least this much clean per-side data to trust
+// a rate off it -- a shorter window makes tiny pose-noise jitter look like a
+// huge angular velocity.
+const MIN_DRIVE_DURATION_SEC = 0.15;
+
+// How much harder one leg drove than the other during each rep's concentric
+// (standing-up) phase, for bilateral lower-body lifts -- reuses the same
+// hip-knee-ankle angle computeRepDepths already tracks, but keeps left and
+// right separate through the drive instead of pooling them, since a real
+// strength imbalance shows up as one knee extending measurably faster than
+// the other on the way up, not as a difference in how deep either one got.
+// Each rep window is the same whole-rep {startT, endT} computeRepDepths
+// takes; the concentric-only sub-window is found here by locating the
+// window's deepest (pooled) knee angle and measuring drive from there to
+// the window's end.
+// Returns null for a rep without enough clean per-side data to trust a
+// comparison -- same "no number beats a fake-confident one" stance as
+// computeForceVelocityProfile.
+export function computeLegDriveAsymmetry(
+  frames: PoseFrame[],
+  repWindows: { startT: number; endT: number }[],
+): (LegDriveAsymmetry | null)[] {
+  return repWindows.map(({ startT, endT }) => {
+    const windowFrames = frames.filter((f) => f.t >= startT && f.t <= endT);
+    if (windowFrames.length < 4) return null;
+
+    let bottomIdx = 0;
+    let bottomAngle = Infinity;
+    windowFrames.forEach((frame, i) => {
+      for (const angle of frameKneeAngles(frame.landmarks)) {
+        if (angle < bottomAngle) {
+          bottomAngle = angle;
+          bottomIdx = i;
+        }
+      }
+    });
+    const driveFrames = windowFrames.slice(bottomIdx);
+
+    const left: { t: number; angle: number }[] = [];
+    const right: { t: number; angle: number }[] = [];
+    for (const frame of driveFrames) {
+      const sides = frameKneeAnglesBySide(frame.landmarks);
+      if (sides.left != null) left.push({ t: frame.t, angle: sides.left });
+      if (sides.right != null) right.push({ t: frame.t, angle: sides.right });
+    }
+    if (left.length < 3 || right.length < 3) return null;
+
+    const leftDuration = left[left.length - 1].t - left[0].t;
+    const rightDuration = right[right.length - 1].t - right[0].t;
+    if (leftDuration < MIN_DRIVE_DURATION_SEC || rightDuration < MIN_DRIVE_DURATION_SEC) return null;
+
+    const leftRate = (left[left.length - 1].angle - left[0].angle) / leftDuration;
+    const rightRate = (right[right.length - 1].angle - right[0].angle) / rightDuration;
+    // Only a genuine drive (knee opening up) on both sides is comparable --
+    // a rate at or below zero means the window missed the concentric phase
+    // (pose noise, mistimed rep boundary) rather than a real slow leg.
+    if (leftRate <= 0 || rightRate <= 0) return null;
+
+    const faster = Math.max(leftRate, rightRate);
+    const slower = Math.min(leftRate, rightRate);
+    return {
+      leftDriveDegPerSec: Math.round(leftRate),
+      rightDriveDegPerSec: Math.round(rightRate),
+      asymmetryPercent: Math.round(((faster - slower) / faster) * 100),
+      dominantSide: leftRate > rightRate ? "left" : "right",
+    } satisfies LegDriveAsymmetry;
+  });
+}
+
 export type FormFault = {
   code: "shallow_depth" | "knee_valgus" | "forward_lean" | "bar_path_drift" | "bar_tilt";
   label: string;
