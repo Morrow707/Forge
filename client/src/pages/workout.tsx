@@ -63,6 +63,7 @@ import {
   RefreshCw,
   GitCompare,
   Share2,
+  Headphones,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import type { PublicUser } from "@shared/schema";
@@ -72,6 +73,7 @@ import { ReadinessBanner } from "@/components/readiness-banner";
 import { ModifiedWorkoutBanner } from "@/components/modified-workout-banner";
 import { WellnessGate } from "@/components/wellness-gate";
 import { CaraTimer } from "@/components/cara-timer";
+import { HandsFreeMode } from "@/components/hands-free-mode";
 
 type ExerciseInfo = {
   id: number;
@@ -88,7 +90,7 @@ type ExerciseInfo = {
   usesBox: boolean;
 };
 
-type WeightUnit = "lbs" | "kg";
+export type WeightUnit = "lbs" | "kg";
 type BoxHeightUnit = "in" | "m";
 type WeightMode = "numeric" | "bodyweight" | "band" | "box";
 
@@ -320,7 +322,7 @@ type DayDetail = {
   isModified: boolean;
 };
 
-type SetRow = {
+export type SetRow = {
   setNumber: number;
   reps: string;
   weight: string;
@@ -329,7 +331,7 @@ type SetRow = {
   boxHeightUnit: BoxHeightUnit;
 } & SetMetrics;
 
-type ItemState = {
+export type ItemState = {
   key: string;
   kind: "exercise" | "corrective";
   refId: number;
@@ -432,7 +434,7 @@ function buildItem(
   };
 }
 
-function isSetComplete(item: ItemState, set: SetRow) {
+export function isSetComplete(item: ItemState, set: SetRow) {
   if (!set.reps.trim()) return false;
   if (item.materials.usesWeight && !set.weight.trim()) return false;
   if (item.materials.usesBand && !set.bandColor.trim()) return false;
@@ -533,7 +535,7 @@ function estimateOneRmFromHistory(history: SetHistoryPoint[], unit: WeightUnit) 
   return best > 0 ? Math.round(best * 10) / 10 : null;
 }
 
-type Page = {
+export type Page = {
   kind: "corrective" | "exercise";
   items: ItemState[];
   labels: Record<string, string>;
@@ -686,6 +688,7 @@ export function WorkoutPage({
   const [hydrated, setHydrated] = useState(false);
   const [pageIndex, setPageIndex] = useState(0);
   const [viewMode, setViewMode] = useState<"overview" | "logging">("overview");
+  const [handsFreeActive, setHandsFreeActive] = useState(false);
   const restTimerRef = useRef<RestTimerHandle>(null);
 
   // Keep the screen awake for the length of an active logging session --
@@ -1299,17 +1302,30 @@ export function WorkoutPage({
             </div>
           ) : currentPage ? (
             <div className="space-y-2">
-              <button
-                type="button"
-                onClick={() => {
-                  autosaveNow(items);
-                  setViewMode("overview");
-                }}
-                className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
-              >
-                <ArrowLeft className="h-3.5 w-3.5" />
-                Back to full workout
-              </button>
+              <div className="flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => {
+                    autosaveNow(items);
+                    setViewMode("overview");
+                  }}
+                  className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
+                >
+                  <ArrowLeft className="h-3.5 w-3.5" />
+                  Back to full workout
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    autosaveNow(items);
+                    setHandsFreeActive(true);
+                  }}
+                  className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
+                >
+                  <Headphones className="h-3.5 w-3.5" />
+                  Hands-Free
+                </button>
+              </div>
               {currentPage.kind === "corrective" && (
                 <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-cyan-400">
                   <Stethoscope className="h-3.5 w-3.5" />
@@ -1417,6 +1433,14 @@ export function WorkoutPage({
             </button>
           </div>
         </div>
+      )}
+      {handsFreeActive && (
+        <HandsFreeMode
+          items={items}
+          unit={unit}
+          onUpdateSet={(key, setNumber, patch) => updateSet(key, setNumber, patch, { immediate: true })}
+          onClose={() => setHandsFreeActive(false)}
+        />
       )}
       </AppShell>
     </>
