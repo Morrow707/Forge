@@ -39,6 +39,7 @@ import {
 } from "lucide-react";
 import type { ExerciseWithOwnership } from "@/lib/exercise-types";
 import { MOVEMENT_TYPES, MUSCLE_GROUPS, SPORTS } from "@/lib/exercise-taxonomy";
+import { CATEGORY_BADGE_CLASS } from "@/lib/exercise-colors";
 
 const ISSUE_TYPES = [
   { value: "broken_video", label: "Broken video link" },
@@ -55,15 +56,6 @@ const CATEGORIES = [
   "mobility",
   "plyometric",
 ] as const;
-
-const categoryColors: Record<string, string> = {
-  strength: "bg-primary/15 text-primary",
-  conditioning: "bg-success/15 text-success",
-  olympic: "bg-blue-500/15 text-blue-400",
-  accessory: "bg-purple-500/15 text-purple-400",
-  mobility: "bg-cyan-500/15 text-cyan-400",
-  plyometric: "bg-amber-500/15 text-amber-400",
-};
 
 type ExerciseForm = {
   name: string;
@@ -288,7 +280,7 @@ export function ExerciseDetailPage({
               isForgeOfficial={exercise.isForgeOfficial}
               ownerLabel={exercise.ownerLabel}
             />
-            <Badge className={categoryColors[exercise.category]} variant="default">
+            <Badge className={CATEGORY_BADGE_CLASS[exercise.category]} variant="default">
               {exercise.category}
             </Badge>
             {exercise.isCorrective && (
