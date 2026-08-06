@@ -39,11 +39,13 @@ import {
   Share2,
   Target,
   Trophy,
+  FileDown,
 } from "lucide-react";
 import { GoalsPanel } from "@/components/goals-panel";
 import { StreakBadges } from "@/components/streak-badge";
 import { DigestBanner } from "@/components/digest-banner";
 import { TrophyCase, type AthleteTrophyView } from "@/components/trophy-case";
+import { TrainingHistoryExportDialog } from "@/components/training-history-export-dialog";
 
 type ProgressSummary = {
   totalWorkoutsCompleted: number;
@@ -76,6 +78,7 @@ export default function AthleteProgress() {
   const [sharingProfile, setSharingProfile] = useState(false);
   const [sharingPrIndex, setSharingPrIndex] = useState<number | null>(null);
   const [trendExercise, setTrendExercise] = useState<{ id: number; name: string } | null>(null);
+  const [exportOpen, setExportOpen] = useState(false);
 
   async function handleSharePr(
     pr: {
@@ -175,10 +178,16 @@ export default function AthleteProgress() {
     <AppShell
       title="My Progress"
       actions={
-        <Button variant="outline" size="sm" onClick={handleShareProfile} disabled={sharingProfile}>
-          <Share2 className="h-4 w-4" />
-          Share Recruiting Profile
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => setExportOpen(true)}>
+            <FileDown className="h-4 w-4" />
+            Export History
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleShareProfile} disabled={sharingProfile}>
+            <Share2 className="h-4 w-4" />
+            Share Recruiting Profile
+          </Button>
+        </div>
       }
     >
       <p className="mb-6 text-sm text-muted-foreground">
@@ -518,6 +527,14 @@ export default function AthleteProgress() {
         onOpenChange={(open) => {
           if (!open) setTrendExercise(null);
         }}
+      />
+
+      <TrainingHistoryExportDialog
+        open={exportOpen}
+        onOpenChange={setExportOpen}
+        athleteName={user?.name ?? "Athlete"}
+        csvUrl="/api/athlete/training-history.csv"
+        pdfUrl="/api/athlete/training-history.pdf"
       />
     </AppShell>
   );

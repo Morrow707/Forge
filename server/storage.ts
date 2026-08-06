@@ -5215,6 +5215,63 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
     });
   },
 
+  // Every completed workout, flattened to one row per logged set, for a
+  // full CSV/PDF export -- unlike getAthleteProgressSummary this isn't
+  // filtered to numeric weightMode or collapsed to PRs/current lifts, and
+  // it includes correctives alongside program exercises since a coach or
+  // athlete asking for "full training history" means everything performed,
+  // not just the main lifts.
+  async getFullTrainingHistoryForAthlete(athleteId: number) {
+    const logs = await db.query.workoutLogs.findMany({
+      where: and(eq(workoutLogs.athleteId, athleteId), eq(workoutLogs.completed, true)),
+      orderBy: asc(workoutLogs.date),
+      with: {
+        entries: {
+          with: {
+            sets: { orderBy: asc(workoutSetEntries.setNumber) },
+            programExercise: { with: { exercise: true } },
+            corrective: { with: { exercise: true } },
+          },
+        },
+      },
+    });
+
+    const rows: {
+      date: string;
+      exerciseName: string;
+      isCorrective: boolean;
+      setNumber: number;
+      reps: string | null;
+      weight: string | null;
+      weightUnit: string | null;
+      weightMode: string;
+      rpe: number | null;
+      notes: string | null;
+    }[] = [];
+
+    for (const log of logs) {
+      for (const entry of log.entries) {
+        const exerciseName =
+          entry.programExercise?.exercise.name ?? entry.corrective?.exercise.name ?? "Unknown";
+        for (const set of entry.sets) {
+          rows.push({
+            date: log.date,
+            exerciseName,
+            isCorrective: entry.correctiveId != null,
+            setNumber: set.setNumber,
+            reps: set.reps,
+            weight: set.weight,
+            weightUnit: set.weightUnit,
+            weightMode: entry.weightMode,
+            rpe: entry.rpe,
+            notes: entry.notes,
+          });
+        }
+      }
+    }
+    return rows;
+  },
+
   // Every distinct exercise this athlete has ever logged at least one set
   // for, scoped to this coach -- not just CV-tracked ones, so the coach can
   // drill into plain weight/PR history too.

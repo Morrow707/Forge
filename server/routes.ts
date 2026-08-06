@@ -10,6 +10,7 @@ import { getVapidPublicKey } from "./push";
 import { sendEmail } from "./email";
 import { buildProgressReportEmail } from "./progress-report";
 import { buildRecruitingProfilePdf } from "./recruiting-profile";
+import { buildTrainingHistoryCsv, buildTrainingHistoryPdf } from "./training-history-export";
 import { notifyUser } from "./notify";
 import {
   insertExerciseSchema,
@@ -1052,6 +1053,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
+  app.get(
+    "/api/coach/roster/:athleteId/training-history.csv",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      const athlete = await storage.getRosterAthleteForCoach(user.id, athleteId);
+      if (!athlete) return res.status(404).json({ message: "Athlete not found" });
+
+      const rows = await storage.getFullTrainingHistoryForAthlete(athleteId);
+      const csv = buildTrainingHistoryCsv(rows);
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${athlete.name.replace(/[^a-z0-9]+/gi, "-")}-training-history.csv"`,
+      );
+      res.send(csv);
+    },
+  );
+
+  app.get(
+    "/api/coach/roster/:athleteId/training-history.pdf",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      const athlete = await storage.getRosterAthleteForCoach(user.id, athleteId);
+      if (!athlete) return res.status(404).json({ message: "Athlete not found" });
+
+      const rows = await storage.getFullTrainingHistoryForAthlete(athleteId);
+      const pdf = await buildTrainingHistoryPdf(athlete.name, rows);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${athlete.name.replace(/[^a-z0-9]+/gi, "-")}-training-history.pdf"`,
+      );
+      res.send(pdf);
+    },
+  );
+
   app.get("/api/coach/roster/:athleteId/goals", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     const athleteId = Number(req.params.athleteId);
@@ -2041,6 +2082,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.setHeader(
       "Content-Disposition",
       `attachment; filename="${user.name.replace(/[^a-z0-9]+/gi, "-")}-recruiting-profile.pdf"`,
+    );
+    res.send(pdf);
+  });
+
+  app.get("/api/athlete/training-history.csv", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const rows = await storage.getFullTrainingHistoryForAthlete(user.id);
+    const csv = buildTrainingHistoryCsv(rows);
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${user.name.replace(/[^a-z0-9]+/gi, "-")}-training-history.csv"`,
+    );
+    res.send(csv);
+  });
+
+  app.get("/api/athlete/training-history.pdf", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const rows = await storage.getFullTrainingHistoryForAthlete(user.id);
+    const pdf = await buildTrainingHistoryPdf(user.name, rows);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${user.name.replace(/[^a-z0-9]+/gi, "-")}-training-history.pdf"`,
     );
     res.send(pdf);
   });
