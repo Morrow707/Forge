@@ -6,6 +6,7 @@ import {
   teams,
   teamMembers,
   teamChallenges,
+  teamGameDays,
   exercises,
   programs,
   programBlocks,
@@ -85,7 +86,14 @@ import {
   hashResetToken,
   generateCalendarToken,
 } from "./auth-utils";
-import { addDays, parseISO, formatISO, isWithinInterval, startOfWeek } from "date-fns";
+import {
+  addDays,
+  parseISO,
+  formatISO,
+  isWithinInterval,
+  startOfWeek,
+  differenceInCalendarDays,
+} from "date-fns";
 
 function initialsFor(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -2267,6 +2275,122 @@ Athlete's data:
 
     const teamTotal = perAthlete.reduce((sum, a) => sum + a.contribution, 0);
     return { teamTotal, target: challenge.targetValue, perAthlete };
+  },
+
+  // ---------- Team game days (competition schedule + microcycle planning) ----------
+  async createTeamGameDay(
+    teamId: number,
+    date: string,
+    opponent: string | null,
+    notes: string | null,
+  ) {
+    const [row] = await db.insert(teamGameDays).values({ teamId, date, opponent, notes }).returning();
+    return row;
+  },
+
+  async getTeamGameDaysForCoach(coachId: number) {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    return db
+      .select({
+        id: teamGameDays.id,
+        teamId: teamGameDays.teamId,
+        teamName: teams.name,
+        date: teamGameDays.date,
+        opponent: teamGameDays.opponent,
+        notes: teamGameDays.notes,
+        createdAt: teamGameDays.createdAt,
+      })
+      .from(teamGameDays)
+      .innerJoin(teams, eq(teams.id, teamGameDays.teamId))
+      .where(inArray(teams.coachId, coachIds))
+      .orderBy(asc(teamGameDays.date));
+  },
+
+  async getTeamGameDayById(id: number) {
+    return db.query.teamGameDays.findFirst({ where: eq(teamGameDays.id, id) });
+  },
+
+  async deleteTeamGameDay(id: number) {
+    await db.delete(teamGameDays).where(eq(teamGameDays.id, id));
+  },
+
+  // Lays out every team member's scheduled training in the window around one
+  // game day, each date labeled by its offset from competition (GD-3, GD-1,
+  // Game Day, GD+1...) so a coach can see -- and rebalance -- the whole
+  // squad's load leading into and recovering out of competition at a
+  // glance. Reuses getCalendarForCoach rather than re-deriving assignment
+  // dates, so a manual dateOverride (game moved, travel day) already shows
+  // up correctly here too.
+  async getMicrocyclePlanForTeam(
+    coachId: number,
+    teamId: number,
+    gameDayId: number,
+    daysBefore = 6,
+    daysAfter = 1,
+  ) {
+    const gameDay = await this.getTeamGameDayById(gameDayId);
+    if (!gameDay || gameDay.teamId !== teamId) return null;
+
+    const memberIds = await this.getTeamMemberIds(teamId);
+    const members = memberIds.length
+      ? await db.query.users.findMany({
+          where: inArray(users.id, memberIds),
+          columns: { id: true, name: true },
+        })
+      : [];
+
+    const gameDate = parseISO(gameDay.date);
+    const windowStart = addDays(gameDate, -Math.max(0, daysBefore));
+    const windowEnd = addDays(gameDate, Math.max(0, daysAfter));
+    const rangeStart = formatISO(windowStart, { representation: "date" });
+    const rangeEnd = formatISO(windowEnd, { representation: "date" });
+
+    const calendar = memberIds.length
+      ? await this.getCalendarForCoach(coachId, rangeStart, rangeEnd)
+      : [];
+    const byAthleteAndDate = new Map<string, (typeof calendar)[number]>();
+    for (const entry of calendar) {
+      if (!memberIds.includes(entry.athleteId)) continue;
+      byAthleteAndDate.set(`${entry.athleteId}:${entry.date}`, entry);
+    }
+
+    const dateList: string[] = [];
+    for (let d = windowStart; d <= windowEnd; d = addDays(d, 1)) {
+      dateList.push(formatISO(d, { representation: "date" }));
+    }
+    const offsetLabel = (offset: number) =>
+      offset === 0 ? "Game Day" : offset < 0 ? `GD${offset}` : `GD+${offset}`;
+
+    const athletes = members
+      .map((m) => ({
+        athleteId: m.id,
+        athleteName: m.name,
+        days: dateList.map((date) => {
+          const offset = differenceInCalendarDays(parseISO(date), gameDate);
+          const entry = byAthleteAndDate.get(`${m.id}:${date}`);
+          return {
+            date,
+            offset,
+            label: offsetLabel(offset),
+            title: entry?.title ?? null,
+            isRestDay: entry?.isRestDay ?? false,
+            exerciseCount: entry?.exerciseCount ?? 0,
+            completed: entry?.completed ?? false,
+          };
+        }),
+      }))
+      .sort((a, b) => a.athleteName.localeCompare(b.athleteName));
+
+    return {
+      gameDay,
+      windowStart: rangeStart,
+      windowEnd: rangeEnd,
+      dates: dateList.map((date) => {
+        const offset = differenceInCalendarDays(parseISO(date), gameDate);
+        return { date, offset, label: offsetLabel(offset) };
+      }),
+      athletes,
+    };
   },
 
   // ---------- Team board (shared Q&A, not private messaging) ----------

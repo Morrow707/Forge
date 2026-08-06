@@ -211,6 +211,16 @@ CREATE TABLE IF NOT EXISTS "team_challenges" (
 );
 CREATE INDEX IF NOT EXISTS "team_challenges_team_idx" ON "team_challenges" ("team_id");
 
+CREATE TABLE IF NOT EXISTS "team_game_days" (
+  "id" serial PRIMARY KEY,
+  "team_id" integer NOT NULL REFERENCES "teams"("id") ON DELETE CASCADE,
+  "date" date NOT NULL,
+  "opponent" text,
+  "notes" text,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "team_game_days_team_idx" ON "team_game_days" ("team_id");
+
 CREATE TABLE IF NOT EXISTS "coach_staff" (
   "id" serial PRIMARY KEY,
   "primary_coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
