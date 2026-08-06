@@ -55,7 +55,8 @@ import {
   Crown,
   Calculator,
   CalendarRange,
-  Layers,
+  Dumbbell,
+  History,
   Sparkles,
   RefreshCw,
   GitCompare,
@@ -404,6 +405,22 @@ function isSetComplete(item: ItemState, set: SetRow) {
   if (item.materials.usesBox && !set.boxHeight.trim()) return false;
   return true;
 }
+
+// Standard 1-10 RPE scale with an approximate reps-in-reserve translation --
+// RIR only really means something once a set gets challenging, so it's left
+// off the very easy end rather than claiming false precision there.
+const RPE_SCALE: { value: number; label: string; rir: string }[] = [
+  { value: 1, label: "Very Easy", rir: "9+ in reserve" },
+  { value: 2, label: "Easy", rir: "8+ in reserve" },
+  { value: 3, label: "Easy+", rir: "7+ in reserve" },
+  { value: 4, label: "Moderate", rir: "6 in reserve" },
+  { value: 5, label: "Moderate+", rir: "5 in reserve" },
+  { value: 6, label: "Somewhat Hard", rir: "4 in reserve" },
+  { value: 7, label: "Hard", rir: "3 in reserve" },
+  { value: 8, label: "Very Hard", rir: "2 in reserve" },
+  { value: 9, label: "Near Max", rir: "1 in reserve" },
+  { value: 10, label: "Max Effort", rir: "0 in reserve" },
+];
 
 function formatLastPerformance(lp: NonNullable<LastPerformance>) {
   let s = `${lp.sets} × ${lp.reps ?? "-"}`;
@@ -956,11 +973,6 @@ export function WorkoutPage({
 
   return (
     <>
-      {/* Only for an actual training day -- a rest day has nothing to be
-          ready for, and gating the day's own page (rather than every page
-          in the app, as this used to) means checking the calendar or chat
-          doesn't force a check-in first. */}
-      {user?.role === "athlete" && !data.day.isRestDay && <WellnessGate />}
       <AppShell
         title={
           <div className="flex items-center gap-2">
@@ -1014,6 +1026,16 @@ export function WorkoutPage({
               Saved on this device — will sync once you're back online.
             </>
           )}
+        </div>
+      )}
+
+      {/* Only for an actual training day -- a rest day has nothing to check
+          in about. Inline and always editable (not a blocking gate), so an
+          athlete who under- or over-estimated their soreness or stress can
+          come back and fix it before or during the session. */}
+      {user?.role === "athlete" && !data.day.isRestDay && (
+        <div className="mb-4">
+          <WellnessGate />
         </div>
       )}
 
@@ -1098,20 +1120,16 @@ export function WorkoutPage({
                             : "border-border",
                         )}
                       >
-                        <ExerciseVideoThumb
-                          url={page.items[0].videoUrl}
-                          name={page.items[0].exerciseName}
-                        />
                         <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-1.5">
+                          <div className="flex flex-wrap items-center gap-2">
                             {page.kind === "corrective" && (
-                              <Stethoscope className="h-3.5 w-3.5 shrink-0 text-cyan-400" />
+                              <Stethoscope className="h-4 w-4 shrink-0 text-cyan-400" />
                             )}
                             {page.items.map((it) => (
-                              <span key={it.key} className="flex items-center gap-1 text-sm font-semibold">
+                              <span key={it.key} className="flex items-center gap-1.5 text-sm font-semibold">
                                 <span
                                   className={cn(
-                                    "flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-extrabold",
+                                    "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-extrabold",
                                     page.kind === "corrective"
                                       ? "bg-cyan-500 text-white"
                                       : colorForLabel(page.labels[it.key]),
@@ -1468,51 +1486,48 @@ function ExerciseLogContent({
 
   return (
     <div className="space-y-3">
-      <div className="flex gap-3">
-        <ExerciseVideoThumb url={item.videoUrl} name={item.exerciseName} />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex min-w-0 items-center gap-1.5">
-              <span
-                className={cn(
-                  "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-extrabold",
-                  isCorrective ? "bg-cyan-500 text-white" : colorForLabel(badgeLabel),
-                )}
-              >
-                {badgeLabel}
-              </span>
-              <p className="truncate font-semibold">{item.exerciseName}</p>
-              {linked && <Link2 className="h-3.5 w-3.5 shrink-0 text-primary" />}
-            </div>
-            <div className="flex shrink-0 items-center gap-1.5">
-              <Badge variant="outline">{item.muscleGroup}</Badge>
-              {canSubstituteExercise && !isCorrective && (
-                <button
-                  type="button"
-                  aria-label={`Ask AI to swap ${item.exerciseName}`}
-                  title="Ask AI to swap this exercise"
-                  onClick={() => setSwapOpen(true)}
-                  className="text-muted-foreground transition-colors hover:text-primary"
-                >
-                  <RefreshCw className="h-3.5 w-3.5" />
-                </button>
+      <ExerciseVideoThumb url={item.videoUrl} name={item.exerciseName} size="lg" />
+      <div>
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <span
+              className={cn(
+                "flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-extrabold",
+                isCorrective ? "bg-cyan-500 text-white" : colorForLabel(badgeLabel),
               )}
-            </div>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Prescribed: {item.prescribedSets} × {item.prescribedReps}
-            {item.prescribedWeight ? ` @ ${item.prescribedWeight}` : ""}
-            {suggestedFromOneRm != null ? ` (≈ ${suggestedFromOneRm} ${unit})` : ""}
-            {suggestedFromOneRm == null && suggestedFromProgression != null
-              ? ` (≈ ${suggestedFromProgression} ${unit})`
-              : ""}
-            {item.restSeconds ? ` · Rest ${item.restSeconds}s` : ""}
-          </p>
-          {item.lastPerformance && (
-            <p className="text-xs font-semibold text-muted-foreground">
-              <span className="text-primary">LAST</span> {formatLastPerformance(item.lastPerformance)}
+            >
+              {badgeLabel}
+            </span>
+            <p className="truncate font-display text-xl font-extrabold sm:text-2xl">
+              {item.exerciseName}
             </p>
-          )}
+            {linked && <Link2 className="h-4 w-4 shrink-0 text-primary" />}
+          </div>
+          <div className="flex shrink-0 items-center gap-1.5 pt-1.5">
+            <Badge variant="outline">{item.muscleGroup}</Badge>
+            {canSubstituteExercise && !isCorrective && (
+              <button
+                type="button"
+                aria-label={`Ask AI to swap ${item.exerciseName}`}
+                title="Ask AI to swap this exercise"
+                onClick={() => setSwapOpen(true)}
+                className="text-muted-foreground transition-colors hover:text-primary"
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+        </div>
+        <p className="mt-1 pl-11 text-xs text-muted-foreground">
+          Prescribed: {item.prescribedSets} × {item.prescribedReps}
+          {item.prescribedWeight ? ` @ ${item.prescribedWeight}` : ""}
+          {suggestedFromOneRm != null ? ` (≈ ${suggestedFromOneRm} ${unit})` : ""}
+          {suggestedFromOneRm == null && suggestedFromProgression != null
+            ? ` (≈ ${suggestedFromProgression} ${unit})`
+            : ""}
+          {item.restSeconds ? ` · Rest ${item.restSeconds}s` : ""}
+        </p>
+        <div className="pl-11">
           {suggestedFromOneRm != null && item.weightMode === "numeric" && (
             <div className="mt-0.5 flex items-center gap-1.5 text-xs">
               <Calculator className="h-3 w-3 shrink-0 text-blue-500" />
@@ -1589,8 +1604,8 @@ function ExerciseLogContent({
           <span className="flex items-center gap-1.5 text-xs font-semibold text-amber-500">
             {videoCheckMode === "ai" && <Sparkles className="h-3.5 w-3.5 shrink-0" />}
             {videoCheckMode === "ai"
-              ? "Get an AI form check on any set below"
-              : "Your coach wants a form check video -- record any set below"}
+              ? "Record any set below for full AI analytics -- velocity, bar path, and form"
+              : "Your coach wants a video -- record any set below for full analytics"}
           </span>
           {flaggedSetVideos.length > 1 && (
             <Button size="sm" variant="secondary" onClick={() => setCompareOpen(true)}>
@@ -1598,6 +1613,18 @@ function ExerciseLogContent({
               Compare Sets
             </Button>
           )}
+        </div>
+      )}
+
+      {item.lastPerformance && (
+        <div className="flex items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2">
+          <History className="h-4 w-4 shrink-0 text-primary" />
+          <p className="text-sm font-bold sm:text-base">
+            <span className="mr-1.5 text-[10px] font-extrabold uppercase tracking-wide text-primary">
+              Last time
+            </span>
+            {formatLastPerformance(item.lastPerformance)}
+          </p>
         </div>
       )}
 
@@ -1618,17 +1645,6 @@ function ExerciseLogContent({
                 <span className="text-[10px] font-semibold uppercase text-muted-foreground">
                   {col.label}
                 </span>
-                {col.type === "weight" && (
-                  <button
-                    type="button"
-                    onClick={() => setPlateCalcOpen(true)}
-                    aria-label="Plate and warm-up calculator"
-                    title="Plate and warm-up calculator"
-                    className="text-muted-foreground transition-colors hover:text-primary"
-                  >
-                    <Layers className="h-3 w-3" />
-                  </button>
-                )}
                 {col.type === "box" && (
                   <div className="flex overflow-hidden rounded border border-border text-[9px] font-semibold">
                     {(["in", "m"] as const).map((u) => (
@@ -1656,7 +1672,7 @@ function ExerciseLogContent({
           <span />
         </div>
         <div className="space-y-1.5">
-          {item.sets.map((set) => {
+          {item.sets.map((set, setIndex) => {
             const complete = isSetComplete(item, set);
             const tracked =
               set.peakVelocityMps != null || set.barPathDeviationCm != null || set.jumpHeightCm != null;
@@ -1670,7 +1686,7 @@ function ExerciseLogContent({
                 >
                   <span className="text-sm font-semibold text-muted-foreground">{set.setNumber}</span>
                   <Input
-                    placeholder="Reps"
+                    placeholder={item.lastPerformance?.reps || "Reps"}
                     value={set.reps}
                     onChange={(e) => onUpdateSet(set.setNumber, { reps: e.target.value })}
                     className="h-9 text-sm"
@@ -1686,7 +1702,7 @@ function ExerciseLogContent({
                           key="weight"
                           type="number"
                           inputMode="decimal"
-                          placeholder="0"
+                          placeholder={historyMatch?.weight || item.lastPerformance?.weight || "0"}
                           value={set.weight}
                           onChange={(e) => onUpdateSet(set.setNumber, { weight: e.target.value })}
                           className="h-9 text-sm"
@@ -1736,7 +1752,8 @@ function ExerciseLogContent({
                   </p>
                 )}
                 {(item.trackingLevel !== "none" ||
-                  (item.videoCheckEnabled && videoCheckMode !== "off")) && (
+                  (item.videoCheckEnabled && videoCheckMode !== "off") ||
+                  (setIndex === 0 && item.weightMode === "numeric")) && (
                   <div className="mt-1 flex flex-wrap items-center gap-1.5">
                     {item.trackingLevel !== "none" && (
                       <button
@@ -1783,7 +1800,17 @@ function ExerciseLogContent({
                             : set.formCheckFlag === "worst"
                               ? "Worst set video"
                               : "View video"
-                          : "Record form check"}
+                          : "Record & Analyze"}
+                      </button>
+                    )}
+                    {setIndex === 0 && item.weightMode === "numeric" && (
+                      <button
+                        type="button"
+                        onClick={() => setPlateCalcOpen(true)}
+                        className="flex items-center gap-1.5 rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
+                      >
+                        <Dumbbell className="h-3 w-3" />
+                        Plate Calculator
                       </button>
                     )}
                   </div>
@@ -2024,19 +2051,39 @@ function ExerciseLogContent({
         </button>
       </div>
 
-      <div className="flex items-center gap-2">
-        <Input
-          value={item.rpe}
-          type="number"
-          onChange={(e) => onUpdateItem({ rpe: e.target.value })}
-          placeholder="RPE"
-          className="w-20 shrink-0 text-center"
-        />
+      <div className="space-y-2 rounded-lg border border-border bg-surface-elevated p-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          How did that set feel? (RPE / RIR)
+        </p>
+        <div className="grid grid-cols-5 gap-1.5">
+          {RPE_SCALE.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => onUpdateItem({ rpe: String(opt.value) })}
+              aria-pressed={Number(item.rpe) === opt.value}
+              aria-label={`RPE ${opt.value} -- ${opt.label}`}
+              title={opt.label}
+              className={cn(
+                "rounded-md border py-2 text-sm font-bold transition-colors",
+                Number(item.rpe) === opt.value
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-border text-muted-foreground hover:border-primary/50",
+              )}
+            >
+              {opt.value}
+            </button>
+          ))}
+        </div>
+        <p className="h-4 text-xs text-muted-foreground">
+          {item.rpe && Number(item.rpe) >= 1 && Number(item.rpe) <= 10
+            ? `${RPE_SCALE[Number(item.rpe) - 1].label} · ${RPE_SCALE[Number(item.rpe) - 1].rir}`
+            : "1 = very easy, 10 = max effort"}
+        </p>
         <Input
           value={item.athleteNotes}
           onChange={(e) => onUpdateItem({ athleteNotes: e.target.value })}
           placeholder="Add exercise note"
-          className="flex-1"
         />
       </div>
     </div>
