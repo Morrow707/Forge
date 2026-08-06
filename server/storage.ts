@@ -703,6 +703,272 @@ const updateGuidelinesResultSchema = z.object({
 
 const knowledgeAskQuestionResultSchema = z.object({ reply: z.string() });
 
+// Below this size, a bucket (a sport, an age bracket, a gender) is dropped
+// from every platform-trends breakdown rather than shown with a small
+// count -- a bucket of 1-4 athletes is small enough that a bad actor with
+// outside knowledge of the roster (age, sport, gender are the exact fields
+// visible here) could plausibly reverse-identify who it is. This is a
+// blunt k-anonymity floor, not a statistical-significance threshold; raise
+// it if the platform's real population is much larger than today's.
+const PLATFORM_TRENDS_MIN_COHORT = 5;
+
+function average(values: (number | null | undefined)[]): number | null {
+  const nums = values.filter((v): v is number => v != null && !Number.isNaN(v));
+  if (nums.length < PLATFORM_TRENDS_MIN_COHORT) return null;
+  return Math.round((nums.reduce((sum, v) => sum + v, 0) / nums.length) * 10) / 10;
+}
+
+function ageBracket(age: number | null): string {
+  if (age == null) return "Not set";
+  if (age < 14) return "Under 14";
+  if (age <= 17) return "14-17";
+  if (age <= 22) return "18-22";
+  if (age <= 27) return "23-27";
+  return "28+";
+}
+
+const GENDER_LABEL: Record<string, string> = {
+  male: "Male",
+  female: "Female",
+  non_binary: "Non-binary",
+  prefer_not_to_say: "Prefer not to say",
+};
+
+// Free-text sport names collide on casing/whitespace ("Football" vs
+// "football ") far more than they collide on real spelling differences --
+// this groups by a normalized key but displays whichever original casing
+// was seen first, rather than trying to fix typos.
+function normalizeSport(sport: string | null): { key: string; label: string } | null {
+  if (!sport) return null;
+  const trimmed = sport.trim();
+  if (!trimmed) return null;
+  return { key: trimmed.toLowerCase(), label: trimmed };
+}
+
+function countBuckets(labels: (string | null)[], fallback = "Not set") {
+  const counts = new Map<string, number>();
+  for (const label of labels) {
+    const key = label ?? fallback;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return Array.from(counts.entries())
+    .filter(([, count]) => count >= PLATFORM_TRENDS_MIN_COHORT)
+    .map(([bucket, count]) => ({ bucket, count }))
+    .sort((a, b) => b.count - a.count);
+}
+
+// Platform-wide, anonymized cross-cut of every athlete on Forge -- built for
+// the admin's "true trends" view, not any one coach's roster. Every number
+// here is a group average or a count; individual athlete names, emails, and
+// IDs never leave this function. Sport/age/gender breakdowns are the only
+// dimensions sliced on (the fields the admin explicitly asked to see), and
+// any bucket below PLATFORM_TRENDS_MIN_COHORT is dropped entirely rather
+// than shown small, so no single athlete's data is ever isolable from the
+// output even by someone who already knows the roster.
+async function buildPlatformTrends() {
+  const athletes = await db
+    .select({
+      id: users.id,
+      age: users.age,
+      gender: users.gender,
+      sport: users.sport,
+      heightIn: users.heightIn,
+      bodyWeightLbs: users.bodyWeightLbs,
+      fortyYardDash: users.fortyYardDash,
+      verticalJumpIn: users.verticalJumpIn,
+      broadJumpIn: users.broadJumpIn,
+      proAgilitySeconds: users.proAgilitySeconds,
+      benchMaxLbs: users.benchMaxLbs,
+      squatMaxLbs: users.squatMaxLbs,
+      deadliftMaxLbs: users.deadliftMaxLbs,
+    })
+    .from(users)
+    .where(eq(users.role, "athlete"));
+
+  const totalAthletes = athletes.length;
+  const sportBySportKey = new Map<string, string>();
+  const sportKeyByAthlete = new Map<number, string | null>();
+  for (const a of athletes) {
+    const normalized = normalizeSport(a.sport);
+    sportKeyByAthlete.set(a.id, normalized?.key ?? null);
+    if (normalized && !sportBySportKey.has(normalized.key)) {
+      sportBySportKey.set(normalized.key, normalized.label);
+    }
+  }
+
+  const demographics = {
+    byGender: countBuckets(athletes.map((a) => (a.gender ? GENDER_LABEL[a.gender] : null))),
+    byAgeBracket: countBuckets(athletes.map((a) => ageBracket(a.age)), "Not set"),
+    bySport: countBuckets(athletes.map((a) => normalizeSport(a.sport)?.label ?? null)),
+  };
+
+  // Only sports clearing the cohort floor on raw headcount are worth
+  // computing anything further for -- keeps the per-sport breakdown below
+  // from doing wasted work on sports with 1-2 athletes.
+  const eligibleSportKeys = new Set(
+    Array.from(
+      athletes.reduce((counts, a) => {
+        const key = sportKeyByAthlete.get(a.id);
+        if (key) counts.set(key, (counts.get(key) ?? 0) + 1);
+        return counts;
+      }, new Map<string, number>()),
+    )
+      .filter(([, count]) => count >= PLATFORM_TRENDS_MIN_COHORT)
+      .map(([key]) => key),
+  );
+
+  const bySportProfile = new Map<string, typeof athletes>();
+  for (const a of athletes) {
+    const key = sportKeyByAthlete.get(a.id);
+    if (!key || !eligibleSportKeys.has(key)) continue;
+    const list = bySportProfile.get(key) ?? [];
+    list.push(a);
+    bySportProfile.set(key, list);
+  }
+
+  // Strength/velocity/power come from actual tracked sets, platform-wide --
+  // same Epley 1RM estimate and CV-tracked fields the coach analytics page
+  // uses, just averaged across every athlete instead of charted per-athlete.
+  const setRows =
+    athletes.length > 0
+      ? await db
+          .select({
+            athleteId: workoutLogs.athleteId,
+            weightMode: workoutLogEntries.weightMode,
+            reps: workoutSetEntries.reps,
+            weight: workoutSetEntries.weight,
+            peakVelocityMps: workoutSetEntries.peakVelocityMps,
+            peakPowerWatts: workoutSetEntries.peakPowerWatts,
+          })
+          .from(workoutSetEntries)
+          .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
+          .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
+      : [];
+
+  const oneRmBySport = new Map<string, number[]>();
+  const velocityBySport = new Map<string, number[]>();
+  const powerBySport = new Map<string, number[]>();
+  for (const row of setRows) {
+    const sportKey = sportKeyByAthlete.get(row.athleteId);
+    if (!sportKey || !eligibleSportKeys.has(sportKey)) continue;
+    if (row.weightMode === "numeric" && row.weight && row.reps) {
+      const weight = parseFloat(row.weight);
+      const reps = parseInt(row.reps, 10);
+      if (!Number.isNaN(weight) && !Number.isNaN(reps) && reps > 0) {
+        const estimatedOneRm = weight * (1 + reps / 30);
+        oneRmBySport.set(sportKey, [...(oneRmBySport.get(sportKey) ?? []), estimatedOneRm]);
+      }
+    }
+    if (row.peakVelocityMps != null) {
+      velocityBySport.set(sportKey, [...(velocityBySport.get(sportKey) ?? []), row.peakVelocityMps]);
+    }
+    if (row.peakPowerWatts != null) {
+      powerBySport.set(sportKey, [...(powerBySport.get(sportKey) ?? []), row.peakPowerWatts]);
+    }
+  }
+
+  // Readiness comes from the last 30 days of wellness check-ins, platform-
+  // wide -- same computeReadiness formula the athlete-facing widget uses.
+  const sinceDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const wellnessRows =
+    athletes.length > 0
+      ? await db
+          .select({
+            athleteId: wellnessCheckins.athleteId,
+            sleepHours: wellnessCheckins.sleepHours,
+            soreness: wellnessCheckins.soreness,
+            stress: wellnessCheckins.stress,
+            hydration: wellnessCheckins.hydration,
+            mentalFocus: wellnessCheckins.mentalFocus,
+            bodyPainMap: wellnessCheckins.bodyPainMap,
+          })
+          .from(wellnessCheckins)
+          .where(gte(wellnessCheckins.date, sinceDate))
+      : [];
+  const readinessBySport = new Map<string, number[]>();
+  for (const row of wellnessRows) {
+    const sportKey = sportKeyByAthlete.get(row.athleteId);
+    if (!sportKey || !eligibleSportKeys.has(sportKey)) continue;
+    const { score } = computeReadiness(row);
+    readinessBySport.set(sportKey, [...(readinessBySport.get(sportKey) ?? []), score]);
+  }
+
+  const bySport = Array.from(eligibleSportKeys).map((key) => {
+    const label = sportBySportKey.get(key) ?? key;
+    const profiles = bySportProfile.get(key) ?? [];
+    return {
+      sport: label,
+      athleteCount: profiles.length,
+      avgHeightIn: average(profiles.map((p) => p.heightIn)),
+      avgWeightLbs: average(profiles.map((p) => p.bodyWeightLbs)),
+      avgFortyYardDash: average(profiles.map((p) => p.fortyYardDash)),
+      avgVerticalJumpIn: average(profiles.map((p) => p.verticalJumpIn)),
+      avgBroadJumpIn: average(profiles.map((p) => p.broadJumpIn)),
+      avgProAgilitySeconds: average(profiles.map((p) => p.proAgilitySeconds)),
+      avgBenchMaxLbs: average(profiles.map((p) => p.benchMaxLbs)),
+      avgSquatMaxLbs: average(profiles.map((p) => p.squatMaxLbs)),
+      avgDeadliftMaxLbs: average(profiles.map((p) => p.deadliftMaxLbs)),
+      avgEstimatedOneRm: average(oneRmBySport.get(key) ?? []),
+      avgPeakVelocityMps: average(velocityBySport.get(key) ?? []),
+      avgPeakPowerWatts: average(powerBySport.get(key) ?? []),
+      avgReadinessScore: average(readinessBySport.get(key) ?? []),
+    };
+  });
+
+  // ACWR: one risk-band snapshot per athlete with any load in the last 28
+  // days, then just a platform-wide count per band -- deliberately not
+  // cross-cut by sport, since a per-sport ACWR band count would get small
+  // enough per band to risk re-identifying an individual at-risk athlete.
+  const loadSinceDate = new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const today = new Date().toISOString().slice(0, 10);
+  const loadRows =
+    athletes.length > 0
+      ? await db
+          .select({
+            athleteId: workoutLogs.athleteId,
+            date: workoutLogs.date,
+            weightMode: workoutLogEntries.weightMode,
+            reps: workoutSetEntries.reps,
+            weight: workoutSetEntries.weight,
+          })
+          .from(workoutSetEntries)
+          .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
+          .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
+          .where(gte(workoutLogs.date, loadSinceDate))
+      : [];
+  const loadByAthleteAndDate = new Map<number, Map<string, number>>();
+  for (const row of loadRows) {
+    if (row.weightMode !== "numeric" || !row.weight || !row.reps) continue;
+    const weight = parseFloat(row.weight);
+    const reps = parseInt(row.reps, 10);
+    if (Number.isNaN(weight) || Number.isNaN(reps)) continue;
+    const byDate = loadByAthleteAndDate.get(row.athleteId) ?? new Map<string, number>();
+    byDate.set(row.date, (byDate.get(row.date) ?? 0) + reps * weight);
+    loadByAthleteAndDate.set(row.athleteId, byDate);
+  }
+  const acwrCounts = { green: 0, yellow: 0, red: 0 };
+  for (const byDate of loadByAthleteAndDate.values()) {
+    const dailyLoads = Array.from(byDate.entries()).map(([date, load]) => ({ date, load }));
+    const series = buildAcwrSeries(dailyLoads, today, 1);
+    const level = series[series.length - 1].level;
+    acwrCounts[level] += 1;
+  }
+  const acwrTrackedCount = loadByAthleteAndDate.size;
+  const acwrDistribution =
+    acwrTrackedCount >= PLATFORM_TRENDS_MIN_COHORT
+      ? (["green", "yellow", "red"] as const).map((level) => ({ level, count: acwrCounts[level] }))
+      : [];
+
+  return {
+    totalAthletes,
+    minCohortSize: PLATFORM_TRENDS_MIN_COHORT,
+    demographics,
+    bySport,
+    acwrTrackedCount,
+    acwrDistribution,
+  };
+}
+
 export const storage = {
   // ---------- Users ----------
   async getUser(id: number) {
@@ -6550,5 +6816,11 @@ ${catalog}`;
         totalCompleted: streaks.get(id)?.totalCompleted ?? 0,
       }))
       .sort((a, b) => b.estimatedOneRm - a.estimatedOneRm);
+  },
+
+  // ---------- Platform trends (admin-only, anonymized) ----------
+
+  async getPlatformTrends() {
+    return buildPlatformTrends();
   },
 };

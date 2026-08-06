@@ -504,6 +504,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(publicUser);
   });
 
+  // Platform-wide, anonymized -- see buildPlatformTrends in storage.ts for
+  // the actual aggregation and its k-anonymity floor. Never returns a name,
+  // email, or athlete id; every number here is a group average or count.
+  app.get("/api/admin/platform-trends", requireRole("admin"), async (_req, res) => {
+    const trends = await storage.getPlatformTrends();
+    res.json(trends);
+  });
+
   // Self-assignment: coachId and athleteId are both the admin's own id.
   // Deliberately bypasses the coach roster-membership check that guards
   // /api/coach/assignments -- an admin is never on their own roster, so
