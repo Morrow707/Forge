@@ -102,6 +102,7 @@ type RecentSession = {
 const CHART_OPTIONS = [
   { key: "weight", label: "Weight & Est. 1RM" },
   { key: "velocity", label: "Bar Speed" },
+  { key: "forceVelocity", label: "Force-Velocity Profile" },
   { key: "power", label: "Power Output" },
   { key: "velocityLoss", label: "Velocity Loss" },
   { key: "path", label: "Bar Path Deviation" },
@@ -217,6 +218,15 @@ export default function CoachAnalytics() {
       );
       return res.json();
     },
+    enabled: !!athleteId && !!exerciseId,
+  });
+
+  const { data: fvData } = useQuery<{
+    points: { date: string; loadKg: number; meanVelocityMps: number }[];
+    profile: { slope: number; intercept: number; v0: number; rSquared: number } | null;
+  }>({
+    queryKey: ["/api/coach/force-velocity", athleteId, exerciseId],
+    queryFn: () => getJson(`/api/coach/force-velocity?athleteId=${athleteId}&exerciseId=${exerciseId}`),
     enabled: !!athleteId && !!exerciseId,
   });
 
@@ -540,6 +550,102 @@ export default function CoachAnalytics() {
                     />
                   </LineChart>
                 </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
+          {!!fvData && fvData.points.length > 0 && !hiddenCharts.has("forceVelocity") && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Force-Velocity Profile</CardTitle>
+                <CardDescription>
+                  Load vs. mean concentric velocity across every tracked set -- the standard
+                  barbell proxy for a force-velocity relationship, fit from at least 3 tracked
+                  sets at different loads.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {fvData.profile ? (
+                  <div className="grid grid-cols-3 gap-3 text-sm">
+                    <div className="rounded-md border border-border p-3">
+                      <p className="text-xs text-muted-foreground">Est. 1RM (velocity-based)</p>
+                      <p className="font-semibold">
+                        {Math.round(
+                          unit === "kg"
+                            ? fvData.profile.intercept
+                            : fvData.profile.intercept * 2.20462,
+                        )}{" "}
+                        {unit}
+                      </p>
+                    </div>
+                    <div className="rounded-md border border-border p-3">
+                      <p className="text-xs text-muted-foreground">V0 (max velocity)</p>
+                      <p className="font-semibold">{fvData.profile.v0.toFixed(2)} m/s</p>
+                    </div>
+                    <div className="rounded-md border border-border p-3">
+                      <p className="text-xs text-muted-foreground">Fit quality (R²)</p>
+                      <p className="font-semibold">{Math.round(fvData.profile.rSquared * 100)}%</p>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Not enough tracked sets at different loads yet to fit a profile -- keep logging
+                    velocity-tracked sets across a range of weights.
+                  </p>
+                )}
+                <div className="h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart margin={{ left: 4, right: 12, bottom: 4 }}>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                      <XAxis
+                        type="number"
+                        dataKey="meanVelocityMps"
+                        name="Velocity"
+                        unit=" m/s"
+                        tick={{ fontSize: 11 }}
+                        domain={[0, "dataMax"]}
+                      />
+                      <YAxis
+                        type="number"
+                        dataKey="loadKg"
+                        name="Load"
+                        unit=" kg"
+                        tick={{ fontSize: 11 }}
+                        width={48}
+                        domain={[0, "dataMax"]}
+                      />
+                      <Tooltip
+                        cursor={{ strokeDasharray: "3 3" }}
+                        contentStyle={{
+                          background: "hsl(var(--card))",
+                          border: "1px solid hsl(var(--border))",
+                        }}
+                      />
+                      <Scatter
+                        name="Tracked sets"
+                        data={fvData.points}
+                        dataKey="loadKg"
+                        fill="hsl(var(--primary))"
+                      />
+                      {fvData.profile && (
+                        <Line
+                          name="Fitted profile"
+                          type="linear"
+                          data={[
+                            { meanVelocityMps: 0, loadKg: fvData.profile.intercept },
+                            { meanVelocityMps: fvData.profile.v0, loadKg: 0 },
+                          ]}
+                          dataKey="loadKg"
+                          stroke="hsl(var(--muted-foreground))"
+                          strokeWidth={2}
+                          strokeDasharray="4 3"
+                          dot={false}
+                          isAnimationActive={false}
+                        />
+                      )}
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
               </CardContent>
             </Card>
           )}

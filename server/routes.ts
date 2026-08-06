@@ -1918,6 +1918,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(points);
   });
 
+  app.get("/api/coach/force-velocity", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = coachAnalyticsQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "athleteId and exerciseId query params required" });
+    }
+    const result = await storage.getForceVelocityProfileForAthlete(
+      user.id,
+      parsed.data.athleteId,
+      parsed.data.exerciseId,
+    );
+    res.json(result);
+  });
+
   // ---------------- Coach: Leaderboard ----------------
   // Coach-only, ranks every athlete on the roster (never other coaches'
   // athletes) by their best estimated 1RM for a chosen exercise.
