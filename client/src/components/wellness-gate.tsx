@@ -57,6 +57,11 @@ export function WellnessGate() {
     },
     onSuccess: (checkin) => {
       qc.setQueryData(["/api/athlete/wellness/today"], checkin);
+      // The very first submission of the day may have just started a CARA
+      // training-time session server-side -- refetch so the timer widget
+      // picks it up immediately instead of waiting up to 30s for its own
+      // poll.
+      qc.invalidateQueries({ queryKey: ["/api/athlete/cara/status"] });
       toast.success(data ? "Check-in updated" : "Thanks -- have a great session");
       setEditing(false);
     },

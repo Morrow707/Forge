@@ -133,6 +133,13 @@ export const users = pgTable(
     // When this user last opened the team board -- compared against the
     // board's newest post to show a "new activity" flag on the nav tab.
     teamBoardReadAt: timestamp("team_board_read_at"),
+    // Coach-only, opt-in: an NCAA-style weekly countable-hours cap (in
+    // minutes) this program is held to. Null means "not tracking CARA
+    // compliance at all," not "no limit" -- most coaches never touch this,
+    // and the whole feature (auto-started session timers, the compliance
+    // dashboard) stays invisible until a coach who actually needs it sets
+    // one.
+    caraWeeklyCapMinutes: integer("cara_weekly_cap_minutes"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({
@@ -959,6 +966,74 @@ export const submitWellnessCheckinSchema = z.object({
   sleepHours: z.number().min(0).max(24),
   soreness: z.number().int().min(1).max(5),
   stress: z.number().int().min(1).max(5),
+});
+
+export const caraActivityTypeEnum = pgEnum("cara_activity_type", [
+  "training", // auto-started the moment the day's readiness check-in is submitted
+  "meeting",
+  "film_review",
+  "travel",
+  "other",
+]);
+
+export const caraEndReasonEnum = pgEnum("cara_end_reason", [
+  "completed", // workout marked complete -- the clean case
+  "idle_timeout", // server-side sweep closed a stale session automatically
+  "manual_stop", // athlete confirmed "not still training," or a coach closed a logged activity
+]);
+
+// NCAA-style countable-athletically-related-activity (CARA) time tracking.
+// A row is open the instant it's created (endedAt/endReason null) -- closing
+// it is always a separate, server-driven event (workout completion, an idle
+// sweep, or an explicit stop), never something the client unilaterally
+// decides. That's deliberate: the whole point is a record that survives an
+// audit even if an athlete's phone dies mid-set or they just forget to tap
+// "done," so the source of truth can never be "whatever the browser tab
+// happened to be doing."
+export const caraSessions = pgTable(
+  "cara_sessions",
+  {
+    id: serial("id").primaryKey(),
+    athleteId: integer("athlete_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    activityType: caraActivityTypeEnum("activity_type").notNull(),
+    startedAt: timestamp("started_at").notNull().defaultNow(),
+    // Bumped on every set logged while a "training" session is open. The
+    // idle-timeout sweep compares against this, not the wall clock, so a
+    // forgotten session closes at the athlete's last real activity instead
+    // of whenever a coach happens to notice it's still open -- an audit
+    // never sees inflated idle time tacked onto a real workout.
+    lastActivityAt: timestamp("last_activity_at").notNull().defaultNow(),
+    endedAt: timestamp("ended_at"),
+    endReason: caraEndReasonEnum("end_reason"),
+    // Set only for non-training activities a coach logs by hand -- a team
+    // meeting or film session has no "reps" to detect idleness from, so
+    // those get manual start/end times instead of the auto-tracked flow.
+    loggedByCoachId: integer("logged_by_coach_id").references(() => users.id),
+    note: text("note"),
+  },
+  (table) => ({
+    athleteIdx: index("cara_sessions_athlete_idx").on(table.athleteId),
+    // Every lookup here is either "does this athlete have an open session"
+    // or "sweep stale open sessions," both filtering on endedAt IS NULL --
+    // this keeps both cheap regardless of how much closed history piles up.
+    openIdx: index("cara_sessions_open_idx").on(table.athleteId, table.endedAt),
+  }),
+);
+
+export type CaraSession = typeof caraSessions.$inferSelect;
+
+export const logCaraActivitySchema = z.object({
+  athleteId: z.number(),
+  activityType: z.enum(["meeting", "film_review", "travel", "other"]),
+  startedAt: z.string(),
+  endedAt: z.string(),
+  note: z.string().max(500).optional(),
+});
+
+export const setCaraCapSchema = z.object({
+  capMinutes: z.number().int().min(1).max(10080).nullable(),
 });
 
 // AI-generated, one per athlete per date, cached permanently once written

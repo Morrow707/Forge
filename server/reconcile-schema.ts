@@ -57,6 +57,14 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN null; END $$;
 
 DO $$ BEGIN
+  CREATE TYPE "cara_activity_type" AS ENUM ('training', 'meeting', 'film_review', 'travel', 'other');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE "cara_end_reason" AS ENUM ('completed', 'idle_timeout', 'manual_stop');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+DO $$ BEGIN
   CREATE TYPE "chat_role" AS ENUM ('athlete', 'assistant');
 EXCEPTION WHEN duplicate_object THEN null; END $$;
 
@@ -144,6 +152,7 @@ ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "notify_sms" boolean NOT NULL DEFAU
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "health_status" health_status NOT NULL DEFAULT 'healthy';
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "calendar_token" text;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "team_board_read_at" timestamp;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "cara_weekly_cap_minutes" integer;
 CREATE UNIQUE INDEX IF NOT EXISTS "users_email_idx" ON "users" ("email");
 CREATE UNIQUE INDEX IF NOT EXISTS "users_coach_code_idx" ON "users" ("coach_code");
 CREATE UNIQUE INDEX IF NOT EXISTS "users_calendar_token_idx" ON "users" ("calendar_token");
@@ -535,6 +544,20 @@ CREATE TABLE IF NOT EXISTS "wellness_checkins" (
 );
 CREATE INDEX IF NOT EXISTS "wellness_checkins_athlete_idx" ON "wellness_checkins" ("athlete_id");
 CREATE UNIQUE INDEX IF NOT EXISTS "wellness_checkins_athlete_date_idx" ON "wellness_checkins" ("athlete_id", "date");
+
+CREATE TABLE IF NOT EXISTS "cara_sessions" (
+  "id" serial PRIMARY KEY,
+  "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "activity_type" cara_activity_type NOT NULL,
+  "started_at" timestamp NOT NULL DEFAULT now(),
+  "last_activity_at" timestamp NOT NULL DEFAULT now(),
+  "ended_at" timestamp,
+  "end_reason" cara_end_reason,
+  "logged_by_coach_id" integer REFERENCES "users"("id"),
+  "note" text
+);
+CREATE INDEX IF NOT EXISTS "cara_sessions_athlete_idx" ON "cara_sessions" ("athlete_id");
+CREATE INDEX IF NOT EXISTS "cara_sessions_open_idx" ON "cara_sessions" ("athlete_id", "ended_at");
 
 -- Performance pass -- Postgres never auto-indexes foreign key columns, and
 -- these hot-path lookups (workout history, comment threads, notification

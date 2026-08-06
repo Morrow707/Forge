@@ -67,6 +67,7 @@ import { parseProgression } from "@/lib/progression";
 import { PlateCalculatorDialog } from "@/components/plate-calculator-dialog";
 import { ReadinessBanner } from "@/components/readiness-banner";
 import { WellnessGate } from "@/components/wellness-gate";
+import { CaraTimer } from "@/components/cara-timer";
 
 type ExerciseInfo = {
   id: number;
@@ -1062,8 +1063,9 @@ export function WorkoutPage({
           athlete who under- or over-estimated their soreness or stress can
           come back and fix it before or during the session. */}
       {user?.role === "athlete" && !data.day.isRestDay && (
-        <div className="mb-4">
+        <div className="mb-4 space-y-2">
           <WellnessGate />
+          <CaraTimer />
         </div>
       )}
 
