@@ -25,6 +25,7 @@ import { WellnessHistoryDialog, READINESS_CLASSNAME } from "@/components/wellnes
 import { AcwrHistoryDialog, ACWR_RISK_CLASSNAME } from "@/components/acwr-history-dialog";
 import { ChatHistoryDialog } from "@/components/chat-history-dialog";
 import { TrophyCaseDialog } from "@/components/trophy-case-dialog";
+import { TrainingHistoryExportDialog } from "@/components/training-history-export-dialog";
 import { CaraCompliancePanel } from "@/components/cara-compliance-panel";
 import { TeamChallengesSection } from "@/components/team-challenges-panel";
 import { READINESS_LABEL, type ReadinessLevel } from "@shared/wellness";
@@ -54,6 +55,7 @@ import {
   Activity,
   Apple,
   Trophy,
+  FileDown,
 } from "lucide-react";
 
 type HealthStatus = "healthy" | "hurt";
@@ -132,6 +134,7 @@ export default function CoachRoster() {
   const [acwrAthlete, setAcwrAthlete] = useState<RosterEntry | null>(null);
   const [chatAthlete, setChatAthlete] = useState<RosterEntry | null>(null);
   const [sharingProfileId, setSharingProfileId] = useState<number | null>(null);
+  const [exportAthlete, setExportAthlete] = useState<RosterEntry | null>(null);
 
   async function handleShareRecruitingProfile(athlete: RosterEntry) {
     setSharingProfileId(athlete.id);
@@ -372,6 +375,15 @@ export default function CoachRoster() {
                             onClick={() => handleShareRecruitingProfile(a)}
                           >
                             <Share2 className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            aria-label={`Export ${a.name}'s full training history`}
+                            title="Export training history"
+                            onClick={() => setExportAthlete(a)}
+                          >
+                            <FileDown className="h-4 w-4" />
                           </Button>
                           <Button
                             size="sm"
@@ -637,6 +649,16 @@ export default function CoachRoster() {
         athleteId={chatAthlete?.id ?? null}
         athleteName={chatAthlete?.name ?? ""}
       />
+
+      {exportAthlete && (
+        <TrainingHistoryExportDialog
+          open={exportAthlete !== null}
+          onOpenChange={(open) => !open && setExportAthlete(null)}
+          athleteName={exportAthlete.name}
+          csvUrl={`/api/coach/roster/${exportAthlete.id}/training-history.csv`}
+          pdfUrl={`/api/coach/roster/${exportAthlete.id}/training-history.pdf`}
+        />
+      )}
     </AppShell>
   );
 }
