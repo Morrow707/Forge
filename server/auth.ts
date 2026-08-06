@@ -121,8 +121,9 @@ export function setupAuth(app: Express) {
           .status(401)
           .json({ message: info?.message || "Invalid email or password" });
       }
-      req.login(user, (err2) => {
+      req.login(user, async (err2) => {
         if (err2) return next(err2);
+        await storage.touchUserActivity(user.id);
         res.json(toPublicUser(user));
       });
     })(req, res, next);

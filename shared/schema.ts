@@ -141,6 +141,12 @@ export const users = pgTable(
     // dashboard) stays invisible until a coach who actually needs it sets
     // one.
     caraWeeklyCapMinutes: integer("cara_weekly_cap_minutes"),
+    // Set on every successful login -- the signal behind the coach-facing
+    // "hasn't logged in N days" re-engagement nudge. Null for any account
+    // that hasn't logged in since this column was added; storage.ts falls
+    // back to their most recent workout_logs date so a genuinely active
+    // athlete isn't misflagged just because this column is new.
+    lastActivityAt: timestamp("last_activity_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({
