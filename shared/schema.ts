@@ -764,6 +764,13 @@ export const workoutSetEntries = pgTable("workout_set_entries", {
   groundContactSeconds: real("ground_contact_seconds"),
   reactiveStrengthIndex: real("reactive_strength_index"),
   jumpBreakdown: json("jump_breakdown"),
+  // Per-rep left/right knee-drive comparison for bilateral lower-body lifts
+  // (see pose-tracking.ts's computeLegDriveAsymmetry) -- null unless the
+  // exercise's movementType was "Squat" (or it was jump-tracked) and both
+  // legs stayed in frame long enough during the drive phase to trust a
+  // comparison. Not applicable to unilateral exercises (single-leg squats,
+  // lunges), which load one leg at a time rather than both at once.
+  legDriveAsymmetry: json("leg_drive_asymmetry"),
 });
 
 // A two-way thread on a specific day of a specific assignment -- an athlete
@@ -1933,6 +1940,18 @@ export const armPathTraceSchema = z.object({
   right: z.array(barPathPointSchema),
 });
 
+// One entry per rep of a bilateral lower-body lift, comparing how fast each
+// knee extended during that rep's drive phase -- see pose-tracking.ts's
+// computeLegDriveAsymmetry. asymmetryPercent is relative to whichever side
+// drove faster, so 0 is perfectly even and higher means a bigger gap.
+export const legDriveAsymmetryEntrySchema = z.object({
+  repNumber: z.number(),
+  leftDriveDegPerSec: z.number(),
+  rightDriveDegPerSec: z.number(),
+  asymmetryPercent: z.number(),
+  dominantSide: z.enum(["left", "right"]),
+});
+
 // One entry per detected jump within a "jump" tracking-mode set -- see
 // jump-tracking.ts's summarizeJumpSet for how these are derived from the
 // ankle-height trace. Distinct from repBreakdownEntrySchema above since a
@@ -1966,6 +1985,7 @@ export const setLogInputSchema = z.object({
   formFaults: z.array(formFaultSchema).optional().nullable(),
   repBreakdown: z.array(repBreakdownEntrySchema).optional().nullable(),
   armPathTrace: armPathTraceSchema.optional().nullable(),
+  legDriveAsymmetry: z.array(legDriveAsymmetryEntrySchema).optional().nullable(),
   peakPowerWatts: z.number().optional().nullable(),
   meanPowerWatts: z.number().optional().nullable(),
   eccentricMeanVelocityMps: z.number().optional().nullable(),

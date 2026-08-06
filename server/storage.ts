@@ -95,6 +95,13 @@ import {
   differenceInCalendarDays,
 } from "date-fns";
 
+// A rep's asymmetry only counts toward a flag when it's a real, repeated
+// pattern, not one noisy rep -- majority-side agreement across the set's
+// valid reps, and the average gap clears this threshold. 15% mirrors the
+// limb-symmetry-index cutoff sports-science literature commonly treats as
+// injury-risk-relevant, not an arbitrary round number.
+const LEG_DRIVE_ASYMMETRY_FLAG_THRESHOLD = 15;
+
 function initialsFor(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   const initials = parts.slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("");
@@ -5123,6 +5130,7 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
               groundContactSeconds: s.groundContactSeconds ?? null,
               reactiveStrengthIndex: s.reactiveStrengthIndex ?? null,
               jumpBreakdown: s.jumpBreakdown ?? null,
+              legDriveAsymmetry: s.legDriveAsymmetry ?? null,
             })),
           );
         }
@@ -5130,6 +5138,80 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
 
       return log;
     });
+  },
+
+  // Scans a just-submitted log's sets for a genuine (not single-rep-noise)
+  // leg-drive imbalance and, if the athlete trains under a coach, returns
+  // what to tell them -- one flag per exercise, worst set wins. Read-only;
+  // the route layer owns the actual notifyUser call, same as every other
+  // notification in this codebase.
+  async evaluateLegDriveAsymmetryFlags(
+    assignmentId: number,
+    entries: SubmitWorkoutLogInput["entries"],
+  ) {
+    const assignment = await db.query.assignments.findFirst({
+      where: eq(assignments.id, assignmentId),
+    });
+    // Self-assigned (Free Agent / admin training themselves) has no coach to
+    // tell -- coachId === athleteId is how that's represented elsewhere
+    // (see getWorkoutDayDetail's isSelfAssigned).
+    if (!assignment || assignment.coachId === assignment.athleteId) return null;
+
+    const bestByExercise = new Map<
+      string,
+      { programExerciseId: number | null; correctiveId: number | null; avgAsymmetryPercent: number; weakSide: "left" | "right" }
+    >();
+
+    for (const entry of entries) {
+      for (const s of entry.sets) {
+        const reps = s.legDriveAsymmetry;
+        if (!reps || reps.length < 2) continue;
+        const leftCount = reps.filter((r) => r.dominantSide === "left").length;
+        const rightCount = reps.length - leftCount;
+        const consistency = Math.max(leftCount, rightCount) / reps.length;
+        if (consistency < 0.7) continue;
+        const avgAsymmetryPercent =
+          reps.reduce((sum, r) => sum + r.asymmetryPercent, 0) / reps.length;
+        if (avgAsymmetryPercent < LEG_DRIVE_ASYMMETRY_FLAG_THRESHOLD) continue;
+
+        const dominantSide = leftCount >= rightCount ? "left" : "right";
+        const key = entry.programExerciseId != null
+          ? `pe:${entry.programExerciseId}`
+          : `c:${entry.correctiveId}`;
+        const existing = bestByExercise.get(key);
+        if (!existing || avgAsymmetryPercent > existing.avgAsymmetryPercent) {
+          bestByExercise.set(key, {
+            programExerciseId: entry.programExerciseId ?? null,
+            correctiveId: entry.correctiveId ?? null,
+            avgAsymmetryPercent: Math.round(avgAsymmetryPercent),
+            weakSide: dominantSide === "left" ? "right" : "left",
+          });
+        }
+      }
+    }
+    if (bestByExercise.size === 0) return null;
+
+    const flags = await Promise.all(
+      Array.from(bestByExercise.values()).map(async (flag) => {
+        let exerciseName = "an exercise";
+        if (flag.programExerciseId != null) {
+          const pe = await db.query.programExercises.findFirst({
+            where: eq(programExercises.id, flag.programExerciseId),
+            with: { exercise: true },
+          });
+          if (pe) exerciseName = pe.exercise.name;
+        } else if (flag.correctiveId != null) {
+          const c = await db.query.assignmentCorrectives.findFirst({
+            where: eq(assignmentCorrectives.id, flag.correctiveId),
+            with: { exercise: true },
+          });
+          if (c) exerciseName = c.exercise.name;
+        }
+        return { exerciseName, avgAsymmetryPercent: flag.avgAsymmetryPercent, weakSide: flag.weakSide };
+      }),
+    );
+
+    return { coachId: assignment.coachId, flags };
   },
 
   // ---------- Coach analytics ----------
@@ -5172,6 +5254,7 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
         groundContactSeconds: workoutSetEntries.groundContactSeconds,
         reactiveStrengthIndex: workoutSetEntries.reactiveStrengthIndex,
         jumpBreakdown: workoutSetEntries.jumpBreakdown,
+        legDriveAsymmetry: workoutSetEntries.legDriveAsymmetry,
       })
       .from(workoutSetEntries)
       .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
@@ -5219,6 +5302,7 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
         groundContactSeconds: workoutSetEntries.groundContactSeconds,
         reactiveStrengthIndex: workoutSetEntries.reactiveStrengthIndex,
         jumpBreakdown: workoutSetEntries.jumpBreakdown,
+        legDriveAsymmetry: workoutSetEntries.legDriveAsymmetry,
       })
       .from(workoutSetEntries)
       .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))

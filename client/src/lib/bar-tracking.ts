@@ -8,6 +8,19 @@
 // = higher), applied by the caller before points ever reach this module.
 export type TrackedPoint = { t: number; x: number; y: number; z: number };
 
+// One entry per rep that had enough clean per-side pose data to trust a
+// left/right comparison -- see pose-tracking.ts's computeLegDriveAsymmetry.
+// A rep without a valid comparison is simply absent, not included as a null
+// placeholder, since the flagging logic downstream only cares about the
+// reps that actually say something.
+export type LegDriveAsymmetryEntry = {
+  repNumber: number;
+  leftDriveDegPerSec: number;
+  rightDriveDegPerSec: number;
+  asymmetryPercent: number;
+  dominantSide: "left" | "right";
+};
+
 const LBS_PER_KG = 2.20462;
 
 // Converts a set's entered weight to kg for summarizeTrackedSet's loadKg --
@@ -62,6 +75,12 @@ export type RepMetrics = {
   // same reasoning as formFaults below -- null when one side was out of
   // frame for too much of the set to build a meaningful trace.
   armPathTrace?: { left: PathTracePoint[]; right: PathTracePoint[] } | null;
+  // Populated by the caller from pose-tracking.ts's computeLegDriveAsymmetry
+  // -- only for bilateral lower-body lifts (see bar-tracker-dialog.tsx's
+  // gate on movementType/laterality), same "caller fills it in" pattern as
+  // armPathTrace above. Null when the movement doesn't apply or no rep had
+  // enough clean data.
+  legDriveAsymmetry?: LegDriveAsymmetryEntry[] | null;
   // Populated by the caller from pose-tracking.ts's detectFormFaults --
   // kept as a plain field here (rather than computed inside
   // summarizeTrackedSet) since fault detection needs the full per-frame

@@ -2425,6 +2425,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
     const log = await storage.submitWorkoutLog(user.id, parsed.data);
+    const legDriveFlag = await storage.evaluateLegDriveAsymmetryFlags(
+      parsed.data.assignmentId,
+      parsed.data.entries,
+    );
+    if (legDriveFlag) {
+      const body = legDriveFlag.flags
+        .map((f) => `${f.exerciseName}: ${f.weakSide} leg driving ${f.avgAsymmetryPercent}% less than the other`)
+        .join("; ");
+      await notifyUser(
+        legDriveFlag.coachId,
+        "leg_asymmetry",
+        `${user.name} showed a leg-drive imbalance today`,
+        body,
+        "/coach/analytics",
+      );
+    }
     // Every save while a CARA training session is open is "still actively
     // training" evidence -- completion closes it outright, anything else
     // just resets the idle clock. Both are no-ops when there's no open
