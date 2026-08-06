@@ -14,6 +14,9 @@ import {
   Dumbbell,
   Target,
   CalendarCheck,
+  Bot,
+  Activity,
+  Mail,
 } from "lucide-react";
 
 /** A screenshot dressed up as a little browser window -- same treatment on
@@ -23,7 +26,8 @@ function BrowserFrame({ src, alt, className }: { src: string; alt: string; class
   return (
     <div
       className={
-        "overflow-hidden rounded-xl border border-border bg-surface shadow-2xl shadow-black/40 " +
+        "group overflow-hidden rounded-xl border border-border bg-surface shadow-2xl shadow-black/40 " +
+        "transition-all duration-300 hover:-translate-y-1 hover:shadow-primary/20 " +
         (className ?? "")
       }
     >
@@ -32,7 +36,7 @@ function BrowserFrame({ src, alt, className }: { src: string; alt: string; class
         <span className="h-2.5 w-2.5 rounded-full bg-yellow-500/70" />
         <span className="h-2.5 w-2.5 rounded-full bg-success/70" />
       </div>
-      <img src={src} alt={alt} className="block w-full" loading="lazy" />
+      <img src={src} alt={alt} className="block w-full" />
     </div>
   );
 }
@@ -49,21 +53,34 @@ function GlowBlob({ className }: { className: string }) {
 const STATS = [
   { value: "150+", label: "Exercises in the library" },
   { value: "20+", label: "Sports with tailored programming" },
-  { value: "AI", label: "Program builder that talks back" },
+  { value: "5+", label: "AI features built in" },
   { value: "0", label: "Extra hardware required" },
 ];
 
+const AI_CARDS = [
+  {
+    icon: Video,
+    title: "AI Form Check",
+    body: "Film a set on the phone that's already recording it and get feedback on bar path, depth, and rep quality -- the same kind of notes a coach standing right there would give.",
+  },
+  {
+    icon: Bot,
+    title: "AI Chat Coach",
+    body: "Free Agents get a training partner built into the app -- ask a question about today's session and get an answer that already knows the program, the numbers, and the history.",
+  },
+  {
+    icon: Activity,
+    title: "Smart Autoregulation",
+    body: "When a wellness check-in comes back rough, Forge adjusts what it recommends instead of pretending nothing changed.",
+  },
+  {
+    icon: Mail,
+    title: "Smart Goals & Digests",
+    body: "Ask for a target and get one grounded in actual numbers, then get a plain-language recap of the week without opening a single chart.",
+  },
+];
+
 const FEATURE_CARDS = [
-  {
-    icon: Apple,
-    title: "Nutrition, tracked for real",
-    body: "Macro and micro tracking, barcode scanning, and photo-based meal logging -- athletes log food in seconds, coaches set targets that actually reflect training load.",
-  },
-  {
-    icon: Trophy,
-    title: "Built-in motivation",
-    body: "Trophies, streaks, and team leaderboards keep athletes coming back -- every milestone is visible, not buried in a spreadsheet.",
-  },
   {
     icon: ShieldCheck,
     title: "Injury-risk aware",
@@ -163,6 +180,9 @@ export default function LandingPage() {
               </Button>
             </Link>
           </div>
+          <p className="mt-3 text-xs text-muted-foreground">
+            Free to get started -- no credit card required.
+          </p>
         </div>
 
         <div className="relative mx-auto mt-16 max-w-5xl">
@@ -210,6 +230,41 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ---------------- AI throughout Forge ---------------- */}
+      <section className="relative isolate overflow-hidden border-y border-primary/20 bg-surface px-4 py-20 md:px-8 md:py-28">
+        <GlowBlob className="left-1/2 top-1/2 h-[32rem] w-[32rem] -translate-x-1/2 -translate-y-1/2 bg-primary/10" />
+        <div className="relative mx-auto max-w-6xl">
+          <div className="mx-auto max-w-2xl text-center">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-primary">
+              <Bot className="h-3.5 w-3.5" />
+              AI, everywhere that matters
+            </span>
+            <h2 className="mt-4 font-display text-4xl font-bold uppercase tracking-wide md:text-5xl">
+              Not a chatbot bolted on the side
+            </h2>
+            <p className="mt-4 text-muted-foreground">
+              The AI program builder is just the start. The same intelligence shows up
+              everywhere training actually takes time -- reading form, reading recovery, and
+              turning raw numbers into plain answers.
+            </p>
+          </div>
+          <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            {AI_CARDS.map((f) => (
+              <div
+                key={f.title}
+                className="rounded-xl border border-primary/20 bg-background p-6 transition-colors hover:border-primary/50"
+              >
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/15 text-primary">
+                  <f.icon className="h-5 w-5" />
+                </div>
+                <h3 className="mt-4 font-semibold">{f.title}</h3>
+                <p className="mt-2 text-sm text-muted-foreground">{f.body}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* ---------------- Feature: Analytics ---------------- */}
       <section className="bg-surface px-4 py-20 md:px-8 md:py-28">
         <div className="mx-auto grid max-w-6xl items-center gap-12 md:grid-cols-2">
@@ -240,6 +295,57 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ---------------- Feature: Gamification ---------------- */}
+      <section className="px-4 py-20 md:px-8 md:py-28">
+        <div className="mx-auto grid max-w-6xl items-center gap-12 md:grid-cols-2">
+          <div>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-primary">
+              <Trophy className="h-3.5 w-3.5" />
+              Gamification
+            </span>
+            <h2 className="mt-4 font-display text-4xl font-bold uppercase tracking-wide md:text-5xl">
+              Every milestone.
+              <br />
+              Earned and saved.
+            </h2>
+            <p className="mt-4 text-muted-foreground">
+              Trophies stack like a real collection -- every threshold an athlete ever crosses
+              stays unlocked, even after a streak breaks. Locked ones stay visible too, greyed
+              out with exactly what it takes to earn them, so the next goal is never a mystery.
+              Team leaderboards and daily streaks turn consistency into something everyone can
+              see, not just a number sitting in the coach's spreadsheet.
+            </p>
+          </div>
+          <BrowserFrame src="/marketing/shot-trophies.png" alt="Athlete trophy case" />
+        </div>
+      </section>
+
+      {/* ---------------- Feature: Nutrition ---------------- */}
+      <section className="bg-surface px-4 py-20 md:px-8 md:py-28">
+        <div className="mx-auto grid max-w-6xl items-center gap-12 md:grid-cols-2">
+          <div className="order-2 md:order-1">
+            <BrowserFrame src="/marketing/shot-nutrition.png" alt="Food log with macro tracking" />
+          </div>
+          <div className="order-1 md:order-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-primary">
+              <Apple className="h-3.5 w-3.5" />
+              Nutrition
+            </span>
+            <h2 className="mt-4 font-display text-4xl font-bold uppercase tracking-wide md:text-5xl">
+              Log a meal
+              <br />
+              in seconds.
+            </h2>
+            <p className="mt-4 text-muted-foreground">
+              Snap a photo, scan a barcode, or type it in -- Forge fills in the macros (and the
+              micros) automatically and rolls them up against whatever targets the coach set.
+              No spreadsheets, no manual math, just a running total that updates the moment
+              food gets logged.
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* ---------------- Feature grid ---------------- */}
       <section className="px-4 py-20 md:px-8 md:py-28">
         <div className="mx-auto max-w-6xl">
@@ -248,11 +354,11 @@ export default function LandingPage() {
               Everything else a program needs
             </h2>
             <p className="mt-4 text-muted-foreground">
-              Forge isn't just a program builder -- it's the whole operation, from the food log
-              to the compliance report.
+              Forge isn't just a program builder -- it's the whole operation, from injury-risk
+              flagging to the compliance report.
             </p>
           </div>
-          <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
             {FEATURE_CARDS.map((f) => (
               <div key={f.title} className="rounded-xl border border-border bg-surface p-6">
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/15 text-primary">
