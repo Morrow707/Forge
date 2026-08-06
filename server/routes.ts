@@ -792,6 +792,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(updated);
   });
 
+  // Conversational AI program builder, coach-side -- same auto-applies-every-
+  // turn behavior as the admin/Free-Agent chat above (see
+  // storage.generateProgramFromChat), now available while actively editing
+  // one of the coach's own programs, not just the one-shot draft-then-review
+  // AI Assist on the programs list. A coach editing a program already
+  // assigned to real athletes has this exact same blast radius with their
+  // own manual edits + Save Program already, so the AI applying a turn
+  // in-place isn't a new category of risk -- it's the same program, same
+  // ownership check, just edited by chat instead of by hand.
+  app.get("/api/coach/programs/:id/chat", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const owned = await assertCoachOwnsProgram(user.id, id);
+    if (!owned) return res.status(404).json({ message: "Program not found" });
+    const messages = await storage.getProgramChatMessages(id);
+    res.json(messages);
+  });
+
+  app.post("/api/coach/programs/:id/chat", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const owned = await assertCoachOwnsProgram(user.id, id);
+    if (!owned) return res.status(404).json({ message: "Program not found" });
+    const parsed = sendProgramChatMessageSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "Invalid message" });
+    const result = await storage.generateProgramFromChat(id, user.id, parsed.data.content, false);
+    res.status(201).json(result);
+  });
+
   app.delete("/api/coach/programs/:id", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     const id = Number(req.params.id);
