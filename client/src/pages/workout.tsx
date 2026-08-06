@@ -594,23 +594,40 @@ export function WorkoutPage({
   const { data, isLoading } = useQuery<DayDetail>({
     queryKey: [`${apiBase}/day`, assignmentId, programDayId, date],
     queryFn: async () => {
-      try {
-        const res = await apiRequest(
-          "GET",
-          `${apiBase}/day?assignmentId=${assignmentId}&programDayId=${programDayId}&date=${date}`,
-        );
-        const json = await res.json();
-        saveDayCache(dayKey, json);
-        setOffline(false);
-        return json;
-      } catch (err) {
-        const cached = loadDayCache<DayDetail>(dayKey);
-        if (cached) {
-          setOffline(true);
-          return cached;
+      const url = `${apiBase}/day?assignmentId=${assignmentId}&programDayId=${programDayId}&date=${date}`;
+      // A phone waking up (screen unlock, backgrounded PWA resumed) very
+      // often fires this first request a beat before its network stack is
+      // actually back up -- one failed `fetch` there is a timing blip, not
+      // a real "no signal" state, so it's worth a couple of quick retries
+      // before believing it. An ApiError means the server itself answered
+      // (401, 500, ...), which no amount of retrying fixes, so that's
+      // rethrown immediately rather than treated the same as a dropped
+      // connection.
+      const maxAttempts = 3;
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+          const res = await apiRequest("GET", url);
+          const json = await res.json();
+          saveDayCache(dayKey, json);
+          setOffline(false);
+          return json;
+        } catch (err) {
+          if (err instanceof ApiError) throw err;
+          if (attempt < maxAttempts) {
+            await new Promise((r) => setTimeout(r, 400 * attempt));
+            continue;
+          }
+          const cached = loadDayCache<DayDetail>(dayKey);
+          if (cached) {
+            setOffline(true);
+            return cached;
+          }
+          throw err;
         }
-        throw err;
       }
+      // Unreachable -- the loop above always either returns or throws --
+      // but TypeScript can't see that, so this satisfies the return type.
+      throw new Error("Unreachable");
     },
     // Workout data (history, PRs, prescriptions) must always reflect the
     // most recent log -- never serve a cached snapshot from before the last
@@ -618,6 +635,17 @@ export function WorkoutPage({
     staleTime: 0,
     refetchOnMount: "always",
   });
+
+  // If a genuinely dropped connection did trigger the offline fallback
+  // above, don't make the athlete navigate away and back just to clear it
+  // -- the moment the browser itself reports connectivity restored, refetch
+  // so the banner disappears on its own.
+  useEffect(() => {
+    if (!offline) return;
+    const onOnline = () => qc.invalidateQueries({ queryKey: [`${apiBase}/day`] });
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+  }, [offline, apiBase, qc]);
 
   const [items, setItems] = useState<ItemState[]>([]);
   const [hydrated, setHydrated] = useState(false);
