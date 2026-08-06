@@ -24,6 +24,7 @@ import { NutritionDialog } from "@/components/nutrition-dialog";
 import { WellnessHistoryDialog, READINESS_CLASSNAME } from "@/components/wellness-history-dialog";
 import { AcwrHistoryDialog, ACWR_RISK_CLASSNAME } from "@/components/acwr-history-dialog";
 import { ChatHistoryDialog } from "@/components/chat-history-dialog";
+import { CaraCompliancePanel } from "@/components/cara-compliance-panel";
 import { READINESS_LABEL, type ReadinessLevel } from "@shared/wellness";
 import { ACWR_RISK_LABEL, type AcwrRiskLevel } from "@shared/load";
 import { apiRequest, ApiError } from "@/lib/queryClient";
@@ -216,6 +217,7 @@ export default function CoachRoster() {
         <TabsList>
           <TabsTrigger value="roster">Roster ({roster.length})</TabsTrigger>
           <TabsTrigger value="teams">Teams ({teams.length})</TabsTrigger>
+          <TabsTrigger value="compliance">Compliance</TabsTrigger>
         </TabsList>
 
         <TabsContent value="roster">
@@ -480,6 +482,10 @@ export default function CoachRoster() {
               </Card>
             ))}
           </div>
+        </TabsContent>
+
+        <TabsContent value="compliance">
+          <CaraCompliancePanel roster={roster} />
         </TabsContent>
       </Tabs>
 

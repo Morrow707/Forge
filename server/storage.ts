@@ -27,6 +27,7 @@ import {
   nutritionTargets,
   goals,
   wellnessCheckins,
+  caraSessions,
   readinessBriefings,
   athleteDigests,
   coachDigests,
@@ -1336,6 +1337,219 @@ Based on this athlete's actual rate of improvement, suggest a realistic target v
       .innerJoin(wellnessCheckins, eq(wellnessCheckins.athleteId, coachAthletes.athleteId))
       .where(and(inArray(coachAthletes.coachId, coachIds), eq(wellnessCheckins.date, date)));
     return rows;
+  },
+
+  // ---------- CARA (countable athletically-related activity) time tracking ----------
+  // See caraSessions in shared/schema.ts for the full design rationale.
+  // Idle threshold: the client prompts "still working out?" once a session
+  // goes this long with no set logged. Sweep threshold is the hard backstop
+  // that fires even if nobody's there to answer the prompt -- deliberately
+  // longer, since it's the last line of defense against a bogus multi-hour
+  // audit entry, not the primary UX.
+  IDLE_PROMPT_MINUTES: 5,
+  SWEEP_TIMEOUT_MINUTES: 20,
+
+  async getCaraCapMinutesForCoach(coachId: number): Promise<number | null> {
+    const [row] = await db.select({ cap: users.caraWeeklyCapMinutes }).from(users).where(eq(users.id, coachId));
+    return row?.cap ?? null;
+  },
+
+  // Null clears tracking entirely for this coach's roster -- the compliance
+  // dashboard and every athlete's session timer both go quiet the moment
+  // this is unset, not just "no longer enforced."
+  async setCaraCapMinutesForCoach(coachId: number, capMinutes: number | null) {
+    const [row] = await db
+      .update(users)
+      .set({ caraWeeklyCapMinutes: capMinutes })
+      .where(eq(users.id, coachId))
+      .returning({ id: users.id, caraWeeklyCapMinutes: users.caraWeeklyCapMinutes });
+    return row;
+  },
+
+  // Null if none of this athlete's coaches track CARA compliance. If more
+  // than one does (rare -- an athlete can be on more than one coach's
+  // roster), the strictest cap applies rather than picking one arbitrarily.
+  async getCaraCapMinutesForAthlete(athleteId: number): Promise<number | null> {
+    const rows = await db
+      .select({ cap: users.caraWeeklyCapMinutes })
+      .from(coachAthletes)
+      .innerJoin(users, eq(coachAthletes.coachId, users.id))
+      .where(eq(coachAthletes.athleteId, athleteId));
+    const caps = rows.map((r) => r.cap).filter((c): c is number => c != null);
+    return caps.length > 0 ? Math.min(...caps) : null;
+  },
+
+  async getOpenCaraSession(athleteId: number) {
+    return db.query.caraSessions.findFirst({
+      where: and(eq(caraSessions.athleteId, athleteId), isNull(caraSessions.endedAt)),
+      orderBy: desc(caraSessions.startedAt),
+    });
+  },
+
+  // Closes a stale open session at its last real activity (not "now" and
+  // not whatever moment this happened to run) so an audit never sees idle
+  // time tacked onto real training. Safe to call constantly and cheaply --
+  // it's a no-op unless a session is both open AND past the hard timeout.
+  async sweepStaleCaraSession(athleteId: number) {
+    const open = await this.getOpenCaraSession(athleteId);
+    if (!open) return null;
+    const staleCutoff = new Date(Date.now() - this.SWEEP_TIMEOUT_MINUTES * 60_000);
+    if (open.lastActivityAt > staleCutoff) return null;
+    const [closed] = await db
+      .update(caraSessions)
+      .set({ endedAt: open.lastActivityAt, endReason: "idle_timeout" })
+      .where(eq(caraSessions.id, open.id))
+      .returning();
+    return closed;
+  },
+
+  async startCaraTrainingSession(athleteId: number) {
+    await this.sweepStaleCaraSession(athleteId);
+    const existing = await this.getOpenCaraSession(athleteId);
+    if (existing) return existing;
+    const [row] = await db
+      .insert(caraSessions)
+      .values({ athleteId, activityType: "training" })
+      .returning();
+    return row;
+  },
+
+  // Called on every set save while a training session might be open --
+  // this is the "you're still actually training" signal the idle sweep
+  // measures against. A no-op if there's no open session (most saves, most
+  // days, since not every training day is CARA-tracked).
+  async touchCaraSession(athleteId: number) {
+    const open = await this.getOpenCaraSession(athleteId);
+    if (!open) return null;
+    const [row] = await db
+      .update(caraSessions)
+      .set({ lastActivityAt: new Date() })
+      .where(eq(caraSessions.id, open.id))
+      .returning();
+    return row;
+  },
+
+  // The clean end path -- "Mark Workout Complete" closes the session right
+  // now rather than waiting for the idle sweep to eventually catch it.
+  async closeCaraSessionOnCompletion(athleteId: number) {
+    const open = await this.getOpenCaraSession(athleteId);
+    if (!open) return null;
+    const [row] = await db
+      .update(caraSessions)
+      .set({ endedAt: new Date(), endReason: "completed" })
+      .where(eq(caraSessions.id, open.id))
+      .returning();
+    return row;
+  },
+
+  // "Still working out?" -> yes: just proves the session is still live,
+  // resetting the idle clock without requiring an actual set edit (an
+  // athlete resting between sets isn't touching their phone either).
+  async confirmCaraSessionActive(athleteId: number) {
+    return this.touchCaraSession(athleteId);
+  },
+
+  // "Still working out?" -> no (or the prompt timed out unanswered): ends
+  // at the last real activity, exactly like the automatic sweep -- a
+  // deliberate confirmation shouldn't record a longer session than an
+  // unnoticed one would have.
+  async stopCaraSessionManually(athleteId: number) {
+    const open = await this.getOpenCaraSession(athleteId);
+    if (!open) return null;
+    const [row] = await db
+      .update(caraSessions)
+      .set({ endedAt: open.lastActivityAt, endReason: "manual_stop" })
+      .where(eq(caraSessions.id, open.id))
+      .returning();
+    return row;
+  },
+
+  // For a coach logging something Forge can't observe on its own -- a team
+  // meeting, film review, travel -- as a fully-formed, already-closed block
+  // rather than trying to auto-detect it the way a training session is.
+  async logManualCaraActivity(
+    coachId: number,
+    input: {
+      athleteId: number;
+      activityType: "meeting" | "film_review" | "travel" | "other";
+      startedAt: Date;
+      endedAt: Date;
+      note?: string;
+    },
+  ) {
+    const [row] = await db
+      .insert(caraSessions)
+      .values({
+        athleteId: input.athleteId,
+        activityType: input.activityType,
+        startedAt: input.startedAt,
+        lastActivityAt: input.startedAt,
+        endedAt: input.endedAt,
+        endReason: "manual_stop",
+        loggedByCoachId: coachId,
+        note: input.note,
+      })
+      .returning();
+    return row;
+  },
+
+  async getCaraSessionsForAthlete(athleteId: number, weekStart: Date, weekEnd: Date) {
+    await this.sweepStaleCaraSession(athleteId);
+    return db.query.caraSessions.findMany({
+      where: and(
+        eq(caraSessions.athleteId, athleteId),
+        gte(caraSessions.startedAt, weekStart),
+        lt(caraSessions.startedAt, weekEnd),
+      ),
+      orderBy: desc(caraSessions.startedAt),
+    });
+  },
+
+  // Total countable minutes this week -- closed sessions contribute their
+  // real duration; a still-open session (the athlete is mid-workout right
+  // now) contributes up to this instant, so the number a coach sees is
+  // always live, never stale until the next full page reload.
+  async getCaraWeeklyMinutesForAthlete(athleteId: number, weekStart: Date, weekEnd: Date) {
+    const sessions = await this.getCaraSessionsForAthlete(athleteId, weekStart, weekEnd);
+    const now = Date.now();
+    let totalMs = 0;
+    for (const s of sessions) {
+      const end = s.endedAt ?? new Date(now);
+      totalMs += Math.max(0, end.getTime() - s.startedAt.getTime());
+    }
+    return Math.round(totalMs / 60_000);
+  },
+
+  // Roster-wide weekly compliance snapshot for a coach who's opted into
+  // CARA tracking (see caraWeeklyCapMinutes) -- null cap means this coach
+  // hasn't turned the feature on, so the route this backs simply won't
+  // show anything rather than reporting a meaningless "0 / unlimited."
+  async getCaraComplianceForCoach(coachId: number, weekStart: Date, weekEnd: Date) {
+    const [coach] = await db.select({ cap: users.caraWeeklyCapMinutes }).from(users).where(eq(users.id, coachId));
+    if (!coach?.cap) return null;
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    const roster = await db
+      .selectDistinct({ id: users.id, name: users.name })
+      .from(coachAthletes)
+      .innerJoin(users, eq(coachAthletes.athleteId, users.id))
+      .where(inArray(coachAthletes.coachId, coachIds));
+    const rows = await Promise.all(
+      roster.map(async (athlete) => {
+        const minutes = await this.getCaraWeeklyMinutesForAthlete(athlete.id, weekStart, weekEnd);
+        const openSession = await this.getOpenCaraSession(athlete.id);
+        return {
+          athleteId: athlete.id,
+          name: athlete.name,
+          minutes,
+          capMinutes: coach.cap!,
+          percentUsed: Math.round((minutes / coach.cap!) * 100),
+          atRisk: minutes >= coach.cap! * 0.8,
+          overCap: minutes > coach.cap!,
+          currentlyTraining: !!openSession,
+        };
+      }),
+    );
+    return { capMinutes: coach.cap, athletes: rows };
   },
 
   // Cached once generated (see readinessBriefings in schema.ts) -- a day's

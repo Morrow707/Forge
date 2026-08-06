@@ -45,9 +45,12 @@ import {
   formFaultSchema,
   updateNutritionTargetsSchema,
   createFoodLogEntrySchema,
+  logCaraActivitySchema,
+  setCaraCapSchema,
 } from "@shared/schema";
 import { computeReadiness } from "@shared/wellness";
 import { z } from "zod";
+import { startOfWeek, addWeeks } from "date-fns";
 
 // Form-check clips are opt-in and athlete-initiated: recorded in the
 // browser, previewed, then either saved here or discarded and never sent.
@@ -1116,6 +1119,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(rows.map((r) => ({ ...r, ...computeReadiness(r) })));
   });
 
+  // ---------- CARA (countable athletically-related activity) compliance ----------
+  // Opt-in per coach (see caraWeeklyCapMinutes) -- most coaches never touch
+  // any of this.
+
+  app.get("/api/coach/cara/settings", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const capMinutes = await storage.getCaraCapMinutesForCoach(user.id);
+    res.json({ capMinutes });
+  });
+
+  app.post("/api/coach/cara/settings", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = setCaraCapSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const row = await storage.setCaraCapMinutesForCoach(user.id, parsed.data.capMinutes);
+    res.json({ capMinutes: row.caraWeeklyCapMinutes ?? null });
+  });
+
+  app.get("/api/coach/cara/compliance", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const weekStart = startOfWeek(new Date());
+    const weekEnd = addWeeks(weekStart, 1);
+    const report = await storage.getCaraComplianceForCoach(user.id, weekStart, weekEnd);
+    res.json(report ?? { capMinutes: null, athletes: [] });
+  });
+
+  app.get(
+    "/api/coach/cara/:athleteId/history",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      const onRoster = await storage.getRosterAthleteForCoach(user.id, athleteId);
+      if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
+      const weekStart = startOfWeek(new Date());
+      const weekEnd = addWeeks(weekStart, 1);
+      const sessions = await storage.getCaraSessionsForAthlete(athleteId, weekStart, weekEnd);
+      res.json(sessions);
+    },
+  );
+
+  app.post("/api/coach/cara/manual-log", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = logCaraActivitySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const onRoster = await storage.getRosterAthleteForCoach(user.id, parsed.data.athleteId);
+    if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
+    const startedAt = new Date(parsed.data.startedAt);
+    const endedAt = new Date(parsed.data.endedAt);
+    if (Number.isNaN(startedAt.getTime()) || Number.isNaN(endedAt.getTime()) || endedAt <= startedAt) {
+      return res.status(400).json({ message: "Invalid start/end time" });
+    }
+    const session = await storage.logManualCaraActivity(user.id, {
+      athleteId: parsed.data.athleteId,
+      activityType: parsed.data.activityType,
+      startedAt,
+      endedAt,
+      note: parsed.data.note,
+    });
+    res.status(201).json(session);
+  });
+
   app.get(
     "/api/coach/roster/:athleteId/wellness-history",
     requireRole("coach"),
@@ -1936,8 +2005,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.status(204).end();
   });
 
-  // Mandatory once-per-day self-report -- the client blocks the rest of the
-  // app (WellnessGate) until this returns a non-null checkin for today.
+  // Once-per-day self-report -- inline and always editable on the
+  // athlete's training day page, not a blocking gate.
   app.get("/api/athlete/wellness/today", requireRole("athlete"), async (req, res) => {
     const user = currentUser(req);
     const checkin = await storage.getWellnessCheckin(user.id, todayIso());
@@ -1950,7 +2019,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
+    // Only the very first submission of the day should start a CARA
+    // session -- re-editing an already-submitted check-in later (an
+    // athlete correcting their sleep number after the fact) must never
+    // spin up a second training-time timer.
+    const isFirstSubmissionToday = !(await storage.getWellnessCheckin(user.id, todayIso()));
     const checkin = await storage.upsertWellnessCheckin(user.id, todayIso(), parsed.data);
+    if (isFirstSubmissionToday && (await storage.getCaraCapMinutesForAthlete(user.id)) != null) {
+      await storage.startCaraTrainingSession(user.id);
+    }
     res.status(201).json(checkin);
   });
 
@@ -2051,7 +2128,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
     const log = await storage.submitWorkoutLog(user.id, parsed.data);
+    // Every save while a CARA training session is open is "still actively
+    // training" evidence -- completion closes it outright, anything else
+    // just resets the idle clock. Both are no-ops when there's no open
+    // session (most days, for most coaches, since this is opt-in).
+    if (parsed.data.completed) {
+      await storage.closeCaraSessionOnCompletion(user.id);
+    } else {
+      await storage.touchCaraSession(user.id);
+    }
     res.status(200).json(log);
+  });
+
+  // ---------- CARA (countable athletically-related activity) tracking ----------
+  // All athlete-facing -- silently inert (open: null) for any athlete whose
+  // coach hasn't opted into CARA compliance tracking.
+
+  app.get("/api/athlete/cara/status", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const capMinutes = await storage.getCaraCapMinutesForAthlete(user.id);
+    if (capMinutes == null) return res.json({ tracking: false, open: null });
+    await storage.sweepStaleCaraSession(user.id);
+    const open = await storage.getOpenCaraSession(user.id);
+    const weekStart = startOfWeek(new Date());
+    const weekEnd = addWeeks(weekStart, 1);
+    const weeklyMinutes = await storage.getCaraWeeklyMinutesForAthlete(user.id, weekStart, weekEnd);
+    // The idle prompt is a client-side decision (it just compares "now" to
+    // lastActivityAt against IDLE_PROMPT_MINUTES), so the open session's
+    // own timestamp is all the client needs -- no separate flag to keep in
+    // sync.
+    res.json({
+      tracking: true,
+      open: open ?? null,
+      idlePromptMinutes: storage.IDLE_PROMPT_MINUTES,
+      weeklyMinutes,
+      capMinutes,
+    });
+  });
+
+  app.post("/api/athlete/cara/confirm-active", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const session = await storage.confirmCaraSessionActive(user.id);
+    res.json(session ?? null);
+  });
+
+  app.post("/api/athlete/cara/stop", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const session = await storage.stopCaraSessionManually(user.id);
+    res.json(session ?? null);
   });
 
   // Athlete-initiated only: recorded and previewed client-side, uploaded
