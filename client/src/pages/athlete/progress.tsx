@@ -15,7 +15,8 @@ import {
 } from "@/components/ui/select";
 import { apiRequest, getJson } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
-import { shareOrDownloadFile } from "@/lib/share-file";
+import { shareOrDownloadFile, shareOrDownloadBlob } from "@/lib/share-file";
+import { renderPrShareCard } from "@/lib/share-card";
 import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
 import {
@@ -73,7 +74,36 @@ export default function AthleteProgress() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [sharingProfile, setSharingProfile] = useState(false);
+  const [sharingPrIndex, setSharingPrIndex] = useState<number | null>(null);
   const [trendExercise, setTrendExercise] = useState<{ id: number; name: string } | null>(null);
+
+  async function handleSharePr(
+    pr: {
+      exerciseName: string;
+      weight: number;
+      unit: string;
+      reps: string;
+      date: string;
+    },
+    index: number,
+  ) {
+    setSharingPrIndex(index);
+    try {
+      const blob = await renderPrShareCard({
+        athleteName: user?.name ?? "Athlete",
+        exerciseName: pr.exerciseName,
+        weight: pr.weight,
+        unit: pr.unit,
+        reps: pr.reps,
+        dateLabel: format(parseISO(pr.date), "MMM d, yyyy"),
+      });
+      await shareOrDownloadBlob(blob, `${pr.exerciseName}-pr.png`, `New PR: ${pr.exerciseName}`);
+    } catch {
+      toast.error("Couldn't generate that share card");
+    } finally {
+      setSharingPrIndex(null);
+    }
+  }
 
   async function handleShareProfile() {
     setSharingProfile(true);
@@ -244,22 +274,38 @@ export default function AthleteProgress() {
                   </p>
                 )}
                 {data?.recentPRs.map((pr, i) => (
-                  <button
+                  <div
                     key={i}
-                    type="button"
-                    onClick={() => setTrendExercise({ id: pr.exerciseId, name: pr.exerciseName })}
-                    className="flex w-full items-center justify-between rounded-md border border-border p-3 text-left transition-colors hover:border-primary/50 hover:bg-surface"
+                    className="flex items-center gap-1 rounded-md border border-border p-3 transition-colors hover:border-primary/50 hover:bg-surface"
                   >
-                    <div>
-                      <p className="font-semibold">{pr.exerciseName}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {format(parseISO(pr.date), "MMM d, yyyy")}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setTrendExercise({ id: pr.exerciseId, name: pr.exerciseName })
+                      }
+                      className="flex flex-1 items-center justify-between text-left"
+                    >
+                      <div>
+                        <p className="font-semibold">{pr.exerciseName}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {format(parseISO(pr.date), "MMM d, yyyy")}
+                        </p>
+                      </div>
+                      <p className="font-display text-lg font-bold text-primary">
+                        {pr.weight} {pr.unit} × {pr.reps}
                       </p>
-                    </div>
-                    <p className="font-display text-lg font-bold text-primary">
-                      {pr.weight} {pr.unit} × {pr.reps}
-                    </p>
-                  </button>
+                    </button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="shrink-0"
+                      aria-label={`Share ${pr.exerciseName} PR`}
+                      disabled={sharingPrIndex === i}
+                      onClick={() => handleSharePr(pr, i)}
+                    >
+                      <Share2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 ))}
               </CardContent>
             </Card>

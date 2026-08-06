@@ -29,6 +29,8 @@ import type { JumpSetMetrics } from "@/lib/jump-tracking";
 import { toKg } from "@/lib/bar-tracking";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
+import { renderWorkoutShareCard } from "@/lib/share-card";
+import { shareOrDownloadBlob } from "@/lib/share-file";
 import {
   dayCacheKey,
   saveDayCache,
@@ -60,6 +62,7 @@ import {
   Sparkles,
   RefreshCw,
   GitCompare,
+  Share2,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import type { PublicUser } from "@shared/schema";
@@ -591,6 +594,7 @@ export function WorkoutPage({
   const dayKey = dayCacheKey(assignmentId, programDayId, date);
   const [offline, setOffline] = useState(false);
   const [pendingSync, setPendingSync] = useState(() => hasPendingLog(dayKey));
+  const [sharingWorkout, setSharingWorkout] = useState(false);
 
   const { data, isLoading } = useQuery<DayDetail>({
     queryKey: [`${apiBase}/day`, assignmentId, programDayId, date],
@@ -981,6 +985,28 @@ export function WorkoutPage({
   const currentPage = pages[Math.min(pageIndex, pages.length - 1)];
   const unit = user?.preferredWeightUnit ?? "lbs";
   const stats = computeStats(items);
+  const exerciseCount = pages.reduce((sum, p) => sum + p.items.length, 0);
+
+  async function handleShareWorkout() {
+    if (!data) return;
+    setSharingWorkout(true);
+    try {
+      const blob = await renderWorkoutShareCard({
+        athleteName: user?.name ?? "Athlete",
+        workoutTitle: data.day.title,
+        totalReps: stats.totalReps,
+        totalVolume: stats.totalVolume,
+        volumeUnit: unit,
+        exerciseCount,
+        dateLabel: format(parseISO(date), "MMM d, yyyy"),
+      });
+      await shareOrDownloadBlob(blob, `${data.day.title}-workout.png`, "Workout Complete");
+    } catch {
+      toast.error("Couldn't generate that share card");
+    } finally {
+      setSharingWorkout(false);
+    }
+  }
   // "comment" (coach-assigned programs) posts the video for the coach to
   // review, unchanged from before. "ai" applies to any AI-authored program
   // (admin's own, or now a Free Agent athlete's own self-built one -- see
@@ -1118,6 +1144,18 @@ export function WorkoutPage({
                     {unit}
                   </p>
                 </div>
+                {data.log?.completed && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="ml-auto"
+                    disabled={sharingWorkout}
+                    onClick={handleShareWorkout}
+                  >
+                    <Share2 className="h-4 w-4" />
+                    Share
+                  </Button>
+                )}
               </div>
               <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary">
                 <div
