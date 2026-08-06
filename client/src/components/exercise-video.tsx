@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Youtube, Play } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export function extractYouTubeId(url: string): string | null {
   try {
@@ -17,17 +18,28 @@ export function extractYouTubeId(url: string): string | null {
   return null;
 }
 
-/** Compact clickable thumbnail that expands to an inline player -- matches
- * a TrainHeroic-style exercise row (thumbnail on the left, info to the
- * right) rather than a full-width always-on video. */
-export function ExerciseVideoThumb({ url, name }: { url: string | null; name: string }) {
+/** Clickable thumbnail that expands to an inline player. `size="sm"` is a
+ * compact corner thumbnail; `size="lg"` fills the width of its container --
+ * used at the top of the exercise logging card so the demo is the first
+ * thing an athlete sees, above the exercise name. */
+export function ExerciseVideoThumb({
+  url,
+  name,
+  size = "sm",
+}: {
+  url: string | null;
+  name: string;
+  size?: "sm" | "lg";
+}) {
   const [expanded, setExpanded] = useState(false);
   if (!url) return null;
   const videoId = extractYouTubeId(url);
+  const isLg = size === "lg";
+  const frameClass = isLg ? "aspect-video w-full rounded-lg" : "h-20 w-28 shrink-0 rounded-md";
 
   if (expanded && videoId) {
     return (
-      <div className="aspect-video w-full shrink-0 overflow-hidden rounded-md border border-border bg-black sm:w-40">
+      <div className={cn(frameClass, "overflow-hidden border border-border bg-black")}>
         <iframe
           className="h-full w-full"
           src={`https://www.youtube.com/embed/${videoId}?autoplay=1`}
@@ -44,17 +56,22 @@ export function ExerciseVideoThumb({ url, name }: { url: string | null; name: st
       <button
         type="button"
         onClick={() => setExpanded(true)}
-        className="relative h-20 w-28 shrink-0 overflow-hidden rounded-md border border-border bg-black"
+        className={cn(frameClass, "relative overflow-hidden border border-border bg-black")}
         aria-label={`Play ${name} demo video`}
       >
         <img
-          src={`https://img.youtube.com/vi/${videoId}/mqdefault.jpg`}
+          src={`https://img.youtube.com/vi/${videoId}/${isLg ? "hqdefault" : "mqdefault"}.jpg`}
           alt=""
           className="h-full w-full object-cover opacity-80"
         />
         <span className="absolute inset-0 flex items-center justify-center">
-          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-black/60">
-            <Play className="h-4 w-4 fill-white text-white" />
+          <span
+            className={cn(
+              "flex items-center justify-center rounded-full bg-black/60",
+              isLg ? "h-14 w-14" : "h-8 w-8",
+            )}
+          >
+            <Play className={cn("fill-white text-white", isLg ? "h-6 w-6" : "h-4 w-4")} />
           </span>
         </span>
       </button>
@@ -66,10 +83,13 @@ export function ExerciseVideoThumb({ url, name }: { url: string | null; name: st
       href={url}
       target="_blank"
       rel="noopener noreferrer"
-      className="flex h-20 w-28 shrink-0 flex-col items-center justify-center gap-1 rounded-md border border-dashed border-border text-center text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
+      className={cn(
+        frameClass,
+        "flex flex-col items-center justify-center gap-1 border border-dashed border-border text-center text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary",
+      )}
     >
-      <Youtube className="h-5 w-5" />
-      <span className="text-[10px] font-semibold">Watch</span>
+      <Youtube className={isLg ? "h-8 w-8" : "h-5 w-5"} />
+      <span className={cn("font-semibold", isLg ? "text-xs" : "text-[10px]")}>Watch</span>
     </a>
   );
 }
