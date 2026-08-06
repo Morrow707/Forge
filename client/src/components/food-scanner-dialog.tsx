@@ -77,10 +77,11 @@ export function FoodScannerDialog({
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [analyzingPhoto, setAnalyzingPhoto] = useState(false);
   const [photoItems, setPhotoItems] = useState<FoodCandidate[]>([]);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const scannerRef = useRef<BarcodeScanner | null>(null);
   const photoVideoRef = useRef<HTMLVideoElement>(null);
-  const photoStreamRef = useRef<MediaStream | null>(null);
+  const sharedStreamRef = useRef<MediaStream | null>(null);
   const photoFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -98,8 +99,45 @@ export function FoodScannerDialog({
     }
   }, [open]);
 
+  // Acquire the camera exactly once per dialog-open and share it between
+  // both scan mode and photo mode, instead of each mode independently
+  // calling getUserMedia -- that used to fire a fresh permission prompt
+  // (and a fresh black-until-manually-retried stream) on every mode switch.
   useEffect(() => {
-    if (!open || mode !== "scan") {
+    if (!open) {
+      sharedStreamRef.current?.getTracks().forEach((t) => t.stop());
+      sharedStreamRef.current = null;
+      setCameraStream(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment" },
+        });
+        if (cancelled) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        sharedStreamRef.current = stream;
+        setCameraStream(stream);
+      } catch {
+        if (!cancelled) {
+          setCameraError("Couldn't access the camera -- check permissions.");
+          setPhotoError("Couldn't access the camera -- check permissions, or upload a photo instead.");
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+      sharedStreamRef.current?.getTracks().forEach((t) => t.stop());
+      sharedStreamRef.current = null;
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open || mode !== "scan" || !cameraStream) {
       scannerRef.current?.stop();
       scannerRef.current = null;
       return;
@@ -111,7 +149,8 @@ export function FoodScannerDialog({
     (async () => {
       try {
         if (!videoRef.current) return;
-        await scanner.start(
+        await scanner.startFromStream(
+          cameraStream,
           videoRef.current,
           async (barcode) => {
             if (cancelled) return;
@@ -132,41 +171,25 @@ export function FoodScannerDialog({
       scanner.stop();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, mode]);
+  }, [open, mode, cameraStream]);
 
-  // Plain getUserMedia preview for the photo mode -- no continuous decoding
-  // needed like the barcode scanner above, just a live view to capture one
-  // still frame from on demand.
+  // Photo mode reuses the same shared stream directly (no decoding needed,
+  // just a live view to capture one still frame on demand) -- but unlike a
+  // static `autoPlay` attribute on a `srcObject` assigned after mount, that
+  // isn't reliably enough to start playback on every browser, so play() is
+  // called explicitly. This is the fix for the "camera pops up but the
+  // preview stays black" bug.
   useEffect(() => {
-    if (!open || mode !== "photo") {
-      photoStreamRef.current?.getTracks().forEach((t) => t.stop());
-      photoStreamRef.current = null;
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "environment" },
-        });
-        if (cancelled) {
-          stream.getTracks().forEach((t) => t.stop());
-          return;
-        }
-        photoStreamRef.current = stream;
-        if (photoVideoRef.current) photoVideoRef.current.srcObject = stream;
-      } catch {
-        if (!cancelled) {
-          setPhotoError("Couldn't access the camera -- check permissions, or upload a photo instead.");
-        }
-      }
-    })();
+    if (!open || mode !== "photo" || !cameraStream || !photoVideoRef.current) return;
+    const videoEl = photoVideoRef.current;
+    videoEl.srcObject = cameraStream;
+    videoEl.play().catch(() => {
+      // Benign -- e.g. AbortError from a rapid mode-switch interrupting play().
+    });
     return () => {
-      cancelled = true;
-      photoStreamRef.current?.getTracks().forEach((t) => t.stop());
-      photoStreamRef.current = null;
+      videoEl.srcObject = null;
     };
-  }, [open, mode]);
+  }, [open, mode, cameraStream]);
 
   async function handleBarcodeDetected(barcode: string) {
     try {
@@ -332,7 +355,17 @@ export function FoodScannerDialog({
           <div className="space-y-3">
             <div className="relative overflow-hidden rounded-md border border-border bg-black">
               <video ref={videoRef} autoPlay playsInline muted className="w-full" />
-              <div className="pointer-events-none absolute inset-x-8 top-1/2 h-16 -translate-y-1/2 rounded-md border-2 border-primary/70" />
+              <div className="pointer-events-none absolute inset-x-8 top-1/2 h-16 -translate-y-1/2">
+                <div className="absolute left-0 top-0 h-5 w-5 rounded-tl-md border-l-2 border-t-2 border-primary" />
+                <div className="absolute right-0 top-0 h-5 w-5 rounded-tr-md border-r-2 border-t-2 border-primary" />
+                <div className="absolute bottom-0 left-0 h-5 w-5 rounded-bl-md border-b-2 border-l-2 border-primary" />
+                <div className="absolute bottom-0 right-0 h-5 w-5 rounded-br-md border-b-2 border-r-2 border-primary" />
+                <div className="absolute inset-x-6 top-1/2 flex h-9 -translate-y-1/2 items-stretch gap-[3px] opacity-40">
+                  {[2, 1, 3, 1, 1, 2, 3, 1, 2, 1, 1, 3, 2, 1, 2].map((w, i) => (
+                    <div key={i} className="bg-primary" style={{ width: `${w}px` }} />
+                  ))}
+                </div>
+              </div>
             </div>
             {cameraError && <p className="text-sm text-destructive">{cameraError}</p>}
             <p className="text-center text-xs text-muted-foreground">
