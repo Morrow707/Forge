@@ -47,6 +47,7 @@ import {
   createFoodLogEntrySchema,
   logCaraActivitySchema,
   setCaraCapSchema,
+  createTeamChallengeSchema,
 } from "@shared/schema";
 import { computeReadiness } from "@shared/wellness";
 import { z } from "zod";
@@ -1330,6 +1331,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     await storage.deleteTeam(teamId);
     res.status(204).end();
+  });
+
+  // ---------------- Coach & Athlete: Team challenges (squad quests) ----------------
+  // Team-scoped, not individual -- the whole roster on a team pools its
+  // effort toward one shared number, sitting alongside (not replacing) the
+  // existing per-athlete leaderboard.
+
+  app.get("/api/coach/team-challenges", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const challenges = await storage.getTeamChallengesForCoach(user.id);
+    const withProgress = await Promise.all(
+      challenges.map(async (c) => ({ ...c, progress: await storage.computeTeamChallengeProgress(c) })),
+    );
+    res.json(withProgress);
+  });
+
+  app.post("/api/coach/teams/:id/challenges", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const teamId = Number(req.params.id);
+    if (!(await assertOwnsTeam(user.id, teamId))) {
+      return res.status(404).json({ message: "Team not found" });
+    }
+    const parsed = createTeamChallengeSchema.safeParse({ ...req.body, teamId });
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const challenge = await storage.createTeamChallenge({
+      teamId,
+      title: parsed.data.title,
+      metric: parsed.data.metric,
+      targetValue: parsed.data.targetValue ?? null,
+      startDate: parsed.data.startDate,
+      endDate: parsed.data.endDate,
+    });
+    res.status(201).json(challenge);
+  });
+
+  app.delete("/api/coach/team-challenges/:id", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const challengeId = Number(req.params.id);
+    const challenge = await storage.getTeamChallengeById(challengeId);
+    if (!challenge || !(await assertOwnsTeam(user.id, challenge.teamId))) {
+      return res.status(404).json({ message: "Challenge not found" });
+    }
+    await storage.deleteTeamChallenge(challengeId);
+    res.status(204).end();
+  });
+
+  app.get("/api/athlete/team-challenges", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const challenges = await storage.getTeamChallengesForAthlete(user.id);
+    const withProgress = await Promise.all(
+      challenges.map(async (c) => ({ ...c, progress: await storage.computeTeamChallengeProgress(c) })),
+    );
+    res.json(withProgress);
   });
 
   // ---------------- Coach & Athlete: Team board ----------------

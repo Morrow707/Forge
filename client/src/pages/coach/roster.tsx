@@ -26,6 +26,7 @@ import { AcwrHistoryDialog, ACWR_RISK_CLASSNAME } from "@/components/acwr-histor
 import { ChatHistoryDialog } from "@/components/chat-history-dialog";
 import { TrophyCaseDialog } from "@/components/trophy-case-dialog";
 import { CaraCompliancePanel } from "@/components/cara-compliance-panel";
+import { TeamChallengesSection } from "@/components/team-challenges-panel";
 import { READINESS_LABEL, type ReadinessLevel } from "@shared/wellness";
 import { ACWR_RISK_LABEL, type AcwrRiskLevel } from "@shared/load";
 import { apiRequest, ApiError } from "@/lib/queryClient";
@@ -497,6 +498,7 @@ export default function CoachRoster() {
                     )}
                     onAdd={(athleteId) => addToTeamMutation.mutate({ teamId: team.id, athleteId })}
                   />
+                  <TeamChallengesSection teamId={team.id} teamName={team.name} />
                 </CardContent>
               </Card>
             ))}

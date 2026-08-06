@@ -5,6 +5,7 @@ import {
   coachStaff,
   teams,
   teamMembers,
+  teamChallenges,
   exercises,
   programs,
   programWeeks,
@@ -66,7 +67,7 @@ import { computeReadiness } from "@shared/wellness";
 import { buildAcwrSeries, type DailyLoad, type AcwrPoint } from "@shared/load";
 import { ALL_TROPHY_DEFINITIONS } from "@shared/achievements";
 import { askClaude, askClaudeStructured, askClaudeWithTools, askClaudeVision, aiEnabled, fastModel, type SystemPrompt } from "./ai";
-import { eq, and, inArray, asc, desc, lt, gte, gt, isNull, sql } from "drizzle-orm";
+import { eq, and, inArray, asc, desc, lt, lte, gte, gt, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { diffLines } from "diff";
 import {
@@ -2048,6 +2049,157 @@ Athlete's data:
 
   async deleteTeam(teamId: number) {
     await db.delete(teams).where(eq(teams.id, teamId));
+  },
+
+  // ---------- Team challenges (monthly squad quests) ----------
+  async getTeamsForAthlete(athleteId: number) {
+    const rows = await db.query.teamMembers.findMany({
+      where: eq(teamMembers.athleteId, athleteId),
+      with: { team: true },
+    });
+    return rows.map((r) => r.team);
+  },
+
+  async getTeamMemberIds(teamId: number) {
+    const rows = await db.query.teamMembers.findMany({ where: eq(teamMembers.teamId, teamId) });
+    return rows.map((r) => r.athleteId);
+  },
+
+  async createTeamChallenge(input: {
+    teamId: number;
+    title: string;
+    metric: "workouts_completed" | "total_reps" | "total_volume";
+    targetValue: number | null;
+    startDate: string;
+    endDate: string;
+  }) {
+    const [row] = await db.insert(teamChallenges).values(input).returning();
+    return row;
+  },
+
+  async getTeamChallengesForCoach(coachId: number) {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    return db
+      .select({
+        id: teamChallenges.id,
+        teamId: teamChallenges.teamId,
+        teamName: teams.name,
+        title: teamChallenges.title,
+        metric: teamChallenges.metric,
+        targetValue: teamChallenges.targetValue,
+        startDate: teamChallenges.startDate,
+        endDate: teamChallenges.endDate,
+        createdAt: teamChallenges.createdAt,
+      })
+      .from(teamChallenges)
+      .innerJoin(teams, eq(teams.id, teamChallenges.teamId))
+      .where(inArray(teams.coachId, coachIds))
+      .orderBy(desc(teamChallenges.startDate));
+  },
+
+  async getTeamChallengesForAthlete(athleteId: number) {
+    const myTeams = await this.getTeamsForAthlete(athleteId);
+    if (myTeams.length === 0) return [];
+    return db
+      .select({
+        id: teamChallenges.id,
+        teamId: teamChallenges.teamId,
+        teamName: teams.name,
+        title: teamChallenges.title,
+        metric: teamChallenges.metric,
+        targetValue: teamChallenges.targetValue,
+        startDate: teamChallenges.startDate,
+        endDate: teamChallenges.endDate,
+      })
+      .from(teamChallenges)
+      .innerJoin(teams, eq(teams.id, teamChallenges.teamId))
+      .where(
+        inArray(
+          teamChallenges.teamId,
+          myTeams.map((t) => t.id),
+        ),
+      )
+      .orderBy(desc(teamChallenges.startDate));
+  },
+
+  async getTeamChallengeById(challengeId: number) {
+    return db.query.teamChallenges.findFirst({ where: eq(teamChallenges.id, challengeId) });
+  },
+
+  async deleteTeamChallenge(challengeId: number) {
+    await db.delete(teamChallenges).where(eq(teamChallenges.id, challengeId));
+  },
+
+  // Recomputed live on every view, never persisted or incremented -- same
+  // "derive, don't cache" approach as streaks/ACWR elsewhere, since a set
+  // logged then edited then un-completed would otherwise leave a running
+  // counter wrong with no event to correct it. Weight is normalized to lbs
+  // for the team total since teammates can have different preferred units.
+  async computeTeamChallengeProgress(challenge: {
+    teamId: number;
+    metric: "workouts_completed" | "total_reps" | "total_volume";
+    targetValue: number | null;
+    startDate: string;
+    endDate: string;
+  }) {
+    const memberIds = await this.getTeamMemberIds(challenge.teamId);
+    if (memberIds.length === 0) {
+      return {
+        teamTotal: 0,
+        target: challenge.targetValue,
+        perAthlete: [] as { athleteId: number; name: string; contribution: number }[],
+      };
+    }
+    const members = await db.query.users.findMany({
+      where: inArray(users.id, memberIds),
+      columns: { id: true, name: true },
+    });
+    const nameById = new Map(members.map((m) => [m.id, m.name]));
+
+    const logs = await db.query.workoutLogs.findMany({
+      where: and(
+        inArray(workoutLogs.athleteId, memberIds),
+        eq(workoutLogs.completed, true),
+        gte(workoutLogs.date, challenge.startDate),
+        lte(workoutLogs.date, challenge.endDate),
+      ),
+      with: { entries: { with: { sets: true } } },
+    });
+
+    const totalByAthlete = new Map<number, number>();
+    for (const id of memberIds) totalByAthlete.set(id, 0);
+
+    for (const log of logs) {
+      if (challenge.metric === "workouts_completed") {
+        totalByAthlete.set(log.athleteId, (totalByAthlete.get(log.athleteId) ?? 0) + 1);
+        continue;
+      }
+      for (const entry of log.entries) {
+        for (const set of entry.sets) {
+          const reps = parseInt(set.reps ?? "", 10);
+          if (Number.isNaN(reps)) continue;
+          if (challenge.metric === "total_reps") {
+            totalByAthlete.set(log.athleteId, (totalByAthlete.get(log.athleteId) ?? 0) + reps);
+          } else if (entry.weightMode === "numeric") {
+            const weight = parseFloat(set.weight ?? "");
+            if (Number.isNaN(weight)) continue;
+            const lbs = set.weightUnit === "kg" ? weight * 2.20462 : weight;
+            totalByAthlete.set(log.athleteId, (totalByAthlete.get(log.athleteId) ?? 0) + reps * lbs);
+          }
+        }
+      }
+    }
+
+    const perAthlete = memberIds
+      .map((id) => ({
+        athleteId: id,
+        name: nameById.get(id) ?? "Unknown",
+        contribution: Math.round(totalByAthlete.get(id) ?? 0),
+      }))
+      .sort((a, b) => b.contribution - a.contribution);
+
+    const teamTotal = perAthlete.reduce((sum, a) => sum + a.contribution, 0);
+    return { teamTotal, target: challenge.targetValue, perAthlete };
   },
 
   // ---------- Team board (shared Q&A, not private messaging) ----------

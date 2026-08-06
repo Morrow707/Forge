@@ -57,6 +57,10 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN null; END $$;
 
 DO $$ BEGIN
+  CREATE TYPE "challenge_metric" AS ENUM ('workouts_completed', 'total_reps', 'total_volume');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+DO $$ BEGIN
   CREATE TYPE "cara_activity_type" AS ENUM ('training', 'meeting', 'film_review', 'travel', 'other');
 EXCEPTION WHEN duplicate_object THEN null; END $$;
 
@@ -189,6 +193,18 @@ CREATE TABLE IF NOT EXISTS "team_members" (
   "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "team_member_pair_idx" ON "team_members" ("team_id", "athlete_id");
+
+CREATE TABLE IF NOT EXISTS "team_challenges" (
+  "id" serial PRIMARY KEY,
+  "team_id" integer NOT NULL REFERENCES "teams"("id") ON DELETE CASCADE,
+  "title" text NOT NULL,
+  "metric" challenge_metric NOT NULL,
+  "target_value" integer,
+  "start_date" date NOT NULL,
+  "end_date" date NOT NULL,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "team_challenges_team_idx" ON "team_challenges" ("team_id");
 
 CREATE TABLE IF NOT EXISTS "coach_staff" (
   "id" serial PRIMARY KEY,

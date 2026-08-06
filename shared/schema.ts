@@ -208,6 +208,60 @@ export const teamMembers = pgTable(
   }),
 );
 
+export const challengeMetricEnum = pgEnum("challenge_metric", [
+  "workouts_completed",
+  "total_reps",
+  "total_volume",
+]);
+
+// Team-scoped, not individual -- the whole roster on a team pools its effort
+// toward one shared number for the challenge window, which is the point:
+// this sits alongside (not instead of) the existing per-athlete leaderboard.
+// Progress is never persisted/incremented on write; it's recomputed live
+// from workout_logs/workout_set_entries for the window every time it's
+// viewed (storage.computeTeamChallengeProgress), same "derive, don't cache"
+// approach as streaks and ACWR elsewhere in this codebase -- there's no
+// event stream to keep a running counter in sync with, and the underlying
+// data (a set logged, then edited, then unmarked complete) already changes
+// after the fact.
+export const teamChallenges = pgTable(
+  "team_challenges",
+  {
+    id: serial("id").primaryKey(),
+    teamId: integer("team_id")
+      .notNull()
+      .references(() => teams.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    metric: challengeMetricEnum("metric").notNull(),
+    // Null means "just track our total for the period," no fixed finish
+    // line -- a coach can run this as an open-ended team tally instead of a
+    // goal race if that fits the squad better.
+    targetValue: integer("target_value"),
+    startDate: date("start_date").notNull(),
+    endDate: date("end_date").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    teamIdx: index("team_challenges_team_idx").on(table.teamId),
+  }),
+);
+
+export type TeamChallenge = typeof teamChallenges.$inferSelect;
+
+export const createTeamChallengeSchema = z
+  .object({
+    teamId: z.number(),
+    title: z.string().trim().min(1).max(80),
+    metric: z.enum(["workouts_completed", "total_reps", "total_volume"]),
+    targetValue: z.number().int().positive().nullable().optional(),
+    startDate: z.string(),
+    endDate: z.string(),
+  })
+  .refine((v) => v.endDate >= v.startDate, {
+    message: "End date must be on or after the start date",
+    path: ["endDate"],
+  });
+
 // Shared coaching staff: lets multiple coach accounts operate as one
 // program (roster, teams, exercises, programs, analytics) instead of one
 // coach owning everything alone -- built for a program with an assistant/
@@ -1343,6 +1397,7 @@ export const coachAthletesRelations = relations(coachAthletes, ({ one }) => ({
 export const teamsRelations = relations(teams, ({ one, many }) => ({
   coach: one(users, { fields: [teams.coachId], references: [users.id] }),
   members: many(teamMembers),
+  challenges: many(teamChallenges),
 }));
 
 export const teamMembersRelations = relations(teamMembers, ({ one }) => ({
@@ -1351,6 +1406,10 @@ export const teamMembersRelations = relations(teamMembers, ({ one }) => ({
     fields: [teamMembers.athleteId],
     references: [users.id],
   }),
+}));
+
+export const teamChallengesRelations = relations(teamChallenges, ({ one }) => ({
+  team: one(teams, { fields: [teamChallenges.teamId], references: [teams.id] }),
 }));
 
 export const coachStaffRelations = relations(coachStaff, ({ one }) => ({
