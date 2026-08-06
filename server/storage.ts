@@ -64,7 +64,7 @@ import type {
   NutritionKnowledgeMessage,
   CreateFoodLogEntryInput,
 } from "@shared/schema";
-import { lookupBarcode, searchFoodsByName } from "./food-lookup";
+import { lookupBarcode, searchFoodsByName, type FoodCandidate } from "./food-lookup";
 import { TESTING_METRICS, testingMetricLowerIsBetter } from "@shared/testing-metrics";
 import { computeReadiness, BODY_PAIN_PARTS } from "@shared/wellness";
 import { isExerciseRiskyForPainParts } from "@shared/injury-matching";
@@ -78,7 +78,7 @@ import {
 } from "@shared/load";
 import { computeForceVelocityProfile, type LoadVelocityPoint } from "@shared/force-velocity";
 import { ALL_TROPHY_DEFINITIONS } from "@shared/achievements";
-import { askClaude, askClaudeStructured, askClaudeWithTools, askClaudeVision, aiEnabled, fastModel, type SystemPrompt } from "./ai";
+import { askClaude, askClaudeStructured, askClaudeWithTools, askClaudeVision, askClaudeVisionStructured, aiEnabled, fastModel, type SystemPrompt } from "./ai";
 import { eq, and, inArray, asc, desc, lt, lte, gte, gt, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { diffLines } from "diff";
@@ -604,6 +604,17 @@ const goalSuggestionSchema = z.object({
 const exerciseSubstitutionSchema = z.object({
   exerciseId: z.number().int(),
   summary: z.string(),
+});
+
+const mealPhotoItemSchema = z.object({
+  description: z.string().trim().min(1).max(200),
+  servingDescription: z.string().trim().max(120).nullable().optional(),
+  caloriesKcal: z.number().min(0).max(5000),
+  proteinG: z.number().min(0).max(500),
+  carbsG: z.number().min(0).max(500),
+  fatG: z.number().min(0).max(500),
+  fiberG: z.number().min(0).max(100).nullable().optional(),
+  sodiumMg: z.number().min(0).max(10000).nullable().optional(),
 });
 
 const generateModifiedWorkoutSchema = z.object({
@@ -1158,6 +1169,81 @@ export const storage = {
 
   async searchFoods(query: string) {
     return searchFoodsByName(query);
+  },
+
+  // The one AI-driven food-log path (see foodLogEntries' schema comment) --
+  // a meal photo has no barcode/database entry to look up, so estimating its
+  // contents is a genuine vision-and-judgment call rather than a lookup.
+  // Returns one candidate per distinct food item Claude identifies, in the
+  // same FoodCandidate shape lookupFoodBarcode/searchFoods already return,
+  // so the client's existing "review, edit, then POST to food-log" flow
+  // works unchanged regardless of which source produced the candidate.
+  async analyzeMealPhoto(
+    images: { mediaType: "image/jpeg" | "image/png"; data: string }[],
+  ): Promise<{ items: FoodCandidate[] } | { error: string }> {
+    if (!aiEnabled) {
+      return { error: "AI isn't set up yet -- ask whoever manages this Forge instance to configure it." };
+    }
+    const system =
+      "You are a sports-nutrition assistant estimating the contents of a meal from a photo. Identify every distinct food item visible and estimate typical nutrition for the portion shown, using standard reference values for common foods (USDA-style). A photo can't reveal exact recipe/restaurant macros, so give your single best estimate per item rather than caveating -- an athlete reviews and can edit every number before logging it. If the photo doesn't clearly show food, call the tool with an empty items array rather than guessing.";
+    const tool = {
+      name: "log_meal_items",
+      description: "Report each distinct food item identified in the photo with its estimated nutrition.",
+      input_schema: {
+        type: "object",
+        properties: {
+          items: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                description: { type: "string", description: "Food name, e.g. 'Grilled chicken breast'" },
+                servingDescription: { type: "string", description: "Estimated portion, e.g. '6 oz' or '1 cup'" },
+                caloriesKcal: { type: "number" },
+                proteinG: { type: "number" },
+                carbsG: { type: "number" },
+                fatG: { type: "number" },
+                fiberG: { type: "number" },
+                sodiumMg: { type: "number" },
+              },
+              required: ["description", "servingDescription", "caloriesKcal", "proteinG", "carbsG", "fatG"],
+            },
+          },
+        },
+        required: ["items"],
+      },
+    };
+    const result = await askClaudeVisionStructured<{ items: unknown[] }>(
+      system,
+      "Identify the food items in this photo and estimate nutrition for each.",
+      images,
+      tool,
+      { maxTokens: 1536 },
+    );
+    if (!result || !Array.isArray(result.items)) {
+      return { error: "Couldn't analyze that photo -- try again or enter it manually." };
+    }
+    const items: FoodCandidate[] = [];
+    for (const raw of result.items) {
+      const parsed = mealPhotoItemSchema.safeParse(raw);
+      if (!parsed.success) continue;
+      items.push({
+        description: parsed.data.description,
+        brand: null,
+        servingDescription: parsed.data.servingDescription ?? null,
+        caloriesKcal: Math.round(parsed.data.caloriesKcal),
+        proteinG: Math.round(parsed.data.proteinG * 10) / 10,
+        carbsG: Math.round(parsed.data.carbsG * 10) / 10,
+        fatG: Math.round(parsed.data.fatG * 10) / 10,
+        fiberG: parsed.data.fiberG != null ? Math.round(parsed.data.fiberG * 10) / 10 : null,
+        sodiumMg: parsed.data.sodiumMg != null ? Math.round(parsed.data.sodiumMg) : null,
+        barcode: null,
+      });
+    }
+    if (items.length === 0) {
+      return { error: "Couldn't identify any food in that photo -- try a clearer shot or enter it manually." };
+    }
+    return { items };
   },
 
   // ---------- Testing/combine history ----------

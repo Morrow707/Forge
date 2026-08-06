@@ -2140,6 +2140,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(results);
   });
 
+  // Photo-based meal logging -- the one AI-driven path in food logging (see
+  // foodLogEntries' schema comment): no barcode/database entry exists for a
+  // home-cooked or restaurant plate, so this is a real vision call rather
+  // than a lookup. Same "every athlete, coached or Free Agent" access as the
+  // rest of food logging -- not gated behind requireFreeAgent/
+  // requirePaidAiAccess, since this doesn't compete with a coach's guidance
+  // any more than typing in a food name does.
+  app.post("/api/athlete/food/analyze-photo", requireRole("athlete"), async (req, res) => {
+    const schema = z.object({
+      images: z
+        .array(z.object({ mediaType: z.enum(["image/jpeg", "image/png"]), data: z.string().min(1) }))
+        .min(1)
+        .max(2),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const result = await storage.analyzeMealPhoto(parsed.data.images);
+    if ("error" in result) return res.status(422).json({ message: result.error });
+    res.json(result);
+  });
+
   app.get("/api/athlete/calendar", requireRole("athlete"), async (req, res) => {
     const user = currentUser(req);
     const schema = z.object({ start: z.string(), end: z.string() });

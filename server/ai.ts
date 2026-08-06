@@ -173,6 +173,43 @@ export async function askClaudeStructured<T>(
   return (toolUse?.input as T) ?? null;
 }
 
+/** Structured extraction grounded in one or more images -- the vision
+ * counterpart to askClaudeStructured, for when the shape Claude should
+ * return needs to be reliable JSON (e.g. a list of foods identified in a
+ * meal photo) rather than prose describing what it sees. Same
+ * validate-before-trusting caveat as askClaudeStructured. */
+export async function askClaudeVisionStructured<T>(
+  system: SystemPrompt,
+  text: string,
+  images: { mediaType: "image/jpeg" | "image/png"; data: string }[],
+  tool: { name: string; description: string; input_schema: Record<string, unknown> },
+  { maxTokens = 1024, model }: CallOptions = {},
+): Promise<T | null> {
+  if (!aiEnabled) return null;
+  const data = await callAnthropic({
+    model: model || defaultModel,
+    max_tokens: maxTokens,
+    system: buildSystemField(system),
+    messages: [
+      {
+        role: "user",
+        content: [
+          ...images.map((img) => ({
+            type: "image",
+            source: { type: "base64", media_type: img.mediaType, data: img.data },
+          })),
+          { type: "text", text },
+        ],
+      },
+    ],
+    tools: [tool],
+    tool_choice: { type: "tool", name: tool.name },
+  });
+  if (!data) return null;
+  const toolUse = data.content?.find((b: any) => b.type === "tool_use");
+  return (toolUse?.input as T) ?? null;
+}
+
 /** Like askClaudeStructured, but offers Claude a choice between multiple
  * tools (tool_choice: "auto") instead of forcing exactly one -- lets the
  * model genuinely just reply/ask a question via a no-op tool on a turn

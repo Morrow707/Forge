@@ -1004,16 +1004,19 @@ export const nutritionTargets = pgTable(
   }),
 );
 
-export const foodLogSourceEnum = pgEnum("food_log_source", ["barcode", "search", "manual"]);
+export const foodLogSourceEnum = pgEnum("food_log_source", ["barcode", "search", "manual", "photo"]);
 
-// One row per logged food item, on a given calendar date -- never an AI
-// capability (see server/food-lookup.ts): barcode/name lookups just proxy a
-// public food database (Open Food Facts, USDA FoodData Central) for
+// One row per logged food item, on a given calendar date -- mostly never an
+// AI capability (see server/food-lookup.ts): barcode/name lookups just proxy
+// a public food database (Open Food Facts, USDA FoodData Central) for
 // convenience, same way the plate calculator looks up known plate weights.
-// Always free for every athlete, coached or Free Agent -- this is what an
-// athlete logs against the nutritionTargets a coach (or the athlete
-// themselves) already set, the same "coach sets the plan, human enters the
-// data" split as everywhere else in nutrition tracking.
+// "photo" is the one exception -- a meal photo has no barcode/database entry
+// to look up, so estimating its contents requires an actual AI vision call
+// (see storage.analyzeMealPhoto) -- but the resulting row is still always
+// free for every athlete, coached or Free Agent, same as every other source:
+// this is what an athlete logs against the nutritionTargets a coach (or the
+// athlete themselves) already set, the same "coach sets the plan, human
+// enters the data" split as everywhere else in nutrition tracking.
 export const foodLogEntries = pgTable(
   "food_log_entries",
   {
@@ -1053,7 +1056,7 @@ export const createFoodLogEntrySchema = z.object({
   fatG: z.coerce.number().min(0).max(1000).optional().nullable(),
   fiberG: z.coerce.number().min(0).max(300).optional().nullable(),
   sodiumMg: z.coerce.number().min(0).max(20000).optional().nullable(),
-  source: z.enum(["barcode", "search", "manual"]),
+  source: z.enum(["barcode", "search", "manual", "photo"]),
   barcode: z.string().trim().max(64).optional().nullable(),
 });
 export type CreateFoodLogEntryInput = z.infer<typeof createFoodLogEntrySchema>;
