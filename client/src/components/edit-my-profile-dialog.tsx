@@ -34,6 +34,7 @@ export function EditMyProfileDialog({
       setValue({
         name: user.name,
         age: user.age != null ? String(user.age) : "",
+        gender: user.gender ?? "",
         heightIn: user.heightIn != null ? String(user.heightIn) : "",
         bodyWeightLbs: user.bodyWeightLbs != null ? String(user.bodyWeightLbs) : "",
         sport: user.sport ?? "",
@@ -55,6 +56,7 @@ export function EditMyProfileDialog({
       const res = await apiRequest("PATCH", "/api/athlete/profile", {
         name: value.name.trim() || undefined,
         age: value.age.trim() ? Number(value.age) : null,
+        gender: value.gender.trim() || null,
         heightIn: value.heightIn.trim() ? Number(value.heightIn) : null,
         bodyWeightLbs: value.bodyWeightLbs.trim() ? Number(value.bodyWeightLbs) : null,
         sport: value.sport.trim() || null,

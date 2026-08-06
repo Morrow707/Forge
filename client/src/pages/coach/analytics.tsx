@@ -14,8 +14,21 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { apiRequest, getJson } from "@/lib/queryClient";
-import { Users, Gauge, Crown, CalendarDays, TrendingUp, Activity, SlidersHorizontal, Weight } from "lucide-react";
+import {
+  Users,
+  Gauge,
+  Crown,
+  CalendarDays,
+  TrendingUp,
+  Activity,
+  SlidersHorizontal,
+  Weight,
+  Video,
+  ThumbsUp,
+  ThumbsDown,
+} from "lucide-react";
 import {
   LineChart,
   Line,
@@ -78,6 +91,15 @@ type AnalyticsPoint = {
     jumpHeightCm: number;
     groundContactSeconds: number | null;
   }[] | null;
+  legDriveAsymmetry: {
+    repNumber: number;
+    leftDriveDegPerSec: number;
+    rightDriveDegPerSec: number;
+    asymmetryPercent: number;
+    dominantSide: "left" | "right";
+  }[] | null;
+  formCheckVideoUrl: string | null;
+  formCheckFlag: "best" | "worst" | null;
 };
 
 const FAULT_NAMES: Record<string, string> = {
@@ -110,6 +132,7 @@ const CHART_OPTIONS = [
   { key: "groundContact", label: "Ground Contact & RSI" },
   { key: "pathShape", label: "Bar Path Shape" },
   { key: "armSymmetry", label: "Arm Symmetry" },
+  { key: "legAsymmetry", label: "Leg Drive Asymmetry" },
   { key: "repDecay", label: "Rep-by-Rep Velocity Decay" },
   { key: "tempo", label: "Tempo" },
   { key: "rom", label: "Range of Motion" },
@@ -186,6 +209,15 @@ export default function CoachAnalytics() {
   const [athleteId, setAthleteId] = useState<string>("");
   const [exerciseId, setExerciseId] = useState<string>("");
   const [hiddenCharts, setHiddenCharts] = useState<Set<ChartKey>>(() => loadHiddenCharts());
+  // Read-only preview of an athlete's per-set form-check clip from the raw
+  // table below -- unlike the comment-thread video annotation flow, a coach
+  // can't retake/remove/re-flag from here, this is just "watch what they
+  // tagged," same data the athlete already saw when they recorded it.
+  const [videoPreview, setVideoPreview] = useState<{
+    url: string;
+    flag: "best" | "worst" | null;
+    label: string;
+  } | null>(null);
 
   const { data: roster = [] } = useQuery<RosterEntry[]>({
     queryKey: ["/api/coach/roster"],
@@ -258,6 +290,14 @@ export default function CoachAnalytics() {
     (p) => p.armPathTrace && p.armPathTrace.left.length > 1 && p.armPathTrace.right.length > 1,
   );
   const latestArmPathSet = armPathSets[armPathSets.length - 1];
+  // Rep-by-rep left/right knee-drive rate for the most recent set with a
+  // detected bilateral lower-body lift -- same "latest set only" treatment
+  // as arm symmetry above, since averaging across sets would wash out which
+  // specific reps skewed one-sided.
+  const legDriveSets = chartData.filter(
+    (p) => p.legDriveAsymmetry && p.legDriveAsymmetry.length > 0,
+  );
+  const latestLegDriveSet = legDriveSets[legDriveSets.length - 1];
   // Velocity decay across reps within the most recent multi-rep tracked set.
   const repDecaySets = chartData.filter(
     (p) => p.repBreakdown && p.repBreakdown.length > 1 && p.repBreakdown.some((r) => r.peakVelocityMps > 0),
@@ -949,6 +989,50 @@ export default function CoachAnalytics() {
             </Card>
           )}
 
+          {latestLegDriveSet && !hiddenCharts.has("legAsymmetry") && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Leg Drive Asymmetry</CardTitle>
+                <CardDescription>
+                  Left vs. right knee extension rate during the drive phase, rep by rep, for the
+                  most recent bilateral lift with a detected asymmetry (
+                  {format(parseISO(latestLegDriveSet.date), "MMM d")} · Set{" "}
+                  {latestLegDriveSet.setNumber}) -- a consistent lean to one side across reps is
+                  the load-management signal, not any single rep.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="h-56">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={latestLegDriveSet.legDriveAsymmetry!} margin={{ left: 4, right: 12 }}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                    <XAxis dataKey="repNumber" tick={{ fontSize: 11 }} tickFormatter={(v) => `Rep ${v}`} />
+                    <YAxis tick={{ fontSize: 11 }} width={48} unit="°/s" />
+                    <Tooltip
+                      contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))" }}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <Line
+                      type="monotone"
+                      dataKey="leftDriveDegPerSec"
+                      name="Left leg"
+                      stroke={TREND_COLORS[0]}
+                      strokeWidth={2}
+                      dot={{ r: 3 }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="rightDriveDegPerSec"
+                      name="Right leg"
+                      stroke={TREND_COLORS[1]}
+                      strokeWidth={2}
+                      dot={{ r: 3 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
           {latestRepDecaySet && !hiddenCharts.has("repDecay") && (
             <Card>
               <CardHeader>
@@ -1114,6 +1198,7 @@ export default function CoachAnalytics() {
                     <th className="py-1.5 pr-3">Path (cm)</th>
                     <th className="py-1.5 pr-3">Jump (cm)</th>
                     <th className="py-1.5 pr-3">Form notes</th>
+                    <th className="py-1.5 pr-3">Video</th>
                     <th className="py-1.5">PR</th>
                   </tr>
                 </thead>
@@ -1159,6 +1244,28 @@ export default function CoachAnalytics() {
                           "-"
                         )}
                       </td>
+                      <td className="py-1.5 pr-3">
+                        {p.formCheckVideoUrl ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setVideoPreview({
+                                url: p.formCheckVideoUrl!,
+                                flag: p.formCheckFlag,
+                                label: `${format(parseISO(p.date), "MMM d")} · Set ${p.setNumber}`,
+                              })
+                            }
+                            className="flex items-center gap-1 text-primary hover:underline"
+                          >
+                            <Video className="h-3.5 w-3.5" />
+                            Watch
+                            {p.formCheckFlag === "best" && <ThumbsUp className="h-3 w-3 text-success" />}
+                            {p.formCheckFlag === "worst" && <ThumbsDown className="h-3 w-3 text-destructive" />}
+                          </button>
+                        ) : (
+                          "-"
+                        )}
+                      </td>
                       <td className="py-1.5">
                         {p.isPR && <Crown className="h-3.5 w-3.5 text-amber-400" />}
                       </td>
@@ -1169,6 +1276,36 @@ export default function CoachAnalytics() {
             </CardContent>
           </Card>
           )}
+
+          <Dialog open={!!videoPreview} onOpenChange={(o) => !o && setVideoPreview(null)}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  {videoPreview?.label}
+                  {videoPreview?.flag === "best" && (
+                    <Badge className="gap-1 bg-success/15 text-success hover:bg-success/15">
+                      <ThumbsUp className="h-3 w-3" />
+                      Best
+                    </Badge>
+                  )}
+                  {videoPreview?.flag === "worst" && (
+                    <Badge className="gap-1 bg-destructive/15 text-destructive hover:bg-destructive/15">
+                      <ThumbsDown className="h-3 w-3" />
+                      Worst
+                    </Badge>
+                  )}
+                </DialogTitle>
+              </DialogHeader>
+              {videoPreview && (
+                <video
+                  src={videoPreview.url}
+                  controls
+                  playsInline
+                  className="w-full rounded-md bg-black"
+                />
+              )}
+            </DialogContent>
+          </Dialog>
         </div>
       )}
         </TabsContent>

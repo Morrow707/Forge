@@ -21,6 +21,7 @@ export type ProfileAthlete = {
   name: string;
   email: string;
   age?: number | null;
+  gender?: string | null;
   heightIn?: number | null;
   bodyWeightLbs?: number | null;
   sport?: string | null;
@@ -40,6 +41,7 @@ function toFormValue(athlete: ProfileAthlete | null): ProfileFieldsValue {
   return {
     name: athlete.name,
     age: athlete.age != null ? String(athlete.age) : "",
+    gender: athlete.gender ?? "",
     heightIn: athlete.heightIn != null ? String(athlete.heightIn) : "",
     bodyWeightLbs: athlete.bodyWeightLbs != null ? String(athlete.bodyWeightLbs) : "",
     sport: athlete.sport ?? "",
@@ -76,6 +78,7 @@ export function AthleteProfileDialog({
       const res = await apiRequest("PATCH", `/api/coach/roster/${athlete.id}/profile`, {
         name: value.name.trim() || undefined,
         age: value.age.trim() ? Number(value.age) : null,
+        gender: value.gender.trim() || null,
         heightIn: value.heightIn.trim() ? Number(value.heightIn) : null,
         bodyWeightLbs: value.bodyWeightLbs.trim() ? Number(value.bodyWeightLbs) : null,
         sport: value.sport.trim() || null,
