@@ -65,7 +65,14 @@ import type {
 import { lookupBarcode, searchFoodsByName } from "./food-lookup";
 import { TESTING_METRICS, testingMetricLowerIsBetter } from "@shared/testing-metrics";
 import { computeReadiness } from "@shared/wellness";
-import { buildAcwrSeries, type DailyLoad, type AcwrPoint } from "@shared/load";
+import {
+  buildAcwrSeries,
+  buildWeeklyLoadSeries,
+  type DailyLoad,
+  type DailyTrainingLoad,
+  type AcwrPoint,
+  type WeeklyLoadPoint,
+} from "@shared/load";
 import { ALL_TROPHY_DEFINITIONS } from "@shared/achievements";
 import { askClaude, askClaudeStructured, askClaudeWithTools, askClaudeVision, aiEnabled, fastModel, type SystemPrompt } from "./ai";
 import { eq, and, inArray, asc, desc, lt, lte, gte, gt, isNull, sql } from "drizzle-orm";
@@ -5469,6 +5476,58 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
       .slice(0, 10);
     const dailyLoads = await this.getDailyLoadSeriesForAthlete(athleteId, sinceDate);
     return buildAcwrSeries(dailyLoads, today, days);
+  },
+
+  // Week-by-week volume (total load) and intensity (average load per rep)
+  // for the analytics page's training-load chart -- coach-scoped like the
+  // exercise analytics above, via the same owned-assignment-ids lookup
+  // getRecentSessionsForAthlete uses, rather than getDailyLoadSeriesForAthlete's
+  // unscoped athleteId-only query (that one's only ever called for the
+  // requesting athlete's own id or after an equivalent check upstream).
+  async getWeeklyLoadForAthlete(
+    coachId: number,
+    athleteId: number,
+    weeks = 12,
+  ): Promise<WeeklyLoadPoint[]> {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    const owned = await db
+      .select({ id: assignments.id })
+      .from(assignments)
+      .where(and(inArray(assignments.coachId, coachIds), eq(assignments.athleteId, athleteId)));
+    const assignmentIds = owned.map((a) => a.id);
+    if (assignmentIds.length === 0) return [];
+
+    const sinceDate = new Date(Date.now() - weeks * 7 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10);
+    const logs = await db.query.workoutLogs.findMany({
+      where: and(inArray(workoutLogs.assignmentId, assignmentIds), gte(workoutLogs.date, sinceDate)),
+      with: { entries: { with: { sets: true } } },
+    });
+
+    const byDate = new Map<string, { volume: number; numericReps: number; sets: number }>();
+    for (const log of logs) {
+      const entry = byDate.get(log.date) ?? { volume: 0, numericReps: 0, sets: 0 };
+      for (const e of log.entries) {
+        for (const set of e.sets) {
+          entry.sets += 1;
+          const reps = set.reps ? parseInt(set.reps, 10) : NaN;
+          if (Number.isNaN(reps) || e.weightMode !== "numeric" || !set.weight) continue;
+          const w = parseFloat(set.weight);
+          if (Number.isNaN(w)) continue;
+          entry.numericReps += reps;
+          entry.volume += reps * w;
+        }
+      }
+      byDate.set(log.date, entry);
+    }
+    const dailyLoads: DailyTrainingLoad[] = Array.from(byDate.entries()).map(([date, v]) => ({
+      date,
+      ...v,
+    }));
+
+    const today = new Date().toISOString().slice(0, 10);
+    return buildWeeklyLoadSeries(dailyLoads, weeks, today);
   },
 
   // Current ACWR snapshot for every athlete on this coach's roster -- one
