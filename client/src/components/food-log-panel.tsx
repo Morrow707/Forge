@@ -1,11 +1,20 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { apiRequest, getJson } from "@/lib/queryClient";
-import { FoodScannerDialog } from "@/components/food-scanner-dialog";
 import { toast } from "sonner";
 import { Plus, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
 import { format, addDays, parseISO } from "date-fns";
+
+// Barcode scanning (@zxing/browser) and the photo-analysis path it drags in
+// alongside it are only ever needed once someone actually opens the Log Food
+// dialog -- a static import here would bundle that weight into every
+// nutrition-panel load, including a coach's read-only view of a roster
+// athlete that never renders this dialog at all. Splitting it into its own
+// chunk means a plain "check my macros" visit never fetches it.
+const FoodScannerDialog = lazy(() =>
+  import("@/components/food-scanner-dialog").then((m) => ({ default: m.FoodScannerDialog })),
+);
 
 type FoodLogEntry = {
   id: number;
@@ -80,6 +89,10 @@ export function FoodLogPanel({
   const qc = useQueryClient();
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [scannerOpen, setScannerOpen] = useState(false);
+  // Sticky once true -- mounts the lazy dialog (and fetches its chunk) the
+  // first time it's actually opened, then leaves it mounted so closing and
+  // reopening doesn't re-fetch or lose in-progress state.
+  const [scannerEverOpened, setScannerEverOpened] = useState(false);
 
   const queryKey = [fetchUrl, date];
   const { data, isLoading } = useQuery<FoodLogResponse>({
@@ -176,13 +189,24 @@ export function FoodLogPanel({
       )}
 
       {editable && isToday && (
-        <Button type="button" variant="outline" onClick={() => setScannerOpen(true)}>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => {
+            setScannerEverOpened(true);
+            setScannerOpen(true);
+          }}
+        >
           <Plus className="h-4 w-4" />
           Log Food
         </Button>
       )}
 
-      {editable && <FoodScannerDialog open={scannerOpen} onOpenChange={setScannerOpen} date={date} />}
+      {scannerEverOpened && (
+        <Suspense fallback={null}>
+          <FoodScannerDialog open={scannerOpen} onOpenChange={setScannerOpen} date={date} />
+        </Suspense>
+      )}
     </div>
   );
 }
