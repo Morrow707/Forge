@@ -1265,6 +1265,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(digest ? { digest: digest.digest } : null);
   });
 
+  // Lazily computed on each request (no background job) -- see
+  // getInactiveAthletesForCoach for how lastActivityAt + last workout log
+  // date are combined into a single staleness signal per athlete.
+  app.get("/api/coach/inactive-athletes", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const inactive = await storage.getInactiveAthletesForCoach(user.id);
+    res.json(inactive);
+  });
+
+  app.post(
+    "/api/coach/roster/:athleteId/nudge",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      const athlete = await storage.getRosterAthleteForCoach(user.id, athleteId);
+      if (!athlete) return res.status(404).json({ message: "Athlete not found" });
+
+      await notifyUser(
+        athleteId,
+        "reengagement",
+        `${user.name} misses you at training`,
+        `It's been a few days since your last session. Hop back in whenever you're ready -- your coach is cheering you on.`,
+        "/athlete",
+      );
+      res.status(204).end();
+    },
+  );
+
   app.get("/api/coach/teams", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     const teamList = await storage.getTeamsForCoach(user.id);

@@ -866,6 +866,64 @@ export const storage = {
     return updated;
   },
 
+  async touchUserActivity(userId: number) {
+    await db.update(users).set({ lastActivityAt: new Date() }).where(eq(users.id, userId));
+  },
+
+  // Coach-facing re-engagement nudge: flags roster athletes with no
+  // evidence of activity in `thresholdDays`. lastActivityAt only started
+  // being recorded once this feature shipped, so an athlete who logged
+  // real workouts before then but hasn't opened the app since would look
+  // falsely inactive on login alone -- falling back to their most recent
+  // workout_logs date (whichever is more recent) avoids that false
+  // positive without needing a backfill migration.
+  async getInactiveAthletesForCoach(coachId: number, thresholdDays = 3) {
+    const roster = await this.getRosterForCoach(coachId);
+    if (roster.length === 0) return [];
+    const athleteIds = roster.map((a) => a.id);
+
+    const [users_, lastLogByAthlete] = await Promise.all([
+      db.query.users.findMany({
+        where: inArray(users.id, athleteIds),
+        columns: { id: true, lastActivityAt: true },
+      }),
+      db
+        .select({ athleteId: workoutLogs.athleteId, lastDate: sql<string>`max(${workoutLogs.date})` })
+        .from(workoutLogs)
+        .where(inArray(workoutLogs.athleteId, athleteIds))
+        .groupBy(workoutLogs.athleteId),
+    ]);
+    const lastActivityById = new Map(users_.map((u) => [u.id, u.lastActivityAt]));
+    const lastLogDateById = new Map(lastLogByAthlete.map((r) => [r.athleteId, r.lastDate]));
+
+    const now = Date.now();
+    const thresholdMs = thresholdDays * 24 * 60 * 60 * 1000;
+    const inactive: { id: number; name: string; email: string; daysSinceActive: number | null }[] = [];
+
+    for (const athlete of roster) {
+      const loginTime = lastActivityById.get(athlete.id)?.getTime() ?? null;
+      const logDateStr = lastLogDateById.get(athlete.id);
+      const logTime = logDateStr ? new Date(logDateStr).getTime() : null;
+      const mostRecent =
+        loginTime != null && logTime != null
+          ? Math.max(loginTime, logTime)
+          : (loginTime ?? logTime);
+
+      if (mostRecent == null) {
+        inactive.push({ id: athlete.id, name: athlete.name, email: athlete.email, daysSinceActive: null });
+      } else if (now - mostRecent >= thresholdMs) {
+        inactive.push({
+          id: athlete.id,
+          name: athlete.name,
+          email: athlete.email,
+          daysSinceActive: Math.floor((now - mostRecent) / (24 * 60 * 60 * 1000)),
+        });
+      }
+    }
+
+    return inactive.sort((a, b) => (b.daysSinceActive ?? Infinity) - (a.daysSinceActive ?? Infinity));
+  },
+
   async getCoachesForAthlete(athleteId: number) {
     const rows = await db
       .select({ id: users.id, name: users.name, coachCode: users.coachCode })
