@@ -24,6 +24,7 @@ import { NutritionDialog } from "@/components/nutrition-dialog";
 import { WellnessHistoryDialog, READINESS_CLASSNAME } from "@/components/wellness-history-dialog";
 import { AcwrHistoryDialog, ACWR_RISK_CLASSNAME } from "@/components/acwr-history-dialog";
 import { ChatHistoryDialog } from "@/components/chat-history-dialog";
+import { TrophyCaseDialog } from "@/components/trophy-case-dialog";
 import { CaraCompliancePanel } from "@/components/cara-compliance-panel";
 import { READINESS_LABEL, type ReadinessLevel } from "@shared/wellness";
 import { ACWR_RISK_LABEL, type AcwrRiskLevel } from "@shared/load";
@@ -51,6 +52,7 @@ import {
   Sparkles,
   Activity,
   Apple,
+  Trophy,
 } from "lucide-react";
 
 type HealthStatus = "healthy" | "hurt";
@@ -118,6 +120,7 @@ export default function CoachRoster() {
   const [goalsAthlete, setGoalsAthlete] = useState<RosterEntry | null>(null);
   const [nutritionAthlete, setNutritionAthlete] = useState<RosterEntry | null>(null);
   const [wellnessAthlete, setWellnessAthlete] = useState<RosterEntry | null>(null);
+  const [trophyAthlete, setTrophyAthlete] = useState<RosterEntry | null>(null);
   const [acwrAthlete, setAcwrAthlete] = useState<RosterEntry | null>(null);
   const [chatAthlete, setChatAthlete] = useState<RosterEntry | null>(null);
   const [sharingProfileId, setSharingProfileId] = useState<number | null>(null);
@@ -314,6 +317,15 @@ export default function CoachRoster() {
                             onClick={() => setNutritionAthlete(a)}
                           >
                             <Apple className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            aria-label={`View ${a.name}'s trophy case`}
+                            title="Trophy case"
+                            onClick={() => setTrophyAthlete(a)}
+                          >
+                            <Trophy className="h-4 w-4" />
                           </Button>
                           <Button
                             size="icon"
@@ -598,6 +610,15 @@ export default function CoachRoster() {
           onOpenChange={(open) => !open && setAcwrAthlete(null)}
           athleteName={acwrAthlete.name}
           fetchUrl={`/api/coach/roster/${acwrAthlete.id}/acwr-history`}
+        />
+      )}
+
+      {trophyAthlete && (
+        <TrophyCaseDialog
+          open={trophyAthlete !== null}
+          onOpenChange={(open) => !open && setTrophyAthlete(null)}
+          athleteName={trophyAthlete.name}
+          fetchUrl={`/api/coach/roster/${trophyAthlete.id}/trophies`}
         />
       )}
 

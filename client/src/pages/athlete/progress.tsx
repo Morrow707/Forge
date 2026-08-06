@@ -37,10 +37,12 @@ import {
   TrendingUp,
   Share2,
   Target,
+  Trophy,
 } from "lucide-react";
 import { GoalsPanel } from "@/components/goals-panel";
 import { StreakBadges } from "@/components/streak-badge";
 import { DigestBanner } from "@/components/digest-banner";
+import { TrophyCase, type AthleteTrophyView } from "@/components/trophy-case";
 
 type ProgressSummary = {
   totalWorkoutsCompleted: number;
@@ -91,6 +93,11 @@ export default function AthleteProgress() {
   const { data, isLoading } = useQuery<ProgressSummary>({
     queryKey: ["/api/athlete/progress"],
     queryFn: () => getJson("/api/athlete/progress"),
+  });
+
+  const { data: trophies } = useQuery<AthleteTrophyView[]>({
+    queryKey: ["/api/athlete/trophies"],
+    queryFn: () => getJson("/api/athlete/trophies"),
   });
 
   const { data: metrics } = useQuery<BodyMetric[]>({
@@ -203,6 +210,21 @@ export default function AthleteProgress() {
               />
             </div>
           )}
+
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Trophy className="h-5 w-5 text-primary" />
+                Trophy Case
+              </CardTitle>
+              <CardDescription>
+                Every milestone you've ever unlocked -- they stack, and they're yours for good.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <TrophyCase trophies={trophies ?? []} />
+            </CardContent>
+          </Card>
 
           <div className="grid gap-4 lg:grid-cols-2">
             <Card>

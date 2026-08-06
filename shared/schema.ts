@@ -1036,6 +1036,48 @@ export const setCaraCapSchema = z.object({
   capMinutes: z.number().int().min(1).max(10080).nullable(),
 });
 
+export const trophyCategoryEnum = pgEnum("trophy_category", [
+  "workout_count",
+  "streak",
+  "pr_count",
+]);
+
+export const trophyTierEnum = pgEnum("trophy_tier", ["bronze", "silver", "gold"]);
+
+// Persisted, Pokemon-Go-style stacking achievements: once a threshold is
+// crossed the row is written permanently and never removed, even if the
+// underlying stat later drops back down (a broken streak doesn't take its
+// streak trophies away). This is deliberately the single system covering
+// workout-count milestones, streak milestones, and PR-count milestones --
+// keeps three overlapping gamification ideas from turning into three
+// half-built ones. One row per (athleteId, key); `key` is a stable id like
+// "workout_count_100" defined in shared/achievements.ts, not the display
+// label, so re-labeling a trophy later doesn't orphan already-awarded rows.
+export const athleteTrophies = pgTable(
+  "athlete_trophies",
+  {
+    id: serial("id").primaryKey(),
+    athleteId: integer("athlete_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    key: text("key").notNull(),
+    category: trophyCategoryEnum("category").notNull(),
+    tier: trophyTierEnum("tier").notNull(),
+    label: text("label").notNull(),
+    threshold: integer("threshold").notNull(),
+    unlockedAt: timestamp("unlocked_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    athleteIdx: index("athlete_trophies_athlete_idx").on(table.athleteId),
+    athleteKeyIdx: uniqueIndex("athlete_trophies_athlete_key_idx").on(
+      table.athleteId,
+      table.key,
+    ),
+  }),
+);
+
+export type AthleteTrophy = typeof athleteTrophies.$inferSelect;
+
 // AI-generated, one per athlete per date, cached permanently once written
 // (same lazy-materialize-then-cache pattern as testingResults above) rather
 // than regenerated on every view -- a day's wellness check-in and RPE

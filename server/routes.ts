@@ -1198,6 +1198,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
+  app.get(
+    "/api/coach/roster/:athleteId/trophies",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      const onRoster = await storage.getRosterAthleteForCoach(user.id, athleteId);
+      if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
+      const trophies = await storage.getTrophiesForAthlete(athleteId);
+      res.json(trophies);
+    },
+  );
+
   // Current acute:chronic workload ratio for every roster athlete with any
   // logged training in the last 28 days -- an athlete with nothing logged
   // is simply absent, same "absent means no data yet" convention as
@@ -1907,6 +1920,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ ...summary, ...streak });
   });
 
+  // Persisted, stacking achievement case -- covers what used to be three
+  // separate gamification ideas (workout-count milestones, streak badges,
+  // PR milestones) in one system. Lazily re-checks thresholds on every read
+  // so a workout logged directly via the offline queue, or any other path
+  // that doesn't go through the completion branch of /api/athlete/log,
+  // still self-heals the next time the trophy case is opened.
+  app.get("/api/athlete/trophies", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const trophies = await storage.getTrophiesForAthlete(user.id);
+    res.json(trophies);
+  });
+
   // Backs the "see the trend" click on an exercise in the athlete's own
   // Recent PRs list -- scoped to their own id, no athleteId to validate.
   app.get("/api/athlete/exercise-history", requireRole("athlete"), async (req, res) => {
@@ -2132,12 +2157,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // training" evidence -- completion closes it outright, anything else
     // just resets the idle clock. Both are no-ops when there's no open
     // session (most days, for most coaches, since this is opt-in).
+    let newlyUnlockedTrophies: Awaited<ReturnType<typeof storage.checkAndAwardTrophies>>["newlyUnlocked"] = [];
     if (parsed.data.completed) {
       await storage.closeCaraSessionOnCompletion(user.id);
+      // Completing a workout is the only moment totalCompleted/streak/PR
+      // count can newly cross a threshold, so this is the one place we
+      // surface "newly unlocked" for a celebratory toast -- a plain refetch
+      // of the trophy case (e.g. the athlete's own progress page) never
+      // re-announces something already earned.
+      ({ newlyUnlocked: newlyUnlockedTrophies } = await storage.checkAndAwardTrophies(user.id));
     } else {
       await storage.touchCaraSession(user.id);
     }
-    res.status(200).json(log);
+    res.status(200).json({ ...log, newlyUnlockedTrophies });
   });
 
   // ---------- CARA (countable athletically-related activity) tracking ----------

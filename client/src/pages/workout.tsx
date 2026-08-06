@@ -778,7 +778,7 @@ export function WorkoutPage({
         return { synced: false as const, data: null, silent };
       }
     },
-    onSuccess: ({ synced, silent }, { completed }) => {
+    onSuccess: ({ synced, silent, data }, { completed }) => {
       // The offline banner needs to reflect reality regardless of which
       // save path triggered it -- only the toast and the query refetch
       // (items only ever hydrates from `data` once per mount, so refetching
@@ -790,6 +790,12 @@ export function WorkoutPage({
       qc.invalidateQueries({ queryKey: [`${apiBase}/day`] });
       if (synced) {
         toast.success(completed ? "Workout marked complete" : "Progress saved");
+        qc.invalidateQueries({ queryKey: ["/api/athlete/trophies"] });
+        for (const trophy of data?.newlyUnlockedTrophies ?? []) {
+          toast.success(`🏆 New trophy: ${trophy.label}`, {
+            description: `${trophy.tier[0].toUpperCase()}${trophy.tier.slice(1)}`,
+          });
+        }
       } else {
         toast.info("You're offline — saved on this device, will sync automatically");
       }
