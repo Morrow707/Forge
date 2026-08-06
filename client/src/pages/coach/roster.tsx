@@ -28,6 +28,7 @@ import { TrophyCaseDialog } from "@/components/trophy-case-dialog";
 import { TrainingHistoryExportDialog } from "@/components/training-history-export-dialog";
 import { CaraCompliancePanel } from "@/components/cara-compliance-panel";
 import { TeamChallengesSection } from "@/components/team-challenges-panel";
+import { GameDaysSection } from "@/components/game-days-panel";
 import { READINESS_LABEL, type ReadinessLevel } from "@shared/wellness";
 import { ACWR_RISK_LABEL, type AcwrRiskLevel } from "@shared/load";
 import { apiRequest, ApiError } from "@/lib/queryClient";
@@ -511,6 +512,7 @@ export default function CoachRoster() {
                     onAdd={(athleteId) => addToTeamMutation.mutate({ teamId: team.id, athleteId })}
                   />
                   <TeamChallengesSection teamId={team.id} teamName={team.name} />
+                  <GameDaysSection teamId={team.id} teamName={team.name} />
                 </CardContent>
               </Card>
             ))}

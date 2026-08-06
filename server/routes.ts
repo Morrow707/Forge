@@ -49,6 +49,7 @@ import {
   logCaraActivitySchema,
   setCaraCapSchema,
   createTeamChallengeSchema,
+  createTeamGameDaySchema,
 } from "@shared/schema";
 import { computeReadiness } from "@shared/wellness";
 import { z } from "zod";
@@ -1489,6 +1490,81 @@ export async function registerRoutes(app: Express): Promise<Server> {
     );
     res.json(withProgress);
   });
+
+  // ---------------- Coach: Game days + microcycle planning ----------------
+  // A team's competition schedule, and a planning grid that lays out every
+  // athlete's training in the window around one game day, labeled by offset
+  // (GD-3, GD-1, Game Day, GD+1) -- so a coach can see the whole squad's
+  // taper-in/recover-out structure at a glance instead of scanning each
+  // athlete's calendar separately.
+
+  app.get("/api/coach/team-game-days", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const gameDays = await storage.getTeamGameDaysForCoach(user.id);
+    res.json(gameDays);
+  });
+
+  app.post("/api/coach/teams/:id/game-days", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const teamId = Number(req.params.id);
+    if (!(await assertOwnsTeam(user.id, teamId))) {
+      return res.status(404).json({ message: "Team not found" });
+    }
+    const parsed = createTeamGameDaySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const gameDay = await storage.createTeamGameDay(
+      teamId,
+      parsed.data.date,
+      parsed.data.opponent || null,
+      parsed.data.notes || null,
+    );
+    res.status(201).json(gameDay);
+  });
+
+  app.delete("/api/coach/team-game-days/:id", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const gameDayId = Number(req.params.id);
+    const gameDay = await storage.getTeamGameDayById(gameDayId);
+    if (!gameDay || !(await assertOwnsTeam(user.id, gameDay.teamId))) {
+      return res.status(404).json({ message: "Game day not found" });
+    }
+    await storage.deleteTeamGameDay(gameDayId);
+    res.status(204).end();
+  });
+
+  app.get(
+    "/api/coach/teams/:id/game-days/:gameDayId/microcycle",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const teamId = Number(req.params.id);
+      const gameDayId = Number(req.params.gameDayId);
+      if (!(await assertOwnsTeam(user.id, teamId))) {
+        return res.status(404).json({ message: "Team not found" });
+      }
+      const querySchema = z.object({
+        daysBefore: z.coerce.number().int().min(0).max(13).optional(),
+        daysAfter: z.coerce.number().int().min(0).max(6).optional(),
+      });
+      const parsed = querySchema.safeParse(req.query);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      const plan = await storage.getMicrocyclePlanForTeam(
+        user.id,
+        teamId,
+        gameDayId,
+        parsed.data.daysBefore,
+        parsed.data.daysAfter,
+      );
+      if (!plan) {
+        return res.status(404).json({ message: "Game day not found" });
+      }
+      res.json(plan);
+    },
+  );
 
   // ---------------- Coach & Athlete: Team board ----------------
   // A single shared board per coach, visible to the coach and every athlete

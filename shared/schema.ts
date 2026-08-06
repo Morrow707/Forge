@@ -288,6 +288,38 @@ export const createTeamChallengeSchema = z
     path: ["endDate"],
   });
 
+// A team's competition schedule -- lets a coach plan the training week
+// around competition rather than a rigid calendar grid. Deliberately
+// separate from assignments/programDays: a game day isn't training, it's a
+// fixed point every athlete's microcycle gets planned relative to (GD-3,
+// GD-1, GD, GD+1...), and offsets are always computed live against whatever
+// is actually scheduled rather than stored, so moving a game or editing a
+// program never leaves a stale offset behind.
+export const teamGameDays = pgTable(
+  "team_game_days",
+  {
+    id: serial("id").primaryKey(),
+    teamId: integer("team_id")
+      .notNull()
+      .references(() => teams.id, { onDelete: "cascade" }),
+    date: date("date").notNull(),
+    opponent: text("opponent"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    teamIdx: index("team_game_days_team_idx").on(table.teamId),
+  }),
+);
+
+export type TeamGameDay = typeof teamGameDays.$inferSelect;
+
+export const createTeamGameDaySchema = z.object({
+  date: z.string().min(1),
+  opponent: z.string().trim().max(100).optional(),
+  notes: z.string().trim().max(500).optional(),
+});
+
 // Shared coaching staff: lets multiple coach accounts operate as one
 // program (roster, teams, exercises, programs, analytics) instead of one
 // coach owning everything alone -- built for a program with an assistant/
@@ -1450,6 +1482,7 @@ export const teamsRelations = relations(teams, ({ one, many }) => ({
   coach: one(users, { fields: [teams.coachId], references: [users.id] }),
   members: many(teamMembers),
   challenges: many(teamChallenges),
+  gameDays: many(teamGameDays),
 }));
 
 export const teamMembersRelations = relations(teamMembers, ({ one }) => ({
@@ -1462,6 +1495,10 @@ export const teamMembersRelations = relations(teamMembers, ({ one }) => ({
 
 export const teamChallengesRelations = relations(teamChallenges, ({ one }) => ({
   team: one(teams, { fields: [teamChallenges.teamId], references: [teams.id] }),
+}));
+
+export const teamGameDaysRelations = relations(teamGameDays, ({ one }) => ({
+  team: one(teams, { fields: [teamGameDays.teamId], references: [teams.id] }),
 }));
 
 export const coachStaffRelations = relations(coachStaff, ({ one }) => ({
