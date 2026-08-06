@@ -4538,6 +4538,14 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
   // calendar individually. Only ever touches days that actually belong to
   // this assignment's own program. Fine-tuning specific days afterward
   // still works the same as before via updateCorrectivesForAssignmentDay.
+  //
+  // One transaction covering every target day, not one transaction per day
+  // -- the assign-program wizard calls this once per athlete per day-group
+  // (see assign-program-dialog.tsx's correctives queue), and a 12-week
+  // program with a repeating day title used to mean 12 sequential round
+  // trips per call just to seed correctives. A single batched delete + a
+  // single multi-row insert does the same work in one round trip regardless
+  // of day count.
   async applyCorrectivesToDays(
     assignmentId: number,
     programDayIds: number[],
@@ -4552,10 +4560,35 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
     const validDayIds = new Set(
       program.weeks.flatMap((w) => w.days.filter((d) => !d.isRestDay).map((d) => d.id)),
     );
-    for (const dayId of programDayIds) {
-      if (!validDayIds.has(dayId)) continue;
-      await this.updateCorrectivesForAssignmentDay(assignmentId, dayId, { correctives });
-    }
+    const dayIds = programDayIds.filter((id) => validDayIds.has(id));
+    if (dayIds.length === 0) return;
+    await db.transaction(async (tx) => {
+      await tx
+        .delete(assignmentCorrectives)
+        .where(
+          and(
+            eq(assignmentCorrectives.assignmentId, assignmentId),
+            inArray(assignmentCorrectives.programDayId, dayIds),
+          ),
+        );
+      if (correctives.length > 0) {
+        await tx.insert(assignmentCorrectives).values(
+          dayIds.flatMap((dayId) =>
+            correctives.map((c, i) => ({
+              assignmentId,
+              programDayId: dayId,
+              exerciseId: c.exerciseId,
+              orderIndex: c.orderIndex ?? i,
+              sets: c.sets,
+              reps: c.reps,
+              weight: c.weight ?? null,
+              restSeconds: c.restSeconds ?? null,
+              notes: c.notes ?? null,
+            })),
+          ),
+        );
+      }
+    });
   },
 
   async copyCorrectivesToDays(
@@ -4567,18 +4600,18 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
       assignmentId,
       sourceProgramDayId,
     );
-    for (const dayId of targetProgramDayIds) {
-      await db.transaction(async (tx) => {
-        await tx
-          .delete(assignmentCorrectives)
-          .where(
-            and(
-              eq(assignmentCorrectives.assignmentId, assignmentId),
-              eq(assignmentCorrectives.programDayId, dayId),
-            ),
-          );
-        if (source.length > 0) {
-          await tx.insert(assignmentCorrectives).values(
+    await db.transaction(async (tx) => {
+      await tx
+        .delete(assignmentCorrectives)
+        .where(
+          and(
+            eq(assignmentCorrectives.assignmentId, assignmentId),
+            inArray(assignmentCorrectives.programDayId, targetProgramDayIds),
+          ),
+        );
+      if (source.length > 0) {
+        await tx.insert(assignmentCorrectives).values(
+          targetProgramDayIds.flatMap((dayId) =>
             source.map((c, i) => ({
               assignmentId,
               programDayId: dayId,
@@ -4590,10 +4623,10 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
               restSeconds: c.restSeconds,
               notes: c.notes,
             })),
-          );
-        }
-      });
-    }
+          ),
+        );
+      }
+    });
   },
 
   async getRecentCorrectivesForAthlete(

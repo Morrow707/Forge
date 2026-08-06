@@ -45,7 +45,12 @@ export function CaraTimer() {
   const { data } = useQuery<CaraStatus>({
     queryKey: ["/api/athlete/cara/status"],
     queryFn: () => getJson("/api/athlete/cara/status"),
-    refetchInterval: 30_000,
+    // Most athletes' coaches never turn CARA tracking on at all, and this
+    // mounts on every visit to the workout page -- polling every 30s
+    // forever for an athlete who will only ever get back `tracking: false`
+    // is pure waste. Keep polling only while there's an actual session to
+    // watch (or on first load, before we know either way).
+    refetchInterval: (query) => (query.state.data?.tracking === false ? false : 30_000),
   });
 
   // Local tick for a smooth-looking clock between polls -- the source of
