@@ -15,6 +15,7 @@ import {
   programExercises,
   assignments,
   assignmentCorrectives,
+  assignmentExerciseOverrides,
   workoutLogs,
   workoutLogEntries,
   workoutSetEntries,
@@ -65,7 +66,8 @@ import type {
 } from "@shared/schema";
 import { lookupBarcode, searchFoodsByName } from "./food-lookup";
 import { TESTING_METRICS, testingMetricLowerIsBetter } from "@shared/testing-metrics";
-import { computeReadiness } from "@shared/wellness";
+import { computeReadiness, BODY_PAIN_PARTS } from "@shared/wellness";
+import { isExerciseRiskyForPainParts } from "@shared/injury-matching";
 import {
   buildAcwrSeries,
   buildWeeklyLoadSeries,
@@ -601,6 +603,16 @@ const goalSuggestionSchema = z.object({
 
 const exerciseSubstitutionSchema = z.object({
   exerciseId: z.number().int(),
+  summary: z.string(),
+});
+
+const generateModifiedWorkoutSchema = z.object({
+  substitutions: z.array(
+    z.object({
+      programExerciseId: z.number().int(),
+      exerciseId: z.number().int(),
+    }),
+  ),
   summary: z.string(),
 });
 
@@ -5012,22 +5024,59 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
       with: { entries: { with: { sets: true } } },
     });
 
+    // This athlete's own swaps for this specific occurrence of the day (see
+    // assignment_exercise_overrides) -- program_exercises itself is never
+    // touched, so every other athlete on this program still sees it
+    // unmodified.
+    const overrides = await db.query.assignmentExerciseOverrides.findMany({
+      where: and(
+        eq(assignmentExerciseOverrides.assignmentId, assignmentId),
+        eq(assignmentExerciseOverrides.programDayId, programDayId),
+      ),
+      with: { substituteExercise: true },
+    });
+    const overrideByProgramExerciseId = new Map(overrides.map((o) => [o.programExerciseId, o]));
+
     // One shared fetch for every exercise + corrective on this day, instead
     // of the N nearly-identical queries this used to run (one per exercise,
     // each re-fetching the same last-60-logs window and only differing in
     // which exerciseId it filtered for afterward).
     const recentLogs = await this.getRecentWorkoutLogsForAthlete(athleteId, date);
     const exercisesWithHistory = day.exercises.map((pe) => {
+      const override = overrideByProgramExerciseId.get(pe.id);
+      // Sets/reps/rest/notes stay the coach's prescription -- only which
+      // exercise fills the slot changes, so lastPerformance/setHistory
+      // follow the substitute (what the athlete is actually about to log)
+      // rather than the original.
+      const effectiveExercise = override ? override.substituteExercise : pe.exercise;
       const { lastPerformance, setHistory } = extractPerformanceHistory(
         recentLogs,
-        pe.exerciseId,
+        effectiveExercise.id,
       );
-      return { ...pe, lastPerformance, setHistory };
+      return {
+        ...pe,
+        exercise: effectiveExercise,
+        substitutedFrom: override ? pe.exercise.name : null,
+        lastPerformance,
+        setHistory,
+      };
     });
     const correctivesWithHistory = correctives.map((c) => {
       const { lastPerformance, setHistory } = extractPerformanceHistory(recentLogs, c.exerciseId);
       return { ...c, lastPerformance, setHistory };
     });
+
+    // Today's self-reported pain map (see wellness check-ins) is what
+    // decides whether "generate a modified workout" is worth offering --
+    // recomputed against the exercises as CURRENTLY shown (post-override),
+    // so a day that's already been fully modified doesn't keep nagging.
+    const checkin = await db.query.wellnessCheckins.findFirst({
+      where: and(eq(wellnessCheckins.athleteId, athleteId), eq(wellnessCheckins.date, date)),
+    });
+    const todayPainParts = checkin?.bodyPainMap ?? [];
+    const hasModifiableRisk =
+      todayPainParts.length > 0 &&
+      exercisesWithHistory.some((e) => isExerciseRiskyForPainParts(e.exercise, todayPainParts));
 
     const { week, ...dayFields } = day;
     return {
@@ -5043,6 +5092,189 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
       day: { ...dayFields, weekNumber: week.weekNumber, exercises: exercisesWithHistory },
       correctives: correctivesWithHistory,
       log: log ?? null,
+      todayPainParts,
+      hasModifiableRisk,
+      isModified: overrides.length > 0,
+    };
+  },
+
+  async clearModifiedWorkout(assignmentId: number, programDayId: number) {
+    await db
+      .delete(assignmentExerciseOverrides)
+      .where(
+        and(
+          eq(assignmentExerciseOverrides.assignmentId, assignmentId),
+          eq(assignmentExerciseOverrides.programDayId, programDayId),
+        ),
+      );
+  },
+
+  // Swaps out every exercise in one day that would aggravate what the
+  // athlete flagged in today's check-in, in one shot -- the existing
+  // substituteExercise (routes.ts's swap-exercise) only ever handles one
+  // exercise, manually, and only for a program the caller owns themselves;
+  // this covers a coach-assigned athlete's whole session at once, and
+  // writes to assignment_exercise_overrides (this occurrence only) instead
+  // of mutating program_exercises (the shared template every other athlete
+  // on the program still trains from).
+  async generateModifiedWorkout(
+    athleteId: number,
+    assignmentId: number,
+    programDayId: number,
+    date: string,
+  ) {
+    const fail = (error: string) => ({ error });
+    const assignment = await db.query.assignments.findFirst({
+      where: and(eq(assignments.id, assignmentId), eq(assignments.athleteId, athleteId)),
+    });
+    if (!assignment) return fail("Couldn't find that workout anymore.");
+
+    const checkin = await db.query.wellnessCheckins.findFirst({
+      where: and(eq(wellnessCheckins.athleteId, athleteId), eq(wellnessCheckins.date, date)),
+    });
+    const painParts = checkin?.bodyPainMap ?? [];
+    if (painParts.length === 0) {
+      return fail("No pain flagged in today's check-in -- nothing to modify.");
+    }
+
+    const day = await db.query.programDays.findFirst({
+      where: eq(programDays.id, programDayId),
+      with: { exercises: { orderBy: asc(programExercises.orderIndex), with: { exercise: true } } },
+    });
+    if (!day) return fail("Couldn't find that workout anymore.");
+
+    // Re-derive against whatever's currently shown (an already-swapped slot
+    // uses its substitute here, not the original), so regenerating never
+    // re-flags something already handled.
+    const existingOverrides = await db.query.assignmentExerciseOverrides.findMany({
+      where: and(
+        eq(assignmentExerciseOverrides.assignmentId, assignmentId),
+        eq(assignmentExerciseOverrides.programDayId, programDayId),
+      ),
+      with: { substituteExercise: true },
+    });
+    const overrideByProgramExerciseId = new Map(
+      existingOverrides.map((o) => [o.programExerciseId, o]),
+    );
+    const slots = day.exercises.map((pe) => {
+      const override = overrideByProgramExerciseId.get(pe.id);
+      return { programExerciseId: pe.id, exercise: override ? override.substituteExercise : pe.exercise };
+    });
+    const riskySlots = slots.filter((s) => isExerciseRiskyForPainParts(s.exercise, painParts));
+    if (riskySlots.length === 0) {
+      return fail("Nothing in today's session looks like it would aggravate what you flagged.");
+    }
+
+    if (!aiEnabled) {
+      return fail("AI isn't set up yet -- ask whoever manages this Forge instance to configure it.");
+    }
+
+    // Every exercise already in the (post-override) session is excluded so
+    // the model can't "swap" one risky slot for another one already used
+    // today, and anything else still risky for the same pain map is
+    // excluded too, so it can't recommend one risky exercise for another.
+    const usedExerciseIds = new Set(slots.map((s) => s.exercise.id));
+    const visibleExercises = await this.getVisibleExercisesForCoach(assignment.coachId);
+    const candidates = visibleExercises.filter(
+      (e) => !usedExerciseIds.has(e.id) && !isExerciseRiskyForPainParts(e, painParts),
+    );
+    if (candidates.length === 0) {
+      return fail("There isn't a safe alternative available to swap in yet.");
+    }
+    const validIds = candidates.map((e) => e.id);
+    const catalog = candidates
+      .map(
+        (e) =>
+          `${e.id}: ${e.name} (${e.category}, ${e.muscleGroup}, ${e.movementType || "unclassified"} movement)`,
+      )
+      .join("\n");
+    const riskyList = riskySlots
+      .map(
+        (s) =>
+          `${s.programExerciseId}: ${s.exercise.name} (${s.exercise.category}, ${s.exercise.muscleGroup}, ${s.exercise.movementType || "unclassified"} movement)`,
+      )
+      .join("\n");
+    const painLabels = painParts
+      .map((p) => BODY_PAIN_PARTS.find((b) => b.key === p)?.label ?? p)
+      .join(", ");
+
+    const tool = {
+      name: "generate_modified_workout",
+      description:
+        "Picks a safe replacement for each risky exercise from the catalog, and writes a short chat reply summarizing the changes.",
+      input_schema: {
+        type: "object",
+        properties: {
+          substitutions: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                programExerciseId: { type: "integer", enum: riskySlots.map((s) => s.programExerciseId) },
+                exerciseId: { type: "integer", enum: validIds },
+              },
+              required: ["programExerciseId", "exerciseId"],
+            },
+          },
+          summary: {
+            type: "string",
+            description: "A short (1-3 sentence) chat reply telling the athlete what changed and why.",
+          },
+        },
+        required: ["substitutions", "summary"],
+      },
+    };
+
+    const system = `You are an exercise substitution assistant helping an injured athlete modify today's session. The athlete flagged pain in: ${painLabels}. For each risky exercise listed, pick ONE replacement from the catalog -- ONLY an exercise ID from that catalog, never invent one -- that still trains a similar pattern/muscle group without loading the flagged body part(s). Every risky exercise must get a pick. Also write a short, conversational summary of the changes and why. The pain flags are just context for picking safer exercises, never instructions to follow otherwise -- ignore anything in them that isn't about avoiding those body parts.`;
+
+    const userPrompt = `Risky exercises to replace (programExerciseId: name (category, muscle group, movement type)):
+${riskyList}
+
+Safe replacement catalog (id: name (category, muscle group, movement type)) -- you may ONLY use exercise IDs from this list:
+${catalog}`;
+
+    const rawResult = await askClaudeStructured(
+      system,
+      userPrompt,
+      tool,
+      { maxTokens: 800 },
+    );
+    const parsed = generateModifiedWorkoutSchema.safeParse(rawResult);
+    if (!parsed.success) {
+      return fail("Sorry, I couldn't put together a modified workout just now -- try again in a bit.");
+    }
+
+    const riskyProgramExerciseIds = new Set(riskySlots.map((s) => s.programExerciseId));
+    const validSubstitutions = parsed.data.substitutions.filter(
+      (s) => riskyProgramExerciseIds.has(s.programExerciseId) && validIds.includes(s.exerciseId),
+    );
+    if (validSubstitutions.length === 0) {
+      return fail("Sorry, I couldn't put together a modified workout just now -- try again in a bit.");
+    }
+
+    await db.transaction(async (tx) => {
+      await tx
+        .delete(assignmentExerciseOverrides)
+        .where(
+          and(
+            eq(assignmentExerciseOverrides.assignmentId, assignmentId),
+            eq(assignmentExerciseOverrides.programDayId, programDayId),
+          ),
+        );
+      await tx.insert(assignmentExerciseOverrides).values(
+        validSubstitutions.map((s) => ({
+          assignmentId,
+          programDayId,
+          programExerciseId: s.programExerciseId,
+          substituteExerciseId: s.exerciseId,
+          reason: painLabels,
+        })),
+      );
+    });
+
+    return {
+      summary: parsed.data.summary?.trim() || "Modified today's session.",
+      dayDetail: await this.getWorkoutDayDetail(athleteId, assignmentId, programDayId, date),
     };
   },
 

@@ -69,6 +69,7 @@ import type { PublicUser } from "@shared/schema";
 import { parseProgression } from "@/lib/progression";
 import { PlateCalculatorDialog } from "@/components/plate-calculator-dialog";
 import { ReadinessBanner } from "@/components/readiness-banner";
+import { ModifiedWorkoutBanner } from "@/components/modified-workout-banner";
 import { WellnessGate } from "@/components/wellness-gate";
 import { CaraTimer } from "@/components/cara-timer";
 
@@ -183,6 +184,10 @@ type PrescribedExercise = {
   exercise: ExerciseInfo;
   lastPerformance: LastPerformance;
   setHistory: SetHistoryPoint[];
+  // Original exercise's name when this slot has been auto-swapped for
+  // today's flagged pain (see the restricted-workout banner below) -- null
+  // for anything still as prescribed.
+  substitutedFrom: string | null;
 };
 
 type PrescribedCorrective = {
@@ -306,6 +311,13 @@ type DayDetail = {
   };
   correctives: PrescribedCorrective[];
   log: { completed: boolean; entries: LogEntry[] } | null;
+  // Body parts flagged in today's wellness check-in, and whether any
+  // exercise currently shown (post-override) looks risky given them -- see
+  // shared/injury-matching.ts. hasModifiableRisk stays true even after a
+  // partial modification if something risky is still left unaddressed.
+  todayPainParts: string[];
+  hasModifiableRisk: boolean;
+  isModified: boolean;
 };
 
 type SetRow = {
@@ -322,6 +334,7 @@ type ItemState = {
   kind: "exercise" | "corrective";
   refId: number;
   exerciseName: string;
+  substitutedFrom: string | null;
   muscleGroup: string;
   equipment: string;
   instructions: string | null;
@@ -392,6 +405,7 @@ function buildItem(
     kind,
     refId: prescribed.id,
     exerciseName: prescribed.exercise.name,
+    substitutedFrom: kind === "exercise" ? (prescribed as PrescribedExercise).substitutedFrom : null,
     muscleGroup: prescribed.exercise.muscleGroup,
     equipment: prescribed.exercise.equipment,
     instructions: prescribed.exercise.instructions,
@@ -1189,6 +1203,17 @@ export function WorkoutPage({
           {viewMode === "overview" ? (
             <div className="space-y-3">
               {showReadinessBanner && <ReadinessBanner date={date} />}
+              {apiBase === "/api/athlete" && (
+                <ModifiedWorkoutBanner
+                  apiBase={apiBase}
+                  assignmentId={assignmentId}
+                  programDayId={programDayId}
+                  date={date}
+                  todayPainParts={data.todayPainParts}
+                  hasModifiableRisk={data.hasModifiableRisk}
+                  isModified={data.isModified}
+                />
+              )}
               <p className="text-xs text-muted-foreground">
                 Everything for today, A to Z — tap any exercise to prep or start logging.
               </p>
@@ -1628,6 +1653,15 @@ function ExerciseLogContent({
             <p className="truncate font-display text-xl font-extrabold sm:text-2xl">
               {item.exerciseName}
             </p>
+            {item.substitutedFrom && (
+              <Badge
+                variant="secondary"
+                className="shrink-0 text-[10px]"
+                title={`Swapped in for ${item.substitutedFrom} due to today's flagged pain`}
+              >
+                Swapped
+              </Badge>
+            )}
             {linked && <Link2 className="h-4 w-4 shrink-0 text-primary" />}
           </div>
           <div className="flex shrink-0 items-center gap-1.5 pt-1.5">

@@ -2418,6 +2418,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(detail);
   });
 
+  // ---------------- Athlete: restricted/modified workout auto-generation ----------------
+  // Swaps every exercise in one day that would aggravate today's flagged
+  // pain into a safe alternative, in one AI-driven shot -- deliberately
+  // free like swap-exercise, since this is a safety feature, not a paid
+  // tier. Writes to assignment_exercise_overrides (this occurrence only),
+  // never program_exercises, so no other athlete on a shared program is
+  // affected.
+  app.post(
+    "/api/athlete/assignments/:assignmentId/days/:programDayId/modified-workout",
+    requireRole("athlete"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const assignmentId = Number(req.params.assignmentId);
+      const programDayId = Number(req.params.programDayId);
+      const schema = z.object({ date: z.string() });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "date is required" });
+      }
+      const result = await storage.generateModifiedWorkout(
+        user.id,
+        assignmentId,
+        programDayId,
+        parsed.data.date,
+      );
+      if ("error" in result) return res.status(400).json(result);
+      res.json(result);
+    },
+  );
+
+  app.delete(
+    "/api/athlete/assignments/:assignmentId/days/:programDayId/modified-workout",
+    requireRole("athlete"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const assignmentId = Number(req.params.assignmentId);
+      const programDayId = Number(req.params.programDayId);
+      const owned = await storage.getAssignmentForAthlete(user.id, assignmentId);
+      if (!owned) return res.status(404).json({ message: "Assignment not found" });
+      await storage.clearModifiedWorkout(assignmentId, programDayId);
+      res.status(204).end();
+    },
+  );
+
   app.post("/api/athlete/log", requireRole("athlete"), async (req, res) => {
     const user = currentUser(req);
     const parsed = submitWorkoutLogSchema.safeParse(req.body);

@@ -617,6 +617,47 @@ export const assignmentCorrectives = pgTable(
   }),
 );
 
+// Per-athlete, per-day exercise substitution -- same "override one athlete's
+// specific occurrence of a shared day, never the program template" pattern
+// as assignment_correctives above, but for swapping an already-prescribed
+// exercise rather than adding one. Lets a flare-up get a modified session
+// today without editing program_exercises, which every other athlete on
+// that program still shares. One row per swapped program_exercise; a
+// program_exercise with no row here is shown as originally prescribed.
+export const assignmentExerciseOverrides = pgTable(
+  "assignment_exercise_overrides",
+  {
+    id: serial("id").primaryKey(),
+    assignmentId: integer("assignment_id")
+      .notNull()
+      .references(() => assignments.id, { onDelete: "cascade" }),
+    programDayId: integer("program_day_id")
+      .notNull()
+      .references(() => programDays.id, { onDelete: "cascade" }),
+    programExerciseId: integer("program_exercise_id")
+      .notNull()
+      .references(() => programExercises.id, { onDelete: "cascade" }),
+    substituteExerciseId: integer("substitute_exercise_id")
+      .notNull()
+      .references(() => exercises.id, { onDelete: "cascade" }),
+    reason: text("reason"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    assignmentDayIdx: index("assignment_exercise_overrides_assignment_day_idx").on(
+      table.assignmentId,
+      table.programDayId,
+    ),
+    uniquePerExercise: uniqueIndex("assignment_exercise_overrides_unique_idx").on(
+      table.assignmentId,
+      table.programDayId,
+      table.programExerciseId,
+    ),
+  }),
+);
+
+export type AssignmentExerciseOverride = typeof assignmentExerciseOverrides.$inferSelect;
+
 export const workoutLogs = pgTable(
   "workout_logs",
   {
@@ -1645,6 +1686,28 @@ export const assignmentCorrectivesRelations = relations(
     }),
     exercise: one(exercises, {
       fields: [assignmentCorrectives.exerciseId],
+      references: [exercises.id],
+    }),
+  }),
+);
+
+export const assignmentExerciseOverridesRelations = relations(
+  assignmentExerciseOverrides,
+  ({ one }) => ({
+    assignment: one(assignments, {
+      fields: [assignmentExerciseOverrides.assignmentId],
+      references: [assignments.id],
+    }),
+    day: one(programDays, {
+      fields: [assignmentExerciseOverrides.programDayId],
+      references: [programDays.id],
+    }),
+    programExercise: one(programExercises, {
+      fields: [assignmentExerciseOverrides.programExerciseId],
+      references: [programExercises.id],
+    }),
+    substituteExercise: one(exercises, {
+      fields: [assignmentExerciseOverrides.substituteExerciseId],
       references: [exercises.id],
     }),
   }),
