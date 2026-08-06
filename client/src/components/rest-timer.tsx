@@ -1,14 +1,14 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Timer, BellRing } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { playSuccessChime as playChime } from "@/lib/audio-cues";
-import { toast } from "sonner";
+import { playRestOverAlarm } from "@/lib/audio-cues";
 
-// Felt on Android/most PWA contexts (iOS Safari doesn't implement the
-// Vibration API at all, so this silently no-ops there) -- a second,
-// non-audio channel for "rest is over" that doesn't depend on the phone's
-// volume, ringer state, or whatever else might be routing audio.
+// Felt on Android/most PWA contexts. iOS Safari has never implemented the
+// Vibration API at all -- in *any* context, tab or installed-to-homescreen
+// PWA alike -- so this is silently a no-op there, and no amount of JS on
+// our side changes that; it's a WebKit gap, not a bug here.
 function vibrateRestOver() {
   if (typeof navigator !== "undefined" && "vibrate" in navigator) {
     navigator.vibrate([300, 150, 300, 150, 300]);
@@ -66,50 +66,112 @@ export const RestTimerControl = forwardRef<RestTimerHandle, { defaultSeconds?: n
 
   useEffect(() => {
     if (!ringing) return;
-    playChime();
+    playRestOverAlarm();
     vibrateRestOver();
-    // The bottom-nav pill alone is easy to miss if attention is on the
-    // camera tracker or anywhere else on screen -- a sticky, full-width
-    // toast makes "rest is over" impossible to overlook visually, on top of
-    // the repeating chime + vibration. Stays up (duration: Infinity) until
-    // the athlete dismisses it from either this toast or the pill itself.
-    const toastId = toast.error("Rest time is up!", {
-      duration: Infinity,
-      action: { label: "Dismiss", onClick: () => setRinging(false) },
-    });
     ringIntervalRef.current = setInterval(() => {
-      playChime();
+      playRestOverAlarm();
       vibrateRestOver();
-    }, 1500);
+    }, 1800);
     return () => {
       if (ringIntervalRef.current) clearInterval(ringIntervalRef.current);
-      toast.dismiss(toastId);
     };
   }, [ringing]);
 
+  // A tiny bottom-nav pill is easy to miss if attention is on the camera
+  // tracker, a comment thread, or anywhere else on screen -- both the
+  // running countdown and the "time's up" state below render as a portal
+  // to document.body instead of inline in this component's normal position.
+  // A plain `fixed inset-0` here isn't enough on its own: this component
+  // sits inside AppShell's scroll area, and any ancestor with a transform,
+  // filter, or backdrop-filter (several show up between here and <body> in
+  // this app) turns into a containing block for fixed descendants, which
+  // silently clips them to that ancestor instead of the true viewport --
+  // confirmed happening here, the sticky top header was rendering above the
+  // "rest over" overlay instead of being covered by it. The portal sidesteps
+  // that entirely. The small inline control below the portal calls stays in
+  // its normal spot for the bottom nav row's layout. The overlay's
+  // audio/vibration are still bound by whatever the phone's ringer/silent
+  // switch and Web Audio allow (see audio-cues.ts) -- no web API lets a page
+  // or installed PWA override that on iOS, so a muted phone genuinely won't
+  // make sound no matter how the tone is built; that's a WebKit platform
+  // ceiling, not something fixable in this file.
   if (ringing) {
     return (
-      <button
-        type="button"
-        onClick={() => setRinging(false)}
-        className="flex animate-pulse items-center gap-1.5 rounded-full bg-primary px-3 py-1 text-sm font-bold text-primary-foreground"
-      >
-        <BellRing className="h-4 w-4" />
-        Rest over — tap to dismiss
-      </button>
+      <>
+        <button
+          type="button"
+          onClick={() => setRinging(false)}
+          className="flex animate-pulse items-center gap-1.5 rounded-full bg-primary px-3 py-1 text-sm font-bold text-primary-foreground"
+        >
+          <BellRing className="h-4 w-4" />
+          Rest over
+        </button>
+        {createPortal(
+          <div
+            role="alertdialog"
+            aria-label="Rest time is up"
+            onClick={() => setRinging(false)}
+            className="fixed inset-0 z-[100] flex flex-col items-center justify-center gap-6 bg-destructive px-6 text-center"
+          >
+            <BellRing className="h-20 w-20 animate-bounce text-destructive-foreground" />
+            <p className="font-display text-6xl font-extrabold leading-none text-destructive-foreground">
+              Rest Over
+            </p>
+            <p className="text-lg font-semibold text-destructive-foreground/80">
+              Time to get back to it
+            </p>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setRinging(false);
+              }}
+              className="mt-4 rounded-full bg-destructive-foreground px-10 py-4 text-lg font-bold text-destructive shadow-lg"
+            >
+              Dismiss
+            </button>
+          </div>,
+          document.body,
+        )}
+      </>
     );
   }
 
   if (remaining !== null) {
     return (
-      <button
-        type="button"
-        onClick={() => setRemaining(null)}
-        className="flex items-center gap-1.5 text-sm font-semibold text-primary"
-      >
-        <Timer className="h-4 w-4" />
-        {formatClock(remaining)}
-      </button>
+      <>
+        <button
+          type="button"
+          onClick={() => setRemaining(null)}
+          className="flex items-center gap-1.5 text-sm font-semibold text-primary"
+        >
+          <Timer className="h-4 w-4" />
+          {formatClock(remaining)}
+        </button>
+        {createPortal(
+          <div className="pointer-events-none fixed inset-x-0 bottom-16 z-[100] flex justify-center px-4">
+            <div className="pointer-events-auto flex items-center gap-4 rounded-2xl border border-primary/40 bg-surface/95 px-6 py-3 shadow-xl backdrop-blur">
+              <Timer className="h-7 w-7 shrink-0 text-primary" />
+              <div className="text-left">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Resting
+                </p>
+                <p className="font-display text-4xl font-extrabold leading-none tabular-nums text-primary">
+                  {formatClock(remaining)}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRemaining(null)}
+                className="ml-2 text-xs font-semibold text-muted-foreground underline"
+              >
+                Skip
+              </button>
+            </div>
+          </div>,
+          document.body,
+        )}
+      </>
     );
   }
 
