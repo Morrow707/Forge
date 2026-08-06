@@ -523,6 +523,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const schema = z.object({
       programId: z.number(),
       startDate: z.string(),
+      durationWeeks: z.number().int().min(1).max(12).default(1),
       dateOverrides: z.record(z.string(), z.string()).optional(),
       correctivesEnabled: z.boolean().default(true),
     });
@@ -539,6 +540,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       [{ athleteId: user.id, correctivesEnabled: parsed.data.correctivesEnabled }],
       parsed.data.startDate,
       parsed.data.dateOverrides,
+      parsed.data.durationWeeks,
     );
     res.status(201).json(result);
   });
@@ -1779,6 +1781,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       parsed.data.athletes,
       parsed.data.startDate,
       parsed.data.dateOverrides,
+      parsed.data.durationWeeks,
     );
     res.status(201).json(result);
   });
@@ -2925,6 +2928,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const schema = z.object({
       programId: z.number(),
       startDate: z.string(),
+      durationWeeks: z.number().int().min(1).max(12).default(1),
       dateOverrides: z.record(z.string(), z.string()).optional(),
       correctivesEnabled: z.boolean().default(true),
     });
@@ -2941,6 +2945,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       [{ athleteId: user.id, correctivesEnabled: parsed.data.correctivesEnabled }],
       parsed.data.startDate,
       parsed.data.dateOverrides,
+      parsed.data.durationWeeks,
     );
     res.status(201).json(result);
   });
