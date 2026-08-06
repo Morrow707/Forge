@@ -73,6 +73,7 @@ import {
   type AcwrPoint,
   type WeeklyLoadPoint,
 } from "@shared/load";
+import { computeForceVelocityProfile, type LoadVelocityPoint } from "@shared/force-velocity";
 import { ALL_TROPHY_DEFINITIONS } from "@shared/achievements";
 import { askClaude, askClaudeStructured, askClaudeWithTools, askClaudeVision, aiEnabled, fastModel, type SystemPrompt } from "./ai";
 import { eq, and, inArray, asc, desc, lt, lte, gte, gt, isNull, sql } from "drizzle-orm";
@@ -5136,6 +5137,44 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
 
       return { ...r, estimatedOneRm, isPR };
     });
+  },
+
+  // Load-velocity profile for one exercise -- the standard barbell proxy
+  // for a force-velocity relationship (see shared/force-velocity.ts for
+  // why load stands in for force here). Built on top of
+  // getExerciseAnalyticsForCoach rather than re-querying, since that
+  // already has every tracked set's weight/unit/velocity merged across
+  // program-exercise and corrective rows.
+  async getForceVelocityProfileForAthlete(
+    coachId: number,
+    athleteId: number,
+    exerciseId: number,
+  ) {
+    const rows = await this.getExerciseAnalyticsForCoach(coachId, athleteId, exerciseId);
+    const points: LoadVelocityPoint[] = [];
+    for (const r of rows) {
+      if (r.weightMode !== "numeric" || !r.weight || r.meanVelocityMps == null) continue;
+      const weight = parseFloat(r.weight);
+      if (Number.isNaN(weight)) continue;
+      const loadKg = r.weightUnit === "kg" ? weight : weight / 2.20462;
+      points.push({ date: r.date, loadKg, meanVelocityMps: r.meanVelocityMps });
+    }
+    // Fit against full precision, but round what's actually returned --
+    // both the chart axes and the summary stats otherwise inherit long
+    // floating-point tails from the regression math.
+    const rawProfile = computeForceVelocityProfile(points);
+    const profile = rawProfile && {
+      slope: Math.round(rawProfile.slope * 100) / 100,
+      intercept: Math.round(rawProfile.intercept * 10) / 10,
+      v0: Math.round(rawProfile.v0 * 100) / 100,
+      rSquared: Math.round(rawProfile.rSquared * 1000) / 1000,
+    };
+    const roundedPoints = points.map((p) => ({
+      ...p,
+      loadKg: Math.round(p.loadKg * 10) / 10,
+      meanVelocityMps: Math.round(p.meanVelocityMps * 1000) / 1000,
+    }));
+    return { points: roundedPoints, profile };
   },
 
   // An athlete's own, deliberately limited view of their progress -- just
