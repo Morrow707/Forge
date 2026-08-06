@@ -137,7 +137,14 @@ export function AppShell({
             </span>
           </div>
 
-          <nav className="hidden flex-1 items-center justify-center gap-1 md:flex">
+          {/* justify-start, not center -- when every item fits this looks
+              identical either way, but once the roster grows past what
+              fits (coach nav can run to 9 items), centering an overflowing
+              flex row clips it evenly from BOTH edges with no visible cue
+              that there's more to scroll to. Left-aligned overflows the
+              same way a normal scrollable list does: nothing missing on
+              the left, a natural scroll to reveal the rest on the right. */}
+          <nav className="hidden min-w-0 flex-1 items-center justify-start gap-1 overflow-x-auto md:flex">
             {nav.map((item) => {
               const Icon = item.icon;
               const active = isActive(item);
@@ -147,7 +154,7 @@ export function AppShell({
                   key={item.href}
                   href={item.href}
                   className={cn(
-                    "flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-semibold transition-colors",
+                    "flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-2 text-sm font-semibold transition-colors",
                     active
                       ? "bg-primary text-primary-foreground"
                       : "text-muted-foreground hover:bg-surface-elevated hover:text-foreground",
