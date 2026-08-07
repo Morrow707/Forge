@@ -5076,9 +5076,12 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
   },
 
   async updateAssignment(assignmentId: number, input: UpdateAssignmentInput) {
+    const patch: { correctivesEnabled?: boolean; durationWeeks?: number } = {};
+    if (input.correctivesEnabled !== undefined) patch.correctivesEnabled = input.correctivesEnabled;
+    if (input.durationWeeks !== undefined) patch.durationWeeks = input.durationWeeks;
     const [row] = await db
       .update(assignments)
-      .set({ correctivesEnabled: input.correctivesEnabled })
+      .set(patch)
       .where(eq(assignments.id, assignmentId))
       .returning();
     return row;

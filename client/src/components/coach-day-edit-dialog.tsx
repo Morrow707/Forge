@@ -27,7 +27,7 @@ import {
   colorForLabel,
 } from "@/lib/supersets";
 import { toast } from "sonner";
-import { Plus, Trash2, MoonStar, Link2, Stethoscope, Copy, Clock } from "lucide-react";
+import { Plus, Trash2, MoonStar, Link2, Stethoscope, Copy, Clock, Repeat } from "lucide-react";
 import type { Exercise } from "@shared/schema";
 
 type TrackingLevel = "none" | "bar_path" | "full" | "jump";
@@ -159,6 +159,12 @@ export function CoachDayEditDialog({
     enabled: open && data != null,
   });
 
+  const { data: assignment } = useQuery<{ id: number; durationWeeks: number }>({
+    queryKey: ["/api/coach/assignments", assignmentId],
+    queryFn: () => getJson(`/api/coach/assignments/${assignmentId}`),
+    enabled: open && assignmentId != null,
+  });
+
   const [title, setTitle] = useState("");
   const [isRestDay, setIsRestDay] = useState(false);
   const [exercises, setExercises] = useState<LocalExercise[]>([]);
@@ -279,6 +285,21 @@ export function CoachDayEditDialog({
       onOpenChange(false);
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not delete workout"),
+  });
+
+  const updateDurationMutation = useMutation({
+    mutationFn: async (durationWeeks: number) => {
+      const res = await apiRequest("PATCH", `/api/coach/assignments/${assignmentId}`, {
+        durationWeeks,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/coach/assignments", assignmentId] });
+      invalidateCalendars();
+      toast.success(`Duration updated for ${athleteName ?? "this athlete"}`);
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Could not update duration"),
   });
 
   const enableCorrectivesMutation = useMutation({
@@ -541,6 +562,32 @@ export function CoachDayEditDialog({
                     <Plus className="h-3.5 w-3.5" />
                     Add Exercise
                   </Button>
+                </div>
+              )}
+
+              {assignmentId != null && assignment != null && (
+                <div className="space-y-1.5 border-t border-border pt-4">
+                  <Label className="flex items-center gap-1.5">
+                    <Repeat className="h-3.5 w-3.5 text-muted-foreground" />
+                    Duration for {athleteName ?? "this athlete"}
+                  </Label>
+                  <RadioChipGroup
+                    label=""
+                    className="[&>p]:hidden"
+                    options={Array.from({ length: 12 }, (_, i) => String(i + 1))}
+                    value={String(assignment.durationWeeks)}
+                    onChange={(v) => {
+                      const weeks = Number(v) || 1;
+                      if (weeks !== assignment.durationWeeks) updateDurationMutation.mutate(weeks);
+                    }}
+                  />
+                  {program?.weeks?.length > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      {program.weeks.length > 1
+                        ? `Runs this program's own ${program.weeks.length}-week pattern ${assignment.durationWeeks} time${assignment.durationWeeks === 1 ? "" : "s"} — ${program.weeks.length * assignment.durationWeeks} weeks total.`
+                        : `${assignment.durationWeeks} week${assignment.durationWeeks === 1 ? "" : "s"} total.`}
+                    </p>
+                  )}
                 </div>
               )}
 
