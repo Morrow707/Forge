@@ -8,6 +8,7 @@ export default function CoachSkills() {
       routeBase="/coach/skills"
       title="Skill Bank"
       emptyStateText="Your Skill Bank is empty. Add your first drill to start building skill programs."
+      showFaultSettings
       libraryTabs={
         <LibraryTabs
           active="skill-bank"

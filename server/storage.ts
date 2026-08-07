@@ -89,6 +89,7 @@ import {
 import { computeForceVelocityProfile, type LoadVelocityPoint } from "@shared/force-velocity";
 import { ALL_TROPHY_DEFINITIONS } from "@shared/achievements";
 import { FAULT_CORRECTIVE_KEYWORDS } from "@shared/fault-correctives";
+import { resolveSkillFaultThresholds, type SkillFaultThresholds } from "@shared/skill-fault-thresholds";
 import { askClaude, askClaudeStructured, askClaudeWithTools, askClaudeVision, askClaudeVisionStructured, aiEnabled, fastModel, type SystemPrompt } from "./ai";
 import { eq, and, inArray, asc, desc, lt, lte, gte, gt, isNull, isNotNull, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -3036,6 +3037,44 @@ Athlete's data:
     });
 
     return matches.slice(0, 3).map((ex) => ({ id: ex.id, name: ex.name, muscleGroup: ex.muscleGroup }));
+  },
+
+  // ---------- Skills fault-detection sensitivity (coach-configurable) ----------
+  // See shared/skill-fault-thresholds.ts for the full field set, defaults,
+  // and rationale: these started as fixed constants picked from general
+  // coaching knowledge, not calibrated against any real athlete's data.
+
+  async getSkillFaultThresholdsForCoach(coachId: number) {
+    const coach = await db.query.users.findFirst({ where: eq(users.id, coachId) });
+    const overrides = coach?.skillFaultThresholds ?? null;
+    return {
+      effective: resolveSkillFaultThresholds(overrides),
+      isCustomized: !!overrides && Object.keys(overrides).length > 0,
+    };
+  },
+
+  async updateSkillFaultThresholdsForCoach(coachId: number, values: SkillFaultThresholds) {
+    await db.update(users).set({ skillFaultThresholds: values }).where(eq(users.id, coachId));
+    return resolveSkillFaultThresholds(values);
+  },
+
+  async resetSkillFaultThresholdsForCoach(coachId: number) {
+    await db.update(users).set({ skillFaultThresholds: null }).where(eq(users.id, coachId));
+    return resolveSkillFaultThresholds(null);
+  },
+
+  // Athlete-facing: resolves via the skill assignment's owning coach, the
+  // same ownership check getSkillDayForAthlete already does for reads --
+  // this is the read path the camera tracker dialogs call right before
+  // scoring a capture, so an athlete only ever gets their own coach's
+  // sensitivity, never one they looked up by guessing an id.
+  async getSkillFaultThresholdsForAssignment(athleteId: number, skillAssignmentId: number) {
+    const assignment = await db.query.skillAssignments.findFirst({
+      where: and(eq(skillAssignments.id, skillAssignmentId), eq(skillAssignments.athleteId, athleteId)),
+    });
+    if (!assignment) return null;
+    const coach = await db.query.users.findFirst({ where: eq(users.id, assignment.coachId) });
+    return resolveSkillFaultThresholds(coach?.skillFaultThresholds ?? null);
   },
 
   // Exercises owned by a specific user's whole staff -- an admin's own bank

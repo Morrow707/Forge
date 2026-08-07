@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
@@ -9,7 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, getJson } from "@/lib/queryClient";
 import { getPoseLandmarker } from "@/lib/pose-tracking";
 import {
   analyzeMechanics,
@@ -19,6 +20,10 @@ import {
   type MechanicsResult,
   type MechanicsFault,
 } from "@/lib/mechanics-tracking";
+import {
+  DEFAULT_SKILL_FAULT_THRESHOLDS,
+  type SkillFaultThresholds,
+} from "@shared/skill-fault-thresholds";
 import { PoseLandmarker, type NormalizedLandmark, type Landmark } from "@mediapipe/tasks-vision";
 import { toast } from "sonner";
 import { AlertTriangle, Play, Square, RotateCcw, Check, Activity, Eye, EyeOff } from "lucide-react";
@@ -112,6 +117,14 @@ export function MechanicsTrackerDialog({
   const [faults, setFaults] = useState<MechanicsFault[]>([]);
   const [saving, setSaving] = useState(false);
   const [saveClipForCoach, setSaveClipForCoach] = useState(false);
+
+  // Same coach-configurable sensitivity thresholds as the sprint tracker --
+  // see the route comment on /api/athlete/skill-fault-thresholds.
+  const { data: thresholds } = useQuery<SkillFaultThresholds>({
+    queryKey: ["/api/athlete/skill-fault-thresholds", skillAssignmentId],
+    queryFn: () => getJson(`/api/athlete/skill-fault-thresholds?skillAssignmentId=${skillAssignmentId}`),
+    enabled: open,
+  });
 
   useEffect(() => {
     if (!open) return;
@@ -235,9 +248,10 @@ export function MechanicsTrackerDialog({
       return;
     }
 
-    const mechanicsResult = analyzeMechanics(framesRef.current, mode);
+    const effectiveThresholds = thresholds ?? DEFAULT_SKILL_FAULT_THRESHOLDS;
+    const mechanicsResult = analyzeMechanics(framesRef.current, mode, effectiveThresholds);
     setResult(mechanicsResult);
-    setFaults(cameraAngle ? detectMechanicsFaults(mechanicsResult, cameraAngle) : []);
+    setFaults(cameraAngle ? detectMechanicsFaults(mechanicsResult, cameraAngle, effectiveThresholds) : []);
     recordedBlobRef.current = blob;
     setVideoUrl(URL.createObjectURL(blob));
     changeStep("review");

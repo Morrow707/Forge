@@ -6,8 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
+import { SkillFaultThresholdsDialog } from "@/components/skill-fault-thresholds-dialog";
 import { apiRequest } from "@/lib/queryClient";
-import { Plus, Trash2, Target, Search, Video } from "lucide-react";
+import { Plus, Trash2, Target, Search, Video, SlidersHorizontal } from "lucide-react";
 import type { SkillExerciseWithOwnership } from "@/lib/skill-types";
 import { SKILL_TYPES } from "@/lib/skill-taxonomy";
 import { SPORTS } from "@/lib/exercise-taxonomy";
@@ -32,15 +33,18 @@ export function SkillBankPage({
   title,
   emptyStateText,
   libraryTabs,
+  showFaultSettings,
 }: {
   apiBase: string;
   routeBase: string;
   title: string;
   emptyStateText: string;
   libraryTabs?: ReactNode;
+  showFaultSettings?: boolean;
 }) {
   const qc = useQueryClient();
   const [, navigate] = useLocation();
+  const [faultSettingsOpen, setFaultSettingsOpen] = useState(false);
   const { data: skills = [], isLoading } = useQuery<SkillExerciseWithOwnership[]>({
     queryKey: [`${apiBase}/skill-exercises`],
   });
@@ -93,12 +97,27 @@ export function SkillBankPage({
       title={title}
       subheader={libraryTabs}
       actions={
-        <Button onClick={() => navigate(`${routeBase}/new`)}>
-          <Plus className="h-4 w-4" />
-          New Skill Drill
-        </Button>
+        <div className="flex items-center gap-2">
+          {showFaultSettings && (
+            <Button
+              variant="outline"
+              size="icon"
+              aria-label="Fault detection sensitivity"
+              onClick={() => setFaultSettingsOpen(true)}
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+            </Button>
+          )}
+          <Button onClick={() => navigate(`${routeBase}/new`)}>
+            <Plus className="h-4 w-4" />
+            New Skill Drill
+          </Button>
+        </div>
       }
     >
+      {showFaultSettings && (
+        <SkillFaultThresholdsDialog open={faultSettingsOpen} onOpenChange={setFaultSettingsOpen} />
+      )}
       <div className="mb-4 space-y-3">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />

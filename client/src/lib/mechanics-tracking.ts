@@ -22,6 +22,10 @@
 // position.
 import type { Landmark, NormalizedLandmark } from "@mediapipe/tasks-vision";
 import { POSE_LANDMARKS } from "./pose-tracking";
+import {
+  DEFAULT_SKILL_FAULT_THRESHOLDS,
+  type SkillFaultThresholds,
+} from "@shared/skill-fault-thresholds";
 
 export type MechanicsFrame = { t: number; worldLandmarks: Landmark[] };
 
@@ -119,9 +123,11 @@ export type MechanicsResult = {
   armSlot: ArmSlot | null;
 };
 
-const SEQUENCING_TOLERANCE_MS = 20;
-
-export function analyzeMechanics(frames: MechanicsFrame[], mode: MechanicsMode): MechanicsResult {
+export function analyzeMechanics(
+  frames: MechanicsFrame[],
+  mode: MechanicsMode,
+  thresholds: SkillFaultThresholds = DEFAULT_SKILL_FAULT_THRESHOLDS,
+): MechanicsResult {
   const times = frames.map((f) => f.t);
   const hipAnglesRaw = frames.map((f) => segmentAngleDeg(f.worldLandmarks, POSE_LANDMARKS.LEFT_HIP, POSE_LANDMARKS.RIGHT_HIP));
   const shoulderAnglesRaw = frames.map((f) =>
@@ -201,8 +207,8 @@ export function analyzeMechanics(frames: MechanicsFrame[], mode: MechanicsMode):
   const wellSequenced =
     hipPeakTimeMs0 != null &&
     shoulderPeakTimeMs0 != null &&
-    shoulderPeakTimeMs0 >= hipPeakTimeMs0 - SEQUENCING_TOLERANCE_MS &&
-    (armPeakTimeMs == null || armPeakTimeMs >= shoulderPeakTimeMs0 - SEQUENCING_TOLERANCE_MS);
+    shoulderPeakTimeMs0 >= hipPeakTimeMs0 - thresholds.sequencingToleranceMs &&
+    (armPeakTimeMs == null || armPeakTimeMs >= shoulderPeakTimeMs0 - thresholds.sequencingToleranceMs);
 
   // Ankle x-positions are meaningful within a single (hip-centered) frame
   // even though the hip center's own position across frames isn't -- see
@@ -244,28 +250,32 @@ export function analyzeMechanics(frames: MechanicsFrame[], mode: MechanicsMode):
 
 export type MechanicsFault = { code: string; label: string };
 
-const LOW_WEIGHT_TRANSFER_PCT = 15;
-const LOW_HIP_ROTATION_DEG = 20;
-const LOW_SEPARATION_DEG = 20;
-
-export function detectMechanicsFaults(result: MechanicsResult, cameraAngle: MechanicsCameraAngle): MechanicsFault[] {
+// Cutoffs are coach-adjustable (see shared/skill-fault-thresholds.ts) --
+// they started as fixed values picked from general hitting/throwing
+// mechanics coaching knowledge, not calibrated against any real athlete's
+// data.
+export function detectMechanicsFaults(
+  result: MechanicsResult,
+  cameraAngle: MechanicsCameraAngle,
+  thresholds: SkillFaultThresholds = DEFAULT_SKILL_FAULT_THRESHOLDS,
+): MechanicsFault[] {
   const faults: MechanicsFault[] = [];
 
   if (cameraAngle === "face_on") {
-    if (result.weightTransferPct != null && result.weightTransferPct < LOW_WEIGHT_TRANSFER_PCT) {
+    if (result.weightTransferPct != null && result.weightTransferPct < thresholds.lowWeightTransferPct) {
       faults.push({
         code: "low_weight_transfer",
         label: "Weight staying back -- work on shifting into your front side",
       });
     }
-    if (result.hipRotationDeg != null && result.hipRotationDeg < LOW_HIP_ROTATION_DEG) {
+    if (result.hipRotationDeg != null && result.hipRotationDeg < thresholds.lowHipRotationDeg) {
       faults.push({
         code: "low_hip_rotation",
         label: "Hips aren't rotating through -- work on clearing your hips fully",
       });
     }
   } else {
-    if (result.hipShoulderSeparationDeg != null && result.hipShoulderSeparationDeg < LOW_SEPARATION_DEG) {
+    if (result.hipShoulderSeparationDeg != null && result.hipShoulderSeparationDeg < thresholds.lowSeparationDeg) {
       faults.push({
         code: "low_hip_shoulder_separation",
         label: "Limited hip-shoulder separation -- work on delaying your upper body to build more torque",

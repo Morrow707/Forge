@@ -185,6 +185,7 @@ ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "calendar_token" text;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "team_board_read_at" timestamp;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "cara_weekly_cap_minutes" integer;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "last_activity_at" timestamp;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "skill_fault_thresholds" json;
 CREATE UNIQUE INDEX IF NOT EXISTS "users_email_idx" ON "users" ("email");
 CREATE UNIQUE INDEX IF NOT EXISTS "users_coach_code_idx" ON "users" ("coach_code");
 CREATE UNIQUE INDEX IF NOT EXISTS "users_calendar_token_idx" ON "users" ("calendar_token");

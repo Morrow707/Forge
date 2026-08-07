@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
@@ -11,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, getJson } from "@/lib/queryClient";
 import { getPoseLandmarker, POSE_LANDMARKS, type PoseFrame } from "@/lib/pose-tracking";
 import {
   deriveSprintReferencePoint,
@@ -22,6 +23,7 @@ import {
   type SprintResult,
   type SprintFault,
 } from "@/lib/sprint-tracking";
+import { DEFAULT_SKILL_FAULT_THRESHOLDS, type SkillFaultThresholds } from "@shared/skill-fault-thresholds";
 import { PoseLandmarker, type NormalizedLandmark } from "@mediapipe/tasks-vision";
 import { toast } from "sonner";
 import { AlertTriangle, Play, Square, RotateCcw, Check, Timer, Trophy } from "lucide-react";
@@ -117,6 +119,17 @@ export function SprintTrackerDialog({
   const [saving, setSaving] = useState(false);
   const [savingToProfile, setSavingToProfile] = useState(false);
   const [savedToProfile, setSavedToProfile] = useState(false);
+
+  // Fetched once per dialog open, resolved via this drill's own coach --
+  // see the route comment on /api/athlete/skill-fault-thresholds. Falls
+  // back to the built-in defaults below if it hasn't resolved yet by the
+  // time a fault check runs (a plain GET well ahead of a multi-second
+  // sprint capture), so a slow network never blocks scoring.
+  const { data: thresholds } = useQuery<SkillFaultThresholds>({
+    queryKey: ["/api/athlete/skill-fault-thresholds", skillAssignmentId],
+    queryFn: () => getJson(`/api/athlete/skill-fault-thresholds?skillAssignmentId=${skillAssignmentId}`),
+    enabled: open,
+  });
 
   useEffect(() => {
     if (!open) return;
@@ -218,7 +231,11 @@ export function SprintTrackerDialog({
   function finishCapture(crossing: SprintResult) {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     setResult(crossing);
-    setFaults(cameraAngle ? detectSprintFaults(framesRef.current, cameraAngle) : []);
+    setFaults(
+      cameraAngle
+        ? detectSprintFaults(framesRef.current, cameraAngle, undefined, thresholds ?? DEFAULT_SKILL_FAULT_THRESHOLDS)
+        : [],
+    );
     changeStep("review");
   }
 

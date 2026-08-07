@@ -12,6 +12,10 @@
 // calibration), not from the camera.
 import type { NormalizedLandmark } from "@mediapipe/tasks-vision";
 import { POSE_LANDMARKS } from "./pose-tracking";
+import {
+  DEFAULT_SKILL_FAULT_THRESHOLDS,
+  type SkillFaultThresholds,
+} from "@shared/skill-fault-thresholds";
 
 export type SprintCheckpoint = { x: number };
 
@@ -114,20 +118,22 @@ export type SprintCameraAngle = "side" | "front_behind";
 // phase" cue). This flags the opposite failure mode (too upright), not
 // "too much lean," since excessive lean is comparatively rare and much
 // harder to define a safe threshold for without a controlled setup.
-const MIN_ACCELERATION_LEAN_DEGREES = 12;
-
+//
 // Front/behind view: lateral hip-height difference (normalized to hip
 // width so it's scale-invariant) during single-leg stance phases --
 // "hip drop" / contralateral pelvic drop, the same fault
 // computeLegDriveAsymmetry already looks for in the strength tracker's
 // squat/lunge context, applied here to the stance phase of a sprint
 // stride instead of a squat rep.
-const HIP_DROP_RATIO_THRESHOLD = 0.12;
-
+//
+// Both cutoffs are coach-adjustable (see shared/skill-fault-thresholds.ts)
+// -- they started as fixed values picked from general sprint-coaching
+// knowledge, not calibrated against any real athlete's data.
 export function detectSprintFaults(
   frames: { landmarks: NormalizedLandmark[] }[],
   cameraAngle: SprintCameraAngle,
   accelerationPhaseFraction = 1 / 3,
+  thresholds: SkillFaultThresholds = DEFAULT_SKILL_FAULT_THRESHOLDS,
 ): SprintFault[] {
   const faults: SprintFault[] = [];
   if (frames.length < 4) return faults;
@@ -157,7 +163,7 @@ export function detectSprintFaults(
     }
     if (leanAngles.length > 0) {
       const avgLean = leanAngles.reduce((a, b) => a + b, 0) / leanAngles.length;
-      if (avgLean < MIN_ACCELERATION_LEAN_DEGREES) {
+      if (avgLean < thresholds.minAccelerationLeanDeg) {
         faults.push({
           code: "upright_acceleration",
           label: "Running upright too early -- drive forward harder out of the start",
@@ -176,7 +182,7 @@ export function detectSprintFaults(
     }
     if (hipDropRatios.length > 0) {
       const maxDrop = Math.max(...hipDropRatios);
-      if (maxDrop > HIP_DROP_RATIO_THRESHOLD) {
+      if (maxDrop > thresholds.hipDropRatioThreshold) {
         faults.push({
           code: "hip_drop",
           label: "Hip drop during stance -- work on single-leg glute strength",

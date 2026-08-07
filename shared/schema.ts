@@ -17,6 +17,8 @@ import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { BODY_PAIN_PARTS } from "./wellness";
+import type { SkillFaultThresholds } from "./skill-fault-thresholds";
+import { SKILL_FAULT_THRESHOLD_BOUNDS } from "./skill-fault-thresholds";
 
 // Owned and populated by connect-pg-simple at runtime, not by our own code --
 // declared here purely so drizzle-kit's live-diff sees it as an already-
@@ -180,6 +182,12 @@ export const users = pgTable(
     // dashboard) stays invisible until a coach who actually needs it sets
     // one.
     caraWeeklyCapMinutes: integer("cara_weekly_cap_minutes"),
+    // Coach-only, opt-in per-field overrides for the Skills camera tracker's
+    // fault-detection sensitivity (see shared/skill-fault-thresholds.ts for
+    // the full set + defaults). Null/missing fields fall back to the
+    // built-in defaults individually -- a coach who only wants to loosen
+    // one threshold never has to also specify the other five.
+    skillFaultThresholds: json("skill_fault_thresholds").$type<Partial<SkillFaultThresholds>>(),
     // Set on every successful login -- the signal behind the coach-facing
     // "hasn't logged in N days" re-engagement nudge. Null for any account
     // that hasn't logged in since this column was added; storage.ts falls
@@ -2415,6 +2423,38 @@ export const createSkillSessionLogSchema = z.object({
 
 export const setSkillSessionAnnotationSchema = z.object({
   imageUrl: z.string().trim().max(500).min(1),
+});
+
+// Full replacement, not a patch -- the settings form always has a value for
+// every field (pre-filled with whatever's currently effective, default or
+// override), so there's never a partial submission to reconcile. Bounds
+// come from SKILL_FAULT_THRESHOLD_BOUNDS so this can't drift from what the
+// UI itself enforces.
+export const updateSkillFaultThresholdsSchema = z.object({
+  minAccelerationLeanDeg: z.coerce
+    .number()
+    .min(SKILL_FAULT_THRESHOLD_BOUNDS.minAccelerationLeanDeg.min)
+    .max(SKILL_FAULT_THRESHOLD_BOUNDS.minAccelerationLeanDeg.max),
+  hipDropRatioThreshold: z.coerce
+    .number()
+    .min(SKILL_FAULT_THRESHOLD_BOUNDS.hipDropRatioThreshold.min)
+    .max(SKILL_FAULT_THRESHOLD_BOUNDS.hipDropRatioThreshold.max),
+  lowWeightTransferPct: z.coerce
+    .number()
+    .min(SKILL_FAULT_THRESHOLD_BOUNDS.lowWeightTransferPct.min)
+    .max(SKILL_FAULT_THRESHOLD_BOUNDS.lowWeightTransferPct.max),
+  lowHipRotationDeg: z.coerce
+    .number()
+    .min(SKILL_FAULT_THRESHOLD_BOUNDS.lowHipRotationDeg.min)
+    .max(SKILL_FAULT_THRESHOLD_BOUNDS.lowHipRotationDeg.max),
+  lowSeparationDeg: z.coerce
+    .number()
+    .min(SKILL_FAULT_THRESHOLD_BOUNDS.lowSeparationDeg.min)
+    .max(SKILL_FAULT_THRESHOLD_BOUNDS.lowSeparationDeg.max),
+  sequencingToleranceMs: z.coerce
+    .number()
+    .min(SKILL_FAULT_THRESHOLD_BOUNDS.sequencingToleranceMs.min)
+    .max(SKILL_FAULT_THRESHOLD_BOUNDS.sequencingToleranceMs.max),
 });
 
 export const repBreakdownEntrySchema = z.object({
