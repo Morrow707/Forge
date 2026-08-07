@@ -186,7 +186,7 @@ export function SprintTrackerDialog({
     const video = videoRef.current;
     const canvas = canvasRef.current;
     const landmarker = poseLandmarkerRef.current;
-    if (!video || !canvas || !landmarker || video.videoWidth === 0) {
+    if (!video || !canvas || !landmarker || video.videoWidth === 0 || video.clientWidth === 0) {
       rafRef.current = requestAnimationFrame(tick);
       return;
     }
@@ -196,8 +196,13 @@ export function SprintTrackerDialog({
     }
     lastVideoTimeRef.current = video.currentTime;
 
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    // Sized to the video's actual on-screen box (clientWidth/Height), not its
+    // encoded videoWidth/videoHeight -- on iOS Safari a portrait rear-camera
+    // stream's encoded resolution can be transposed relative to what's
+    // actually rendered on screen, which drew the skeleton/checkpoint
+    // overlay offset from the athlete's real position in frame.
+    canvas.width = video.clientWidth;
+    canvas.height = video.clientHeight;
     const ctx = canvas.getContext("2d");
     const now = performance.now();
     const detection = landmarker.detectForVideo(video, now);

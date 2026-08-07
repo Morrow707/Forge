@@ -665,7 +665,9 @@ export function BarTrackerDialog({
             z: wrists.left.z,
           };
           const prevLeft = leftTraceRef.current[leftTraceRef.current.length - 1];
-          if (prevLeft) for (const g of interpolateOcclusionGap(prevLeft, leftPoint)) leftTraceRef.current.push(g);
+          if (prevLeft)
+            for (const g of interpolateOcclusionGap(prevLeft, leftPoint, mode === "jump" ? 400 : 300))
+              leftTraceRef.current.push(g);
           leftTraceRef.current.push(leftPoint);
         }
         if (wrists.right) {
@@ -677,7 +679,8 @@ export function BarTrackerDialog({
           };
           const prevRight = rightTraceRef.current[rightTraceRef.current.length - 1];
           if (prevRight)
-            for (const g of interpolateOcclusionGap(prevRight, rightPoint)) rightTraceRef.current.push(g);
+            for (const g of interpolateOcclusionGap(prevRight, rightPoint, mode === "jump" ? 400 : 300))
+              rightTraceRef.current.push(g);
           rightTraceRef.current.push(rightPoint);
         }
 
