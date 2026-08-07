@@ -724,7 +724,8 @@ export function FoodScannerDialog({
                 </div>
               ))}
             </div>
-            {mode === "manual" && (
+            {(mode === "manual" ||
+              (mode === "confirm" && MICRO_FIELDS.some(([key]) => candidate[key] != null))) && (
               <>
                 <button
                   type="button"
@@ -746,6 +747,7 @@ export function FoodScannerDialog({
                           inputMode="decimal"
                           min={0}
                           value={candidate[key] ?? ""}
+                          readOnly={mode === "confirm"}
                           onChange={(e) =>
                             setCandidate((c) => ({
                               ...c,
