@@ -364,24 +364,30 @@ export function ProgramBuilderPage({
     <AppShell
       title="Program Builder"
       actions={
-        <>
-          <Button variant="outline" onClick={() => navigate(routeBase)}>
-            <ArrowLeft className="h-4 w-4" />
-            Back
-          </Button>
-          {showAssign && (
-            <Button variant="secondary" onClick={() => setAssignOpen(true)}>
-              <Send className="h-4 w-4" />
-              Assign Program
+        <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => navigate(routeBase)}>
+              <ArrowLeft className="h-4 w-4" />
+              Back
             </Button>
-          )}
+            {showAssign && (
+              <Button variant="secondary" onClick={() => setAssignOpen(true)}>
+                <Send className="h-4 w-4" />
+                Assign Program
+              </Button>
+            )}
+          </div>
           {editable && (
-            <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
+            <Button
+              className="w-full sm:w-auto"
+              onClick={() => saveMutation.mutate()}
+              disabled={saveMutation.isPending}
+            >
               <Save className="h-4 w-4" />
               {saveMutation.isPending ? "Saving…" : "Save Program"}
             </Button>
           )}
-        </>
+        </div>
       }
     >
       {program?.ownerLabel && (
