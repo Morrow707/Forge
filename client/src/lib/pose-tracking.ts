@@ -242,7 +242,11 @@ export function deriveWristPoints(
 }
 
 // Angle in degrees at vertex `b`, given three normalized-space points.
-function angleAtVertex(
+// Exported for joint-angles.ts (the video-review angle tool) -- everything
+// else in this file only ever needs the inside angle these callers already
+// compute, but a manually-placed or tapped-joint angle measurement wants the
+// exact same math the rest of the pipeline already trusts.
+export function angleAtVertex(
   a: { x: number; y: number },
   b: { x: number; y: number },
   c: { x: number; y: number },

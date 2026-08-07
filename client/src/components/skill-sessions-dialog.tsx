@@ -10,9 +10,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { VideoAnnotationDialog } from "@/components/video-annotation-dialog";
+import { VideoAnalysisDialog } from "@/components/video-analysis-dialog";
 import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
-import { Film, Pencil } from "lucide-react";
+import { Film, Pencil, Wand2 } from "lucide-react";
 
 type SkillSession = {
   id: number;
@@ -48,6 +49,7 @@ export function SkillSessionsDialog({
     enabled: open,
   });
   const [annotating, setAnnotating] = useState<SkillSession | null>(null);
+  const [analyzing, setAnalyzing] = useState<SkillSession | null>(null);
 
   async function saveAnnotation(imageUrl: string) {
     if (!annotating) return;
@@ -100,10 +102,16 @@ export function SkillSessionsDialog({
                       className="mb-2 w-full rounded-md border border-border"
                     />
                   )}
-                  <Button size="sm" variant="outline" onClick={() => setAnnotating(s)}>
-                    <Pencil className="h-3.5 w-3.5" />
-                    {s.coachAnnotationUrl ? "Redo annotation" : "Annotate"}
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" onClick={() => setAnnotating(s)}>
+                      <Pencil className="h-3.5 w-3.5" />
+                      {s.coachAnnotationUrl ? "Redo annotation" : "Annotate"}
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setAnalyzing(s)}>
+                      <Wand2 className="h-3.5 w-3.5" />
+                      Analysis Tools
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -117,6 +125,15 @@ export function SkillSessionsDialog({
           onOpenChange={(next) => !next && setAnnotating(null)}
           videoUrl={annotating.videoUrl}
           onSaved={saveAnnotation}
+        />
+      )}
+
+      {analyzing && (
+        <VideoAnalysisDialog
+          open={!!analyzing}
+          onOpenChange={(next) => !next && setAnalyzing(null)}
+          videoUrl={analyzing.videoUrl}
+          title={`${athleteName} — ${analyzing.skillExerciseName}`}
         />
       )}
     </>

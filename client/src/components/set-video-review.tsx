@@ -10,7 +10,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { RotateCcw, Trash2, ThumbsUp, ThumbsDown } from "lucide-react";
+import { RotateCcw, Trash2, ThumbsUp, ThumbsDown, Wand2 } from "lucide-react";
+import { VideoAnalysisDialog } from "@/components/video-analysis-dialog";
 
 export type FlaggedSetVideo = {
   setNumber: number;
@@ -71,6 +72,7 @@ export function SetVideoPreviewDialog({
   onRetake: () => void;
   onRemove: () => void;
 }) {
+  const [analyzing, setAnalyzing] = useState(false);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
@@ -78,6 +80,10 @@ export function SetVideoPreviewDialog({
           <DialogTitle>Set {setNumber} — Form Check</DialogTitle>
         </DialogHeader>
         <video src={videoUrl} controls playsInline className="w-full rounded-md bg-black" />
+        <Button variant="outline" onClick={() => setAnalyzing(true)}>
+          <Wand2 className="h-4 w-4" />
+          Analysis Tools
+        </Button>
         <div className="flex items-center justify-center gap-2">
           <FlagButton
             active={flag === "best"}
@@ -105,6 +111,12 @@ export function SetVideoPreviewDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
+      <VideoAnalysisDialog
+        open={analyzing}
+        onOpenChange={setAnalyzing}
+        videoUrl={videoUrl}
+        title={`Set ${setNumber} — Form Check`}
+      />
     </Dialog>
   );
 }
