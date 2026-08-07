@@ -7,6 +7,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { getPoseLandmarker } from "@/lib/pose-tracking";
@@ -21,6 +22,7 @@ import {
 import { PoseLandmarker, type NormalizedLandmark, type Landmark } from "@mediapipe/tasks-vision";
 import { toast } from "sonner";
 import { AlertTriangle, Play, Square, RotateCcw, Check, Activity, Eye, EyeOff } from "lucide-react";
+import { SuggestedCorrective } from "@/components/suggested-corrective";
 
 type Step = "warning" | "capture" | "review";
 
@@ -90,6 +92,7 @@ export function MechanicsTrackerDialog({
   const lastVideoTimeRef = useRef(-1);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const recordedBlobRef = useRef<Blob | null>(null);
   const framesRef = useRef<CapturedFrame[]>([]);
   const captureStartRef = useRef(0);
   const stepRef = useRef<Step>("warning");
@@ -108,6 +111,7 @@ export function MechanicsTrackerDialog({
   const [result, setResult] = useState<MechanicsResult | null>(null);
   const [faults, setFaults] = useState<MechanicsFault[]>([]);
   const [saving, setSaving] = useState(false);
+  const [saveClipForCoach, setSaveClipForCoach] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -120,8 +124,10 @@ export function MechanicsTrackerDialog({
     setResult(null);
     setFaults([]);
     setShowSkeleton(true);
+    setSaveClipForCoach(false);
     framesRef.current = [];
     chunksRef.current = [];
+    recordedBlobRef.current = null;
     lastVideoTimeRef.current = -1;
 
     setModelLoading(true);
@@ -232,6 +238,7 @@ export function MechanicsTrackerDialog({
     const mechanicsResult = analyzeMechanics(framesRef.current, mode);
     setResult(mechanicsResult);
     setFaults(cameraAngle ? detectMechanicsFaults(mechanicsResult, cameraAngle) : []);
+    recordedBlobRef.current = blob;
     setVideoUrl(URL.createObjectURL(blob));
     changeStep("review");
   }
@@ -268,7 +275,9 @@ export function MechanicsTrackerDialog({
     setVideoUrl(null);
     setResult(null);
     setFaults([]);
+    setSaveClipForCoach(false);
     framesRef.current = [];
+    recordedBlobRef.current = null;
     changeStep("capture");
   }
 
@@ -276,6 +285,17 @@ export function MechanicsTrackerDialog({
     if (!result) return;
     setSaving(true);
     try {
+      // Opt-in only: the clip is uploaded here for the first time, right
+      // before saving the session, never during capture -- if the athlete
+      // never checks the box, recordedBlobRef is simply discarded when the
+      // dialog closes and no video ever leaves the device.
+      let uploadedVideoUrl: string | null = null;
+      if (saveClipForCoach && recordedBlobRef.current) {
+        const formData = new FormData();
+        formData.append("video", recordedBlobRef.current, "skill-clip.webm");
+        const uploadRes = await apiRequest("POST", "/api/athlete/skill-video", formData);
+        uploadedVideoUrl = (await uploadRes.json()).url;
+      }
       await apiRequest("POST", "/api/athlete/skill-session-logs", {
         skillAssignmentId,
         skillProgramDayId,
@@ -289,6 +309,7 @@ export function MechanicsTrackerDialog({
         armSlotDeg: result.armSlot?.angleDeg ?? null,
         armSlotLabel: result.armSlot?.label ?? null,
         wellSequenced: result.sequencing.wellSequenced,
+        videoUrl: uploadedVideoUrl,
       });
       toast.success(mode === "throw" ? "Throw saved" : "Swing saved");
       onOpenChange(false);
@@ -444,12 +465,12 @@ export function MechanicsTrackerDialog({
             {faults.length > 0 ? (
               <div className="space-y-2">
                 {faults.map((f) => (
-                  <div
-                    key={f.code}
-                    className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-2.5 text-sm text-amber-200"
-                  >
-                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                    {f.label}
+                  <div key={f.code} className="space-y-1">
+                    <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-2.5 text-sm text-amber-200">
+                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                      {f.label}
+                    </div>
+                    <SuggestedCorrective faultCode={f.code} />
                   </div>
                 ))}
               </div>
@@ -459,6 +480,19 @@ export function MechanicsTrackerDialog({
                 No mechanics faults flagged from this angle.
               </p>
             )}
+
+            <label className="flex items-start gap-2 text-sm">
+              <Checkbox
+                checked={saveClipForCoach}
+                onCheckedChange={(c) => setSaveClipForCoach(c === true)}
+              />
+              <span>
+                Save this clip so my coach can review it
+                <span className="block text-xs text-muted-foreground">
+                  Off by default -- only the numbers above are saved unless you turn this on.
+                </span>
+              </span>
+            </label>
 
             <DialogFooter>
               <Button variant="outline" onClick={retry}>

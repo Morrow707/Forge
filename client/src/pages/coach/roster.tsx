@@ -20,6 +20,7 @@ import { CalendarLinkDialog } from "@/components/calendar-link-dialog";
 import { BodyMetricsDialog } from "@/components/body-metrics-dialog";
 import { TestingHistoryDialog } from "@/components/testing-history-dialog";
 import { GoalsDialog } from "@/components/goals-dialog";
+import { SkillSessionsDialog } from "@/components/skill-sessions-dialog";
 import { NutritionDialog } from "@/components/nutrition-dialog";
 import { WellnessHistoryDialog, READINESS_CLASSNAME } from "@/components/wellness-history-dialog";
 import { AcwrHistoryDialog, ACWR_RISK_CLASSNAME } from "@/components/acwr-history-dialog";
@@ -57,6 +58,7 @@ import {
   Apple,
   Trophy,
   FileDown,
+  Film,
 } from "lucide-react";
 
 type HealthStatus = "healthy" | "hurt";
@@ -129,6 +131,7 @@ export default function CoachRoster() {
   const [metricsAthlete, setMetricsAthlete] = useState<RosterEntry | null>(null);
   const [testingAthlete, setTestingAthlete] = useState<RosterEntry | null>(null);
   const [goalsAthlete, setGoalsAthlete] = useState<RosterEntry | null>(null);
+  const [skillSessionsAthlete, setSkillSessionsAthlete] = useState<RosterEntry | null>(null);
   const [nutritionAthlete, setNutritionAthlete] = useState<RosterEntry | null>(null);
   const [wellnessAthlete, setWellnessAthlete] = useState<RosterEntry | null>(null);
   const [trophyAthlete, setTrophyAthlete] = useState<RosterEntry | null>(null);
@@ -320,6 +323,15 @@ export default function CoachRoster() {
                             onClick={() => setGoalsAthlete(a)}
                           >
                             <Target className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            aria-label={`View ${a.name}'s skill clips`}
+                            title="Skill Clips"
+                            onClick={() => setSkillSessionsAthlete(a)}
+                          >
+                            <Film className="h-4 w-4" />
                           </Button>
                           <Button
                             size="icon"
@@ -606,6 +618,16 @@ export default function CoachRoster() {
           athleteName={goalsAthlete.name}
           goalsUrl={`/api/coach/roster/${goalsAthlete.id}/goals`}
           exercisesUrl={`/api/coach/analytics/exercises?athleteId=${goalsAthlete.id}`}
+          skillExercisesUrl={`/api/coach/analytics/skill-exercises?athleteId=${goalsAthlete.id}`}
+        />
+      )}
+
+      {skillSessionsAthlete && (
+        <SkillSessionsDialog
+          open={skillSessionsAthlete !== null}
+          onOpenChange={(open) => !open && setSkillSessionsAthlete(null)}
+          athleteName={skillSessionsAthlete.name}
+          athleteId={skillSessionsAthlete.id}
         />
       )}
 

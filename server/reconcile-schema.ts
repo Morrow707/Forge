@@ -61,6 +61,10 @@ EXCEPTION WHEN duplicate_object THEN null; END $$;
 DO $$ BEGIN
   CREATE TYPE "goal_type" AS ENUM ('exercise', 'testing');
 EXCEPTION WHEN duplicate_object THEN null; END $$;
+-- 'skill' targets a best sprint-timing elapsedSeconds off skillSessionLogs
+-- (see the comment on goalTypeEnum in shared/schema.ts) -- goals stays a
+-- wholly strength-side table otherwise.
+ALTER TYPE "goal_type" ADD VALUE IF NOT EXISTS 'skill';
 
 DO $$ BEGIN
   CREATE TYPE "challenge_metric" AS ENUM ('workouts_completed', 'total_reps', 'total_volume');
@@ -77,6 +81,10 @@ EXCEPTION WHEN duplicate_object THEN null; END $$;
 DO $$ BEGIN
   CREATE TYPE "trophy_category" AS ENUM ('workout_count', 'streak', 'pr_count');
 EXCEPTION WHEN duplicate_object THEN null; END $$;
+-- 'speed' counts sprint-timing captures (skillSessionLogs rows with
+-- tracking_level 'sprint') -- see the comment on trophyCategoryEnum in
+-- shared/schema.ts.
+ALTER TYPE "trophy_category" ADD VALUE IF NOT EXISTS 'speed';
 
 DO $$ BEGIN
   CREATE TYPE "trophy_tier" AS ENUM ('bronze', 'silver', 'gold');
@@ -349,11 +357,15 @@ CREATE TABLE IF NOT EXISTS "skill_session_logs" (
   "arm_slot_deg" real,
   "arm_slot_label" text,
   "well_sequenced" boolean,
+  "video_url" text,
+  "coach_annotation_url" text,
   "created_at" timestamp NOT NULL DEFAULT now()
 );
 ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "hip_shoulder_separation_deg" real;
 ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "weight_transfer_pct" real;
 ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "hip_rotation_deg" real;
+ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "video_url" text;
+ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "coach_annotation_url" text;
 ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "arm_slot_deg" real;
 ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "arm_slot_label" text;
 ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "well_sequenced" boolean;
@@ -715,11 +727,13 @@ CREATE TABLE IF NOT EXISTS "goals" (
   "type" goal_type NOT NULL,
   "exercise_id" integer REFERENCES "exercises"("id") ON DELETE CASCADE,
   "testing_metric" text,
+  "skill_exercise_id" integer REFERENCES "skill_exercises"("id") ON DELETE CASCADE,
   "target_value" real NOT NULL,
   "target_unit" text NOT NULL,
   "target_date" date,
   "created_at" timestamp NOT NULL DEFAULT now()
 );
+ALTER TABLE "goals" ADD COLUMN IF NOT EXISTS "skill_exercise_id" integer REFERENCES "skill_exercises"("id") ON DELETE CASCADE;
 CREATE INDEX IF NOT EXISTS "goals_athlete_idx" ON "goals" ("athlete_id");
 
 CREATE TABLE IF NOT EXISTS "wellness_checkins" (

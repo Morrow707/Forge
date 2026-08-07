@@ -644,6 +644,16 @@ export const skillSessionLogs = pgTable(
     armSlotDeg: real("arm_slot_deg"),
     armSlotLabel: text("arm_slot_label"),
     wellSequenced: boolean("well_sequenced"),
+    // Both optional opt-ins, not part of a normal capture -- the athlete
+    // must explicitly choose to keep the clip (see the privacy comment on
+    // MechanicsTrackerDialog; a capture is ephemeral by default) before
+    // videoUrl is ever set, and coachAnnotationUrl only gets set afterward
+    // if their coach actually opens it and draws on a frame. Reuses
+    // VideoAnnotationDialog as-is (it only ever needs a bare videoUrl in,
+    // an imageUrl out) rather than building a parallel comment-thread
+    // system the way the strength side's workoutComments does.
+    videoUrl: text("video_url"),
+    coachAnnotationUrl: text("coach_annotation_url"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({
@@ -1356,13 +1366,20 @@ export const testingResults = pgTable(
   }),
 );
 
-export const goalTypeEnum = pgEnum("goal_type", ["exercise", "testing"]);
+// "skill" is Skills' own goal type -- targets a best (lowest) sprint-timing
+// elapsedSeconds for one skill drill, computed off skillSessionLogs the
+// same read-only, never-stored-achieved way "exercise"/"testing" are
+// computed off workoutSetEntries/users. skillExerciseId below is the only
+// Skills-table reference this row ever gets; goals stays otherwise a
+// wholly strength-side table.
+export const goalTypeEnum = pgEnum("goal_type", ["exercise", "testing", "skill"]);
 
 // A target the athlete (or their coach) is working toward -- "achieved" is
 // deliberately not a stored column. It's computed fresh each time goals are
 // fetched by comparing targetValue against the athlete's current best (max
 // weight ever logged, for an exercise goal; current profile value, for a
-// testing goal), so it can never drift out of sync with the data it's about.
+// testing goal; best sprint time, for a skill goal), so it can never drift
+// out of sync with the data it's about.
 export const goals = pgTable(
   "goals",
   {
@@ -1376,6 +1393,12 @@ export const goals = pgTable(
     type: goalTypeEnum("type").notNull(),
     exerciseId: integer("exercise_id").references(() => exercises.id, { onDelete: "cascade" }),
     testingMetric: text("testing_metric"),
+    // Only set for type "skill" -- the drill this goal tracks a best sprint
+    // time for. Deliberately a separate column from exerciseId rather than
+    // reusing it, even though both are just "which thing this goal is
+    // about": exerciseId's FK points at the strength exercises table, and a
+    // skill goal must never accidentally resolve against it.
+    skillExerciseId: integer("skill_exercise_id").references(() => skillExercises.id, { onDelete: "cascade" }),
     targetValue: real("target_value").notNull(),
     targetUnit: text("target_unit").notNull(),
     targetDate: date("target_date"),
@@ -1497,10 +1520,16 @@ export const setCaraCapSchema = z.object({
   capMinutes: z.number().int().min(1).max(10080).nullable(),
 });
 
+// "speed" is Skills' own category -- counts sprint-timing captures
+// (skillSessionLogs rows with trackingLevel "sprint"), entirely separate
+// from every other category's strength-table-only counts. It's still
+// awarded through the exact same checkAndAwardTrophies pass as the rest;
+// the only Skills-specific part is which count feeds it.
 export const trophyCategoryEnum = pgEnum("trophy_category", [
   "workout_count",
   "streak",
   "pr_count",
+  "speed",
 ]);
 
 export const trophyTierEnum = pgEnum("trophy_tier", ["bronze", "silver", "gold"]);
@@ -2379,6 +2408,13 @@ export const createSkillSessionLogSchema = z.object({
   armSlotDeg: z.number().min(0).max(90).optional().nullable(),
   armSlotLabel: z.enum(["overhand", "three-quarter", "sidearm"]).optional().nullable(),
   wellSequenced: z.boolean().optional().nullable(),
+  // Opt-in only -- set when the athlete explicitly chooses "Save clip for
+  // coach" after a capture (see MechanicsTrackerDialog); absent otherwise.
+  videoUrl: z.string().trim().max(500).optional().nullable(),
+});
+
+export const setSkillSessionAnnotationSchema = z.object({
+  imageUrl: z.string().trim().max(500).min(1),
 });
 
 export const repBreakdownEntrySchema = z.object({
@@ -2622,7 +2658,7 @@ export type TestingMetric = z.infer<typeof testingTrendsQuerySchema>["metric"];
 
 export const createGoalSchema = z
   .object({
-    type: z.enum(["exercise", "testing"]),
+    type: z.enum(["exercise", "testing", "skill"]),
     exerciseId: z.coerce.number().optional(),
     testingMetric: z.enum([
       "fortyYardDash",
@@ -2633,6 +2669,7 @@ export const createGoalSchema = z
       "squatMaxLbs",
       "deadliftMaxLbs",
     ]).optional(),
+    skillExerciseId: z.coerce.number().optional(),
     targetValue: z.coerce.number().positive(),
     targetUnit: z.string().trim().min(1).max(10),
     targetDate: z
@@ -2645,6 +2682,9 @@ export const createGoalSchema = z
   })
   .refine((data) => (data.type === "testing" ? data.testingMetric != null : true), {
     message: "testingMetric is required for testing goals",
+  })
+  .refine((data) => (data.type === "skill" ? data.skillExerciseId != null : true), {
+    message: "skillExerciseId is required for skill goals",
   });
 export type CreateGoalInput = z.infer<typeof createGoalSchema>;
 export type Goal = typeof goals.$inferSelect;

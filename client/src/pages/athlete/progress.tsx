@@ -367,6 +367,7 @@ export default function AthleteProgress() {
               <GoalsPanel
                 goalsUrl="/api/athlete/goals"
                 exercisesUrl="/api/athlete/exercises-with-history"
+                skillExercisesUrl="/api/athlete/skill-exercises-with-history"
               />
             </CardContent>
           </Card>
