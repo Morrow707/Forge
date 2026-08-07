@@ -142,9 +142,13 @@ const OCCLUSION_STEP_MS = 33;
 // the gap between them looks like a brief dropout rather than real motion
 // -- empty array (nothing to insert) otherwise. Caller pushes these before
 // pushing `curr` itself; `prev`/`curr` are never duplicated or altered.
-export function interpolateOcclusionGap(prev: TrackedPoint, curr: TrackedPoint): TrackedPoint[] {
+export function interpolateOcclusionGap(
+  prev: TrackedPoint,
+  curr: TrackedPoint,
+  maxGapMs = OCCLUSION_MAX_GAP_MS,
+): TrackedPoint[] {
   const gap = curr.t - prev.t;
-  if (gap < OCCLUSION_MIN_GAP_MS || gap > OCCLUSION_MAX_GAP_MS) return [];
+  if (gap < OCCLUSION_MIN_GAP_MS || gap > maxGapMs) return [];
   const steps = Math.floor(gap / OCCLUSION_STEP_MS);
   if (steps < 2) return [];
   const points: TrackedPoint[] = [];

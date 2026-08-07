@@ -190,9 +190,10 @@ export function BarTrackerDialog({
   // right comparison wouldn't mean anything -- gates leg-drive asymmetry
   // tracking off for those, alongside the movementType check.
   laterality?: string | null;
-  // Auto-stops tracking once this many reps are detected (parsed from the
-  // prescribed rep scheme by the caller) -- manual "Stop & Review" always
-  // still works too, and non-numeric rep schemes just never trigger this.
+  // Parsed from the prescribed rep scheme by the caller -- shown as
+  // "3/5 reps" on the live overlay so the athlete knows where they are,
+  // but never auto-stops tracking (a missed or mistimed rep shouldn't cut
+  // the recording short); Stop is always a manual, deliberate tap.
   targetReps?: number;
   // This set's entered weight, converted to kg by the caller -- lets
   // summarizeTrackedSet estimate power output (mass * g * velocity).
@@ -377,7 +378,7 @@ export function BarTrackerDialog({
     const video = videoRef.current;
     const overlay = overlayRef.current;
     const landmarker = poseLandmarkerRef.current;
-    if (!video || !overlay || !landmarker || video.videoWidth === 0) {
+    if (!video || !overlay || !landmarker || video.videoWidth === 0 || video.clientWidth === 0) {
       rafRef.current = requestAnimationFrame(previewTick);
       return;
     }
@@ -387,8 +388,15 @@ export function BarTrackerDialog({
     }
     lastVideoTimeRef.current = video.currentTime;
 
-    overlay.width = video.videoWidth;
-    overlay.height = video.videoHeight;
+    // Sized to the video's actual on-screen box (clientWidth/Height), not
+    // its encoded videoWidth/videoHeight -- on iOS Safari a portrait
+    // rear-camera stream can report landscape sensor dimensions there while
+    // rendering (and feeding MediaPipe) already-rotated portrait frames, so
+    // scaling normalized landmarks by the raw encoded size draws the
+    // skeleton at the wrong scale and position relative to what's actually
+    // on screen. clientWidth/Height always matches what the athlete sees.
+    overlay.width = video.clientWidth;
+    overlay.height = video.clientHeight;
     const ctx = overlay.getContext("2d");
     if (ctx) {
       ctx.clearRect(0, 0, overlay.width, overlay.height);
@@ -533,7 +541,7 @@ export function BarTrackerDialog({
     const video = videoRef.current;
     const overlay = overlayRef.current;
     const landmarker = poseLandmarkerRef.current;
-    if (!video || !overlay || !landmarker || video.videoWidth === 0) {
+    if (!video || !overlay || !landmarker || video.videoWidth === 0 || video.clientWidth === 0) {
       rafRef.current = requestAnimationFrame(tick);
       return;
     }
@@ -543,8 +551,12 @@ export function BarTrackerDialog({
     }
     lastVideoTimeRef.current = video.currentTime;
 
-    overlay.width = video.videoWidth;
-    overlay.height = video.videoHeight;
+    // See previewTick's comment -- sized to the video's actual on-screen
+    // box, not its encoded videoWidth/videoHeight, so the overlay always
+    // lines up with what's visually on screen regardless of any rotation
+    // metadata mismatch on the encoded stream.
+    overlay.width = video.clientWidth;
+    overlay.height = video.clientHeight;
     const ctx = overlay.getContext("2d");
     if (!ctx) {
       rafRef.current = requestAnimationFrame(tick);
@@ -630,8 +642,17 @@ export function BarTrackerDialog({
         // A brief camera dropout right before this point (an arm crossing
         // the bar, a chalk cloud) shouldn't read as one giant instantaneous
         // jump once it resolves -- see interpolateOcclusionGap's own
-        // comment for why only a short gap gets bridged this way.
-        if (prev) for (const gapPoint of interpolateOcclusionGap(prev, point)) trace.push(gapPoint);
+        // comment for why only a short gap gets bridged this way. A fast,
+        // explosive movement (a rotational med-ball throw, a jump landing)
+        // blurs past the pose model harder and longer than the slower,
+        // controlled lifts this tolerance was originally tuned around, and
+        // an unbridged gap there doesn't just misdraw one point -- it can
+        // make segmentPhases lose or merge whole reps around the gap. Jump
+        // mode gets the most headroom (a landing can lose ankle tracking
+        // for longer than any lift's bar/wrist ever does).
+        if (prev)
+          for (const gapPoint of interpolateOcclusionGap(prev, point, mode === "jump" ? 400 : 300))
+            trace.push(gapPoint);
         trace.push(point);
         framesRef.current.push({ t, landmarks, worldLandmarks });
 
@@ -663,7 +684,12 @@ export function BarTrackerDialog({
         // Cheap live rep counter: count direction reversals bigger than
         // ~4cm, same idea as segmentPhases but incremental for the live
         // display -- the real, precise segmentation runs once on the full
-        // trace at Stop.
+        // trace at Stop. Display only -- this used to also auto-stop
+        // tracking once it reached targetReps, but that cheap heuristic
+        // can misfire (noise counted as a rep, or a mistimed/failed rep
+        // never registering), silently ending the capture and the camera
+        // recording well before the set was actually done. Recording now
+        // only ever ends when the athlete taps Stop themselves.
         if (trace.length > 4) {
           const window5 = trace.slice(-5).map((p) => p.y);
           const delta = window5[window5.length - 1] - window5[0];
@@ -674,13 +700,6 @@ export function BarTrackerDialog({
                 repCountRef.current += 1;
                 setRepCount(repCountRef.current);
                 if (voiceEnabledRef.current) speak(String(repCountRef.current));
-                if (targetReps && repCountRef.current >= targetReps) {
-                  toast.info(
-                    `${targetReps} ${mode === "jump" ? "jumps" : "reps"} detected — reviewing your set`,
-                  );
-                  stopTracking();
-                  return;
-                }
               }
               lastRepDirRef.current = dir;
             }

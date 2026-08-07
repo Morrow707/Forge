@@ -18,6 +18,8 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { RadioChipGroup } from "@/components/filter-chip-group";
 import { apiRequest, getJson } from "@/lib/queryClient";
+import { useDistanceUnit, cmToDisplayUnit } from "@/lib/distance-unit";
+import { DistanceUnitToggle } from "@/components/distance-unit-toggle";
 import {
   Users,
   Gauge,
@@ -211,6 +213,7 @@ function ChartVisibilityMenu({
  * athlete-facing equivalent -- athletes only see the live number during
  * their own set, this page is where the history/coaching value lives. */
 export default function CoachAnalytics() {
+  const [distanceUnit] = useDistanceUnit();
   const [athleteId, setAthleteId] = useState<string>("");
   const [athleteSearch, setAthleteSearch] = useState("");
   const [exerciseId, setExerciseId] = useState<string>("");
@@ -271,6 +274,12 @@ export default function CoachAnalytics() {
   const chartData = points.map((p) => ({
     ...p,
     label: `${format(parseISO(p.date), "MMM d")} · Set ${p.setNumber}`,
+    jumpHeightCm:
+      p.jumpHeightCm != null ? Math.round(cmToDisplayUnit(p.jumpHeightCm, distanceUnit) * 10) / 10 : p.jumpHeightCm,
+    jumpDistanceCm:
+      p.jumpDistanceCm != null
+        ? Math.round(cmToDisplayUnit(p.jumpDistanceCm, distanceUnit) * 10) / 10
+        : p.jumpDistanceCm,
   }));
 
   const hasNumericWeight = chartData.some((p) => p.weightMode === "numeric" && p.weight != null);
@@ -848,19 +857,22 @@ export default function CoachAnalytics() {
 
           {hasJumpHeight && !hiddenCharts.has("jump") && (
             <Card>
-              <CardHeader>
-                <CardTitle>Jump Height &amp; Distance</CardTitle>
-                <CardDescription>
-                  Flight-time-derived jump height, and horizontal distance for broad jumps, per
-                  tracked set.
-                </CardDescription>
+              <CardHeader className="flex flex-row items-start justify-between gap-2">
+                <div>
+                  <CardTitle>Jump Height &amp; Distance</CardTitle>
+                  <CardDescription>
+                    Flight-time-derived jump height, and horizontal distance for broad jumps, per
+                    tracked set.
+                  </CardDescription>
+                </div>
+                <DistanceUnitToggle />
               </CardHeader>
               <CardContent className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={chartData} margin={{ left: 4, right: 12 }}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                     <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                    <YAxis tick={{ fontSize: 11 }} width={40} unit="cm" />
+                    <YAxis tick={{ fontSize: 11 }} width={40} unit={distanceUnit} />
                     <Tooltip
                       contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))" }}
                     />
@@ -1242,7 +1254,7 @@ export default function CoachAnalytics() {
                     <th className="py-1.5 pr-3">Peak m/s</th>
                     <th className="py-1.5 pr-3">Power (W)</th>
                     <th className="py-1.5 pr-3">Path (cm)</th>
-                    <th className="py-1.5 pr-3">Jump (cm)</th>
+                    <th className="py-1.5 pr-3">Jump ({distanceUnit})</th>
                     <th className="py-1.5 pr-3">Form notes</th>
                     <th className="py-1.5 pr-3">Video</th>
                     <th className="py-1.5">PR</th>
