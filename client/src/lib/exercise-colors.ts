@@ -32,3 +32,10 @@ export const LATERALITY_FILTER_ACTIVE_CLASS = "border-violet-500 bg-violet-500/1
 export const MUSCLE_FILTER_ACTIVE_CLASS = "border-emerald-500 bg-emerald-500/15 text-emerald-400";
 export const SPORT_FILTER_ACTIVE_CLASS = "border-rose-500 bg-rose-500/15 text-rose-400";
 export const OWNER_FILTER_ACTIVE_CLASS = "border-slate-400 bg-slate-400/15 text-slate-300";
+
+// Skills is a wholly separate system from Exercises (see shared/schema.ts's
+// skillExercises comment) and gets its own single hue -- teal -- not reused
+// by anything above, so a coach can tell "this is skills" at a glance
+// anywhere the two systems' UI might otherwise sit near each other.
+export const SKILL_BADGE_CLASS = "bg-teal-500/15 text-teal-400";
+export const SKILL_FILTER_ACTIVE_CLASS = "border-teal-500 bg-teal-500/15 text-teal-400";

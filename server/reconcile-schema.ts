@@ -255,6 +255,21 @@ ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "uses_box" boolean NOT NULL DEF
 ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "secondary_muscles" json;
 ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "sports" json;
 
+-- Fully separate from "exercises" -- see the comment on skillExercises in
+-- shared/schema.ts for why this isn't just a category on the same table.
+CREATE TABLE IF NOT EXISTS "skill_exercises" (
+  "id" serial PRIMARY KEY,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "name" text NOT NULL,
+  "skill_type" text NOT NULL DEFAULT 'Hitting',
+  "sports" json,
+  "equipment" text,
+  "video_url" text,
+  "instructions" text,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "skill_exercises_coach_idx" ON "skill_exercises" ("coach_id");
+
 DO $$ BEGIN
   CREATE TYPE "exercise_submission_status" AS ENUM ('pending', 'approved', 'rejected');
 EXCEPTION WHEN duplicate_object THEN null; END $$;

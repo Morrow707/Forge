@@ -8,6 +8,7 @@ import {
   teamChallenges,
   teamGameDays,
   exercises,
+  skillExercises,
   programs,
   programBlocks,
   programWeeks,
@@ -3026,6 +3027,58 @@ Athlete's data:
 
   async deleteExercise(id: number) {
     await db.delete(exercises).where(eq(exercises.id, id));
+  },
+
+  // ---------- Skill Exercises (fully separate from Exercises) ----------
+  // Mirrors the exercises block above (withOwnership, visible-to-coach,
+  // CRUD) but against its own table, so a skills coach's bank and a
+  // strength coach's bank never mix -- see the comment on skillExercises in
+  // shared/schema.ts.
+  async getVisibleSkillExercisesForCoach(coachId: number) {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    const admins = await db.query.users.findMany({ where: eq(users.role, "admin") });
+    const ownerIds = Array.from(new Set([...coachIds, ...admins.map((a) => a.id)]));
+    const rows = await db.query.skillExercises.findMany({
+      where: inArray(skillExercises.coachId, ownerIds),
+      orderBy: desc(skillExercises.createdAt),
+      with: { coach: true },
+    });
+    return rows.map((ex) => this.withOwnership(ex, coachId, coachIds));
+  },
+
+  async getSkillExerciseDetail(id: number, requestingUserId: number) {
+    const ex = await db.query.skillExercises.findFirst({
+      where: eq(skillExercises.id, id),
+      with: { coach: true },
+    });
+    if (!ex) return null;
+    const coachIds = await this.getEffectiveCoachIds(requestingUserId);
+    return this.withOwnership(ex, requestingUserId, coachIds);
+  },
+
+  async getSkillExercise(id: number) {
+    return db.query.skillExercises.findFirst({ where: eq(skillExercises.id, id) });
+  },
+
+  async createSkillExercise(coachId: number, data: any) {
+    const [row] = await db
+      .insert(skillExercises)
+      .values({ ...data, coachId })
+      .returning();
+    return row;
+  },
+
+  async updateSkillExercise(id: number, data: any) {
+    const [row] = await db
+      .update(skillExercises)
+      .set(data)
+      .where(eq(skillExercises.id, id))
+      .returning();
+    return row;
+  },
+
+  async deleteSkillExercise(id: number) {
+    await db.delete(skillExercises).where(eq(skillExercises.id, id));
   },
 
   // ---------- Trending exercises (numbers, not opt-in, -> Forge) ----------
