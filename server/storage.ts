@@ -515,6 +515,7 @@ type WeekPatch = {
       restSeconds?: number;
       notes?: string;
       supersetGroup?: string;
+      restAfterGroupOnly?: boolean;
       trackingLevel?: "none" | "bar_path" | "full" | "jump";
       videoCheckEnabled?: boolean;
     }[];
@@ -568,11 +569,7 @@ function applyProgramWeekUpdates(
                 restSeconds: ex.restSeconds ?? null,
                 notes: ex.notes || null,
                 supersetGroup: ex.supersetGroup || null,
-                // The AI chat patch format doesn't expose this field yet
-                // (see the restAfterGroupOnly column comment) -- same
-                // "resets when the AI rewrites a day's exercises" treatment
-                // as restSeconds/supersetGroup above.
-                restAfterGroupOnly: false,
+                restAfterGroupOnly: ex.restAfterGroupOnly ?? false,
                 trackingLevel: ex.trackingLevel,
                 videoCheckEnabled: ex.videoCheckEnabled ?? false,
               }))
@@ -685,6 +682,7 @@ const programExerciseItemSchema = z.object({
   restSeconds: z.number().int().optional(),
   notes: z.string().optional(),
   supersetGroup: z.string().optional(),
+  restAfterGroupOnly: z.boolean().optional(),
   trackingLevel: z.enum(["none", "bar_path", "full", "jump"]).optional(),
   videoCheckEnabled: z.boolean().optional(),
 });
@@ -4062,6 +4060,7 @@ Design a complete draft program matching the coach's request.`;
             restSeconds: ex.restSeconds,
             notes: ex.notes,
             supersetGroup: ex.supersetGroup,
+            restAfterGroupOnly: ex.restAfterGroupOnly,
             trackingLevel: ex.trackingLevel,
             videoCheckEnabled: ex.videoCheckEnabled,
           })),
@@ -4078,7 +4077,16 @@ Design a complete draft program matching the coach's request.`;
         weight: { type: "string" },
         restSeconds: { type: "integer" },
         notes: { type: "string" },
-        supersetGroup: { type: "string" },
+        supersetGroup: {
+          type: "string",
+          description:
+            "An arbitrary shared ID (e.g. 'A') given to every exercise chained back-to-back in a superset, so they render as one linked block (A1, A2...). Omit for a solo exercise. Only group exercises the user actually wants chained together -- not just because they're on the same day.",
+        },
+        restAfterGroupOnly: {
+          type: "boolean",
+          description:
+            "Only meaningful for 2+ exercises sharing a supersetGroup. true: the athlete goes from one exercise straight into the next with no rest, and only rests once after finishing the LAST exercise in the group's set. false (default): rests after every exercise's set, same as a solo exercise. Only set true when the user actually describes wanting no rest between specific exercises in a group (e.g. 'let me do curls into rows back to back, then rest') -- carry forward the group's existing value for anything else you're re-listing in that day.",
+        },
         trackingLevel: {
           type: "string",
           enum: ["none", "bar_path", "full", "jump"],
