@@ -14,17 +14,19 @@ import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { format, parseISO, addDays, formatISO } from "date-fns";
-import { Target, Dumbbell, Trophy, X, Plus, Sparkles } from "lucide-react";
+import { Target, Dumbbell, Trophy, X, Plus, Sparkles, Timer } from "lucide-react";
 import { TESTING_METRICS, type TestingMetricKey } from "@shared/testing-metrics";
 
 type ExerciseOption = { id: number; name: string };
 
 type Goal = {
   id: number;
-  type: "exercise" | "testing";
+  type: "exercise" | "testing" | "skill";
   exerciseId: number | null;
   exerciseName: string | null;
   testingMetric: TestingMetricKey | null;
+  skillExerciseId: number | null;
+  skillExerciseName: string | null;
   targetValue: number;
   targetUnit: string;
   targetDate: string | null;
@@ -35,21 +37,29 @@ type Goal = {
 /** Embedded directly in the athlete's own progress page (self-service, no
  * dialog needed) and wrapped in a Dialog for the coach's roster view.
  * "Achieved" is never stored -- it's recomputed by the server every fetch
- * from the athlete's actual lift history / current testing numbers. */
+ * from the athlete's actual lift history / current testing numbers /
+ * best sprint time. skillExercisesUrl is optional -- goals against a skill
+ * drill only make sense once Skills is in the picture at all, so a caller
+ * that never passes it just doesn't offer that goal type (no broken empty
+ * option), keeping a coach/athlete with no skill history from seeing a
+ * dead-end choice. */
 export function GoalsPanel({
   goalsUrl,
   exercisesUrl,
+  skillExercisesUrl,
   canCreate = true,
 }: {
   goalsUrl: string;
   exercisesUrl: string;
+  skillExercisesUrl?: string;
   canCreate?: boolean;
 }) {
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
-  const [type, setType] = useState<"exercise" | "testing">("exercise");
+  const [type, setType] = useState<"exercise" | "testing" | "skill">("exercise");
   const [exerciseId, setExerciseId] = useState("");
   const [testingMetric, setTestingMetric] = useState<TestingMetricKey | "">("");
+  const [skillExerciseId, setSkillExerciseId] = useState("");
   const [targetValue, setTargetValue] = useState("");
   const [targetUnit, setTargetUnit] = useState("lbs");
   const [targetDate, setTargetDate] = useState("");
@@ -70,9 +80,16 @@ export function GoalsPanel({
     enabled: showForm && type === "exercise",
   });
 
+  const { data: skillExercises = [] } = useQuery<ExerciseOption[]>({
+    queryKey: [skillExercisesUrl],
+    queryFn: () => getJson(skillExercisesUrl!),
+    enabled: showForm && type === "skill" && !!skillExercisesUrl,
+  });
+
   function resetForm() {
     setExerciseId("");
     setTestingMetric("");
+    setSkillExerciseId("");
     setTargetValue("");
     setTargetDate("");
     setSuggestion(null);
@@ -104,8 +121,14 @@ export function GoalsPanel({
         type,
         exerciseId: type === "exercise" ? Number(exerciseId) : undefined,
         testingMetric: type === "testing" ? testingMetric : undefined,
+        skillExerciseId: type === "skill" ? Number(skillExerciseId) : undefined,
         targetValue: Number(targetValue),
-        targetUnit: type === "testing" ? TESTING_METRICS.find((m) => m.key === testingMetric)?.unit ?? "" : targetUnit,
+        targetUnit:
+          type === "testing"
+            ? TESTING_METRICS.find((m) => m.key === testingMetric)?.unit ?? ""
+            : type === "skill"
+              ? "sec"
+              : targetUnit,
         targetDate: targetDate || undefined,
       });
       return res.json();
@@ -141,6 +164,7 @@ export function GoalsPanel({
                 if (!targetValue) return;
                 if (type === "exercise" && !exerciseId) return;
                 if (type === "testing" && !testingMetric) return;
+                if (type === "skill" && !skillExerciseId) return;
                 createGoal.mutate();
               }}
               className="space-y-3 rounded-md border border-border p-3"
@@ -151,7 +175,7 @@ export function GoalsPanel({
                   <Select
                     value={type}
                     onValueChange={(v) => {
-                      setType(v as "exercise" | "testing");
+                      setType(v as "exercise" | "testing" | "skill");
                       setSuggestion(null);
                     }}
                   >
@@ -161,6 +185,7 @@ export function GoalsPanel({
                     <SelectContent>
                       <SelectItem value="exercise">A lift</SelectItem>
                       <SelectItem value="testing">A testing metric</SelectItem>
+                      {skillExercisesUrl && <SelectItem value="skill">A sprint time</SelectItem>}
                     </SelectContent>
                   </Select>
                 </div>
@@ -184,6 +209,28 @@ export function GoalsPanel({
                             {e.name}
                           </SelectItem>
                         ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : type === "skill" ? (
+                  <div className="space-y-1.5">
+                    <Label>Skill drill</Label>
+                    <Select value={skillExerciseId} onValueChange={setSkillExerciseId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Pick a drill" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {skillExercises.length === 0 ? (
+                          <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                            No timed sprints recorded yet
+                          </div>
+                        ) : (
+                          skillExercises.map((e) => (
+                            <SelectItem key={e.id} value={String(e.id)}>
+                              {e.name}
+                            </SelectItem>
+                          ))
+                        )}
                       </SelectContent>
                     </Select>
                   </div>
@@ -235,7 +282,9 @@ export function GoalsPanel({
                       </Select>
                     ) : (
                       <div className="flex w-16 items-center justify-center rounded-md border border-dashed border-border text-xs text-muted-foreground">
-                        {TESTING_METRICS.find((m) => m.key === testingMetric)?.unit ?? "unit"}
+                        {type === "skill"
+                          ? "sec"
+                          : TESTING_METRICS.find((m) => m.key === testingMetric)?.unit ?? "unit"}
                       </div>
                     )}
                   </div>
@@ -320,8 +369,15 @@ export function GoalsPanel({
       ) : (
         <div className="space-y-2">
           {goals.map((g) => {
-            const label = g.type === "exercise" ? g.exerciseName ?? "Deleted exercise" : TESTING_METRICS.find((m) => m.key === g.testingMetric)?.label ?? g.testingMetric;
-            const lowerIsBetter = g.type === "testing" && TESTING_METRICS.find((m) => m.key === g.testingMetric)?.lowerIsBetter;
+            const label =
+              g.type === "exercise"
+                ? g.exerciseName ?? "Deleted exercise"
+                : g.type === "skill"
+                  ? g.skillExerciseName ?? "Deleted drill"
+                  : TESTING_METRICS.find((m) => m.key === g.testingMetric)?.label ?? g.testingMetric;
+            const lowerIsBetter =
+              g.type === "skill" ||
+              (g.type === "testing" && TESTING_METRICS.find((m) => m.key === g.testingMetric)?.lowerIsBetter);
             const pct =
               g.currentValue == null
                 ? 0
@@ -335,6 +391,8 @@ export function GoalsPanel({
                   <div className="flex items-center gap-1.5 font-semibold">
                     {g.type === "exercise" ? (
                       <Dumbbell className="h-4 w-4 text-primary" />
+                    ) : g.type === "skill" ? (
+                      <Timer className="h-4 w-4 text-primary" />
                     ) : (
                       <Target className="h-4 w-4 text-primary" />
                     )}

@@ -16,12 +16,14 @@ export function GoalsDialog({
   athleteName,
   goalsUrl,
   exercisesUrl,
+  skillExercisesUrl,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   athleteName: string;
   goalsUrl: string;
   exercisesUrl: string;
+  skillExercisesUrl?: string;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -35,7 +37,11 @@ export function GoalsDialog({
             Set a target for a lift or testing metric and track progress toward it.
           </DialogDescription>
         </DialogHeader>
-        <GoalsPanel goalsUrl={goalsUrl} exercisesUrl={exercisesUrl} />
+        <GoalsPanel
+          goalsUrl={goalsUrl}
+          exercisesUrl={exercisesUrl}
+          skillExercisesUrl={skillExercisesUrl}
+        />
       </DialogContent>
     </Dialog>
   );

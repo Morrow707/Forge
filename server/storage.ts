@@ -88,8 +88,9 @@ import {
 } from "@shared/load";
 import { computeForceVelocityProfile, type LoadVelocityPoint } from "@shared/force-velocity";
 import { ALL_TROPHY_DEFINITIONS } from "@shared/achievements";
+import { FAULT_CORRECTIVE_KEYWORDS } from "@shared/fault-correctives";
 import { askClaude, askClaudeStructured, askClaudeWithTools, askClaudeVision, askClaudeVisionStructured, aiEnabled, fastModel, type SystemPrompt } from "./ai";
-import { eq, and, inArray, asc, desc, lt, lte, gte, gt, isNull, sql } from "drizzle-orm";
+import { eq, and, inArray, asc, desc, lt, lte, gte, gt, isNull, isNotNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { diffLines } from "diff";
 import {
@@ -1674,6 +1675,30 @@ export const storage = {
     return best;
   },
 
+  // Best (lowest) sprint-timing elapsedSeconds ever captured for a given
+  // skill drill -- the skill-goal analog of getBestLiftForExercise above.
+  // skillExerciseId identifies the drill itself, not one specific program's
+  // copy of it, so this joins through every skillProgramExercise instance
+  // of that drill the athlete has ever run.
+  async getBestSprintTimeForSkillExercise(athleteId: number, skillExerciseId: number) {
+    const rows = await db
+      .select({ elapsedSeconds: skillSessionLogs.elapsedSeconds })
+      .from(skillSessionLogs)
+      .innerJoin(skillProgramExercises, eq(skillSessionLogs.skillProgramExerciseId, skillProgramExercises.id))
+      .where(
+        and(
+          eq(skillSessionLogs.athleteId, athleteId),
+          eq(skillSessionLogs.trackingLevel, "sprint"),
+          eq(skillProgramExercises.skillExerciseId, skillExerciseId),
+        ),
+      );
+    let best: number | null = null;
+    for (const r of rows) {
+      if (r.elapsedSeconds != null && (best === null || r.elapsedSeconds < best)) best = r.elapsedSeconds;
+    }
+    return best;
+  },
+
   async createGoal(athleteId: number, createdBy: number, input: CreateGoalInput) {
     const [row] = await db
       .insert(goals)
@@ -1683,6 +1708,7 @@ export const storage = {
         type: input.type,
         exerciseId: input.type === "exercise" ? input.exerciseId : null,
         testingMetric: input.type === "testing" ? input.testingMetric : null,
+        skillExerciseId: input.type === "skill" ? input.skillExerciseId : null,
         targetValue: input.targetValue,
         targetUnit: input.targetUnit,
         targetDate: input.targetDate ?? null,
@@ -1707,6 +1733,14 @@ export const storage = {
       });
       for (const e of exerciseRows) exerciseNameById.set(e.id, e.name);
     }
+    const skillExerciseIds = rows.map((g) => g.skillExerciseId).filter((id): id is number => id != null);
+    const skillExerciseNameById = new Map<number, string>();
+    if (skillExerciseIds.length > 0) {
+      const skillExerciseRows = await db.query.skillExercises.findMany({
+        where: inArray(skillExercises.id, skillExerciseIds),
+      });
+      for (const s of skillExerciseRows) skillExerciseNameById.set(s.id, s.name);
+    }
     const athlete =
       rows.some((g) => g.type === "testing") &&
       (await db.query.users.findFirst({ where: eq(users.id, athleteId) }));
@@ -1715,17 +1749,24 @@ export const storage = {
       rows.map(async (g) => {
         let currentValue: number | null = null;
         let exerciseName: string | null = null;
+        let skillExerciseName: string | null = null;
         if (g.type === "exercise" && g.exerciseId != null) {
           currentValue = await this.getBestLiftForExercise(athleteId, g.exerciseId);
           exerciseName = exerciseNameById.get(g.exerciseId) ?? null;
         } else if (g.type === "testing" && g.testingMetric && athlete) {
           const value = (athlete as any)[g.testingMetric];
           currentValue = typeof value === "number" ? value : null;
+        } else if (g.type === "skill" && g.skillExerciseId != null) {
+          currentValue = await this.getBestSprintTimeForSkillExercise(athleteId, g.skillExerciseId);
+          skillExerciseName = skillExerciseNameById.get(g.skillExerciseId) ?? null;
         }
 
-        const lowerIsBetter = g.type === "testing" && g.testingMetric
-          ? testingMetricLowerIsBetter(g.testingMetric)
-          : false;
+        // Skill goals are always sprint elapsedSeconds -- lower always wins,
+        // the same direction as a handful of testing metrics (see
+        // testingMetricLowerIsBetter) but never needing to ask which one.
+        const lowerIsBetter =
+          g.type === "skill" ||
+          (g.type === "testing" && g.testingMetric ? testingMetricLowerIsBetter(g.testingMetric) : false);
         const achieved =
           currentValue != null &&
           (lowerIsBetter ? currentValue <= g.targetValue : currentValue >= g.targetValue);
@@ -1736,6 +1777,8 @@ export const storage = {
           exerciseId: g.exerciseId,
           exerciseName,
           testingMetric: g.testingMetric,
+          skillExerciseId: g.skillExerciseId,
+          skillExerciseName,
           targetValue: g.targetValue,
           targetUnit: g.targetUnit,
           targetDate: g.targetDate,
@@ -2964,6 +3007,37 @@ Athlete's data:
     return rows.map((ex) => this.withOwnership(ex, coachId, coachIds));
   },
 
+  // Suggests an existing corrective exercise for a camera-tracking fault
+  // flagged in a Skills sprint/mechanics capture (see FAULT_CORRECTIVE_KEYWORDS).
+  // Pulls from the athlete's own coach(es)' correctives plus every
+  // Forge-official one -- same "coach's bank + admin bank" visibility rule
+  // as getVisibleExercisesForCoach, just entered from the athlete side and
+  // filtered to isCorrective. This is the one deliberate, read-only bridge
+  // from Skills back into the strength-side exercises table (matching by
+  // keyword, never by a shared query path) -- see the data-isolation note
+  // on skillSessionLogs.
+  async getSuggestedCorrectivesForFault(athleteId: number, faultCode: string) {
+    const keywords = FAULT_CORRECTIVE_KEYWORDS[faultCode];
+    if (!keywords || keywords.length === 0) return [];
+
+    const coaches = await this.getCoachesForAthlete(athleteId);
+    const admins = await db.query.users.findMany({ where: eq(users.role, "admin") });
+    const ownerIds = Array.from(new Set([...coaches.map((c) => c.id), ...admins.map((a) => a.id)]));
+    if (ownerIds.length === 0) return [];
+
+    const rows = await db.query.exercises.findMany({
+      where: and(inArray(exercises.coachId, ownerIds), eq(exercises.isCorrective, true)),
+    });
+
+    const lowerKeywords = keywords.map((k) => k.toLowerCase());
+    const matches = rows.filter((ex) => {
+      const haystack = `${ex.muscleGroup} ${ex.movementType ?? ""} ${ex.name}`.toLowerCase();
+      return lowerKeywords.some((k) => haystack.includes(k));
+    });
+
+    return matches.slice(0, 3).map((ex) => ({ id: ex.id, name: ex.name, muscleGroup: ex.muscleGroup }));
+  },
+
   // Exercises owned by a specific user's whole staff -- an admin's own bank
   // is exactly their Forge library, nothing shared in (admins have no
   // staff, so getEffectiveCoachIds is a no-op for them).
@@ -3346,6 +3420,7 @@ Athlete's data:
         armSlotDeg: input.armSlotDeg ?? null,
         armSlotLabel: input.armSlotLabel ?? null,
         wellSequenced: input.wellSequenced ?? null,
+        videoUrl: input.videoUrl ?? null,
       })
       .returning();
     return row;
@@ -6871,6 +6946,93 @@ ${catalog}`;
       .sort((a, b) => a.name.localeCompare(b.name));
   },
 
+  // Skill drills this athlete has actually captured a sprint time for --
+  // the relevant picker list for "which drill is this skill goal about,"
+  // same "history, not the full bank" narrowing as the strength version
+  // above, but off skillSessionLogs instead (a wholly separate query path,
+  // no shared table with the strength side).
+  async getSkillExercisesWithHistoryForAthlete(athleteId: number) {
+    return db
+      .selectDistinct({ id: skillExercises.id, name: skillExercises.name })
+      .from(skillSessionLogs)
+      .innerJoin(skillProgramExercises, eq(skillSessionLogs.skillProgramExerciseId, skillProgramExercises.id))
+      .innerJoin(skillExercises, eq(skillProgramExercises.skillExerciseId, skillExercises.id))
+      .where(and(eq(skillSessionLogs.athleteId, athleteId), eq(skillSessionLogs.trackingLevel, "sprint")))
+      .orderBy(asc(skillExercises.name));
+  },
+
+  async getSkillExercisesWithHistoryForCoachAthlete(coachId: number, athleteId: number) {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    return db
+      .selectDistinct({ id: skillExercises.id, name: skillExercises.name })
+      .from(skillSessionLogs)
+      .innerJoin(skillProgramExercises, eq(skillSessionLogs.skillProgramExerciseId, skillProgramExercises.id))
+      .innerJoin(skillExercises, eq(skillProgramExercises.skillExerciseId, skillExercises.id))
+      .innerJoin(skillAssignments, eq(skillSessionLogs.skillAssignmentId, skillAssignments.id))
+      .where(
+        and(
+          eq(skillSessionLogs.athleteId, athleteId),
+          eq(skillSessionLogs.trackingLevel, "sprint"),
+          inArray(skillAssignments.coachId, coachIds),
+        ),
+      )
+      .orderBy(asc(skillExercises.name));
+  },
+
+  // Only sessions with a saved clip are listable -- videoUrl is an opt-in
+  // the athlete sets explicitly when saving a mechanics capture (see the
+  // schema comment on skillSessionLogs.videoUrl and the privacy note on
+  // MechanicsTrackerDialog); most sessions never have one.
+  async getSkillSessionsWithVideoForCoachAthlete(coachId: number, athleteId: number) {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    return db
+      .select({
+        id: skillSessionLogs.id,
+        trackingLevel: skillSessionLogs.trackingLevel,
+        videoUrl: skillSessionLogs.videoUrl,
+        coachAnnotationUrl: skillSessionLogs.coachAnnotationUrl,
+        createdAt: skillSessionLogs.createdAt,
+        skillExerciseName: skillExercises.name,
+      })
+      .from(skillSessionLogs)
+      .innerJoin(
+        skillProgramExercises,
+        eq(skillSessionLogs.skillProgramExerciseId, skillProgramExercises.id),
+      )
+      .innerJoin(skillExercises, eq(skillProgramExercises.skillExerciseId, skillExercises.id))
+      .innerJoin(skillAssignments, eq(skillSessionLogs.skillAssignmentId, skillAssignments.id))
+      .where(
+        and(
+          eq(skillSessionLogs.athleteId, athleteId),
+          inArray(skillAssignments.coachId, coachIds),
+          isNotNull(skillSessionLogs.videoUrl),
+        ),
+      )
+      .orderBy(desc(skillSessionLogs.createdAt));
+  },
+
+  // Ownership check mirrors the read above -- a coach can only annotate a
+  // clip belonging to one of their own (or their staff's) athletes. Reuses
+  // VideoAnnotationDialog/its PNG-decode route as-is; this just persists the
+  // resulting imageUrl onto the Skills-side row.
+  async setSkillSessionAnnotation(coachId: number, skillSessionLogId: number, imageUrl: string) {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    const [owned] = await db
+      .select({ id: skillSessionLogs.id })
+      .from(skillSessionLogs)
+      .innerJoin(skillAssignments, eq(skillSessionLogs.skillAssignmentId, skillAssignments.id))
+      .where(
+        and(eq(skillSessionLogs.id, skillSessionLogId), inArray(skillAssignments.coachId, coachIds)),
+      );
+    if (!owned) return null;
+    const [updated] = await db
+      .update(skillSessionLogs)
+      .set({ coachAnnotationUrl: imageUrl })
+      .where(eq(skillSessionLogs.id, skillSessionLogId))
+      .returning();
+    return updated;
+  },
+
   // Reduced overview shown before a specific exercise is chosen -- recent
   // sessions across everything this athlete has logged, so picking an
   // athlete is never a dead end even before drilling into one exercise.
@@ -7319,6 +7481,17 @@ ${catalog}`;
     return prCount;
   },
 
+  // Total sprint-timing captures ever recorded, across every skill drill --
+  // deliberately not scoped to one drill (see the comment on speed trophies
+  // in shared/achievements.ts for why count-based rather than time-based).
+  async getTotalSprintCaptureCountForAthlete(athleteId: number) {
+    const [{ count }] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(skillSessionLogs)
+      .where(and(eq(skillSessionLogs.athleteId, athleteId), eq(skillSessionLogs.trackingLevel, "sprint")));
+    return count;
+  },
+
   // Lazily evaluated the same way CARA's idle sweep is: no background job
   // infrastructure exists here, so this runs inline whenever an athlete's
   // stats could plausibly have crossed a new threshold (workout completion,
@@ -7328,9 +7501,10 @@ ${catalog}`;
   // is never removed even if the underlying stat later regresses (a broken
   // streak keeps the streak trophies it already earned).
   async checkAndAwardTrophies(athleteId: number) {
-    const [{ longestStreak, totalCompleted }, totalPRs, existing] = await Promise.all([
+    const [{ longestStreak, totalCompleted }, totalPRs, totalSprintCaptures, existing] = await Promise.all([
       this.getStreakForAthlete(athleteId),
       this.getTotalPrCountForAthlete(athleteId),
+      this.getTotalSprintCaptureCountForAthlete(athleteId),
       db.query.athleteTrophies.findMany({ where: eq(athleteTrophies.athleteId, athleteId) }),
     ]);
     const existingKeys = new Set(existing.map((t) => t.key));
@@ -7338,6 +7512,7 @@ ${catalog}`;
       workout_count: totalCompleted,
       streak: longestStreak,
       pr_count: totalPRs,
+      speed: totalSprintCaptures,
     };
 
     const toInsert = ALL_TROPHY_DEFINITIONS.filter(
@@ -7453,6 +7628,103 @@ ${catalog}`;
         totalCompleted: streaks.get(id)?.totalCompleted ?? 0,
       }))
       .sort((a, b) => b.estimatedOneRm - a.estimatedOneRm);
+  },
+
+  // ---------- Speed & Agility leaderboard (Skills-side, fully separate from
+  // the strength leaderboard above -- never joins workoutSetEntries/exercises,
+  // only skillSessionLogs/skillProgramExercises/skillAssignments, per the
+  // data-isolation requirement) ----------
+
+  async getSpeedLeaderboardExercisesForCoach(coachId: number) {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    const rows = await db
+      .selectDistinct({ id: skillExercises.id, name: skillExercises.name })
+      .from(skillSessionLogs)
+      .innerJoin(
+        skillProgramExercises,
+        eq(skillSessionLogs.skillProgramExerciseId, skillProgramExercises.id),
+      )
+      .innerJoin(skillExercises, eq(skillProgramExercises.skillExerciseId, skillExercises.id))
+      .innerJoin(skillAssignments, eq(skillSessionLogs.skillAssignmentId, skillAssignments.id))
+      .where(
+        and(eq(skillSessionLogs.trackingLevel, "sprint"), inArray(skillAssignments.coachId, coachIds)),
+      );
+    return rows.sort((a, b) => a.name.localeCompare(b.name));
+  },
+
+  // Ranks every athlete on this coach's roster by their best (lowest)
+  // camera-timed sprint for one skill drill -- the Skills-side mirror of
+  // getLeaderboardForExercise just above.
+  async getSpeedLeaderboardForExercise(coachId: number, skillExerciseId: number) {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    const rows = await db
+      .select({
+        athleteId: skillSessionLogs.athleteId,
+        elapsedSeconds: skillSessionLogs.elapsedSeconds,
+        distanceYards: skillSessionLogs.distanceYards,
+        date: skillSessionLogs.createdAt,
+      })
+      .from(skillSessionLogs)
+      .innerJoin(
+        skillProgramExercises,
+        eq(skillSessionLogs.skillProgramExerciseId, skillProgramExercises.id),
+      )
+      .innerJoin(skillAssignments, eq(skillSessionLogs.skillAssignmentId, skillAssignments.id))
+      .where(
+        and(
+          eq(skillSessionLogs.trackingLevel, "sprint"),
+          eq(skillProgramExercises.skillExerciseId, skillExerciseId),
+          inArray(skillAssignments.coachId, coachIds),
+        ),
+      );
+
+    const bestByAthlete = new Map<
+      number,
+      { elapsedSeconds: number; distanceYards: number | null; date: Date }
+    >();
+    for (const r of rows) {
+      if (r.elapsedSeconds == null) continue;
+      const existing = bestByAthlete.get(r.athleteId);
+      if (!existing || r.elapsedSeconds < existing.elapsedSeconds) {
+        bestByAthlete.set(r.athleteId, {
+          elapsedSeconds: r.elapsedSeconds,
+          distanceYards: r.distanceYards,
+          date: r.date,
+        });
+      }
+    }
+
+    const athleteIds = Array.from(bestByAthlete.keys());
+    if (athleteIds.length === 0) return [];
+
+    const profiles = await db
+      .select({
+        id: users.id,
+        name: users.name,
+        sport: users.sport,
+        position: users.position,
+        age: users.age,
+        heightIn: users.heightIn,
+        bodyWeightLbs: users.bodyWeightLbs,
+      })
+      .from(users)
+      .where(inArray(users.id, athleteIds));
+    const profileById = new Map(profiles.map((p) => [p.id, p]));
+    const streaks = await this.getStreaksForCoachRoster(coachId);
+
+    return athleteIds
+      .map((id) => {
+        const best = bestByAthlete.get(id)!;
+        return {
+          ...profileById.get(id)!,
+          elapsedSeconds: best.elapsedSeconds,
+          distanceYards: best.distanceYards,
+          date: formatISO(best.date, { representation: "date" }),
+          currentStreak: streaks.get(id)?.currentStreak ?? 0,
+          totalCompleted: streaks.get(id)?.totalCompleted ?? 0,
+        };
+      })
+      .sort((a, b) => a.elapsedSeconds - b.elapsedSeconds);
   },
 
   // ---------- Platform trends (admin-only, anonymized) ----------

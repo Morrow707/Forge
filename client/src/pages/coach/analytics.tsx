@@ -444,6 +444,7 @@ export default function CoachAnalytics() {
               <GoalsPanel
                 goalsUrl={`/api/coach/roster/${athleteId}/goals`}
                 exercisesUrl={`/api/coach/analytics/exercises?athleteId=${athleteId}`}
+                skillExercisesUrl={`/api/coach/analytics/skill-exercises?athleteId=${athleteId}`}
               />
             </CardContent>
           </Card>

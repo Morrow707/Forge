@@ -21,6 +21,7 @@ import {
   insertAssignmentSchema,
   insertSkillAssignmentSchema,
   createSkillSessionLogSchema,
+  setSkillSessionAnnotationSchema,
   updateAssignmentSchema,
   submitWorkoutLogSchema,
   updateProgramDaySchema,
@@ -83,6 +84,31 @@ const VIDEO_EXTENSION_BY_MIME: Record<string, string> = {
 const uploadFormVideo = multer({
   storage: multer.diskStorage({
     destination: UPLOADS_DIR,
+    filename: (_req, file, cb) => {
+      cb(null, `${crypto.randomUUID()}${VIDEO_EXTENSION_BY_MIME[file.mimetype] ?? ""}`);
+    },
+  }),
+  limits: { fileSize: 100 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (!VIDEO_EXTENSION_BY_MIME[file.mimetype]) {
+      return cb(new Error("Unsupported video format"));
+    }
+    cb(null, true);
+  },
+});
+
+// Skills' own opt-in clip storage -- deliberately a separate directory from
+// form-videos even though the upload mechanics are identical, keeping the
+// same "never share a query path or a bucket" isolation the rest of Skills
+// follows. A clip only ever lands here if the athlete explicitly taps
+// "save for coach" on the mechanics tracker's review screen (see
+// MechanicsTrackerDialog); every other capture never uploads video at all.
+const SKILL_VIDEOS_DIR = path.join(process.cwd(), "server", "uploads", "skill-videos");
+fs.mkdirSync(SKILL_VIDEOS_DIR, { recursive: true });
+
+const uploadSkillVideo = multer({
+  storage: multer.diskStorage({
+    destination: SKILL_VIDEOS_DIR,
     filename: (_req, file, cb) => {
       cb(null, `${crypto.randomUUID()}${VIDEO_EXTENSION_BY_MIME[file.mimetype] ?? ""}`);
     },
@@ -1354,6 +1380,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
+  // Skills-side clip review -- entirely separate from the strength-side
+  // form-check video thread (see the comment on skillSessionLogs.videoUrl).
+  // Only sessions where the athlete opted in to saving a clip show up here.
+  app.get(
+    "/api/coach/roster/:athleteId/skill-sessions",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      const onRoster = await storage.getRosterAthleteForCoach(user.id, athleteId);
+      if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
+      const sessions = await storage.getSkillSessionsWithVideoForCoachAthlete(user.id, athleteId);
+      res.json(sessions);
+    },
+  );
+
+  // Persists the imageUrl VideoAnnotationDialog hands back after the coach
+  // draws on a paused frame -- that dialog and its /api/coach/annotations
+  // PNG-decode route are both reused as-is, this is the one Skills-specific
+  // piece: where the resulting URL actually gets saved.
+  app.patch(
+    "/api/coach/skill-sessions/:id/annotation",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const parsed = setSkillSessionAnnotationSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      const updated = await storage.setSkillSessionAnnotation(
+        user.id,
+        Number(req.params.id),
+        parsed.data.imageUrl,
+      );
+      if (!updated) return res.status(404).json({ message: "Skill session not found" });
+      res.json(updated);
+    },
+  );
+
   // Today's readiness snapshot for the whole roster -- athletes with no
   // check-in yet for today are simply absent, not shown as "flagged".
   app.get("/api/coach/roster-wellness", requireRole("coach"), async (req, res) => {
@@ -2189,6 +2254,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(list);
   });
 
+  app.get("/api/coach/analytics/skill-exercises", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const schema = z.object({ athleteId: z.coerce.number() });
+    const parsed = schema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "athleteId query param required" });
+    }
+    const list = await storage.getSkillExercisesWithHistoryForCoachAthlete(user.id, parsed.data.athleteId);
+    res.json(list);
+  });
+
   app.get("/api/coach/analytics/overview", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     const schema = z.object({
@@ -2253,6 +2329,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ message: "exerciseId query param required" });
     }
     const rows = await storage.getLeaderboardForExercise(user.id, parsed.data.exerciseId);
+    res.json(rows);
+  });
+
+  // Speed & Agility leaderboard -- Skills-side, same shape and ownership
+  // rules as the strength leaderboard above but entirely separate queries
+  // (skillSessionLogs only), per the data-isolation requirement.
+  app.get("/api/coach/leaderboard/skill-exercises", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const list = await storage.getSpeedLeaderboardExercisesForCoach(user.id);
+    res.json(list);
+  });
+
+  app.get("/api/coach/leaderboard/speed", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const schema = z.object({ skillExerciseId: z.coerce.number() });
+    const parsed = schema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "skillExerciseId query param required" });
+    }
+    const rows = await storage.getSpeedLeaderboardForExercise(user.id, parsed.data.skillExerciseId);
     res.json(rows);
   });
 
@@ -2527,6 +2623,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(list);
   });
 
+  app.get("/api/athlete/skill-exercises-with-history", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const list = await storage.getSkillExercisesWithHistoryForAthlete(user.id);
+    res.json(list);
+  });
+
+  // Suggests an existing corrective for a fault flagged during a Skills
+  // sprint/mechanics capture -- see getSuggestedCorrectivesForFault's
+  // comment for why this is the one deliberate bridge back to the
+  // strength-side exercises table.
+  app.get("/api/athlete/suggested-correctives", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const schema = z.object({ faultCode: z.string().min(1) });
+    const parsed = schema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "faultCode query param required" });
+    }
+    const list = await storage.getSuggestedCorrectivesForFault(user.id, parsed.data.faultCode);
+    res.json(list);
+  });
+
   app.get("/api/athlete/goals", requireRole("athlete"), async (req, res) => {
     const user = currentUser(req);
     const list = await storage.getGoalsForAthlete(user.id);
@@ -2729,6 +2846,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const logs = await storage.getSkillSessionLogsForExercise(user.id, parsed.data.skillProgramExerciseId);
     res.json(logs);
   });
+
+  // Opt-in only -- the athlete explicitly taps "save clip for coach" on the
+  // mechanics tracker's review screen (see MechanicsTrackerDialog's privacy
+  // comment); every other capture never reaches this route at all. Returns
+  // the URL to attach as videoUrl on the skill-session-log POST above.
+  app.post(
+    "/api/athlete/skill-video",
+    requireRole("athlete"),
+    (req, res) => {
+      uploadSkillVideo.single("video")(req, res, (err: unknown) => {
+        if (err) {
+          const message = err instanceof Error ? err.message : "Upload failed";
+          return res.status(400).json({ message });
+        }
+        if (!req.file) {
+          return res.status(400).json({ message: "No video file provided" });
+        }
+        res.status(201).json({ url: `/uploads/skill-videos/${req.file.filename}` });
+      });
+    },
+  );
 
   // ---------------- Athlete: restricted/modified workout auto-generation ----------------
   // Swaps every exercise in one day that would aggravate today's flagged

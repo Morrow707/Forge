@@ -25,6 +25,7 @@ import {
 import { PoseLandmarker, type NormalizedLandmark } from "@mediapipe/tasks-vision";
 import { toast } from "sonner";
 import { AlertTriangle, Play, Square, RotateCcw, Check, Timer, Trophy } from "lucide-react";
+import { SuggestedCorrective } from "@/components/suggested-corrective";
 
 type Step = "warning" | "calibrate" | "capture" | "review";
 
@@ -421,12 +422,12 @@ export function SprintTrackerDialog({
             {faults.length > 0 ? (
               <div className="space-y-2">
                 {faults.map((f) => (
-                  <div
-                    key={f.code}
-                    className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-2.5 text-sm text-amber-200"
-                  >
-                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                    {f.label}
+                  <div key={f.code} className="space-y-1">
+                    <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-2.5 text-sm text-amber-200">
+                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                      {f.label}
+                    </div>
+                    <SuggestedCorrective faultCode={f.code} />
                   </div>
                 ))}
               </div>
