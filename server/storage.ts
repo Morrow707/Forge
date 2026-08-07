@@ -63,6 +63,7 @@ import type {
   AiKnowledgeMessage,
   NutritionKnowledgeMessage,
   CreateFoodLogEntryInput,
+  UpdateFoodLogEntryInput,
 } from "@shared/schema";
 import { lookupBarcode, searchFoodsByName, type FoodCandidate } from "./food-lookup";
 import { TESTING_METRICS, testingMetricLowerIsBetter } from "@shared/testing-metrics";
@@ -650,6 +651,13 @@ const mealPhotoItemSchema = z.object({
   fatG: z.number().min(0).max(500),
   fiberG: z.number().min(0).max(100).nullable().optional(),
   sodiumMg: z.number().min(0).max(10000).nullable().optional(),
+  calciumMg: z.number().min(0).max(5000).nullable().optional(),
+  ironMg: z.number().min(0).max(100).nullable().optional(),
+  vitaminDMcg: z.number().min(0).max(1000).nullable().optional(),
+  potassiumMg: z.number().min(0).max(10000).nullable().optional(),
+  magnesiumMg: z.number().min(0).max(2000).nullable().optional(),
+  vitaminB12Mcg: z.number().min(0).max(500).nullable().optional(),
+  zincMg: z.number().min(0).max(200).nullable().optional(),
 });
 
 const generateModifiedWorkoutSchema = z.object({
@@ -1441,8 +1449,29 @@ export const storage = {
         fatG: acc.fatG + (e.fatG ?? 0),
         fiberG: acc.fiberG + (e.fiberG ?? 0),
         sodiumMg: acc.sodiumMg + (e.sodiumMg ?? 0),
+        calciumMg: acc.calciumMg + (e.calciumMg ?? 0),
+        ironMg: acc.ironMg + (e.ironMg ?? 0),
+        vitaminDMcg: acc.vitaminDMcg + (e.vitaminDMcg ?? 0),
+        potassiumMg: acc.potassiumMg + (e.potassiumMg ?? 0),
+        magnesiumMg: acc.magnesiumMg + (e.magnesiumMg ?? 0),
+        vitaminB12Mcg: acc.vitaminB12Mcg + (e.vitaminB12Mcg ?? 0),
+        zincMg: acc.zincMg + (e.zincMg ?? 0),
       }),
-      { caloriesKcal: 0, proteinG: 0, carbsG: 0, fatG: 0, fiberG: 0, sodiumMg: 0 },
+      {
+        caloriesKcal: 0,
+        proteinG: 0,
+        carbsG: 0,
+        fatG: 0,
+        fiberG: 0,
+        sodiumMg: 0,
+        calciumMg: 0,
+        ironMg: 0,
+        vitaminDMcg: 0,
+        potassiumMg: 0,
+        magnesiumMg: 0,
+        vitaminB12Mcg: 0,
+        zincMg: 0,
+      },
     );
     return { entries, totals };
   },
@@ -1451,6 +1480,15 @@ export const storage = {
     const [row] = await db
       .insert(foodLogEntries)
       .values({ athleteId, ...input })
+      .returning();
+    return row;
+  },
+
+  async updateFoodLogEntry(athleteId: number, id: number, input: UpdateFoodLogEntryInput) {
+    const [row] = await db
+      .update(foodLogEntries)
+      .set(input)
+      .where(and(eq(foodLogEntries.id, id), eq(foodLogEntries.athleteId, athleteId)))
       .returning();
     return row;
   },
@@ -1508,6 +1546,13 @@ export const storage = {
                 fatG: { type: "number" },
                 fiberG: { type: "number" },
                 sodiumMg: { type: "number" },
+                calciumMg: { type: "number", description: "Calcium in mg" },
+                ironMg: { type: "number", description: "Iron in mg" },
+                vitaminDMcg: { type: "number", description: "Vitamin D in mcg (micrograms)" },
+                potassiumMg: { type: "number", description: "Potassium in mg" },
+                magnesiumMg: { type: "number", description: "Magnesium in mg" },
+                vitaminB12Mcg: { type: "number", description: "Vitamin B12 in mcg (micrograms)" },
+                zincMg: { type: "number", description: "Zinc in mg" },
               },
               required: ["description", "servingDescription", "caloriesKcal", "proteinG", "carbsG", "fatG"],
             },
@@ -1540,6 +1585,14 @@ export const storage = {
         fatG: Math.round(parsed.data.fatG * 10) / 10,
         fiberG: parsed.data.fiberG != null ? Math.round(parsed.data.fiberG * 10) / 10 : null,
         sodiumMg: parsed.data.sodiumMg != null ? Math.round(parsed.data.sodiumMg) : null,
+        calciumMg: parsed.data.calciumMg != null ? Math.round(parsed.data.calciumMg) : null,
+        ironMg: parsed.data.ironMg != null ? Math.round(parsed.data.ironMg * 10) / 10 : null,
+        vitaminDMcg: parsed.data.vitaminDMcg != null ? Math.round(parsed.data.vitaminDMcg * 10) / 10 : null,
+        potassiumMg: parsed.data.potassiumMg != null ? Math.round(parsed.data.potassiumMg) : null,
+        magnesiumMg: parsed.data.magnesiumMg != null ? Math.round(parsed.data.magnesiumMg) : null,
+        vitaminB12Mcg:
+          parsed.data.vitaminB12Mcg != null ? Math.round(parsed.data.vitaminB12Mcg * 10) / 10 : null,
+        zincMg: parsed.data.zincMg != null ? Math.round(parsed.data.zincMg * 10) / 10 : null,
         barcode: null,
       });
     }

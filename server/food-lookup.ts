@@ -26,6 +26,17 @@ export type FoodCandidate = {
   fatG: number | null;
   fiberG: number | null;
   sodiumMg: number | null;
+  // Not populated by either lookup below (Open Food Facts/USDA aren't
+  // wired up for these yet) -- always null from lookupBarcode/
+  // searchFoodsByName, only ever filled by the AI photo-analysis path
+  // (see storage.analyzeMealPhoto) or the athlete's own manual entry/edit.
+  calciumMg: number | null;
+  ironMg: number | null;
+  vitaminDMcg: number | null;
+  potassiumMg: number | null;
+  magnesiumMg: number | null;
+  vitaminB12Mcg: number | null;
+  zincMg: number | null;
   barcode: string | null;
 };
 
@@ -57,6 +68,13 @@ async function lookupBarcodeOpenFoodFacts(barcode: string): Promise<FoodCandidat
       fatG: round(n["fat_serving"] ?? n["fat_100g"]),
       fiberG: round(n["fiber_serving"] ?? n["fiber_100g"]),
       sodiumMg: round((n["sodium_serving"] ?? n["sodium_100g"]) * 1000, 0),
+      calciumMg: null,
+      ironMg: null,
+      vitaminDMcg: null,
+      potassiumMg: null,
+      magnesiumMg: null,
+      vitaminB12Mcg: null,
+      zincMg: null,
       barcode,
     };
   } catch (err) {
@@ -81,6 +99,13 @@ function usdaFoodToCandidate(food: any, barcode: string | null): FoodCandidate {
     fatG: round(nutrientValue("Total lipid (fat)")),
     fiberG: round(nutrientValue("Fiber, total dietary")),
     sodiumMg: round(nutrientValue("Sodium, Na"), 0),
+    calciumMg: null,
+    ironMg: null,
+    vitaminDMcg: null,
+    potassiumMg: null,
+    magnesiumMg: null,
+    vitaminB12Mcg: null,
+    zincMg: null,
     barcode,
   };
 }

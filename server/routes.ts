@@ -47,6 +47,7 @@ import {
   formFaultSchema,
   updateNutritionTargetsSchema,
   createFoodLogEntrySchema,
+  updateFoodLogEntrySchema,
   logCaraActivitySchema,
   setCaraCapSchema,
   createTeamChallengeSchema,
@@ -2169,6 +2170,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     const entry = await storage.addFoodLogEntry(user.id, parsed.data);
     res.status(201).json(entry);
+  });
+
+  app.patch("/api/athlete/food-log/:id", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const parsed = updateFoodLogEntrySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const entry = await storage.updateFoodLogEntry(user.id, id, parsed.data);
+    if (!entry) return res.status(404).json({ message: "Entry not found" });
+    res.json(entry);
   });
 
   app.delete("/api/athlete/food-log/:id", requireRole("athlete"), async (req, res) => {

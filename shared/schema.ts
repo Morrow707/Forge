@@ -1063,6 +1063,21 @@ export const foodLogEntries = pgTable(
     fatG: real("fat_g"),
     fiberG: real("fiber_g"),
     sodiumMg: real("sodium_mg"),
+    // Same "athletes specifically" micro set as nutritionTargets above (not
+    // a full multivitamin panel) -- mirrors that table's column naming so
+    // a logged entry's micros can be compared directly against the
+    // athlete's targets. Unlike the macro-ish fields above, no lookup path
+    // populates these automatically yet (Open Food Facts/USDA barcode
+    // lookups could in principle, but weren't wired up here) -- they're
+    // filled by the AI photo-analysis path (see analyzeMealPhoto) or
+    // manual entry/edit. Missing means "not provided," never coerced to 0.
+    calciumMg: real("calcium_mg"),
+    ironMg: real("iron_mg"),
+    vitaminDMcg: real("vitamin_d_mcg"),
+    potassiumMg: real("potassium_mg"),
+    magnesiumMg: real("magnesium_mg"),
+    vitaminB12Mcg: real("vitamin_b12_mcg"),
+    zincMg: real("zinc_mg"),
     source: foodLogSourceEnum("source").notNull(),
     barcode: text("barcode"),
     loggedAt: timestamp("logged_at").notNull().defaultNow(),
@@ -1073,6 +1088,16 @@ export const foodLogEntries = pgTable(
 );
 
 export type FoodLogEntry = typeof foodLogEntries.$inferSelect;
+
+const foodLogMicroFields = {
+  calciumMg: z.coerce.number().min(0).max(10000).optional().nullable(),
+  ironMg: z.coerce.number().min(0).max(200).optional().nullable(),
+  vitaminDMcg: z.coerce.number().min(0).max(2000).optional().nullable(),
+  potassiumMg: z.coerce.number().min(0).max(20000).optional().nullable(),
+  magnesiumMg: z.coerce.number().min(0).max(5000).optional().nullable(),
+  vitaminB12Mcg: z.coerce.number().min(0).max(1000).optional().nullable(),
+  zincMg: z.coerce.number().min(0).max(500).optional().nullable(),
+};
 
 export const createFoodLogEntrySchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date"),
@@ -1085,10 +1110,29 @@ export const createFoodLogEntrySchema = z.object({
   fatG: z.coerce.number().min(0).max(1000).optional().nullable(),
   fiberG: z.coerce.number().min(0).max(300).optional().nullable(),
   sodiumMg: z.coerce.number().min(0).max(20000).optional().nullable(),
+  ...foodLogMicroFields,
   source: z.enum(["barcode", "search", "manual", "photo"]),
   barcode: z.string().trim().max(64).optional().nullable(),
 });
 export type CreateFoodLogEntryInput = z.infer<typeof createFoodLogEntrySchema>;
+
+// Athlete editing an entry after posting it -- everything but date/source/
+// barcode (which describe how/when it was logged, not what's in it) is
+// editable, and every field is optional since an edit only needs to touch
+// what changed.
+export const updateFoodLogEntrySchema = z.object({
+  description: z.string().trim().min(1).max(200).optional(),
+  brand: z.string().trim().max(120).optional().nullable(),
+  servingDescription: z.string().trim().max(120).optional().nullable(),
+  caloriesKcal: z.coerce.number().min(0).max(10000).optional().nullable(),
+  proteinG: z.coerce.number().min(0).max(1000).optional().nullable(),
+  carbsG: z.coerce.number().min(0).max(2000).optional().nullable(),
+  fatG: z.coerce.number().min(0).max(1000).optional().nullable(),
+  fiberG: z.coerce.number().min(0).max(300).optional().nullable(),
+  sodiumMg: z.coerce.number().min(0).max(20000).optional().nullable(),
+  ...foodLogMicroFields,
+});
+export type UpdateFoodLogEntryInput = z.infer<typeof updateFoodLogEntrySchema>;
 
 // Automatic snapshot of the testing/combine fields (see users table above),
 // one row per date whenever a coach actually changes one of those numbers

@@ -26,11 +26,37 @@ type FoodCandidate = {
   fatG: number | null;
   fiberG: number | null;
   sodiumMg: number | null;
+  calciumMg: number | null;
+  ironMg: number | null;
+  vitaminDMcg: number | null;
+  potassiumMg: number | null;
+  magnesiumMg: number | null;
+  vitaminB12Mcg: number | null;
+  zincMg: number | null;
   barcode: string | null;
 };
 
 type Mode = "scan" | "search" | "manual" | "confirm" | "photo" | "photo-review";
 type Source = "barcode" | "search" | "manual" | "photo";
+
+const MACRO_FIELDS = [
+  ["caloriesKcal", "Calories"],
+  ["proteinG", "Protein (g)"],
+  ["carbsG", "Carbs (g)"],
+  ["fatG", "Fat (g)"],
+  ["fiberG", "Fiber (g)"],
+  ["sodiumMg", "Sodium (mg)"],
+] as const;
+
+const MICRO_FIELDS = [
+  ["calciumMg", "Calcium (mg)"],
+  ["ironMg", "Iron (mg)"],
+  ["vitaminDMcg", "Vitamin D (mcg)"],
+  ["potassiumMg", "Potassium (mg)"],
+  ["magnesiumMg", "Magnesium (mg)"],
+  ["vitaminB12Mcg", "Vitamin B12 (mcg)"],
+  ["zincMg", "Zinc (mg)"],
+] as const;
 
 function emptyManual(): FoodCandidate {
   return {
@@ -43,6 +69,13 @@ function emptyManual(): FoodCandidate {
     fatG: null,
     fiberG: null,
     sodiumMg: null,
+    calciumMg: null,
+    ironMg: null,
+    vitaminDMcg: null,
+    potassiumMg: null,
+    magnesiumMg: null,
+    vitaminB12Mcg: null,
+    zincMg: null,
     barcode: null,
   };
 }
@@ -77,6 +110,8 @@ export function FoodScannerDialog({
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [analyzingPhoto, setAnalyzingPhoto] = useState(false);
   const [photoItems, setPhotoItems] = useState<FoodCandidate[]>([]);
+  const [microsOpenForPhotoItem, setMicrosOpenForPhotoItem] = useState<Set<number>>(new Set());
+  const [microsOpenForConfirm, setMicrosOpenForConfirm] = useState(false);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const scannerRef = useRef<BarcodeScanner | null>(null);
@@ -95,6 +130,8 @@ export function FoodScannerDialog({
       setPhotoError(null);
       setPhotoItems([]);
       setAnalyzingPhoto(false);
+      setMicrosOpenForPhotoItem(new Set());
+      setMicrosOpenForConfirm(false);
       return;
     }
   }, [open]);
@@ -242,6 +279,13 @@ export function FoodScannerDialog({
         fatG: scale(candidate.fatG),
         fiberG: scale(candidate.fiberG),
         sodiumMg: scale(candidate.sodiumMg),
+        calciumMg: scale(candidate.calciumMg),
+        ironMg: scale(candidate.ironMg),
+        vitaminDMcg: scale(candidate.vitaminDMcg),
+        potassiumMg: scale(candidate.potassiumMg),
+        magnesiumMg: scale(candidate.magnesiumMg),
+        vitaminB12Mcg: scale(candidate.vitaminB12Mcg),
+        zincMg: scale(candidate.zincMg),
         source,
         barcode: candidate.barcode,
       });
@@ -311,6 +355,13 @@ export function FoodScannerDialog({
           fatG: item.fatG,
           fiberG: item.fiberG,
           sodiumMg: item.sodiumMg,
+          calciumMg: item.calciumMg,
+          ironMg: item.ironMg,
+          vitaminDMcg: item.vitaminDMcg,
+          potassiumMg: item.potassiumMg,
+          magnesiumMg: item.magnesiumMg,
+          vitaminB12Mcg: item.vitaminB12Mcg,
+          zincMg: item.zincMg,
           source: "photo",
           barcode: null,
         });
@@ -487,16 +538,7 @@ export function FoodScannerDialog({
                     className="text-xs"
                   />
                   <div className="grid grid-cols-3 gap-2">
-                    {(
-                      [
-                        ["caloriesKcal", "Calories"],
-                        ["proteinG", "Protein (g)"],
-                        ["carbsG", "Carbs (g)"],
-                        ["fatG", "Fat (g)"],
-                        ["fiberG", "Fiber (g)"],
-                        ["sodiumMg", "Sodium (mg)"],
-                      ] as const
-                    ).map(([key, label]) => (
+                    {MACRO_FIELDS.map(([key, label]) => (
                       <div key={key} className="space-y-1">
                         <Label htmlFor={`photo-${i}-${key}`} className="text-xs">
                           {label}
@@ -514,6 +556,41 @@ export function FoodScannerDialog({
                       </div>
                     ))}
                   </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setMicrosOpenForPhotoItem((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(i)) next.delete(i);
+                        else next.add(i);
+                        return next;
+                      })
+                    }
+                    className="text-xs font-semibold text-muted-foreground hover:text-foreground"
+                  >
+                    {microsOpenForPhotoItem.has(i) ? "Hide micros" : "Micros (optional)"}
+                  </button>
+                  {microsOpenForPhotoItem.has(i) && (
+                    <div className="grid grid-cols-3 gap-2">
+                      {MICRO_FIELDS.map(([key, label]) => (
+                        <div key={key} className="space-y-1">
+                          <Label htmlFor={`photo-${i}-${key}`} className="text-xs">
+                            {label}
+                          </Label>
+                          <Input
+                            id={`photo-${i}-${key}`}
+                            type="number"
+                            inputMode="decimal"
+                            min={0}
+                            value={item[key] ?? ""}
+                            onChange={(e) =>
+                              updatePhotoItem(i, { [key]: e.target.value ? Number(e.target.value) : null })
+                            }
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -625,16 +702,7 @@ export function FoodScannerDialog({
               </div>
             )}
             <div className="grid grid-cols-3 gap-2">
-              {(
-                [
-                  ["caloriesKcal", "Calories"],
-                  ["proteinG", "Protein (g)"],
-                  ["carbsG", "Carbs (g)"],
-                  ["fatG", "Fat (g)"],
-                  ["fiberG", "Fiber (g)"],
-                  ["sodiumMg", "Sodium (mg)"],
-                ] as const
-              ).map(([key, label]) => (
+              {MACRO_FIELDS.map(([key, label]) => (
                 <div key={key} className="space-y-1">
                   <Label htmlFor={`food-${key}`} className="text-xs">
                     {label}
@@ -656,6 +724,41 @@ export function FoodScannerDialog({
                 </div>
               ))}
             </div>
+            {mode === "manual" && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setMicrosOpenForConfirm((v) => !v)}
+                  className="text-xs font-semibold text-muted-foreground hover:text-foreground"
+                >
+                  {microsOpenForConfirm ? "Hide micros" : "Micros (optional)"}
+                </button>
+                {microsOpenForConfirm && (
+                  <div className="grid grid-cols-3 gap-2">
+                    {MICRO_FIELDS.map(([key, label]) => (
+                      <div key={key} className="space-y-1">
+                        <Label htmlFor={`food-${key}`} className="text-xs">
+                          {label}
+                        </Label>
+                        <Input
+                          id={`food-${key}`}
+                          type="number"
+                          inputMode="decimal"
+                          min={0}
+                          value={candidate[key] ?? ""}
+                          onChange={(e) =>
+                            setCandidate((c) => ({
+                              ...c,
+                              [key]: e.target.value ? Number(e.target.value) : null,
+                            }))
+                          }
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
             <div className="flex gap-2">
               <Button
                 type="button"
