@@ -14,6 +14,7 @@ import {
   skillProgramDays,
   skillProgramExercises,
   skillAssignments,
+  skillSessionLogs,
   programs,
   programBlocks,
   programWeeks,
@@ -54,6 +55,7 @@ import {
 import type {
   ProgramStructureInput,
   SkillProgramStructureInput,
+  CreateSkillSessionLogInput,
   SubmitWorkoutLogInput,
   UpdateProgramDayInput,
   UpdateCorrectivesInput,
@@ -491,7 +493,7 @@ type MergeableDay = {
     notes: string | null;
     supersetGroup: string | null;
     restAfterGroupOnly: boolean;
-    trackingLevel?: "none" | "bar_path" | "full" | "jump";
+    trackingLevel?: "none" | "bar_path" | "full" | "jump" | "sprint";
     videoCheckEnabled: boolean;
   }[];
 };
@@ -516,7 +518,7 @@ type WeekPatch = {
       notes?: string;
       supersetGroup?: string;
       restAfterGroupOnly?: boolean;
-      trackingLevel?: "none" | "bar_path" | "full" | "jump";
+      trackingLevel?: "none" | "bar_path" | "full" | "jump" | "sprint";
       videoCheckEnabled?: boolean;
     }[];
   }[];
@@ -3216,6 +3218,7 @@ Athlete's data:
               reps: ex.reps,
               restSeconds: ex.restSeconds ?? null,
               notes: ex.notes ?? null,
+              trackingLevel: ex.trackingLevel ?? "none",
             });
           }
         }
@@ -3269,6 +3272,7 @@ Athlete's data:
               reps: ex.reps,
               restSeconds: ex.restSeconds ?? null,
               notes: ex.notes ?? null,
+              trackingLevel: ex.trackingLevel ?? "none",
             });
           }
         }
@@ -3316,6 +3320,42 @@ Athlete's data:
     return rows.map((a) => {
       const { passwordHash, ...athlete } = a.athlete;
       return { ...a, athlete };
+    });
+  },
+
+  // ---------- Skill session logs (camera-tracked skill sessions) ----------
+  // See the comment on skillSessionLogs in shared/schema.ts -- this is
+  // deliberately minimal (one row per capture, no completion/logging
+  // system around it yet).
+  async createSkillSessionLog(athleteId: number, input: CreateSkillSessionLogInput) {
+    const [row] = await db
+      .insert(skillSessionLogs)
+      .values({
+        skillAssignmentId: input.skillAssignmentId,
+        skillProgramDayId: input.skillProgramDayId,
+        skillProgramExerciseId: input.skillProgramExerciseId,
+        athleteId,
+        trackingLevel: input.trackingLevel,
+        elapsedSeconds: input.elapsedSeconds ?? null,
+        distanceYards: input.distanceYards ?? null,
+        cameraAngle: input.cameraAngle ?? null,
+        faults: input.faults ?? null,
+      })
+      .returning();
+    return row;
+  },
+
+  // Recent attempts at this specific drill, for the athlete recording it --
+  // a lightweight "here's your history" list, not a full analytics view
+  // (that's Skills Batch 6's job, kept separate from strength analytics).
+  async getSkillSessionLogsForExercise(athleteId: number, skillProgramExerciseId: number, limit = 5) {
+    return db.query.skillSessionLogs.findMany({
+      where: and(
+        eq(skillSessionLogs.athleteId, athleteId),
+        eq(skillSessionLogs.skillProgramExerciseId, skillProgramExerciseId),
+      ),
+      orderBy: desc(skillSessionLogs.createdAt),
+      limit,
     });
   },
 
@@ -4277,13 +4317,19 @@ Respond to the user's latest message by calling ask_question or update_program.`
       name: update.name?.trim() || program.name,
       description: update.description?.trim() || program.description,
       blocks,
+      // "sprint" is structurally part of the shared tracking_level enum (see
+      // its comment in shared/schema.ts) but never actually appears on a
+      // strength program_exercises row -- only skill_program_exercises (a
+      // wholly separate table) ever writes it. The cast below just
+      // reconciles that structural possibility with ProgramStructureInput's
+      // narrower, strength-specific Zod enum.
       weeks: applyProgramWeekUpdates(program.weeks, update.weekUpdates ?? [], validIdSet).map((w) => {
         const blockId = blockIdByWeekNumber.get(w.weekNumber);
         return {
           ...w,
           blockIndex: blockId != null ? (blockIdToIndex.get(blockId) ?? null) : null,
         };
-      }),
+      }) as ProgramStructureInput["weeks"],
     };
 
     await this.updateProgramStructure(programId, structure);
@@ -5948,6 +5994,7 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
         restSeconds: ex.restSeconds,
         notes: ex.notes,
         videoUrl: ex.skillExercise.videoUrl,
+        trackingLevel: ex.trackingLevel,
       })),
     };
   },

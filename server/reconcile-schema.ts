@@ -43,6 +43,10 @@ DO $$ BEGIN
   CREATE TYPE "tracking_level" AS ENUM ('none', 'bar_path', 'full');
 EXCEPTION WHEN duplicate_object THEN null; END $$;
 ALTER TYPE "tracking_level" ADD VALUE IF NOT EXISTS 'jump';
+-- 'sprint' is Skills' own signal (see the comment on trackingLevelEnum in
+-- shared/schema.ts) -- shares this enum type as a vocabulary convenience,
+-- skill_program_exercises stays a wholly separate table either way.
+ALTER TYPE "tracking_level" ADD VALUE IF NOT EXISTS 'sprint';
 
 DO $$ BEGIN
   CREATE TYPE "health_status" AS ENUM ('healthy', 'hurt');
@@ -307,9 +311,11 @@ CREATE TABLE IF NOT EXISTS "skill_program_exercises" (
   "sets" integer NOT NULL DEFAULT 3,
   "reps" text NOT NULL DEFAULT '10',
   "rest_seconds" integer,
-  "notes" text
+  "notes" text,
+  "tracking_level" tracking_level NOT NULL DEFAULT 'none'
 );
 CREATE INDEX IF NOT EXISTS "skill_program_exercises_day_idx" ON "skill_program_exercises" ("day_id");
+ALTER TABLE "skill_program_exercises" ADD COLUMN IF NOT EXISTS "tracking_level" tracking_level NOT NULL DEFAULT 'none';
 
 CREATE TABLE IF NOT EXISTS "skill_assignments" (
   "id" serial PRIMARY KEY,
@@ -323,6 +329,22 @@ CREATE TABLE IF NOT EXISTS "skill_assignments" (
 );
 CREATE INDEX IF NOT EXISTS "skill_assignments_athlete_idx" ON "skill_assignments" ("athlete_id");
 CREATE INDEX IF NOT EXISTS "skill_assignments_coach_idx" ON "skill_assignments" ("coach_id");
+
+CREATE TABLE IF NOT EXISTS "skill_session_logs" (
+  "id" serial PRIMARY KEY,
+  "skill_assignment_id" integer NOT NULL REFERENCES "skill_assignments"("id") ON DELETE CASCADE,
+  "skill_program_day_id" integer NOT NULL REFERENCES "skill_program_days"("id") ON DELETE CASCADE,
+  "skill_program_exercise_id" integer NOT NULL REFERENCES "skill_program_exercises"("id") ON DELETE CASCADE,
+  "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "tracking_level" tracking_level NOT NULL,
+  "elapsed_seconds" real,
+  "distance_yards" real,
+  "camera_angle" text,
+  "faults" json,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "skill_session_logs_athlete_idx" ON "skill_session_logs" ("athlete_id");
+CREATE INDEX IF NOT EXISTS "skill_session_logs_assignment_idx" ON "skill_session_logs" ("skill_assignment_id");
 
 DO $$ BEGIN
   CREATE TYPE "exercise_submission_status" AS ENUM ('pending', 'approved', 'rejected');

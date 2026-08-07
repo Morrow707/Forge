@@ -106,11 +106,17 @@ export const PERIODIZATION_PHASE_LABEL: Record<PeriodizationPhase, string> = {
 // watches ankle position for flight phases instead of wrist/bar position
 // (see jump-tracking.ts), reporting height/distance/ground-contact instead
 // of velocity/power.
+// "sprint" is Skills' own signal -- see sprint-tracking.ts. Reusing this
+// enum (rather than declaring a parallel one) is purely a shared-vocabulary
+// convenience; skillProgramExercises is still a wholly separate table from
+// programExercises, so this doesn't reintroduce the shared-category
+// coupling the rest of the Skills system deliberately avoids.
 export const trackingLevelEnum = pgEnum("tracking_level", [
   "none",
   "bar_path",
   "full",
   "jump",
+  "sprint",
 ]);
 
 export const users = pgTable(
@@ -504,8 +510,9 @@ export const skillExercises = pgTable(
 // exercises -> assignments) but reference skillExercises, not exercises,
 // and deliberately drop the strength-specific concepts that don't apply to
 // a drill: no training blocks/periodization phases, no supersets, no
-// tracking-level/video-check CV toggle (skill camera tracking is a
-// separate mechanism, added in later Skills batches), no correctives.
+// correctives. Camera tracking exists (see trackingLevel on
+// skillProgramExercises below) but is its own simpler on/off signal, not
+// the strength side's category-aware video-check toggle.
 export const skillPrograms = pgTable("skill_programs", {
   id: serial("id").primaryKey(),
   coachId: integer("coach_id")
@@ -562,6 +569,11 @@ export const skillProgramExercises = pgTable(
     reps: text("reps").notNull().default("10"),
     restSeconds: integer("rest_seconds"),
     notes: text("notes"),
+    // Only "none" or "sprint" are meaningful here for now -- "bar_path"/
+    // "full"/"jump" are strength-side camera pipelines with no skill-drill
+    // equivalent. "mechanics" tracking (swing/throw/kick) lands in a later
+    // Skills batch as its own value.
+    trackingLevel: trackingLevelEnum("tracking_level").notNull().default("none"),
   },
   (table) => ({
     dayIdx: index("skill_program_exercises_day_idx").on(table.dayId),
@@ -589,6 +601,43 @@ export const skillAssignments = pgTable(
   (table) => ({
     athleteIdx: index("skill_assignments_athlete_idx").on(table.athleteId),
     coachIdx: index("skill_assignments_coach_idx").on(table.coachId),
+  }),
+);
+
+// One row per camera-tracked skill session (sprint/agility for now,
+// swing/throw/kick mechanics in a later batch) -- there's no broader
+// skill-day completion/logging system yet (see the comment on
+// getCalendarForAthlete's skill-entry merge in storage.ts), so this exists
+// purely to keep a captured result from being a one-time, thrown-away
+// number. athleteId is denormalized here (derivable via the assignment)
+// the same way workoutLogs denormalizes it off assignments, since almost
+// every read of this table filters by athlete directly.
+export const skillSessionLogs = pgTable(
+  "skill_session_logs",
+  {
+    id: serial("id").primaryKey(),
+    skillAssignmentId: integer("skill_assignment_id")
+      .notNull()
+      .references(() => skillAssignments.id, { onDelete: "cascade" }),
+    skillProgramDayId: integer("skill_program_day_id")
+      .notNull()
+      .references(() => skillProgramDays.id, { onDelete: "cascade" }),
+    skillProgramExerciseId: integer("skill_program_exercise_id")
+      .notNull()
+      .references(() => skillProgramExercises.id, { onDelete: "cascade" }),
+    athleteId: integer("athlete_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    trackingLevel: trackingLevelEnum("tracking_level").notNull(),
+    elapsedSeconds: real("elapsed_seconds"),
+    distanceYards: real("distance_yards"),
+    cameraAngle: text("camera_angle"),
+    faults: json("faults"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    athleteIdx: index("skill_session_logs_athlete_idx").on(table.athleteId),
+    assignmentIdx: index("skill_session_logs_assignment_idx").on(table.skillAssignmentId),
   }),
 );
 
@@ -1822,6 +1871,22 @@ export const skillAssignmentsRelations = relations(skillAssignments, ({ one }) =
   coach: one(users, { fields: [skillAssignments.coachId], references: [users.id] }),
 }));
 
+export const skillSessionLogsRelations = relations(skillSessionLogs, ({ one }) => ({
+  assignment: one(skillAssignments, {
+    fields: [skillSessionLogs.skillAssignmentId],
+    references: [skillAssignments.id],
+  }),
+  day: one(skillProgramDays, {
+    fields: [skillSessionLogs.skillProgramDayId],
+    references: [skillProgramDays.id],
+  }),
+  programExercise: one(skillProgramExercises, {
+    fields: [skillSessionLogs.skillProgramExerciseId],
+    references: [skillProgramExercises.id],
+  }),
+  athlete: one(users, { fields: [skillSessionLogs.athleteId], references: [users.id] }),
+}));
+
 export const exerciseSubmissionsRelations = relations(exerciseSubmissions, ({ one }) => ({
   exercise: one(exercises, {
     fields: [exerciseSubmissions.exerciseId],
@@ -2115,6 +2180,7 @@ export const skillProgramExerciseInputSchema = z.object({
   reps: z.string().default("10"),
   restSeconds: z.number().optional().nullable(),
   notes: z.string().optional().nullable(),
+  trackingLevel: z.enum(["none", "sprint"]).optional(),
 });
 
 export const skillProgramDayInputSchema = z.object({
@@ -2284,6 +2350,17 @@ export const formFaultSchema = z.object({
   label: z.string(),
 });
 
+export const createSkillSessionLogSchema = z.object({
+  skillAssignmentId: z.number(),
+  skillProgramDayId: z.number(),
+  skillProgramExerciseId: z.number(),
+  trackingLevel: z.enum(["sprint"]),
+  elapsedSeconds: z.number().min(0).max(120).optional().nullable(),
+  distanceYards: z.number().min(0).max(200).optional().nullable(),
+  cameraAngle: z.enum(["side", "front_behind"]).optional().nullable(),
+  faults: z.array(formFaultSchema).optional().nullable(),
+});
+
 export const repBreakdownEntrySchema = z.object({
   repNumber: z.number(),
   peakVelocityMps: z.number(),
@@ -2407,6 +2484,7 @@ export type Exercise = typeof exercises.$inferSelect;
 export type SkillExercise = typeof skillExercises.$inferSelect;
 export type SkillProgram = typeof skillPrograms.$inferSelect;
 export type SkillAssignment = typeof skillAssignments.$inferSelect;
+export type SkillSessionLog = typeof skillSessionLogs.$inferSelect;
 export type Program = typeof programs.$inferSelect;
 export type ProgramWeek = typeof programWeeks.$inferSelect;
 export type ProgramDay = typeof programDays.$inferSelect;
@@ -2423,6 +2501,7 @@ export type SignupInput = z.infer<typeof signupSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type ProgramStructureInput = z.infer<typeof programStructureSchema>;
 export type SkillProgramStructureInput = z.infer<typeof skillProgramStructureSchema>;
+export type CreateSkillSessionLogInput = z.infer<typeof createSkillSessionLogSchema>;
 
 export const generateProgramDraftSchema = z.object({
   prompt: z.string().trim().min(5).max(500),

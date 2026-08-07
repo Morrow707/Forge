@@ -14,10 +14,13 @@ import { AssignSkillProgramDialog } from "@/components/assign-skill-program-dial
 import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { Plus, Trash2, Save, ArrowLeft, MoonStar, Send, Lock, ChevronUp, ChevronDown } from "lucide-react";
+import { Plus, Trash2, Save, ArrowLeft, MoonStar, Send, Lock, ChevronUp, ChevronDown, Timer } from "lucide-react";
+import { cn } from "@/lib/utils";
 import type { SkillExercise } from "@shared/schema";
 
 type RosterEntry = { id: number; name: string; email: string };
+
+type SkillTrackingLevel = "none" | "sprint";
 
 type LocalExercise = {
   key: string;
@@ -27,6 +30,7 @@ type LocalExercise = {
   reps: string;
   restSeconds: string;
   notes: string;
+  trackingLevel: SkillTrackingLevel;
 };
 
 type LocalDay = {
@@ -70,6 +74,7 @@ function stateFromProgram(program: any) {
           reps: pe.reps,
           restSeconds: pe.restSeconds != null ? String(pe.restSeconds) : "",
           notes: pe.notes ?? "",
+          trackingLevel: (pe.trackingLevel ?? "none") as SkillTrackingLevel,
         })),
       });
     }
@@ -87,7 +92,9 @@ function stateFromProgram(program: any) {
  * and deliberately without the strength-specific machinery that doesn't
  * apply to a drill: no training blocks, no supersets, no drag reordering
  * (simple up/down buttons instead -- skill sessions are typically short
- * lists), no AI chat, no tracking-level/video-check toggle. */
+ * lists), no AI chat. The one camera-tracking control it does have is a
+ * simple sprint on/off toggle -- skills only ever has one trackable
+ * signal so far, unlike the strength builder's category-aware levels. */
 export function SkillProgramBuilderPage({
   apiBase,
   routeBase,
@@ -169,6 +176,7 @@ export function SkillProgramBuilderPage({
               reps: ex.reps || "10",
               restSeconds: ex.restSeconds ? Number(ex.restSeconds) : null,
               notes: ex.notes || null,
+              trackingLevel: ex.trackingLevel,
             })),
           })),
         })),
@@ -310,6 +318,7 @@ export function SkillProgramBuilderPage({
                 reps: "10",
                 restSeconds: "",
                 notes: "",
+                trackingLevel: "none",
               },
             ],
           }));
@@ -475,6 +484,17 @@ function DayCard({
                       }
                     />
                   </div>
+                  <SprintTrackingToggle
+                    trackingLevel={ex.trackingLevel}
+                    onChange={(trackingLevel) =>
+                      onChange((d) => ({
+                        ...d,
+                        exercises: d.exercises.map((e) =>
+                          e.key === ex.key ? { ...e, trackingLevel } : e,
+                        ),
+                      }))
+                    }
+                  />
                 </div>
               ))}
             </div>
@@ -489,6 +509,46 @@ function DayCard({
         )}
       </CardContent>
     </Card>
+  );
+}
+
+// Simplified sibling of VideoTrackingToggle -- skills only ever has one
+// camera signal to turn on ("sprint"), so there's no category-based branching
+// to a different "on" level like the strength builder's jump/full split.
+function SprintTrackingToggle({
+  trackingLevel,
+  onChange,
+}: {
+  trackingLevel: SkillTrackingLevel;
+  onChange: (trackingLevel: SkillTrackingLevel) => void;
+}) {
+  const isOn = trackingLevel === "sprint";
+  return (
+    <div className="mt-1.5 flex items-center gap-1.5">
+      <Timer className="h-3.5 w-3.5 text-muted-foreground" />
+      <button
+        type="button"
+        aria-pressed={!isOn}
+        onClick={() => onChange("none")}
+        className={cn(
+          "rounded px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide",
+          !isOn ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground",
+        )}
+      >
+        No Timing
+      </button>
+      <button
+        type="button"
+        aria-pressed={isOn}
+        onClick={() => onChange("sprint")}
+        className={cn(
+          "rounded px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide",
+          isOn ? "bg-teal-900/60 text-teal-100" : "text-muted-foreground hover:text-foreground",
+        )}
+      >
+        Sprint Timing
+      </button>
+    </div>
   );
 }
 
