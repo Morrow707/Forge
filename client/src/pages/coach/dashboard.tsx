@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { EntryPill, type CalendarEntry } from "@/components/calendar-view";
 import { CoachDayEditDialog } from "@/components/coach-day-edit-dialog";
+import { SkillDayViewDialog } from "@/components/skill-day-view-dialog";
 import { CoachDigestBanner } from "@/components/coach-digest-banner";
 import { ReengagementBanner } from "@/components/reengagement-banner";
 import { useAuth } from "@/hooks/use-auth";
@@ -94,6 +95,11 @@ export default function CoachDashboard() {
     athleteId: number;
     athleteName: string;
   } | null>(null);
+  const [viewingSkill, setViewingSkill] = useState<{
+    skillProgramId: number;
+    skillProgramDayId: number;
+    athleteName: string;
+  } | null>(null);
 
   return (
     <AppShell title={`Welcome, ${user?.name?.split(" ")[0] ?? "Coach"}`} fitScreen>
@@ -149,12 +155,18 @@ export default function CoachDashboard() {
                           key={`${e.assignmentId}-${e.programDayId}`}
                           entry={e}
                           onClick={() =>
-                            setEditing({
-                              programDayId: e.programDayId,
-                              assignmentId: e.assignmentId,
-                              athleteId: e.athleteId!,
-                              athleteName: e.athleteName!,
-                            })
+                            e.kind === "skill"
+                              ? setViewingSkill({
+                                  skillProgramId: e.programId,
+                                  skillProgramDayId: e.programDayId,
+                                  athleteName: e.athleteName!,
+                                })
+                              : setEditing({
+                                  programDayId: e.programDayId,
+                                  assignmentId: e.assignmentId,
+                                  athleteId: e.athleteId!,
+                                  athleteName: e.athleteName!,
+                                })
                           }
                         />
                       ))}
@@ -250,6 +262,19 @@ export default function CoachDashboard() {
         open={editing !== null}
         onOpenChange={(open) => !open && setEditing(null)}
       />
+
+      {viewingSkill && (
+        <SkillDayViewDialog
+          open
+          onOpenChange={(open) => !open && setViewingSkill(null)}
+          athleteName={viewingSkill.athleteName}
+          source={{
+            kind: "coach",
+            skillProgramId: viewingSkill.skillProgramId,
+            skillProgramDayId: viewingSkill.skillProgramDayId,
+          }}
+        />
+      )}
     </AppShell>
   );
 }

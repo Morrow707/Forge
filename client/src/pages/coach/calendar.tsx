@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
 import { CalendarView, type CalendarEntry } from "@/components/calendar-view";
 import { CoachDayEditDialog } from "@/components/coach-day-edit-dialog";
+import { SkillDayViewDialog } from "@/components/skill-day-view-dialog";
 import {
   Select,
   SelectContent,
@@ -27,6 +28,11 @@ export default function CoachCalendar() {
     programDayId: number;
     assignmentId: number;
     athleteId: number;
+    athleteName: string;
+  } | null>(null);
+  const [viewingSkill, setViewingSkill] = useState<{
+    skillProgramId: number;
+    skillProgramDayId: number;
     athleteName: string;
   } | null>(null);
 
@@ -67,12 +73,18 @@ export default function CoachCalendar() {
         entries={entries}
         onRangeChange={(start, end) => setRange({ start, end })}
         onEntryClick={(e) =>
-          setEditing({
-            programDayId: e.programDayId,
-            assignmentId: e.assignmentId,
-            athleteId: e.athleteId!,
-            athleteName: e.athleteName!,
-          })
+          e.kind === "skill"
+            ? setViewingSkill({
+                skillProgramId: e.programId,
+                skillProgramDayId: e.programDayId,
+                athleteName: e.athleteName!,
+              })
+            : setEditing({
+                programDayId: e.programDayId,
+                assignmentId: e.assignmentId,
+                athleteId: e.athleteId!,
+                athleteName: e.athleteName!,
+              })
         }
       />
 
@@ -95,6 +107,19 @@ export default function CoachCalendar() {
         open={editing !== null}
         onOpenChange={(open) => !open && setEditing(null)}
       />
+
+      {viewingSkill && (
+        <SkillDayViewDialog
+          open
+          onOpenChange={(open) => !open && setViewingSkill(null)}
+          athleteName={viewingSkill.athleteName}
+          source={{
+            kind: "coach",
+            skillProgramId: viewingSkill.skillProgramId,
+            skillProgramDayId: viewingSkill.skillProgramDayId,
+          }}
+        />
+      )}
     </AppShell>
   );
 }

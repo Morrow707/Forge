@@ -2679,6 +2679,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(detail);
   });
 
+  // Read-only skill-day view -- no logging/completion here yet, see the
+  // comment on getSkillDayForAthlete.
+  app.get(
+    "/api/athlete/skill-day/:skillAssignmentId/:skillProgramDayId",
+    requireRole("athlete"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const detail = await storage.getSkillDayForAthlete(
+        user.id,
+        Number(req.params.skillAssignmentId),
+        Number(req.params.skillProgramDayId),
+      );
+      if (!detail) return res.status(404).json({ message: "Skill session not found" });
+      res.json(detail);
+    },
+  );
+
   // ---------------- Athlete: restricted/modified workout auto-generation ----------------
   // Swaps every exercise in one day that would aggravate today's flagged
   // pain into a safe alternative, in one AI-driven shot -- deliberately
