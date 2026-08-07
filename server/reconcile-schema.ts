@@ -567,10 +567,24 @@ CREATE TABLE IF NOT EXISTS "food_log_entries" (
   "fat_g" real,
   "fiber_g" real,
   "sodium_mg" real,
+  "calcium_mg" real,
+  "iron_mg" real,
+  "vitamin_d_mcg" real,
+  "potassium_mg" real,
+  "magnesium_mg" real,
+  "vitamin_b12_mcg" real,
+  "zinc_mg" real,
   "source" food_log_source NOT NULL,
   "barcode" text,
   "logged_at" timestamp NOT NULL DEFAULT now()
 );
+ALTER TABLE "food_log_entries" ADD COLUMN IF NOT EXISTS "calcium_mg" real;
+ALTER TABLE "food_log_entries" ADD COLUMN IF NOT EXISTS "iron_mg" real;
+ALTER TABLE "food_log_entries" ADD COLUMN IF NOT EXISTS "vitamin_d_mcg" real;
+ALTER TABLE "food_log_entries" ADD COLUMN IF NOT EXISTS "potassium_mg" real;
+ALTER TABLE "food_log_entries" ADD COLUMN IF NOT EXISTS "magnesium_mg" real;
+ALTER TABLE "food_log_entries" ADD COLUMN IF NOT EXISTS "vitamin_b12_mcg" real;
+ALTER TABLE "food_log_entries" ADD COLUMN IF NOT EXISTS "zinc_mg" real;
 CREATE INDEX IF NOT EXISTS "food_log_entries_athlete_date_idx" ON "food_log_entries" ("athlete_id", "date");
 
 CREATE TABLE IF NOT EXISTS "testing_results" (

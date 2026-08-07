@@ -1,10 +1,29 @@
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { apiRequest, getJson } from "@/lib/queryClient";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { apiRequest, getJson, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { Plus, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Trash2, Pencil, ChevronLeft, ChevronRight, ChevronDown } from "lucide-react";
 import { format, addDays, parseISO } from "date-fns";
+
+const MICRO_FIELDS = [
+  ["calciumMg", "Calcium", "mg"],
+  ["ironMg", "Iron", "mg"],
+  ["vitaminDMcg", "Vitamin D", "mcg"],
+  ["potassiumMg", "Potassium", "mg"],
+  ["magnesiumMg", "Magnesium", "mg"],
+  ["vitaminB12Mcg", "Vitamin B12", "mcg"],
+  ["zincMg", "Zinc", "mg"],
+] as const;
 
 // Barcode scanning (@zxing/browser) and the photo-analysis path it drags in
 // alongside it are only ever needed once someone actually opens the Log Food
@@ -27,6 +46,13 @@ type FoodLogEntry = {
   fatG: number | null;
   fiberG: number | null;
   sodiumMg: number | null;
+  calciumMg: number | null;
+  ironMg: number | null;
+  vitaminDMcg: number | null;
+  potassiumMg: number | null;
+  magnesiumMg: number | null;
+  vitaminB12Mcg: number | null;
+  zincMg: number | null;
   source: "barcode" | "search" | "manual";
 };
 
@@ -93,6 +119,8 @@ export function FoodLogPanel({
   // first time it's actually opened, then leaves it mounted so closing and
   // reopening doesn't re-fetch or lose in-progress state.
   const [scannerEverOpened, setScannerEverOpened] = useState(false);
+  const [expandedMicros, setExpandedMicros] = useState<Set<number>>(new Set());
+  const [editingEntry, setEditingEntry] = useState<FoodLogEntry | null>(null);
 
   const queryKey = [fetchUrl, date];
   const { data, isLoading } = useQuery<FoodLogResponse>({
@@ -107,6 +135,11 @@ export function FoodLogPanel({
     onSuccess: () => qc.invalidateQueries({ queryKey }),
     onError: () => toast.error("Couldn't remove that entry"),
   });
+
+  function handleEntrySaved() {
+    qc.invalidateQueries({ queryKey });
+    setEditingEntry(null);
+  }
 
   const totals = data?.totals ?? { caloriesKcal: 0, proteinG: 0, carbsG: 0, fatG: 0, fiberG: 0, sodiumMg: 0 };
   const isToday = date === new Date().toISOString().slice(0, 10);
@@ -158,32 +191,81 @@ export function FoodLogPanel({
             {!data?.entries.length && (
               <p className="py-3 text-center text-sm text-muted-foreground">Nothing logged yet.</p>
             )}
-            {data?.entries.map((e) => (
-              <div
-                key={e.id}
-                className="flex items-center justify-between rounded-md border border-border p-2.5 text-sm"
-              >
-                <div>
-                  <p className="font-medium">{e.description}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {e.servingDescription ? `${e.servingDescription} -- ` : ""}
-                    {e.caloriesKcal ?? "?"} kcal
-                    {e.proteinG != null ? `, ${e.proteinG}g protein` : ""}
-                  </p>
+            {data?.entries.map((e) => {
+              const presentMicros = MICRO_FIELDS.filter(([key]) => e[key] != null);
+              const microsOpen = expandedMicros.has(e.id);
+              return (
+                <div key={e.id} className="rounded-md border border-border p-2.5 text-sm">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">{e.description}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {e.servingDescription ? `${e.servingDescription} -- ` : ""}
+                        {e.caloriesKcal ?? "?"} kcal
+                        {e.proteinG != null ? `, ${e.proteinG}g protein` : ""}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-0.5">
+                      {presentMicros.length > 0 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          aria-label={microsOpen ? "Hide micros" : "Show micros"}
+                          onClick={() =>
+                            setExpandedMicros((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(e.id)) next.delete(e.id);
+                              else next.add(e.id);
+                              return next;
+                            })
+                          }
+                        >
+                          <ChevronDown
+                            className={`h-3.5 w-3.5 transition-transform ${microsOpen ? "rotate-180" : ""}`}
+                          />
+                        </Button>
+                      )}
+                      {editable && (
+                        <>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            aria-label="Edit entry"
+                            onClick={() => setEditingEntry(e)}
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            aria-label="Remove entry"
+                            onClick={() => deleteMutation.mutate(e.id)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  {microsOpen && presentMicros.length > 0 && (
+                    <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 border-t border-border pt-2 text-xs text-muted-foreground sm:grid-cols-3">
+                      {presentMicros.map(([key, label, unit]) => (
+                        <div key={key} className="flex justify-between">
+                          <span>{label}</span>
+                          <span className="font-medium text-foreground">
+                            {e[key]}
+                            {unit}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                {editable && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    aria-label="Remove entry"
-                    onClick={() => deleteMutation.mutate(e.id)}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         </>
       )}
@@ -207,6 +289,152 @@ export function FoodLogPanel({
           <FoodScannerDialog open={scannerOpen} onOpenChange={setScannerOpen} date={date} />
         </Suspense>
       )}
+
+      <EditFoodEntryDialog
+        entry={editingEntry}
+        onOpenChange={(open) => !open && setEditingEntry(null)}
+        onSaved={handleEntrySaved}
+      />
     </div>
+  );
+}
+
+const MACRO_FIELDS = [
+  ["caloriesKcal", "Calories", ""],
+  ["proteinG", "Protein", "g"],
+  ["carbsG", "Carbs", "g"],
+  ["fatG", "Fat", "g"],
+  ["fiberG", "Fiber", "g"],
+  ["sodiumMg", "Sodium", "mg"],
+] as const;
+
+type EditableField = (typeof MACRO_FIELDS)[number][0] | (typeof MICRO_FIELDS)[number][0];
+
+/** Lets an athlete correct/fill in any macro or micro on an already-logged
+ * entry -- previously the only edit action was delete-and-relog from
+ * scratch. Every field is optional (missing stays missing, not coerced to
+ * 0), same convention as logging it the first time. */
+function EditFoodEntryDialog({
+  entry,
+  onOpenChange,
+  onSaved,
+}: {
+  entry: FoodLogEntry | null;
+  onOpenChange: (open: boolean) => void;
+  onSaved: () => void;
+}) {
+  const [description, setDescription] = useState("");
+  const [values, setValues] = useState<Partial<Record<EditableField, string>>>({});
+  const [micrasOpen, setMicrosOpen] = useState(false);
+  const [hydratedFor, setHydratedFor] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (entry && hydratedFor !== entry.id) {
+      setDescription(entry.description);
+      setValues(
+        Object.fromEntries(
+          [...MACRO_FIELDS, ...MICRO_FIELDS].map(([key]) => [
+            key,
+            entry[key] != null ? String(entry[key]) : "",
+          ]),
+        ),
+      );
+      setHydratedFor(entry.id);
+    }
+    if (!entry) setHydratedFor(null);
+  }, [entry, hydratedFor]);
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      const payload: Record<string, unknown> = { description: description.trim() };
+      for (const [key] of [...MACRO_FIELDS, ...MICRO_FIELDS]) {
+        const raw = values[key];
+        payload[key] = raw && raw.trim() !== "" ? Number(raw) : null;
+      }
+      await apiRequest("PATCH", `/api/athlete/food-log/${entry!.id}`, payload);
+    },
+    onSuccess: () => {
+      toast.success("Entry updated");
+      onSaved();
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't save changes"),
+  });
+
+  return (
+    <Dialog open={entry != null} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Edit Entry</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="edit-food-desc">Food</Label>
+            <Input
+              id="edit-food-desc"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+            />
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {MACRO_FIELDS.map(([key, label, unit]) => (
+              <div key={key} className="space-y-1">
+                <Label htmlFor={`edit-${key}`} className="text-xs">
+                  {label}
+                  {unit ? ` (${unit})` : ""}
+                </Label>
+                <Input
+                  id={`edit-${key}`}
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  value={values[key] ?? ""}
+                  onChange={(e) => setValues((prev) => ({ ...prev, [key]: e.target.value }))}
+                />
+              </div>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setMicrosOpen((v) => !v)}
+            className="flex items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-foreground"
+          >
+            <ChevronDown className={`h-3.5 w-3.5 transition-transform ${micrasOpen ? "rotate-180" : ""}`} />
+            Micros (optional)
+          </button>
+          {micrasOpen && (
+            <div className="grid grid-cols-3 gap-2">
+              {MICRO_FIELDS.map(([key, label, unit]) => (
+                <div key={key} className="space-y-1">
+                  <Label htmlFor={`edit-${key}`} className="text-xs">
+                    {label} ({unit})
+                  </Label>
+                  <Input
+                    id={`edit-${key}`}
+                    type="number"
+                    inputMode="decimal"
+                    min={0}
+                    value={values[key] ?? ""}
+                    onChange={(e) => setValues((prev) => ({ ...prev, [key]: e.target.value }))}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            disabled={!description.trim() || saveMutation.isPending}
+            onClick={() => saveMutation.mutate()}
+          >
+            {saveMutation.isPending ? "Saving…" : "Save Changes"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
