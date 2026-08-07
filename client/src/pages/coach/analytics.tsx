@@ -34,7 +34,9 @@ import {
   ThumbsDown,
   Target,
   Search,
+  Wand2,
 } from "lucide-react";
+import { VideoAnalysisDialog } from "@/components/video-analysis-dialog";
 import {
   LineChart,
   Line,
@@ -234,6 +236,8 @@ export default function CoachAnalytics() {
     flag: "best" | "worst" | null;
     label: string;
   } | null>(null);
+  const [videoPreviewError, setVideoPreviewError] = useState(false);
+  const [analyzingVideo, setAnalyzingVideo] = useState(false);
 
   const { data: roster = [] } = useQuery<RosterEntry[]>({
     queryKey: ["/api/coach/roster"],
@@ -1328,13 +1332,14 @@ export default function CoachAnalytics() {
                         {p.formCheckVideoUrl ? (
                           <button
                             type="button"
-                            onClick={() =>
+                            onClick={() => {
+                              setVideoPreviewError(false);
                               setVideoPreview({
                                 url: p.formCheckVideoUrl!,
                                 flag: p.formCheckFlag,
                                 label: `${format(parseISO(p.date), "MMM d")} · Set ${p.setNumber}`,
-                              })
-                            }
+                              });
+                            }}
                             className="flex items-center gap-1 text-primary hover:underline"
                           >
                             <Video className="h-3.5 w-3.5" />
@@ -1376,16 +1381,36 @@ export default function CoachAnalytics() {
                   )}
                 </DialogTitle>
               </DialogHeader>
-              {videoPreview && (
-                <video
-                  src={videoPreview.url}
-                  controls
-                  playsInline
-                  className="w-full rounded-md bg-black"
-                />
+              {videoPreview && videoPreviewError && (
+                <div className="rounded-md border border-border bg-secondary/30 p-4 text-center text-sm text-muted-foreground">
+                  This video couldn't be loaded -- it may not have finished uploading, or the file is missing.
+                </div>
+              )}
+              {videoPreview && !videoPreviewError && (
+                <>
+                  <video
+                    src={videoPreview.url}
+                    controls
+                    playsInline
+                    className="w-full rounded-md bg-black"
+                    onError={() => setVideoPreviewError(true)}
+                  />
+                  <Button variant="outline" onClick={() => setAnalyzingVideo(true)}>
+                    <Wand2 className="h-4 w-4" />
+                    Analysis Tools
+                  </Button>
+                </>
               )}
             </DialogContent>
           </Dialog>
+          {videoPreview && (
+            <VideoAnalysisDialog
+              open={analyzingVideo}
+              onOpenChange={setAnalyzingVideo}
+              videoUrl={videoPreview.url}
+              title={videoPreview.label}
+            />
+          )}
         </div>
       )}
         </TabsContent>
