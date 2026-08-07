@@ -21,9 +21,16 @@ import {
 } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { ChevronLeft, ChevronRight, CheckCircle2, Dumbbell, MoonStar } from "lucide-react";
+import { ChevronLeft, ChevronRight, CheckCircle2, Dumbbell, MoonStar, Target } from "lucide-react";
 
 export type CalendarEntry = {
+  // Which system this entry came from -- an exercise-program day and a
+  // skill-program day are equals that can share a date (see the
+  // reconciliation comment in storage.ts), so the client needs to tell them
+  // apart to style and route them differently: skill entries render teal
+  // and open the read-only SkillDayViewDialog instead of the strength
+  // day-edit/workout pages, which don't understand skill IDs.
+  kind: "exercise" | "skill";
   date: string;
   assignmentId: number;
   programDayId: number;
@@ -65,6 +72,7 @@ function rangeFor(mode: CalendarViewMode, cursor: Date) {
 
 function entryIcon(entry: CalendarEntry, className: string) {
   if (entry.isRestDay) return <MoonStar className={className} />;
+  if (entry.kind === "skill") return <Target className={className} />;
   if (entry.completed) return <CheckCircle2 className={className} />;
   return <Dumbbell className={className} />;
 }
@@ -86,9 +94,11 @@ export function EntryPill({
         compact ? "text-[11px] sm:text-xs" : "text-sm",
         entry.isRestDay
           ? "bg-secondary text-muted-foreground"
-          : entry.completed
-            ? "bg-success/20 text-success hover:bg-success/30"
-            : "bg-primary/20 text-primary hover:bg-primary/30",
+          : entry.kind === "skill"
+            ? "bg-teal-500/20 text-teal-400 hover:bg-teal-500/30"
+            : entry.completed
+              ? "bg-success/20 text-success hover:bg-success/30"
+              : "bg-primary/20 text-primary hover:bg-primary/30",
       )}
     >
       {entryIcon(entry, "h-3 w-3 shrink-0")}
@@ -268,9 +278,11 @@ function MonthGrid({
                       "flex h-4 w-4 items-center justify-center rounded-full",
                       e.isRestDay
                         ? "bg-secondary text-muted-foreground"
-                        : e.completed
-                          ? "bg-success/25 text-success"
-                          : "bg-primary/25 text-primary",
+                        : e.kind === "skill"
+                          ? "bg-teal-500/25 text-teal-400"
+                          : e.completed
+                            ? "bg-success/25 text-success"
+                            : "bg-primary/25 text-primary",
                     )}
                   >
                     {entryIcon(e, "h-2.5 w-2.5")}
@@ -444,9 +456,11 @@ function ThreeDayAgenda({
                           "flex h-9 w-9 shrink-0 items-center justify-center rounded-md",
                           e.isRestDay
                             ? "bg-secondary text-muted-foreground"
-                            : e.completed
-                              ? "bg-success/15 text-success"
-                              : "bg-primary/15 text-primary",
+                            : e.kind === "skill"
+                              ? "bg-teal-500/15 text-teal-400"
+                              : e.completed
+                                ? "bg-success/15 text-success"
+                                : "bg-primary/15 text-primary",
                         )}
                       >
                         {entryIcon(e, "h-4.5 w-4.5")}

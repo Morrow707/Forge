@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { CalendarView, type CalendarEntry } from "@/components/calendar-view";
 import { CalendarLinkDialog } from "@/components/calendar-link-dialog";
+import { SkillDayViewDialog } from "@/components/skill-day-view-dialog";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { CalendarDays } from "lucide-react";
@@ -17,6 +18,10 @@ export default function AthleteDashboard() {
   const [, navigate] = useLocation();
   const [range, setRange] = useState<{ start: string; end: string }>({ start: "", end: "" });
   const [syncOpen, setSyncOpen] = useState(false);
+  const [viewingSkill, setViewingSkill] = useState<{
+    skillAssignmentId: number;
+    skillProgramDayId: number;
+  } | null>(null);
 
   const { data: entries = [] } = useQuery<CalendarEntry[]>({
     queryKey: ["/api/athlete/calendar", range.start, range.end],
@@ -54,7 +59,11 @@ export default function AthleteDashboard() {
       <CalendarView
         entries={entries}
         onRangeChange={(start, end) => setRange({ start, end })}
-        onEntryClick={(e) => navigate(`/athlete/day/${e.assignmentId}/${e.programDayId}/${e.date}`)}
+        onEntryClick={(e) =>
+          e.kind === "skill"
+            ? setViewingSkill({ skillAssignmentId: e.assignmentId, skillProgramDayId: e.programDayId })
+            : navigate(`/athlete/day/${e.assignmentId}/${e.programDayId}/${e.date}`)
+        }
       />
 
       {/* Only the "you have no coach at all" case gets a big empty state --
@@ -101,6 +110,18 @@ export default function AthleteDashboard() {
         title="Sync Your Calendar"
         fetchUrl="/api/athlete/calendar-link"
       />
+
+      {viewingSkill && (
+        <SkillDayViewDialog
+          open
+          onOpenChange={(open) => !open && setViewingSkill(null)}
+          source={{
+            kind: "athlete",
+            skillAssignmentId: viewingSkill.skillAssignmentId,
+            skillProgramDayId: viewingSkill.skillProgramDayId,
+          }}
+        />
+      )}
     </AppShell>
   );
 }

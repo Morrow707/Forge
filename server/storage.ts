@@ -5529,6 +5529,102 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
   },
 
   // ---------- Calendar ----------
+  // Skill assignments are computed the same way as exercise assignments
+  // (see resolveAssignmentDate/assignmentWeekOccurrences above) and reconciled
+  // among themselves the same way (two overlapping skill programs still
+  // collapse to the newer one), but are never reconciled against exercise
+  // entries -- an exercise-program day and a skill-program day landing on
+  // the same date are equals, not competitors, per the explicit requirement
+  // that assigning one must never silently drop the other. Every entry is
+  // tagged kind: "skill" so the client can style/route it distinctly
+  // (skill days have no logging page yet -- see SkillDayViewDialog).
+  async getSkillCalendarEntries(
+    rangeStart: string,
+    rangeEnd: string,
+    filter:
+      | { mode: "athlete"; athleteId: number }
+      | { mode: "coach"; coachId: number; athleteId?: number },
+  ) {
+    const where =
+      filter.mode === "athlete"
+        ? eq(skillAssignments.athleteId, filter.athleteId)
+        : filter.athleteId
+          ? and(
+              inArray(skillAssignments.coachId, await this.getEffectiveCoachIds(filter.coachId)),
+              eq(skillAssignments.athleteId, filter.athleteId),
+            )
+          : inArray(skillAssignments.coachId, await this.getEffectiveCoachIds(filter.coachId));
+
+    const rows = await db.query.skillAssignments.findMany({
+      where,
+      with: {
+        athlete: true,
+        program: {
+          with: {
+            weeks: {
+              with: {
+                days: { with: { exercises: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const start = parseISO(rangeStart);
+    const end = parseISO(rangeEnd);
+
+    type SkillCalendarEntry = {
+      kind: "skill";
+      date: string;
+      assignmentId: number;
+      programDayId: number;
+      programId: number;
+      programName: string;
+      athleteId: number;
+      athleteName: string;
+      title: string;
+      isRestDay: boolean;
+      exerciseCount: number;
+      completed: boolean;
+    };
+
+    const entries: SkillCalendarEntry[] = [];
+    for (const a of rows) {
+      for (const { week, calendarWeekNumber, isFirstCycle } of assignmentWeekOccurrences(
+        a.program.weeks,
+        a.durationWeeks,
+      )) {
+        for (const day of week.days) {
+          const date = resolveAssignmentDate(a, calendarWeekNumber, day.dayNumber, day.id, isFirstCycle);
+          if (isWithinInterval(date, { start, end })) {
+            entries.push({
+              kind: "skill",
+              date: formatISO(date, { representation: "date" }),
+              assignmentId: a.id,
+              programDayId: day.id,
+              programId: a.program.id,
+              programName: a.program.name,
+              athleteId: a.athlete.id,
+              athleteName: a.athlete.name,
+              title: day.title,
+              isRestDay: day.isRestDay,
+              exerciseCount: day.exercises.length,
+              completed: false,
+            });
+          }
+        }
+      }
+    }
+
+    const createdAtByAssignment = new Map(rows.map((a) => [a.id, new Date(a.createdAt)]));
+    return reconcileOverlappingAssignments(
+      entries,
+      (e) => `${e.athleteId}:${e.date}`,
+      createdAtByAssignment,
+    );
+  },
+
   async getCalendarForAthlete(
     athleteId: number,
     rangeStart: string,
@@ -5553,6 +5649,7 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
     const end = parseISO(rangeEnd);
 
     type CalendarEntry = {
+      kind: "exercise";
       date: string;
       assignmentId: number;
       programDayId: number;
@@ -5575,6 +5672,7 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
           const date = resolveAssignmentDate(a, calendarWeekNumber, day.dayNumber, day.id, isFirstCycle);
           if (isWithinInterval(date, { start, end })) {
             entries.push({
+              kind: "exercise",
               date: formatISO(date, { representation: "date" }),
               assignmentId: a.id,
               programDayId: day.id,
@@ -5616,8 +5714,12 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
       athleteAssignments.map((a) => [a.id, new Date(a.createdAt)]),
     );
     const reconciled = reconcileOverlappingAssignments(entries, (e) => e.date, createdAtByAssignment);
-    reconciled.sort((a, b) => a.date.localeCompare(b.date));
-    return reconciled;
+    const skillEntries = (
+      await this.getSkillCalendarEntries(rangeStart, rangeEnd, { mode: "athlete", athleteId })
+    ).map(({ athleteId: _athleteId, athleteName: _athleteName, ...e }) => e);
+    const combined = [...reconciled, ...skillEntries];
+    combined.sort((a, b) => a.date.localeCompare(b.date));
+    return combined;
   },
 
   async getCalendarForCoach(
@@ -5649,6 +5751,7 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
     const end = parseISO(rangeEnd);
 
     type CoachCalendarEntry = {
+      kind: "exercise";
       date: string;
       assignmentId: number;
       programDayId: number;
@@ -5673,6 +5776,7 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
           const date = resolveAssignmentDate(a, calendarWeekNumber, day.dayNumber, day.id, isFirstCycle);
           if (isWithinInterval(date, { start, end })) {
             entries.push({
+              kind: "exercise",
               date: formatISO(date, { representation: "date" }),
               assignmentId: a.id,
               programDayId: day.id,
@@ -5717,8 +5821,14 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
       (e) => `${e.athleteId}:${e.date}`,
       createdAtByAssignment,
     );
-    reconciled.sort((a, b) => a.date.localeCompare(b.date));
-    return reconciled;
+    const skillEntries = await this.getSkillCalendarEntries(
+      rangeStart,
+      rangeEnd,
+      athleteId ? { mode: "coach", coachId, athleteId } : { mode: "coach", coachId },
+    );
+    const combined = [...reconciled, ...skillEntries];
+    combined.sort((a, b) => a.date.localeCompare(b.date));
+    return combined;
   },
 
   // Simple RPE-based autoregulation: turn how hard the last set felt into a
@@ -5794,6 +5904,52 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
   ) {
     const logs = await this.getRecentWorkoutLogsForAthlete(athleteId, beforeDate);
     return extractPerformanceHistory(logs, exerciseId);
+  },
+
+  // Read-only skill-day view for an athlete's own calendar -- there's no
+  // logging/completion flow yet (that lands with the camera-tracking
+  // batches), so this is deliberately just "what's on the plan today,"
+  // scoped to an assignment that's actually theirs.
+  async getSkillDayForAthlete(
+    athleteId: number,
+    skillAssignmentId: number,
+    skillProgramDayId: number,
+  ) {
+    const assignment = await db.query.skillAssignments.findFirst({
+      where: and(
+        eq(skillAssignments.id, skillAssignmentId),
+        eq(skillAssignments.athleteId, athleteId),
+      ),
+      with: { program: true },
+    });
+    if (!assignment) return undefined;
+
+    const day = await db.query.skillProgramDays.findFirst({
+      where: eq(skillProgramDays.id, skillProgramDayId),
+      with: {
+        exercises: {
+          orderBy: asc(skillProgramExercises.orderIndex),
+          with: { skillExercise: true },
+        },
+      },
+    });
+    if (!day) return undefined;
+
+    return {
+      programName: assignment.program.name,
+      title: day.title,
+      isRestDay: day.isRestDay,
+      exercises: day.exercises.map((ex) => ({
+        id: ex.id,
+        name: ex.skillExercise.name,
+        skillType: ex.skillExercise.skillType,
+        sets: ex.sets,
+        reps: ex.reps,
+        restSeconds: ex.restSeconds,
+        notes: ex.notes,
+        videoUrl: ex.skillExercise.videoUrl,
+      })),
+    };
   },
 
   async getWorkoutDayDetail(
