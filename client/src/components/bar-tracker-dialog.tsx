@@ -55,6 +55,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis } from "recharts";
+import { apiRequest } from "@/lib/queryClient";
 
 type Step = "setup" | "tracking" | "review";
 
@@ -171,6 +172,7 @@ export function BarTrackerDialog({
   laterality,
   targetReps,
   loadKg,
+  recordVideo,
   onCapture,
 }: {
   open: boolean;
@@ -197,7 +199,15 @@ export function BarTrackerDialog({
   // Undefined for bodyweight-only sets, which just don't get a power
   // number, same as any other tracking-off metric. Unused in jump mode.
   loadKg?: number;
-  onCapture: (metrics: RepMetrics | JumpSetMetrics) => void;
+  // When the coach also wants a video (videoCheckEnabled), this dialog
+  // becomes the athlete's single capture step for the set instead of a
+  // separate FormVideoRecorderDialog flow -- recording real video
+  // alongside the pose tracking that's already happening, uploaded only
+  // once "Use This Data" is tapped. Off by default (undefined/false), which
+  // keeps the existing "only derived numbers ever leave the device" privacy
+  // behavior for exercises that track form but were never asked for video.
+  recordVideo?: boolean;
+  onCapture: (metrics: RepMetrics | JumpSetMetrics, videoUrl?: string) => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
@@ -248,6 +258,9 @@ export function BarTrackerDialog({
   const readyStartTimeRef = useRef<number | null>(null);
   const autoStartTriggeredRef = useRef(false);
   const autoStartTimersRef = useRef<number[]>([]);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const videoChunksRef = useRef<Blob[]>([]);
+  const recordedBlobRef = useRef<Blob | null>(null);
 
   const [step, setStepState] = useState<Step>("setup");
   function changeStep(next: Step) {
@@ -272,6 +285,7 @@ export function BarTrackerDialog({
   const [result, setResult] = useState<RepMetrics | JumpSetMetrics | null>(null);
   const [movementGuess, setMovementGuess] = useState<MovementGuess | null>(null);
   const [voiceEnabled, setVoiceEnabled] = useState(loadVoicePref);
+  const [savingVideo, setSavingVideo] = useState(false);
 
   function toggleVoice(next: boolean) {
     setVoiceEnabled(next);
@@ -305,6 +319,9 @@ export function BarTrackerDialog({
     autoStartTimersRef.current = [];
     setCountdown(null);
     setAlignmentHint(null);
+    videoChunksRef.current = [];
+    recordedBlobRef.current = null;
+    setSavingVideo(false);
 
     setModelLoading(true);
     getPoseLandmarker()
@@ -493,6 +510,22 @@ export function BarTrackerDialog({
     setRepCount(0);
     setLiveTiltDeg(null);
     setBarEdgeDetected(false);
+
+    if (recordVideo && streamRef.current) {
+      videoChunksRef.current = [];
+      recordedBlobRef.current = null;
+      const mimeType = MediaRecorder.isTypeSupported("video/webm") ? "video/webm" : undefined;
+      const recorder = new MediaRecorder(streamRef.current, mimeType ? { mimeType } : undefined);
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) videoChunksRef.current.push(e.data);
+      };
+      recorder.onstop = () => {
+        recordedBlobRef.current = new Blob(videoChunksRef.current, { type: mimeType ?? "video/webm" });
+      };
+      mediaRecorderRef.current = recorder;
+      recorder.start();
+    }
+
     tick();
   }
 
@@ -661,6 +694,7 @@ export function BarTrackerDialog({
 
   function stopTracking() {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    if (mediaRecorderRef.current?.state === "recording") mediaRecorderRef.current.stop();
 
     if (mode === "jump") {
       const jumpMetrics = summarizeJumpSet(traceRef.current);
@@ -1084,13 +1118,33 @@ export function BarTrackerDialog({
                 Retry
               </Button>
               <Button
-                onClick={() => {
-                  if (result) onCapture(result);
-                  onOpenChange(false);
+                disabled={savingVideo}
+                onClick={async () => {
+                  if (!result) return;
+                  if (recordVideo && recordedBlobRef.current) {
+                    setSavingVideo(true);
+                    try {
+                      const formData = new FormData();
+                      formData.append("video", recordedBlobRef.current, "form-check.webm");
+                      const res = await apiRequest("POST", "/api/athlete/form-video", formData);
+                      const { url } = await res.json();
+                      onCapture(result, url);
+                      onOpenChange(false);
+                    } catch {
+                      toast.error("Couldn't upload the video -- analytics are still saved below.");
+                      onCapture(result);
+                      onOpenChange(false);
+                    } finally {
+                      setSavingVideo(false);
+                    }
+                  } else {
+                    onCapture(result);
+                    onOpenChange(false);
+                  }
                 }}
               >
                 <Check className="h-4 w-4" />
-                Use This Data
+                {savingVideo ? "Saving…" : "Use This Data"}
               </Button>
             </>
           )}

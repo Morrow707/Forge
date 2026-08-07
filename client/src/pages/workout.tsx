@@ -64,6 +64,7 @@ import {
   GitCompare,
   Share2,
   Headphones,
+  Lock,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import type { PublicUser } from "@shared/schema";
@@ -1518,6 +1519,15 @@ function ExerciseLogContent({
   // stacked in matched pairs on either side of anything.
   const usesPlateCalc =
     item.weightMode === "numeric" && (item.equipment === "Barbell" || item.equipment === "Trap Bar");
+  // Whenever a coach wants a video AND the exercise also has camera
+  // analytics turned on, recording the video always runs the analytics too
+  // -- one capture, not two separate ones for the same set (see the merged
+  // "Record & Analyze" button below, which drives BarTrackerDialog's
+  // recordVideo prop instead of a second, standalone FormVideoRecorderDialog
+  // flow). videoCheckEnabled with trackingLevel "none" still falls back to
+  // that standalone flow, unchanged.
+  const videoRequired = item.videoCheckEnabled && videoCheckMode !== "off";
+  const mergedTracking = item.trackingLevel !== "none" && videoRequired;
   // Tracks which sets currently hold a weight the athlete never actually
   // typed -- only a value carried forward by handleWeightChange below.
   // Lets a later edit keep overwriting that whole inherited chain (see
@@ -1531,6 +1541,18 @@ function ExerciseLogContent({
   // the athlete has deliberately put their own number into -- so editing
   // set 2 from 135 to 185 pushes 185 into sets 3+ (still inherited), but
   // never touches a set 4 the athlete already set to 225 by hand.
+  // Shared by the three "Use" shortcut buttons below (1RM/progression/last-
+  // performance suggestions) -- they bulk-fill every set at once, so they
+  // have to respect the same video-first gate handleWeightChange's Input
+  // enforces one set at a time, or a coach's video requirement would be
+  // trivially bypassed by tapping "Use" instead of typing.
+  function fillSuggestedWeight(value: string) {
+    for (const set of item.sets) {
+      if (videoRequired && !set.formCheckVideoUrl) continue;
+      onUpdateSet(set.setNumber, { weight: value });
+    }
+  }
+
   function handleWeightChange(setNumber: number, value: string) {
     onUpdateSet(setNumber, { weight: value });
     autoFilledWeightSetsRef.current.delete(setNumber);
@@ -1743,10 +1765,7 @@ function ExerciseLogContent({
               </span>
               <button
                 type="button"
-                onClick={() => {
-                  const value = String(suggestedFromOneRm);
-                  for (const set of item.sets) onUpdateSet(set.setNumber, { weight: value });
-                }}
+                onClick={() => fillSuggestedWeight(String(suggestedFromOneRm))}
                 className="font-semibold text-primary hover:underline"
               >
                 Use
@@ -1762,10 +1781,7 @@ function ExerciseLogContent({
               </span>
               <button
                 type="button"
-                onClick={() => {
-                  const value = String(suggestedFromProgression);
-                  for (const set of item.sets) onUpdateSet(set.setNumber, { weight: value });
-                }}
+                onClick={() => fillSuggestedWeight(String(suggestedFromProgression))}
                 className="font-semibold text-primary hover:underline"
               >
                 Use
@@ -1782,10 +1798,9 @@ function ExerciseLogContent({
                 item.weightMode === "numeric" && (
                   <button
                     type="button"
-                    onClick={() => {
-                      const value = String(item.lastPerformance!.suggestion!.suggestedWeight);
-                      for (const set of item.sets) onUpdateSet(set.setNumber, { weight: value });
-                    }}
+                    onClick={() =>
+                      fillSuggestedWeight(String(item.lastPerformance!.suggestion!.suggestedWeight))
+                    }
                     className="font-semibold text-primary hover:underline"
                   >
                     Use
@@ -1805,13 +1820,13 @@ function ExerciseLogContent({
         <p className="text-xs text-muted-foreground">{item.instructions}</p>
       )}
 
-      {item.videoCheckEnabled && videoCheckMode !== "off" && (
+      {videoRequired && (
         <div className="flex items-center justify-between gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-2.5 py-2">
           <span className="flex items-center gap-1.5 text-xs font-semibold text-amber-500">
             {videoCheckMode === "ai" && <Sparkles className="h-3.5 w-3.5 shrink-0" />}
             {videoCheckMode === "ai"
-              ? "Record any set below for full AI analytics -- velocity, bar path, and form"
-              : "Your coach wants a video -- record any set below for full analytics"}
+              ? "Record each set for full AI analytics -- velocity, bar path, and form. Weight unlocks once the video's in."
+              : "Your coach wants a video -- record each set below. Weight unlocks once the video's in."}
           </span>
           {flaggedSetVideos.length > 1 && (
             <Button size="sm" variant="secondary" onClick={() => setCompareOpen(true)}>
@@ -1884,6 +1899,13 @@ function ExerciseLogContent({
               set.peakVelocityMps != null || set.barPathDeviationCm != null || set.jumpHeightCm != null;
             const historyMatch = findHistoryForReps(item.setHistory, set.reps);
             const isPR = complete && isRepCountPR(item.setHistory, set.reps, item.weightMode, set.weight);
+            // Safety gate, not a UX nicety: with a video required, the
+            // number can't be typed in until the proof it happened exists --
+            // opens the instant the video finishes uploading (formCheckVideoUrl
+            // lands via the same onUpdateSet call that saves the capture), no
+            // separate confirmation step, so there's no CARA-relevant dead
+            // time between recording and logging.
+            const videoGateOpen = !videoRequired || !!set.formCheckVideoUrl;
             return (
               <div key={set.setNumber}>
                 <div
@@ -1908,7 +1930,12 @@ function ExerciseLogContent({
                           key="weight"
                           type="number"
                           inputMode="decimal"
-                          placeholder={historyMatch?.weight || item.lastPerformance?.weight || "0"}
+                          disabled={!videoGateOpen}
+                          placeholder={
+                            videoGateOpen
+                              ? historyMatch?.weight || item.lastPerformance?.weight || "0"
+                              : "Record video first"
+                          }
                           value={set.weight}
                           onChange={(e) => handleWeightChange(set.setNumber, e.target.value)}
                           className="h-9 text-sm"
@@ -1916,7 +1943,8 @@ function ExerciseLogContent({
                       ) : col.type === "band" ? (
                         <Input
                           key="band"
-                          placeholder="e.g. Green"
+                          disabled={!videoGateOpen}
+                          placeholder={videoGateOpen ? "e.g. Green" : "Record video first"}
                           value={set.bandColor}
                           onChange={(e) => onUpdateSet(set.setNumber, { bandColor: e.target.value })}
                           className="h-9 text-sm"
@@ -1926,7 +1954,8 @@ function ExerciseLogContent({
                           key="box"
                           type="number"
                           inputMode="decimal"
-                          placeholder="Height"
+                          disabled={!videoGateOpen}
+                          placeholder={videoGateOpen ? "Height" : "Record video first"}
                           value={set.boxHeight}
                           onChange={(e) => onUpdateSet(set.setNumber, { boxHeight: e.target.value })}
                           className="h-9 text-sm"
@@ -1957,9 +1986,7 @@ function ExerciseLogContent({
                     Last @ {set.reps} reps: {formatLoad(historyMatch)}
                   </p>
                 )}
-                {(item.trackingLevel !== "none" ||
-                  (item.videoCheckEnabled && videoCheckMode !== "off") ||
-                  usesPlateCalc) && (
+                {(item.trackingLevel !== "none" || videoRequired || usesPlateCalc) && (
                   <div className="mt-1 flex flex-wrap items-center gap-1.5">
                     {item.trackingLevel !== "none" && (
                       <button
@@ -1981,10 +2008,16 @@ function ExerciseLogContent({
                               : `Path ${set.barPathDeviationCm} cm — retake`
                           : item.trackingLevel === "jump"
                             ? "Track this jump"
-                            : "Track this set"}
+                            : mergedTracking
+                              ? "Record & Analyze"
+                              : "Track this set"}
                       </button>
                     )}
-                    {item.videoCheckEnabled && videoCheckMode !== "off" && (
+                    {/* When trackingLevel also applies, the button above already
+                        records the video (see BarTrackerDialog's recordVideo
+                        prop below) -- a second, separate video button here
+                        would just be the same set recorded twice. */}
+                    {videoRequired && !mergedTracking && (
                       <button
                         type="button"
                         onClick={() =>
@@ -2008,6 +2041,26 @@ function ExerciseLogContent({
                               : "View video"
                           : "Record & Analyze"}
                       </button>
+                    )}
+                    {videoRequired && mergedTracking && set.formCheckVideoUrl && (
+                      <button
+                        type="button"
+                        onClick={() => setPreviewSetNumber(set.setNumber)}
+                        className="flex items-center gap-1.5 rounded-full border border-success/40 bg-success/10 px-2 py-0.5 text-[10px] font-semibold text-success"
+                      >
+                        <Video className="h-3 w-3" />
+                        {set.formCheckFlag === "best"
+                          ? "Best set video"
+                          : set.formCheckFlag === "worst"
+                            ? "Worst set video"
+                            : "View video"}
+                      </button>
+                    )}
+                    {!videoGateOpen && (
+                      <span className="flex items-center gap-1 text-[10px] font-semibold text-amber-500">
+                        <Lock className="h-3 w-3" />
+                        Record video to unlock weight
+                      </span>
                     )}
                     {usesPlateCalc && (
                       <button
@@ -2076,8 +2129,10 @@ function ExerciseLogContent({
               laterality={item.laterality}
               targetReps={parseTargetReps(item.prescribedReps)}
               loadKg={loadKg}
-              onCapture={(metrics: RepMetrics | JumpSetMetrics) => {
+              recordVideo={mergedTracking}
+              onCapture={(metrics: RepMetrics | JumpSetMetrics, videoUrl?: string) => {
                 if (trackingSet == null) return;
+                const videoPatch = videoUrl ? { formCheckVideoUrl: videoUrl } : {};
                 if ("bestJumpHeightCm" in metrics) {
                   onUpdateSet(
                     trackingSet,
@@ -2089,41 +2144,50 @@ function ExerciseLogContent({
                       jumpBreakdown: metrics.repBreakdown,
                       barPathTrace: metrics.pathTrace,
                       formFaults: metrics.formFaults,
+                      ...videoPatch,
                     },
                     // A tracked capture is expensive to redo -- save it the
                     // instant it lands rather than risk losing it to a
                     // force-close inside the normal autosave debounce window.
                     { immediate: true },
                   );
-                  return;
+                } else {
+                  onUpdateSet(
+                    trackingSet,
+                    {
+                      peakVelocityMps: metrics.peakVelocityMps,
+                      meanVelocityMps: metrics.meanVelocityMps,
+                      concentricSeconds: metrics.concentricSeconds,
+                      eccentricSeconds: metrics.eccentricSeconds,
+                      barPathDeviationCm: metrics.barPathDeviationCm,
+                      barPathTrace: metrics.barPathTrace,
+                      formFaults: metrics.formFaults,
+                      repBreakdown: metrics.repBreakdown,
+                      armPathTrace: metrics.armPathTrace ?? null,
+                      peakPowerWatts: metrics.peakPowerWatts,
+                      meanPowerWatts: metrics.meanPowerWatts,
+                      eccentricMeanVelocityMps: metrics.eccentricMeanVelocityMps,
+                      romCm: metrics.romCm,
+                      velocityLossPercent: metrics.velocityLossPercent,
+                      legDriveAsymmetry: metrics.legDriveAsymmetry ?? null,
+                      ...videoPatch,
+                    },
+                    { immediate: true },
+                  );
                 }
-                onUpdateSet(
-                  trackingSet,
-                  {
-                    peakVelocityMps: metrics.peakVelocityMps,
-                    meanVelocityMps: metrics.meanVelocityMps,
-                    concentricSeconds: metrics.concentricSeconds,
-                    eccentricSeconds: metrics.eccentricSeconds,
-                    barPathDeviationCm: metrics.barPathDeviationCm,
-                    barPathTrace: metrics.barPathTrace,
-                    formFaults: metrics.formFaults,
-                    repBreakdown: metrics.repBreakdown,
-                    armPathTrace: metrics.armPathTrace ?? null,
-                    peakPowerWatts: metrics.peakPowerWatts,
-                    meanPowerWatts: metrics.meanPowerWatts,
-                    eccentricMeanVelocityMps: metrics.eccentricMeanVelocityMps,
-                    romCm: metrics.romCm,
-                    velocityLossPercent: metrics.velocityLossPercent,
-                    legDriveAsymmetry: metrics.legDriveAsymmetry ?? null,
-                  },
-                  { immediate: true },
-                );
+                // Same downstream handling FormVideoRecorderDialog's onSaved
+                // does below -- a merged capture's video is just as much a
+                // real form-check clip as a standalone one.
+                if (videoUrl) {
+                  if (videoCheckMode === "ai") aiFormCheckMutation.mutate({ setNumber: trackingSet, videoUrl });
+                  else postFormVideoMutation.mutate({ setNumber: trackingSet, videoUrl });
+                }
               }}
             />
           );
         })()}
 
-      {item.videoCheckEnabled && videoCheckMode !== "off" && (
+      {videoRequired && !mergedTracking && (
         <FormVideoRecorderDialog
           open={recordingSetNumber !== null}
           onOpenChange={(open) => !open && setRecordingSetNumber(null)}
