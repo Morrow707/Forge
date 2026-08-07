@@ -1,26 +1,27 @@
 import { useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-import { ListChecks, Dumbbell, Target } from "lucide-react";
+import { ListChecks, Dumbbell, ClipboardList, Target } from "lucide-react";
 
 /** Tab strip shown under the page title on the coach's Programs, Exercise
- * Bank, and Skill Bank list pages -- all routes are unchanged, this just
- * lets the coach flip between them without going back out to the top nav,
- * since they're all filed under one "Library" tab there now. Skill Bank
- * uses teal (its own color, see exercise-colors.ts) so it reads as visually
- * distinct from the strength-side tabs even in this shared strip -- it's a
- * wholly separate system underneath, not a filtered view of the others. */
+ * Bank, Skill Programs, and Skill Bank list pages -- all routes are
+ * unchanged, this just lets the coach flip between them without going back
+ * out to the top nav, since they're all filed under one "Library" tab
+ * there now. The two skill tabs use teal (their own color, see
+ * exercise-colors.ts) so they read as visually distinct from the
+ * strength-side tabs even in this shared strip -- Skills is a wholly
+ * separate system underneath, not a filtered view of the others. */
 export function LibraryTabs({
   active,
   programsHref,
   exercisesHref,
-  skillsHref,
+  skillProgramsHref,
+  skillBankHref,
 }: {
-  active: "programs" | "exercises" | "skills";
+  active: "programs" | "exercises" | "skill-programs" | "skill-bank";
   programsHref: string;
   exercisesHref: string;
-  /** Omitted until Skill Programs (Batch 2) exists too -- only the Skill
-   * Bank tab is wired up for now. */
-  skillsHref?: string;
+  skillProgramsHref: string;
+  skillBankHref: string;
 }) {
   const [, navigate] = useLocation();
 
@@ -31,7 +32,7 @@ export function LibraryTabs({
     );
 
   return (
-    <div className="flex gap-1">
+    <div className="flex flex-wrap gap-1">
       <button type="button" onClick={() => navigate(programsHref)} className={tabClass(active === "programs")}>
         <ListChecks className="h-4 w-4" />
         Programs
@@ -40,16 +41,22 @@ export function LibraryTabs({
         <Dumbbell className="h-4 w-4" />
         Exercise Bank
       </button>
-      {skillsHref && (
-        <button
-          type="button"
-          onClick={() => navigate(skillsHref)}
-          className={tabClass(active === "skills", "bg-teal-500 text-white")}
-        >
-          <Target className="h-4 w-4" />
-          Skill Bank
-        </button>
-      )}
+      <button
+        type="button"
+        onClick={() => navigate(skillProgramsHref)}
+        className={tabClass(active === "skill-programs", "bg-teal-500 text-white")}
+      >
+        <ClipboardList className="h-4 w-4" />
+        Skill Programs
+      </button>
+      <button
+        type="button"
+        onClick={() => navigate(skillBankHref)}
+        className={tabClass(active === "skill-bank", "bg-teal-500 text-white")}
+      >
+        <Target className="h-4 w-4" />
+        Skill Bank
+      </button>
     </div>
   );
 }

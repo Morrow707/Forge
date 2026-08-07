@@ -270,6 +270,60 @@ CREATE TABLE IF NOT EXISTS "skill_exercises" (
 );
 CREATE INDEX IF NOT EXISTS "skill_exercises_coach_idx" ON "skill_exercises" ("coach_id");
 
+-- Mirrors programs -> program_weeks -> program_days -> program_exercises ->
+-- assignments, but referencing skill_exercises and dropping the
+-- strength-specific concepts (blocks/phases, supersets, tracking level,
+-- video-check, correctives) that don't apply to a skill drill.
+CREATE TABLE IF NOT EXISTS "skill_programs" (
+  "id" serial PRIMARY KEY,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "name" text NOT NULL,
+  "description" text,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS "skill_program_weeks" (
+  "id" serial PRIMARY KEY,
+  "program_id" integer NOT NULL REFERENCES "skill_programs"("id") ON DELETE CASCADE,
+  "week_number" integer NOT NULL,
+  "name" text
+);
+CREATE INDEX IF NOT EXISTS "skill_program_weeks_program_idx" ON "skill_program_weeks" ("program_id");
+
+CREATE TABLE IF NOT EXISTS "skill_program_days" (
+  "id" serial PRIMARY KEY,
+  "week_id" integer NOT NULL REFERENCES "skill_program_weeks"("id") ON DELETE CASCADE,
+  "day_number" integer NOT NULL,
+  "title" text NOT NULL DEFAULT 'Skill Session',
+  "is_rest_day" boolean NOT NULL DEFAULT false
+);
+CREATE INDEX IF NOT EXISTS "skill_program_days_week_idx" ON "skill_program_days" ("week_id");
+
+CREATE TABLE IF NOT EXISTS "skill_program_exercises" (
+  "id" serial PRIMARY KEY,
+  "day_id" integer NOT NULL REFERENCES "skill_program_days"("id") ON DELETE CASCADE,
+  "skill_exercise_id" integer NOT NULL REFERENCES "skill_exercises"("id") ON DELETE CASCADE,
+  "order_index" integer NOT NULL DEFAULT 0,
+  "sets" integer NOT NULL DEFAULT 3,
+  "reps" text NOT NULL DEFAULT '10',
+  "rest_seconds" integer,
+  "notes" text
+);
+CREATE INDEX IF NOT EXISTS "skill_program_exercises_day_idx" ON "skill_program_exercises" ("day_id");
+
+CREATE TABLE IF NOT EXISTS "skill_assignments" (
+  "id" serial PRIMARY KEY,
+  "skill_program_id" integer NOT NULL REFERENCES "skill_programs"("id") ON DELETE CASCADE,
+  "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "start_date" date NOT NULL,
+  "duration_weeks" integer NOT NULL DEFAULT 1,
+  "date_overrides" json,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "skill_assignments_athlete_idx" ON "skill_assignments" ("athlete_id");
+CREATE INDEX IF NOT EXISTS "skill_assignments_coach_idx" ON "skill_assignments" ("coach_id");
+
 DO $$ BEGIN
   CREATE TYPE "exercise_submission_status" AS ENUM ('pending', 'approved', 'rejected');
 EXCEPTION WHEN duplicate_object THEN null; END $$;

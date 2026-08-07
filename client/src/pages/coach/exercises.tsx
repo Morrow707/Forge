@@ -13,7 +13,8 @@ export default function CoachExercises() {
           active="exercises"
           programsHref="/coach/programs"
           exercisesHref="/coach/exercises"
-          skillsHref="/coach/skills"
+          skillProgramsHref="/coach/skill-programs"
+          skillBankHref="/coach/skills"
         />
       }
     />
