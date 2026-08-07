@@ -20,7 +20,7 @@ import type { SkillExercise } from "@shared/schema";
 
 type RosterEntry = { id: number; name: string; email: string };
 
-type SkillTrackingLevel = "none" | "sprint";
+type SkillTrackingLevel = "none" | "sprint" | "mechanics";
 
 type LocalExercise = {
   key: string;
@@ -93,8 +93,8 @@ function stateFromProgram(program: any) {
  * apply to a drill: no training blocks, no supersets, no drag reordering
  * (simple up/down buttons instead -- skill sessions are typically short
  * lists), no AI chat. The one camera-tracking control it does have is a
- * simple sprint on/off toggle -- skills only ever has one trackable
- * signal so far, unlike the strength builder's category-aware levels. */
+ * flat 3-way toggle (none/sprint/mechanics) -- skills only ever has two
+ * trackable signals, unlike the strength builder's category-aware levels. */
 export function SkillProgramBuilderPage({
   apiBase,
   routeBase,
@@ -512,9 +512,16 @@ function DayCard({
   );
 }
 
-// Simplified sibling of VideoTrackingToggle -- skills only ever has one
-// camera signal to turn on ("sprint"), so there's no category-based branching
-// to a different "on" level like the strength builder's jump/full split.
+// Simplified sibling of VideoTrackingToggle -- skills only ever has two
+// camera signals to turn on ("sprint" or "mechanics"), so there's no
+// category-based branching to a different "on" level like the strength
+// builder's jump/full split, just a 3-way choice.
+const TRACKING_OPTIONS: { value: SkillTrackingLevel; label: string }[] = [
+  { value: "none", label: "No Tracking" },
+  { value: "sprint", label: "Sprint Timing" },
+  { value: "mechanics", label: "Mechanics" },
+];
+
 function SprintTrackingToggle({
   trackingLevel,
   onChange,
@@ -522,32 +529,30 @@ function SprintTrackingToggle({
   trackingLevel: SkillTrackingLevel;
   onChange: (trackingLevel: SkillTrackingLevel) => void;
 }) {
-  const isOn = trackingLevel === "sprint";
   return (
     <div className="mt-1.5 flex items-center gap-1.5">
       <Timer className="h-3.5 w-3.5 text-muted-foreground" />
-      <button
-        type="button"
-        aria-pressed={!isOn}
-        onClick={() => onChange("none")}
-        className={cn(
-          "rounded px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide",
-          !isOn ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground",
-        )}
-      >
-        No Timing
-      </button>
-      <button
-        type="button"
-        aria-pressed={isOn}
-        onClick={() => onChange("sprint")}
-        className={cn(
-          "rounded px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide",
-          isOn ? "bg-teal-900/60 text-teal-100" : "text-muted-foreground hover:text-foreground",
-        )}
-      >
-        Sprint Timing
-      </button>
+      {TRACKING_OPTIONS.map((opt) => {
+        const isActive = trackingLevel === opt.value;
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            aria-pressed={isActive}
+            onClick={() => onChange(opt.value)}
+            className={cn(
+              "rounded px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide",
+              isActive
+                ? opt.value === "none"
+                  ? "bg-muted text-foreground"
+                  : "bg-teal-900/60 text-teal-100"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {opt.label}
+          </button>
+        );
+      })}
     </div>
   );
 }

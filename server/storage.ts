@@ -493,7 +493,7 @@ type MergeableDay = {
     notes: string | null;
     supersetGroup: string | null;
     restAfterGroupOnly: boolean;
-    trackingLevel?: "none" | "bar_path" | "full" | "jump" | "sprint";
+    trackingLevel?: "none" | "bar_path" | "full" | "jump" | "sprint" | "mechanics";
     videoCheckEnabled: boolean;
   }[];
 };
@@ -518,7 +518,7 @@ type WeekPatch = {
       notes?: string;
       supersetGroup?: string;
       restAfterGroupOnly?: boolean;
-      trackingLevel?: "none" | "bar_path" | "full" | "jump" | "sprint";
+      trackingLevel?: "none" | "bar_path" | "full" | "jump" | "sprint" | "mechanics";
       videoCheckEnabled?: boolean;
     }[];
   }[];
@@ -3340,6 +3340,12 @@ Athlete's data:
         distanceYards: input.distanceYards ?? null,
         cameraAngle: input.cameraAngle ?? null,
         faults: input.faults ?? null,
+        hipShoulderSeparationDeg: input.hipShoulderSeparationDeg ?? null,
+        weightTransferPct: input.weightTransferPct ?? null,
+        hipRotationDeg: input.hipRotationDeg ?? null,
+        armSlotDeg: input.armSlotDeg ?? null,
+        armSlotLabel: input.armSlotLabel ?? null,
+        wellSequenced: input.wellSequenced ?? null,
       })
       .returning();
     return row;

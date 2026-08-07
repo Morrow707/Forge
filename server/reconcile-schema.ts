@@ -43,10 +43,12 @@ DO $$ BEGIN
   CREATE TYPE "tracking_level" AS ENUM ('none', 'bar_path', 'full');
 EXCEPTION WHEN duplicate_object THEN null; END $$;
 ALTER TYPE "tracking_level" ADD VALUE IF NOT EXISTS 'jump';
--- 'sprint' is Skills' own signal (see the comment on trackingLevelEnum in
--- shared/schema.ts) -- shares this enum type as a vocabulary convenience,
--- skill_program_exercises stays a wholly separate table either way.
+-- 'sprint' and 'mechanics' are Skills' own signals (see the comment on
+-- trackingLevelEnum in shared/schema.ts) -- share this enum type as a
+-- vocabulary convenience, skill_program_exercises stays a wholly separate
+-- table either way.
 ALTER TYPE "tracking_level" ADD VALUE IF NOT EXISTS 'sprint';
+ALTER TYPE "tracking_level" ADD VALUE IF NOT EXISTS 'mechanics';
 
 DO $$ BEGIN
   CREATE TYPE "health_status" AS ENUM ('healthy', 'hurt');
@@ -341,8 +343,20 @@ CREATE TABLE IF NOT EXISTS "skill_session_logs" (
   "distance_yards" real,
   "camera_angle" text,
   "faults" json,
+  "hip_shoulder_separation_deg" real,
+  "weight_transfer_pct" real,
+  "hip_rotation_deg" real,
+  "arm_slot_deg" real,
+  "arm_slot_label" text,
+  "well_sequenced" boolean,
   "created_at" timestamp NOT NULL DEFAULT now()
 );
+ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "hip_shoulder_separation_deg" real;
+ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "weight_transfer_pct" real;
+ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "hip_rotation_deg" real;
+ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "arm_slot_deg" real;
+ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "arm_slot_label" text;
+ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "well_sequenced" boolean;
 CREATE INDEX IF NOT EXISTS "skill_session_logs_athlete_idx" ON "skill_session_logs" ("athlete_id");
 CREATE INDEX IF NOT EXISTS "skill_session_logs_assignment_idx" ON "skill_session_logs" ("skill_assignment_id");
 
