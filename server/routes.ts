@@ -1945,6 +1945,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.status(201).json(result);
   });
 
+  app.get("/api/coach/assignments/:id", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const assignment = await storage.getAssignmentForCoach(user.id, id);
+    if (!assignment) return res.status(404).json({ message: "Assignment not found" });
+    res.json(assignment);
+  });
+
   app.patch("/api/coach/assignments/:id", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     const id = Number(req.params.id);

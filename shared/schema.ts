@@ -2221,7 +2221,8 @@ export const insertAssignmentSchema = z.object({
 });
 
 export const updateAssignmentSchema = z.object({
-  correctivesEnabled: z.boolean(),
+  correctivesEnabled: z.boolean().optional(),
+  durationWeeks: z.number().int().min(1).max(12).optional(),
 });
 
 export const updateProgramDaySchema = z.object({
