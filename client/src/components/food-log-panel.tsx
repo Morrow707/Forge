@@ -65,6 +65,13 @@ type FoodLogResponse = {
     fatG: number;
     fiberG: number;
     sodiumMg: number;
+    calciumMg: number;
+    ironMg: number;
+    vitaminDMcg: number;
+    potassiumMg: number;
+    magnesiumMg: number;
+    vitaminB12Mcg: number;
+    zincMg: number;
   };
 };
 
@@ -73,7 +80,26 @@ type Targets = {
   proteinG: number | null;
   carbsG: number | null;
   fatG: number | null;
+  calciumMg: number | null;
+  ironMg: number | null;
+  vitaminDMcg: number | null;
+  potassiumMg: number | null;
+  magnesiumMg: number | null;
+  sodiumMg: number | null;
+  vitaminB12Mcg: number | null;
+  zincMg: number | null;
 } | null;
+
+const MICRO_TARGET_FIELDS = [
+  ["calciumMg", "Calcium", "mg"],
+  ["ironMg", "Iron", "mg"],
+  ["vitaminDMcg", "Vitamin D", "mcg"],
+  ["potassiumMg", "Potassium", "mg"],
+  ["magnesiumMg", "Magnesium", "mg"],
+  ["sodiumMg", "Sodium", "mg"],
+  ["vitaminB12Mcg", "Vitamin B12", "mcg"],
+  ["zincMg", "Zinc", "mg"],
+] as const;
 
 function ProgressBar({ label, value, target, unit }: { label: string; value: number; target: number | null; unit: string }) {
   const pct = target ? Math.min(100, Math.round((value / target) * 100)) : null;
@@ -121,6 +147,7 @@ export function FoodLogPanel({
   const [scannerEverOpened, setScannerEverOpened] = useState(false);
   const [expandedMicros, setExpandedMicros] = useState<Set<number>>(new Set());
   const [editingEntry, setEditingEntry] = useState<FoodLogEntry | null>(null);
+  const [dayMicrosOpen, setDayMicrosOpen] = useState(false);
 
   const queryKey = [fetchUrl, date];
   const { data, isLoading } = useQuery<FoodLogResponse>({
@@ -141,8 +168,28 @@ export function FoodLogPanel({
     setEditingEntry(null);
   }
 
-  const totals = data?.totals ?? { caloriesKcal: 0, proteinG: 0, carbsG: 0, fatG: 0, fiberG: 0, sodiumMg: 0 };
+  const totals = data?.totals ?? {
+    caloriesKcal: 0,
+    proteinG: 0,
+    carbsG: 0,
+    fatG: 0,
+    fiberG: 0,
+    sodiumMg: 0,
+    calciumMg: 0,
+    ironMg: 0,
+    vitaminDMcg: 0,
+    potassiumMg: 0,
+    magnesiumMg: 0,
+    vitaminB12Mcg: 0,
+    zincMg: 0,
+  };
   const isToday = date === new Date().toISOString().slice(0, 10);
+  // Secondary to the macros above -- only worth a row (and only shown
+  // collapsed) when there's actually something to compare: a target set for
+  // it, or some of it logged today.
+  const relevantDayMicros = MICRO_TARGET_FIELDS.filter(
+    ([key]) => (targets?.[key] ?? null) != null || totals[key] > 0,
+  );
 
   return (
     <div className="space-y-4 border-t border-border pt-4">
@@ -186,6 +233,35 @@ export function FoodLogPanel({
             <ProgressBar label="Carbs" value={totals.carbsG} target={targets?.carbsG ?? null} unit="g" />
             <ProgressBar label="Fat" value={totals.fatG} target={targets?.fatG ?? null} unit="g" />
           </div>
+
+          {relevantDayMicros.length > 0 && (
+            <div>
+              <button
+                type="button"
+                onClick={() => setDayMicrosOpen((v) => !v)}
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+              >
+                <ChevronDown className={`h-3 w-3 transition-transform ${dayMicrosOpen ? "rotate-180" : ""}`} />
+                Micros
+              </button>
+              {dayMicrosOpen && (
+                <div className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-0.5 text-xs text-muted-foreground sm:grid-cols-4">
+                  {relevantDayMicros.map(([key, label, unit]) => {
+                    const target = targets?.[key] ?? null;
+                    return (
+                      <div key={key} className="flex justify-between">
+                        <span>{label}</span>
+                        <span>
+                          {Math.round(totals[key])}
+                          {target ? `/${target}` : ""} {unit}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="space-y-1.5">
             {!data?.entries.length && (

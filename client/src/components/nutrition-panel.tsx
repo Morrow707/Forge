@@ -281,6 +281,14 @@ export function NutritionPanel({
                   proteinG: data.proteinG,
                   carbsG: data.carbsG,
                   fatG: data.fatG,
+                  calciumMg: data.calciumMg,
+                  ironMg: data.ironMg,
+                  vitaminDMcg: data.vitaminDMcg,
+                  potassiumMg: data.potassiumMg,
+                  magnesiumMg: data.magnesiumMg,
+                  sodiumMg: data.sodiumMg,
+                  vitaminB12Mcg: data.vitaminB12Mcg,
+                  zincMg: data.zincMg,
                 }
               : null
           }
