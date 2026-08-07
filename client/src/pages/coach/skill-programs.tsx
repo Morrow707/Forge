@@ -1,16 +1,16 @@
-import { SkillBankPage } from "@/pages/skill-bank";
+import { SkillProgramListPage } from "@/pages/skill-program-list";
 import { LibraryTabs } from "@/components/library-tabs";
 
-export default function CoachSkills() {
+export default function CoachSkillPrograms() {
   return (
-    <SkillBankPage
+    <SkillProgramListPage
       apiBase="/api/coach"
-      routeBase="/coach/skills"
-      title="Skill Bank"
-      emptyStateText="Your Skill Bank is empty. Add your first drill to start building skill programs."
+      routeBase="/coach/skill-programs"
+      title="Skill Programs"
+      emptyStateText="No skill programs yet. Build one to start assigning skill work to athletes."
       libraryTabs={
         <LibraryTabs
-          active="skill-bank"
+          active="skill-programs"
           programsHref="/coach/programs"
           exercisesHref="/coach/exercises"
           skillProgramsHref="/coach/skill-programs"

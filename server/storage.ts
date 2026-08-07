@@ -9,6 +9,11 @@ import {
   teamGameDays,
   exercises,
   skillExercises,
+  skillPrograms,
+  skillProgramWeeks,
+  skillProgramDays,
+  skillProgramExercises,
+  skillAssignments,
   programs,
   programBlocks,
   programWeeks,
@@ -48,6 +53,7 @@ import {
 } from "@shared/schema";
 import type {
   ProgramStructureInput,
+  SkillProgramStructureInput,
   SubmitWorkoutLogInput,
   UpdateProgramDayInput,
   UpdateCorrectivesInput,
@@ -3079,6 +3085,240 @@ Athlete's data:
 
   async deleteSkillExercise(id: number) {
     await db.delete(skillExercises).where(eq(skillExercises.id, id));
+  },
+
+  // ---------- Skill Programs (fully separate from Programs) ----------
+  // Mirrors the Programs block below it (visible-to-coach, full detail,
+  // create/update-with-structure, delete, assign) but against its own set
+  // of tables -- see the comment on skillPrograms in shared/schema.ts.
+  async getVisibleSkillProgramsForCoach(coachId: number) {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    const admins = await db.query.users.findMany({ where: eq(users.role, "admin") });
+    const ownerIds = Array.from(new Set([...coachIds, ...admins.map((a) => a.id)]));
+    const progs = await db.query.skillPrograms.findMany({
+      where: inArray(skillPrograms.coachId, ownerIds),
+      with: {
+        weeks: { with: { days: true } },
+        assignments: true,
+        coach: true,
+      },
+      orderBy: desc(skillPrograms.createdAt),
+    });
+    return progs.map((p) => {
+      const { weeks, assignments, ...ownership } = this.withOwnership(p, coachId, coachIds);
+      return {
+        ...ownership,
+        weekCount: weeks.length,
+        dayCount: weeks.reduce((acc, w) => acc + w.days.length, 0),
+        assignedAthleteCount: new Set(assignments.map((a) => a.athleteId)).size,
+      };
+    });
+  },
+
+  async getSkillProgramFull(id: number) {
+    return db.query.skillPrograms.findFirst({
+      where: eq(skillPrograms.id, id),
+      with: {
+        weeks: {
+          orderBy: asc(skillProgramWeeks.weekNumber),
+          with: {
+            days: {
+              orderBy: asc(skillProgramDays.dayNumber),
+              with: {
+                exercises: {
+                  orderBy: asc(skillProgramExercises.orderIndex),
+                  with: { skillExercise: true },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+  },
+
+  async getVisibleSkillProgramDetail(id: number, requestingUserId: number) {
+    const program = await db.query.skillPrograms.findFirst({
+      where: eq(skillPrograms.id, id),
+      with: {
+        coach: true,
+        weeks: {
+          orderBy: asc(skillProgramWeeks.weekNumber),
+          with: {
+            days: {
+              orderBy: asc(skillProgramDays.dayNumber),
+              with: {
+                exercises: {
+                  orderBy: asc(skillProgramExercises.orderIndex),
+                  with: { skillExercise: true },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!program) return null;
+    const isForgeOfficial = program.coach.role === "admin";
+    const coachIds = await this.getEffectiveCoachIds(requestingUserId);
+    if (!coachIds.includes(program.coachId) && !isForgeOfficial) return null;
+    return this.withOwnership(program, requestingUserId, coachIds);
+  },
+
+  async getSkillProgramIfUsableByCoach(coachId: number, programId: number) {
+    const program = await db.query.skillPrograms.findFirst({
+      where: eq(skillPrograms.id, programId),
+      with: { coach: true },
+    });
+    if (!program) return null;
+    const isForgeOfficial = program.coach.role === "admin";
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    if (!coachIds.includes(program.coachId) && !isForgeOfficial) return null;
+    return program;
+  },
+
+  async createSkillProgramWithStructure(coachId: number, structure: SkillProgramStructureInput) {
+    return db.transaction(async (tx) => {
+      const [program] = await tx
+        .insert(skillPrograms)
+        .values({
+          coachId,
+          name: structure.name,
+          description: structure.description ?? null,
+        })
+        .returning();
+
+      for (const week of structure.weeks) {
+        const [weekRow] = await tx
+          .insert(skillProgramWeeks)
+          .values({
+            programId: program.id,
+            weekNumber: week.weekNumber,
+            name: week.name ?? null,
+          })
+          .returning();
+
+        for (const day of week.days) {
+          const [dayRow] = await tx
+            .insert(skillProgramDays)
+            .values({
+              weekId: weekRow.id,
+              dayNumber: day.dayNumber,
+              title: day.title,
+              isRestDay: day.isRestDay,
+            })
+            .returning();
+
+          for (const ex of day.exercises) {
+            await tx.insert(skillProgramExercises).values({
+              dayId: dayRow.id,
+              skillExerciseId: ex.skillExerciseId,
+              orderIndex: ex.orderIndex,
+              sets: ex.sets,
+              reps: ex.reps,
+              restSeconds: ex.restSeconds ?? null,
+              notes: ex.notes ?? null,
+            });
+          }
+        }
+      }
+
+      return program;
+    });
+  },
+
+  async updateSkillProgramStructure(programId: number, structure: SkillProgramStructureInput) {
+    return db.transaction(async (tx) => {
+      await tx
+        .update(skillPrograms)
+        .set({
+          name: structure.name,
+          description: structure.description ?? null,
+        })
+        .where(eq(skillPrograms.id, programId));
+
+      // Simplest consistent approach, same as updateProgramStructure: wipe
+      // and rebuild the whole week/day/exercise tree on every save.
+      await tx.delete(skillProgramWeeks).where(eq(skillProgramWeeks.programId, programId));
+
+      for (const week of structure.weeks) {
+        const [weekRow] = await tx
+          .insert(skillProgramWeeks)
+          .values({
+            programId,
+            weekNumber: week.weekNumber,
+            name: week.name ?? null,
+          })
+          .returning();
+
+        for (const day of week.days) {
+          const [dayRow] = await tx
+            .insert(skillProgramDays)
+            .values({
+              weekId: weekRow.id,
+              dayNumber: day.dayNumber,
+              title: day.title,
+              isRestDay: day.isRestDay,
+            })
+            .returning();
+
+          for (const ex of day.exercises) {
+            await tx.insert(skillProgramExercises).values({
+              dayId: dayRow.id,
+              skillExerciseId: ex.skillExerciseId,
+              orderIndex: ex.orderIndex,
+              sets: ex.sets,
+              reps: ex.reps,
+              restSeconds: ex.restSeconds ?? null,
+              notes: ex.notes ?? null,
+            });
+          }
+        }
+      }
+    });
+  },
+
+  async deleteSkillProgram(id: number) {
+    await db.delete(skillPrograms).where(eq(skillPrograms.id, id));
+  },
+
+  async createSkillAssignment(
+    coachId: number,
+    skillProgramId: number,
+    athletes: { athleteId: number }[],
+    startDate: string,
+    dateOverrides?: Record<string, string>,
+    durationWeeks = 1,
+  ) {
+    const created = athletes.length
+      ? await db
+          .insert(skillAssignments)
+          .values(
+            athletes.map((a) => ({
+              coachId,
+              skillProgramId,
+              athleteId: a.athleteId,
+              startDate,
+              durationWeeks,
+              dateOverrides: dateOverrides && Object.keys(dateOverrides).length ? dateOverrides : null,
+            })),
+          )
+          .returning()
+      : [];
+    return { created };
+  },
+
+  async getSkillAssignmentsForCoach(coachId: number) {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    const rows = await db.query.skillAssignments.findMany({
+      where: inArray(skillAssignments.coachId, coachIds),
+      with: { program: true, athlete: true },
+      orderBy: desc(skillAssignments.createdAt),
+    });
+    return rows.map((a) => {
+      const { passwordHash, ...athlete } = a.athlete;
+      return { ...a, athlete };
+    });
   },
 
   // ---------- Trending exercises (numbers, not opt-in, -> Forge) ----------

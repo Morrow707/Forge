@@ -17,7 +17,9 @@ import {
   insertExerciseSchema,
   insertSkillExerciseSchema,
   programStructureSchema,
+  skillProgramStructureSchema,
   insertAssignmentSchema,
+  insertSkillAssignmentSchema,
   updateAssignmentSchema,
   submitWorkoutLogSchema,
   updateProgramDaySchema,
@@ -175,6 +177,14 @@ async function assertOwnsSkillExercise(userId: number, skillExerciseId: number) 
 
 async function assertCoachOwnsProgram(coachId: number, programId: number) {
   const program = await storage.getProgramFull(programId);
+  if (!program) return null;
+  const coachIds = await storage.getEffectiveCoachIds(coachId);
+  if (!coachIds.includes(program.coachId)) return null;
+  return program;
+}
+
+async function assertCoachOwnsSkillProgram(coachId: number, skillProgramId: number) {
+  const program = await storage.getSkillProgramFull(skillProgramId);
   if (!program) return null;
   const coachIds = await storage.getEffectiveCoachIds(coachId);
   if (!coachIds.includes(program.coachId)) return null;
@@ -340,6 +350,91 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!owned) return res.status(404).json({ message: "Skill exercise not found" });
     await storage.deleteSkillExercise(id);
     res.status(204).end();
+  });
+
+  // ---------------- Coach: Skill Programs ----------------
+  // Mirrors the Programs block below it -- see the comment on
+  // skillPrograms in shared/schema.ts for why it's a separate table/API,
+  // not a category on the existing programs endpoints.
+
+  app.get("/api/coach/skill-programs", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const list = await storage.getVisibleSkillProgramsForCoach(user.id);
+    res.json(list);
+  });
+
+  app.get("/api/coach/skill-programs/:id", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const program = await storage.getVisibleSkillProgramDetail(id, user.id);
+    if (!program) return res.status(404).json({ message: "Skill program not found" });
+    res.json(program);
+  });
+
+  app.post("/api/coach/skill-programs", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = skillProgramStructureSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const program = await storage.createSkillProgramWithStructure(user.id, parsed.data);
+    res.status(201).json(program);
+  });
+
+  app.put("/api/coach/skill-programs/:id", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const owned = await assertCoachOwnsSkillProgram(user.id, id);
+    if (!owned) return res.status(404).json({ message: "Skill program not found" });
+    const parsed = skillProgramStructureSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    await storage.updateSkillProgramStructure(id, parsed.data);
+    const updated = await storage.getSkillProgramFull(id);
+    res.json(updated);
+  });
+
+  app.delete("/api/coach/skill-programs/:id", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const owned = await assertCoachOwnsSkillProgram(user.id, id);
+    if (!owned) return res.status(404).json({ message: "Skill program not found" });
+    await storage.deleteSkillProgram(id);
+    res.status(204).end();
+  });
+
+  app.get("/api/coach/skill-assignments", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const list = await storage.getSkillAssignmentsForCoach(user.id);
+    res.json(list);
+  });
+
+  app.post("/api/coach/skill-assignments", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = insertSkillAssignmentSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const usable = await storage.getSkillProgramIfUsableByCoach(user.id, parsed.data.skillProgramId);
+    if (!usable) return res.status(404).json({ message: "Skill program not found" });
+
+    const roster = await storage.getRosterForCoach(user.id);
+    const rosterIds = new Set(roster.map((a) => a.id));
+    const invalidAthlete = parsed.data.athletes.find((a) => !rosterIds.has(a.athleteId));
+    if (invalidAthlete) {
+      return res.status(400).json({ message: "Athlete not on your roster" });
+    }
+
+    const result = await storage.createSkillAssignment(
+      user.id,
+      parsed.data.skillProgramId,
+      parsed.data.athletes,
+      parsed.data.startDate,
+      parsed.data.dateOverrides,
+      parsed.data.durationWeeks,
+    );
+    res.status(201).json(result);
   });
 
   // ---------------- Admin: Forge Exercise Library ----------------

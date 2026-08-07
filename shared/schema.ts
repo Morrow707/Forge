@@ -500,6 +500,98 @@ export const skillExercises = pgTable(
   }),
 );
 
+// Skill Programs mirror the shape of Programs (program -> weeks -> days ->
+// exercises -> assignments) but reference skillExercises, not exercises,
+// and deliberately drop the strength-specific concepts that don't apply to
+// a drill: no training blocks/periodization phases, no supersets, no
+// tracking-level/video-check CV toggle (skill camera tracking is a
+// separate mechanism, added in later Skills batches), no correctives.
+export const skillPrograms = pgTable("skill_programs", {
+  id: serial("id").primaryKey(),
+  coachId: integer("coach_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  description: text("description"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const skillProgramWeeks = pgTable(
+  "skill_program_weeks",
+  {
+    id: serial("id").primaryKey(),
+    programId: integer("program_id")
+      .notNull()
+      .references(() => skillPrograms.id, { onDelete: "cascade" }),
+    weekNumber: integer("week_number").notNull(),
+    name: text("name"),
+  },
+  (table) => ({
+    programIdx: index("skill_program_weeks_program_idx").on(table.programId),
+  }),
+);
+
+export const skillProgramDays = pgTable(
+  "skill_program_days",
+  {
+    id: serial("id").primaryKey(),
+    weekId: integer("week_id")
+      .notNull()
+      .references(() => skillProgramWeeks.id, { onDelete: "cascade" }),
+    dayNumber: integer("day_number").notNull(),
+    title: text("title").notNull().default("Skill Session"),
+    isRestDay: boolean("is_rest_day").notNull().default(false),
+  },
+  (table) => ({
+    weekIdx: index("skill_program_days_week_idx").on(table.weekId),
+  }),
+);
+
+export const skillProgramExercises = pgTable(
+  "skill_program_exercises",
+  {
+    id: serial("id").primaryKey(),
+    dayId: integer("day_id")
+      .notNull()
+      .references(() => skillProgramDays.id, { onDelete: "cascade" }),
+    skillExerciseId: integer("skill_exercise_id")
+      .notNull()
+      .references(() => skillExercises.id, { onDelete: "cascade" }),
+    orderIndex: integer("order_index").notNull().default(0),
+    sets: integer("sets").notNull().default(3),
+    reps: text("reps").notNull().default("10"),
+    restSeconds: integer("rest_seconds"),
+    notes: text("notes"),
+  },
+  (table) => ({
+    dayIdx: index("skill_program_exercises_day_idx").on(table.dayId),
+  }),
+);
+
+export const skillAssignments = pgTable(
+  "skill_assignments",
+  {
+    id: serial("id").primaryKey(),
+    skillProgramId: integer("skill_program_id")
+      .notNull()
+      .references(() => skillPrograms.id, { onDelete: "cascade" }),
+    athleteId: integer("athlete_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    coachId: integer("coach_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    startDate: date("start_date").notNull(),
+    durationWeeks: integer("duration_weeks").notNull().default(1),
+    dateOverrides: json("date_overrides").$type<Record<string, string>>(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    athleteIdx: index("skill_assignments_athlete_idx").on(table.athleteId),
+    coachIdx: index("skill_assignments_coach_idx").on(table.coachId),
+  }),
+);
+
 export const programs = pgTable("programs", {
   id: serial("id").primaryKey(),
   coachId: integer("coach_id")
@@ -1688,6 +1780,48 @@ export const skillExercisesRelations = relations(skillExercises, ({ one }) => ({
   coach: one(users, { fields: [skillExercises.coachId], references: [users.id] }),
 }));
 
+export const skillProgramsRelations = relations(skillPrograms, ({ one, many }) => ({
+  coach: one(users, { fields: [skillPrograms.coachId], references: [users.id] }),
+  weeks: many(skillProgramWeeks),
+  assignments: many(skillAssignments),
+}));
+
+export const skillProgramWeeksRelations = relations(skillProgramWeeks, ({ one, many }) => ({
+  program: one(skillPrograms, {
+    fields: [skillProgramWeeks.programId],
+    references: [skillPrograms.id],
+  }),
+  days: many(skillProgramDays),
+}));
+
+export const skillProgramDaysRelations = relations(skillProgramDays, ({ one, many }) => ({
+  week: one(skillProgramWeeks, {
+    fields: [skillProgramDays.weekId],
+    references: [skillProgramWeeks.id],
+  }),
+  exercises: many(skillProgramExercises),
+}));
+
+export const skillProgramExercisesRelations = relations(skillProgramExercises, ({ one }) => ({
+  day: one(skillProgramDays, {
+    fields: [skillProgramExercises.dayId],
+    references: [skillProgramDays.id],
+  }),
+  skillExercise: one(skillExercises, {
+    fields: [skillProgramExercises.skillExerciseId],
+    references: [skillExercises.id],
+  }),
+}));
+
+export const skillAssignmentsRelations = relations(skillAssignments, ({ one }) => ({
+  program: one(skillPrograms, {
+    fields: [skillAssignments.skillProgramId],
+    references: [skillPrograms.id],
+  }),
+  athlete: one(users, { fields: [skillAssignments.athleteId], references: [users.id] }),
+  coach: one(users, { fields: [skillAssignments.coachId], references: [users.id] }),
+}));
+
 export const exerciseSubmissionsRelations = relations(exerciseSubmissions, ({ one }) => ({
   exercise: one(exercises, {
     fields: [exerciseSubmissions.exerciseId],
@@ -1972,6 +2106,46 @@ export const insertSkillExerciseSchema = createInsertSchema(skillExercises)
     sports: z.array(z.string().trim().min(1)).max(8).optional().nullable(),
   });
 
+// ---------- Skill Programs (fully separate from Programs) ----------
+export const skillProgramExerciseInputSchema = z.object({
+  id: z.number().optional(),
+  skillExerciseId: z.number(),
+  orderIndex: z.number().default(0),
+  sets: z.number().min(1).default(3),
+  reps: z.string().default("10"),
+  restSeconds: z.number().optional().nullable(),
+  notes: z.string().optional().nullable(),
+});
+
+export const skillProgramDayInputSchema = z.object({
+  id: z.number().optional(),
+  dayNumber: z.number(),
+  title: z.string().default("Skill Session"),
+  isRestDay: z.boolean().default(false),
+  exercises: z.array(skillProgramExerciseInputSchema).default([]),
+});
+
+export const skillProgramWeekInputSchema = z.object({
+  id: z.number().optional(),
+  weekNumber: z.number(),
+  name: z.string().optional().nullable(),
+  days: z.array(skillProgramDayInputSchema).default([]),
+});
+
+export const skillProgramStructureSchema = z.object({
+  name: z.string().min(1),
+  description: z.string().optional().nullable(),
+  weeks: z.array(skillProgramWeekInputSchema).default([]),
+});
+
+export const insertSkillAssignmentSchema = z.object({
+  skillProgramId: z.number(),
+  startDate: z.string(),
+  durationWeeks: z.number().int().min(1).max(12).default(1),
+  dateOverrides: z.record(z.string(), z.string()).optional(),
+  athletes: z.array(z.object({ athleteId: z.number() })).min(1),
+});
+
 export const insertProgramSchema = createInsertSchema(programs).pick({
   name: true,
   description: true,
@@ -2230,6 +2404,8 @@ export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type Exercise = typeof exercises.$inferSelect;
 export type SkillExercise = typeof skillExercises.$inferSelect;
+export type SkillProgram = typeof skillPrograms.$inferSelect;
+export type SkillAssignment = typeof skillAssignments.$inferSelect;
 export type Program = typeof programs.$inferSelect;
 export type ProgramWeek = typeof programWeeks.$inferSelect;
 export type ProgramDay = typeof programDays.$inferSelect;
@@ -2245,6 +2421,7 @@ export type Team = typeof teams.$inferSelect;
 export type SignupInput = z.infer<typeof signupSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type ProgramStructureInput = z.infer<typeof programStructureSchema>;
+export type SkillProgramStructureInput = z.infer<typeof skillProgramStructureSchema>;
 
 export const generateProgramDraftSchema = z.object({
   prompt: z.string().trim().min(5).max(500),
