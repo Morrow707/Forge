@@ -20,6 +20,7 @@ import {
   skillProgramStructureSchema,
   insertAssignmentSchema,
   insertSkillAssignmentSchema,
+  createSkillSessionLogSchema,
   updateAssignmentSchema,
   submitWorkoutLogSchema,
   updateProgramDaySchema,
@@ -2679,8 +2680,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(detail);
   });
 
-  // Read-only skill-day view -- no logging/completion here yet, see the
-  // comment on getSkillDayForAthlete.
+  // Read-only skill-day view -- the day's plan, not a workout page. Camera
+  // captures (sprint tracking below) are the only thing actually logged
+  // for a skill day so far.
   app.get(
     "/api/athlete/skill-day/:skillAssignmentId/:skillProgramDayId",
     requireRole("athlete"),
@@ -2695,6 +2697,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(detail);
     },
   );
+
+  // ---------------- Athlete: skill camera sessions (sprint/agility) ----------------
+  app.post("/api/athlete/skill-session-logs", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = createSkillSessionLogSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    // Confirms this assignment is actually the requesting athlete's own --
+    // getSkillDayForAthlete already does this same check for reads, this is
+    // the write-path equivalent so a session log can't be attributed to an
+    // assignment/day/exercise that isn't really this athlete's.
+    const detail = await storage.getSkillDayForAthlete(
+      user.id,
+      parsed.data.skillAssignmentId,
+      parsed.data.skillProgramDayId,
+    );
+    if (!detail) return res.status(404).json({ message: "Skill session not found" });
+    const log = await storage.createSkillSessionLog(user.id, parsed.data);
+    res.status(201).json(log);
+  });
+
+  app.get("/api/athlete/skill-session-logs", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const schema = z.object({ skillProgramExerciseId: z.coerce.number() });
+    const parsed = schema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "skillProgramExerciseId query param required" });
+    }
+    const logs = await storage.getSkillSessionLogsForExercise(user.id, parsed.data.skillProgramExerciseId);
+    res.json(logs);
+  });
 
   // ---------------- Athlete: restricted/modified workout auto-generation ----------------
   // Swaps every exercise in one day that would aggravate today's flagged
