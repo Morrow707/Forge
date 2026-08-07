@@ -9,7 +9,12 @@ export default function CoachExercises() {
       title="Exercise Bank"
       emptyStateText="Your exercise bank is empty. Add your first exercise to start building programs."
       libraryTabs={
-        <LibraryTabs active="exercises" programsHref="/coach/programs" exercisesHref="/coach/exercises" />
+        <LibraryTabs
+          active="exercises"
+          programsHref="/coach/programs"
+          exercisesHref="/coach/exercises"
+          skillsHref="/coach/skills"
+        />
       }
     />
   );

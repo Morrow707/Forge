@@ -15,6 +15,7 @@ import { buildTrainingHistoryCsv, buildTrainingHistoryPdf } from "./training-his
 import { notifyUser } from "./notify";
 import {
   insertExerciseSchema,
+  insertSkillExerciseSchema,
   programStructureSchema,
   insertAssignmentSchema,
   updateAssignmentSchema,
@@ -164,6 +165,14 @@ async function assertOwnsExercise(userId: number, exerciseId: number) {
   return exercise;
 }
 
+async function assertOwnsSkillExercise(userId: number, skillExerciseId: number) {
+  const skillExercise = await storage.getSkillExercise(skillExerciseId);
+  if (!skillExercise) return null;
+  const coachIds = await storage.getEffectiveCoachIds(userId);
+  if (!coachIds.includes(skillExercise.coachId)) return null;
+  return skillExercise;
+}
+
 async function assertCoachOwnsProgram(coachId: number, programId: number) {
   const program = await storage.getProgramFull(programId);
   if (!program) return null;
@@ -277,6 +286,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     const report = await storage.createExerciseReport(id, user.id, parsed.data);
     res.status(201).json(report);
+  });
+
+  // ---------------- Coach: Skill Bank ----------------
+  // A wholly separate bank from the exercise one above -- a skills coach
+  // never sees a squat here, and a strength coach never sees a hitting
+  // drill in their exercise bank. See shared/schema.ts's skillExercises
+  // comment for why this is a parallel table, not a category.
+
+  app.get("/api/coach/skill-exercises", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const list = await storage.getVisibleSkillExercisesForCoach(user.id);
+    res.json(list);
+  });
+
+  app.get("/api/coach/skill-exercises/:id", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const skillExercise = await storage.getSkillExerciseDetail(id, user.id);
+    if (!skillExercise || (!skillExercise.isForgeOfficial && !skillExercise.editable)) {
+      return res.status(404).json({ message: "Skill exercise not found" });
+    }
+    res.json(skillExercise);
+  });
+
+  app.post("/api/coach/skill-exercises", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = insertSkillExerciseSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const skillExercise = await storage.createSkillExercise(user.id, parsed.data);
+    res.status(201).json(skillExercise);
+  });
+
+  app.put("/api/coach/skill-exercises/:id", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const owned = await assertOwnsSkillExercise(user.id, id);
+    if (!owned) return res.status(404).json({ message: "Skill exercise not found" });
+    const parsed = insertSkillExerciseSchema.partial().safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const updated = await storage.updateSkillExercise(id, parsed.data);
+    res.json(updated);
+  });
+
+  app.delete("/api/coach/skill-exercises/:id", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const owned = await assertOwnsSkillExercise(user.id, id);
+    if (!owned) return res.status(404).json({ message: "Skill exercise not found" });
+    await storage.deleteSkillExercise(id);
+    res.status(204).end();
   });
 
   // ---------------- Admin: Forge Exercise Library ----------------

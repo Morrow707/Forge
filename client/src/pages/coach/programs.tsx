@@ -10,7 +10,12 @@ export default function CoachPrograms() {
       emptyStateText="No programs yet. Build a training block to start assigning workouts to athletes."
       showAiAssist
       libraryTabs={
-        <LibraryTabs active="programs" programsHref="/coach/programs" exercisesHref="/coach/exercises" />
+        <LibraryTabs
+          active="programs"
+          programsHref="/coach/programs"
+          exercisesHref="/coach/exercises"
+          skillsHref="/coach/skills"
+        />
       }
     />
   );

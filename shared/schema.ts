@@ -463,6 +463,43 @@ export const exerciseReports = pgTable("exercise_reports", {
   resolvedAt: timestamp("resolved_at"),
 });
 
+// ---------- Skills (fully separate from Exercises/Programs) ----------
+// A deliberate parallel system, not a category tacked onto `exercises` --
+// a coach who only does strength & conditioning should never see a skill
+// drill in their exercise bank/picker, and a skills coach should never see
+// squats in theirs. Sharing one table with a filter would still leak
+// through anywhere that queries "all exercises" without remembering to
+// exclude skills; a separate table can't leak by construction.
+export const skillExercises = pgTable(
+  "skill_exercises",
+  {
+    id: serial("id").primaryKey(),
+    coachId: integer("coach_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    // Free-text like an exercise's muscleGroup, not a fixed enum -- SKILL_TYPES
+    // in client/src/lib/skill-taxonomy.ts are just suggested quick-pick
+    // chips (Hitting/Fielding/Throwing/Catching/Footwork/Pitching), so a
+    // coach can type one that isn't on the list and it becomes its own
+    // reusable tag from then on, same pattern as every other taxonomy field.
+    skillType: text("skill_type").notNull().default("Hitting"),
+    // Which sports this drill applies to -- deliberately not exclusive to
+    // whichever sport it was written for. A throwing/arm-care drill written
+    // for baseball is just as taggable with Volleyball or Football (both
+    // use the same overhead-throwing mechanics for serving/passing), so a
+    // coach in either sport can still find it.
+    sports: json("sports").$type<string[]>(),
+    equipment: text("equipment"),
+    videoUrl: text("video_url"),
+    instructions: text("instructions"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    coachIdx: index("skill_exercises_coach_idx").on(table.coachId),
+  }),
+);
+
 export const programs = pgTable("programs", {
   id: serial("id").primaryKey(),
   coachId: integer("coach_id")
@@ -1647,6 +1684,10 @@ export const exercisesRelations = relations(exercises, ({ one }) => ({
   coach: one(users, { fields: [exercises.coachId], references: [users.id] }),
 }));
 
+export const skillExercisesRelations = relations(skillExercises, ({ one }) => ({
+  coach: one(users, { fields: [skillExercises.coachId], references: [users.id] }),
+}));
+
 export const exerciseSubmissionsRelations = relations(exerciseSubmissions, ({ one }) => ({
   exercise: one(exercises, {
     fields: [exerciseSubmissions.exerciseId],
@@ -1919,6 +1960,18 @@ export const insertExerciseSchema = createInsertSchema(exercises)
     usesBox: z.boolean().default(false),
   });
 
+export const insertSkillExerciseSchema = createInsertSchema(skillExercises)
+  .pick({
+    name: true,
+    skillType: true,
+    equipment: true,
+    videoUrl: true,
+    instructions: true,
+  })
+  .extend({
+    sports: z.array(z.string().trim().min(1)).max(8).optional().nullable(),
+  });
+
 export const insertProgramSchema = createInsertSchema(programs).pick({
   name: true,
   description: true,
@@ -2176,6 +2229,7 @@ export const submitWorkoutLogSchema = z.object({
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type Exercise = typeof exercises.$inferSelect;
+export type SkillExercise = typeof skillExercises.$inferSelect;
 export type Program = typeof programs.$inferSelect;
 export type ProgramWeek = typeof programWeeks.$inferSelect;
 export type ProgramDay = typeof programDays.$inferSelect;
