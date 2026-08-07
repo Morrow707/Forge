@@ -182,7 +182,7 @@ export function MechanicsTrackerDialog({
     const video = videoRef.current;
     const canvas = canvasRef.current;
     const landmarker = poseLandmarkerRef.current;
-    if (!video || !canvas || !landmarker || video.videoWidth === 0) {
+    if (!video || !canvas || !landmarker || video.videoWidth === 0 || video.clientWidth === 0) {
       rafRef.current = requestAnimationFrame(tick);
       return;
     }
@@ -192,8 +192,13 @@ export function MechanicsTrackerDialog({
     }
     lastVideoTimeRef.current = video.currentTime;
 
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    // Sized to the video's actual on-screen box, not its encoded
+    // videoWidth/videoHeight -- on iOS Safari a portrait rear-camera stream
+    // can report landscape sensor dimensions there while already rendering
+    // (and feeding MediaPipe) rotated portrait frames, so scaling landmarks
+    // by the raw encoded size draws the skeleton at the wrong scale/position.
+    canvas.width = video.clientWidth;
+    canvas.height = video.clientHeight;
     const ctx = canvas.getContext("2d");
     const now = performance.now();
     const detection = landmarker.detectForVideo(video, now);
@@ -265,8 +270,8 @@ export function MechanicsTrackerDialog({
     const video = reviewVideoRef.current;
     const canvas = reviewCanvasRef.current;
     if (!video || !canvas) return;
-    canvas.width = video.videoWidth || canvas.width;
-    canvas.height = video.videoHeight || canvas.height;
+    canvas.width = video.clientWidth || canvas.width;
+    canvas.height = video.clientHeight || canvas.height;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);

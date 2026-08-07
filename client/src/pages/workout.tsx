@@ -27,6 +27,8 @@ import { extractVideoFrames } from "@/lib/video-frames";
 import type { RepMetrics } from "@/lib/bar-tracking";
 import type { JumpSetMetrics } from "@/lib/jump-tracking";
 import { toKg } from "@/lib/bar-tracking";
+import { useDistanceUnit, formatDistanceCm } from "@/lib/distance-unit";
+import { DistanceUnitToggle } from "@/components/distance-unit-toggle";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import { renderWorkoutShareCard } from "@/lib/share-card";
@@ -65,6 +67,7 @@ import {
   Share2,
   Headphones,
   Lock,
+  Copy,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import type { PublicUser } from "@shared/schema";
@@ -486,21 +489,30 @@ function findHistoryForReps(history: SetHistoryPoint[], reps: string) {
 
 // A set is a PR when its weight beats every prior numeric-weight set logged
 // at that same rep count -- so one workout can produce several PRs (one per
-// rep count), not just one for the whole exercise.
+// rep count), not just one for the whole exercise. "Prior" includes both
+// past sessions (history) and earlier sets already filled in THIS session
+// (earlierSetsThisSession) -- without the latter, doing the same weight for
+// sets 1-3 on purpose (holding speed, not chasing a max) would crown every
+// one of them, since each only beat old history, never each other.
 function isRepCountPR(
   history: SetHistoryPoint[],
   reps: string,
   weightMode: WeightMode,
   weight: string,
+  earlierSetsThisSession: { reps: string; weight: string }[] = [],
 ) {
   if (weightMode !== "numeric") return false;
   const trimmed = reps.trim();
   const currentWeight = parseFloat(weight);
   if (!trimmed || Number.isNaN(currentWeight)) return false;
-  const priorWeights = history
-    .filter((h) => h.reps.trim() === trimmed && h.weightMode === "numeric" && h.weight)
-    .map((h) => parseFloat(h.weight!))
-    .filter((w) => !Number.isNaN(w));
+  const priorWeights = [
+    ...history
+      .filter((h) => h.reps.trim() === trimmed && h.weightMode === "numeric" && h.weight)
+      .map((h) => parseFloat(h.weight!)),
+    ...earlierSetsThisSession
+      .filter((s) => s.reps.trim() === trimmed && s.weight.trim())
+      .map((s) => parseFloat(s.weight)),
+  ].filter((w) => !Number.isNaN(w));
   if (priorWeights.length === 0) return false;
   return currentWeight > Math.max(...priorWeights);
 }
@@ -948,9 +960,15 @@ export function WorkoutPage({
   // `immediate` bypasses the debounce for data that's expensive to redo (a
   // completed camera-tracked capture, a saved form-check video) -- see
   // autosaveNow's comment for why those can't wait out the debounce window.
+  // The moment a set's own completeness flips to true (the green
+  // checkmark) forces the same immediate save -- a debounced save still
+  // pending when the athlete navigates away can be lost (a client-side
+  // route change doesn't fire the pagehide/visibilitychange flush), so a
+  // finished set can never be left sitting in the debounce window.
   function updateSet(key: string, setNumber: number, patch: Partial<SetRow>, options?: { immediate?: boolean }) {
     setItems((prev) => {
       let restOnComplete: number | null = null;
+      let becameComplete = false;
       const next = prev.map((it) => {
         if (it.key !== key) return it;
         return {
@@ -959,15 +977,16 @@ export function WorkoutPage({
             if (s.setNumber !== setNumber) return s;
             const wasComplete = isSetComplete(it, s);
             const updated = { ...s, ...patch };
-            if (!wasComplete && isSetComplete(it, updated) && shouldRestAfterSet(prev, it)) {
-              restOnComplete = it.restSeconds;
+            if (!wasComplete && isSetComplete(it, updated)) {
+              becameComplete = true;
+              if (shouldRestAfterSet(prev, it)) restOnComplete = it.restSeconds;
             }
             return updated;
           }),
         };
       });
       if (restOnComplete !== null) restTimerRef.current?.autoStart(restOnComplete);
-      if (options?.immediate) autosaveNow(next);
+      if (options?.immediate || becameComplete) autosaveNow(next);
       else scheduleAutosave(next);
       return next;
     });
@@ -1093,34 +1112,46 @@ export function WorkoutPage({
     <>
       <AppShell
         title={
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => navigate(routeBase)}
-              aria-label="Back to calendar"
-              className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <ArrowLeft className="h-6 w-6 md:h-7 md:w-7" />
-            </button>
-            <span>{format(parseISO(date), "EEEE, MMM d")}</span>
-          </div>
+          // Hidden on the single-exercise logging screen -- that screen
+          // already has its own "Back to full workout" link, so the date
+          // header here is just repeated chrome eating vertical space right
+          // where the athlete needs to see the exercise and log a set.
+          viewMode === "overview" ? (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  autosaveNow(items);
+                  navigate(routeBase);
+                }}
+                aria-label="Back to calendar"
+                className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <ArrowLeft className="h-6 w-6 md:h-7 md:w-7" />
+              </button>
+              <span>{format(parseISO(date), "EEEE, MMM d")}</span>
+            </div>
+          ) : null
         }
       actions={
-        <div className="flex items-center gap-1 rounded-md bg-secondary p-1">
-          {(["lbs", "kg"] as const).map((u) => (
-            <button
-              key={u}
-              onClick={() => unitMutation.mutate(u)}
-              className={cn(
-                "rounded px-2.5 py-1 text-xs font-semibold uppercase transition-colors",
-                unit === u
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {u}
-            </button>
-          ))}
+        <div className="flex items-center gap-2">
+          {items.some((i) => i.trackingLevel === "jump") && <DistanceUnitToggle />}
+          <div className="flex items-center gap-1 rounded-md bg-secondary p-1">
+            {(["lbs", "kg"] as const).map((u) => (
+              <button
+                key={u}
+                onClick={() => unitMutation.mutate(u)}
+                className={cn(
+                  "rounded px-2.5 py-1 text-xs font-semibold uppercase transition-colors",
+                  unit === u
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {u}
+              </button>
+            ))}
+          </div>
         </div>
       }
     >
@@ -1150,10 +1181,13 @@ export function WorkoutPage({
       {/* Only for an actual training day -- a rest day has nothing to check
           in about. Inline and always editable (not a blocking gate), so an
           athlete who under- or over-estimated their soreness or stress can
-          come back and fix it before or during the session. */}
+          come back and fix it before or during the session. The readiness
+          card itself is overview-only -- once the athlete is inside a
+          single exercise, logging a set is the priority and this is just
+          space taken from that. */}
       {user?.role === "athlete" && !data.day.isRestDay && (
         <div className="mb-4 space-y-2">
-          <WellnessGate />
+          {viewMode === "overview" && <WellnessGate />}
           <CaraTimer />
         </div>
       )}
@@ -1182,7 +1216,7 @@ export function WorkoutPage({
         </Card>
       ) : (
         <div className={cn("space-y-4", viewMode === "logging" && "pb-4")}>
-          {stats.totalSets > 0 && (
+          {viewMode === "overview" && stats.totalSets > 0 && (
             <div className="rounded-lg border border-border bg-surface p-4">
               <div className="mb-3 flex items-baseline gap-8">
                 <div>
@@ -1503,6 +1537,7 @@ function ExerciseLogContent({
   onRemoveSet: () => void;
 }) {
   const isCorrective = item.kind === "corrective";
+  const [distanceUnit] = useDistanceUnit();
   const [trackingSet, setTrackingSet] = useState<number | null>(null);
   // Which set the "Record" pill is currently recording for -- one form-check
   // clip per set now, not one per exercise, so this replaces what used to be
@@ -1528,19 +1563,7 @@ function ExerciseLogContent({
   // that standalone flow, unchanged.
   const videoRequired = item.videoCheckEnabled && videoCheckMode !== "off";
   const mergedTracking = item.trackingLevel !== "none" && videoRequired;
-  // Tracks which sets currently hold a weight the athlete never actually
-  // typed -- only a value carried forward by handleWeightChange below.
-  // Lets a later edit keep overwriting that whole inherited chain (see
-  // there for why a plain "only fill in empty sets" rule isn't enough).
-  const autoFilledWeightSetsRef = useRef<Set<number>>(new Set());
 
-  // Most working sets in a block use the same weight, so entering it once
-  // should carry forward instead of making the athlete retype it every
-  // set. Propagates into every following set that's still empty or still
-  // holding an earlier carried-forward value, and stops at the first set
-  // the athlete has deliberately put their own number into -- so editing
-  // set 2 from 135 to 185 pushes 185 into sets 3+ (still inherited), but
-  // never touches a set 4 the athlete already set to 225 by hand.
   // Shared by the three "Use" shortcut buttons below (1RM/progression/last-
   // performance suggestions) -- they bulk-fill every set at once, so they
   // have to respect the same video-first gate handleWeightChange's Input
@@ -1553,18 +1576,11 @@ function ExerciseLogContent({
     }
   }
 
+  // Every set requires its own deliberate entry -- no carrying a typed
+  // weight forward into later sets. The "Same as Set N" button below is the
+  // explicit, one-tap way to repeat a weight instead.
   function handleWeightChange(setNumber: number, value: string) {
     onUpdateSet(setNumber, { weight: value });
-    autoFilledWeightSetsRef.current.delete(setNumber);
-    if (value.trim() === "") return;
-    for (const s of item.sets) {
-      if (s.setNumber <= setNumber) continue;
-      const isEmpty = s.weight.trim() === "";
-      const wasAutoFilled = autoFilledWeightSetsRef.current.has(s.setNumber);
-      if (!isEmpty && !wasAutoFilled) break;
-      onUpdateSet(s.setNumber, { weight: value });
-      autoFilledWeightSetsRef.current.add(s.setNumber);
-    }
   }
   // One column per material the exercise actually needs -- not mutually
   // exclusive, so a combo movement (dumbbell box step-up) shows both a
@@ -1898,7 +1914,10 @@ function ExerciseLogContent({
             const tracked =
               set.peakVelocityMps != null || set.barPathDeviationCm != null || set.jumpHeightCm != null;
             const historyMatch = findHistoryForReps(item.setHistory, set.reps);
-            const isPR = complete && isRepCountPR(item.setHistory, set.reps, item.weightMode, set.weight);
+            const earlierSetsThisSession = item.sets.filter((s) => s.setNumber < set.setNumber);
+            const isPR =
+              complete &&
+              isRepCountPR(item.setHistory, set.reps, item.weightMode, set.weight, earlierSetsThisSession);
             // Safety gate, not a UX nicety: with a video required, the
             // number can't be typed in until the proof it happened exists --
             // opens the instant the video finishes uploading (formCheckVideoUrl
@@ -1906,6 +1925,12 @@ function ExerciseLogContent({
             // separate confirmation step, so there's no CARA-relevant dead
             // time between recording and logging.
             const videoGateOpen = !videoRequired || !!set.formCheckVideoUrl;
+            const prevSet = item.sets.find((s) => s.setNumber === set.setNumber - 1);
+            const canQuickFillSame =
+              item.weightMode === "numeric" &&
+              videoGateOpen &&
+              !!prevSet?.weight.trim() &&
+              set.weight.trim() !== prevSet.weight.trim();
             return (
               <div key={set.setNumber}>
                 <div
@@ -1986,8 +2011,18 @@ function ExerciseLogContent({
                     Last @ {set.reps} reps: {formatLoad(historyMatch)}
                   </p>
                 )}
-                {(item.trackingLevel !== "none" || videoRequired || usesPlateCalc) && (
+                {(item.trackingLevel !== "none" || videoRequired || usesPlateCalc || canQuickFillSame) && (
                   <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                    {canQuickFillSame && (
+                      <button
+                        type="button"
+                        onClick={() => handleWeightChange(set.setNumber, prevSet!.weight)}
+                        className="flex items-center gap-1.5 rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
+                      >
+                        <Copy className="h-3 w-3" />
+                        Same as Set {prevSet!.setNumber} ({prevSet!.weight} {unit})
+                      </button>
+                    )}
                     {item.trackingLevel !== "none" && (
                       <button
                         type="button"
@@ -2002,7 +2037,7 @@ function ExerciseLogContent({
                         <Camera className="h-3 w-3" />
                         {tracked
                           ? item.trackingLevel === "jump" && set.jumpHeightCm != null
-                            ? `${set.jumpHeightCm} cm jump — retake`
+                            ? `${formatDistanceCm(set.jumpHeightCm, distanceUnit)} jump — retake`
                             : item.trackingLevel === "full" && set.peakVelocityMps != null
                               ? `${set.peakVelocityMps} m/s peak — retake`
                               : `Path ${set.barPathDeviationCm} cm — retake`
@@ -2099,7 +2134,7 @@ function ExerciseLogContent({
                     <span className="font-semibold uppercase tracking-wide">Jump by jump</span>
                     {set.jumpBreakdown.map((j) => (
                       <span key={j.repNumber} className="rounded bg-secondary px-1.5 py-0.5">
-                        {j.jumpHeightCm} cm
+                        {formatDistanceCm(j.jumpHeightCm, distanceUnit)}
                         {j.groundContactSeconds != null ? ` · GCT ${j.groundContactSeconds}s` : ""}
                       </span>
                     ))}
