@@ -482,6 +482,7 @@ type MergeableDay = {
     restSeconds: number | null;
     notes: string | null;
     supersetGroup: string | null;
+    restAfterGroupOnly: boolean;
     trackingLevel?: "none" | "bar_path" | "full" | "jump";
     videoCheckEnabled: boolean;
   }[];
@@ -559,6 +560,11 @@ function applyProgramWeekUpdates(
                 restSeconds: ex.restSeconds ?? null,
                 notes: ex.notes || null,
                 supersetGroup: ex.supersetGroup || null,
+                // The AI chat patch format doesn't expose this field yet
+                // (see the restAfterGroupOnly column comment) -- same
+                // "resets when the AI rewrites a day's exercises" treatment
+                // as restSeconds/supersetGroup above.
+                restAfterGroupOnly: false,
                 trackingLevel: ex.trackingLevel,
                 videoCheckEnabled: ex.videoCheckEnabled ?? false,
               }))
@@ -3330,6 +3336,7 @@ Athlete's data:
               restSeconds: ex.restSeconds ?? null,
               notes: ex.notes ?? null,
               supersetGroup: ex.supersetGroup ?? null,
+              restAfterGroupOnly: ex.restAfterGroupOnly ?? false,
               trackingLevel: ex.trackingLevel ?? "none",
               videoCheckEnabled: ex.videoCheckEnabled ?? false,
             });
@@ -4673,6 +4680,7 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
             restSeconds: ex.restSeconds ?? null,
             notes: ex.notes ?? null,
             supersetGroup: ex.supersetGroup ?? null,
+            restAfterGroupOnly: ex.restAfterGroupOnly ?? false,
             trackingLevel: ex.trackingLevel ?? "none",
             videoCheckEnabled: ex.videoCheckEnabled ?? false,
           })),

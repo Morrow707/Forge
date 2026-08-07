@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/select";
 import { ExercisePickerDialog } from "@/components/exercise-picker-dialog";
 import { AssignProgramDialog } from "@/components/assign-program-dialog";
+import { RadioChipGroup } from "@/components/filter-chip-group";
 import { ProgramAiChatPanel } from "@/components/program-ai-chat-panel";
 import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
 import { ProgressionButton } from "@/components/progression-button";
@@ -83,6 +84,14 @@ type LocalExercise = {
   // when exercises are added/removed/reordered. Converted to/from the
   // persisted `supersetGroup` token only at load/save time.
   linkedToNext: boolean;
+  // Only meaningful for 2+ exercises chained via linkedToNext -- false
+  // (default) rests after every exercise's set same as a solo exercise,
+  // true rests only after the last exercise in the chain's set. Kept in
+  // sync across every exercise in a chain (see the group-rest control in
+  // DayCard), even though only the chain's last exercise's value is
+  // actually read at runtime -- so a value doesn't go stale if the coach
+  // later removes what's currently the last exercise.
+  restAfterGroupOnly: boolean;
   trackingLevel: TrackingLevel;
   videoCheckEnabled: boolean;
   // Drives which camera pipeline "Video" turns on for this exercise (see
@@ -172,6 +181,7 @@ function stateFromProgram(program: any) {
             restSeconds: pe.restSeconds != null ? String(pe.restSeconds) : "",
             notes: pe.notes ?? "",
             supersetGroup: pe.supersetGroup ?? null,
+            restAfterGroupOnly: pe.restAfterGroupOnly ?? false,
             trackingLevel: pe.trackingLevel ?? "none",
             videoCheckEnabled: pe.videoCheckEnabled ?? false,
             category: pe.exercise.category ?? null,
@@ -325,6 +335,7 @@ export function ProgramBuilderPage({
               restSeconds: ex.restSeconds ? Number(ex.restSeconds) : null,
               notes: ex.notes || null,
               supersetGroup: ex.supersetGroup,
+              restAfterGroupOnly: ex.restAfterGroupOnly,
               trackingLevel: ex.trackingLevel,
               videoCheckEnabled: ex.videoCheckEnabled,
             })),
@@ -585,6 +596,7 @@ export function ProgramBuilderPage({
                 restSeconds: "",
                 notes: "",
                 linkedToNext: false,
+                restAfterGroupOnly: false,
                 trackingLevel: "none",
                 videoCheckEnabled: false,
                 category: exercise.category ?? null,
@@ -605,6 +617,22 @@ export function ProgramBuilderPage({
       )}
     </AppShell>
   );
+}
+
+// A run of 2+ consecutive exercises chained by linkedToNext is one "group"
+// for rest-scope purposes -- these two helpers find where the group this
+// index belongs to starts/ends, so the group-rest control (shown once,
+// after the group's last exercise) can update every exercise in the chain
+// together and stay internally consistent.
+function isEndOfLinkedGroup(exercises: LocalExercise[], i: number): boolean {
+  if (exercises[i].linkedToNext) return false;
+  return i > 0 && exercises[i - 1].linkedToNext;
+}
+
+function startOfLinkedGroup(exercises: LocalExercise[], endIndex: number): number {
+  let start = endIndex;
+  while (start > 0 && exercises[start - 1].linkedToNext) start--;
+  return start;
 }
 
 function DayCard({
@@ -719,6 +747,25 @@ function DayCard({
                           }
                         />
                       )}
+                      {isEndOfLinkedGroup(day.exercises, i) && (
+                        <div className="py-1 pl-3">
+                          <RadioChipGroup
+                            label="Rest"
+                            options={["Between each", "After the group"]}
+                            value={ex.restAfterGroupOnly ? "After the group" : "Between each"}
+                            onChange={(v) => {
+                              const groupStart = startOfLinkedGroup(day.exercises, i);
+                              const restAfterGroupOnly = v === "After the group";
+                              onChange((d) => ({
+                                ...d,
+                                exercises: d.exercises.map((e, idx) =>
+                                  idx >= groupStart && idx <= i ? { ...e, restAfterGroupOnly } : e,
+                                ),
+                              }));
+                            }}
+                          />
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -824,7 +871,7 @@ function SortableExerciseRow({
           <Trash2 className="h-4 w-4" />
         </button>
       </div>
-      <div className="grid grid-cols-3 gap-1.5">
+      <div className="grid grid-cols-4 gap-1.5">
         <FieldInput
           label="Sets"
           value={String(exercise.sets)}
@@ -848,6 +895,12 @@ function SortableExerciseRow({
             />
           </div>
         </div>
+        <FieldInput
+          label="Rest (sec)"
+          value={exercise.restSeconds}
+          onChange={(v) => onUpdate({ restSeconds: v })}
+          type="number"
+        />
       </div>
       <div className="mt-1.5">
         <VideoTrackingToggle

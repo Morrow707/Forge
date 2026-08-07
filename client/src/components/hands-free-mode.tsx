@@ -4,7 +4,7 @@ import { Mic, MicOff, X, Volume2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useWakeLock } from "@/hooks/use-wake-lock";
 import type { ItemState, SetRow, WeightUnit } from "@/pages/workout";
-import { isSetComplete } from "@/pages/workout";
+import { isSetComplete, shouldRestAfterSet } from "@/pages/workout";
 import {
   speakQueued,
   stopSpeaking,
@@ -183,7 +183,10 @@ export function HandsFreeMode({ items, unit, onUpdateSet, onClose }: HandsFreeMo
       speakQueued(`That's every set for ${current.exerciseName}. Say next when you're ready.`);
     } else {
       const rest = current.restSeconds;
-      if (rest) {
+      // Superset-aware, same as the manual workout view: a chained exercise
+      // with restAfterGroupOnly on only rests once the LAST exercise in its
+      // group logs a set, not after every exercise's set.
+      if (rest && shouldRestAfterSet(itemsRef.current, current)) {
         setRestRemaining(rest);
         speakQueued(`Resting for ${rest} seconds.`);
       }
