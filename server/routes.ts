@@ -22,6 +22,7 @@ import {
   insertSkillAssignmentSchema,
   createSkillSessionLogSchema,
   setSkillSessionAnnotationSchema,
+  updateSkillFaultThresholdsSchema,
   updateAssignmentSchema,
   submitWorkoutLogSchema,
   updateProgramDaySchema,
@@ -1447,6 +1448,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ capMinutes: row.caraWeeklyCapMinutes ?? null });
   });
 
+  // Coach-adjustable sensitivity for the Skills camera tracker's fault
+  // detection (sprint-tracking.ts, mechanics-tracking.ts) -- see
+  // shared/skill-fault-thresholds.ts for the full field set and why these
+  // exist. isCustomized tells the settings UI whether to show a "reset to
+  // defaults" affordance.
+  app.get("/api/coach/skill-fault-thresholds", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const result = await storage.getSkillFaultThresholdsForCoach(user.id);
+    res.json(result);
+  });
+
+  app.put("/api/coach/skill-fault-thresholds", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = updateSkillFaultThresholdsSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const effective = await storage.updateSkillFaultThresholdsForCoach(user.id, parsed.data);
+    res.json({ effective, isCustomized: true });
+  });
+
+  app.delete("/api/coach/skill-fault-thresholds", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const effective = await storage.resetSkillFaultThresholdsForCoach(user.id);
+    res.json({ effective, isCustomized: false });
+  });
+
   app.get("/api/coach/cara/compliance", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     const weekStart = startOfWeek(new Date());
@@ -2642,6 +2670,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     const list = await storage.getSuggestedCorrectivesForFault(user.id, parsed.data.faultCode);
     res.json(list);
+  });
+
+  // Fetched by the sprint/mechanics tracker dialogs right before scoring a
+  // capture -- resolves to whichever coach owns this skill assignment, so
+  // an athlete always gets their own coach's sensitivity settings, never a
+  // guessed one. Falls back to the built-in defaults transparently (see
+  // resolveSkillFaultThresholds) when the coach never customized anything.
+  app.get("/api/athlete/skill-fault-thresholds", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const schema = z.object({ skillAssignmentId: z.coerce.number() });
+    const parsed = schema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "skillAssignmentId query param required" });
+    }
+    const thresholds = await storage.getSkillFaultThresholdsForAssignment(
+      user.id,
+      parsed.data.skillAssignmentId,
+    );
+    if (!thresholds) return res.status(404).json({ message: "Skill assignment not found" });
+    res.json(thresholds);
   });
 
   app.get("/api/athlete/goals", requireRole("athlete"), async (req, res) => {
