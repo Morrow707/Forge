@@ -823,6 +823,13 @@ export function WorkoutPage({
     };
   }
 
+  // How many autosaves in a row have failed -- reset to 0 on any success.
+  // A single silent failure is expected background noise (a blip); this is
+  // what lets a *persistent* one (expired session, a real server rejection)
+  // get surfaced instead of the athlete training an entire session under
+  // the impression it's all being logged.
+  const consecutiveAutosaveFailuresRef = useRef(0);
+
   const submitMutation = useMutation({
     mutationFn: async ({
       completed,
@@ -851,6 +858,7 @@ export function WorkoutPage({
       }
     },
     onSuccess: ({ synced, silent, data }, { completed }) => {
+      consecutiveAutosaveFailuresRef.current = 0;
       // The offline banner needs to reflect reality regardless of which
       // save path triggered it -- only the toast and the query refetch
       // (items only ever hydrates from `data` once per mount, so refetching
@@ -873,7 +881,21 @@ export function WorkoutPage({
       }
     },
     onError: (err: ApiError, { silent }) => {
-      if (!silent) toast.error(err.message || "Could not save workout");
+      if (!silent) {
+        toast.error(err.message || "Could not save workout");
+        return;
+      }
+      // A silent autosave failure (expired session, a server-side rejection)
+      // is invisible by design for a one-off blip -- but if it keeps
+      // failing, the athlete is training an entire session believing it's
+      // being logged when nothing is actually reaching the server. Surface
+      // that loudly once it's clearly not transient, rather than never.
+      consecutiveAutosaveFailuresRef.current += 1;
+      if (consecutiveAutosaveFailuresRef.current === 3) {
+        toast.error("Your sets aren't saving -- reload this page and log back in if needed.", {
+          duration: 15000,
+        });
+      }
     },
   });
 

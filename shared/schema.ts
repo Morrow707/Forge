@@ -2462,6 +2462,10 @@ export const repBreakdownEntrySchema = z.object({
   peakVelocityMps: z.number(),
   meanVelocityMps: z.number(),
   concentricSeconds: z.number(),
+  // How long into the concentric phase peak velocity was reached -- see
+  // bar-tracking.ts's RepBreakdown comment. Optional since sets logged
+  // before this field existed won't have it.
+  timeToPeakVelocitySeconds: z.number().optional(),
   startT: z.number(),
   endT: z.number(),
   depthDeg: z.number().optional().nullable(),

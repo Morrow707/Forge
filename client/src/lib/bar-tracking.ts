@@ -40,6 +40,12 @@ export type RepBreakdown = {
   peakVelocityMps: number;
   meanVelocityMps: number;
   concentricSeconds: number;
+  // How long into the concentric phase peak velocity was reached -- a
+  // standard VBT metric distinct from concentricSeconds (the whole phase's
+  // duration): a rep that reaches its peak early and decelerates for the
+  // rest of the lift reads very differently from one that's still
+  // accelerating right up to lockout, even at the same total duration.
+  timeToPeakVelocitySeconds: number;
   startT: number;
   endT: number;
   depthDeg?: number | null;
@@ -278,7 +284,18 @@ export function summarizeTrackedSet(
     const duration = (rawPoints[phase.endIdx].t - rawPoints[phase.startIdx].t) / 1000;
     const peak = slice.length ? Math.max(...slice) : 0;
     const mean = slice.length ? slice.reduce((a, b) => a + b, 0) / slice.length : 0;
-    return { peak, mean, duration, startIdx: phase.startIdx, endIdx: phase.endIdx };
+    // Index (within the whole trace, not the slice) of the peak-speed frame
+    // -- used to report how long it took to reach peak velocity, a standard
+    // VBT metric ("time to peak velocity") this didn't previously compute.
+    let peakIdx = phase.startIdx;
+    let peakSpeed = -Infinity;
+    for (let i = phase.startIdx; i <= phase.endIdx; i++) {
+      if (speedsMps[i] > peakSpeed) {
+        peakSpeed = speedsMps[i];
+        peakIdx = i;
+      }
+    }
+    return { peak, mean, duration, startIdx: phase.startIdx, endIdx: phase.endIdx, peakIdx };
   });
 
   // Heuristic: of each pair of adjacent phases, the one with the higher
@@ -316,11 +333,15 @@ export function summarizeTrackedSet(
     const pairedEccentric = i > 0 ? phaseStats[i - 1] : null;
     const romCm = Math.round(Math.abs(rawPoints[phase.endIdx].y - rawPoints[phase.startIdx].y) * 1000) / 10;
 
+    const timeToPeakVelocitySeconds =
+      Math.round(((rawPoints[phase.peakIdx].t - rawPoints[phase.startIdx].t) / 1000) * 100) / 100;
+
     repBreakdown.push({
       repNumber: repBreakdown.length + 1,
       peakVelocityMps: Math.round(phase.peak * 100) / 100,
       meanVelocityMps: Math.round(phase.mean * 100) / 100,
       concentricSeconds: Math.round(phase.duration * 100) / 100,
+      timeToPeakVelocitySeconds,
       startT: rawPoints[repStartIdx].t,
       endT: rawPoints[phase.endIdx].t,
       velocityCurve,

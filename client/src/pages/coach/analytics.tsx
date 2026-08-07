@@ -79,7 +79,14 @@ type AnalyticsPoint = {
   barPathDeviationCm: number | null;
   barPathTrace: { t: number; x: number; y: number }[] | null;
   formFaults: { code: string; label: string }[] | null;
-  repBreakdown: { repNumber: number; peakVelocityMps: number; depthDeg?: number | null }[] | null;
+  repBreakdown:
+    | {
+        repNumber: number;
+        peakVelocityMps: number;
+        depthDeg?: number | null;
+        timeToPeakVelocitySeconds?: number;
+      }[]
+    | null;
   armPathTrace: {
     left: { t: number; x: number; y: number }[];
     right: { t: number; x: number; y: number }[];
@@ -1099,7 +1106,9 @@ export default function CoachAnalytics() {
                   Peak concentric velocity, rep by rep, for the most recent multi-rep tracked set (
                   {format(parseISO(latestRepDecaySet.date), "MMM d")} · Set {latestRepDecaySet.setNumber}) --
                   the drop-off across a set is the actual autoregulation signal, not just the set's
-                  best rep.
+                  best rep. Time to peak velocity is how long into each rep that peak was reached --
+                  a rep still accelerating right up to lockout reads very differently from one that
+                  peaked early and decelerated the rest of the way, even at the same total duration.
                 </CardDescription>
               </CardHeader>
               <CardContent className="h-56">
@@ -1107,16 +1116,29 @@ export default function CoachAnalytics() {
                   <LineChart data={latestRepDecaySet.repBreakdown!} margin={{ left: 4, right: 12 }}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                     <XAxis dataKey="repNumber" tick={{ fontSize: 11 }} tickFormatter={(v) => `Rep ${v}`} />
-                    <YAxis tick={{ fontSize: 11 }} width={48} unit=" m/s" />
+                    <YAxis yAxisId="left" tick={{ fontSize: 11 }} width={48} unit=" m/s" />
+                    <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} width={40} unit="s" />
                     <Tooltip
                       contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))" }}
                     />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
                     <Line
+                      yAxisId="left"
                       type="monotone"
                       dataKey="peakVelocityMps"
                       name="Peak velocity"
                       stroke="hsl(var(--primary))"
                       strokeWidth={2}
+                      dot={{ r: 3 }}
+                    />
+                    <Line
+                      yAxisId="right"
+                      type="monotone"
+                      dataKey="timeToPeakVelocitySeconds"
+                      name="Time to peak velocity"
+                      stroke="#f59e0b"
+                      strokeWidth={2}
+                      connectNulls
                       dot={{ r: 3 }}
                     />
                   </LineChart>
