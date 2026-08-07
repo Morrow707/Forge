@@ -3,8 +3,10 @@ import { useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { getJson } from "@/lib/queryClient";
-import { Target, MoonStar, Timer } from "lucide-react";
+import { Target, MoonStar, Timer, Activity } from "lucide-react";
 import { SprintTrackerDialog } from "@/components/sprint-tracker-dialog";
+import { MechanicsTrackerDialog } from "@/components/mechanics-tracker-dialog";
+import type { MechanicsMode } from "@/lib/mechanics-tracking";
 
 type SkillDayInfo = {
   programName: string;
@@ -18,9 +20,17 @@ type SkillDayInfo = {
     reps: string;
     restSeconds: number | null;
     notes: string | null;
-    trackingLevel?: "none" | "sprint";
+    trackingLevel?: "none" | "sprint" | "mechanics";
   }[];
 };
+
+// Hitting is the only skillType that's a "swing" -- Throwing/Pitching are
+// throws (and get the arm-slot metric on top), everything else
+// (Fielding/Catching/Footwork) defaults to the generic rotational-movement
+// "swing" analysis since it's still a body-mechanics capture either way.
+function mechanicsModeFor(skillType: string): MechanicsMode {
+  return skillType === "Throwing" || skillType === "Pitching" ? "throw" : "swing";
+}
 
 /** Read-only view of a skill day, opened when a coach or athlete taps a
  * teal skill entry on the calendar -- skill days have no logging/completion
@@ -92,6 +102,7 @@ export function SkillDayViewDialog({
   // coach-kind view is previewing the program's structure, not a specific
   // athlete's day, so there's no skillAssignmentId to attribute a capture to.
   const [sprintExercise, setSprintExercise] = useState<SkillDayInfo["exercises"][number] | null>(null);
+  const [mechanicsExercise, setMechanicsExercise] = useState<SkillDayInfo["exercises"][number] | null>(null);
 
   return (
     <>
@@ -140,6 +151,17 @@ export function SkillDayViewDialog({
                           Record Sprint
                         </Button>
                       )}
+                      {ex.trackingLevel === "mechanics" && source.kind === "athlete" && (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          className="mt-2 w-full"
+                          onClick={() => setMechanicsExercise(ex)}
+                        >
+                          <Activity className="h-3.5 w-3.5" />
+                          Record {mechanicsModeFor(ex.skillType) === "throw" ? "Throw" : "Swing"}
+                        </Button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -157,6 +179,18 @@ export function SkillDayViewDialog({
           skillAssignmentId={source.skillAssignmentId}
           skillProgramDayId={source.skillProgramDayId}
           skillProgramExerciseId={sprintExercise.id}
+        />
+      )}
+
+      {mechanicsExercise && source.kind === "athlete" && (
+        <MechanicsTrackerDialog
+          open={!!mechanicsExercise}
+          onOpenChange={(o) => !o && setMechanicsExercise(null)}
+          drillName={mechanicsExercise.name}
+          mode={mechanicsModeFor(mechanicsExercise.skillType)}
+          skillAssignmentId={source.skillAssignmentId}
+          skillProgramDayId={source.skillProgramDayId}
+          skillProgramExerciseId={mechanicsExercise.id}
         />
       )}
     </>

@@ -106,9 +106,10 @@ export const PERIODIZATION_PHASE_LABEL: Record<PeriodizationPhase, string> = {
 // watches ankle position for flight phases instead of wrist/bar position
 // (see jump-tracking.ts), reporting height/distance/ground-contact instead
 // of velocity/power.
-// "sprint" is Skills' own signal -- see sprint-tracking.ts. Reusing this
-// enum (rather than declaring a parallel one) is purely a shared-vocabulary
-// convenience; skillProgramExercises is still a wholly separate table from
+// "sprint" and "mechanics" are Skills' own signals -- see
+// sprint-tracking.ts and mechanics-tracking.ts. Reusing this enum (rather
+// than declaring a parallel one) is purely a shared-vocabulary convenience;
+// skillProgramExercises is still a wholly separate table from
 // programExercises, so this doesn't reintroduce the shared-category
 // coupling the rest of the Skills system deliberately avoids.
 export const trackingLevelEnum = pgEnum("tracking_level", [
@@ -117,6 +118,7 @@ export const trackingLevelEnum = pgEnum("tracking_level", [
   "full",
   "jump",
   "sprint",
+  "mechanics",
 ]);
 
 export const users = pgTable(
@@ -569,10 +571,9 @@ export const skillProgramExercises = pgTable(
     reps: text("reps").notNull().default("10"),
     restSeconds: integer("rest_seconds"),
     notes: text("notes"),
-    // Only "none" or "sprint" are meaningful here for now -- "bar_path"/
+    // Only "none", "sprint", or "mechanics" are meaningful here -- "bar_path"/
     // "full"/"jump" are strength-side camera pipelines with no skill-drill
-    // equivalent. "mechanics" tracking (swing/throw/kick) lands in a later
-    // Skills batch as its own value.
+    // equivalent.
     trackingLevel: trackingLevelEnum("tracking_level").notNull().default("none"),
   },
   (table) => ({
@@ -604,12 +605,12 @@ export const skillAssignments = pgTable(
   }),
 );
 
-// One row per camera-tracked skill session (sprint/agility for now,
-// swing/throw/kick mechanics in a later batch) -- there's no broader
-// skill-day completion/logging system yet (see the comment on
-// getCalendarForAthlete's skill-entry merge in storage.ts), so this exists
-// purely to keep a captured result from being a one-time, thrown-away
-// number. athleteId is denormalized here (derivable via the assignment)
+// One row per camera-tracked skill session (sprint/agility or swing/throw
+// mechanics) -- there's no broader skill-day completion/logging system yet
+// (see the comment on getCalendarForAthlete's skill-entry merge in
+// storage.ts), so this exists purely to keep a captured result from being a
+// one-time, thrown-away number. athleteId is denormalized here (derivable
+// via the assignment)
 // the same way workoutLogs denormalizes it off assignments, since almost
 // every read of this table filters by athlete directly.
 export const skillSessionLogs = pgTable(
@@ -633,6 +634,16 @@ export const skillSessionLogs = pgTable(
     distanceYards: real("distance_yards"),
     cameraAngle: text("camera_angle"),
     faults: json("faults"),
+    // Mechanics-only fields (see mechanics-tracking.ts) -- null for sprint
+    // rows, and vice versa for elapsedSeconds/distanceYards above. One wide
+    // table rather than a second one since a session log is already a
+    // single, simple "one row per capture" shape either way.
+    hipShoulderSeparationDeg: real("hip_shoulder_separation_deg"),
+    weightTransferPct: real("weight_transfer_pct"),
+    hipRotationDeg: real("hip_rotation_deg"),
+    armSlotDeg: real("arm_slot_deg"),
+    armSlotLabel: text("arm_slot_label"),
+    wellSequenced: boolean("well_sequenced"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({
@@ -2180,7 +2191,7 @@ export const skillProgramExerciseInputSchema = z.object({
   reps: z.string().default("10"),
   restSeconds: z.number().optional().nullable(),
   notes: z.string().optional().nullable(),
-  trackingLevel: z.enum(["none", "sprint"]).optional(),
+  trackingLevel: z.enum(["none", "sprint", "mechanics"]).optional(),
 });
 
 export const skillProgramDayInputSchema = z.object({
@@ -2354,11 +2365,20 @@ export const createSkillSessionLogSchema = z.object({
   skillAssignmentId: z.number(),
   skillProgramDayId: z.number(),
   skillProgramExerciseId: z.number(),
-  trackingLevel: z.enum(["sprint"]),
+  trackingLevel: z.enum(["sprint", "mechanics"]),
   elapsedSeconds: z.number().min(0).max(120).optional().nullable(),
   distanceYards: z.number().min(0).max(200).optional().nullable(),
-  cameraAngle: z.enum(["side", "front_behind"]).optional().nullable(),
+  // "side"/"front_behind" are sprint's vocabulary, "face_on"/"down_the_line"
+  // are mechanics' -- one shared text column (see skillSessionLogs), just
+  // validated against whichever tracking level actually sent it.
+  cameraAngle: z.enum(["side", "front_behind", "face_on", "down_the_line"]).optional().nullable(),
   faults: z.array(formFaultSchema).optional().nullable(),
+  hipShoulderSeparationDeg: z.number().min(0).max(180).optional().nullable(),
+  weightTransferPct: z.number().min(0).max(100).optional().nullable(),
+  hipRotationDeg: z.number().min(0).max(360).optional().nullable(),
+  armSlotDeg: z.number().min(0).max(90).optional().nullable(),
+  armSlotLabel: z.enum(["overhand", "three-quarter", "sidearm"]).optional().nullable(),
+  wellSequenced: z.boolean().optional().nullable(),
 });
 
 export const repBreakdownEntrySchema = z.object({
