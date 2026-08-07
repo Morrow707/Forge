@@ -395,11 +395,11 @@ export function AppShell({
       </div>
 
       <div className={cn("flex w-full flex-col", fitScreen ? "flex-1 md:min-h-0" : "flex-1")}>
-        <header className="shrink-0 flex items-center justify-between border-b border-border bg-background/95 px-4 py-4 backdrop-blur md:px-8">
+        <header className="shrink-0 flex flex-col gap-2 border-b border-border bg-background/95 px-4 py-4 backdrop-blur sm:flex-row sm:items-center sm:justify-between md:px-8">
           <h1 className="font-display text-2xl font-bold uppercase tracking-wide md:text-3xl">
             {title}
           </h1>
-          <div className="flex min-w-0 items-center gap-2 overflow-x-auto">{actions}</div>
+          <div className="flex min-w-0 items-center gap-2 overflow-x-auto sm:justify-end">{actions}</div>
         </header>
         {subheader && (
           <div className="shrink-0 border-b border-border bg-background px-4 py-2 md:px-8">
