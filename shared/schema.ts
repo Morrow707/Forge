@@ -558,6 +558,14 @@ export const programExercises = pgTable(
     // in orderIndex, are chained together and rendered as one lettered slot
     // (A1, A2...) instead of separate letters. Opaque token, not a display value.
     supersetGroup: text("superset_group"),
+    // Only meaningful within a superset group (2+ exercises sharing a
+    // supersetGroup token): false (default) auto-starts the rest timer
+    // after every exercise's set, same as a solo exercise. true auto-starts
+    // it only after the LAST exercise in the group's set -- e.g. bicep
+    // curls straight into a single-arm row with no rest between them, then
+    // a real rest once both are done. Ignored for solo (non-superset)
+    // exercises, which always rest after every set regardless of this flag.
+    restAfterGroupOnly: boolean("rest_after_group_only").notNull().default(false),
     trackingLevel: trackingLevelEnum("tracking_level").notNull().default("none"),
     videoCheckEnabled: boolean("video_check_enabled").notNull().default(false),
   },
@@ -1882,6 +1890,7 @@ export const programExerciseInputSchema = z.object({
   restSeconds: z.number().optional().nullable(),
   notes: z.string().optional().nullable(),
   supersetGroup: z.string().optional().nullable(),
+  restAfterGroupOnly: z.boolean().optional(),
   trackingLevel: z.enum(["none", "bar_path", "full", "jump"]).optional(),
   videoCheckEnabled: z.boolean().optional(),
 });

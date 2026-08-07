@@ -338,10 +338,12 @@ CREATE TABLE IF NOT EXISTS "program_exercises" (
   "rest_seconds" integer,
   "notes" text,
   "superset_group" text,
+  "rest_after_group_only" boolean NOT NULL DEFAULT false,
   "tracking_level" tracking_level NOT NULL DEFAULT 'none',
   "video_check_enabled" boolean NOT NULL DEFAULT false
 );
 ALTER TABLE "program_exercises" ADD COLUMN IF NOT EXISTS "superset_group" text;
+ALTER TABLE "program_exercises" ADD COLUMN IF NOT EXISTS "rest_after_group_only" boolean NOT NULL DEFAULT false;
 ALTER TABLE "program_exercises" ADD COLUMN IF NOT EXISTS "tracking_level" tracking_level NOT NULL DEFAULT 'none';
 ALTER TABLE "program_exercises" ADD COLUMN IF NOT EXISTS "video_check_enabled" boolean NOT NULL DEFAULT false;
 

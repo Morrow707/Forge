@@ -181,6 +181,11 @@ type PrescribedExercise = {
   restSeconds: number | null;
   notes: string | null;
   supersetGroup: string | null;
+  // Only meaningful when supersetGroup is set (2+ chained exercises) --
+  // false (or a solo exercise) rests after every set same as always; true
+  // only auto-starts the rest timer after the LAST exercise in the group
+  // logs a set (see shouldRestAfterSet below).
+  restAfterGroupOnly: boolean;
   trackingLevel: TrackingLevel;
   videoCheckEnabled: boolean;
   exercise: ExerciseInfo;
@@ -349,6 +354,7 @@ export type ItemState = {
   restSeconds: number | null;
   coachNotes: string | null;
   supersetGroup: string | null;
+  restAfterGroupOnly: boolean;
   trackingLevel: TrackingLevel;
   videoCheckEnabled: boolean;
   lastPerformance: LastPerformance;
@@ -420,6 +426,8 @@ function buildItem(
     restSeconds: prescribed.restSeconds,
     coachNotes: prescribed.notes,
     supersetGroup: kind === "exercise" ? (prescribed as PrescribedExercise).supersetGroup : null,
+    restAfterGroupOnly:
+      kind === "exercise" ? (prescribed as PrescribedExercise).restAfterGroupOnly : false,
     trackingLevel: kind === "exercise" ? (prescribed as PrescribedExercise).trackingLevel : "none",
     videoCheckEnabled:
       kind === "exercise" ? (prescribed as PrescribedExercise).videoCheckEnabled : false,
@@ -566,6 +574,19 @@ function buildPages(items: ItemState[]): Page[] {
   for (const block of exerciseBlocks) pushBlock("exercise", block);
 
   return pages;
+}
+
+// A solo exercise (no supersetGroup) or one with restAfterGroupOnly off
+// rests after every set, same as always. A grouped exercise with it on
+// only rests once the LAST exercise in its (consecutive) superset chain
+// logs a set -- e.g. bicep curls straight into a single-arm row with no
+// rest between them, then a real rest once both are done for that round.
+export function shouldRestAfterSet(items: ItemState[], completedItem: ItemState): boolean {
+  if (!completedItem.supersetGroup || !completedItem.restAfterGroupOnly) return true;
+  const blocks = groupConsecutiveBySupersetGroup(items.filter((it) => it.kind === "exercise"));
+  const block = blocks.find((b) => b.some((it) => it.key === completedItem.key));
+  if (!block || block.length === 0) return true;
+  return block[block.length - 1].key === completedItem.key;
 }
 
 function isPageComplete(page: Page) {
@@ -937,7 +958,7 @@ export function WorkoutPage({
             if (s.setNumber !== setNumber) return s;
             const wasComplete = isSetComplete(it, s);
             const updated = { ...s, ...patch };
-            if (!wasComplete && isSetComplete(it, updated)) {
+            if (!wasComplete && isSetComplete(it, updated) && shouldRestAfterSet(prev, it)) {
               restOnComplete = it.restSeconds;
             }
             return updated;

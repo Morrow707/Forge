@@ -15,6 +15,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { ExercisePickerDialog } from "@/components/exercise-picker-dialog";
 import { WorkoutCommentThread } from "@/components/workout-comment-thread";
+import { RadioChipGroup } from "@/components/filter-chip-group";
 import { ProgressionButton } from "@/components/progression-button";
 import { VideoTrackingToggle } from "@/components/video-tracking-toggle";
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
@@ -41,6 +42,9 @@ type LocalExercise = {
   restSeconds: string;
   notes: string;
   linkedToNext: boolean;
+  // Only meaningful for 2+ exercises chained via linkedToNext -- see the
+  // matching field/comment in program-builder.tsx's LocalExercise.
+  restAfterGroupOnly: boolean;
   trackingLevel: TrackingLevel;
   videoCheckEnabled: boolean;
   // Drives which camera pipeline "Video" turns on for this exercise (see
@@ -74,6 +78,7 @@ type DayDetail = {
     restSeconds: number | null;
     notes: string | null;
     supersetGroup: string | null;
+    restAfterGroupOnly: boolean;
     trackingLevel: TrackingLevel;
     videoCheckEnabled: boolean;
     exercise: Exercise;
@@ -95,6 +100,18 @@ type ProgramDayOption = {
   id: number;
   label: string;
 };
+
+// See the matching helpers in program-builder.tsx for what these do.
+function isEndOfLinkedGroup(exercises: LocalExercise[], i: number): boolean {
+  if (exercises[i].linkedToNext) return false;
+  return i > 0 && exercises[i - 1].linkedToNext;
+}
+
+function startOfLinkedGroup(exercises: LocalExercise[], endIndex: number): number {
+  let start = endIndex;
+  while (start > 0 && exercises[start - 1].linkedToNext) start--;
+  return start;
+}
 
 export function CoachDayEditDialog({
   programDayId,
@@ -169,6 +186,7 @@ export function CoachDayEditDialog({
             restSeconds: pe.restSeconds != null ? String(pe.restSeconds) : "",
             notes: pe.notes ?? "",
             supersetGroup: pe.supersetGroup,
+            restAfterGroupOnly: pe.restAfterGroupOnly ?? false,
             trackingLevel: pe.trackingLevel ?? "none",
             videoCheckEnabled: pe.videoCheckEnabled ?? false,
             category: pe.exercise.category ?? null,
@@ -231,6 +249,7 @@ export function CoachDayEditDialog({
           restSeconds: ex.restSeconds ? Number(ex.restSeconds) : null,
           notes: ex.notes || null,
           supersetGroup: ex.supersetGroup,
+          restAfterGroupOnly: ex.restAfterGroupOnly,
           trackingLevel: ex.trackingLevel,
           videoCheckEnabled: ex.videoCheckEnabled,
         })),
@@ -383,7 +402,7 @@ export function CoachDayEditDialog({
                               <Trash2 className="h-4 w-4" />
                             </button>
                           </div>
-                          <div className="grid grid-cols-3 gap-1.5">
+                          <div className="grid grid-cols-4 gap-1.5">
                             <MiniField
                               label="Sets"
                               value={ex.sets}
@@ -433,6 +452,16 @@ export function CoachDayEditDialog({
                                 />
                               </div>
                             </div>
+                            <MiniField
+                              label="Rest (sec)"
+                              value={ex.restSeconds}
+                              type="number"
+                              onChange={(v) =>
+                                setExercises((prev) =>
+                                  prev.map((e) => (e.key === ex.key ? { ...e, restSeconds: v } : e)),
+                                )
+                              }
+                            />
                           </div>
                           <div className="mt-1.5">
                             <VideoTrackingToggle
@@ -476,6 +505,24 @@ export function CoachDayEditDialog({
                               <Link2 className="h-3 w-3" />
                               {ex.linkedToNext ? "Linked" : "Link"}
                             </button>
+                          </div>
+                        )}
+                        {isEndOfLinkedGroup(exercises, i) && (
+                          <div className="py-1 pl-3">
+                            <RadioChipGroup
+                              label="Rest"
+                              options={["Between each", "After the group"]}
+                              value={ex.restAfterGroupOnly ? "After the group" : "Between each"}
+                              onChange={(v) => {
+                                const groupStart = startOfLinkedGroup(exercises, i);
+                                const restAfterGroupOnly = v === "After the group";
+                                setExercises((prev) =>
+                                  prev.map((e, idx) =>
+                                    idx >= groupStart && idx <= i ? { ...e, restAfterGroupOnly } : e,
+                                  ),
+                                );
+                              }}
+                            />
                           </div>
                         )}
                       </div>
@@ -753,6 +800,7 @@ export function CoachDayEditDialog({
               restSeconds: "",
               notes: "",
               linkedToNext: false,
+              restAfterGroupOnly: false,
               trackingLevel: "none",
               videoCheckEnabled: false,
               category: exercise.category ?? null,
