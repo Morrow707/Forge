@@ -83,6 +83,9 @@ export default function CoachRoster() {
   const [teamDialogOpen, setTeamDialogOpen] = useState(false);
   const [newTeamName, setNewTeamName] = useState("");
 
+  const [addFreeAgentOpen, setAddFreeAgentOpen] = useState(false);
+  const [freeAgentEmail, setFreeAgentEmail] = useState("");
+
   const [rosterSearch, setRosterSearch] = useState("");
 
   const filteredRoster = roster.filter((a) => {
@@ -108,6 +111,22 @@ export default function CoachRoster() {
       toast.success("Team created");
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not create team"),
+  });
+
+  const addFreeAgentMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/coach/roster/add-free-agent", {
+        email: freeAgentEmail,
+      });
+      return res.json();
+    },
+    onSuccess: (athlete: { name: string }) => {
+      qc.invalidateQueries({ queryKey: ["/api/coach/roster"] });
+      setAddFreeAgentOpen(false);
+      setFreeAgentEmail("");
+      toast.success(`${athlete.name} added to your roster`);
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Could not add that athlete"),
   });
 
   const addToTeamMutation = useMutation({
@@ -138,10 +157,16 @@ export default function CoachRoster() {
     <AppShell
       title="Roster & Teams"
       actions={
-        <Button onClick={() => openAssignFor([])}>
-          <Send className="h-4 w-4" />
-          Assign Program
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => setAddFreeAgentOpen(true)}>
+            <UserPlus className="h-4 w-4" />
+            Add Free Agent
+          </Button>
+          <Button onClick={() => openAssignFor([])}>
+            <Send className="h-4 w-4" />
+            Assign Program
+          </Button>
+        </div>
       }
     >
       <Tabs defaultValue="roster">
@@ -375,6 +400,44 @@ export default function CoachRoster() {
               </Button>
               <Button type="submit" disabled={createTeamMutation.isPending}>
                 Create
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={addFreeAgentOpen} onOpenChange={setAddFreeAgentOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Free Agent</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Add an existing athlete account straight to your roster by email -- only works for
+            athletes who aren't already coached by someone else.
+          </p>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              addFreeAgentMutation.mutate();
+            }}
+            className="space-y-4"
+          >
+            <div className="space-y-1.5">
+              <Label>Athlete's email</Label>
+              <Input
+                required
+                type="email"
+                value={freeAgentEmail}
+                onChange={(e) => setFreeAgentEmail(e.target.value)}
+                placeholder="athlete@example.com"
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setAddFreeAgentOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={addFreeAgentMutation.isPending}>
+                {addFreeAgentMutation.isPending ? "Adding..." : "Add to Roster"}
               </Button>
             </DialogFooter>
           </form>

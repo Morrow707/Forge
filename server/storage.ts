@@ -1191,6 +1191,26 @@ export const storage = {
     return true;
   },
 
+  // Coach-initiated counterpart to the athlete-initiated "join with coach
+  // code" flow -- lets a coach pull an existing Free Agent (an athlete
+  // account with zero coachAthletes rows) straight onto their roster by
+  // email, without asking that athlete to re-enter a code. Refuses to
+  // "steal" an athlete who already has a coach -- removeAthleteFromCoach is
+  // the only way to change that relationship, and only the athlete's
+  // current coach (or the athlete themselves) should be able to trigger it.
+  async addFreeAgentToRoster(coachId: number, email: string) {
+    const user = await this.getUserByEmail(email);
+    if (!user) return { ok: false as const, reason: "not_found" as const };
+    if (user.role !== "athlete") return { ok: false as const, reason: "not_athlete" as const };
+    const existingCoaches = await this.getCoachesForAthlete(user.id);
+    if (existingCoaches.length > 0) {
+      return { ok: false as const, reason: "already_coached" as const };
+    }
+    await this.linkAthleteToCoach(coachId, user.id);
+    const athlete = await this.getRosterAthleteForCoach(coachId, user.id);
+    return { ok: true as const, athlete: athlete! };
+  },
+
   async getRosterForCoach(coachId: number) {
     const coachIds = await this.getEffectiveCoachIds(coachId);
     const rows = await db
