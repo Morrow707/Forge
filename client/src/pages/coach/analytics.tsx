@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { RadioChipGroup } from "@/components/filter-chip-group";
+import { PinnedExercisePicker, MAJOR_LIFTS } from "@/components/pinned-exercise-picker";
 import { apiRequest, getJson } from "@/lib/queryClient";
 import { useDistanceUnit, cmToDisplayUnit } from "@/lib/distance-unit";
 import { DistanceUnitToggle } from "@/components/distance-unit-toggle";
@@ -255,6 +256,15 @@ export default function CoachAnalytics() {
     enabled: !!athleteId,
   });
 
+  // The full exercise bank (not scoped to this athlete's history) -- lets a
+  // pinned major-lift tab resolve to a real exercise id even for an athlete
+  // who's never logged it, so tapping it still drives the same "no sets
+  // logged yet" empty state below instead of doing nothing.
+  const { data: allExercises = [] } = useQuery<TrackedExercise[]>({
+    queryKey: ["/api/coach/exercises"],
+    queryFn: () => getJson("/api/coach/exercises"),
+  });
+
   const { data: overview = [], isLoading: overviewLoading } = useQuery<RecentSession[]>({
     queryKey: ["/api/coach/analytics/overview", athleteId],
     queryFn: () => getJson(`/api/coach/analytics/overview?athleteId=${athleteId}&limit=100`),
@@ -359,11 +369,9 @@ export default function CoachAnalytics() {
     });
   const prCount = chartData.filter((p) => p.isPR).length;
   const unit = chartData.find((p) => p.weightUnit)?.weightUnit ?? "lbs";
-  const selectedExerciseName = exercises.find((e) => String(e.id) === exerciseId)?.name;
-  const filteredRoster = athleteSearch.trim()
-    ? roster.filter((a) => a.name.toLowerCase().includes(athleteSearch.trim().toLowerCase()))
-    : roster;
-
+  const selectedExerciseName =
+    exercises.find((e) => String(e.id) === exerciseId)?.name ??
+    allExercises.find((e) => String(e.id) === exerciseId)?.name;
   function handleAthleteChange(value: string) {
     setAthleteId(value);
     setExerciseId("");
@@ -374,58 +382,37 @@ export default function CoachAnalytics() {
       <Tabs defaultValue="performance">
         <TabsList className="mb-6">
           <TabsTrigger value="performance">Performance</TabsTrigger>
+          <TabsTrigger value="videos">Videos</TabsTrigger>
           <TabsTrigger value="trends">Team Trends</TabsTrigger>
         </TabsList>
 
         <TabsContent value="performance">
       <div className="mb-6 grid gap-3 sm:grid-cols-2">
-        <div className="space-y-1.5">
-          <label className="text-xs font-semibold uppercase text-muted-foreground">Athlete</label>
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={athleteSearch}
-              onChange={(e) => setAthleteSearch(e.target.value)}
-              placeholder="Search athletes…"
-              className="mb-1.5 h-8 pl-8 text-sm"
-            />
-          </div>
-          <Select value={athleteId} onValueChange={handleAthleteChange}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select an athlete" />
-            </SelectTrigger>
-            <SelectContent>
-              {filteredRoster.length === 0 && (
-                <p className="px-2 py-1.5 text-sm text-muted-foreground">No athletes match</p>
-              )}
-              {filteredRoster.map((a) => (
-                <SelectItem key={a.id} value={String(a.id)}>
-                  {a.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        <AthletePickerField
+          roster={roster}
+          athleteId={athleteId}
+          onChange={handleAthleteChange}
+          search={athleteSearch}
+          onSearchChange={setAthleteSearch}
+        />
         <div className="space-y-1.5">
           <label className="text-xs font-semibold uppercase text-muted-foreground">
             Exercise (optional)
           </label>
           {athleteId ? (
-            exercises.length > 0 ? (
-              <RadioChipGroup
-                label=""
-                className="[&>p]:hidden"
-                options={exercises.map((e) => e.name)}
-                value={exercises.find((e) => String(e.id) === exerciseId)?.name ?? ""}
-                onChange={(name) => {
-                  const match = exercises.find((e) => e.name === name);
-                  setExerciseId(match ? String(match.id) : "");
-                }}
-                allowNone
-              />
-            ) : (
-              <p className="text-sm text-muted-foreground">No tracked exercises yet</p>
-            )
+            <PinnedExercisePicker
+              options={exercises.map((e) => e.name)}
+              value={selectedExerciseName ?? ""}
+              onChange={(name) => {
+                if (!name) {
+                  setExerciseId("");
+                  return;
+                }
+                const trackedMatch = exercises.find((e) => e.name === name);
+                const bankMatch = allExercises.find((e) => e.name === name);
+                setExerciseId(trackedMatch ? String(trackedMatch.id) : bankMatch ? String(bankMatch.id) : "");
+              }}
+            />
           ) : (
             <p className="text-sm text-muted-foreground">Pick an athlete first</p>
           )}
@@ -517,7 +504,9 @@ export default function CoachAnalytics() {
         <Card>
           <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
             <Gauge className="h-10 w-10 text-muted-foreground" />
-            <p className="text-muted-foreground">No sets logged for this exercise yet.</p>
+            <p className="text-muted-foreground">
+              No sets logged for {selectedExerciseName ?? "this exercise"} yet.
+            </p>
           </CardContent>
         </Card>
       )}
@@ -1415,11 +1404,266 @@ export default function CoachAnalytics() {
       )}
         </TabsContent>
 
+        <TabsContent value="videos">
+          <VideosTab
+            roster={roster}
+            athleteId={athleteId}
+            onAthleteChange={handleAthleteChange}
+            athleteSearch={athleteSearch}
+            onAthleteSearchChange={setAthleteSearch}
+          />
+        </TabsContent>
+
         <TabsContent value="trends">
           <TeamTrends />
         </TabsContent>
       </Tabs>
     </AppShell>
+  );
+}
+
+/** Athlete search + select, shared by the Performance and Videos tabs so
+ * picking an athlete on one carries over to the other (both tabs read the
+ * same lifted athleteId state in CoachAnalytics). */
+function AthletePickerField({
+  roster,
+  athleteId,
+  onChange,
+  search,
+  onSearchChange,
+}: {
+  roster: RosterEntry[];
+  athleteId: string;
+  onChange: (id: string) => void;
+  search: string;
+  onSearchChange: (value: string) => void;
+}) {
+  const filtered = search.trim()
+    ? roster.filter((a) => a.name.toLowerCase().includes(search.trim().toLowerCase()))
+    : roster;
+  return (
+    <div className="space-y-1.5">
+      <label className="text-xs font-semibold uppercase text-muted-foreground">Athlete</label>
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          value={search}
+          onChange={(e) => onSearchChange(e.target.value)}
+          placeholder="Search athletes…"
+          className="mb-1.5 h-8 pl-8 text-sm"
+        />
+      </div>
+      <Select value={athleteId} onValueChange={onChange}>
+        <SelectTrigger>
+          <SelectValue placeholder="Select an athlete" />
+        </SelectTrigger>
+        <SelectContent>
+          {filtered.length === 0 && (
+            <p className="px-2 py-1.5 text-sm text-muted-foreground">No athletes match</p>
+          )}
+          {filtered.map((a) => (
+            <SelectItem key={a.id} value={String(a.id)}>
+              {a.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+type FormCheckVideoRow = {
+  id: number;
+  date: string;
+  setNumber: number;
+  videoUrl: string;
+  flag: "best" | "worst" | null;
+  exerciseName: string;
+};
+
+type SkillSessionVideoRow = {
+  id: number;
+  trackingLevel: string;
+  videoUrl: string;
+  coachAnnotationUrl: string | null;
+  createdAt: string;
+  skillExerciseName: string;
+};
+
+type VideoItem = {
+  key: string;
+  kind: "lift" | "skill";
+  exerciseName: string;
+  date: string;
+  label: string;
+  videoUrl: string;
+  flag: "best" | "worst" | null;
+};
+
+/** Every recorded video for one athlete in one place -- form-check clips
+ * from strength sets and Skills clips both, which otherwise only ever
+ * surfaced buried inside a specific exercise's raw data table (strength) or
+ * a wholly separate roster dialog (Skills). Filtering follows the same
+ * "player, then lift" flow as the Performance tab, sharing its athlete
+ * selection and its pinned-lift picker. */
+function VideosTab({
+  roster,
+  athleteId,
+  onAthleteChange,
+  athleteSearch,
+  onAthleteSearchChange,
+}: {
+  roster: RosterEntry[];
+  athleteId: string;
+  onAthleteChange: (id: string) => void;
+  athleteSearch: string;
+  onAthleteSearchChange: (value: string) => void;
+}) {
+  const [liftFilter, setLiftFilter] = useState("");
+  const [watching, setWatching] = useState<{ url: string; title: string } | null>(null);
+
+  const { data: liftVideos = [], isLoading: liftLoading } = useQuery<FormCheckVideoRow[]>({
+    queryKey: ["/api/coach/roster", athleteId, "form-check-videos"],
+    queryFn: () => getJson(`/api/coach/roster/${athleteId}/form-check-videos`),
+    enabled: !!athleteId,
+  });
+
+  const { data: skillVideos = [], isLoading: skillLoading } = useQuery<SkillSessionVideoRow[]>({
+    queryKey: ["/api/coach/roster", athleteId, "skill-sessions"],
+    queryFn: () => getJson(`/api/coach/roster/${athleteId}/skill-sessions`),
+    enabled: !!athleteId,
+  });
+
+  const allVideos: VideoItem[] = [
+    ...liftVideos.map((v) => ({
+      key: `lift-${v.id}`,
+      kind: "lift" as const,
+      exerciseName: v.exerciseName,
+      date: v.date,
+      label: `${format(parseISO(v.date), "MMM d, yyyy")} · Set ${v.setNumber}`,
+      videoUrl: v.videoUrl,
+      flag: v.flag,
+    })),
+    ...skillVideos.map((v) => ({
+      key: `skill-${v.id}`,
+      kind: "skill" as const,
+      exerciseName: v.skillExerciseName,
+      date: v.createdAt,
+      label: format(parseISO(v.createdAt), "MMM d, yyyy"),
+      videoUrl: v.videoUrl,
+      flag: null,
+    })),
+  ].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+
+  const availableLiftNames = Array.from(new Set(allVideos.map((v) => v.exerciseName))).sort();
+  const filteredVideos = liftFilter ? allVideos.filter((v) => v.exerciseName === liftFilter) : allVideos;
+  const athleteName = roster.find((a) => String(a.id) === athleteId)?.name;
+  const loading = liftLoading || skillLoading;
+
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <AthletePickerField
+          roster={roster}
+          athleteId={athleteId}
+          onChange={(id) => {
+            onAthleteChange(id);
+            setLiftFilter("");
+          }}
+          search={athleteSearch}
+          onSearchChange={onAthleteSearchChange}
+        />
+        <div className="space-y-1.5">
+          <label className="text-xs font-semibold uppercase text-muted-foreground">
+            Lift (optional)
+          </label>
+          {athleteId ? (
+            <PinnedExercisePicker options={availableLiftNames} value={liftFilter} onChange={setLiftFilter} />
+          ) : (
+            <p className="text-sm text-muted-foreground">Pick an athlete first</p>
+          )}
+        </div>
+      </div>
+
+      {!athleteId && (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
+            <Users className="h-10 w-10 text-muted-foreground" />
+            <p className="text-muted-foreground">Pick an athlete to see every video they've recorded.</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {athleteId && !loading && allVideos.length === 0 && (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
+            <Video className="h-10 w-10 text-muted-foreground" />
+            <p className="text-muted-foreground">No videos recorded yet for {athleteName ?? "this athlete"}.</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {athleteId && !loading && allVideos.length > 0 && filteredVideos.length === 0 && (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
+            <Video className="h-10 w-10 text-muted-foreground" />
+            <p className="text-muted-foreground">No {liftFilter} videos yet for {athleteName ?? "this athlete"}.</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {athleteId && filteredVideos.length > 0 && (
+        <div className="divide-y divide-border rounded-md border border-border">
+          {filteredVideos.map((v) => (
+            <div key={v.key} className="flex flex-wrap items-center justify-between gap-3 p-3">
+              <div className="flex items-center gap-3">
+                <div
+                  className={cn(
+                    "flex h-9 w-9 shrink-0 items-center justify-center rounded-md",
+                    v.kind === "skill" ? "bg-teal-500/15 text-teal-400" : "bg-primary/15 text-primary",
+                  )}
+                >
+                  {v.kind === "skill" ? <Activity className="h-4 w-4" /> : <Video className="h-4 w-4" />}
+                </div>
+                <div>
+                  <p className="text-sm font-semibold">{v.exerciseName}</p>
+                  <p className="text-xs text-muted-foreground">{v.label}</p>
+                </div>
+                {v.flag === "best" && (
+                  <Badge className="gap-1 bg-success/15 text-success hover:bg-success/15">
+                    <ThumbsUp className="h-3 w-3" />
+                    Best
+                  </Badge>
+                )}
+                {v.flag === "worst" && (
+                  <Badge className="gap-1 bg-destructive/15 text-destructive hover:bg-destructive/15">
+                    <ThumbsDown className="h-3 w-3" />
+                    Worst
+                  </Badge>
+                )}
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setWatching({ url: v.videoUrl, title: `${v.exerciseName} — ${v.label}` })}
+              >
+                <Wand2 className="h-3.5 w-3.5" />
+                Watch
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {watching && (
+        <VideoAnalysisDialog
+          open={!!watching}
+          onOpenChange={(o) => !o && setWatching(null)}
+          videoUrl={watching.url}
+          title={watching.title}
+        />
+      )}
+    </div>
   );
 }
 

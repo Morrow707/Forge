@@ -1397,6 +1397,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
+  // Strength-side counterpart to skill-sessions above -- every per-set
+  // form-check clip this athlete has recorded, across every exercise at
+  // once. Feeds the analytics page's unified Videos tab; the two lists are
+  // merged client-side rather than here since they're wholly separate
+  // tables with no shared key to join on.
+  app.get(
+    "/api/coach/roster/:athleteId/form-check-videos",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      const onRoster = await storage.getRosterAthleteForCoach(user.id, athleteId);
+      if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
+      const videos = await storage.getFormCheckVideosForCoachAthlete(user.id, athleteId);
+      res.json(videos);
+    },
+  );
+
   // Persists the imageUrl VideoAnnotationDialog hands back after the coach
   // draws on a paused frame -- that dialog and its /api/coach/annotations
   // PNG-decode route are both reused as-is, this is the one Skills-specific

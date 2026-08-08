@@ -6985,6 +6985,58 @@ ${catalog}`;
       .sort((a, b) => a.name.localeCompare(b.name));
   },
 
+  // Every per-set form-check clip this athlete has recorded, across every
+  // exercise at once -- unlike getExerciseAnalyticsForCoach above (scoped to
+  // one exerciseId), this feeds the coach analytics page's unified Videos
+  // tab, alongside getSkillSessionsWithVideoForCoachAthlete's equivalent
+  // list on the Skills side.
+  async getFormCheckVideosForCoachAthlete(coachId: number, athleteId: number) {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    const selection = {
+      id: workoutSetEntries.id,
+      date: workoutLogs.date,
+      setNumber: workoutSetEntries.setNumber,
+      videoUrl: workoutSetEntries.formCheckVideoUrl,
+      flag: workoutSetEntries.formCheckFlag,
+      exerciseName: exercises.name,
+    };
+    const peRows = await db
+      .select(selection)
+      .from(workoutSetEntries)
+      .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
+      .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
+      .innerJoin(assignments, eq(workoutLogs.assignmentId, assignments.id))
+      .innerJoin(programExercises, eq(workoutLogEntries.programExerciseId, programExercises.id))
+      .innerJoin(exercises, eq(programExercises.exerciseId, exercises.id))
+      .where(
+        and(
+          inArray(assignments.coachId, coachIds),
+          eq(assignments.athleteId, athleteId),
+          isNotNull(workoutSetEntries.formCheckVideoUrl),
+        ),
+      );
+
+    const correctiveRows = await db
+      .select(selection)
+      .from(workoutSetEntries)
+      .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
+      .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
+      .innerJoin(assignments, eq(workoutLogs.assignmentId, assignments.id))
+      .innerJoin(assignmentCorrectives, eq(workoutLogEntries.correctiveId, assignmentCorrectives.id))
+      .innerJoin(exercises, eq(assignmentCorrectives.exerciseId, exercises.id))
+      .where(
+        and(
+          inArray(assignments.coachId, coachIds),
+          eq(assignments.athleteId, athleteId),
+          isNotNull(workoutSetEntries.formCheckVideoUrl),
+        ),
+      );
+
+    return [...peRows, ...correctiveRows].sort((a, b) =>
+      a.date < b.date ? 1 : a.date > b.date ? -1 : b.setNumber - a.setNumber,
+    );
+  },
+
   // Skill drills this athlete has actually captured a sprint time for --
   // the relevant picker list for "which drill is this skill goal about,"
   // same "history, not the full bank" narrowing as the strength version
