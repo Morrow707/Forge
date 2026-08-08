@@ -1152,6 +1152,45 @@ export const storage = {
     return row;
   },
 
+  // Takes an athlete off the coach's (whole staff's) roster -- this is the
+  // exact inverse of linkAthleteToCoach, so the athlete simply reverts to
+  // Free Agent status (zero coachAthletes rows) rather than being deleted.
+  // Their account, history, and past assignments are untouched; only the
+  // active roster relationship goes away. Also drops them from any of this
+  // staff's teams so they don't linger as an orphaned team member the coach
+  // can no longer see or remove through the roster. Returns false (no-op)
+  // if the athlete wasn't on this staff's roster to begin with.
+  async removeAthleteFromCoach(coachId: number, athleteId: number) {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    const onRoster = await db.query.coachAthletes.findFirst({
+      where: and(
+        inArray(coachAthletes.coachId, coachIds),
+        eq(coachAthletes.athleteId, athleteId),
+      ),
+    });
+    if (!onRoster) return false;
+    const staffTeams = await db.query.teams.findMany({
+      where: inArray(teams.coachId, coachIds),
+      columns: { id: true },
+    });
+    if (staffTeams.length > 0) {
+      await db
+        .delete(teamMembers)
+        .where(
+          and(
+            inArray(teamMembers.teamId, staffTeams.map((t) => t.id)),
+            eq(teamMembers.athleteId, athleteId),
+          ),
+        );
+    }
+    await db
+      .delete(coachAthletes)
+      .where(
+        and(inArray(coachAthletes.coachId, coachIds), eq(coachAthletes.athleteId, athleteId)),
+      );
+    return true;
+  },
+
   async getRosterForCoach(coachId: number) {
     const coachIds = await this.getEffectiveCoachIds(coachId);
     const rows = await db

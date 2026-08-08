@@ -59,6 +59,7 @@ import {
   Trophy,
   FileDown,
   Film,
+  UserMinus,
 } from "lucide-react";
 
 type HealthStatus = "healthy" | "hurt";
@@ -139,6 +140,7 @@ export default function CoachRoster() {
   const [chatAthlete, setChatAthlete] = useState<RosterEntry | null>(null);
   const [sharingProfileId, setSharingProfileId] = useState<number | null>(null);
   const [exportAthlete, setExportAthlete] = useState<RosterEntry | null>(null);
+  const [removeAthlete, setRemoveAthlete] = useState<RosterEntry | null>(null);
 
   async function handleShareRecruitingProfile(athlete: RosterEntry) {
     setSharingProfileId(athlete.id);
@@ -197,6 +199,21 @@ export default function CoachRoster() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/coach/teams"] });
     },
+  });
+
+  const removeAthleteMutation = useMutation({
+    mutationFn: async (athleteId: number) => {
+      await apiRequest("DELETE", `/api/coach/roster/${athleteId}`);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/coach/roster"] });
+      qc.invalidateQueries({ queryKey: ["/api/coach/teams"] });
+      qc.invalidateQueries({ queryKey: ["/api/coach/roster-wellness"] });
+      qc.invalidateQueries({ queryKey: ["/api/coach/roster-acwr"] });
+      toast.success(`${removeAthlete?.name ?? "Athlete"} removed from your roster`);
+      setRemoveAthlete(null);
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Could not remove that athlete"),
   });
 
   const sendReportMutation = useMutation({
@@ -399,6 +416,16 @@ export default function CoachRoster() {
                             <FileDown className="h-4 w-4" />
                           </Button>
                           <Button
+                            size="icon"
+                            variant="ghost"
+                            aria-label={`Remove ${a.name} from your roster`}
+                            title="Remove from roster"
+                            className="text-muted-foreground hover:text-destructive"
+                            onClick={() => setRemoveAthlete(a)}
+                          >
+                            <UserMinus className="h-4 w-4" />
+                          </Button>
+                          <Button
                             size="sm"
                             variant="outline"
                             className="ml-auto"
@@ -566,6 +593,42 @@ export default function CoachRoster() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={removeAthlete !== null}
+        onOpenChange={(open) => {
+          if (!open && !removeAthleteMutation.isPending) setRemoveAthlete(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Remove {removeAthlete?.name} from your roster?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            They'll lose access to your programs, calendar, and roster tools. Their training
+            history and account stay intact -- this just takes them off your roster, so you can
+            always re-add them later with your coach code.
+          </p>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setRemoveAthlete(null)}
+              disabled={removeAthleteMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={removeAthleteMutation.isPending}
+              onClick={() => removeAthlete && removeAthleteMutation.mutate(removeAthlete.id)}
+            >
+              {removeAthleteMutation.isPending ? "Removing..." : "Remove Athlete"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

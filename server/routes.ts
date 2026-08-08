@@ -1091,6 +1091,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(publicUser);
   });
 
+  app.delete("/api/coach/roster/:athleteId", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const athleteId = Number(req.params.athleteId);
+    const removed = await storage.removeAthleteFromCoach(user.id, athleteId);
+    if (!removed) return res.status(404).json({ message: "Athlete not found" });
+    res.status(204).end();
+  });
+
   app.patch(
     "/api/coach/roster/:athleteId/health-status",
     requireRole("coach"),
