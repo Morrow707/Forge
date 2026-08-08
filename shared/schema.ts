@@ -223,6 +223,36 @@ export const coachAthletes = pgTable(
   }),
 );
 
+export const coachAthleteRequestStatusEnum = pgEnum("coach_athlete_request_status", [
+  "pending",
+  "accepted",
+  "declined",
+]);
+
+// A coach-initiated invite to an existing Free Agent (see /api/coach/roster/
+// add-free-agent) -- deliberately NOT an immediate coachAthletes link, so an
+// athlete always has to accept before a coach gains any roster access to
+// them. Old requests are kept (not deleted) after a response so both sides
+// can see the history; a new request can be sent again after a decline.
+export const coachAthleteRequests = pgTable(
+  "coach_athlete_requests",
+  {
+    id: serial("id").primaryKey(),
+    coachId: integer("coach_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    athleteId: integer("athlete_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    status: coachAthleteRequestStatusEnum("status").notNull().default("pending"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    respondedAt: timestamp("responded_at"),
+  },
+  (table) => ({
+    athleteIdx: index("coach_athlete_requests_athlete_idx").on(table.athleteId),
+  }),
+);
+
 export const teams = pgTable(
   "teams",
   {

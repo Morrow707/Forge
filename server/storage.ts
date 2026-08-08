@@ -2,6 +2,7 @@ import { db } from "./db";
 import {
   users,
   coachAthletes,
+  coachAthleteRequests,
   coachStaff,
   teams,
   teamMembers,
@@ -1192,13 +1193,15 @@ export const storage = {
   },
 
   // Coach-initiated counterpart to the athlete-initiated "join with coach
-  // code" flow -- lets a coach pull an existing Free Agent (an athlete
-  // account with zero coachAthletes rows) straight onto their roster by
-  // email, without asking that athlete to re-enter a code. Refuses to
-  // "steal" an athlete who already has a coach -- removeAthleteFromCoach is
-  // the only way to change that relationship, and only the athlete's
-  // current coach (or the athlete themselves) should be able to trigger it.
-  async addFreeAgentToRoster(coachId: number, email: string) {
+  // code" flow -- lets a coach invite an existing Free Agent (an athlete
+  // account with zero coachAthletes rows) onto their roster by email,
+  // without that athlete having to re-enter a code. Deliberately does NOT
+  // link them immediately: it creates a pending request the athlete has to
+  // accept (see respondToCoachAthleteRequest) so a coach can never gain
+  // roster access to someone without that athlete's consent. Refuses to
+  // invite an athlete who already has a coach -- removeAthleteFromCoach is
+  // the only way to change that relationship.
+  async sendFreeAgentRequest(coachId: number, email: string) {
     const user = await this.getUserByEmail(email);
     if (!user) return { ok: false as const, reason: "not_found" as const };
     if (user.role !== "athlete") return { ok: false as const, reason: "not_athlete" as const };
@@ -1206,9 +1209,66 @@ export const storage = {
     if (existingCoaches.length > 0) {
       return { ok: false as const, reason: "already_coached" as const };
     }
-    await this.linkAthleteToCoach(coachId, user.id);
-    const athlete = await this.getRosterAthleteForCoach(coachId, user.id);
-    return { ok: true as const, athlete: athlete! };
+    const existingPending = await db.query.coachAthleteRequests.findFirst({
+      where: and(
+        eq(coachAthleteRequests.coachId, coachId),
+        eq(coachAthleteRequests.athleteId, user.id),
+        eq(coachAthleteRequests.status, "pending"),
+      ),
+    });
+    if (existingPending) return { ok: false as const, reason: "already_pending" as const };
+    await db.insert(coachAthleteRequests).values({ coachId, athleteId: user.id });
+    return { ok: true as const, athleteName: user.name };
+  },
+
+  async getPendingCoachRequestsForAthlete(athleteId: number) {
+    return db
+      .select({
+        id: coachAthleteRequests.id,
+        coachId: coachAthleteRequests.coachId,
+        coachName: users.name,
+        createdAt: coachAthleteRequests.createdAt,
+      })
+      .from(coachAthleteRequests)
+      .innerJoin(users, eq(users.id, coachAthleteRequests.coachId))
+      .where(
+        and(
+          eq(coachAthleteRequests.athleteId, athleteId),
+          eq(coachAthleteRequests.status, "pending"),
+        ),
+      )
+      .orderBy(desc(coachAthleteRequests.createdAt));
+  },
+
+  // Athlete-side accept/decline for a pending coach request. Re-checks that
+  // the athlete is still a Free Agent at response time (not just when the
+  // request was sent) since they could have joined a different coach with
+  // an invite code in the meantime.
+  async respondToCoachAthleteRequest(athleteId: number, requestId: number, accept: boolean) {
+    const request = await db.query.coachAthleteRequests.findFirst({
+      where: and(
+        eq(coachAthleteRequests.id, requestId),
+        eq(coachAthleteRequests.athleteId, athleteId),
+        eq(coachAthleteRequests.status, "pending"),
+      ),
+    });
+    if (!request) return { ok: false as const, reason: "not_found" as const };
+    if (accept) {
+      const existingCoaches = await this.getCoachesForAthlete(athleteId);
+      if (existingCoaches.length > 0) {
+        await db
+          .update(coachAthleteRequests)
+          .set({ status: "declined", respondedAt: new Date() })
+          .where(eq(coachAthleteRequests.id, requestId));
+        return { ok: false as const, reason: "already_coached" as const };
+      }
+      await this.linkAthleteToCoach(request.coachId, athleteId);
+    }
+    await db
+      .update(coachAthleteRequests)
+      .set({ status: accept ? "accepted" : "declined", respondedAt: new Date() })
+      .where(eq(coachAthleteRequests.id, requestId));
+    return { ok: true as const };
   },
 
   async getRosterForCoach(coachId: number) {

@@ -120,13 +120,12 @@ export default function CoachRoster() {
       });
       return res.json();
     },
-    onSuccess: (athlete: { name: string }) => {
-      qc.invalidateQueries({ queryKey: ["/api/coach/roster"] });
+    onSuccess: (result: { athleteName: string }) => {
       setAddFreeAgentOpen(false);
       setFreeAgentEmail("");
-      toast.success(`${athlete.name} added to your roster`);
+      toast.success(`Invite sent to ${result.athleteName} -- they'll show up on your roster once they accept`);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not add that athlete"),
+    onError: (err: ApiError) => toast.error(err.message || "Could not send that invite"),
   });
 
   const addToTeamMutation = useMutation({
@@ -412,8 +411,9 @@ export default function CoachRoster() {
             <DialogTitle>Add Free Agent</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            Add an existing athlete account straight to your roster by email -- only works for
-            athletes who aren't already coached by someone else.
+            Send an existing athlete account an invite by email -- they have to accept it before
+            they show up on your roster, and it only works for athletes who aren't already
+            coached by someone else.
           </p>
           <form
             onSubmit={(e) => {
@@ -437,7 +437,7 @@ export default function CoachRoster() {
                 Cancel
               </Button>
               <Button type="submit" disabled={addFreeAgentMutation.isPending}>
-                {addFreeAgentMutation.isPending ? "Adding..." : "Add to Roster"}
+                {addFreeAgentMutation.isPending ? "Sending..." : "Send Invite"}
               </Button>
             </DialogFooter>
           </form>

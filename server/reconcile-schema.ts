@@ -198,6 +198,20 @@ CREATE TABLE IF NOT EXISTS "coach_athletes" (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "coach_athlete_pair_idx" ON "coach_athletes" ("coach_id", "athlete_id");
 
+DO $$ BEGIN
+  CREATE TYPE "coach_athlete_request_status" AS ENUM ('pending', 'accepted', 'declined');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+CREATE TABLE IF NOT EXISTS "coach_athlete_requests" (
+  "id" serial PRIMARY KEY,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "status" coach_athlete_request_status NOT NULL DEFAULT 'pending',
+  "created_at" timestamp NOT NULL DEFAULT now(),
+  "responded_at" timestamp
+);
+CREATE INDEX IF NOT EXISTS "coach_athlete_requests_athlete_idx" ON "coach_athlete_requests" ("athlete_id");
+
 CREATE TABLE IF NOT EXISTS "teams" (
   "id" serial PRIMARY KEY,
   "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,

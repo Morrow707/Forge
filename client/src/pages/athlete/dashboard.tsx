@@ -12,7 +12,7 @@ import { CalendarLinkDialog } from "@/components/calendar-link-dialog";
 import { SkillDayViewDialog } from "@/components/skill-day-view-dialog";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { CalendarDays } from "lucide-react";
+import { CalendarDays, UserPlus } from "lucide-react";
 
 export default function AthleteDashboard() {
   const [, navigate] = useLocation();
@@ -56,6 +56,8 @@ export default function AthleteDashboard() {
         </Button>
       }
     >
+      <PendingCoachRequests />
+
       <CalendarView
         entries={entries}
         onRangeChange={(start, end) => setRange({ start, end })}
@@ -123,6 +125,68 @@ export default function AthleteDashboard() {
         />
       )}
     </AppShell>
+  );
+}
+
+type CoachRequest = { id: number; coachId: number; coachName: string; createdAt: string };
+
+// A coach can invite an existing Free Agent by email (see the roster's "Add
+// Free Agent" button), but that never links them automatically -- the
+// athlete always sees it here first and has to accept or decline.
+function PendingCoachRequests() {
+  const qc = useQueryClient();
+  const { data: requests = [] } = useQuery<CoachRequest[]>({
+    queryKey: ["/api/athlete/coach-requests"],
+    refetchInterval: 60_000,
+  });
+
+  const respondMutation = useMutation({
+    mutationFn: async ({ id, accept }: { id: number; accept: boolean }) => {
+      await apiRequest("POST", `/api/athlete/coach-requests/${id}/respond`, { accept });
+    },
+    onSuccess: (_data, { accept }) => {
+      qc.invalidateQueries({ queryKey: ["/api/athlete/coach-requests"] });
+      qc.invalidateQueries({ queryKey: ["/api/athlete/coaches"] });
+      toast.success(accept ? "You're on their roster now" : "Invite declined");
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't respond to that invite"),
+  });
+
+  if (requests.length === 0) return null;
+
+  return (
+    <div className="mb-6 space-y-2">
+      {requests.map((r) => (
+        <Card key={r.id} className="border-primary/40">
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
+            <div className="flex items-center gap-2">
+              <UserPlus className="h-4 w-4 text-primary" />
+              <p className="text-sm">
+                <span className="font-semibold">{r.coachName}</span> wants to add you to their
+                roster.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={respondMutation.isPending}
+                onClick={() => respondMutation.mutate({ id: r.id, accept: false })}
+              >
+                Decline
+              </Button>
+              <Button
+                size="sm"
+                disabled={respondMutation.isPending}
+                onClick={() => respondMutation.mutate({ id: r.id, accept: true })}
+              >
+                Accept
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
   );
 }
 
