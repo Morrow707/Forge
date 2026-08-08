@@ -505,7 +505,7 @@ export function VideoAnalysisDialog({
           triggering Radix's outside-click dismissal. Pinning the top edge
           keeps the video's on-screen position stable regardless of what the
           panels below it are doing. */}
-      <DialogContent className="max-w-3xl w-[95vw] top-8 translate-y-0 gap-3 p-0" hideClose>
+      <DialogContent className="max-w-5xl w-[95vw] top-8 translate-y-0 gap-3 p-0" hideClose>
         <div className="flex items-center justify-between px-4 pt-4">
           <DialogTitle className="text-sm">{title ?? "Video Analysis"}</DialogTitle>
           <DialogClose className="rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring">
@@ -516,45 +516,57 @@ export function VideoAnalysisDialog({
 
         <div className="px-4">
         <div
-          className="relative mx-auto overflow-hidden rounded-md bg-black"
+          className="relative mx-auto flex min-h-[280px] items-center justify-center overflow-hidden rounded-md bg-black"
           style={
             intrinsicSize
               ? { maxWidth: `min(100%, calc(${MAX_VIDEO_VH}vh * ${intrinsicSize.w / intrinsicSize.h}))` }
               : undefined
           }
         >
-          <video
-            ref={videoRef}
-            src={videoUrl}
-            playsInline
-            className="block w-full"
-            onLoadedMetadata={() => {
-              const v = videoRef.current;
-              if (v) {
-                setDuration(v.duration);
-                if (v.videoWidth && v.videoHeight) setIntrinsicSize({ w: v.videoWidth, h: v.videoHeight });
-              }
-              redraw();
-            }}
-            onTimeUpdate={() => {
-              const v = videoRef.current;
-              if (v) setCurrentTime(v.currentTime);
-              redraw();
-            }}
-            onSeeked={handleFrameChanged}
-            onPlay={() => {
-              setPlaying(true);
-              handleFrameChanged();
-            }}
-            onPause={() => setPlaying(false)}
-          />
-          <canvas
-            ref={canvasRef}
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-            className={cn("absolute inset-0 h-full w-full", activeTool !== "none" ? "touch-none" : "pointer-events-none")}
-          />
+          {/* This inner wrapper (not the outer flex container) is what
+              inset-0/h-full/w-full on the canvas actually measures against --
+              it auto-sizes to the video's own natural box regardless of the
+              outer container's min-height, so the canvas's CSS display size
+              always matches the bitmap size redraw() sets from
+              video.clientWidth/Height. Sizing the canvas off the taller
+              outer box instead would stretch the drawing buffer to fill
+              space the video doesn't actually occupy, throwing the skeleton
+              overlay out of alignment exactly like the videoWidth/clientWidth
+              mismatch fixed elsewhere this session. */}
+          <div className="relative w-full">
+            <video
+              ref={videoRef}
+              src={videoUrl}
+              playsInline
+              className="block w-full"
+              onLoadedMetadata={() => {
+                const v = videoRef.current;
+                if (v) {
+                  setDuration(v.duration);
+                  if (v.videoWidth && v.videoHeight) setIntrinsicSize({ w: v.videoWidth, h: v.videoHeight });
+                }
+                redraw();
+              }}
+              onTimeUpdate={() => {
+                const v = videoRef.current;
+                if (v) setCurrentTime(v.currentTime);
+                redraw();
+              }}
+              onSeeked={handleFrameChanged}
+              onPlay={() => {
+                setPlaying(true);
+                handleFrameChanged();
+              }}
+              onPause={() => setPlaying(false)}
+            />
+            <canvas
+              ref={canvasRef}
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              className={cn("absolute inset-0 h-full w-full", activeTool !== "none" ? "touch-none" : "pointer-events-none")}
+            />
+          </div>
 
           <div className="absolute right-2 top-2 flex flex-col gap-1.5">
             <RailButton icon={PersonStanding} active={showSkeleton} label="Skeleton" onClick={toggleSkeleton} />
