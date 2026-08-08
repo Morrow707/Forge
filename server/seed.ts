@@ -52,6 +52,92 @@ async function main() {
 
   await storage.linkAthleteToCoach(coach.id, athlete.id);
 
+  // Five more roster athletes for Coach Riley so there's a real roster to
+  // test filtering/search/multi-athlete views against, not just one demo
+  // athlete. Deliberately @example.com (not @forge.app) so these don't read
+  // as official shareable demo logins, and each password is a random UUID
+  // that's never logged or surfaced anywhere -- these accounts exist purely
+  // to populate the roster, not to be signed into.
+  const extraAthletes: Array<{
+    email: string;
+    name: string;
+    sport: string;
+    position: string;
+    gender: "male" | "female";
+    age: number;
+    heightIn: number;
+    bodyWeightLbs: number;
+  }> = [
+    {
+      email: "maya.chen@example.com",
+      name: "Maya Chen",
+      sport: "Soccer",
+      position: "Midfielder",
+      gender: "female",
+      age: 20,
+      heightIn: 65,
+      bodyWeightLbs: 138,
+    },
+    {
+      email: "tyler.brooks@example.com",
+      name: "Tyler Brooks",
+      sport: "Football",
+      position: "Linebacker",
+      gender: "male",
+      age: 21,
+      heightIn: 73,
+      bodyWeightLbs: 232,
+    },
+    {
+      email: "ava.thompson@example.com",
+      name: "Ava Thompson",
+      sport: "Track & Field",
+      position: "Sprinter",
+      gender: "female",
+      age: 19,
+      heightIn: 67,
+      bodyWeightLbs: 132,
+    },
+    {
+      email: "marcus.webb@example.com",
+      name: "Marcus Webb",
+      sport: "Basketball",
+      position: "Forward",
+      gender: "male",
+      age: 22,
+      heightIn: 79,
+      bodyWeightLbs: 218,
+    },
+    {
+      email: "sofia.ramirez@example.com",
+      name: "Sofia Ramirez",
+      sport: "Volleyball",
+      position: "Outside Hitter",
+      gender: "female",
+      age: 20,
+      heightIn: 70,
+      bodyWeightLbs: 155,
+    },
+  ];
+  for (const a of extraAthletes) {
+    let extraAthlete = await storage.getUserByEmail(a.email);
+    if (!extraAthlete) {
+      extraAthlete = await storage.createUser({
+        email: a.email,
+        passwordHash: await hashPassword(crypto.randomUUID()),
+        name: a.name,
+        role: "athlete",
+        sport: a.sport,
+        position: a.position,
+        gender: a.gender,
+        age: a.age,
+        heightIn: a.heightIn,
+        bodyWeightLbs: a.bodyWeightLbs,
+      });
+    }
+    await storage.linkAthleteToCoach(coach.id, extraAthlete.id);
+  }
+
   // A pure admin account, shareable the same way the coach/athlete demo
   // logins are -- Forge library curation, plus the same personal
   // calendar/training/AI-program-chat features every admin account gets
