@@ -178,31 +178,39 @@ export default function CoachRoster() {
                   No athletes match "{rosterSearch}".
                 </p>
               ) : (
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
                   {filteredRoster.map((a) => (
                     <Card
                       key={a.id}
                       className="cursor-pointer transition-colors hover:border-primary/50"
                       onClick={() => navigate(`/coach/roster/${a.id}`)}
                     >
-                      <CardContent className="flex flex-col gap-3 p-4">
+                      <CardContent className="flex flex-col gap-2 p-3">
                         <div className="min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <span className="truncate font-semibold">{a.name}</span>
-                            <HealthStatusToggle athleteId={a.id} status={a.healthStatus ?? "healthy"} />
+                          <div className="flex items-center gap-1">
+                            <span className="truncate text-sm font-semibold">{a.name}</span>
                           </div>
-                          <p className="truncate text-xs text-muted-foreground">{a.email}</p>
+                          <HealthStatusToggle athleteId={a.id} status={a.healthStatus ?? "healthy"} />
+                          <p className="mt-1 truncate text-[11px] text-muted-foreground">{a.email}</p>
                           {(a.sport || a.position) && (
-                            <div className="mt-1.5 flex flex-wrap gap-1">
-                              {a.sport && <Badge variant="secondary">{a.sport}</Badge>}
-                              {a.position && <Badge variant="outline">{a.position}</Badge>}
+                            <div className="mt-1 flex flex-wrap gap-1">
+                              {a.sport && (
+                                <Badge variant="secondary" className="text-[10px]">
+                                  {a.sport}
+                                </Badge>
+                              )}
+                              {a.position && (
+                                <Badge variant="outline" className="text-[10px]">
+                                  {a.position}
+                                </Badge>
+                              )}
                             </div>
                           )}
                         </div>
                         <Button
                           size="sm"
                           variant="outline"
-                          className="self-end"
+                          className="self-start"
                           onClick={(e) => {
                             e.stopPropagation();
                             openAssignFor([a.id]);
