@@ -19,10 +19,12 @@ import { ChatHistoryDialog } from "@/components/chat-history-dialog";
 import { TrophyCaseDialog } from "@/components/trophy-case-dialog";
 import { TrainingHistoryExportDialog } from "@/components/training-history-export-dialog";
 import { HealthStatusToggle, WellnessBadge, AcwrBadge, type HealthStatus } from "@/components/athlete-status-badges";
+import { formatHeight } from "@/components/profile-fields-form";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { shareOrDownloadFile } from "@/lib/share-file";
 import type { ReadinessLevel } from "@shared/wellness";
 import type { AcwrRiskLevel } from "@shared/load";
+import { TESTING_METRICS } from "@shared/testing-metrics";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -61,6 +63,20 @@ type Athlete = {
   squatMaxLbs?: number | null;
   deadliftMaxLbs?: number | null;
   healthStatus?: HealthStatus;
+};
+
+const GENDER_LABEL: Record<string, string> = {
+  male: "Male",
+  female: "Female",
+  non_binary: "Non-binary",
+  prefer_not_to_say: "Prefer not to say",
+};
+
+const SEASON_PHASE_LABEL: Record<string, string> = {
+  off_season: "Off-season",
+  pre_season: "Pre-season",
+  in_season: "In-season",
+  taper: "Taper / playoffs",
 };
 
 /** A single athlete's full profile -- everything the roster card used to
@@ -184,6 +200,28 @@ export default function AthleteDetailPage() {
     );
   }
 
+  const profileStats: { label: string; value: string }[] = [];
+  if (athlete.age != null) profileStats.push({ label: "Age", value: `${athlete.age}` });
+  if (athlete.gender) profileStats.push({ label: "Gender", value: GENDER_LABEL[athlete.gender] ?? athlete.gender });
+  if (athlete.heightIn != null) {
+    const h = formatHeight(athlete.heightIn);
+    if (h) profileStats.push({ label: "Height", value: h });
+  }
+  if (athlete.bodyWeightLbs != null) {
+    profileStats.push({ label: "Weight", value: `${athlete.bodyWeightLbs} lbs` });
+  }
+  if (athlete.seasonPhase) {
+    profileStats.push({
+      label: "Season Phase",
+      value: SEASON_PHASE_LABEL[athlete.seasonPhase] ?? athlete.seasonPhase,
+    });
+  }
+
+  const testingStats: { label: string; value: string }[] = TESTING_METRICS.flatMap((m) => {
+    const raw = athlete[m.key];
+    return raw == null ? [] : [{ label: m.label as string, value: `${raw} ${m.unit}` }];
+  });
+
   return (
     <AppShell
       title={athlete.name}
@@ -215,6 +253,54 @@ export default function AthleteDetailPage() {
             )}
           </CardContent>
         </Card>
+
+        <section className="space-y-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Profile Details
+          </h3>
+          <Card>
+            <CardContent className="p-5">
+              {profileStats.length === 0 && testingStats.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No profile details yet -- click Edit Profile above to add age, height, weight,
+                  and testing numbers.
+                </p>
+              ) : (
+                <div className="space-y-4">
+                  {profileStats.length > 0 && (
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
+                      {profileStats.map(({ label, value }) => (
+                        <div key={label}>
+                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                            {label}
+                          </p>
+                          <p className="text-sm font-semibold">{value}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {testingStats.length > 0 && (
+                    <div>
+                      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        Testing Maxes
+                      </p>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
+                        {testingStats.map(({ label, value }) => (
+                          <div key={label}>
+                            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                              {label}
+                            </p>
+                            <p className="text-sm font-semibold">{value}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </section>
 
         <section className="space-y-2">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">

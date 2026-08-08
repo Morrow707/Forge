@@ -52,6 +52,17 @@ async function main() {
 
   await storage.linkAthleteToCoach(coach.id, athlete.id);
 
+  // Backfill sport/position for the demo athlete if missing -- only fires
+  // once (guarded on the field itself, not account creation) so a coach who
+  // later edits Jordan's real profile never gets overwritten by a future
+  // deploy's seed run.
+  if (!athlete.sport || !athlete.position) {
+    athlete = await storage.updateUserProfile(athlete.id, {
+      sport: athlete.sport ?? "Football",
+      position: athlete.position ?? "Running Back",
+    });
+  }
+
   // Five more roster athletes for Coach Riley so there's a real roster to
   // test filtering/search/multi-athlete views against, not just one demo
   // athlete. Deliberately @example.com (not @forge.app) so these don't read
