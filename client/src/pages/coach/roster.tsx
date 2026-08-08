@@ -313,117 +313,107 @@ export default function CoachRoster() {
                             </div>
                           )}
                         </div>
-                        <div className="flex flex-wrap items-center gap-1 border-t border-border pt-2">
+                        <div className="flex flex-wrap items-center gap-1.5 border-t border-border pt-2">
                           <Button
-                            size="icon"
-                            variant="ghost"
+                            size="sm"
+                            variant="outline"
                             aria-label={`View ${a.name}'s body metrics`}
-                            title="Body metrics"
                             onClick={() => setMetricsAthlete(a)}
                           >
-                            <Scale className="h-4 w-4" />
+                            <Scale className="h-3.5 w-3.5" />
+                            Body Metrics
                           </Button>
                           <Button
-                            size="icon"
-                            variant="ghost"
+                            size="sm"
+                            variant="outline"
                             aria-label={`View ${a.name}'s testing history`}
-                            title="Testing history"
                             onClick={() => setTestingAthlete(a)}
                           >
-                            <Timer className="h-4 w-4" />
+                            <Timer className="h-3.5 w-3.5" />
+                            Testing
                           </Button>
                           <Button
-                            size="icon"
-                            variant="ghost"
+                            size="sm"
+                            variant="outline"
                             aria-label={`View ${a.name}'s goals`}
-                            title="Goals"
                             onClick={() => setGoalsAthlete(a)}
                           >
-                            <Target className="h-4 w-4" />
+                            <Target className="h-3.5 w-3.5" />
+                            Goals
                           </Button>
                           <Button
-                            size="icon"
-                            variant="ghost"
+                            size="sm"
+                            variant="outline"
                             aria-label={`View ${a.name}'s skill clips`}
-                            title="Skill Clips"
                             onClick={() => setSkillSessionsAthlete(a)}
                           >
-                            <Film className="h-4 w-4" />
+                            <Film className="h-3.5 w-3.5" />
+                            Skill Clips
                           </Button>
                           <Button
-                            size="icon"
-                            variant="ghost"
+                            size="sm"
+                            variant="outline"
                             aria-label={`View ${a.name}'s nutrition targets`}
-                            title="Nutrition"
                             onClick={() => setNutritionAthlete(a)}
                           >
-                            <Apple className="h-4 w-4" />
+                            <Apple className="h-3.5 w-3.5" />
+                            Nutrition
                           </Button>
                           <Button
-                            size="icon"
-                            variant="ghost"
+                            size="sm"
+                            variant="outline"
                             aria-label={`View ${a.name}'s trophy case`}
-                            title="Trophy case"
                             onClick={() => setTrophyAthlete(a)}
                           >
-                            <Trophy className="h-4 w-4" />
+                            <Trophy className="h-3.5 w-3.5" />
+                            Trophies
                           </Button>
                           <Button
-                            size="icon"
-                            variant="ghost"
+                            size="sm"
+                            variant="outline"
                             aria-label={`View ${a.name}'s AI chat`}
-                            title="AI chat"
                             onClick={() => setChatAthlete(a)}
                           >
-                            <Sparkles className="h-4 w-4" />
+                            <Sparkles className="h-3.5 w-3.5" />
+                            AI Chat
                           </Button>
                           <Button
-                            size="icon"
-                            variant="ghost"
+                            size="sm"
+                            variant="outline"
                             aria-label={`Export ${a.name}'s calendar`}
-                            title="Export calendar (.ics)"
                             onClick={() => setCalendarAthlete(a)}
                           >
-                            <CalendarDays className="h-4 w-4" />
+                            <CalendarDays className="h-3.5 w-3.5" />
+                            Calendar
                           </Button>
                           <Button
-                            size="icon"
-                            variant="ghost"
+                            size="sm"
+                            variant="outline"
                             aria-label={`Email ${a.name} a progress report`}
-                            title="Email progress report"
                             disabled={sendReportMutation.isPending}
                             onClick={() => sendReportMutation.mutate(a.id)}
                           >
-                            <Mail className="h-4 w-4" />
+                            <Mail className="h-3.5 w-3.5" />
+                            Email Report
                           </Button>
                           <Button
-                            size="icon"
-                            variant="ghost"
+                            size="sm"
+                            variant="outline"
                             aria-label={`Share ${a.name}'s recruiting profile`}
-                            title="Share recruiting profile"
                             disabled={sharingProfileId === a.id}
                             onClick={() => handleShareRecruitingProfile(a)}
                           >
-                            <Share2 className="h-4 w-4" />
+                            <Share2 className="h-3.5 w-3.5" />
+                            Share Profile
                           </Button>
                           <Button
-                            size="icon"
-                            variant="ghost"
+                            size="sm"
+                            variant="outline"
                             aria-label={`Export ${a.name}'s full training history`}
-                            title="Export training history"
                             onClick={() => setExportAthlete(a)}
                           >
-                            <FileDown className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            aria-label={`Remove ${a.name} from your roster`}
-                            title="Remove from roster"
-                            className="text-muted-foreground hover:text-destructive"
-                            onClick={() => setRemoveAthlete(a)}
-                          >
-                            <UserMinus className="h-4 w-4" />
+                            <FileDown className="h-3.5 w-3.5" />
+                            Export History
                           </Button>
                           <Button
                             size="sm"
@@ -431,7 +421,18 @@ export default function CoachRoster() {
                             className="ml-auto"
                             onClick={() => openAssignFor([a.id])}
                           >
+                            <Send className="h-3.5 w-3.5" />
                             Assign
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            aria-label={`Remove ${a.name} from your roster`}
+                            className="border-destructive/40 text-destructive hover:border-destructive hover:bg-destructive/10 hover:text-destructive"
+                            onClick={() => setRemoveAthlete(a)}
+                          >
+                            <UserMinus className="h-3.5 w-3.5" />
+                            Remove
                           </Button>
                         </div>
                       </CardContent>
