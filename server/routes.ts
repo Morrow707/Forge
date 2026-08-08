@@ -1063,6 +1063,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ---------------- Coach: Roster & Teams ----------------
 
+  // Coach-initiated counterpart to POST /api/auth/join-coach -- lets a coach
+  // pull an existing Free Agent onto their roster by email instead of
+  // asking that athlete to re-enter the coach's invite code.
+  app.post("/api/coach/roster/add-free-agent", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const email = typeof req.body?.email === "string" ? req.body.email.trim() : "";
+    if (!email) return res.status(400).json({ message: "Enter an email address" });
+    const result = await storage.addFreeAgentToRoster(user.id, email);
+    if (!result.ok) {
+      const messages = {
+        not_found: "No athlete account found with that email.",
+        not_athlete: "That account isn't an athlete.",
+        already_coached: "That athlete already has a coach.",
+      };
+      return res.status(400).json({ message: messages[result.reason] });
+    }
+    res.json(result.athlete);
+  });
+
   app.get("/api/coach/roster", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     const roster = await storage.getRosterForCoach(user.id);
