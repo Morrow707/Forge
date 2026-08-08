@@ -5,22 +5,23 @@ import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AthleteProfileDialog } from "@/components/athlete-profile-dialog";
 import { CalendarLinkDialog } from "@/components/calendar-link-dialog";
-import { BodyMetricsDialog } from "@/components/body-metrics-dialog";
-import { TestingHistoryDialog } from "@/components/testing-history-dialog";
-import { GoalsDialog } from "@/components/goals-dialog";
-import { SkillSessionsDialog } from "@/components/skill-sessions-dialog";
-import { NutritionDialog } from "@/components/nutrition-dialog";
+import { BodyMetricsPanel } from "@/components/body-metrics-panel";
+import { TestingHistoryPanel } from "@/components/testing-history-panel";
+import { GoalsPanel } from "@/components/goals-panel";
+import { SkillSessionsPanel } from "@/components/skill-sessions-panel";
+import { NutritionPanel } from "@/components/nutrition-panel";
+import { AiChatPanel } from "@/components/ai-chat-panel";
+import { TrophyCase, type AthleteTrophyView } from "@/components/trophy-case";
 import { WellnessHistoryDialog } from "@/components/wellness-history-dialog";
 import { AcwrHistoryDialog } from "@/components/acwr-history-dialog";
-import { ChatHistoryDialog } from "@/components/chat-history-dialog";
-import { TrophyCaseDialog } from "@/components/trophy-case-dialog";
 import { TrainingHistoryExportDialog } from "@/components/training-history-export-dialog";
 import { HealthStatusToggle, WellnessBadge, AcwrBadge, type HealthStatus } from "@/components/athlete-status-badges";
 import { formatHeight } from "@/components/profile-fields-form";
-import { apiRequest, ApiError } from "@/lib/queryClient";
+import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { shareOrDownloadFile } from "@/lib/share-file";
 import type { ReadinessLevel } from "@shared/wellness";
 import type { AcwrRiskLevel } from "@shared/load";
@@ -29,17 +30,10 @@ import { toast } from "sonner";
 import {
   ArrowLeft,
   Pencil,
-  Scale,
-  Timer,
-  Target,
-  Film,
-  Apple,
-  Trophy,
-  Sparkles,
-  CalendarDays,
   Mail,
   Share2,
   FileDown,
+  CalendarDays,
   UserMinus,
   Users,
 } from "lucide-react";
@@ -79,11 +73,26 @@ const SEASON_PHASE_LABEL: Record<string, string> = {
   taper: "Taper / playoffs",
 };
 
+/** Read-only trophy view, embedded straight in the Trophies tab -- no dialog,
+ * just the fetch the old TrophyCaseDialog used to do plus the shared
+ * TrophyCase renderer. */
+function AthleteTrophiesTab({ fetchUrl }: { fetchUrl: string }) {
+  const { data = [], isLoading } = useQuery<AthleteTrophyView[]>({
+    queryKey: [fetchUrl],
+    queryFn: () => getJson(fetchUrl),
+  });
+
+  if (isLoading) return <div className="h-24 animate-pulse rounded-lg bg-surface" />;
+  return <TrophyCase trophies={data} emptyHint="No trophies unlocked yet." />;
+}
+
 /** A single athlete's full profile -- everything the roster card used to
  * cram into a row of icon buttons now lives here instead, scoped strictly
  * to this one athlete (never a roster-wide or team-wide view; those stay on
  * the Analytics/Leaderboard pages). Reached by clicking an athlete anywhere
- * in the app. */
+ * in the app. Every tab renders its content directly on the page (not in a
+ * popup) -- there's plenty of room, and switching tabs is one click instead
+ * of open-dialog-then-close-dialog. */
 export default function AthleteDetailPage() {
   const { athleteId } = useParams<{ athleteId: string }>();
   const id = Number(athleteId);
@@ -112,15 +121,8 @@ export default function AthleteDetailPage() {
 
   const [editOpen, setEditOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
-  const [metricsOpen, setMetricsOpen] = useState(false);
-  const [testingOpen, setTestingOpen] = useState(false);
-  const [goalsOpen, setGoalsOpen] = useState(false);
-  const [skillSessionsOpen, setSkillSessionsOpen] = useState(false);
-  const [nutritionOpen, setNutritionOpen] = useState(false);
   const [wellnessOpen, setWellnessOpen] = useState(false);
   const [acwrOpen, setAcwrOpen] = useState(false);
-  const [trophyOpen, setTrophyOpen] = useState(false);
-  const [chatOpen, setChatOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [removeOpen, setRemoveOpen] = useState(false);
   const [sharingProfile, setSharingProfile] = useState(false);
@@ -305,69 +307,10 @@ export default function AthleteDetailPage() {
             </section>
 
             <section className="space-y-2">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-destructive">
-                Danger Zone
-              </h3>
-              <Card className="border-destructive/40">
-                <CardContent className="space-y-3 p-4">
-                  <div>
-                    <p className="text-sm font-medium">Remove from your roster</p>
-                    <p className="text-xs text-muted-foreground">
-                      {athlete.name} reverts to Free Agent status. Their account and training
-                      history stay intact.
-                    </p>
-                  </div>
-                  <Button variant="destructive" className="w-full" onClick={() => setRemoveOpen(true)}>
-                    <UserMinus className="h-3.5 w-3.5" />
-                    Remove
-                  </Button>
-                </CardContent>
-              </Card>
-            </section>
-          </div>
-
-          <div className="space-y-6">
-            <section className="space-y-2">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Training
-              </h3>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
-                <Button variant="outline" onClick={() => setMetricsOpen(true)}>
-                  <Scale className="h-3.5 w-3.5" />
-                  Body Metrics
-                </Button>
-                <Button variant="outline" onClick={() => setTestingOpen(true)}>
-                  <Timer className="h-3.5 w-3.5" />
-                  Testing History
-                </Button>
-                <Button variant="outline" onClick={() => setGoalsOpen(true)}>
-                  <Target className="h-3.5 w-3.5" />
-                  Goals
-                </Button>
-                <Button variant="outline" onClick={() => setSkillSessionsOpen(true)}>
-                  <Film className="h-3.5 w-3.5" />
-                  Skill Clips
-                </Button>
-                <Button variant="outline" onClick={() => setTrophyOpen(true)}>
-                  <Trophy className="h-3.5 w-3.5" />
-                  Trophies
-                </Button>
-                <Button variant="outline" onClick={() => setNutritionOpen(true)}>
-                  <Apple className="h-3.5 w-3.5" />
-                  Nutrition
-                </Button>
-              </div>
-            </section>
-
-            <section className="space-y-2">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Communication &amp; Sharing
               </h3>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
-                <Button variant="outline" onClick={() => setChatOpen(true)}>
-                  <Sparkles className="h-3.5 w-3.5" />
-                  AI Chat
-                </Button>
+              <div className="grid grid-cols-2 gap-2">
                 <Button
                   variant="outline"
                   disabled={sendReportMutation.isPending}
@@ -390,6 +333,110 @@ export default function AthleteDetailPage() {
                 </Button>
               </div>
             </section>
+
+            <section className="space-y-2">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-destructive">
+                Danger Zone
+              </h3>
+              <Card className="border-destructive/40">
+                <CardContent className="space-y-3 p-4">
+                  <div>
+                    <p className="text-sm font-medium">Remove from your roster</p>
+                    <p className="text-xs text-muted-foreground">
+                      {athlete.name} reverts to Free Agent status. Their account and training
+                      history stay intact.
+                    </p>
+                  </div>
+                  <Button variant="destructive" className="w-full" onClick={() => setRemoveOpen(true)}>
+                    <UserMinus className="h-3.5 w-3.5" />
+                    Remove
+                  </Button>
+                </CardContent>
+              </Card>
+            </section>
+          </div>
+
+          <div>
+            <Tabs defaultValue="metrics">
+              <TabsList className="h-auto flex-wrap justify-start">
+                <TabsTrigger value="metrics">Body Metrics</TabsTrigger>
+                <TabsTrigger value="testing">Testing History</TabsTrigger>
+                <TabsTrigger value="goals">Goals</TabsTrigger>
+                <TabsTrigger value="skills">Skill Clips</TabsTrigger>
+                <TabsTrigger value="trophies">Trophies</TabsTrigger>
+                <TabsTrigger value="nutrition">Nutrition</TabsTrigger>
+                <TabsTrigger value="chat">AI Chat</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="metrics">
+                <Card>
+                  <CardContent className="p-5">
+                    <BodyMetricsPanel
+                      athleteName={athlete.name}
+                      fetchUrl={`/api/coach/roster/${athlete.id}/body-metrics`}
+                    />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="testing">
+                <Card>
+                  <CardContent className="p-5">
+                    <TestingHistoryPanel fetchUrl={`/api/coach/roster/${athlete.id}/testing-history`} />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="goals">
+                <Card>
+                  <CardContent className="p-5">
+                    <GoalsPanel
+                      goalsUrl={`/api/coach/roster/${athlete.id}/goals`}
+                      exercisesUrl={`/api/coach/analytics/exercises?athleteId=${athlete.id}`}
+                      skillExercisesUrl={`/api/coach/analytics/skill-exercises?athleteId=${athlete.id}`}
+                    />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="skills">
+                <Card>
+                  <CardContent className="p-5">
+                    <SkillSessionsPanel athleteName={athlete.name} athleteId={athlete.id} />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="trophies">
+                <Card>
+                  <CardContent className="p-5">
+                    <AthleteTrophiesTab fetchUrl={`/api/coach/roster/${athlete.id}/trophies`} />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="nutrition">
+                <Card>
+                  <CardContent className="p-5">
+                    <NutritionPanel
+                      nutritionUrl={`/api/coach/roster/${athlete.id}/nutrition`}
+                      editable
+                      foodLogUrl={`/api/coach/roster/${athlete.id}/food-log`}
+                      foodLogEditable={false}
+                    />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="chat">
+                <div className="flex h-[65vh] flex-col">
+                  <AiChatPanel
+                    fetchUrl={`/api/coach/roster/${athlete.id}/chat`}
+                    athleteName={athlete.name}
+                  />
+                </div>
+              </TabsContent>
+            </Tabs>
           </div>
         </div>
       </div>
@@ -406,43 +453,6 @@ export default function AthleteDetailPage() {
         fetchUrl={`/api/coach/roster/${athlete.id}/calendar-link`}
       />
 
-      <BodyMetricsDialog
-        open={metricsOpen}
-        onOpenChange={setMetricsOpen}
-        athleteName={athlete.name}
-        fetchUrl={`/api/coach/roster/${athlete.id}/body-metrics`}
-      />
-
-      <TestingHistoryDialog
-        open={testingOpen}
-        onOpenChange={setTestingOpen}
-        athleteName={athlete.name}
-        fetchUrl={`/api/coach/roster/${athlete.id}/testing-history`}
-      />
-
-      <GoalsDialog
-        open={goalsOpen}
-        onOpenChange={setGoalsOpen}
-        athleteName={athlete.name}
-        goalsUrl={`/api/coach/roster/${athlete.id}/goals`}
-        exercisesUrl={`/api/coach/analytics/exercises?athleteId=${athlete.id}`}
-        skillExercisesUrl={`/api/coach/analytics/skill-exercises?athleteId=${athlete.id}`}
-      />
-
-      <SkillSessionsDialog
-        open={skillSessionsOpen}
-        onOpenChange={setSkillSessionsOpen}
-        athleteName={athlete.name}
-        athleteId={athlete.id}
-      />
-
-      <NutritionDialog
-        open={nutritionOpen}
-        onOpenChange={setNutritionOpen}
-        athleteName={athlete.name}
-        nutritionUrl={`/api/coach/roster/${athlete.id}/nutrition`}
-      />
-
       <WellnessHistoryDialog
         open={wellnessOpen}
         onOpenChange={setWellnessOpen}
@@ -455,20 +465,6 @@ export default function AthleteDetailPage() {
         onOpenChange={setAcwrOpen}
         athleteName={athlete.name}
         fetchUrl={`/api/coach/roster/${athlete.id}/acwr-history`}
-      />
-
-      <TrophyCaseDialog
-        open={trophyOpen}
-        onOpenChange={setTrophyOpen}
-        athleteName={athlete.name}
-        fetchUrl={`/api/coach/roster/${athlete.id}/trophies`}
-      />
-
-      <ChatHistoryDialog
-        open={chatOpen}
-        onOpenChange={setChatOpen}
-        athleteId={athlete.id}
-        athleteName={athlete.name}
       />
 
       <TrainingHistoryExportDialog
