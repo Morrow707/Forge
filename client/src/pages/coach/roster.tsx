@@ -28,8 +28,19 @@ import {
 import type { ReadinessLevel } from "@shared/wellness";
 import type { AcwrRiskLevel } from "@shared/load";
 import { apiRequest, ApiError } from "@/lib/queryClient";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { Users, UserPlus, Send, Plus, X, Search, Copy } from "lucide-react";
+import {
+  Users,
+  UserPlus,
+  Send,
+  Plus,
+  X,
+  Search,
+  Copy,
+  HeartPulse,
+  HeartCrack,
+} from "lucide-react";
 
 type RosterEntry = {
   id: number;
@@ -87,8 +98,13 @@ export default function CoachRoster() {
   const [freeAgentEmail, setFreeAgentEmail] = useState("");
 
   const [rosterSearch, setRosterSearch] = useState("");
+  const [healthFilter, setHealthFilter] = useState<"all" | HealthStatus>("all");
+
+  const healthyCount = roster.filter((a) => (a.healthStatus ?? "healthy") === "healthy").length;
+  const hurtCount = roster.filter((a) => a.healthStatus === "hurt").length;
 
   const filteredRoster = roster.filter((a) => {
+    if (healthFilter !== "all" && (a.healthStatus ?? "healthy") !== healthFilter) return false;
     const q = rosterSearch.trim().toLowerCase();
     if (!q) return true;
     return (
@@ -187,6 +203,46 @@ export default function CoachRoster() {
             </Card>
           ) : (
             <>
+              <div className="mb-4 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setHealthFilter("all")}
+                  className={cn(
+                    "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                    healthFilter === "all"
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  All ({roster.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHealthFilter("healthy")}
+                  className={cn(
+                    "flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                    healthFilter === "healthy"
+                      ? "border-success bg-success/10 text-success"
+                      : "border-border text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  <HeartPulse className="h-3.5 w-3.5" />
+                  Healthy ({healthyCount})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHealthFilter("hurt")}
+                  className={cn(
+                    "flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                    healthFilter === "hurt"
+                      ? "border-destructive bg-destructive/10 text-destructive"
+                      : "border-border text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  <HeartCrack className="h-3.5 w-3.5" />
+                  Hurt ({hurtCount})
+                </button>
+              </div>
               <div className="relative mb-4 max-w-sm">
                 <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
@@ -199,7 +255,9 @@ export default function CoachRoster() {
               </div>
               {filteredRoster.length === 0 ? (
                 <p className="py-8 text-center text-sm text-muted-foreground">
-                  No athletes match "{rosterSearch}".
+                  {healthFilter === "all"
+                    ? `No athletes match "${rosterSearch}".`
+                    : `No ${healthFilter} athletes match your search.`}
                 </p>
               ) : (
                 <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
@@ -260,10 +318,29 @@ export default function CoachRoster() {
             </Button>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
-            {teams.map((team) => (
+            {teams.map((team) => {
+              const teamHurtCount = team.members.filter(
+                (m) => m.athlete.healthStatus === "hurt",
+              ).length;
+              const teamHealthyCount = team.members.length - teamHurtCount;
+              return (
               <Card key={team.id}>
                 <CardHeader className="flex-row items-center justify-between space-y-0">
-                  <CardTitle>{team.name}</CardTitle>
+                  <div>
+                    <CardTitle>{team.name}</CardTitle>
+                    {team.members.length > 0 && (
+                      <p className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1 text-success">
+                          <HeartPulse className="h-3 w-3" />
+                          {teamHealthyCount}
+                        </span>
+                        <span className="flex items-center gap-1 text-destructive">
+                          <HeartCrack className="h-3 w-3" />
+                          {teamHurtCount}
+                        </span>
+                      </p>
+                    )}
+                  </div>
                   <Button
                     size="sm"
                     variant="outline"
@@ -363,7 +440,8 @@ export default function CoachRoster() {
                   <GameDaysSection teamId={team.id} teamName={team.name} />
                 </CardContent>
               </Card>
-            ))}
+              );
+            })}
           </div>
         </TabsContent>
 
