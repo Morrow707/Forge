@@ -102,8 +102,8 @@ export default function CoachDashboard() {
   } | null>(null);
 
   return (
-    <AppShell title={`Welcome, ${user?.name?.split(" ")[0] ?? "Coach"}`} fitScreen>
-      <div className="flex h-full min-h-0 flex-col gap-3">
+    <AppShell title={`Welcome, ${user?.name?.split(" ")[0] ?? "Coach"}`}>
+      <div className="flex flex-col gap-3">
         <CoachDigestBanner />
         <ReengagementBanner />
 
@@ -207,8 +207,8 @@ export default function CoachDashboard() {
           />
         </div>
 
-        <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-3">
-          <Card className="flex min-h-0 flex-col lg:col-span-2">
+        <div className="grid gap-3 lg:grid-cols-3">
+          <Card className="flex flex-col lg:col-span-2">
             <CardHeader className="flex-row shrink-0 items-center justify-between space-y-0 p-3 md:p-4">
               <div>
                 <CardTitle className="text-base md:text-lg">Recent Programs</CardTitle>
@@ -222,7 +222,7 @@ export default function CoachDashboard() {
                 </Button>
               </Link>
             </CardHeader>
-            <CardContent className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3 pt-0 md:p-4 md:pt-0">
+            <CardContent className="space-y-2 p-3 pt-0 md:p-4 md:pt-0">
               {programs.length === 0 && (
                 <p className="py-6 text-center text-sm text-muted-foreground">
                   No programs yet. Build your first one to start assigning workouts.
@@ -312,14 +312,14 @@ function TeamInviteCard({
   }
 
   return (
-    <Card className="flex min-h-0 flex-col">
+    <Card className="flex flex-col">
       <CardHeader className="shrink-0 p-3 md:p-4">
         <CardTitle className="text-base md:text-lg">Invite Athletes</CardTitle>
         <CardDescription className="hidden sm:block">
           Each team has its own code -- athletes who use it join that team automatically.
         </CardDescription>
       </CardHeader>
-      <CardContent className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3 pt-0 md:p-4 md:pt-0">
+      <CardContent className="space-y-2 p-3 pt-0 md:p-4 md:pt-0">
         {codeOptions.length === 0 && (
           <p className="text-sm text-muted-foreground">
             Create a team on the Roster page to get a shareable code.
