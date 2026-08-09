@@ -18,7 +18,7 @@ import { AssignSkillProgramDialog } from "@/components/assign-skill-program-dial
 import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { Plus, Target, Trash2, Users, CalendarRange, Send, Copy } from "lucide-react";
+import { Plus, Target, Trash2, Users, CalendarRange, Send, Copy, CalendarPlus } from "lucide-react";
 
 type SkillProgramSummary = {
   id: number;
@@ -44,12 +44,26 @@ export function SkillProgramListPage({
   title,
   emptyStateText,
   libraryTabs,
+  showAssign = true,
+  showSelfAssign = false,
+  aiFirstCreate = false,
 }: {
   apiBase: string;
   routeBase: string;
   title: string;
   emptyStateText: string;
   libraryTabs?: ReactNode;
+  showAssign?: boolean;
+  /** Same self-assignment shape as ProgramListPage -- coachId === athleteId,
+   * lands the skill program on the caller's own calendar with no roster
+   * picker. Only a Free Agent passes this. */
+  showSelfAssign?: boolean;
+  /** Skips the name/description dialog -- "New Skill Program" creates a
+   * blank program and lands straight in the builder, where the AI chat
+   * panel starts the conversation. Same rationale as ProgramListPage's
+   * aiFirstCreate: a Free Agent isn't expected to design a skill
+   * progression from a blank editor. */
+  aiFirstCreate?: boolean;
 }) {
   const qc = useQueryClient();
   const [, navigate] = useLocation();
@@ -58,17 +72,22 @@ export function SkillProgramListPage({
   });
   const { data: roster = [] } = useQuery<RosterEntry[]>({
     queryKey: ["/api/coach/roster"],
+    enabled: showAssign,
   });
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [assignProgramId, setAssignProgramId] = useState<number | null>(null);
+  const [selfAssignProgramId, setSelfAssignProgramId] = useState<number | null>(null);
+  const [selfAssignDate, setSelfAssignDate] = useState(() =>
+    new Date().toISOString().slice(0, 10),
+  );
 
   const createMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (overrideName?: string) => {
       const res = await apiRequest("POST", `${apiBase}/skill-programs`, {
-        name,
+        name: overrideName ?? name,
         description,
         weeks: [],
       });
@@ -83,6 +102,25 @@ export function SkillProgramListPage({
       navigate(`${routeBase}/${program.id}`);
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not create skill program"),
+  });
+
+  // Self-assignment: coachId === athleteId -- lands the skill program on the
+  // caller's own personal calendar, same as ProgramListPage's
+  // selfAssignMutation.
+  const selfAssignMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `${apiBase}/my/skill-assignments`, {
+        skillProgramId: selfAssignProgramId,
+        startDate: selfAssignDate,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/athlete/calendar"] });
+      toast.success("Added to your calendar");
+      setSelfAssignProgramId(null);
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Could not add to your calendar"),
   });
 
   const deleteMutation = useMutation({
@@ -136,7 +174,10 @@ export function SkillProgramListPage({
       title={title}
       subheader={libraryTabs}
       actions={
-        <Button onClick={() => setDialogOpen(true)}>
+        <Button
+          onClick={() => (aiFirstCreate ? createMutation.mutate("New Skill Program") : setDialogOpen(true))}
+          disabled={aiFirstCreate && createMutation.isPending}
+        >
           <Plus className="h-4 w-4" />
           New Skill Program
         </Button>
@@ -147,7 +188,12 @@ export function SkillProgramListPage({
           <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
             <Target className="h-10 w-10 text-muted-foreground" />
             <p className="text-muted-foreground">{emptyStateText}</p>
-            <Button onClick={() => setDialogOpen(true)}>
+            <Button
+              onClick={() =>
+                aiFirstCreate ? createMutation.mutate("New Skill Program") : setDialogOpen(true)
+              }
+              disabled={aiFirstCreate && createMutation.isPending}
+            >
               <Plus className="h-4 w-4" />
               New Skill Program
             </Button>
@@ -215,15 +261,31 @@ export function SkillProgramListPage({
                     )}
                   </div>
                 </div>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  className="w-full"
-                  onClick={() => setAssignProgramId(p.id)}
-                >
-                  <Send className="h-3.5 w-3.5" />
-                  Assign
-                </Button>
+                {showAssign && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="w-full"
+                    onClick={() => setAssignProgramId(p.id)}
+                  >
+                    <Send className="h-3.5 w-3.5" />
+                    Assign
+                  </Button>
+                )}
+                {showSelfAssign && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="w-full"
+                    onClick={() => {
+                      setSelfAssignDate(new Date().toISOString().slice(0, 10));
+                      setSelfAssignProgramId(p.id);
+                    }}
+                  >
+                    <CalendarPlus className="h-3.5 w-3.5" />
+                    Add to My Calendar
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -238,7 +300,7 @@ export function SkillProgramListPage({
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              createMutation.mutate();
+              createMutation.mutate(undefined);
             }}
             className="space-y-4"
           >
@@ -273,13 +335,61 @@ export function SkillProgramListPage({
         </DialogContent>
       </Dialog>
 
-      <AssignSkillProgramDialog
-        open={assignProgramId !== null}
-        onOpenChange={(open) => !open && setAssignProgramId(null)}
-        roster={roster}
-        programs={programs}
-        programId={assignProgramId ?? undefined}
-      />
+      {showAssign && (
+        <AssignSkillProgramDialog
+          open={assignProgramId !== null}
+          onOpenChange={(open) => !open && setAssignProgramId(null)}
+          roster={roster}
+          programs={programs}
+          programId={assignProgramId ?? undefined}
+        />
+      )}
+
+      {showSelfAssign && (
+        <Dialog
+          open={selfAssignProgramId !== null}
+          onOpenChange={(open) => !open && setSelfAssignProgramId(null)}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Add to My Calendar</DialogTitle>
+            </DialogHeader>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                selfAssignMutation.mutate();
+              }}
+              className="space-y-4"
+            >
+              <div className="space-y-1.5">
+                <Label htmlFor="skill-self-assign-date">Start date</Label>
+                <Input
+                  id="skill-self-assign-date"
+                  type="date"
+                  value={selfAssignDate}
+                  onChange={(e) => setSelfAssignDate(e.target.value)}
+                  required
+                />
+                <p className="text-xs text-muted-foreground">
+                  Day 1 of Week 1 lands on this date.
+                </p>
+              </div>
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setSelfAssignProgramId(null)}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={selfAssignMutation.isPending}>
+                  {selfAssignMutation.isPending ? "Adding…" : "Add to Calendar"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      )}
     </AppShell>
   );
 }

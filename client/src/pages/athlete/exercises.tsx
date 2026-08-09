@@ -1,21 +1,19 @@
-import { ProgramListPage } from "@/pages/program-list";
+import { ExerciseBankPage } from "@/pages/exercise-bank";
 import { FreeAgentGate } from "@/components/free-agent-gate";
 import { LibraryTabs } from "@/components/library-tabs";
 
-export default function AthletePrograms() {
+export default function AthleteExercises() {
   return (
-    <FreeAgentGate>
-      <ProgramListPage
+    <FreeAgentGate title="Exercise Library">
+      <ExerciseBankPage
         apiBase="/api/athlete"
-        routeBase="/athlete/programs"
-        title="My Programs"
-        emptyStateText="Nothing here yet -- hit New Program and the AI will ask what you're trying to achieve, then build it with you."
-        showAssign={false}
-        aiFirstCreate
-        showSelfAssign
+        routeBase="/athlete/exercises"
+        title="Exercise Library"
+        emptyStateText="No exercises match your filters."
+        showCreate={false}
         libraryTabs={
           <LibraryTabs
-            active="programs"
+            active="exercises"
             programsHref="/athlete/programs"
             exercisesHref="/athlete/exercises"
             skillProgramsHref="/athlete/skill-programs"

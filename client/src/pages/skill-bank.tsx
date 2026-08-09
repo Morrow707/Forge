@@ -34,6 +34,7 @@ export function SkillBankPage({
   emptyStateText,
   libraryTabs,
   showFaultSettings,
+  showCreate = true,
 }: {
   apiBase: string;
   routeBase: string;
@@ -41,6 +42,9 @@ export function SkillBankPage({
   emptyStateText: string;
   libraryTabs?: ReactNode;
   showFaultSettings?: boolean;
+  /** Hides "New Skill Drill" -- same rationale as ExerciseBankPage's
+   * showCreate, for a Free Agent browsing the Skill Bank read-only. */
+  showCreate?: boolean;
 }) {
   const qc = useQueryClient();
   const [, navigate] = useLocation();
@@ -108,10 +112,12 @@ export function SkillBankPage({
               <SlidersHorizontal className="h-4 w-4" />
             </Button>
           )}
-          <Button onClick={() => navigate(`${routeBase}/new`)}>
-            <Plus className="h-4 w-4" />
-            New Skill Drill
-          </Button>
+          {showCreate && (
+            <Button onClick={() => navigate(`${routeBase}/new`)}>
+              <Plus className="h-4 w-4" />
+              New Skill Drill
+            </Button>
+          )}
         </div>
       }
     >
@@ -160,7 +166,7 @@ export function SkillBankPage({
             <p className="text-muted-foreground">
               {skills.length === 0 ? emptyStateText : "No skill drills match your filters."}
             </p>
-            {skills.length === 0 && (
+            {skills.length === 0 && showCreate && (
               <Button onClick={() => navigate(`${routeBase}/new`)}>
                 <Plus className="h-4 w-4" />
                 Add Skill Drill

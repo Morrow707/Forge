@@ -5,7 +5,6 @@ import { useAuth } from "@/hooks/use-auth";
 import { getJson } from "@/lib/queryClient";
 import {
   Dumbbell,
-  ListChecks,
   Users,
   CalendarDays,
   LogOut,
@@ -62,7 +61,21 @@ const coachNav: NavItem[] = [
 
 const athleteNav: NavItem[] = [
   { href: "/athlete", label: "Calendar", icon: CalendarDays, exact: true },
-  { href: "/athlete/programs", label: "My Programs", icon: ListChecks },
+  {
+    href: "/athlete/programs",
+    label: "Library",
+    icon: Dumbbell,
+    // Strength and Skills are independently paywalled for a Free Agent (see
+    // requirePaidAiAccess in routes.ts), but the nav tab itself covers both
+    // -- same "browse freely, AI features paywalled inside" shape as the
+    // rest of this page, and matches the coach's own Library tab exactly.
+    matchPrefixes: [
+      "/athlete/programs",
+      "/athlete/exercises",
+      "/athlete/skill-programs",
+      "/athlete/skills",
+    ],
+  },
   { href: "/athlete/progress", label: "Progress", icon: LineChart },
   { href: "/athlete/nutrition", label: "Nutrition", icon: Apple },
   { href: "/athlete/team-board", label: "Team Board", icon: MessagesSquare },

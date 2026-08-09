@@ -311,6 +311,16 @@ CREATE TABLE IF NOT EXISTS "skill_programs" (
   "created_at" timestamp NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS "skill_program_chat_messages" (
+  "id" serial PRIMARY KEY,
+  "skill_program_id" integer NOT NULL REFERENCES "skill_programs"("id") ON DELETE CASCADE,
+  "author_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "role" program_chat_role NOT NULL,
+  "content" text NOT NULL,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "skill_program_chat_messages_program_idx" ON "skill_program_chat_messages" ("skill_program_id", "created_at");
+
 CREATE TABLE IF NOT EXISTS "skill_program_weeks" (
   "id" serial PRIMARY KEY,
   "program_id" integer NOT NULL REFERENCES "skill_programs"("id") ON DELETE CASCADE,

@@ -47,6 +47,7 @@ import {
   generateProgramDraftSchema,
   submitWellnessCheckinSchema,
   sendProgramChatMessageSchema,
+  sendSkillProgramChatMessageSchema,
   sendAiKnowledgeChatMessageSchema,
   applyKnowledgeProposalSchema,
   substituteExerciseSchema,
@@ -3230,6 +3231,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(list);
   });
 
+  app.get("/api/athlete/exercises/:id", requireRole("athlete"), requireFreeAgent, async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const exercise = await storage.getExerciseDetail(id, user.id);
+    if (!exercise || (!exercise.isForgeOfficial && !exercise.editable)) {
+      return res.status(404).json({ message: "Exercise not found" });
+    }
+    res.json(exercise);
+  });
+
   app.get("/api/athlete/programs", requireRole("athlete"), requireFreeAgent, async (req, res) => {
     const user = currentUser(req);
     const list = await storage.getProgramsByCoach(user.id);
@@ -3461,6 +3472,160 @@ export async function registerRoutes(app: Express): Promise<Server> {
     );
     res.status(201).json(result);
   });
+
+  // ---------------- Athlete: Conversational AI skills program builder (Free Agent) ----------------
+  // Exact mirror of the strength self-service block above -- same
+  // requireFreeAgent gate, same plain-CRUD-free/AI-paywalled split -- but
+  // against skillPrograms/skillExercises and gated behind "skillsAi"
+  // instead of "strengthAi", since paying for one never unlocks the other.
+  app.get("/api/athlete/skill-exercises", requireRole("athlete"), requireFreeAgent, async (req, res) => {
+    const user = currentUser(req);
+    const list = await storage.getVisibleSkillExercisesForCoach(user.id);
+    res.json(list);
+  });
+
+  app.get(
+    "/api/athlete/skill-exercises/:id",
+    requireRole("athlete"),
+    requireFreeAgent,
+    async (req, res) => {
+      const user = currentUser(req);
+      const id = Number(req.params.id);
+      const skillExercise = await storage.getSkillExerciseDetail(id, user.id);
+      if (!skillExercise || (!skillExercise.isForgeOfficial && !skillExercise.editable)) {
+        return res.status(404).json({ message: "Skill exercise not found" });
+      }
+      res.json(skillExercise);
+    },
+  );
+
+  app.get("/api/athlete/skill-programs", requireRole("athlete"), requireFreeAgent, async (req, res) => {
+    const user = currentUser(req);
+    const list = await storage.getVisibleSkillProgramsForCoach(user.id);
+    res.json(list);
+  });
+
+  app.get("/api/athlete/skill-programs/:id", requireRole("athlete"), requireFreeAgent, async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const program = await assertCoachOwnsSkillProgram(user.id, id);
+    if (!program) return res.status(404).json({ message: "Skill program not found" });
+    res.json({ ...program, isForgeOfficial: false, ownerLabel: "YOU", editable: true });
+  });
+
+  app.post("/api/athlete/skill-programs", requireRole("athlete"), requireFreeAgent, async (req, res) => {
+    const user = currentUser(req);
+    const parsed = skillProgramStructureSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const program = await storage.createSkillProgramWithStructure(user.id, parsed.data);
+    res.status(201).json(program);
+  });
+
+  app.post(
+    "/api/athlete/skill-programs/ai-draft",
+    requireRole("athlete"),
+    requireFreeAgent,
+    requirePaidAiAccess("skillsAi"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const parsed = generateProgramDraftSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      const draft = await storage.generateSkillProgramDraft(user.id, parsed.data.prompt, user.id);
+      res.json(draft);
+    },
+  );
+
+  app.put("/api/athlete/skill-programs/:id", requireRole("athlete"), requireFreeAgent, async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const owned = await assertCoachOwnsSkillProgram(user.id, id);
+    if (!owned) return res.status(404).json({ message: "Skill program not found" });
+    const parsed = skillProgramStructureSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    await storage.updateSkillProgramStructure(id, parsed.data);
+    const updated = await storage.getSkillProgramFull(id);
+    res.json(updated);
+  });
+
+  app.delete("/api/athlete/skill-programs/:id", requireRole("athlete"), requireFreeAgent, async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const owned = await assertCoachOwnsSkillProgram(user.id, id);
+    if (!owned) return res.status(404).json({ message: "Skill program not found" });
+    await storage.deleteSkillProgram(id);
+    res.status(204).end();
+  });
+
+  app.get(
+    "/api/athlete/skill-programs/:id/chat",
+    requireRole("athlete"),
+    requireFreeAgent,
+    requirePaidAiAccess("skillsAi"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const id = Number(req.params.id);
+      const owned = await assertCoachOwnsSkillProgram(user.id, id);
+      if (!owned) return res.status(404).json({ message: "Skill program not found" });
+      const messages = await storage.getSkillProgramChatMessages(id);
+      res.json(messages);
+    },
+  );
+
+  app.post(
+    "/api/athlete/skill-programs/:id/chat",
+    requireRole("athlete"),
+    requireFreeAgent,
+    requirePaidAiAccess("skillsAi"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const id = Number(req.params.id);
+      const owned = await assertCoachOwnsSkillProgram(user.id, id);
+      if (!owned) return res.status(404).json({ message: "Skill program not found" });
+      const parsed = sendSkillProgramChatMessageSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ message: "Invalid message" });
+      const result = await storage.generateSkillProgramFromChat(id, user.id, parsed.data.content);
+      res.status(201).json(result);
+    },
+  );
+
+  // Self-assignment: coachId and athleteId are both this athlete's own id.
+  // Same bypass reasoning as /api/athlete/my/assignments above.
+  app.post(
+    "/api/athlete/my/skill-assignments",
+    requireRole("athlete"),
+    requireFreeAgent,
+    async (req, res) => {
+      const user = currentUser(req);
+      const schema = z.object({
+        skillProgramId: z.number(),
+        startDate: z.string(),
+        durationWeeks: z.number().int().min(1).max(12).default(1),
+        dateOverrides: z.record(z.string(), z.string()).optional(),
+      });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      const usable = await storage.getSkillProgramIfUsableByCoach(user.id, parsed.data.skillProgramId);
+      if (!usable) return res.status(404).json({ message: "Skill program not found" });
+
+      const result = await storage.createSkillAssignment(
+        user.id,
+        parsed.data.skillProgramId,
+        [{ athleteId: user.id }],
+        parsed.data.startDate,
+        parsed.data.dateOverrides,
+        parsed.data.durationWeeks,
+      );
+      res.status(201).json(result);
+    },
+  );
 
   // ---------------- Notifications ----------------
   // In-app inbox, available to any authenticated user. Coaches get entries

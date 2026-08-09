@@ -43,6 +43,7 @@ export function ExerciseBankPage({
   title,
   emptyStateText,
   libraryTabs,
+  showCreate = true,
 }: {
   apiBase: string;
   routeBase: string;
@@ -51,6 +52,12 @@ export function ExerciseBankPage({
   /** Renders the Programs/Exercise Bank tab strip under the title -- only
    * the coach's Library page passes this (see LibraryTabs). */
   libraryTabs?: ReactNode;
+  /** Hides "New Exercise" -- a Free Agent browses this catalog (own
+   * exercises are never in it, since there's no create route for them) but
+   * doesn't author entries in it the way a coach or admin does. Per-card
+   * delete already stays hidden on its own since every visible exercise has
+   * editable: false for a Free Agent. */
+  showCreate?: boolean;
 }) {
   const qc = useQueryClient();
   const [, navigate] = useLocation();
@@ -141,10 +148,12 @@ export function ExerciseBankPage({
       title={title}
       subheader={libraryTabs}
       actions={
-        <Button onClick={() => navigate(`${routeBase}/new`)}>
-          <Plus className="h-4 w-4" />
-          New Exercise
-        </Button>
+        showCreate && (
+          <Button onClick={() => navigate(`${routeBase}/new`)}>
+            <Plus className="h-4 w-4" />
+            New Exercise
+          </Button>
+        )
       }
     >
       <div className="mb-4 space-y-3">
@@ -231,7 +240,7 @@ export function ExerciseBankPage({
             <p className="text-muted-foreground">
               {exercises.length === 0 ? emptyStateText : "No exercises match your filters."}
             </p>
-            {exercises.length === 0 && (
+            {exercises.length === 0 && showCreate && (
               <Button onClick={() => navigate(`${routeBase}/new`)}>
                 <Plus className="h-4 w-4" />
                 Add Exercise
