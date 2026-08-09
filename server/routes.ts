@@ -208,15 +208,20 @@ function requirePaidAiAccess(entitlement: AiEntitlement) {
 // is the only way to ever actually reach a "purchased" lesson end to end.
 const COMPED_FREE_AGENT_LESSON_BUYER = "freeagent@forge.app";
 
+// Same demo/testing exception as the two stubs above -- no real billing
+// exists yet, so a comped coach here is the only way (besides being an
+// admin) to reach the unlocked Coaches Corner experience end to end.
+const COMPED_COACHES_CORNER_COACHES = new Set(["coach@forge.app"]);
+
 // Coaches Corner (coach education) paywall -- no real billing exists yet
-// (see the two stubs above), so this is intentionally admin-only for now:
-// the demo coach account and every other regular coach see the locked
-// teaser catalog until this is wired to real billing. Admins bypass since
-// they're the ones curating the content. Change only this function once
-// real billing exists -- every route below reads through it, never a role
-// check of its own.
-function hasCoachesCornerAccess(user: { role: string }) {
-  return user.role === "admin";
+// (see the two stubs above), so this is intentionally admin-only for now,
+// plus whichever coaches are explicitly comped above -- every other regular
+// coach sees the locked teaser catalog until this is wired to real billing.
+// Admins bypass since they're the ones curating the content. Change only
+// this function once real billing exists -- every route below reads
+// through it, never a role check of its own.
+function hasCoachesCornerAccess(user: { role: string; email: string }) {
+  return user.role === "admin" || COMPED_COACHES_CORNER_COACHES.has(user.email);
 }
 
 function todayIso() {
