@@ -4158,13 +4158,13 @@ Athlete's data:
 
   async enrollAthleteInClass(coachId: number, classId: number, athleteId: number, startDate: string) {
     const existing = await this.getClassEnrollmentForAthlete(athleteId, classId);
-    if (existing) return existing;
+    if (existing) return { enrollment: existing, newlyUnlocked: [] };
     const [enrollment] = await db
       .insert(classEnrollments)
       .values({ classId, athleteId, coachId, startDate })
       .returning();
-    await this.recomputeClassProgress(enrollment.id);
-    return enrollment;
+    const newlyUnlocked = await this.recomputeClassProgress(enrollment.id);
+    return { enrollment, newlyUnlocked };
   },
 
   // Only a Forge-official class can ever be self-enrolled -- a coach's own
@@ -4223,13 +4223,29 @@ Athlete's data:
   // applies, already paid for -- if both hold, activates it by creating its
   // skillAssignment. Stops at the first lesson that isn't ready to start,
   // since nothing later can be reachable before it.
-  async recomputeClassProgress(enrollmentId: number) {
+  // Returns every lesson that was newly activated during THIS call (not
+  // ones already active from before) -- routes.ts uses this to notify the
+  // athlete only at the real moment a lesson becomes available, whether
+  // that transition was detected because a coach enrolled/unlocked/the
+  // athlete purchased something, or purely because enough time/reps/
+  // sessions had quietly accumulated since the last time anyone checked.
+  async recomputeClassProgress(enrollmentId: number): Promise<
+    Array<{ lessonId: number; lessonNumber: number; title: string; classId: number; className: string; athleteId: number }>
+  > {
+    const newlyUnlocked: Array<{
+      lessonId: number;
+      lessonNumber: number;
+      title: string;
+      classId: number;
+      className: string;
+      athleteId: number;
+    }> = [];
     const enrollment = await db.query.classEnrollments.findFirst({
       where: eq(classEnrollments.id, enrollmentId),
     });
-    if (!enrollment) return;
+    if (!enrollment) return newlyUnlocked;
     const cls = await db.query.classes.findFirst({ where: eq(classes.id, enrollment.classId) });
-    if (!cls) return;
+    if (!cls) return newlyUnlocked;
     const lessons = await db.query.classLessons.findMany({
       where: eq(classLessons.classId, enrollment.classId),
       orderBy: asc(classLessons.lessonNumber),
@@ -4277,7 +4293,16 @@ Athlete's data:
         .where(eq(classLessonProgress.id, progress.id))
         .returning();
       previousProgress = updated;
+      newlyUnlocked.push({
+        lessonId: lesson.id,
+        lessonNumber: lesson.lessonNumber,
+        title: lesson.title,
+        classId: cls.id,
+        className: cls.name,
+        athleteId: enrollment.athleteId,
+      });
     }
+    return newlyUnlocked;
   },
 
   // The Free Agent / athlete-facing read: every lesson with its computed
@@ -4385,13 +4410,12 @@ Athlete's data:
         eq(classLessonProgress.classLessonId, classLessonId),
       ),
     });
-    if (!progress) return null;
+    if (!progress) return [];
     await db
       .update(classLessonProgress)
       .set({ purchasedAt: new Date() })
       .where(eq(classLessonProgress.id, progress.id));
-    await this.recomputeClassProgress(enrollmentId);
-    return true;
+    return this.recomputeClassProgress(enrollmentId);
   },
 
   // Coach/admin escape hatch -- force a lesson open regardless of its
@@ -4403,13 +4427,12 @@ Athlete's data:
         eq(classLessonProgress.classLessonId, classLessonId),
       ),
     });
-    if (!progress) return null;
+    if (!progress) return [];
     await db
       .update(classLessonProgress)
       .set({ manuallyUnlocked: true })
       .where(eq(classLessonProgress.id, progress.id));
-    await this.recomputeClassProgress(enrollmentId);
-    return true;
+    return this.recomputeClassProgress(enrollmentId);
   },
 
   // Coach-facing roster view for a Class's detail page -- who's enrolled
