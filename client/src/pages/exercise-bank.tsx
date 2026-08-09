@@ -11,7 +11,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { Plus, Trash2, Dumbbell, Search, Video, Stethoscope } from "lucide-react";
 import type { ExerciseWithOwnership } from "@/lib/exercise-types";
-import { MOVEMENT_TYPES, MUSCLE_GROUPS, SPORTS } from "@/lib/exercise-taxonomy";
+import { MOVEMENT_TYPES, MUSCLE_GROUPS, SPORTS, BODY_REGIONS, PLANES } from "@/lib/exercise-taxonomy";
 import { FilterChipGroup, toggleInSet } from "@/components/filter-chip-group";
 import {
   CATEGORY_BADGE_CLASS,
@@ -21,6 +21,8 @@ import {
   MUSCLE_FILTER_ACTIVE_CLASS,
   SPORT_FILTER_ACTIVE_CLASS,
   OWNER_FILTER_ACTIVE_CLASS,
+  BODY_REGION_FILTER_ACTIVE_CLASS,
+  PLANE_FILTER_ACTIVE_CLASS,
 } from "@/lib/exercise-colors";
 import { toast } from "sonner";
 import { ApiError } from "@/lib/queryClient";
@@ -70,6 +72,8 @@ export function ExerciseBankPage({
   const [movementFilter, setMovementFilter] = useState<Set<string>>(new Set());
   const [muscleGroupFilter, setMuscleGroupFilter] = useState<Set<string>>(new Set());
   const [lateralityFilter, setLateralityFilter] = useState<Set<string>>(new Set());
+  const [bodyRegionFilter, setBodyRegionFilter] = useState<Set<string>>(new Set());
+  const [planeFilter, setPlaneFilter] = useState<Set<string>>(new Set());
   const [sportFilter, setSportFilter] = useState<Set<string>>(new Set());
   const [ownerFilter, setOwnerFilter] = useState<Set<string>>(new Set());
   const [correctivesOnly, setCorrectivesOnly] = useState(false);
@@ -105,6 +109,9 @@ export function ExerciseBankPage({
       const matchesMuscleGroup = muscleGroupFilter.size === 0 || muscleGroupFilter.has(ex.muscleGroup);
       const matchesLaterality =
         lateralityFilter.size === 0 || (ex.laterality != null && lateralityFilter.has(ex.laterality));
+      const matchesBodyRegion =
+        bodyRegionFilter.size === 0 || (ex.bodyRegion != null && bodyRegionFilter.has(ex.bodyRegion));
+      const matchesPlane = planeFilter.size === 0 || (ex.plane != null && planeFilter.has(ex.plane));
       const matchesSport =
         sportFilter.size === 0 || (ex.sports ?? []).some((s) => sportFilter.has(s));
       const matchesOwner = ownerFilter.size === 0 || ownerFilter.has(ex.ownerLabel);
@@ -115,6 +122,8 @@ export function ExerciseBankPage({
         matchesMovement &&
         matchesMuscleGroup &&
         matchesLaterality &&
+        matchesBodyRegion &&
+        matchesPlane &&
         matchesSport &&
         matchesOwner &&
         matchesCorrective
@@ -127,6 +136,8 @@ export function ExerciseBankPage({
     movementFilter,
     muscleGroupFilter,
     lateralityFilter,
+    bodyRegionFilter,
+    planeFilter,
     sportFilter,
     ownerFilter,
     correctivesOnly,
@@ -216,6 +227,20 @@ export function ExerciseBankPage({
             onToggle={(v) => toggleInSet(setOwnerFilter, v)}
             colorClass={OWNER_FILTER_ACTIVE_CLASS}
           />
+          <FilterChipGroup
+            label="Body Region"
+            options={BODY_REGIONS}
+            selected={bodyRegionFilter}
+            onToggle={(v) => toggleInSet(setBodyRegionFilter, v)}
+            colorClass={BODY_REGION_FILTER_ACTIVE_CLASS}
+          />
+          <FilterChipGroup
+            label="Plane"
+            options={PLANES}
+            selected={planeFilter}
+            onToggle={(v) => toggleInSet(setPlaneFilter, v)}
+            colorClass={PLANE_FILTER_ACTIVE_CLASS}
+          />
         </div>
         <FilterChipGroup
           label="Muscle"
@@ -261,7 +286,9 @@ export function ExerciseBankPage({
                     <p className="text-xs text-muted-foreground">
                       {ex.muscleGroup}
                       {ex.movementType ? ` · ${ex.movementType}` : ""}
+                      {ex.plane ? ` (${ex.plane})` : ""}
                       {ex.laterality ? ` · ${ex.laterality}` : ""}
+                      {ex.bodyRegion ? ` · ${ex.bodyRegion}` : ""}
                     </p>
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-1">

@@ -12,6 +12,17 @@ export const MOVEMENT_TYPES = [
   "Activation",
 ];
 
+// Two more classification axes layered on top of MOVEMENT_TYPES -- neither
+// replaces it, both narrow it further, so a training split like "upper
+// push, horizontal only" or "lower body day" can be queried directly by a
+// coach or the AI program builder instead of eyeballing muscleGroup.
+// BODY_REGIONS applies to any exercise; PLANES is only meaningful
+// alongside a Push/Press/Pull movementType (a squat or hinge has no
+// horizontal/vertical distinction worth tagging).
+export const BODY_REGIONS = ["Upper Body", "Lower Body", "Full Body", "Core"];
+
+export const PLANES = ["Horizontal", "Vertical"];
+
 export const SPORTS = [
   "Football",
   "Basketball",

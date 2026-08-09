@@ -2,8 +2,8 @@ import "dotenv/config";
 import { db } from "./db";
 import { storage } from "./storage";
 import { hashPassword } from "./auth-utils";
-import { users, programs } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { users, programs, exercises } from "@shared/schema";
+import { eq, isNull, and } from "drizzle-orm";
 
 // We don't have live web access from this environment to verify specific
 // YouTube video IDs are real and still online, so hand-picking exact links
@@ -4108,6 +4108,61 @@ async function main() {
       }
 
       console.log(`Created "Test Program" (id ${testProgram.id}), owned by Forge identity ${forgeIdentity.id}.`);
+    }
+  }
+
+  // One-time backfill (fully idempotent -- only ever touches rows where the
+  // column is still NULL, never overwrites a coach's own choice): most of
+  // the exercise library predates the bodyRegion/plane classification
+  // fields, so without this the new filters/AI context would be empty for
+  // almost everything already in the bank. Heuristic, not authoritative --
+  // a coach can always correct an individual exercise afterward via the
+  // edit form, same as any other tag.
+  {
+    const LOWER_BODY_MUSCLES = new Set([
+      "Quads", "Hamstrings", "Glutes", "Calves", "Hip Flexors", "Adductors", "Ankle",
+    ]);
+    const UPPER_BODY_MUSCLES = new Set([
+      "Chest", "Back", "Lats", "Traps", "Shoulders", "Biceps", "Triceps", "Forearms", "Neck",
+    ]);
+    const CORE_MUSCLES = new Set(["Core", "Abs", "Obliques", "Lower Back"]);
+
+    function inferBodyRegion(muscleGroup: string): string | null {
+      if (LOWER_BODY_MUSCLES.has(muscleGroup)) return "Lower Body";
+      if (UPPER_BODY_MUSCLES.has(muscleGroup)) return "Upper Body";
+      if (CORE_MUSCLES.has(muscleGroup)) return "Core";
+      if (muscleGroup === "Full Body") return "Full Body";
+      return null;
+    }
+
+    // Only Push/Press/Pull carries a meaningful horizontal/vertical split --
+    // a chest- or back-tagged exercise in one of those movement types reads
+    // as horizontal (bench press, rows), a shoulders- or lats-tagged one as
+    // vertical (overhead press, pull-ups/lat pulldown).
+    function inferPlane(movementType: string | null, muscleGroup: string): string | null {
+      if (!movementType || !["Push", "Press", "Pull"].includes(movementType)) return null;
+      if (muscleGroup === "Chest" || muscleGroup === "Back") return "Horizontal";
+      if (muscleGroup === "Shoulders" || muscleGroup === "Lats") return "Vertical";
+      return null;
+    }
+
+    const untagged = await db.query.exercises.findMany({
+      where: and(isNull(exercises.bodyRegion), isNull(exercises.plane)),
+    });
+    let backfilled = 0;
+    for (const ex of untagged) {
+      const bodyRegion = inferBodyRegion(ex.muscleGroup);
+      const plane = inferPlane(ex.movementType, ex.muscleGroup);
+      if (bodyRegion || plane) {
+        await db
+          .update(exercises)
+          .set({ bodyRegion, plane })
+          .where(eq(exercises.id, ex.id));
+        backfilled++;
+      }
+    }
+    if (backfilled > 0) {
+      console.log(`Backfilled bodyRegion/plane on ${backfilled} existing exercise(s).`);
     }
   }
 
