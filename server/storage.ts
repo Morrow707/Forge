@@ -36,6 +36,7 @@ import {
   teamPosts,
   bodyMetrics,
   testingResults,
+  goniometerReadings,
   nutritionTargets,
   goals,
   wellnessCheckins,
@@ -78,6 +79,7 @@ import type {
   CreateExerciseReportInput,
   CreateBodyMetricInput,
   TestingMetric,
+  InsertGoniometerReading,
   UpdateNutritionTargetsInput,
   CreateGoalInput,
   AiKnowledgeMessage,
@@ -1979,6 +1981,40 @@ export const storage = {
         date: r.date,
         value: r[metric] as number,
       }));
+  },
+
+  // ---------- Goniometer (joint ROM) readings ----------
+  async createGoniometerReading(recordedBy: number, data: InsertGoniometerReading) {
+    const [row] = await db
+      .insert(goniometerReadings)
+      .values({ ...data, recordedBy })
+      .returning();
+    return row;
+  },
+
+  async deleteGoniometerReading(id: number) {
+    await db.delete(goniometerReadings).where(eq(goniometerReadings.id, id));
+  },
+
+  async getGoniometerHistoryForAthlete(athleteId: number) {
+    return db.query.goniometerReadings.findMany({
+      where: eq(goniometerReadings.athleteId, athleteId),
+      orderBy: [desc(goniometerReadings.date), desc(goniometerReadings.createdAt)],
+    });
+  },
+
+  // The single most recent reading per joint+movement combo -- a compact
+  // "current status" snapshot instead of the full log, e.g. for a roster
+  // overview or as input to a future weakness-analysis report.
+  async getLatestGoniometerReadingsForAthlete(athleteId: number) {
+    const all = await this.getGoniometerHistoryForAthlete(athleteId);
+    const latestByKey = new Map<string, (typeof all)[number]>();
+    for (const r of all) {
+      const key = `${r.joint}:${r.movement}`;
+      // all is already sorted newest-first, so the first hit per key wins
+      if (!latestByKey.has(key)) latestByKey.set(key, r);
+    }
+    return Array.from(latestByKey.values());
   },
 
   // ---------- Goals ----------

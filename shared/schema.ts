@@ -1413,6 +1413,52 @@ export const testingResults = pgTable(
   }),
 );
 
+// One row per joint+movement reading, not one row per assessment session --
+// unlike testingResults' fixed columns, a goniometer session can cover any
+// subset of joints, so a flat append-only log (each reading independently
+// dated) fits better than a wide table that would need a column per
+// joint/movement combination. "joint" reuses BODY_PAIN_PARTS' left/right key
+// convention (shared/wellness.ts) wherever a joint has a laterality split;
+// see shared/goniometer.ts for the full joint/movement taxonomy and normal-
+// range reference used to classify a reading as restricted/normal/
+// hypermobile. No uniqueness constraint on (athleteId, date, joint,
+// movement) -- a coach re-measuring the same joint twice in one session to
+// confirm a number should be able to save both readings.
+export const goniometerReadings = pgTable(
+  "goniometer_readings",
+  {
+    id: serial("id").primaryKey(),
+    athleteId: integer("athlete_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    recordedBy: integer("recorded_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    date: date("date").notNull(),
+    joint: text("joint").notNull(),
+    movement: text("movement").notNull(),
+    angleDegrees: real("angle_degrees").notNull(),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    athleteIdx: index("goniometer_readings_athlete_idx").on(table.athleteId),
+    athleteJointIdx: index("goniometer_readings_athlete_joint_idx").on(
+      table.athleteId,
+      table.joint,
+    ),
+  }),
+);
+
+export const insertGoniometerReadingSchema = z.object({
+  athleteId: z.number(),
+  date: z.string(),
+  joint: z.string(),
+  movement: z.string(),
+  angleDegrees: z.number(),
+  notes: z.string().optional().nullable(),
+});
+
 // "skill" is Skills' own goal type -- targets a best (lowest) sprint-timing
 // elapsedSeconds for one skill drill, computed off skillSessionLogs the
 // same read-only, never-stored-achieved way "exercise"/"testing" are
@@ -3122,6 +3168,9 @@ export type CreateBodyMetricInput = z.infer<typeof createBodyMetricSchema>;
 export type BodyMetric = typeof bodyMetrics.$inferSelect;
 
 export type TestingResult = typeof testingResults.$inferSelect;
+
+export type GoniometerReading = typeof goniometerReadings.$inferSelect;
+export type InsertGoniometerReading = z.infer<typeof insertGoniometerReadingSchema>;
 
 // Every field optional/nullable -- a coach (or a Free Agent editing their
 // own, see the athlete nutrition routes) can set as many or as few of these

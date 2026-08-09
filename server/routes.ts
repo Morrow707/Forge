@@ -41,6 +41,7 @@ import {
   createBodyMetricSchema,
   createAnnotationSchema,
   testingTrendsQuerySchema,
+  insertGoniometerReadingSchema,
   createGoalSchema,
   suggestGoalTargetSchema,
   sendChatMessageSchema,
@@ -1713,6 +1714,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
       const history = await storage.getTestingHistoryForAthlete(athleteId);
       res.json(history);
+    },
+  );
+
+  // Goniometer (joint ROM) readings -- see shared/goniometer.ts for the
+  // joint/movement taxonomy and normal-range reference these compare
+  // against client-side.
+  app.get(
+    "/api/coach/roster/:athleteId/goniometer",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      const onRoster = await storage.getRosterAthleteForCoach(user.id, athleteId);
+      if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
+      const history = await storage.getGoniometerHistoryForAthlete(athleteId);
+      res.json(history);
+    },
+  );
+
+  app.post(
+    "/api/coach/roster/:athleteId/goniometer",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      const onRoster = await storage.getRosterAthleteForCoach(user.id, athleteId);
+      if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
+      const parsed = insertGoniometerReadingSchema.safeParse({ ...req.body, athleteId });
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      const reading = await storage.createGoniometerReading(user.id, parsed.data);
+      res.status(201).json(reading);
+    },
+  );
+
+  app.delete(
+    "/api/coach/roster/:athleteId/goniometer/:readingId",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      const onRoster = await storage.getRosterAthleteForCoach(user.id, athleteId);
+      if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
+      await storage.deleteGoniometerReading(Number(req.params.readingId));
+      res.status(204).end();
     },
   );
 
