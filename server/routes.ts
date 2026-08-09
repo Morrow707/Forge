@@ -59,6 +59,8 @@ import {
   setCaraCapSchema,
   createTeamChallengeSchema,
   createTeamGameDaySchema,
+  classStructureSchema,
+  enrollInClassSchema,
 } from "@shared/schema";
 import { computeReadiness } from "@shared/wellness";
 import { z } from "zod";
@@ -200,6 +202,11 @@ function requirePaidAiAccess(entitlement: AiEntitlement) {
   };
 }
 
+// Same demo/testing exception as COMPED_FREE_AGENT_ENTITLEMENTS above, for
+// per-lesson Class purchases -- no real billing exists yet, so this account
+// is the only way to ever actually reach a "purchased" lesson end to end.
+const COMPED_FREE_AGENT_LESSON_BUYER = "freeagent@forge.app";
+
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -238,6 +245,14 @@ async function assertCoachOwnsSkillProgram(coachId: number, skillProgramId: numb
   const coachIds = await storage.getEffectiveCoachIds(coachId);
   if (!coachIds.includes(program.coachId)) return null;
   return program;
+}
+
+async function assertCoachOwnsClass(coachId: number, classId: number) {
+  const cls = await storage.getClassFull(classId);
+  if (!cls) return null;
+  const coachIds = await storage.getEffectiveCoachIds(coachId);
+  if (!coachIds.includes(cls.coachId)) return null;
+  return cls;
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -486,6 +501,121 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.status(201).json(result);
   });
 
+  // ---------------- Coach: Classes ----------------
+  // A coach's own Class is private to their roster (never shown to a Free
+  // Agent, who has no coach); an admin's Forge Class (see the /api/admin
+  // block further down) shows up here too, read-only, exactly like a Forge
+  // program or skill program. getVisibleClassesForCoach already merges
+  // both -- called with either a coach's or an admin's own id, since an
+  // admin's "coach id" for Classes purposes is just their own user id.
+
+  app.get("/api/coach/classes", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const list = await storage.getVisibleClassesForCoach(user.id);
+    res.json(list);
+  });
+
+  app.get("/api/coach/classes/:id", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const cls = await storage.getClassIfUsableByCoach(user.id, id);
+    if (!cls) return res.status(404).json({ message: "Class not found" });
+    const full = await storage.getClassFull(id);
+    const coachIds = await storage.getEffectiveCoachIds(user.id);
+    res.json({
+      ...full,
+      ownerLabel: cls.isForgeOfficial ? "FORGE" : "YOU",
+      editable: coachIds.includes(cls.coachId),
+    });
+  });
+
+  app.post("/api/coach/classes", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = classStructureSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const cls = await storage.createClassWithStructure(user.id, parsed.data, false);
+    res.status(201).json(cls);
+  });
+
+  app.put("/api/coach/classes/:id", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const owned = await assertCoachOwnsClass(user.id, id);
+    if (!owned) return res.status(404).json({ message: "Class not found" });
+    const parsed = classStructureSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    await storage.updateClassStructure(id, parsed.data);
+    const updated = await storage.getClassFull(id);
+    res.json(updated);
+  });
+
+  app.delete("/api/coach/classes/:id", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const owned = await assertCoachOwnsClass(user.id, id);
+    if (!owned) return res.status(404).json({ message: "Class not found" });
+    await storage.deleteClass(id);
+    res.status(204).end();
+  });
+
+  app.get("/api/coach/classes/:id/roster", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const usable = await storage.getClassIfUsableByCoach(user.id, id);
+    if (!usable) return res.status(404).json({ message: "Class not found" });
+    const roster = await storage.getClassRosterForCoach(user.id, id);
+    res.json(roster);
+  });
+
+  app.post("/api/coach/classes/:id/enroll", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const usable = await storage.getClassIfUsableByCoach(user.id, id);
+    if (!usable) return res.status(404).json({ message: "Class not found" });
+    const schema = z.object({ athleteId: z.number(), startDate: z.string() });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const roster = await storage.getRosterForCoach(user.id);
+    if (!roster.some((a) => a.id === parsed.data.athleteId)) {
+      return res.status(400).json({ message: "Athlete not on your roster" });
+    }
+    const enrollment = await storage.enrollAthleteInClass(
+      user.id,
+      id,
+      parsed.data.athleteId,
+      parsed.data.startDate,
+    );
+    res.status(201).json(enrollment);
+  });
+
+  app.post(
+    "/api/coach/classes/:id/lessons/:lessonId/unlock",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const id = Number(req.params.id);
+      const lessonId = Number(req.params.lessonId);
+      const usable = await storage.getClassIfUsableByCoach(user.id, id);
+      if (!usable) return res.status(404).json({ message: "Class not found" });
+      const schema = z.object({ athleteId: z.number() });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      const enrollment = await storage.getClassEnrollmentForAthlete(parsed.data.athleteId, id);
+      if (!enrollment) return res.status(404).json({ message: "Athlete not enrolled" });
+      await storage.manuallyUnlockLesson(enrollment.id, lessonId);
+      const progress = await storage.getClassProgressForAthlete(parsed.data.athleteId, id);
+      res.json(progress);
+    },
+  );
+
   // ---------------- Admin: Forge Exercise Library ----------------
   // An admin's own exercise bank *is* the Forge library -- everything they
   // create here is automatically shared, read-only, with every coach (see
@@ -536,6 +666,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const owned = await assertOwnsExercise(user.id, id);
     if (!owned) return res.status(404).json({ message: "Exercise not found" });
     await storage.deleteExercise(id);
+    res.status(204).end();
+  });
+
+  // ---------------- Admin: Forge Skill Bank ----------------
+  // Same model as the exercise library above, but against the wholly
+  // separate skillExercises table -- an admin's own drills are the Forge
+  // skill library, shared read-only with every coach. Backs the drill
+  // picker in the admin Class builder (see ClassBuilderPage), which had no
+  // way to reach any skill exercise at all before this existed.
+
+  app.get("/api/admin/skill-exercises", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const list = await storage.getSkillExercisesByCoach(user.id);
+    res.json(list);
+  });
+
+  app.get("/api/admin/skill-exercises/:id", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const skillExercise = await storage.getSkillExerciseDetail(id, user.id);
+    if (!skillExercise || skillExercise.coachId !== user.id) {
+      return res.status(404).json({ message: "Skill exercise not found" });
+    }
+    res.json(skillExercise);
+  });
+
+  app.post("/api/admin/skill-exercises", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = insertSkillExerciseSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const skillExercise = await storage.createSkillExercise(user.id, parsed.data);
+    res.status(201).json(skillExercise);
+  });
+
+  app.put("/api/admin/skill-exercises/:id", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const owned = await assertOwnsSkillExercise(user.id, id);
+    if (!owned) return res.status(404).json({ message: "Skill exercise not found" });
+    const parsed = insertSkillExerciseSchema.partial().safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const updated = await storage.updateSkillExercise(id, parsed.data);
+    res.json(updated);
+  });
+
+  app.delete("/api/admin/skill-exercises/:id", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const owned = await assertOwnsSkillExercise(user.id, id);
+    if (!owned) return res.status(404).json({ message: "Skill exercise not found" });
+    await storage.deleteSkillExercise(id);
     res.status(204).end();
   });
 
@@ -604,6 +789,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const owned = await assertCoachOwnsProgram(user.id, id);
     if (!owned) return res.status(404).json({ message: "Program not found" });
     await storage.deleteProgram(id);
+    res.status(204).end();
+  });
+
+  // ---------------- Admin: Forge Classes ----------------
+  // Same CRUD shape as the coach block above, but always creates a
+  // Forge-official Class (isForgeOfficial: true) -- available to every
+  // coach to assign AND the only kind a Free Agent can ever see or enroll
+  // in. getVisibleClassesForCoach, called with an admin's own id, already
+  // merges every admin's Forge classes together (there's no per-admin
+  // ownership split, same reasoning as the Forge exercise/program library).
+
+  app.get("/api/admin/classes", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const list = await storage.getVisibleClassesForCoach(user.id);
+    res.json(list);
+  });
+
+  app.get("/api/admin/classes/:id", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const owned = await assertCoachOwnsClass(user.id, id);
+    if (!owned) return res.status(404).json({ message: "Class not found" });
+    res.json({ ...owned, isForgeOfficial: true, ownerLabel: "FORGE", editable: true });
+  });
+
+  app.post("/api/admin/classes", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = classStructureSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const cls = await storage.createClassWithStructure(user.id, parsed.data, true);
+    res.status(201).json(cls);
+  });
+
+  app.put("/api/admin/classes/:id", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const owned = await assertCoachOwnsClass(user.id, id);
+    if (!owned) return res.status(404).json({ message: "Class not found" });
+    const parsed = classStructureSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    await storage.updateClassStructure(id, parsed.data);
+    const updated = await storage.getClassFull(id);
+    res.json(updated);
+  });
+
+  app.delete("/api/admin/classes/:id", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const owned = await assertCoachOwnsClass(user.id, id);
+    if (!owned) return res.status(404).json({ message: "Class not found" });
+    await storage.deleteClass(id);
     res.status(204).end();
   });
 
@@ -3624,6 +3864,87 @@ export async function registerRoutes(app: Express): Promise<Server> {
         parsed.data.durationWeeks,
       );
       res.status(201).json(result);
+    },
+  );
+
+  // ---------------- Athlete: Classes ----------------
+  // Unlike the AI Coach, a Class is NOT Free-Agent-exclusive -- a coach can
+  // enroll their own roster into their own (or a Forge) Class, and that
+  // athlete needs to see their progress regardless of having a coach. Only
+  // browsing the Forge catalog to self-enroll, and paying for a lesson, are
+  // Free-Agent-only (a coach's own athlete never sees a price, and never
+  // self-enrolls in something their coach didn't put them in). Never gated
+  // behind requirePaidAiAccess -- Classes are a wholly separate product from
+  // the AI Coach ("a scheduled thing" vs. "a self guided thing").
+
+  app.get("/api/athlete/my-classes", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const list = await storage.getEnrolledClassesForAthlete(user.id);
+    res.json(list);
+  });
+
+  // Free Agent only -- the Forge catalog to browse and self-enroll into.
+  app.get("/api/athlete/classes", requireRole("athlete"), requireFreeAgent, async (req, res) => {
+    const list = await storage.getVisibleClassesForFreeAgent();
+    res.json(list);
+  });
+
+  app.get("/api/athlete/classes/:id/progress", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const enrollment = await storage.getClassEnrollmentForAthlete(user.id, id);
+    if (!enrollment) {
+      // Not enrolled -- only a Free Agent browsing the Forge catalog gets a
+      // preview of a class they haven't joined yet.
+      const coaches = await storage.getCoachesForAthlete(user.id);
+      if (coaches.length > 0) return res.status(404).json({ message: "Class not found" });
+    }
+    const progress = await storage.getClassProgressForAthlete(user.id, id);
+    if (!progress || (!enrollment && !progress.class.isForgeOfficial)) {
+      return res.status(404).json({ message: "Class not found" });
+    }
+    res.json(progress);
+  });
+
+  app.post(
+    "/api/athlete/classes/:id/enroll",
+    requireRole("athlete"),
+    requireFreeAgent,
+    async (req, res) => {
+      const user = currentUser(req);
+      const id = Number(req.params.id);
+      const parsed = enrollInClassSchema.safeParse({ ...req.body, classId: id });
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      const cls = await storage.getClassById(id);
+      if (!cls || !cls.isForgeOfficial) {
+        return res.status(404).json({ message: "Class not found" });
+      }
+      const enrollment = await storage.enrollSelfInClass(user.id, id, parsed.data.startDate);
+      res.status(201).json(enrollment);
+    },
+  );
+
+  app.post(
+    "/api/athlete/classes/:id/lessons/:lessonId/purchase",
+    requireRole("athlete"),
+    requireFreeAgent,
+    async (req, res) => {
+      const user = currentUser(req);
+      const id = Number(req.params.id);
+      const lessonId = Number(req.params.lessonId);
+      if (user.email !== COMPED_FREE_AGENT_LESSON_BUYER) {
+        return res.status(402).json({
+          message: "Lesson purchases aren't live yet -- payments are coming soon.",
+          freeAgentPaywall: true,
+        });
+      }
+      const enrollment = await storage.getClassEnrollmentForAthlete(user.id, id);
+      if (!enrollment) return res.status(404).json({ message: "Not enrolled in this class" });
+      await storage.markLessonPurchased(enrollment.id, lessonId);
+      const progress = await storage.getClassProgressForAthlete(user.id, id);
+      res.json(progress);
     },
   );
 

@@ -1778,6 +1778,213 @@ export const sendSkillProgramChatMessageSchema = z.object({
 
 export type SendProgramChatMessageInput = z.infer<typeof sendProgramChatMessageSchema>;
 
+// ---------------- Classes (self-guided skills curriculum) ----------------
+// A Class is an ordered curriculum of Lessons an athlete works through on
+// their own -- lesson 1 unlocks immediately, each later lesson unlocks once
+// the previous one's rule is satisfied. Same coachId + isForgeOfficial
+// ownership model already used for exercises/programs/skillPrograms: a
+// coach's own Class is private to their roster; an admin's Forge Class is
+// available to any coach to assign AND is the only kind a Free Agent (who
+// has no coach) can ever see or enroll in. Per-lesson pricing (see
+// classLessons.priceCents) only ever applies to a Forge Class sold to a
+// Free Agent -- a coach's own athletes never see a price on their coach's
+// own Class.
+export const classes = pgTable("classes", {
+  id: serial("id").primaryKey(),
+  coachId: integer("coach_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  description: text("description"),
+  isForgeOfficial: boolean("is_forge_official").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const classUnlockRuleEnum = pgEnum("class_unlock_rule", [
+  "immediate",
+  "time_elapsed",
+  "sessions_logged",
+  "reps_logged",
+  "manual",
+]);
+
+export const classLessons = pgTable(
+  "class_lessons",
+  {
+    id: serial("id").primaryKey(),
+    classId: integer("class_id")
+      .notNull()
+      .references(() => classes.id, { onDelete: "cascade" }),
+    lessonNumber: integer("lesson_number").notNull(),
+    title: text("title").notNull(),
+    // Shown even while the lesson is locked-but-reachable or unpaid -- the
+    // "let them view them to a certain degree" half of the two-gate model,
+    // alongside the drill list read off skillProgramId's one day.
+    description: text("description"),
+    // A dedicated, hidden skill program holding this lesson's actual drills
+    // (always exactly one day, repeated on the calendar for as long as the
+    // unlock rule takes to satisfy) -- never surfaced in the coach's own
+    // Skill Programs list (see the lesson-content exclusion in
+    // getVisibleSkillProgramsForCoach). This reuses the skill-program
+    // builder's editor, the assignment/calendar pipeline, and
+    // skillSessionLogs wholesale instead of standing up a second, parallel
+    // content-and-logging system just for lessons.
+    skillProgramId: integer("skill_program_id")
+      .notNull()
+      .references(() => skillPrograms.id, { onDelete: "cascade" }),
+    unlockRule: classUnlockRuleEnum("unlock_rule").notNull().default("immediate"),
+    // Meaning depends on unlockRule: days for time_elapsed, distinct
+    // capture-days for sessions_logged, raw skillSessionLogs row count for
+    // reps_logged. Null for immediate/manual. sessions_logged/reps_logged
+    // only ever see activity from drills with camera tracking turned on --
+    // there's no general (non-camera) skill-day completion log to count
+    // against yet, so a lesson using either rule should keep tracking
+    // enabled on at least one drill or its progress can never move.
+    unlockThreshold: integer("unlock_threshold"),
+    // Cents; null = free/included. Only read when the parent class is
+    // isForgeOfficial (see the table comment above).
+    priceCents: integer("price_cents"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    classIdx: index("class_lessons_class_idx").on(table.classId),
+  }),
+);
+
+export const classEnrollments = pgTable(
+  "class_enrollments",
+  {
+    id: serial("id").primaryKey(),
+    classId: integer("class_id")
+      .notNull()
+      .references(() => classes.id, { onDelete: "cascade" }),
+    athleteId: integer("athlete_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // The coach who enrolled this athlete -- equals athleteId for a Free
+    // Agent's own self-enrollment into a Forge Class, same bypass reasoning
+    // as skillAssignments.coachId (an athlete is never on their own roster).
+    coachId: integer("coach_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    startDate: date("start_date").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    athleteIdx: index("class_enrollments_athlete_idx").on(table.athleteId),
+    classIdx: index("class_enrollments_class_idx").on(table.classId),
+  }),
+);
+
+export const classLessonProgress = pgTable(
+  "class_lesson_progress",
+  {
+    id: serial("id").primaryKey(),
+    enrollmentId: integer("enrollment_id")
+      .notNull()
+      .references(() => classEnrollments.id, { onDelete: "cascade" }),
+    classLessonId: integer("class_lesson_id")
+      .notNull()
+      .references(() => classLessons.id, { onDelete: "cascade" }),
+    // Set once this lesson actually starts (progression gate cleared AND,
+    // if priced, paid for) -- that's the moment its skill program lands on
+    // the athlete's calendar. Null before that, including while the lesson
+    // is merely "reachable" (previous lesson done, this one still unpaid).
+    skillAssignmentId: integer("skill_assignment_id").references(() => skillAssignments.id, {
+      onDelete: "set null",
+    }),
+    unlockedAt: timestamp("unlocked_at"),
+    purchasedAt: timestamp("purchased_at"),
+    // Coach/admin escape hatch -- force a lesson open regardless of what its
+    // unlock rule says, independent of which rule type the lesson uses.
+    manuallyUnlocked: boolean("manually_unlocked").notNull().default(false),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    enrollmentIdx: index("class_lesson_progress_enrollment_idx").on(table.enrollmentId),
+  }),
+);
+
+export const classesRelations = relations(classes, ({ one, many }) => ({
+  coach: one(users, { fields: [classes.coachId], references: [users.id] }),
+  lessons: many(classLessons),
+  enrollments: many(classEnrollments),
+}));
+
+export const classLessonsRelations = relations(classLessons, ({ one, many }) => ({
+  class: one(classes, { fields: [classLessons.classId], references: [classes.id] }),
+  skillProgram: one(skillPrograms, {
+    fields: [classLessons.skillProgramId],
+    references: [skillPrograms.id],
+  }),
+  progress: many(classLessonProgress),
+}));
+
+export const classEnrollmentsRelations = relations(classEnrollments, ({ one, many }) => ({
+  class: one(classes, { fields: [classEnrollments.classId], references: [classes.id] }),
+  athlete: one(users, { fields: [classEnrollments.athleteId], references: [users.id] }),
+  lessonProgress: many(classLessonProgress),
+}));
+
+export const classLessonProgressRelations = relations(classLessonProgress, ({ one }) => ({
+  enrollment: one(classEnrollments, {
+    fields: [classLessonProgress.enrollmentId],
+    references: [classEnrollments.id],
+  }),
+  lesson: one(classLessons, {
+    fields: [classLessonProgress.classLessonId],
+    references: [classLessons.id],
+  }),
+  skillAssignment: one(skillAssignments, {
+    fields: [classLessonProgress.skillAssignmentId],
+    references: [skillAssignments.id],
+  }),
+}));
+
+export type Class = typeof classes.$inferSelect;
+export type ClassLesson = typeof classLessons.$inferSelect;
+export type ClassEnrollment = typeof classEnrollments.$inferSelect;
+export type ClassLessonProgress = typeof classLessonProgress.$inferSelect;
+
+export const classLessonExerciseInputSchema = z.object({
+  skillExerciseId: z.number(),
+  orderIndex: z.number().int().default(0),
+  sets: z.number().int().min(1).default(3),
+  reps: z.string().trim().min(1).default("10"),
+  restSeconds: z.number().int().nullable().optional(),
+  notes: z.string().trim().max(500).nullable().optional(),
+  trackingLevel: z.enum(["none", "sprint", "mechanics"]).default("none"),
+});
+
+export const classLessonInputSchema = z.object({
+  // Present when editing an existing lesson (matches it for in-place
+  // update, preserving its hidden skillProgramId and therefore any
+  // skillAssignments already created off it) -- absent for a brand-new
+  // lesson being added in this same save. See updateClassStructure.
+  id: z.number().optional(),
+  lessonNumber: z.number().int().min(1),
+  title: z.string().trim().min(1).max(200),
+  description: z.string().trim().max(2000).nullable().optional(),
+  unlockRule: z.enum(["immediate", "time_elapsed", "sessions_logged", "reps_logged", "manual"]),
+  unlockThreshold: z.number().int().min(1).nullable().optional(),
+  priceCents: z.number().int().min(0).nullable().optional(),
+  exercises: z.array(classLessonExerciseInputSchema).default([]),
+});
+
+export const classStructureSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  description: z.string().trim().max(2000).nullable().optional(),
+  lessons: z.array(classLessonInputSchema).default([]),
+});
+
+export type ClassStructureInput = z.infer<typeof classStructureSchema>;
+export type ClassLessonInput = z.infer<typeof classLessonInputSchema>;
+
+export const enrollInClassSchema = z.object({
+  classId: z.number(),
+  startDate: z.string(),
+});
+
 export const aiKnowledgeChatRoleEnum = pgEnum("ai_knowledge_chat_role", ["admin", "assistant"]);
 
 // Chat transcript for the admin teaching the AI program builder general

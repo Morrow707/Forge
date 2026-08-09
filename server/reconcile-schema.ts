@@ -906,6 +906,56 @@ DO $$ BEGIN
   CREATE TYPE "gender" AS ENUM ('male', 'female', 'non_binary', 'prefer_not_to_say');
 EXCEPTION WHEN duplicate_object THEN null; END $$;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "gender" gender;
+
+CREATE TABLE IF NOT EXISTS "classes" (
+  "id" serial PRIMARY KEY,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "name" text NOT NULL,
+  "description" text,
+  "is_forge_official" boolean NOT NULL DEFAULT false,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+
+DO $$ BEGIN
+  CREATE TYPE "class_unlock_rule" AS ENUM ('immediate', 'time_elapsed', 'sessions_logged', 'reps_logged', 'manual');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+CREATE TABLE IF NOT EXISTS "class_lessons" (
+  "id" serial PRIMARY KEY,
+  "class_id" integer NOT NULL REFERENCES "classes"("id") ON DELETE CASCADE,
+  "lesson_number" integer NOT NULL,
+  "title" text NOT NULL,
+  "description" text,
+  "skill_program_id" integer NOT NULL REFERENCES "skill_programs"("id") ON DELETE CASCADE,
+  "unlock_rule" class_unlock_rule NOT NULL DEFAULT 'immediate',
+  "unlock_threshold" integer,
+  "price_cents" integer,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "class_lessons_class_idx" ON "class_lessons" ("class_id");
+
+CREATE TABLE IF NOT EXISTS "class_enrollments" (
+  "id" serial PRIMARY KEY,
+  "class_id" integer NOT NULL REFERENCES "classes"("id") ON DELETE CASCADE,
+  "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "start_date" date NOT NULL,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "class_enrollments_athlete_idx" ON "class_enrollments" ("athlete_id");
+CREATE INDEX IF NOT EXISTS "class_enrollments_class_idx" ON "class_enrollments" ("class_id");
+
+CREATE TABLE IF NOT EXISTS "class_lesson_progress" (
+  "id" serial PRIMARY KEY,
+  "enrollment_id" integer NOT NULL REFERENCES "class_enrollments"("id") ON DELETE CASCADE,
+  "class_lesson_id" integer NOT NULL REFERENCES "class_lessons"("id") ON DELETE CASCADE,
+  "skill_assignment_id" integer REFERENCES "skill_assignments"("id") ON DELETE SET NULL,
+  "unlocked_at" timestamp,
+  "purchased_at" timestamp,
+  "manually_unlocked" boolean NOT NULL DEFAULT false,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "class_lesson_progress_enrollment_idx" ON "class_lesson_progress" ("enrollment_id");
 `;
 
 async function main() {

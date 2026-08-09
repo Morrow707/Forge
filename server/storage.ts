@@ -47,6 +47,10 @@ import {
   athleteChatMessages,
   programChatMessages,
   skillProgramChatMessages,
+  classes,
+  classLessons,
+  classEnrollments,
+  classLessonProgress,
   aiKnowledgeMessages,
   aiKnowledge,
   nutritionKnowledgeMessages,
@@ -75,6 +79,7 @@ import type {
   NutritionKnowledgeMessage,
   CreateFoodLogEntryInput,
   UpdateFoodLogEntryInput,
+  ClassStructureInput,
 } from "@shared/schema";
 import { lookupBarcode, searchFoodsByName, type FoodCandidate } from "./food-lookup";
 import { TESTING_METRICS, testingMetricLowerIsBetter } from "@shared/testing-metrics";
@@ -3470,6 +3475,19 @@ Athlete's data:
     return rows.map((ex) => this.withOwnership(ex, coachId, coachIds));
   },
 
+  // Admin counterpart to getExercisesByCoach -- an admin's own skill bank
+  // *is* the Forge skill library, everything in it automatically shared
+  // read-only with every coach (see getVisibleSkillExercisesForCoach).
+  async getSkillExercisesByCoach(coachId: number) {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    const rows = await db.query.skillExercises.findMany({
+      where: inArray(skillExercises.coachId, coachIds),
+      orderBy: desc(skillExercises.createdAt),
+      with: { coach: true },
+    });
+    return rows.map((ex) => this.withOwnership(ex, coachId, coachIds));
+  },
+
   async getSkillExerciseDetail(id: number, requestingUserId: number) {
     const ex = await db.query.skillExercises.findFirst({
       where: eq(skillExercises.id, id),
@@ -3522,15 +3540,26 @@ Athlete's data:
       },
       orderBy: desc(skillPrograms.createdAt),
     });
-    return progs.map((p) => {
-      const { weeks, assignments, ...ownership } = this.withOwnership(p, coachId, coachIds);
-      return {
-        ...ownership,
-        weekCount: weeks.length,
-        dayCount: weeks.reduce((acc, w) => acc + w.days.length, 0),
-        assignedAthleteCount: new Set(assignments.map((a) => a.athleteId)).size,
-      };
-    });
+    // A Class lesson owns a hidden, single-day skill program purely to
+    // reuse the assignment/calendar/logging pipeline (see
+    // classLessons.skillProgramId in shared/schema.ts) -- it was never
+    // meant to be browsed or edited as a standalone program.
+    const lessonProgramIds = new Set(
+      (await db.query.classLessons.findMany({ columns: { skillProgramId: true } })).map(
+        (l) => l.skillProgramId,
+      ),
+    );
+    return progs
+      .filter((p) => !lessonProgramIds.has(p.id))
+      .map((p) => {
+        const { weeks, assignments, ...ownership } = this.withOwnership(p, coachId, coachIds);
+        return {
+          ...ownership,
+          weekCount: weeks.length,
+          dayCount: weeks.reduce((acc, w) => acc + w.days.length, 0),
+          assignedAthleteCount: new Set(assignments.map((a) => a.athleteId)).size,
+        };
+      });
   },
 
   async getSkillProgramFull(id: number) {
@@ -3782,6 +3811,636 @@ Athlete's data:
       orderBy: desc(skillSessionLogs.createdAt),
       limit,
     });
+  },
+
+  // ---------- Classes (self-guided skills curriculum) ----------
+  // See the schema comment on `classes` in shared/schema.ts: an ordered
+  // list of Lessons, each one a hidden single-day skill program (reusing
+  // the assignment/calendar/skillSessionLogs pipeline wholesale instead of
+  // a parallel content-and-logging system), gated by a per-lesson unlock
+  // rule evaluated against the previous lesson's activity, with an
+  // independent payment gate that only ever applies to a Forge-official
+  // class sold to a Free Agent.
+
+  async getVisibleClassesForCoach(coachId: number) {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    const admins = await db.query.users.findMany({ where: eq(users.role, "admin") });
+    const ownerIds = Array.from(new Set([...coachIds, ...admins.map((a) => a.id)]));
+    const rows = await db.query.classes.findMany({
+      where: inArray(classes.coachId, ownerIds),
+      with: { lessons: true, enrollments: true, coach: true },
+      orderBy: desc(classes.createdAt),
+    });
+    return rows.map((c) => {
+      const { lessons, enrollments, ...ownership } = this.withOwnership(c, coachId, coachIds);
+      return {
+        ...ownership,
+        lessonCount: lessons.length,
+        enrolledAthleteCount: new Set(enrollments.map((e) => e.athleteId)).size,
+      };
+    });
+  },
+
+  async getClassById(classId: number) {
+    return db.query.classes.findFirst({ where: eq(classes.id, classId) });
+  },
+
+  async getClassIfUsableByCoach(coachId: number, classId: number) {
+    const cls = await db.query.classes.findFirst({
+      where: eq(classes.id, classId),
+      with: { coach: true },
+    });
+    if (!cls) return null;
+    const isForgeOfficial = cls.coach.role === "admin";
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    if (!coachIds.includes(cls.coachId) && !isForgeOfficial) return null;
+    return cls;
+  },
+
+  // Full editable detail for the builder -- each lesson's drills read off
+  // its hidden skill program's single day.
+  async getClassFull(classId: number) {
+    const cls = await db.query.classes.findFirst({
+      where: eq(classes.id, classId),
+      with: {
+        lessons: {
+          orderBy: asc(classLessons.lessonNumber),
+          with: {
+            skillProgram: {
+              with: {
+                weeks: {
+                  with: {
+                    days: {
+                      with: {
+                        exercises: {
+                          orderBy: asc(skillProgramExercises.orderIndex),
+                          with: { skillExercise: true },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!cls) return null;
+    return {
+      id: cls.id,
+      coachId: cls.coachId,
+      name: cls.name,
+      description: cls.description,
+      isForgeOfficial: cls.isForgeOfficial,
+      lessons: cls.lessons.map((l) => {
+        const day = l.skillProgram.weeks[0]?.days[0];
+        return {
+          id: l.id,
+          lessonNumber: l.lessonNumber,
+          title: l.title,
+          description: l.description,
+          unlockRule: l.unlockRule,
+          unlockThreshold: l.unlockThreshold,
+          priceCents: l.priceCents,
+          exercises: day?.exercises ?? [],
+        };
+      }),
+    };
+  },
+
+  async createClassWithStructure(
+    coachId: number,
+    structure: ClassStructureInput,
+    isForgeOfficial: boolean,
+  ) {
+    return db.transaction(async (tx) => {
+      const [cls] = await tx
+        .insert(classes)
+        .values({
+          coachId,
+          name: structure.name,
+          description: structure.description ?? null,
+          isForgeOfficial,
+        })
+        .returning();
+
+      for (const lesson of structure.lessons) {
+        const isFirst = lesson.lessonNumber === 1;
+        const [skillProgram] = await tx
+          .insert(skillPrograms)
+          .values({
+            coachId,
+            name: `${structure.name} — Lesson ${lesson.lessonNumber}`,
+            description: null,
+          })
+          .returning();
+        const [week] = await tx
+          .insert(skillProgramWeeks)
+          .values({ programId: skillProgram.id, weekNumber: 1, name: null })
+          .returning();
+        const [day] = await tx
+          .insert(skillProgramDays)
+          .values({ weekId: week.id, dayNumber: 1, title: lesson.title, isRestDay: false })
+          .returning();
+        for (const ex of lesson.exercises) {
+          await tx.insert(skillProgramExercises).values({
+            dayId: day.id,
+            skillExerciseId: ex.skillExerciseId,
+            orderIndex: ex.orderIndex,
+            sets: ex.sets,
+            reps: ex.reps,
+            restSeconds: ex.restSeconds ?? null,
+            notes: ex.notes ?? null,
+            trackingLevel: ex.trackingLevel ?? "none",
+          });
+        }
+        await tx.insert(classLessons).values({
+          classId: cls.id,
+          lessonNumber: lesson.lessonNumber,
+          title: lesson.title,
+          description: lesson.description ?? null,
+          skillProgramId: skillProgram.id,
+          unlockRule: isFirst ? "immediate" : lesson.unlockRule,
+          unlockThreshold: isFirst ? null : lesson.unlockThreshold ?? null,
+          priceCents: lesson.priceCents ?? null,
+        });
+      }
+      return cls;
+    });
+  },
+
+  async updateClassStructure(classId: number, structure: ClassStructureInput) {
+    await db.transaction(async (tx) => {
+      const cls = await tx.query.classes.findFirst({ where: eq(classes.id, classId) });
+      if (!cls) throw new Error("Class not found");
+
+      await tx
+        .update(classes)
+        .set({ name: structure.name, description: structure.description ?? null })
+        .where(eq(classes.id, classId));
+
+      const existingLessons = await tx.query.classLessons.findMany({
+        where: eq(classLessons.classId, classId),
+      });
+      const existingById = new Map(existingLessons.map((l) => [l.id, l]));
+      const keptIds = new Set<number>();
+
+      for (const lesson of structure.lessons) {
+        const isFirst = lesson.lessonNumber === 1;
+        const unlockRule = isFirst ? "immediate" : lesson.unlockRule;
+        const unlockThreshold = isFirst ? null : lesson.unlockThreshold ?? null;
+        const existing = lesson.id != null ? existingById.get(lesson.id) : undefined;
+
+        if (existing) {
+          keptIds.add(existing.id);
+          await tx
+            .update(classLessons)
+            .set({
+              lessonNumber: lesson.lessonNumber,
+              title: lesson.title,
+              description: lesson.description ?? null,
+              unlockRule,
+              unlockThreshold,
+              priceCents: lesson.priceCents ?? null,
+            })
+            .where(eq(classLessons.id, existing.id));
+
+          // Same "wipe and rebuild the day/exercise tree" approach
+          // updateSkillProgramStructure uses -- preserves skillProgramId
+          // (and therefore any skillAssignments already created off it for
+          // enrolled athletes) while refreshing its content.
+          await tx
+            .update(skillPrograms)
+            .set({ name: `${structure.name} — Lesson ${lesson.lessonNumber}` })
+            .where(eq(skillPrograms.id, existing.skillProgramId));
+          const week = await tx.query.skillProgramWeeks.findFirst({
+            where: eq(skillProgramWeeks.programId, existing.skillProgramId),
+          });
+          if (week) {
+            await tx.delete(skillProgramDays).where(eq(skillProgramDays.weekId, week.id));
+            const [day] = await tx
+              .insert(skillProgramDays)
+              .values({ weekId: week.id, dayNumber: 1, title: lesson.title, isRestDay: false })
+              .returning();
+            for (const ex of lesson.exercises) {
+              await tx.insert(skillProgramExercises).values({
+                dayId: day.id,
+                skillExerciseId: ex.skillExerciseId,
+                orderIndex: ex.orderIndex,
+                sets: ex.sets,
+                reps: ex.reps,
+                restSeconds: ex.restSeconds ?? null,
+                notes: ex.notes ?? null,
+                trackingLevel: ex.trackingLevel ?? "none",
+              });
+            }
+          }
+        } else {
+          const [skillProgram] = await tx
+            .insert(skillPrograms)
+            .values({
+              coachId: cls.coachId,
+              name: `${structure.name} — Lesson ${lesson.lessonNumber}`,
+              description: null,
+            })
+            .returning();
+          const [week] = await tx
+            .insert(skillProgramWeeks)
+            .values({ programId: skillProgram.id, weekNumber: 1, name: null })
+            .returning();
+          const [day] = await tx
+            .insert(skillProgramDays)
+            .values({ weekId: week.id, dayNumber: 1, title: lesson.title, isRestDay: false })
+            .returning();
+          for (const ex of lesson.exercises) {
+            await tx.insert(skillProgramExercises).values({
+              dayId: day.id,
+              skillExerciseId: ex.skillExerciseId,
+              orderIndex: ex.orderIndex,
+              sets: ex.sets,
+              reps: ex.reps,
+              restSeconds: ex.restSeconds ?? null,
+              notes: ex.notes ?? null,
+              trackingLevel: ex.trackingLevel ?? "none",
+            });
+          }
+          const [newLesson] = await tx
+            .insert(classLessons)
+            .values({
+              classId,
+              lessonNumber: lesson.lessonNumber,
+              title: lesson.title,
+              description: lesson.description ?? null,
+              skillProgramId: skillProgram.id,
+              unlockRule,
+              unlockThreshold,
+              priceCents: lesson.priceCents ?? null,
+            })
+            .returning();
+          keptIds.add(newLesson.id);
+        }
+      }
+
+      // A lesson the coach removed from the structure -- delete it
+      // (cascades its progress rows) and its now-orphaned skill program.
+      for (const existing of existingLessons) {
+        if (!keptIds.has(existing.id)) {
+          await tx.delete(classLessons).where(eq(classLessons.id, existing.id));
+          await tx.delete(skillPrograms).where(eq(skillPrograms.id, existing.skillProgramId));
+        }
+      }
+    });
+  },
+
+  async deleteClass(classId: number) {
+    const lessons = await db.query.classLessons.findMany({ where: eq(classLessons.classId, classId) });
+    await db.delete(classes).where(eq(classes.id, classId));
+    for (const lesson of lessons) {
+      await db.delete(skillPrograms).where(eq(skillPrograms.id, lesson.skillProgramId));
+    }
+  },
+
+  // ---------- Class enrollment + lazily-recomputed lesson progress ----------
+  // Same "recompute on read, no cron" pattern already used for ACWR/
+  // wellness -- nothing here runs on a schedule, it's brought up to date
+  // whenever an athlete's progress is actually read.
+
+  async getVisibleClassesForFreeAgent() {
+    const rows = await db.query.classes.findMany({
+      where: eq(classes.isForgeOfficial, true),
+      with: { lessons: true },
+      orderBy: desc(classes.createdAt),
+    });
+    return rows.map((c) => ({
+      id: c.id,
+      name: c.name,
+      description: c.description,
+      lessonCount: c.lessons.length,
+      isForgeOfficial: true as const,
+      ownerLabel: "FORGE",
+    }));
+  },
+
+  // Every class this athlete is enrolled in, regardless of who enrolled
+  // them -- their own coach (the common case for a coached athlete) or
+  // themself (a Free Agent's self-enrollment into a Forge Class). Not
+  // gated to Free Agents at all, unlike getVisibleClassesForFreeAgent.
+  async getEnrolledClassesForAthlete(athleteId: number) {
+    const rows = await db.query.classEnrollments.findMany({
+      where: eq(classEnrollments.athleteId, athleteId),
+      with: { class: { with: { lessons: true } } },
+      orderBy: desc(classEnrollments.createdAt),
+    });
+    const results = [];
+    for (const enrollment of rows) {
+      await this.recomputeClassProgress(enrollment.id);
+      const progressRows = await db.query.classLessonProgress.findMany({
+        where: eq(classLessonProgress.enrollmentId, enrollment.id),
+      });
+      results.push({
+        classId: enrollment.classId,
+        name: enrollment.class.name,
+        description: enrollment.class.description,
+        isForgeOfficial: enrollment.class.isForgeOfficial,
+        lessonCount: enrollment.class.lessons.length,
+        lessonsStarted: progressRows.filter((p) => p.skillAssignmentId).length,
+      });
+    }
+    return results;
+  },
+
+  async getClassEnrollmentForAthlete(athleteId: number, classId: number) {
+    return db.query.classEnrollments.findFirst({
+      where: and(eq(classEnrollments.athleteId, athleteId), eq(classEnrollments.classId, classId)),
+    });
+  },
+
+  async enrollAthleteInClass(coachId: number, classId: number, athleteId: number, startDate: string) {
+    const existing = await this.getClassEnrollmentForAthlete(athleteId, classId);
+    if (existing) return existing;
+    const [enrollment] = await db
+      .insert(classEnrollments)
+      .values({ classId, athleteId, coachId, startDate })
+      .returning();
+    await this.recomputeClassProgress(enrollment.id);
+    return enrollment;
+  },
+
+  // Only a Forge-official class can ever be self-enrolled -- a coach's own
+  // Class has no self-service path, same as skill programs/programs.
+  async enrollSelfInClass(athleteId: number, classId: number, startDate: string) {
+    return this.enrollAthleteInClass(athleteId, classId, athleteId, startDate);
+  },
+
+  async isClassUnlockRuleSatisfied(
+    lesson: typeof classLessons.$inferSelect,
+    previousProgress: typeof classLessonProgress.$inferSelect,
+  ): Promise<boolean> {
+    if (!previousProgress.skillAssignmentId) return false;
+    switch (lesson.unlockRule) {
+      case "immediate":
+        return true;
+      case "manual":
+        // Never auto-clears -- only the manuallyUnlocked escape hatch on
+        // THIS lesson's own progress row (checked by the caller) can open
+        // it, regardless of what the previous lesson's activity looks like.
+        return false;
+      case "time_elapsed": {
+        if (!previousProgress.unlockedAt || lesson.unlockThreshold == null) return false;
+        return (
+          differenceInCalendarDays(new Date(), previousProgress.unlockedAt) >= lesson.unlockThreshold
+        );
+      }
+      case "sessions_logged": {
+        // Distinct capture-days -- only ever reflects camera-tracked
+        // activity (see the unlockThreshold comment in shared/schema.ts).
+        if (lesson.unlockThreshold == null) return false;
+        const rows = await db
+          .select({ day: sql<string>`date_trunc('day', ${skillSessionLogs.createdAt})` })
+          .from(skillSessionLogs)
+          .where(eq(skillSessionLogs.skillAssignmentId, previousProgress.skillAssignmentId));
+        const distinctDays = new Set(rows.map((r) => r.day));
+        return distinctDays.size >= lesson.unlockThreshold;
+      }
+      case "reps_logged": {
+        // Raw capture count -- each skillSessionLogs row is one attempt.
+        if (lesson.unlockThreshold == null) return false;
+        const [row] = await db
+          .select({ count: sql<number>`count(*)::int` })
+          .from(skillSessionLogs)
+          .where(eq(skillSessionLogs.skillAssignmentId, previousProgress.skillAssignmentId));
+        return (row?.count ?? 0) >= lesson.unlockThreshold;
+      }
+      default:
+        return false;
+    }
+  },
+
+  // Walks an enrollment's lessons in order; for each one still not started,
+  // checks whether it's reachable (first lesson, manually overridden, or
+  // the previous lesson's unlock rule is satisfied) and, if a payment gate
+  // applies, already paid for -- if both hold, activates it by creating its
+  // skillAssignment. Stops at the first lesson that isn't ready to start,
+  // since nothing later can be reachable before it.
+  async recomputeClassProgress(enrollmentId: number) {
+    const enrollment = await db.query.classEnrollments.findFirst({
+      where: eq(classEnrollments.id, enrollmentId),
+    });
+    if (!enrollment) return;
+    const cls = await db.query.classes.findFirst({ where: eq(classes.id, enrollment.classId) });
+    if (!cls) return;
+    const lessons = await db.query.classLessons.findMany({
+      where: eq(classLessons.classId, enrollment.classId),
+      orderBy: asc(classLessons.lessonNumber),
+    });
+
+    let previousProgress: typeof classLessonProgress.$inferSelect | null = null;
+    for (const lesson of lessons) {
+      let progress = await db.query.classLessonProgress.findFirst({
+        where: and(
+          eq(classLessonProgress.enrollmentId, enrollmentId),
+          eq(classLessonProgress.classLessonId, lesson.id),
+        ),
+      });
+      if (!progress) {
+        const [created] = await db
+          .insert(classLessonProgress)
+          .values({ enrollmentId, classLessonId: lesson.id })
+          .returning();
+        progress = created;
+      }
+
+      if (progress.skillAssignmentId) {
+        previousProgress = progress;
+        continue;
+      }
+
+      const reachable =
+        progress.manuallyUnlocked ||
+        lesson.lessonNumber === 1 ||
+        (previousProgress != null && (await this.isClassUnlockRuleSatisfied(lesson, previousProgress)));
+      if (!reachable) break;
+
+      const paymentRequired = cls.isForgeOfficial && lesson.priceCents != null && lesson.priceCents > 0;
+      if (paymentRequired && !progress.purchasedAt) break;
+
+      const { created } = await this.createSkillAssignment(
+        enrollment.coachId,
+        lesson.skillProgramId,
+        [{ athleteId: enrollment.athleteId }],
+        formatISO(new Date(), { representation: "date" }),
+      );
+      const [updated] = await db
+        .update(classLessonProgress)
+        .set({ unlockedAt: new Date(), skillAssignmentId: created[0]?.id ?? null })
+        .where(eq(classLessonProgress.id, progress.id))
+        .returning();
+      previousProgress = updated;
+    }
+  },
+
+  // The Free Agent / athlete-facing read: every lesson with its computed
+  // state. "locked_preview" only ever shows up for a reachable, Forge-
+  // priced, not-yet-purchased lesson -- title/description are always
+  // included regardless of state (the syllabus-preview half of the
+  // two-gate model), the actual drill list only for "active" lessons.
+  async getClassProgressForAthlete(athleteId: number, classId: number) {
+    const cls = await db.query.classes.findFirst({ where: eq(classes.id, classId) });
+    if (!cls) return null;
+    const lessons = await db.query.classLessons.findMany({
+      where: eq(classLessons.classId, classId),
+      orderBy: asc(classLessons.lessonNumber),
+    });
+    const enrollment = await this.getClassEnrollmentForAthlete(athleteId, classId);
+    const classSummary = {
+      id: cls.id,
+      name: cls.name,
+      description: cls.description,
+      isForgeOfficial: cls.isForgeOfficial,
+    };
+
+    if (!enrollment) {
+      return {
+        class: classSummary,
+        enrolled: false as const,
+        lessons: lessons.map((l) => ({
+          id: l.id,
+          lessonNumber: l.lessonNumber,
+          title: l.title,
+          description: l.description,
+          priceCents: l.priceCents,
+          state: "locked" as const,
+          skillAssignmentId: null,
+          purchasedAt: null,
+        })),
+      };
+    }
+
+    await this.recomputeClassProgress(enrollment.id);
+    const progressRows = await db.query.classLessonProgress.findMany({
+      where: eq(classLessonProgress.enrollmentId, enrollment.id),
+    });
+    const progressByLesson = new Map(progressRows.map((p) => [p.classLessonId, p]));
+
+    const result: Array<{
+      id: number;
+      lessonNumber: number;
+      title: string;
+      description: string | null;
+      priceCents: number | null;
+      state: "active" | "locked_preview" | "locked";
+      skillAssignmentId: number | null;
+      purchasedAt: Date | null;
+    }> = [];
+    let previousProgress: typeof classLessonProgress.$inferSelect | null = null;
+    let frontierPassed = false;
+
+    for (const lesson of lessons) {
+      const progress = progressByLesson.get(lesson.id) ?? null;
+      let state: "active" | "locked_preview" | "locked";
+
+      if (progress?.skillAssignmentId) {
+        state = "active";
+      } else if (frontierPassed) {
+        state = "locked";
+      } else {
+        frontierPassed = true;
+        const reachable =
+          lesson.lessonNumber === 1 ||
+          !!progress?.manuallyUnlocked ||
+          (previousProgress != null && (await this.isClassUnlockRuleSatisfied(lesson, previousProgress)));
+        const paymentRequired = cls.isForgeOfficial && lesson.priceCents != null && lesson.priceCents > 0;
+        state = reachable && paymentRequired ? "locked_preview" : "locked";
+      }
+
+      result.push({
+        id: lesson.id,
+        lessonNumber: lesson.lessonNumber,
+        title: lesson.title,
+        description: lesson.description,
+        priceCents: lesson.priceCents,
+        state,
+        skillAssignmentId: progress?.skillAssignmentId ?? null,
+        purchasedAt: progress?.purchasedAt ?? null,
+      });
+      previousProgress = progress;
+    }
+
+    return {
+      class: classSummary,
+      enrolled: true as const,
+      startDate: enrollment.startDate,
+      lessons: result,
+    };
+  },
+
+  // Comped path, exactly like COMPED_FREE_AGENT_ENTITLEMENTS in routes.ts --
+  // no real billing exists yet, so this is the only way a lesson purchase
+  // is ever actually recorded today.
+  async markLessonPurchased(enrollmentId: number, classLessonId: number) {
+    const progress = await db.query.classLessonProgress.findFirst({
+      where: and(
+        eq(classLessonProgress.enrollmentId, enrollmentId),
+        eq(classLessonProgress.classLessonId, classLessonId),
+      ),
+    });
+    if (!progress) return null;
+    await db
+      .update(classLessonProgress)
+      .set({ purchasedAt: new Date() })
+      .where(eq(classLessonProgress.id, progress.id));
+    await this.recomputeClassProgress(enrollmentId);
+    return true;
+  },
+
+  // Coach/admin escape hatch -- force a lesson open regardless of its
+  // unlock rule or payment gate.
+  async manuallyUnlockLesson(enrollmentId: number, classLessonId: number) {
+    const progress = await db.query.classLessonProgress.findFirst({
+      where: and(
+        eq(classLessonProgress.enrollmentId, enrollmentId),
+        eq(classLessonProgress.classLessonId, classLessonId),
+      ),
+    });
+    if (!progress) return null;
+    await db
+      .update(classLessonProgress)
+      .set({ manuallyUnlocked: true })
+      .where(eq(classLessonProgress.id, progress.id));
+    await this.recomputeClassProgress(enrollmentId);
+    return true;
+  },
+
+  // Coach-facing roster view for a Class's detail page -- who's enrolled
+  // and how far along they are, without the full per-lesson breakdown
+  // getClassProgressForAthlete gives the athlete themself.
+  async getClassRosterForCoach(coachId: number, classId: number) {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    const rows = await db.query.classEnrollments.findMany({
+      where: and(eq(classEnrollments.classId, classId), inArray(classEnrollments.coachId, coachIds)),
+      with: { athlete: true },
+      orderBy: desc(classEnrollments.createdAt),
+    });
+    const lessons = await db.query.classLessons.findMany({
+      where: eq(classLessons.classId, classId),
+    });
+    const results = [];
+    for (const enrollment of rows) {
+      await this.recomputeClassProgress(enrollment.id);
+      const progressRows = await db.query.classLessonProgress.findMany({
+        where: eq(classLessonProgress.enrollmentId, enrollment.id),
+      });
+      results.push({
+        enrollmentId: enrollment.id,
+        athleteId: enrollment.athleteId,
+        athleteName: enrollment.athlete.name,
+        startDate: enrollment.startDate,
+        lessonsStarted: progressRows.filter((p) => p.skillAssignmentId).length,
+        lessonsTotal: lessons.length,
+      });
+    }
+    return results;
   },
 
   // ---------- Trending exercises (numbers, not opt-in, -> Forge) ----------

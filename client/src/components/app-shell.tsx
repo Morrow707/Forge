@@ -23,6 +23,7 @@ import {
   Apple,
   BarChart3,
   ChevronDown,
+  GraduationCap,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -52,6 +53,7 @@ const coachNav: NavItem[] = [
     icon: Dumbbell,
     matchPrefixes: ["/coach/programs", "/coach/exercises"],
   },
+  { href: "/coach/classes", label: "Classes", icon: GraduationCap },
   { href: "/coach/roster", label: "Roster & Teams", icon: Users },
   { href: "/coach/nutrition", label: "Nutrition", icon: Apple },
   { href: "/coach/analytics", label: "Analytics", icon: LineChart },
@@ -76,6 +78,10 @@ const athleteNav: NavItem[] = [
       "/athlete/skills",
     ],
   },
+  // The self-guided, scheduled counterpart to the AI Chat's make-it-up-as-
+  // you-go coaching -- its own nav entry rather than folded into Library,
+  // since browsing/enrolling here is never AI-gated at all.
+  { href: "/athlete/classes", label: "Classes", icon: GraduationCap },
   { href: "/athlete/progress", label: "Progress", icon: LineChart },
   { href: "/athlete/nutrition", label: "Nutrition", icon: Apple },
   { href: "/athlete/team-board", label: "Team Board", icon: MessagesSquare },
@@ -87,6 +93,7 @@ const adminNav: NavItem[] = [
   { href: "/admin/my", label: "My Calendar", icon: CalendarDays },
   { href: "/admin/exercises", label: "Forge Library", icon: Dumbbell },
   { href: "/admin/programs", label: "Forge Programs", icon: CalendarRange },
+  { href: "/admin/classes", label: "Forge Classes", icon: GraduationCap },
   { href: "/admin/review", label: "Review Queue", icon: ClipboardCheck },
   { href: "/admin/ai-knowledge", label: "Teach AI", icon: Sparkles },
   { href: "/admin/nutrition-knowledge", label: "Teach Nutrition AI", icon: Apple },
