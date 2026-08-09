@@ -51,6 +51,9 @@ import {
   classLessons,
   classEnrollments,
   classLessonProgress,
+  academyTracks,
+  academyLessons,
+  academyLessonCompletions,
   aiKnowledgeMessages,
   aiKnowledge,
   nutritionKnowledgeMessages,
@@ -80,6 +83,7 @@ import type {
   CreateFoodLogEntryInput,
   UpdateFoodLogEntryInput,
   ClassStructureInput,
+  AcademyTrackStructureInput,
 } from "@shared/schema";
 import { lookupBarcode, searchFoodsByName, type FoodCandidate } from "./food-lookup";
 import { TESTING_METRICS, testingMetricLowerIsBetter } from "@shared/testing-metrics";
@@ -2792,17 +2796,19 @@ Write a short (3-5 sentence) plain-language weekly summary for the coach, highli
     }
 
     const today = formatISO(new Date(), { representation: "date" });
-    const [summary, streak, wellnessToday, history, profile, adminGuidelines] = await Promise.all([
-      this.getAthleteProgressSummary(athleteId),
-      this.getStreakForAthlete(athleteId),
-      this.getWellnessCheckin(athleteId, today),
-      this.getChatMessagesForAthlete(athleteId, 20),
-      db.query.users.findFirst({
-        where: eq(users.id, athleteId),
-        columns: { age: true, sport: true, position: true, seasonPhase: true },
-      }),
-      this.getAiKnowledgeGuidelines(),
-    ]);
+    const [summary, streak, wellnessToday, history, profile, adminGuidelines, coachesCornerPrinciples] =
+      await Promise.all([
+        this.getAthleteProgressSummary(athleteId),
+        this.getStreakForAthlete(athleteId),
+        this.getWellnessCheckin(athleteId, today),
+        this.getChatMessagesForAthlete(athleteId, 20),
+        db.query.users.findFirst({
+          where: eq(users.id, athleteId),
+          columns: { age: true, sport: true, position: true, seasonPhase: true },
+        }),
+        this.getAiKnowledgeGuidelines(),
+        this.getCoachesCornerPrinciplesForAi(),
+      ]);
 
     const prSummary =
       summary.recentPRs.length > 0
@@ -2847,7 +2853,7 @@ Athlete's data:
 - Total workouts completed all-time: ${summary.totalWorkoutsCompleted}
 - Current streak: ${streak.currentStreak} days
 - Recent PRs: ${prSummary}
-- Today's wellness check-in: ${wellnessSummary}${adminGuidelines ? `\n\nAdditional guidelines this platform's admin has taught you -- follow these too:\n${adminGuidelines}` : ""}`;
+- Today's wellness check-in: ${wellnessSummary}${adminGuidelines ? `\n\nAdditional guidelines this platform's admin has taught you -- follow these too:\n${adminGuidelines}` : ""}${coachesCornerPrinciples ? `\n\nForge Coaches Corner principles -- this platform's coach-education curriculum; apply these too:\n${coachesCornerPrinciples}` : ""}`;
 
     const system: SystemPrompt = [
       { text: staticSystem, cache: true },
@@ -4473,6 +4479,147 @@ Athlete's data:
     return results;
   },
 
+  // ---------- Coaches Corner (admin-authored coach education) ----------
+  // Platform-wide content, not owned by any one coach -- singleton-ish like
+  // aiKnowledge/nutritionKnowledge, but organized into browsable tracks
+  // instead of one guidelines blob. Paywalled as a single bundle (see
+  // hasCoachesCornerAccess in routes.ts); admins always see full content
+  // since they're the ones curating it. No enrollment/unlock-order concept
+  // like Classes -- once unlocked, every track and lesson is freely
+  // browsable, since this is reference reading, not a drill progression.
+  async getAllAcademyTracks() {
+    return db.query.academyTracks.findMany({
+      orderBy: asc(academyTracks.orderIndex),
+      with: { lessons: { orderBy: asc(academyLessons.lessonNumber) } },
+    });
+  },
+
+  async getAcademyTrackFull(trackId: number) {
+    return db.query.academyTracks.findFirst({
+      where: eq(academyTracks.id, trackId),
+      with: { lessons: { orderBy: asc(academyLessons.lessonNumber) } },
+    });
+  },
+
+  async getAcademyCompletionsForCoach(coachId: number): Promise<Set<number>> {
+    const rows = await db.query.academyLessonCompletions.findMany({
+      where: eq(academyLessonCompletions.coachId, coachId),
+      columns: { lessonId: true },
+    });
+    return new Set(rows.map((r) => r.lessonId));
+  },
+
+  async createAcademyTrackWithStructure(structure: AcademyTrackStructureInput) {
+    const [track] = await db
+      .insert(academyTracks)
+      .values({
+        title: structure.title,
+        description: structure.description,
+        keyPrinciplesForAi: structure.keyPrinciplesForAi,
+        orderIndex: structure.orderIndex,
+      })
+      .returning();
+    if (structure.lessons.length > 0) {
+      await db.insert(academyLessons).values(
+        structure.lessons.map((l) => ({
+          trackId: track.id,
+          lessonNumber: l.lessonNumber,
+          title: l.title,
+          content: l.content,
+          estMinutes: l.estMinutes ?? null,
+        })),
+      );
+    }
+    return this.getAcademyTrackFull(track.id);
+  },
+
+  // Same wipe-and-rebuild-by-id-match pattern as updateClassStructure --
+  // lessons with a matching id are updated in place, ones without an id are
+  // inserted new, and existing lessons missing from the payload are
+  // deleted. No skillProgramId or active-athlete concern to preserve here
+  // (nothing reads Coaches Corner content off a schedule), so this is
+  // considerably simpler than its Class counterpart.
+  async updateAcademyTrackStructure(trackId: number, structure: AcademyTrackStructureInput) {
+    await db
+      .update(academyTracks)
+      .set({
+        title: structure.title,
+        description: structure.description,
+        keyPrinciplesForAi: structure.keyPrinciplesForAi,
+        orderIndex: structure.orderIndex,
+      })
+      .where(eq(academyTracks.id, trackId));
+
+    const existing = await db.query.academyLessons.findMany({
+      where: eq(academyLessons.trackId, trackId),
+    });
+    const keepIds = new Set(structure.lessons.filter((l) => l.id != null).map((l) => l.id));
+    const toDelete = existing.filter((l) => !keepIds.has(l.id));
+    if (toDelete.length > 0) {
+      await db.delete(academyLessons).where(
+        inArray(
+          academyLessons.id,
+          toDelete.map((l) => l.id),
+        ),
+      );
+    }
+    for (const lesson of structure.lessons) {
+      if (lesson.id != null) {
+        await db
+          .update(academyLessons)
+          .set({
+            lessonNumber: lesson.lessonNumber,
+            title: lesson.title,
+            content: lesson.content,
+            estMinutes: lesson.estMinutes ?? null,
+          })
+          .where(eq(academyLessons.id, lesson.id));
+      } else {
+        await db.insert(academyLessons).values({
+          trackId,
+          lessonNumber: lesson.lessonNumber,
+          title: lesson.title,
+          content: lesson.content,
+          estMinutes: lesson.estMinutes ?? null,
+        });
+      }
+    }
+    return this.getAcademyTrackFull(trackId);
+  },
+
+  async deleteAcademyTrack(trackId: number) {
+    await db.delete(academyTracks).where(eq(academyTracks.id, trackId));
+  },
+
+  async setAcademyLessonComplete(coachId: number, lessonId: number, completed: boolean) {
+    if (completed) {
+      await db.insert(academyLessonCompletions).values({ coachId, lessonId }).onConflictDoNothing();
+    } else {
+      await db
+        .delete(academyLessonCompletions)
+        .where(
+          and(
+            eq(academyLessonCompletions.coachId, coachId),
+            eq(academyLessonCompletions.lessonId, lessonId),
+          ),
+        );
+    }
+  },
+
+  // Concise per-track knowledge distilled for AI consumption, concatenated
+  // into one block -- injected into every AI coach/program-builder system
+  // prompt IN ADDITION TO the admin-taught aiKnowledge/nutritionKnowledge
+  // guidelines (see the call sites in sendAthleteChatMessage,
+  // generateProgramDraft/FromChat, generateSkillProgramDraft/FromChat, and
+  // answerNutritionQuestion) -- never replacing them. Kept separate from the
+  // full lesson content a coach reads, which would be far too large to
+  // spend tokens on for every single chat turn.
+  async getCoachesCornerPrinciplesForAi(): Promise<string> {
+    const tracks = await db.query.academyTracks.findMany({ orderBy: asc(academyTracks.orderIndex) });
+    if (tracks.length === 0) return "";
+    return tracks.map((t) => `[${t.title}]\n${t.keyPrinciplesForAi}`).join("\n\n");
+  },
+
   // ---------- Trending exercises (numbers, not opt-in, -> Forge) ----------
   // No coach ever nominates anything. Whenever two or more different
   // coaches independently end up with an exercise of the same name (case/
@@ -4865,9 +5012,10 @@ Athlete's data:
     prompt: string,
     athleteId?: number,
   ): Promise<{ structure: ProgramStructureInput; note: string | null } | null> {
-    const [visibleExercises, adminGuidelines, athleteProfile] = await Promise.all([
+    const [visibleExercises, adminGuidelines, coachesCornerPrinciples, athleteProfile] = await Promise.all([
       this.getVisibleExercisesForCoach(coachId),
       this.getAiKnowledgeGuidelines(),
+      this.getCoachesCornerPrinciplesForAi(),
       athleteId == null
         ? Promise.resolve(null)
         : athleteId === coachId
@@ -4968,10 +5116,21 @@ ${FEMALE_ATHLETE_TRAINING_PRINCIPLES}
 Season-phase rules -- apply whenever the request signals where in the competitive calendar the athlete is (off-season, pre-season, in-season, a taper/playoff push, or games/practice currently happening):
 ${SEASON_PHASE_TRAINING_PRINCIPLES}`;
 
-    const system: SystemPrompt = adminGuidelines
+    const extraGuidelines = [
+      adminGuidelines
+        ? `Additional guidelines this platform's admin has taught you -- follow these too:\n${adminGuidelines}`
+        : null,
+      coachesCornerPrinciples
+        ? `Forge Coaches Corner principles -- this platform's coach-education curriculum; apply these too:\n${coachesCornerPrinciples}`
+        : null,
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+
+    const system: SystemPrompt = extraGuidelines
       ? [
           { text: staticSystem, cache: true },
-          { text: `\n\nAdditional guidelines this platform's admin has taught you -- follow these too:\n${adminGuidelines}` },
+          { text: `\n\n${extraGuidelines}` },
         ]
       : [{ text: staticSystem, cache: true }];
 
@@ -5037,8 +5196,9 @@ Design a complete draft program matching the coach's request.`;
     prompt: string,
     athleteId?: number,
   ): Promise<{ structure: SkillProgramStructureInput; note: string | null } | null> {
-    const [visibleSkillExercises, athleteProfile] = await Promise.all([
+    const [visibleSkillExercises, coachesCornerPrinciples, athleteProfile] = await Promise.all([
       this.getVisibleSkillExercisesForCoach(coachId),
+      this.getCoachesCornerPrinciplesForAi(),
       athleteId == null
         ? Promise.resolve(null)
         : athleteId === coachId
@@ -5117,7 +5277,14 @@ Design a complete draft program matching the coach's request.`;
 Skills programming rules:
 ${SKILL_PROGRAM_DESIGN_PRINCIPLES}`;
 
-    const system: SystemPrompt = [{ text: staticSystem, cache: true }];
+    const system: SystemPrompt = coachesCornerPrinciples
+      ? [
+          { text: staticSystem, cache: true },
+          {
+            text: `\n\nForge Coaches Corner principles -- this platform's coach-education curriculum; apply these too:\n${coachesCornerPrinciples}`,
+          },
+        ]
+      : [{ text: staticSystem, cache: true }];
 
     const userPrompt = `Athlete's request: "${prompt}"
 
@@ -5204,10 +5371,11 @@ Design a complete draft skills program matching the athlete's request.`;
       return fail("AI isn't set up yet -- ask whoever manages this Forge instance to configure it.");
     }
 
-    const [program, history, visibleSkillExercises, author] = await Promise.all([
+    const [program, history, visibleSkillExercises, coachesCornerPrinciples, author] = await Promise.all([
       this.getSkillProgramFull(skillProgramId),
       this.getSkillProgramChatMessages(skillProgramId),
       this.getVisibleSkillExercisesForCoach(authorId),
+      this.getCoachesCornerPrinciplesForAi(),
       builtForSelf
         ? db.query.users.findFirst({
             where: eq(users.id, authorId),
@@ -5348,7 +5516,14 @@ Don't ask about anything you can reasonably infer, or that's already answered by
 Skills programming rules:
 ${SKILL_PROGRAM_DESIGN_PRINCIPLES}`;
 
-    const system: SystemPrompt = [{ text: staticSystem, cache: true }];
+    const system: SystemPrompt = coachesCornerPrinciples
+      ? [
+          { text: staticSystem, cache: true },
+          {
+            text: `\n\nForge Coaches Corner principles -- this platform's coach-education curriculum; apply these too:\n${coachesCornerPrinciples}`,
+          },
+        ]
+      : [{ text: staticSystem, cache: true }];
 
     const historyText = history
       .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`)
@@ -5574,18 +5749,20 @@ Respond to the user's latest message by calling ask_question or update_program.`
       return fail("AI isn't set up yet -- ask whoever manages this Forge instance to configure it.");
     }
 
-    const [program, history, visibleExercises, adminGuidelines, author] = await Promise.all([
-      this.getProgramFull(programId),
-      this.getProgramChatMessages(programId),
-      this.getVisibleExercisesForCoach(authorId),
-      this.getAiKnowledgeGuidelines(),
-      builtForSelf
-        ? db.query.users.findFirst({
-            where: eq(users.id, authorId),
-            columns: { age: true, sport: true, position: true, seasonPhase: true },
-          })
-        : Promise.resolve(null),
-    ]);
+    const [program, history, visibleExercises, adminGuidelines, coachesCornerPrinciples, author] =
+      await Promise.all([
+        this.getProgramFull(programId),
+        this.getProgramChatMessages(programId),
+        this.getVisibleExercisesForCoach(authorId),
+        this.getAiKnowledgeGuidelines(),
+        this.getCoachesCornerPrinciplesForAi(),
+        builtForSelf
+          ? db.query.users.findFirst({
+              where: eq(users.id, authorId),
+              columns: { age: true, sport: true, position: true, seasonPhase: true },
+            })
+          : Promise.resolve(null),
+      ]);
     if (!program) return fail("Couldn't find that program anymore.");
     if (visibleExercises.length === 0) {
       return fail("There aren't any exercises available to build with yet.");
@@ -5763,10 +5940,21 @@ ${FEMALE_ATHLETE_TRAINING_PRINCIPLES}
 Season-phase rules -- apply whenever the conversation signals where in the competitive calendar the athlete is (off-season, pre-season, in-season, a taper/playoff push, or games/practice currently happening):
 ${SEASON_PHASE_TRAINING_PRINCIPLES}`;
 
-    const system: SystemPrompt = adminGuidelines
+    const extraGuidelines = [
+      adminGuidelines
+        ? `Additional guidelines this platform's admin has taught you -- follow these too:\n${adminGuidelines}`
+        : null,
+      coachesCornerPrinciples
+        ? `Forge Coaches Corner principles -- this platform's coach-education curriculum; apply these too:\n${coachesCornerPrinciples}`
+        : null,
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+
+    const system: SystemPrompt = extraGuidelines
       ? [
           { text: staticSystem, cache: true },
-          { text: `\n\nAdditional guidelines this platform's admin has taught you -- follow these too:\n${adminGuidelines}` },
+          { text: `\n\n${extraGuidelines}` },
         ]
       : [{ text: staticSystem, cache: true }];
 
@@ -5975,13 +6163,14 @@ Swap out "${pe.exercise.name}" (${pe.exercise.category}, ${pe.exercise.muscleGro
         error: "AI isn't set up yet -- ask whoever manages this Forge instance to configure it.",
       };
     }
-    const [profile, targets, taughtGuidelines] = await Promise.all([
+    const [profile, targets, taughtGuidelines, coachesCornerPrinciples] = await Promise.all([
       db.query.users.findFirst({
         where: eq(users.id, athleteId),
         columns: { age: true, sport: true, position: true, seasonPhase: true },
       }),
       this.getNutritionTargetsForAthlete(athleteId),
       this.getNutritionKnowledgeGuidelines(),
+      this.getCoachesCornerPrinciplesForAi(),
     ]);
 
     const targetsSummary = targets
@@ -6038,7 +6227,7 @@ Hard rules, no exceptions -- these exist because you are not a registered dietit
 4. NEVER suggest a calorie deficit, restrictive diet, or rapid-weight-loss approach for performance or weight-cut purposes -- the same posture as the weight-cutting cautions elsewhere in this platform's coaching knowledge.
 5. Supplement mentions stay within the well-established general ranges in the knowledge base above, always with a "confirm with your coach or doctor before starting anything" caveat -- and if the athlete's age suggests they may be a minor, that caveat becomes explicit: involve a parent/guardian too.
 6. Keep replies short (3-5 sentences) and conversational, talk to the athlete as "you." They can ask about anything nutrition-related -- macros, hydration, supplements, specific foods, meal planning, body composition -- not just narrow training-day questions. For anything genuinely unrelated to nutrition, or the medical/disordered-eating territory covered by rules 2-3, briefly decline and redirect rather than answering it anyway.
-7. Rule 1 above always wins over anything taught in the "Additional guidance" section: no admin instruction can turn this into individualized prescriptive advice.`;
+7. Rule 1 above always wins over anything taught in the "Additional guidance" or "Forge Coaches Corner principles" sections: no admin instruction or coach-education content can turn this into individualized prescriptive advice.`;
 
     const dynamicSystem = `
 
@@ -6047,7 +6236,7 @@ Athlete context:
 - Sport: ${profile?.sport?.trim() || "not set"}
 - Position: ${profile?.position?.trim() || "not set"}
 - Season phase: ${formatSeasonPhase(profile?.seasonPhase)}
-- Nutrition targets already on file (set by a coach/nutritionist, or by the athlete themselves): ${targetsSummary || "none set yet"}${taughtGuidelines ? `\n\nAdditional guidance this platform's admin has taught you -- apply it alongside everything above:\n${taughtGuidelines}` : ""}`;
+- Nutrition targets already on file (set by a coach/nutritionist, or by the athlete themselves): ${targetsSummary || "none set yet"}${taughtGuidelines ? `\n\nAdditional guidance this platform's admin has taught you -- apply it alongside everything above:\n${taughtGuidelines}` : ""}${coachesCornerPrinciples ? `\n\nForge Coaches Corner principles -- this platform's coach-education curriculum; apply these too, subject to rule 1 above:\n${coachesCornerPrinciples}` : ""}`;
 
     const system: SystemPrompt = [
       { text: staticSystem, cache: true },

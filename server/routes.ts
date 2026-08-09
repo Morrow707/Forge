@@ -61,6 +61,7 @@ import {
   createTeamGameDaySchema,
   classStructureSchema,
   enrollInClassSchema,
+  academyTrackStructureSchema,
 } from "@shared/schema";
 import { computeReadiness } from "@shared/wellness";
 import { z } from "zod";
@@ -206,6 +207,17 @@ function requirePaidAiAccess(entitlement: AiEntitlement) {
 // per-lesson Class purchases -- no real billing exists yet, so this account
 // is the only way to ever actually reach a "purchased" lesson end to end.
 const COMPED_FREE_AGENT_LESSON_BUYER = "freeagent@forge.app";
+
+// Coaches Corner (coach education) paywall -- no real billing exists yet
+// (see the two stubs above), so this is intentionally admin-only for now:
+// the demo coach account and every other regular coach see the locked
+// teaser catalog until this is wired to real billing. Admins bypass since
+// they're the ones curating the content. Change only this function once
+// real billing exists -- every route below reads through it, never a role
+// check of its own.
+function hasCoachesCornerAccess(user: { role: string }) {
+  return user.role === "admin";
+}
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
@@ -644,6 +656,80 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
+  // ---------------- Coach: Coaches Corner ----------------
+  // Admin-authored coach education (program-design theory, Olympic lift
+  // technique, youth development, arm care, reading Forge's own analytics,
+  // season planning, coaching communication) -- a single paywalled bundle,
+  // not priced per-track. The catalog itself is always visible (title,
+  // description, lesson count) so the locked state still reads as a real
+  // teaser rather than an empty page; lesson content is stripped out until
+  // hasCoachesCornerAccess is true for this coach.
+  app.get("/api/coach/academy/tracks", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const unlocked = hasCoachesCornerAccess(user);
+    const tracks = await storage.getAllAcademyTracks();
+    res.json(
+      tracks.map((t) => ({
+        id: t.id,
+        title: t.title,
+        description: t.description,
+        lessonCount: t.lessons.length,
+        unlocked,
+      })),
+    );
+  });
+
+  app.get("/api/coach/academy/tracks/:id", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const track = await storage.getAcademyTrackFull(id);
+    if (!track) return res.status(404).json({ message: "Track not found" });
+    const unlocked = hasCoachesCornerAccess(user);
+    if (!unlocked) {
+      return res.json({
+        id: track.id,
+        title: track.title,
+        description: track.description,
+        unlocked: false,
+        lessons: track.lessons.map((l) => ({ id: l.id, lessonNumber: l.lessonNumber, title: l.title })),
+      });
+    }
+    const completions = await storage.getAcademyCompletionsForCoach(user.id);
+    res.json({
+      id: track.id,
+      title: track.title,
+      description: track.description,
+      unlocked: true,
+      lessons: track.lessons.map((l) => ({ ...l, completed: completions.has(l.id) })),
+    });
+  });
+
+  app.post(
+    "/api/coach/academy/lessons/:id/complete",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      if (!hasCoachesCornerAccess(user)) {
+        return res.status(402).json({ message: "Coaches Corner isn't open for purchase yet." });
+      }
+      const id = Number(req.params.id);
+      const schema = z.object({ completed: z.boolean() });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      await storage.setAcademyLessonComplete(user.id, id, parsed.data.completed);
+      res.status(204).end();
+    },
+  );
+
+  // No real billing exists yet (see hasCoachesCornerAccess) -- this always
+  // 402s so the client's paywall UX has a real endpoint to hit, the same
+  // "Payments aren't live yet" stub shape as the Class lesson-purchase route.
+  app.post("/api/coach/academy/unlock", requireRole("coach"), async (_req, res) => {
+    res.status(402).json({ message: "Coaches Corner isn't open for purchase yet." });
+  });
+
   // ---------------- Admin: Forge Exercise Library ----------------
   // An admin's own exercise bank *is* the Forge library -- everything they
   // create here is automatically shared, read-only, with every coach (see
@@ -874,6 +960,79 @@ export async function registerRoutes(app: Express): Promise<Server> {
     await storage.deleteClass(id);
     res.status(204).end();
   });
+
+  // ---------------- Admin: Coaches Corner ----------------
+  // Authoring side of the coach-education bundle -- admins always see full
+  // lesson content (no paywall check, they're the ones curating it). See
+  // the coach-facing block above for the locked/unlocked catalog a regular
+  // coach sees instead.
+  app.get("/api/admin/academy/tracks", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const [tracks, completions] = await Promise.all([
+      storage.getAllAcademyTracks(),
+      storage.getAcademyCompletionsForCoach(user.id),
+    ]);
+    res.json(
+      tracks.map((t) => ({
+        ...t,
+        lessons: t.lessons.map((l) => ({ ...l, completed: completions.has(l.id) })),
+      })),
+    );
+  });
+
+  app.get("/api/admin/academy/tracks/:id", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const track = await storage.getAcademyTrackFull(id);
+    if (!track) return res.status(404).json({ message: "Track not found" });
+    const completions = await storage.getAcademyCompletionsForCoach(user.id);
+    res.json({ ...track, lessons: track.lessons.map((l) => ({ ...l, completed: completions.has(l.id) })) });
+  });
+
+  app.post("/api/admin/academy/tracks", requireRole("admin"), async (req, res) => {
+    const parsed = academyTrackStructureSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const track = await storage.createAcademyTrackWithStructure(parsed.data);
+    res.status(201).json(track);
+  });
+
+  app.put("/api/admin/academy/tracks/:id", requireRole("admin"), async (req, res) => {
+    const id = Number(req.params.id);
+    const existing = await storage.getAcademyTrackFull(id);
+    if (!existing) return res.status(404).json({ message: "Track not found" });
+    const parsed = academyTrackStructureSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const updated = await storage.updateAcademyTrackStructure(id, parsed.data);
+    res.json(updated);
+  });
+
+  app.delete("/api/admin/academy/tracks/:id", requireRole("admin"), async (req, res) => {
+    const id = Number(req.params.id);
+    const existing = await storage.getAcademyTrackFull(id);
+    if (!existing) return res.status(404).json({ message: "Track not found" });
+    await storage.deleteAcademyTrack(id);
+    res.status(204).end();
+  });
+
+  app.post(
+    "/api/admin/academy/lessons/:id/complete",
+    requireRole("admin"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const id = Number(req.params.id);
+      const schema = z.object({ completed: z.boolean() });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      await storage.setAcademyLessonComplete(user.id, id, parsed.data.completed);
+      res.status(204).end();
+    },
+  );
 
   // ---------------- Admin: Review Queue ----------------
   // Two independent feeds land here: exercise names that have caught on

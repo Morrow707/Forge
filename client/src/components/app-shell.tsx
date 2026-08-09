@@ -24,6 +24,7 @@ import {
   BarChart3,
   ChevronDown,
   GraduationCap,
+  BookOpen,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -94,6 +95,7 @@ const adminNav: NavItem[] = [
   { href: "/admin/exercises", label: "Forge Library", icon: Dumbbell },
   { href: "/admin/programs", label: "Forge Programs", icon: CalendarRange },
   { href: "/admin/classes", label: "Forge Classes", icon: GraduationCap },
+  { href: "/admin/coaches-corner", label: "Coaches Corner", icon: BookOpen },
   { href: "/admin/review", label: "Review Queue", icon: ClipboardCheck },
   { href: "/admin/ai-knowledge", label: "Teach AI", icon: Sparkles },
   { href: "/admin/nutrition-knowledge", label: "Teach Nutrition AI", icon: Apple },
@@ -219,6 +221,25 @@ export function AppShell({
           </nav>
 
           <div className="flex shrink-0 items-center gap-2">
+            {/* Deliberately NOT one of the main nav tabs above (which mixes
+                it in visually with Team Board and the rest) -- this is a
+                coach's own paid upgrade, not a team feature, so it sits
+                here instead, right next to the account menu, to read as a
+                distinct, personal area of the app. */}
+            {user?.role === "coach" && (
+              <Link
+                href="/coach/coaches-corner"
+                className={cn(
+                  "hidden items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm font-semibold transition-colors md:flex",
+                  location.startsWith("/coach/coaches-corner")
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-amber-500/40 text-amber-500 hover:bg-amber-500/10",
+                )}
+              >
+                <BookOpen className="h-4 w-4" />
+                Coaches Corner
+              </Link>
+            )}
             {/* Hoverable on desktop (mouse enter/leave), click-toggleable for
                 touch, since touch devices never fire hover -- the trigger's
                 own onClick covers that case. Keeps Settings/Coaching
@@ -352,6 +373,21 @@ export function AppShell({
                   </Link>
                 );
               })}
+              {user?.role === "coach" && (
+                <Link
+                  href="/coach/coaches-corner"
+                  onClick={() => setMobileNavOpen(false)}
+                  className={cn(
+                    "flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors",
+                    location.startsWith("/coach/coaches-corner")
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-amber-500/40 text-amber-500 hover:bg-amber-500/10",
+                  )}
+                >
+                  <BookOpen className="h-3.5 w-3.5" />
+                  Coaches Corner
+                </Link>
+              )}
             </div>
             <div className="mt-3 flex items-center justify-between border-t border-border pt-3">
               <div className="min-w-0">
