@@ -16,7 +16,12 @@ export type TrackingLevel = "none" | "bar_path" | "full" | "jump";
  * full bar tracking for everything else. A program exercise saved under
  * the old "bar_path"-only level before this change still works exactly as
  * before in the athlete's workout view -- it just now reads as "Video: On"
- * here rather than exposing that narrower option again. */
+ * here rather than exposing that narrower option again.
+ *
+ * A single small pill rather than a labeled two-button row -- this sits on
+ * every exercise card in a program that can run to dozens of exercises, so
+ * the per-exercise chrome needs to stay as light as the Sets/Reps/Weight
+ * fields next to it. */
 export function VideoTrackingToggle({
   trackingLevel,
   category,
@@ -30,40 +35,30 @@ export function VideoTrackingToggle({
   const onLevel: TrackingLevel = category === "plyometric" ? "jump" : "full";
 
   return (
-    <div>
-      <span className="mb-1 block text-[10px] uppercase text-muted-foreground">Camera</span>
-      <div className="flex gap-2">
-        <button
-          type="button"
-          aria-pressed={!isOn}
-          title="No camera tracking or form-check video for this exercise"
-          onClick={() => onChange({ trackingLevel: "none", videoCheckEnabled: false })}
-          className={cn(
-            "flex items-center gap-1.5 rounded-md border-2 px-3.5 py-2 text-sm font-bold transition-colors",
-            !isOn
-              ? "border-foreground bg-foreground text-background"
-              : "border-border text-muted-foreground hover:border-foreground/40",
-          )}
-        >
-          <VideoOff className="h-4 w-4" />
-          No Video
-        </button>
-        <button
-          type="button"
-          aria-pressed={isOn}
-          title="Captures bar path, velocity, power, ROM, and form faults, plus AI form-check feedback on the same footage"
-          onClick={() => onChange({ trackingLevel: onLevel, videoCheckEnabled: true })}
-          className={cn(
-            "flex items-center gap-1.5 rounded-md border-2 px-3.5 py-2 text-sm font-bold transition-colors",
-            isOn
-              ? "border-primary bg-primary text-primary-foreground"
-              : "border-border text-muted-foreground hover:border-primary/50 hover:text-primary",
-          )}
-        >
-          <Video className="h-4 w-4" />
-          Video
-        </button>
-      </div>
-    </div>
+    <button
+      type="button"
+      aria-pressed={isOn}
+      title={
+        isOn
+          ? "Camera tracking + AI form-check is on for this exercise -- click to turn off"
+          : "Turn on camera tracking (bar path, velocity, power, ROM, form faults) + AI form-check"
+      }
+      onClick={() =>
+        onChange(
+          isOn
+            ? { trackingLevel: "none", videoCheckEnabled: false }
+            : { trackingLevel: onLevel, videoCheckEnabled: true },
+        )
+      }
+      className={cn(
+        "flex w-fit items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-bold uppercase tracking-wide transition-colors",
+        isOn
+          ? "border-primary bg-primary/10 text-primary"
+          : "border-border text-muted-foreground hover:border-primary/40 hover:text-primary",
+      )}
+    >
+      {isOn ? <Video className="h-3.5 w-3.5" /> : <VideoOff className="h-3.5 w-3.5" />}
+      {isOn ? "Video On" : "Video Off"}
+    </button>
   );
 }
