@@ -5,6 +5,7 @@ import { CalendarView, type CalendarEntry } from "@/components/calendar-view";
 import { CoachDayEditDialog } from "@/components/coach-day-edit-dialog";
 import { SkillDayViewDialog } from "@/components/skill-day-view-dialog";
 import { CoachDayDetailDialog } from "@/components/coach-day-detail-dialog";
+import { CoachDayBriefing } from "@/components/coach-day-briefing";
 import {
   Select,
   SelectContent,
@@ -96,6 +97,7 @@ export default function CoachCalendar() {
         onRangeChange={(start, end) => setRange({ start, end })}
         onEntryClick={openEntry}
         onDayClick={(date, dayEntries) => setViewingDay({ date, entries: dayEntries })}
+        singleDayContent={(date) => <CoachDayBriefing date={date} />}
       />
 
       {!isLoading && entries.length === 0 && (

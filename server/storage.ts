@@ -7601,6 +7601,91 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
     return combined;
   },
 
+  // Everything a coach would want to see about their whole roster for ONE
+  // specific day, in a single fetch -- the "Today" tab's data source.
+  // Reuses getCalendarForCoach for the schedule itself (so it doesn't have
+  // to re-solve recurring assignment dates), then enriches each non-rest
+  // day with its actual exercise list + correctives, and layers on
+  // wellness/readiness, ACWR/recovery risk, and injury status per athlete.
+  // ACWR is always "as of right now" (see getRosterAcwrSummary), not
+  // historically accurate for a past/future date -- callers should only
+  // surface it when date is actually today.
+  async getDayBriefingForCoach(coachId: number, date: string) {
+    const [entries, roster, wellnessRows, acwrSummary] = await Promise.all([
+      this.getCalendarForCoach(coachId, date, date),
+      this.getRosterForCoach(coachId),
+      this.getRosterWellnessToday(coachId, date),
+      this.getRosterAcwrSummary(coachId),
+    ]);
+
+    const wellnessByAthlete = new Map(wellnessRows.map((w) => [w.athleteId, w]));
+    const acwrByAthlete = new Map(acwrSummary.map((a) => [a.athleteId, a]));
+
+    const entriesByAthlete = new Map<number, typeof entries>();
+    for (const e of entries) {
+      if (e.athleteId == null) continue;
+      const list = entriesByAthlete.get(e.athleteId) ?? [];
+      list.push(e);
+      entriesByAthlete.set(e.athleteId, list);
+    }
+
+    return Promise.all(
+      roster.map(async (athlete) => {
+        const athleteEntries = entriesByAthlete.get(athlete.id) ?? [];
+        const enrichedEntries = await Promise.all(
+          athleteEntries.map(async (e) => {
+            if (e.isRestDay) {
+              return { ...e, exercises: [], correctives: [] as string[] };
+            }
+            if (e.kind === "skill") {
+              const day = await db.query.skillProgramDays.findFirst({
+                where: eq(skillProgramDays.id, e.programDayId),
+                with: { exercises: { orderBy: asc(skillProgramExercises.orderIndex), with: { skillExercise: true } } },
+              });
+              return {
+                ...e,
+                exercises: (day?.exercises ?? []).map((se) => ({
+                  name: se.skillExercise.name,
+                  sets: se.sets,
+                  reps: se.reps,
+                  weight: null as string | null,
+                })),
+                correctives: [] as string[],
+              };
+            }
+            const [day, correctives] = await Promise.all([
+              this.getProgramDayForCoachView(coachId, e.programDayId),
+              this.getCorrectivesForAssignmentDay(e.assignmentId, e.programDayId),
+            ]);
+            return {
+              ...e,
+              exercises: (day?.exercises ?? []).map((pe) => ({
+                name: pe.exercise.name,
+                sets: pe.sets,
+                reps: pe.reps,
+                weight: pe.weight,
+              })),
+              correctives: correctives.map((c) => c.exercise.name),
+            };
+          }),
+        );
+
+        const wellness = wellnessByAthlete.get(athlete.id);
+        const readiness = wellness ? computeReadiness(wellness) : null;
+        const acwr = acwrByAthlete.get(athlete.id);
+
+        return {
+          athleteId: athlete.id,
+          athleteName: athlete.name,
+          healthStatus: athlete.healthStatus,
+          readiness,
+          acwr: acwr && acwr.ratio != null ? { ratio: acwr.ratio, level: acwr.level } : null,
+          entries: enrichedEntries,
+        };
+      }),
+    );
+  },
+
   // Simple RPE-based autoregulation: turn how hard the last set felt into a
   // concrete suggestion for this time, the way TrainHeroic's Training Load
   // does but surfaced as one plain-language line instead of a chart to read.
