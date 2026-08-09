@@ -54,6 +54,8 @@ import {
   academyTracks,
   academyLessons,
   academyLessonCompletions,
+  academyQuizQuestions,
+  academyQuizAnswers,
   aiKnowledgeMessages,
   aiKnowledge,
   nutritionKnowledgeMessages,
@@ -84,6 +86,7 @@ import type {
   UpdateFoodLogEntryInput,
   ClassStructureInput,
   AcademyTrackStructureInput,
+  AcademyQuizQuestionInput,
 } from "@shared/schema";
 import { lookupBarcode, searchFoodsByName, type FoodCandidate } from "./food-lookup";
 import { TESTING_METRICS, testingMetricLowerIsBetter } from "@shared/testing-metrics";
@@ -4509,15 +4512,53 @@ Athlete's data:
   async getAllAcademyTracks() {
     return db.query.academyTracks.findMany({
       orderBy: asc(academyTracks.orderIndex),
-      with: { lessons: { orderBy: asc(academyLessons.lessonNumber) } },
+      with: {
+        lessons: { orderBy: asc(academyLessons.lessonNumber) },
+        quizQuestions: {
+          orderBy: asc(academyQuizQuestions.orderIndex),
+          with: { answers: { orderBy: asc(academyQuizAnswers.orderIndex) } },
+        },
+      },
     });
   },
 
   async getAcademyTrackFull(trackId: number) {
     return db.query.academyTracks.findFirst({
       where: eq(academyTracks.id, trackId),
-      with: { lessons: { orderBy: asc(academyLessons.lessonNumber) } },
+      with: {
+        lessons: { orderBy: asc(academyLessons.lessonNumber) },
+        quizQuestions: {
+          orderBy: asc(academyQuizQuestions.orderIndex),
+          with: { answers: { orderBy: asc(academyQuizAnswers.orderIndex) } },
+        },
+      },
     });
+  },
+
+  // One-off seeding helper: adds a quiz to a track that doesn't have one yet
+  // without touching its lessons -- unlike updateAcademyTrackStructure,
+  // which would delete-and-recreate every lesson as a duplicate here since
+  // the seed script's track objects carry no lesson ids to match against.
+  async addQuizQuestionsToTrackIfNone(trackId: number, questions: AcademyQuizQuestionInput[]) {
+    const existing = await db.query.academyQuizQuestions.findFirst({
+      where: eq(academyQuizQuestions.trackId, trackId),
+    });
+    if (existing) return;
+    for (const q of questions) {
+      const [question] = await db
+        .insert(academyQuizQuestions)
+        .values({ trackId, orderIndex: q.orderIndex, questionText: q.questionText })
+        .returning();
+      await db.insert(academyQuizAnswers).values(
+        q.answers.map((a) => ({
+          questionId: question.id,
+          orderIndex: a.orderIndex,
+          answerText: a.answerText,
+          isCorrect: a.isCorrect,
+          explanation: a.explanation,
+        })),
+      );
+    }
   },
 
   async getAcademyCompletionsForCoach(coachId: number): Promise<Set<number>> {
@@ -4546,6 +4587,21 @@ Athlete's data:
           title: l.title,
           content: l.content,
           estMinutes: l.estMinutes ?? null,
+        })),
+      );
+    }
+    for (const q of structure.quizQuestions) {
+      const [question] = await db
+        .insert(academyQuizQuestions)
+        .values({ trackId: track.id, orderIndex: q.orderIndex, questionText: q.questionText })
+        .returning();
+      await db.insert(academyQuizAnswers).values(
+        q.answers.map((a) => ({
+          questionId: question.id,
+          orderIndex: a.orderIndex,
+          answerText: a.answerText,
+          isCorrect: a.isCorrect,
+          explanation: a.explanation,
         })),
       );
     }
@@ -4602,6 +4658,51 @@ Athlete's data:
           estMinutes: lesson.estMinutes ?? null,
         });
       }
+    }
+
+    // Same id-match pattern as lessons above for the questions themselves;
+    // each question's answers are simpler to just replace wholesale on
+    // every save rather than id-matching individual answers too, since
+    // nothing else in the app ever references a specific answer row.
+    const existingQuestions = await db.query.academyQuizQuestions.findMany({
+      where: eq(academyQuizQuestions.trackId, trackId),
+    });
+    const keepQuestionIds = new Set(
+      structure.quizQuestions.filter((q) => q.id != null).map((q) => q.id),
+    );
+    const questionsToDelete = existingQuestions.filter((q) => !keepQuestionIds.has(q.id));
+    if (questionsToDelete.length > 0) {
+      await db.delete(academyQuizQuestions).where(
+        inArray(
+          academyQuizQuestions.id,
+          questionsToDelete.map((q) => q.id),
+        ),
+      );
+    }
+    for (const q of structure.quizQuestions) {
+      let questionId = q.id;
+      if (questionId != null) {
+        await db
+          .update(academyQuizQuestions)
+          .set({ orderIndex: q.orderIndex, questionText: q.questionText })
+          .where(eq(academyQuizQuestions.id, questionId));
+        await db.delete(academyQuizAnswers).where(eq(academyQuizAnswers.questionId, questionId));
+      } else {
+        const [inserted] = await db
+          .insert(academyQuizQuestions)
+          .values({ trackId, orderIndex: q.orderIndex, questionText: q.questionText })
+          .returning();
+        questionId = inserted.id;
+      }
+      await db.insert(academyQuizAnswers).values(
+        q.answers.map((a) => ({
+          questionId: questionId!,
+          orderIndex: a.orderIndex,
+          answerText: a.answerText,
+          isCorrect: a.isCorrect,
+          explanation: a.explanation,
+        })),
+      );
     }
     return this.getAcademyTrackFull(trackId);
   },

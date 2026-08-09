@@ -68,6 +68,7 @@ const AdminPlatformTrends = lazy(() => import("@/pages/admin/platform-trends"));
 const AdminClasses = lazy(() => import("@/pages/admin/classes"));
 const AdminClassBuilder = lazy(() => import("@/pages/admin/class-builder"));
 const AdminCoachesCorner = lazy(() => import("@/pages/admin/coaches-corner"));
+const AdminAcademyTrackBuilder = lazy(() => import("@/pages/admin/academy-track-builder"));
 
 function FullScreenSpinner() {
   return (
@@ -277,6 +278,9 @@ function Router() {
         </Route>
         <Route path="/admin/coaches-corner">
           <ProtectedRoute role="admin" component={AdminCoachesCorner} />
+        </Route>
+        <Route path="/admin/academy-tracks/:id">
+          <ProtectedRoute role="admin" component={AdminAcademyTrackBuilder} />
         </Route>
         <Route path="/admin/review">
           <ProtectedRoute role="admin" component={AdminReviewQueue} />

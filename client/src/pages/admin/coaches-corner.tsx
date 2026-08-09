@@ -1,13 +1,15 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { AcademyQuiz } from "@/components/academy-quiz";
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { ArrowLeft, CheckCircle2, Circle } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Circle, Pencil, Plus } from "lucide-react";
 
 type Lesson = {
   id: number;
@@ -18,19 +20,26 @@ type Lesson = {
   completed: boolean;
 };
 
+type QuizAnswer = { id: number; answerText: string; isCorrect: boolean; explanation: string };
+type QuizQuestion = { id: number; questionText: string; answers: QuizAnswer[] };
+
 type Track = {
   id: number;
   title: string;
   description: string;
   keyPrinciplesForAi: string;
   lessons: Lesson[];
+  quizQuestions: QuizQuestion[];
 };
 
 /** Admin's own view of Coaches Corner -- always full content, no paywall
  * check (admins are the ones curating it; see the coach-facing block in
- * routes.ts for the locked/unlocked catalog a regular coach sees). Read-only
- * for now; content is authored via seed.ts, not this page. */
+ * routes.ts for the locked/unlocked catalog a regular coach sees).
+ * Reading/browsing happens here; creating and editing a track's structure
+ * (lessons + quiz) happens on academy-track-builder.tsx, reached via the
+ * New Track / pencil buttons below. */
 export default function AdminCoachesCorner() {
+  const [, navigate] = useLocation();
   const qc = useQueryClient();
   const [selectedTrackId, setSelectedTrackId] = useState<number | null>(null);
   const [selectedLessonId, setSelectedLessonId] = useState<number | null>(null);
@@ -104,10 +113,16 @@ export default function AdminCoachesCorner() {
       <AppShell
         title={selectedTrack.title}
         actions={
-          <Button variant="outline" onClick={() => setSelectedTrackId(null)}>
-            <ArrowLeft className="h-4 w-4" />
-            Back to Coaches Corner
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => navigate(`/admin/academy-tracks/${selectedTrack.id}`)}>
+              <Pencil className="h-4 w-4" />
+              Edit
+            </Button>
+            <Button variant="outline" onClick={() => setSelectedTrackId(null)}>
+              <ArrowLeft className="h-4 w-4" />
+              Back to Coaches Corner
+            </Button>
+          </div>
         }
       >
         <p className="mb-6 max-w-2xl text-sm text-muted-foreground">{selectedTrack.description}</p>
@@ -135,30 +150,57 @@ export default function AdminCoachesCorner() {
             </button>
           ))}
         </div>
+        <AcademyQuiz questions={selectedTrack.quizQuestions} />
       </AppShell>
     );
   }
 
   return (
-    <AppShell title="Coaches Corner">
+    <AppShell
+      title="Coaches Corner"
+      actions={
+        <Button onClick={() => navigate("/admin/academy-tracks/new")}>
+          <Plus className="h-4 w-4" />
+          New Track
+        </Button>
+      }
+    >
       <p className="mb-6 max-w-2xl text-sm text-muted-foreground">
         Coach-education content -- what a regular coach sees as a locked, paywalled catalog (see the
-        Coaches Corner nav item next to the account menu). Seeded via server/seed.ts; not yet
-        editable from this page.
+        Coaches Corner nav item next to the account menu). Click a track to read it, or the pencil to
+        edit its lessons and quiz.
       </p>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {tracks.map((track) => (
-          <Card
-            key={track.id}
-            className="cursor-pointer transition-colors hover:border-primary/50"
-            onClick={() => setSelectedTrackId(track.id)}
-          >
+          <Card key={track.id} className="transition-colors hover:border-primary/50">
             <CardContent className="flex flex-col gap-2 p-5">
-              <h3 className="font-display text-base font-bold uppercase tracking-wide">{track.title}</h3>
+              <div className="flex items-start justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedTrackId(track.id)}
+                  className="text-left font-display text-base font-bold uppercase tracking-wide hover:text-primary"
+                >
+                  {track.title}
+                </button>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="shrink-0"
+                  onClick={() => navigate(`/admin/academy-tracks/${track.id}`)}
+                  aria-label={`Edit ${track.title}`}
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
+              </div>
               <p className="text-sm text-muted-foreground">{track.description}</p>
-              <Badge variant="secondary" className="w-fit">
-                {track.lessons.length} lessons
-              </Badge>
+              <div className="flex gap-1.5">
+                <Badge variant="secondary" className="w-fit">
+                  {track.lessons.length} lessons
+                </Badge>
+                <Badge variant="outline" className="w-fit">
+                  {track.quizQuestions.length} quiz Qs
+                </Badge>
+              </div>
             </CardContent>
           </Card>
         ))}

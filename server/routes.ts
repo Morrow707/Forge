@@ -706,6 +706,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       description: track.description,
       unlocked: true,
       lessons: track.lessons.map((l) => ({ ...l, completed: completions.has(l.id) })),
+      quizQuestions: track.quizQuestions,
     });
   });
 
