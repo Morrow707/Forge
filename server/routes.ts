@@ -145,38 +145,58 @@ async function requireFreeAgent(req: any, res: any, next: any) {
   next();
 }
 
+// Strength and Skills are two totally separate paid upgrades for a Free
+// Agent -- paying for one never unlocks the other. Keep this a plain union
+// (not a DB enum) since it's purely a route-gating concept, not stored data.
+type AiEntitlement = "strengthAi" | "skillsAi";
+
 // The seeded demo Free Agent account (see server/seed.ts) is the one
-// deliberate exception to the paywall below -- it's used for demoing/
+// deliberate exception to the paywalls below -- it's used for demoing/
 // testing the full Free Agent AI experience without real billing existing
-// yet, so it's treated as permanently "paid." No other account gets this.
-const COMPED_FREE_AGENT_EMAILS = new Set(["freeagent@forge.app"]);
+// yet, so it's treated as permanently "paid" for both entitlements. No other
+// account gets this.
+const COMPED_FREE_AGENT_ENTITLEMENTS: Record<string, Set<AiEntitlement>> = {
+  "freeagent@forge.app": new Set(["strengthAi", "skillsAi"]),
+};
 
 // The future paywall requireFreeAgent's own comment anticipates: nothing
-// sets this true yet (no billing exists), so every route gated behind it is
-// a hard block for a Free Agent until that's built -- change only this
-// function once real billing exists. Exercise substitution is deliberately
-// never gated by this (see the swap-exercise routes below) so a Free Agent
-// keeps that one AI feature even while everything else here is paywalled.
-async function hasAthletePaidForAiAccess(_athleteId: number, email: string): Promise<boolean> {
-  return COMPED_FREE_AGENT_EMAILS.has(email);
+// sets either entitlement true yet (no billing exists), so every route
+// gated behind requirePaidAiAccess is a hard block for a Free Agent until
+// that's built -- change only this function once real billing exists.
+// Exercise substitution is deliberately never gated by this (see the
+// swap-exercise routes below) so a Free Agent keeps that one AI feature
+// even while everything requiring a paid entitlement is paywalled.
+async function hasAthletePaidForAiAccess(
+  _athleteId: number,
+  email: string,
+  entitlement: AiEntitlement,
+): Promise<boolean> {
+  return COMPED_FREE_AGENT_ENTITLEMENTS[email]?.has(entitlement) ?? false;
 }
 
-// Gates the "full function" AI features (program builder chat/draft, AI
-// form-check, the general AI chat coach) for a Free Agent specifically.
-// Only meaningful stacked after requireFreeAgent, which already guarantees
-// the caller has zero coaches by the time this runs -- a coached athlete
-// never reaches this paywall at all, they're already rejected upstream.
-async function requirePaidAiAccess(req: any, res: any, next: any) {
-  const user = currentUser(req);
-  const hasPaid = await hasAthletePaidForAiAccess(user.id, user.email);
-  if (!hasPaid) {
-    return res.status(402).json({
-      message:
-        "This AI feature is a paid upgrade for Free Agents, coming soon -- exercise substitution stays free in the meantime.",
-      freeAgentPaywall: true,
-    });
-  }
-  next();
+// Gates the "full function" AI features -- program builder chat/draft, AI
+// form-check, nutrition Q&A, and the general chat coach behind "strengthAi";
+// the Skills side's equivalent features behind "skillsAi" -- for a Free
+// Agent specifically. Only meaningful stacked after requireFreeAgent, which
+// already guarantees the caller has zero coaches by the time this runs -- a
+// coached athlete never reaches either paywall at all, they're already
+// rejected upstream.
+function requirePaidAiAccess(entitlement: AiEntitlement) {
+  return async function (req: any, res: any, next: any) {
+    const user = currentUser(req);
+    const hasPaid = await hasAthletePaidForAiAccess(user.id, user.email, entitlement);
+    if (!hasPaid) {
+      return res.status(402).json({
+        message:
+          entitlement === "skillsAi"
+            ? "This is a paid upgrade for Free Agents, coming soon."
+            : "This AI feature is a paid upgrade for Free Agents, coming soon -- exercise substitution stays free in the meantime.",
+        freeAgentPaywall: true,
+        entitlement,
+      });
+    }
+    next();
+  };
 }
 
 function todayIso() {
@@ -2878,7 +2898,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "/api/athlete/chat",
     requireRole("athlete"),
     requireFreeAgent,
-    requirePaidAiAccess,
+    requirePaidAiAccess("strengthAi"),
     async (req, res) => {
       const user = currentUser(req);
       const messages = await storage.getChatMessagesForAthlete(user.id);
@@ -2890,7 +2910,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "/api/athlete/chat",
     requireRole("athlete"),
     requireFreeAgent,
-    requirePaidAiAccess,
+    requirePaidAiAccess("strengthAi"),
     async (req, res) => {
       const user = currentUser(req);
       const parsed = sendChatMessageSchema.safeParse(req.body);
@@ -3238,7 +3258,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "/api/athlete/programs/ai-draft",
     requireRole("athlete"),
     requireFreeAgent,
-    requirePaidAiAccess,
+    requirePaidAiAccess("strengthAi"),
     async (req, res) => {
       const user = currentUser(req);
       const parsed = generateProgramDraftSchema.safeParse(req.body);
@@ -3277,7 +3297,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "/api/athlete/programs/:id/chat",
     requireRole("athlete"),
     requireFreeAgent,
-    requirePaidAiAccess,
+    requirePaidAiAccess("strengthAi"),
     async (req, res) => {
       const user = currentUser(req);
       const id = Number(req.params.id);
@@ -3292,7 +3312,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "/api/athlete/programs/:id/chat",
     requireRole("athlete"),
     requireFreeAgent,
-    requirePaidAiAccess,
+    requirePaidAiAccess("strengthAi"),
     async (req, res) => {
       const user = currentUser(req);
       const id = Number(req.params.id);
@@ -3341,7 +3361,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "/api/athlete/nutrition/ask",
     requireRole("athlete"),
     requireFreeAgent,
-    requirePaidAiAccess,
+    requirePaidAiAccess("strengthAi"),
     async (req, res) => {
       const user = currentUser(req);
       const schema = z.object({ question: z.string().trim().min(3).max(500) });
@@ -3362,7 +3382,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "/api/athlete/programs/:id/form-check",
     requireRole("athlete"),
     requireFreeAgent,
-    requirePaidAiAccess,
+    requirePaidAiAccess("strengthAi"),
     async (req, res) => {
       const user = currentUser(req);
       const id = Number(req.params.id);
