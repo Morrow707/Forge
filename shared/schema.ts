@@ -441,6 +441,15 @@ export const exercises = pgTable("exercises", {
   equipment: text("equipment").notNull().default("Barbell"),
   movementType: text("movement_type"),
   laterality: lateralityEnum("laterality"),
+  // Two more classification axes on top of movementType, so a coach or the
+  // AI program builder can filter/query at the level of an actual training
+  // split -- "today is an upper body day" (bodyRegion) or "today is upper
+  // push, horizontal only" (plane, only meaningful alongside a Push/Press/
+  // Pull movementType). Deliberately independent free-text fields rather
+  // than folded into movementType, matching how laterality already sits
+  // beside it instead of being encoded into the movement name itself.
+  bodyRegion: text("body_region"),
+  plane: text("plane"),
   // What the athlete actually logs for this exercise, set once here by the
   // coach instead of re-chosen by the athlete on every set -- not mutually
   // exclusive (a dumbbell box step-up needs both usesWeight and usesBox).
@@ -2647,6 +2656,8 @@ export const insertExerciseSchema = createInsertSchema(exercises)
   .extend({
     movementType: z.string().optional().nullable(),
     laterality: z.enum(["bilateral", "unilateral"]).optional().nullable(),
+    bodyRegion: z.string().optional().nullable(),
+    plane: z.string().optional().nullable(),
     secondaryMuscles: z.array(z.string().trim().min(1)).max(8).optional().nullable(),
     sports: z.array(z.string().trim().min(1)).max(8).optional().nullable(),
     isCorrective: z.boolean().default(false),

@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 import { Search, Dumbbell, Stethoscope } from "lucide-react";
 import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
 import type { ExerciseWithOwnership as Exercise } from "@/lib/exercise-types";
-import { MOVEMENT_TYPES, MUSCLE_GROUPS, SPORTS } from "@/lib/exercise-taxonomy";
+import { MOVEMENT_TYPES, MUSCLE_GROUPS, SPORTS, BODY_REGIONS, PLANES } from "@/lib/exercise-taxonomy";
 import { FilterChipGroup, toggleInSet } from "@/components/filter-chip-group";
 import {
   CATEGORY_FILTER_ACTIVE_CLASS,
@@ -21,6 +21,8 @@ import {
   MUSCLE_FILTER_ACTIVE_CLASS,
   SPORT_FILTER_ACTIVE_CLASS,
   OWNER_FILTER_ACTIVE_CLASS,
+  BODY_REGION_FILTER_ACTIVE_CLASS,
+  PLANE_FILTER_ACTIVE_CLASS,
 } from "@/lib/exercise-colors";
 
 const CATEGORIES = ["strength", "conditioning", "olympic", "accessory", "mobility", "plyometric"];
@@ -49,6 +51,8 @@ export function ExercisePickerDialog({
   const [movementFilter, setMovementFilter] = useState<Set<string>>(new Set());
   const [muscleGroupFilter, setMuscleGroupFilter] = useState<Set<string>>(new Set());
   const [lateralityFilter, setLateralityFilter] = useState<Set<string>>(new Set());
+  const [bodyRegionFilter, setBodyRegionFilter] = useState<Set<string>>(new Set());
+  const [planeFilter, setPlaneFilter] = useState<Set<string>>(new Set());
   const [sportFilter, setSportFilter] = useState<Set<string>>(new Set());
   const [ownerFilter, setOwnerFilter] = useState<Set<string>>(new Set());
   const [onlyCorrectives, setOnlyCorrectives] = useState(correctivesOnly);
@@ -93,6 +97,11 @@ export function ExercisePickerDialog({
         const matchesLaterality =
           lateralityFilter.size === 0 ||
           (ex.laterality != null && lateralityFilter.has(ex.laterality));
+        const matchesBodyRegion =
+          bodyRegionFilter.size === 0 ||
+          (ex.bodyRegion != null && bodyRegionFilter.has(ex.bodyRegion));
+        const matchesPlane =
+          planeFilter.size === 0 || (ex.plane != null && planeFilter.has(ex.plane));
         const matchesSport =
           sportFilter.size === 0 || (ex.sports ?? []).some((s) => sportFilter.has(s));
         const matchesOwner = ownerFilter.size === 0 || ownerFilter.has(ex.ownerLabel);
@@ -103,6 +112,8 @@ export function ExercisePickerDialog({
           matchesMovement &&
           matchesMuscleGroup &&
           matchesLaterality &&
+          matchesBodyRegion &&
+          matchesPlane &&
           matchesSport &&
           matchesOwner &&
           matchesCorrective
@@ -115,6 +126,8 @@ export function ExercisePickerDialog({
       movementFilter,
       muscleGroupFilter,
       lateralityFilter,
+      bodyRegionFilter,
+      planeFilter,
       sportFilter,
       ownerFilter,
       onlyCorrectives,
@@ -186,6 +199,20 @@ export function ExercisePickerDialog({
               selected={ownerFilter}
               onToggle={(v) => toggleInSet(setOwnerFilter, v)}
               colorClass={OWNER_FILTER_ACTIVE_CLASS}
+            />
+            <FilterChipGroup
+              label="Body Region"
+              options={BODY_REGIONS}
+              selected={bodyRegionFilter}
+              onToggle={(v) => toggleInSet(setBodyRegionFilter, v)}
+              colorClass={BODY_REGION_FILTER_ACTIVE_CLASS}
+            />
+            <FilterChipGroup
+              label="Plane"
+              options={PLANES}
+              selected={planeFilter}
+              onToggle={(v) => toggleInSet(setPlaneFilter, v)}
+              colorClass={PLANE_FILTER_ACTIVE_CLASS}
             />
             <FilterChipGroup
               label="Muscle"

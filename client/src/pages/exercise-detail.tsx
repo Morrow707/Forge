@@ -38,7 +38,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import type { ExerciseWithOwnership } from "@/lib/exercise-types";
-import { MOVEMENT_TYPES, MUSCLE_GROUPS, SPORTS } from "@/lib/exercise-taxonomy";
+import { MOVEMENT_TYPES, MUSCLE_GROUPS, SPORTS, BODY_REGIONS, PLANES } from "@/lib/exercise-taxonomy";
 import {
   CATEGORY_BADGE_CLASS,
   CATEGORY_FILTER_ACTIVE_CLASS,
@@ -46,6 +46,8 @@ import {
   LATERALITY_FILTER_ACTIVE_CLASS,
   MUSCLE_FILTER_ACTIVE_CLASS,
   SPORT_FILTER_ACTIVE_CLASS,
+  BODY_REGION_FILTER_ACTIVE_CLASS,
+  PLANE_FILTER_ACTIVE_CLASS,
 } from "@/lib/exercise-colors";
 import { FilterChipGroup, RadioChipGroup } from "@/components/filter-chip-group";
 
@@ -78,6 +80,8 @@ type ExerciseForm = {
   equipment: string;
   movementType: string;
   laterality: string;
+  bodyRegion: string;
+  plane: string;
   isCorrective: boolean;
   videoUrl: string;
   instructions: string;
@@ -96,6 +100,8 @@ const emptyForm: ExerciseForm = {
   equipment: "",
   movementType: "",
   laterality: "",
+  bodyRegion: "",
+  plane: "",
   isCorrective: false,
   videoUrl: "",
   instructions: "",
@@ -115,6 +121,8 @@ function formFrom(ex: ExerciseWithOwnership): ExerciseForm {
     equipment: ex.equipment,
     movementType: ex.movementType ?? "",
     laterality: ex.laterality ?? "",
+    bodyRegion: ex.bodyRegion ?? "",
+    plane: ex.plane ?? "",
     isCorrective: ex.isCorrective,
     videoUrl: ex.videoUrl ?? "",
     instructions: ex.instructions ?? "",
@@ -163,6 +171,8 @@ export function ExerciseDetailPage({
         equipment: form.equipment || "Bodyweight",
         movementType: form.movementType || null,
         laterality: form.laterality || null,
+        bodyRegion: form.bodyRegion || null,
+        plane: form.plane || null,
         isCorrective: form.isCorrective,
         videoUrl: form.videoUrl || null,
         instructions: form.instructions || null,
@@ -317,6 +327,8 @@ export function ExerciseDetailPage({
                 <Field label="Movement" value={exercise.movementType || "—"} />
                 <Field label="Laterality" value={exercise.laterality || "—"} />
                 <Field label="Equipment" value={exercise.equipment} />
+                <Field label="Body region" value={exercise.bodyRegion || "—"} />
+                <Field label="Plane" value={exercise.plane || "—"} />
               </div>
               {exercise.secondaryMuscles && exercise.secondaryMuscles.length > 0 && (
                 <div>
@@ -485,6 +497,35 @@ export function ExerciseDetailPage({
                   colorClass={LATERALITY_FILTER_ACTIVE_CLASS}
                   allowNone
                 />
+                <div className="space-y-1.5">
+                  <RadioChipGroup
+                    label="Body region"
+                    options={BODY_REGIONS}
+                    value={form.bodyRegion}
+                    onChange={(v) => setForm((f) => ({ ...f, bodyRegion: v }))}
+                    colorClass={BODY_REGION_FILTER_ACTIVE_CLASS}
+                    allowNone
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Which part of the body this exercise trains as a whole -- lets a coach or the
+                    AI pull "today's upper body exercises" directly instead of inferring it from
+                    body part.
+                  </p>
+                </div>
+                <div className="space-y-1.5">
+                  <RadioChipGroup
+                    label="Plane (push/pull only)"
+                    options={PLANES}
+                    value={form.plane}
+                    onChange={(v) => setForm((f) => ({ ...f, plane: v }))}
+                    colorClass={PLANE_FILTER_ACTIVE_CLASS}
+                    allowNone
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Only meaningful alongside a Push/Press/Pull movement type -- e.g. bench press
+                    is horizontal, overhead press is vertical.
+                  </p>
+                </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="ex-equipment">Equipment</Label>
                   <Input

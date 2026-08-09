@@ -250,7 +250,7 @@ const TESTING_FIELDS = [
 // (compound, highest-skill/highest-fatigue movements go first in a session
 // -- performance on a lift done last can drop 10-30% from accumulated
 // fatigue versus doing it first).
-const PROGRAM_DESIGN_PRINCIPLES = `- "muscleGroup" is a coarse tag, not a reliable upper/lower-body classifier -- exercises like deadlifts, RDLs, and good mornings are often tagged "Back" but are Hinge movements, leg/hip-dominant despite training the back isometrically. Classify by movementType (Squat, Hinge, Lunge = lower body; Push, Pull, Press = upper body) and by what the movement actually trains, not just the muscleGroup label.
+const PROGRAM_DESIGN_PRINCIPLES = `- "muscleGroup" is a coarse tag, not a reliable upper/lower-body classifier -- exercises like deadlifts, RDLs, and good mornings are often tagged "Back" but are Hinge movements, leg/hip-dominant despite training the back isometrically. When an exercise carries an explicit "body region" tag (Upper Body/Lower Body/Full Body/Core), trust it directly -- it's a coach-set classification, more reliable than inferring one. For exercises without that tag, fall back to classifying by movementType (Squat, Hinge, Lunge = lower body; Push, Pull, Press = upper body) and by what the movement actually trains, not just the muscleGroup label. Likewise, an explicit "plane" tag (Horizontal/Vertical) on a Push/Press/Pull exercise tells you exactly which sub-pattern it is (e.g. bench press is horizontal push, overhead press is vertical push) -- use it to balance horizontal/vertical volume within a training block when the athlete's request calls for that level of structure (e.g. "upper body push/pull day").
 - An exercise's "sports" tag (shown in the catalog when present) is a coach-facing search/filter aid listing sports that commonly reach for it -- it is never an eligibility restriction, and no exercise is sport-exclusive or sex-exclusive. A rotator-cuff exercise, an ankle-mobility drill, or a general strength pattern like a squat or a carry trains the same shoulder, ankle, or hips in every athlete regardless of their sport or sex, whether or not that sport happens to appear in the tag. Choose exercises by what the athlete's request actually calls for (a movement pattern, a muscle group, a corrective need), never by matching against or excluding based on the sports tag -- an exercise tagged only for baseball is still exactly the right pick for a football player's shoulder health, or anyone else's, if that's what the situation needs.
 - Plyometric/explosive work belongs in every athlete's program, not just jump-sport athletes -- the triple-extension power quality trained by jumps (Box Jump, Broad Jump) and by Olympic-lift derivatives (see the powerlifting/Olympic weightlifting rules below, where it's central to that sport specifically) is a general athleticism quality that transfers to every sport and every training goal, including a plain strength/hypertrophy request with no sport mentioned at all. Default to including some jump or explosive throw work rather than treating plyometrics as optional or sport-gated.
 - Never program two exercises with the same movementType back-to-back or as the main lifts of the same day (e.g. pull-ups and lat pulldowns are both Pull -- pick one, or pair it with a Push or a different pattern) unless extra volume on that pattern was explicitly requested.
@@ -5148,7 +5148,7 @@ Athlete's data:
     if (visibleExercises.length === 0) return null;
     const validIds = visibleExercises.map((e) => e.id);
     const catalog = visibleExercises
-      .map((e) => `${e.id}: ${e.name} (${e.category}, ${e.muscleGroup}, ${e.movementType || "unclassified"} movement${e.sports && e.sports.length > 0 ? `, sports: ${e.sports.join("/")}` : ""})`)
+      .map((e) => `${e.id}: ${e.name} (${e.category}, ${e.muscleGroup}, ${e.movementType || "unclassified"} movement${e.bodyRegion ? `, ${e.bodyRegion}` : ""}${e.plane ? `, ${e.plane}` : ""}${e.sports && e.sports.length > 0 ? `, sports: ${e.sports.join("/")}` : ""})`)
       .join("\n");
 
     const tool = {
@@ -5891,7 +5891,7 @@ Respond to the user's latest message by calling ask_question or update_program.`
     const validIds = visibleExercises.map((e) => e.id);
     const validIdSet = new Set(validIds);
     const catalog = visibleExercises
-      .map((e) => `${e.id}: ${e.name} (${e.category}, ${e.muscleGroup}, ${e.movementType || "unclassified"} movement${e.sports && e.sports.length > 0 ? `, sports: ${e.sports.join("/")}` : ""})`)
+      .map((e) => `${e.id}: ${e.name} (${e.category}, ${e.muscleGroup}, ${e.movementType || "unclassified"} movement${e.bodyRegion ? `, ${e.bodyRegion}` : ""}${e.plane ? `, ${e.plane}` : ""}${e.sports && e.sports.length > 0 ? `, sports: ${e.sports.join("/")}` : ""})`)
       .join("\n");
 
     const currentStructure = {
@@ -6214,7 +6214,7 @@ Respond to the user's latest message by calling ask_question or update_program.`
       return fail("There isn't another exercise available to swap in yet.");
     }
     const catalog = visibleExercises
-      .map((e) => `${e.id}: ${e.name} (${e.category}, ${e.muscleGroup}, ${e.movementType || "unclassified"} movement${e.sports && e.sports.length > 0 ? `, sports: ${e.sports.join("/")}` : ""})`)
+      .map((e) => `${e.id}: ${e.name} (${e.category}, ${e.muscleGroup}, ${e.movementType || "unclassified"} movement${e.bodyRegion ? `, ${e.bodyRegion}` : ""}${e.plane ? `, ${e.plane}` : ""}${e.sports && e.sports.length > 0 ? `, sports: ${e.sports.join("/")}` : ""})`)
       .join("\n");
 
     const tool = {
@@ -6240,7 +6240,7 @@ Respond to the user's latest message by calling ask_question or update_program.`
     const userPrompt = `Available exercises (id: name (category, muscle group, movement type)) -- you may ONLY use exercise IDs from this list:
 ${catalog}
 
-Swap out "${pe.exercise.name}" (${pe.exercise.category}, ${pe.exercise.muscleGroup}, ${pe.exercise.movementType || "unclassified"} movement) for a suitable alternative. Reason: ${reason}${notes.trim() ? ` -- ${notes.trim()}` : ""}.`;
+Swap out "${pe.exercise.name}" (${pe.exercise.category}, ${pe.exercise.muscleGroup}, ${pe.exercise.movementType || "unclassified"} movement${pe.exercise.bodyRegion ? `, ${pe.exercise.bodyRegion}` : ""}${pe.exercise.plane ? `, ${pe.exercise.plane}` : ""}) for a suitable alternative. Reason: ${reason}${notes.trim() ? ` -- ${notes.trim()}` : ""}.`;
 
     const rawResult = await askClaudeStructured(system, userPrompt, tool, { maxTokens: 400 });
     const parsed = exerciseSubstitutionSchema.safeParse(rawResult);
@@ -8110,13 +8110,13 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
     const catalog = candidates
       .map(
         (e) =>
-          `${e.id}: ${e.name} (${e.category}, ${e.muscleGroup}, ${e.movementType || "unclassified"} movement)`,
+          `${e.id}: ${e.name} (${e.category}, ${e.muscleGroup}, ${e.movementType || "unclassified"} movement${e.bodyRegion ? `, ${e.bodyRegion}` : ""})`,
       )
       .join("\n");
     const riskyList = riskySlots
       .map(
         (s) =>
-          `${s.programExerciseId}: ${s.exercise.name} (${s.exercise.category}, ${s.exercise.muscleGroup}, ${s.exercise.movementType || "unclassified"} movement)`,
+          `${s.programExerciseId}: ${s.exercise.name} (${s.exercise.category}, ${s.exercise.muscleGroup}, ${s.exercise.movementType || "unclassified"} movement${s.exercise.bodyRegion ? `, ${s.exercise.bodyRegion}` : ""})`,
       )
       .join("\n");
     const painLabels = painParts
