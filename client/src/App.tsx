@@ -28,6 +28,8 @@ const CoachSkillPrograms = lazy(() => import("@/pages/coach/skill-programs"));
 const CoachSkillProgramBuilder = lazy(() => import("@/pages/coach/skill-program-builder"));
 const CoachPrograms = lazy(() => import("@/pages/coach/programs"));
 const CoachProgramBuilder = lazy(() => import("@/pages/coach/program-builder"));
+const CoachClasses = lazy(() => import("@/pages/coach/classes"));
+const CoachClassBuilder = lazy(() => import("@/pages/coach/class-builder"));
 const CoachRoster = lazy(() => import("@/pages/coach/roster"));
 const CoachAthleteDetail = lazy(() => import("@/pages/coach/athlete-detail"));
 const CoachNutrition = lazy(() => import("@/pages/coach/nutrition"));
@@ -49,6 +51,8 @@ const AthleteSkills = lazy(() => import("@/pages/athlete/skills"));
 const AthleteSkillDetail = lazy(() => import("@/pages/athlete/skill-detail"));
 const AthleteSkillPrograms = lazy(() => import("@/pages/athlete/skill-programs"));
 const AthleteSkillProgramBuilder = lazy(() => import("@/pages/athlete/skill-program-builder"));
+const AthleteClasses = lazy(() => import("@/pages/athlete/classes"));
+const AthleteClassDetail = lazy(() => import("@/pages/athlete/class-detail"));
 const AdminDashboard = lazy(() => import("@/pages/admin/dashboard"));
 const AdminExercises = lazy(() => import("@/pages/admin/exercises"));
 const AdminExerciseDetail = lazy(() => import("@/pages/admin/exercise-detail"));
@@ -60,6 +64,8 @@ const AdminNutritionKnowledge = lazy(() => import("@/pages/admin/nutrition-knowl
 const AdminMyCalendar = lazy(() => import("@/pages/admin/my-calendar"));
 const AdminMyWorkout = lazy(() => import("@/pages/admin/my-workout"));
 const AdminPlatformTrends = lazy(() => import("@/pages/admin/platform-trends"));
+const AdminClasses = lazy(() => import("@/pages/admin/classes"));
+const AdminClassBuilder = lazy(() => import("@/pages/admin/class-builder"));
 
 function FullScreenSpinner() {
   return (
@@ -165,6 +171,12 @@ function Router() {
         <Route path="/coach/programs">
           <ProtectedRoute role="coach" component={CoachPrograms} />
         </Route>
+        <Route path="/coach/classes/:id">
+          <ProtectedRoute role="coach" component={CoachClassBuilder} />
+        </Route>
+        <Route path="/coach/classes">
+          <ProtectedRoute role="coach" component={CoachClasses} />
+        </Route>
         <Route path="/coach/roster/:athleteId">
           <ProtectedRoute role="coach" component={CoachAthleteDetail} />
         </Route>
@@ -222,6 +234,12 @@ function Router() {
         <Route path="/athlete/skills">
           <ProtectedRoute role="athlete" component={AthleteSkills} />
         </Route>
+        <Route path="/athlete/classes/:id">
+          <ProtectedRoute role="athlete" component={AthleteClassDetail} />
+        </Route>
+        <Route path="/athlete/classes">
+          <ProtectedRoute role="athlete" component={AthleteClasses} />
+        </Route>
         <Route path="/athlete/day/:assignmentId/:programDayId/:date">
           <ProtectedRoute role="athlete" component={AthleteWorkout} />
         </Route>
@@ -245,6 +263,12 @@ function Router() {
         </Route>
         <Route path="/admin/programs">
           <ProtectedRoute role="admin" component={AdminPrograms} />
+        </Route>
+        <Route path="/admin/classes/:id">
+          <ProtectedRoute role="admin" component={AdminClassBuilder} />
+        </Route>
+        <Route path="/admin/classes">
+          <ProtectedRoute role="admin" component={AdminClasses} />
         </Route>
         <Route path="/admin/review">
           <ProtectedRoute role="admin" component={AdminReviewQueue} />
