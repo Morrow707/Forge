@@ -1742,6 +1742,40 @@ export const sendProgramChatMessageSchema = z.object({
   content: z.string().trim().min(1).max(2000),
 });
 
+// Same conversational-AI-program-builder pattern as programChatMessages
+// above, but against skillPrograms -- kept as its own table (not a shared
+// "chat messages" table with a kind discriminator) since it references
+// skillPrograms.id, not programs.id, and the two program systems are
+// deliberately kept fully separate end to end (see the schema comment on
+// skillPrograms).
+export const skillProgramChatMessages = pgTable(
+  "skill_program_chat_messages",
+  {
+    id: serial("id").primaryKey(),
+    skillProgramId: integer("skill_program_id")
+      .notNull()
+      .references(() => skillPrograms.id, { onDelete: "cascade" }),
+    authorId: integer("author_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    role: programChatRoleEnum("role").notNull(),
+    content: text("content").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    skillProgramIdx: index("skill_program_chat_messages_program_idx").on(
+      table.skillProgramId,
+      table.createdAt,
+    ),
+  }),
+);
+
+export type SkillProgramChatMessage = typeof skillProgramChatMessages.$inferSelect;
+
+export const sendSkillProgramChatMessageSchema = z.object({
+  content: z.string().trim().min(1).max(2000),
+});
+
 export type SendProgramChatMessageInput = z.infer<typeof sendProgramChatMessageSchema>;
 
 export const aiKnowledgeChatRoleEnum = pgEnum("ai_knowledge_chat_role", ["admin", "assistant"]);

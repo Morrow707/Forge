@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { SkillPickerDialog } from "@/components/skill-picker-dialog";
 import { AssignSkillProgramDialog } from "@/components/assign-skill-program-dialog";
 import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
+import { ProgramAiChatPanel } from "@/components/program-ai-chat-panel";
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { Plus, Trash2, Save, ArrowLeft, MoonStar, Send, Lock, ChevronUp, ChevronDown, Timer } from "lucide-react";
@@ -98,9 +99,13 @@ function stateFromProgram(program: any) {
 export function SkillProgramBuilderPage({
   apiBase,
   routeBase,
+  showAssign = true,
+  showAiChat = false,
 }: {
   apiBase: string;
   routeBase: string;
+  showAssign?: boolean;
+  showAiChat?: boolean;
 }) {
   const { id } = useParams<{ id: string }>();
   const [, navigate] = useLocation();
@@ -113,6 +118,7 @@ export function SkillProgramBuilderPage({
   });
   const { data: roster = [] } = useQuery<RosterEntry[]>({
     queryKey: ["/api/coach/roster"],
+    enabled: showAssign,
   });
   const editable = program?.editable !== false;
 
@@ -134,6 +140,17 @@ export function SkillProgramBuilderPage({
       setHydrated(true);
     }
   }, [program, hydrated]);
+
+  // Called by the AI chat panel after each turn with the fresh skill program
+  // it just wrote -- same immediate-update pattern as the strength builder's
+  // handleChatApplied, no refetch round-trip needed.
+  function handleChatApplied(updatedProgram: any) {
+    const state = stateFromProgram(updatedProgram);
+    setName(state.name);
+    setDescription(state.description);
+    setDays(state.days);
+    setWeekNames(state.weekNames);
+  }
 
   function updateDay(dayKey: string, updater: (day: LocalDay) => LocalDay) {
     setDays((prev) => prev.map((d) => (d.key === dayKey ? updater(d) : d)));
@@ -209,10 +226,12 @@ export function SkillProgramBuilderPage({
               <ArrowLeft className="h-4 w-4" />
               Back
             </Button>
-            <Button variant="secondary" onClick={() => setAssignOpen(true)}>
-              <Send className="h-4 w-4" />
-              Assign Program
-            </Button>
+            {showAssign && (
+              <Button variant="secondary" onClick={() => setAssignOpen(true)}>
+                <Send className="h-4 w-4" />
+                Assign Program
+              </Button>
+            )}
           </div>
           {editable && (
             <Button
@@ -242,69 +261,83 @@ export function SkillProgramBuilderPage({
         </div>
       )}
 
-      <fieldset disabled={!editable} className="contents">
-        <div className="min-w-0">
-          <Card className="mb-6">
-            <CardContent className="grid gap-3 p-5 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label>Skill program name</Label>
-                <Input value={name} onChange={(e) => setName(e.target.value)} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Description</Label>
-                <Textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  rows={1}
-                />
-              </div>
-            </CardContent>
-          </Card>
+      <div className={cn(showAiChat && "grid items-start gap-6 lg:grid-cols-[1fr_380px]")}>
+        <fieldset disabled={!editable} className="contents">
+          <div className="min-w-0">
+            <Card className="mb-6">
+              <CardContent className="grid gap-3 p-5 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label>Skill program name</Label>
+                  <Input value={name} onChange={(e) => setName(e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Description</Label>
+                  <Textarea
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    rows={1}
+                  />
+                </div>
+              </CardContent>
+            </Card>
 
-          {days.length === 0 ? (
-            <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border py-16 text-center text-muted-foreground">
-              <p>No days yet. Add skill sessions one at a time.</p>
-              <Button onClick={addDay}>
+            {days.length === 0 ? (
+              <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border py-16 text-center text-muted-foreground">
+                <p>No days yet. Add skill sessions one at a time.</p>
+                <Button onClick={addDay}>
+                  <Plus className="h-4 w-4" />
+                  Add Day
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-8">
+                {weekChunks.map((chunk, wi) => (
+                  <div key={wi}>
+                    <div className="mb-3 flex flex-wrap items-center gap-2">
+                      <Input
+                        value={weekNames[wi] || `Week ${wi + 1}`}
+                        onChange={(e) => renameWeek(wi, e.target.value)}
+                        className="h-8 max-w-xs border-none bg-transparent px-0 text-xs font-bold uppercase tracking-wide text-muted-foreground focus-visible:ring-0"
+                      />
+                    </div>
+                    <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+                      {chunk.map((day, di) => (
+                        <DayCard
+                          key={day.key}
+                          dayNumber={wi * 7 + di + 1}
+                          day={day}
+                          onChange={(updater) => updateDay(day.key, updater)}
+                          onAddExercise={() => setPickerForDay(day.key)}
+                          onRemove={() => removeDay(day.key)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {days.length > 0 && (
+              <Button variant="outline" className="mt-4" onClick={addDay}>
                 <Plus className="h-4 w-4" />
                 Add Day
               </Button>
-            </div>
-          ) : (
-            <div className="space-y-8">
-              {weekChunks.map((chunk, wi) => (
-                <div key={wi}>
-                  <div className="mb-3 flex flex-wrap items-center gap-2">
-                    <Input
-                      value={weekNames[wi] || `Week ${wi + 1}`}
-                      onChange={(e) => renameWeek(wi, e.target.value)}
-                      className="h-8 max-w-xs border-none bg-transparent px-0 text-xs font-bold uppercase tracking-wide text-muted-foreground focus-visible:ring-0"
-                    />
-                  </div>
-                  <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
-                    {chunk.map((day, di) => (
-                      <DayCard
-                        key={day.key}
-                        dayNumber={wi * 7 + di + 1}
-                        day={day}
-                        onChange={(updater) => updateDay(day.key, updater)}
-                        onAddExercise={() => setPickerForDay(day.key)}
-                        onRemove={() => removeDay(day.key)}
-                      />
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+            )}
+          </div>
+        </fieldset>
 
-          {days.length > 0 && (
-            <Button variant="outline" className="mt-4" onClick={addDay}>
-              <Plus className="h-4 w-4" />
-              Add Day
-            </Button>
-          )}
-        </div>
-      </fieldset>
+        {showAiChat && (
+          <div className="flex h-[75vh] max-h-[720px] flex-col overflow-hidden lg:sticky lg:top-24">
+            <ProgramAiChatPanel
+              apiBase={apiBase}
+              programId={programId}
+              onApplied={handleChatApplied}
+              resourcePath="skill-programs"
+              title="AI Skill Builder"
+            />
+          </div>
+        )}
+      </div>
 
       <SkillPickerDialog
         apiBase={apiBase}
@@ -331,13 +364,15 @@ export function SkillProgramBuilderPage({
         }}
       />
 
-      <AssignSkillProgramDialog
-        open={assignOpen}
-        onOpenChange={setAssignOpen}
-        roster={roster}
-        programs={[{ id: programId, name }]}
-        programId={programId}
-      />
+      {showAssign && (
+        <AssignSkillProgramDialog
+          open={assignOpen}
+          onOpenChange={setAssignOpen}
+          roster={roster}
+          programs={[{ id: programId, name }]}
+          programId={programId}
+        />
+      )}
     </AppShell>
   );
 }

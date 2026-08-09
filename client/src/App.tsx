@@ -43,6 +43,12 @@ const AthleteChat = lazy(() => import("@/pages/athlete/chat"));
 const AthleteNutrition = lazy(() => import("@/pages/athlete/nutrition"));
 const AthletePrograms = lazy(() => import("@/pages/athlete/programs"));
 const AthleteProgramBuilder = lazy(() => import("@/pages/athlete/program-builder"));
+const AthleteExercises = lazy(() => import("@/pages/athlete/exercises"));
+const AthleteExerciseDetail = lazy(() => import("@/pages/athlete/exercise-detail"));
+const AthleteSkills = lazy(() => import("@/pages/athlete/skills"));
+const AthleteSkillDetail = lazy(() => import("@/pages/athlete/skill-detail"));
+const AthleteSkillPrograms = lazy(() => import("@/pages/athlete/skill-programs"));
+const AthleteSkillProgramBuilder = lazy(() => import("@/pages/athlete/skill-program-builder"));
 const AdminDashboard = lazy(() => import("@/pages/admin/dashboard"));
 const AdminExercises = lazy(() => import("@/pages/admin/exercises"));
 const AdminExerciseDetail = lazy(() => import("@/pages/admin/exercise-detail"));
@@ -197,6 +203,24 @@ function Router() {
         </Route>
         <Route path="/athlete/programs">
           <ProtectedRoute role="athlete" component={AthletePrograms} />
+        </Route>
+        <Route path="/athlete/exercises/:id">
+          <ProtectedRoute role="athlete" component={AthleteExerciseDetail} />
+        </Route>
+        <Route path="/athlete/exercises">
+          <ProtectedRoute role="athlete" component={AthleteExercises} />
+        </Route>
+        <Route path="/athlete/skill-programs/:id">
+          <ProtectedRoute role="athlete" component={AthleteSkillProgramBuilder} />
+        </Route>
+        <Route path="/athlete/skill-programs">
+          <ProtectedRoute role="athlete" component={AthleteSkillPrograms} />
+        </Route>
+        <Route path="/athlete/skills/:id">
+          <ProtectedRoute role="athlete" component={AthleteSkillDetail} />
+        </Route>
+        <Route path="/athlete/skills">
+          <ProtectedRoute role="athlete" component={AthleteSkills} />
         </Route>
         <Route path="/athlete/day/:assignmentId/:programDayId/:date">
           <ProtectedRoute role="athlete" component={AthleteWorkout} />

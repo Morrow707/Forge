@@ -30,16 +30,28 @@ export function ProgramAiChatPanel({
   apiBase,
   programId,
   onApplied,
+  resourcePath = "programs",
+  title = "AI Program Builder",
 }: {
   apiBase: string;
   programId: number;
   onApplied: (program: any) => void;
+  /** URL segment for the resource being edited -- "programs" (default) for
+   * the strength builder, "skill-programs" for the skills one. The chat
+   * protocol (ask_question/update_program tool-calling, 402 paywall) is
+   * identical either way, so this is the only thing that needs to change to
+   * reuse this panel for Skills. */
+  resourcePath?: string;
+  /** Header text -- "AI Program Builder" (default) for strength, "AI Skill
+   * Builder" for skills, so the two paywalled products never read as the
+   * same one. */
+  title?: string;
 }) {
   const qc = useQueryClient();
   const [content, setContent] = useState("");
   const [copiedId, setCopiedId] = useState<number | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const fetchUrl = `${apiBase}/programs/${programId}/chat`;
+  const fetchUrl = `${apiBase}/${resourcePath}/${programId}/chat`;
 
   async function handleCopy(message: ProgramChatMessage) {
     const copied = await copyToClipboard(message.content);
@@ -85,7 +97,7 @@ export function ProgramAiChatPanel({
         <CardHeader className="shrink-0">
           <CardTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" />
-            AI Program Builder
+            {title}
           </CardTitle>
         </CardHeader>
         <CardContent className="flex flex-1 flex-col items-center justify-center gap-3 py-10 text-center">
@@ -101,7 +113,7 @@ export function ProgramAiChatPanel({
       <CardHeader className="shrink-0">
         <CardTitle className="flex items-center gap-2">
           <Sparkles className="h-5 w-5 text-primary" />
-          AI Program Builder
+          {title}
         </CardTitle>
         <CardDescription>
           Describe what you want -- the AI rewrites the program and applies it immediately.
