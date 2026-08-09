@@ -956,6 +956,34 @@ CREATE TABLE IF NOT EXISTS "class_lesson_progress" (
   "created_at" timestamp NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS "class_lesson_progress_enrollment_idx" ON "class_lesson_progress" ("enrollment_id");
+
+CREATE TABLE IF NOT EXISTS "academy_tracks" (
+  "id" serial PRIMARY KEY,
+  "title" text NOT NULL,
+  "description" text NOT NULL,
+  "key_principles_for_ai" text NOT NULL,
+  "order_index" integer NOT NULL DEFAULT 0,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS "academy_lessons" (
+  "id" serial PRIMARY KEY,
+  "track_id" integer NOT NULL REFERENCES "academy_tracks"("id") ON DELETE CASCADE,
+  "lesson_number" integer NOT NULL,
+  "title" text NOT NULL,
+  "content" text NOT NULL,
+  "est_minutes" integer,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "academy_lessons_track_idx" ON "academy_lessons" ("track_id");
+
+CREATE TABLE IF NOT EXISTS "academy_lesson_completions" (
+  "id" serial PRIMARY KEY,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "lesson_id" integer NOT NULL REFERENCES "academy_lessons"("id") ON DELETE CASCADE,
+  "completed_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "academy_lesson_completions_coach_lesson_idx" ON "academy_lesson_completions" ("coach_id", "lesson_id");
 `;
 
 async function main() {

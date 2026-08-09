@@ -1985,6 +1985,112 @@ export const enrollInClassSchema = z.object({
   startDate: z.string(),
 });
 
+// ---------- Coaches Corner (admin-authored coach education, "Coaches
+// Corner") ----------
+// A separate, much simpler content model than Classes above: this is
+// reading/reference material for the COACH (program-design theory, Olympic
+// lift technique, youth development, arm care, reading Forge's own
+// analytics, season planning, coaching communication), not a drill an
+// athlete performs, so there's no hidden skill program, no camera tracking,
+// and no per-athlete enrollment. Platform-wide, admin-authored, and paywalled
+// as a single bundle (see hasCoachesCornerAccess in routes.ts) rather than
+// priced per-lesson.
+export const academyTracks = pgTable("academy_tracks", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  // A concise, AI-facing distillation of this track's core teaching points --
+  // injected into every AI coach/program-builder system prompt IN ADDITION
+  // TO (never in place of) the admin-taught aiKnowledge/nutritionKnowledge
+  // guidelines, so every bot in the app reflects the same coaching
+  // philosophy taught here. See getCoachesCornerPrinciplesForAi in storage.ts.
+  keyPrinciplesForAi: text("key_principles_for_ai").notNull(),
+  orderIndex: integer("order_index").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const academyLessons = pgTable(
+  "academy_lessons",
+  {
+    id: serial("id").primaryKey(),
+    trackId: integer("track_id")
+      .notNull()
+      .references(() => academyTracks.id, { onDelete: "cascade" }),
+    lessonNumber: integer("lesson_number").notNull(),
+    title: text("title").notNull(),
+    content: text("content").notNull(),
+    estMinutes: integer("est_minutes"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    trackIdx: index("academy_lessons_track_idx").on(table.trackId),
+  }),
+);
+
+// A coach's own "read this" checkbox -- purely a personal progress marker
+// (drives a completion count on the track catalog), never gates access to
+// later lessons the way Class lesson progress does.
+export const academyLessonCompletions = pgTable(
+  "academy_lesson_completions",
+  {
+    id: serial("id").primaryKey(),
+    coachId: integer("coach_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    lessonId: integer("lesson_id")
+      .notNull()
+      .references(() => academyLessons.id, { onDelete: "cascade" }),
+    completedAt: timestamp("completed_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    coachLessonUnique: uniqueIndex("academy_lesson_completions_coach_lesson_idx").on(
+      table.coachId,
+      table.lessonId,
+    ),
+  }),
+);
+
+export const academyTracksRelations = relations(academyTracks, ({ many }) => ({
+  lessons: many(academyLessons),
+}));
+
+export const academyLessonsRelations = relations(academyLessons, ({ one, many }) => ({
+  track: one(academyTracks, { fields: [academyLessons.trackId], references: [academyTracks.id] }),
+  completions: many(academyLessonCompletions),
+}));
+
+export const academyLessonCompletionsRelations = relations(academyLessonCompletions, ({ one }) => ({
+  lesson: one(academyLessons, {
+    fields: [academyLessonCompletions.lessonId],
+    references: [academyLessons.id],
+  }),
+  coach: one(users, { fields: [academyLessonCompletions.coachId], references: [users.id] }),
+}));
+
+export type AcademyTrack = typeof academyTracks.$inferSelect;
+export type AcademyLesson = typeof academyLessons.$inferSelect;
+
+export const academyLessonInputSchema = z.object({
+  // Present when editing an existing lesson (matches it for in-place
+  // update) -- absent for a brand-new lesson being added in this same save.
+  id: z.number().optional(),
+  lessonNumber: z.number().int().min(1),
+  title: z.string().trim().min(1).max(200),
+  content: z.string().trim().min(1),
+  estMinutes: z.number().int().min(1).nullable().optional(),
+});
+
+export const academyTrackStructureSchema = z.object({
+  title: z.string().trim().min(1).max(200),
+  description: z.string().trim().min(1).max(2000),
+  keyPrinciplesForAi: z.string().trim().min(1).max(4000),
+  orderIndex: z.number().int().default(0),
+  lessons: z.array(academyLessonInputSchema).default([]),
+});
+
+export type AcademyTrackStructureInput = z.infer<typeof academyTrackStructureSchema>;
+export type AcademyLessonInput = z.infer<typeof academyLessonInputSchema>;
+
 export const aiKnowledgeChatRoleEnum = pgEnum("ai_knowledge_chat_role", ["admin", "assistant"]);
 
 // Chat transcript for the admin teaching the AI program builder general

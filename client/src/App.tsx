@@ -30,6 +30,7 @@ const CoachPrograms = lazy(() => import("@/pages/coach/programs"));
 const CoachProgramBuilder = lazy(() => import("@/pages/coach/program-builder"));
 const CoachClasses = lazy(() => import("@/pages/coach/classes"));
 const CoachClassBuilder = lazy(() => import("@/pages/coach/class-builder"));
+const CoachCoachesCorner = lazy(() => import("@/pages/coach/coaches-corner"));
 const CoachRoster = lazy(() => import("@/pages/coach/roster"));
 const CoachAthleteDetail = lazy(() => import("@/pages/coach/athlete-detail"));
 const CoachNutrition = lazy(() => import("@/pages/coach/nutrition"));
@@ -66,6 +67,7 @@ const AdminMyWorkout = lazy(() => import("@/pages/admin/my-workout"));
 const AdminPlatformTrends = lazy(() => import("@/pages/admin/platform-trends"));
 const AdminClasses = lazy(() => import("@/pages/admin/classes"));
 const AdminClassBuilder = lazy(() => import("@/pages/admin/class-builder"));
+const AdminCoachesCorner = lazy(() => import("@/pages/admin/coaches-corner"));
 
 function FullScreenSpinner() {
   return (
@@ -177,6 +179,9 @@ function Router() {
         <Route path="/coach/classes">
           <ProtectedRoute role="coach" component={CoachClasses} />
         </Route>
+        <Route path="/coach/coaches-corner">
+          <ProtectedRoute role="coach" component={CoachCoachesCorner} />
+        </Route>
         <Route path="/coach/roster/:athleteId">
           <ProtectedRoute role="coach" component={CoachAthleteDetail} />
         </Route>
@@ -269,6 +274,9 @@ function Router() {
         </Route>
         <Route path="/admin/classes">
           <ProtectedRoute role="admin" component={AdminClasses} />
+        </Route>
+        <Route path="/admin/coaches-corner">
+          <ProtectedRoute role="admin" component={AdminCoachesCorner} />
         </Route>
         <Route path="/admin/review">
           <ProtectedRoute role="admin" component={AdminReviewQueue} />
