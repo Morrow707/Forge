@@ -9,6 +9,7 @@ import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { ArrowLeft, Lock, GraduationCap, CheckCircle2, Circle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { AcademyQuiz } from "@/components/academy-quiz";
 
 type TrackSummary = {
   id: number;
@@ -27,12 +28,16 @@ type LessonDetail = {
   completed?: boolean;
 };
 
+type QuizAnswerDetail = { id: number; answerText: string; isCorrect: boolean; explanation: string };
+type QuizQuestionDetail = { id: number; questionText: string; answers: QuizAnswerDetail[] };
+
 type TrackDetail = {
   id: number;
   title: string;
   description: string;
   unlocked: boolean;
   lessons: LessonDetail[];
+  quizQuestions?: QuizQuestionDetail[];
 };
 
 /** Admin-authored coach education -- a single paywalled bundle (see
@@ -168,6 +173,7 @@ export default function CoachesCorner() {
             </button>
           ))}
         </div>
+        <AcademyQuiz questions={trackDetail.quizQuestions ?? []} />
       </AppShell>
     );
   }

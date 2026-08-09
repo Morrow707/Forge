@@ -984,6 +984,25 @@ CREATE TABLE IF NOT EXISTS "academy_lesson_completions" (
   "completed_at" timestamp NOT NULL DEFAULT now()
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "academy_lesson_completions_coach_lesson_idx" ON "academy_lesson_completions" ("coach_id", "lesson_id");
+
+CREATE TABLE IF NOT EXISTS "academy_quiz_questions" (
+  "id" serial PRIMARY KEY,
+  "track_id" integer NOT NULL REFERENCES "academy_tracks"("id") ON DELETE CASCADE,
+  "order_index" integer NOT NULL DEFAULT 0,
+  "question_text" text NOT NULL,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "academy_quiz_questions_track_idx" ON "academy_quiz_questions" ("track_id");
+
+CREATE TABLE IF NOT EXISTS "academy_quiz_answers" (
+  "id" serial PRIMARY KEY,
+  "question_id" integer NOT NULL REFERENCES "academy_quiz_questions"("id") ON DELETE CASCADE,
+  "order_index" integer NOT NULL DEFAULT 0,
+  "answer_text" text NOT NULL,
+  "is_correct" boolean NOT NULL DEFAULT false,
+  "explanation" text NOT NULL
+);
+CREATE INDEX IF NOT EXISTS "academy_quiz_answers_question_idx" ON "academy_quiz_answers" ("question_id");
 `;
 
 async function main() {

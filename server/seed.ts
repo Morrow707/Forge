@@ -2724,13 +2724,19 @@ async function main() {
   // by title (system-wide, not owner-scoped -- there's no per-coach
   // ownership concept here at all, see academyTracks in shared/schema.ts).
   {
-    const existingTrackTitles = new Set((await storage.getAllAcademyTracks()).map((t) => t.title));
+    const existingTracks = await storage.getAllAcademyTracks();
+    const existingTrackIdByTitle = new Map(existingTracks.map((t) => [t.title, t.id]));
 
     const seedAcademyTracks: Array<{
       title: string;
       description: string;
       keyPrinciplesForAi: string;
       lessons: Array<{ lessonNumber: number; title: string; content: string; estMinutes: number }>;
+      quizQuestions: Array<{
+        orderIndex: number;
+        questionText: string;
+        answers: Array<{ orderIndex: number; answerText: string; isCorrect: boolean; explanation: string }>;
+      }>;
     }> = [
       {
         title: "Strength & Conditioning Fundamentals",
@@ -2766,6 +2772,98 @@ async function main() {
             estMinutes: 6,
             content:
               "Testing tells you whether the program is actually working and gives athletes concrete, motivating feedback -- but testing done poorly can waste a training day, produce meaningless numbers, or genuinely hurt someone. A few principles keep it useful and safe.\n\nStandardize the conditions. The same warm-up, the same order of tests, the same equipment, and ideally the same time of day and rest since the last hard session, every time you test. An athlete's numbers can swing meaningfully based on fatigue alone -- if you don't control for that, you can't tell whether a number changed because of training or because of when you happened to test.\n\nMatch the test to the athlete's training age. A true 1-rep max test requires enough technical proficiency that a breakdown in form under maximal load doesn't turn into an injury -- this generally means a novice lifter (especially a younger one) should use an estimated max from a submaximal set rather than testing an actual 1RM. Reserve true 1RM testing for athletes who have already demonstrated clean technique under heavy, but sub-maximal, load.\n\nTest what you'll actually use. A focused set -- something from each of speed, power, and strength, plus anything sport-specific -- is usually enough to track real trends without turning a testing day into an all-day event.\n\nFinally, set a retest cadence you'll actually keep. Every 6-8 weeks, aligned with the end of a training block, is a reasonable default for most team-sport programs.",
+          },
+        ],
+        quizQuestions: [
+          {
+            orderIndex: 0,
+            questionText: "Within a single training session, which exercise sequencing is generally recommended?",
+            answers: [
+              {
+                orderIndex: 0,
+                answerText: "Power/explosive work first, then primary strength lifts, then accessory work",
+                isCorrect: true,
+                explanation: "This is correct: technical precision and rate of force development are highest when fresh, so the most neurologically demanding work (jumps, throws, Olympic-lift variations) should come first, before fatigue makes those movements riskier and less effective.",
+              },
+              {
+                orderIndex: 1,
+                answerText: "Accessory work first to pre-fatigue the muscle before the main lift",
+                isCorrect: false,
+                explanation: "This is a valid bodybuilding technique in some contexts, but it's backwards for general athletic development -- pre-fatiguing before a power or primary strength movement increases injury risk and reduces the quality of the most important work in the session.",
+              },
+              {
+                orderIndex: 2,
+                answerText: "Whatever the athlete feels like starting with that day",
+                isCorrect: false,
+                explanation: "Random ordering ignores the real physiological reasoning behind sequencing -- technical, high-skill movements need to happen while the nervous system is freshest, not whenever it's convenient.",
+              },
+              {
+                orderIndex: 3,
+                answerText: "Conditioning first to get the 'hard part' out of the way",
+                isCorrect: false,
+                explanation: "Conditioning first fatigues the athlete before the technical strength and power work, which is exactly backwards -- it increases injury risk on lifts that need the most precision.",
+              },
+            ],
+          },
+          {
+            orderIndex: 1,
+            questionText: "What does \"RPE 8\" on a top set generally mean?",
+            answers: [
+              {
+                orderIndex: 0,
+                answerText: "The athlete could have done roughly 2 more reps before failure",
+                isCorrect: true,
+                explanation: "Correct -- RPE (Rate of Perceived Exertion) on a 1-10 scale directly maps to reps in reserve; an 8 means about 2 reps were left, a more honest target than a fixed weight number.",
+              },
+              {
+                orderIndex: 1,
+                answerText: "The athlete hit an exact percentage of their 1-rep max",
+                isCorrect: false,
+                explanation: "RPE is about how the set actually felt, not a fixed percentage -- the whole point of autoregulation is that the same percentage can feel very different depending on the day.",
+              },
+              {
+                orderIndex: 2,
+                answerText: "The set was a warm-up set",
+                isCorrect: false,
+                explanation: "RPE 8 describes a genuinely hard working set, not a warm-up -- warm-ups are typically well below this effort level.",
+              },
+              {
+                orderIndex: 3,
+                answerText: "The athlete failed to complete the set",
+                isCorrect: false,
+                explanation: "Failure would be RPE 10 -- RPE 8 specifically means reps were left in reserve, not that the set broke down.",
+              },
+            ],
+          },
+          {
+            orderIndex: 2,
+            questionText: "Which periodization model is generally best suited to a long in-season competitive calendar?",
+            answers: [
+              {
+                orderIndex: 0,
+                answerText: "A hybrid: base-building block/linear off-season transitioning to undulating in-season",
+                isCorrect: true,
+                explanation: "Correct -- build a base when there's no competition to interrupt a longer ramp, then switch to a model that can flex week-to-week around games.",
+              },
+              {
+                orderIndex: 1,
+                answerText: "Pure linear periodization straight through the whole year",
+                isCorrect: false,
+                explanation: "A strict linear ramp assumes an uninterrupted progression toward one peak, which a long in-season game schedule won't allow -- games and travel will constantly disrupt it.",
+              },
+              {
+                orderIndex: 2,
+                answerText: "No periodization -- keep training identical year-round",
+                isCorrect: false,
+                explanation: "Identical training year-round has no mechanism to keep producing adaptation, and ignores that off-season and in-season have fundamentally different goals.",
+              },
+              {
+                orderIndex: 3,
+                answerText: "Block periodization exclusively, with no adjustment for the season",
+                isCorrect: false,
+                explanation: "Block periodization's short, single-quality-focused blocks work best building toward one clear peak -- a season with games happening constantly doesn't offer that clean, uninterrupted structure.",
+              },
+            ],
           },
         ],
       },
@@ -2805,6 +2903,98 @@ async function main() {
               "Three faults account for the large majority of technical breakdowns in Olympic lift coaching, and each has a specific, repeatable cue that fixes it faster than simply saying \"do it again.\"\n\nEarly arm pull: the athlete starts bending the elbows and pulling with the arms before full leg/hip extension is complete, which short-circuits the power output of the lift and usually means the bar path drifts away from the body. Cue: \"long arms until your hips are open\" or \"jump the bar up, don't pull it up\" -- have the athlete feel the extension as a jump first, arms staying passive until the very top.\n\nLooping bar path: instead of traveling in a tight, near-vertical line close to the body, the bar swings out and away during the first pull, then has to loop back in. This is very often actually a hip/torso positioning issue, not an arm issue: the athlete is starting with hips too high. Cue: \"keep the bar brushing your thighs,\" combined with checking the starting hip height.\n\nForward knee travel on the catch: in the receiving position, the knees drift forward past the toes and the torso collapses forward to compensate. This is frequently a mobility limitation as much as a cueing issue, so pair the verbal cue -- \"sit back into your heels, chest tall\" -- with an honest mobility screen; cueing alone won't fix a genuine range-of-motion restriction.",
           },
         ],
+        quizQuestions: [
+          {
+            orderIndex: 0,
+            questionText: "What's the recommended starting point for teaching a brand-new athlete an Olympic lift?",
+            answers: [
+              {
+                orderIndex: 0,
+                answerText: "The power position, isolating the final explosive extension",
+                isCorrect: true,
+                explanation: "Correct -- starting at the power position lets the athlete groove the actual explosive extension without the added complexity of the first pull off the floor.",
+              },
+              {
+                orderIndex: 1,
+                answerText: "A full competition snatch from the floor, to learn the whole lift at once",
+                isCorrect: false,
+                explanation: "This is specifically what the progression is designed to avoid -- combining the hardest first-pull mechanics with the hardest catch position on day one is how technical breakdowns and injuries happen.",
+              },
+              {
+                orderIndex: 2,
+                answerText: "The catch position under maximum load, to build confidence",
+                isCorrect: false,
+                explanation: "Catching under heavy load before the position is proven safe under light load is backwards -- the catch should be drilled statically and lightly first.",
+              },
+              {
+                orderIndex: 3,
+                answerText: "Whichever position the athlete finds most comfortable",
+                isCorrect: false,
+                explanation: "Comfort isn't the criterion here -- the progression exists because certain positions are objectively safer starting points regardless of preference.",
+              },
+            ],
+          },
+          {
+            orderIndex: 1,
+            questionText: "An athlete's bar path loops away from the body during the first pull. What's the most likely underlying cause?",
+            answers: [
+              {
+                orderIndex: 0,
+                answerText: "Starting the pull with hips too high, more like a stiff-leg deadlift",
+                isCorrect: true,
+                explanation: "Correct -- a looping bar path is very often a hip-height problem at the start, not an arm problem; cueing \"keep the bar brushing your thighs\" alongside checking starting hip height addresses the root cause.",
+              },
+              {
+                orderIndex: 1,
+                answerText: "The athlete is using too little weight",
+                isCorrect: false,
+                explanation: "Bar path problems are technical, not load-related -- adding weight to a looping pull just makes the flawed pattern more dangerous, not more correct.",
+              },
+              {
+                orderIndex: 2,
+                answerText: "The athlete's grip width is too narrow",
+                isCorrect: false,
+                explanation: "Grip width affects the catch position, not the pull's bar path -- this isn't the relevant variable for this fault.",
+              },
+              {
+                orderIndex: 3,
+                answerText: "The athlete needs to pull with the arms earlier",
+                isCorrect: false,
+                explanation: "This is the opposite of the fix -- pulling with the arms earlier is itself a separate major fault (early arm pull) and doesn't address a looping bar path.",
+              },
+            ],
+          },
+          {
+            orderIndex: 2,
+            questionText: "Why might a coach choose to never progress a team past hang or high-hang variations?",
+            answers: [
+              {
+                orderIndex: 0,
+                answerText: "Because most of the power-development benefit is available without the added technical risk of a full floor pull",
+                isCorrect: true,
+                explanation: "Correct -- the value of Olympic lifts for most athletes is the triple extension and force development, which hang/high-hang variations already deliver, at lower technical risk than the full lift.",
+              },
+              {
+                orderIndex: 1,
+                answerText: "Because the full lift is against competition rules for team sports",
+                isCorrect: false,
+                explanation: "There's no such rule -- this isn't a regulatory issue, it's a risk/benefit and coaching-capacity decision.",
+              },
+              {
+                orderIndex: 2,
+                answerText: "Because hang variations use heavier loads and are therefore superior",
+                isCorrect: false,
+                explanation: "Hang variations are not about using heavier loads -- the reasoning is about reducing technical complexity, not increasing load.",
+              },
+              {
+                orderIndex: 3,
+                answerText: "Because full-lift Olympic lifts don't build explosive power",
+                isCorrect: false,
+                explanation: "Full Olympic lifts absolutely build explosive power -- the reason to stop at a partial isn't that the full lift lacks benefit, it's managing technical risk relative to coaching resources.",
+              },
+            ],
+          },
+        ],
       },
       {
         title: "Youth Long-Term Athletic Development (LTAD)",
@@ -2840,6 +3030,98 @@ async function main() {
             estMinutes: 5,
             content:
               "Translating the previous lessons into an actual season plan for a 10-14 year old comes down to a few concrete guardrails.\n\nCap total organized volume across everything the athlete does, not just what you personally coach. A young athlete who plays on two teams, takes private lessons, and attends your strength sessions can easily be doing far more total volume than any single coach realizes. Ask directly about what else the athlete is doing.\n\nFavor 2-3 shorter, varied sessions per week over fewer, longer, more concentrated ones -- this matches the faster single-session recovery discussed earlier and keeps any one session from becoming a marathon that a young athlete's attention span and technique both degrade through.\n\nBuild in genuine unstructured time. A full calendar of organized practices, games, and lessons leaves no room for the free, unstructured play that's historically where a lot of natural athleticism and creativity actually develops.\n\nFinally, resist the urge to chase short-term competitive results at this age at the expense of the long-term plan. Coaching for who's best in two years, not who's best this Saturday, is the actual job at this age.",
+          },
+        ],
+        quizQuestions: [
+          {
+            orderIndex: 0,
+            questionText: "What is a key argument against early single-sport specialization before age 10-12?",
+            answers: [
+              {
+                orderIndex: 0,
+                answerText: "It's associated with higher overuse injury rates and higher long-term dropout, without a performance advantage",
+                isCorrect: true,
+                explanation: "Correct -- research consistently shows more overuse injury and burnout from early specialization, while most eventual elite athletes were actually multi-sport participants through adolescence.",
+              },
+              {
+                orderIndex: 1,
+                answerText: "It's technically prohibited by youth sports governing bodies",
+                isCorrect: false,
+                explanation: "There's no blanket prohibition -- the concern is evidence-based (injury and burnout data), not a rules violation.",
+              },
+              {
+                orderIndex: 2,
+                answerText: "It guarantees the athlete will lose interest in sports entirely",
+                isCorrect: false,
+                explanation: "It's associated with higher dropout rates, not a guarantee -- framing it as inevitable overstates the evidence.",
+              },
+              {
+                orderIndex: 3,
+                answerText: "Multi-sport athletes always outperform specialists at every age",
+                isCorrect: false,
+                explanation: "The advantage shows up in eventual elite outcomes, not necessarily at every single age group along the way -- early-specializing athletes can still win in younger age brackets before broader development catches up.",
+              },
+            ],
+          },
+          {
+            orderIndex: 1,
+            questionText: "What typically happens to an athlete's coordination around their growth spurt (Peak Height Velocity)?",
+            answers: [
+              {
+                orderIndex: 0,
+                answerText: "A temporary, normal dip, as the nervous system re-calibrates to new limb lengths",
+                isCorrect: true,
+                explanation: "Correct -- this is a well-documented, temporary phase, not a real regression in ability, and shouldn't be met with added volume or frustration.",
+              },
+              {
+                orderIndex: 1,
+                answerText: "A permanent decline that most athletes never recover from",
+                isCorrect: false,
+                explanation: "This dip is temporary, not permanent -- coordination typically returns and improves as the nervous system adapts to the new proportions.",
+              },
+              {
+                orderIndex: 2,
+                answerText: "No change at all -- growth spurts don't affect coordination",
+                isCorrect: false,
+                explanation: "Growth spurts are specifically linked to a temporary coordination dip in the research this track draws on -- it's a real, expected phenomenon.",
+              },
+              {
+                orderIndex: 3,
+                answerText: "An immediate improvement in coordination",
+                isCorrect: false,
+                explanation: "The opposite is typically true in the short term -- coordination often temporarily dips before improving.",
+              },
+            ],
+          },
+          {
+            orderIndex: 2,
+            questionText: "Before a growth spurt, what type of training tends to produce the largest long-term benefit?",
+            answers: [
+              {
+                orderIndex: 0,
+                answerText: "Broad motor-skill development -- running, jumping, throwing, catching, changing direction",
+                isCorrect: true,
+                explanation: "Correct -- this is the highest-value window for building a broad athletic base, since motor learning is fast and durable at this stage.",
+              },
+              {
+                orderIndex: 1,
+                answerText: "Heavy, maximal-load strength training",
+                isCorrect: false,
+                explanation: "Strength training tends to become highly responsive later, around and after the growth spurt, rather than being the priority beforehand.",
+              },
+              {
+                orderIndex: 2,
+                answerText: "Narrow, single-sport skill repetition",
+                isCorrect: false,
+                explanation: "This is exactly what the track argues against at this age -- narrowing too early costs the broad development window.",
+              },
+              {
+                orderIndex: 3,
+                answerText: "No structured training at all until after puberty",
+                isCorrect: false,
+                explanation: "The claim isn't \"wait until later\" -- it's that broad, varied motor development specifically (not narrow specialization) is valuable during this window.",
+              },
+            ],
           },
         ],
       },
@@ -2879,6 +3161,98 @@ async function main() {
               "The single most important skill in arm care isn't a stretch or an exercise -- it's recognizing when to stop, and having the discipline to act on it immediately rather than \"seeing how the next inning goes.\"\n\nMechanical red flags show up before pain does, if you're watching for them: a drop in arm slot or release point late in an outing, reduced hip-shoulder separation, a pitcher who starts \"muscling\" the ball with the arm rather than using their whole body, or a visible change in follow-through.\n\nReported pain is a hard stop, full stop -- not a modification, not \"let's see how it feels after a few easy ones.\" This is true even for a pitcher who is pitching a great game, even in a playoff situation. Elbow or shoulder pain during or after throwing in a still-developing athlete is exactly the population where \"pitching through it\" turns a manageable issue into a season-ending or growth-plate injury.\n\nPersistent soreness that doesn't resolve with normal rest, a decline in velocity that doesn't track with normal season fatigue, or any report of numbness/tingling are all reasons to involve a medical professional. As a coach, your job in all of these situations is the same: stop the throwing, communicate clearly with the parent, and refer to a doctor or sports medicine professional -- never attempt to diagnose or clear an athlete to return yourself.",
           },
         ],
+        quizQuestions: [
+          {
+            orderIndex: 0,
+            questionText: "Where should a coach look for official pitch count and rest guidelines?",
+            answers: [
+              {
+                orderIndex: 0,
+                answerText: "Whichever governing body (Little League, high school federation, travel org) applies to the team, followed without exception",
+                isCorrect: true,
+                explanation: "Correct -- guidelines vary by governing body and are updated periodically, so the right habit is knowing which one applies and following it exactly, not applying a number from memory or a different context.",
+              },
+              {
+                orderIndex: 1,
+                answerText: "Whatever number feels reasonable based on how the pitcher looks that day",
+                isCorrect: false,
+                explanation: "This is exactly the reasoning the track warns against -- \"but he feels fine\" isn't a reliable signal for cumulative injury risk, which is why fixed, official guidelines exist in the first place.",
+              },
+              {
+                orderIndex: 2,
+                answerText: "Only game pitches count toward the limit, not bullpens or lessons",
+                isCorrect: false,
+                explanation: "A young arm doesn't distinguish between contexts -- practice bullpens, showcases, and lessons all count toward total throwing volume.",
+              },
+              {
+                orderIndex: 3,
+                answerText: "There's one universal number that applies to every league and age",
+                isCorrect: false,
+                explanation: "Numbers vary meaningfully by governing body and age group -- there's no single universal figure.",
+              },
+            ],
+          },
+          {
+            orderIndex: 1,
+            questionText: "What is the recommended approach to introducing breaking balls (like curveballs) to a young pitcher?",
+            answers: [
+              {
+                orderIndex: 0,
+                answerText: "Delay introduction until further along in growth-plate development, per official guidance",
+                isCorrect: true,
+                explanation: "Correct -- most official youth guidance recommends significantly delaying breaking-ball introduction because of the specific elbow stress involved, favoring fastballs and changeups for younger arms.",
+              },
+              {
+                orderIndex: 1,
+                answerText: "Introduce them as early as possible to build a full arsenal",
+                isCorrect: false,
+                explanation: "This runs directly against the documented additional injury risk breaking pitches carry for still-developing arms.",
+              },
+              {
+                orderIndex: 2,
+                answerText: "It doesn't matter what pitch type is thrown, only total pitch count matters",
+                isCorrect: false,
+                explanation: "Pitch type is a real, separate risk factor from raw volume -- breaking balls carry documented additional elbow stress.",
+              },
+              {
+                orderIndex: 3,
+                answerText: "Only allow breaking balls in practice, never in games",
+                isCorrect: false,
+                explanation: "The concern is the pitch's mechanical stress on the arm, which is present regardless of whether it's practice or a game.",
+              },
+            ],
+          },
+          {
+            orderIndex: 2,
+            questionText: "An athlete reports mild elbow tightness after throwing, but says they can keep going. What should a coach do?",
+            answers: [
+              {
+                orderIndex: 0,
+                answerText: "Stop the throwing immediately and refer to a medical professional",
+                isCorrect: true,
+                explanation: "Correct -- reported pain during or after throwing is a hard stop, not a judgment call, regardless of how minor it sounds or the game situation.",
+              },
+              {
+                orderIndex: 1,
+                answerText: "Have them throw a few easy ones to see if it works itself out",
+                isCorrect: false,
+                explanation: "This is precisely the \"pitching through it\" pattern that turns a manageable issue into a season-ending or growth-plate injury in a still-developing athlete.",
+              },
+              {
+                orderIndex: 2,
+                answerText: "Let them finish the inning since they say they're fine",
+                isCorrect: false,
+                explanation: "Self-report of being fine doesn't override the hard-stop rule for reported pain -- no game situation changes this.",
+              },
+              {
+                orderIndex: 3,
+                answerText: "Reduce their pitch count for next outing but let them continue this one",
+                isCorrect: false,
+                explanation: "Any reported pain calls for stopping now, not a plan for a future outing -- the current session is the one that needs to stop.",
+              },
+            ],
+          },
+        ],
       },
       {
         title: "Reading Forge's Own Analytics",
@@ -2914,6 +3288,98 @@ async function main() {
             estMinutes: 5,
             content:
               "The readiness score combines an athlete's self-reported sleep, soreness, stress, and focus into a single daily signal -- and its entire value comes from actually letting it influence that day's session, rather than being logged and then ignored.\n\nA low readiness score is not a reason to cancel training outright in most cases -- it's a reason to adjust what that session emphasizes. Practical adjustments include: dropping planned top-end intensity while keeping movement quality work, swapping a heavy strength day for a technique-focused session, or simply reducing volume while watching how the athlete actually moves once warmed up.\n\nIt's worth distinguishing a single bad day from a real pattern. One low-readiness day after a late night is normal and doesn't require a program overhaul. A pattern of consistently low scores over multiple days or weeks deserves an actual conversation with the athlete about what's driving it.\n\nThe score is most useful when athletes trust that reporting honestly actually changes something about their day -- a coach who visibly adjusts sessions based on the score, even in small ways, is the single biggest driver of athletes continuing to fill it out honestly over a full season.",
+          },
+        ],
+        quizQuestions: [
+          {
+            orderIndex: 0,
+            questionText: "An athlete's ACWR spikes above the typical 0.8-1.3 range after a planned hard training week. What's the appropriate response?",
+            answers: [
+              {
+                orderIndex: 0,
+                answerText: "Be more deliberate about the deload/recovery period that follows, rather than stacking another hard week on top",
+                isCorrect: true,
+                explanation: "Correct -- a spike after a genuinely planned hard week isn't automatically a problem, but it's a cue to manage the recovery that follows carefully rather than compounding it.",
+              },
+              {
+                orderIndex: 1,
+                answerText: "Ignore it completely since the week was planned",
+                isCorrect: false,
+                explanation: "Even a planned spike is worth watching -- the real risk is stacking more hard training on top without adequate recovery.",
+              },
+              {
+                orderIndex: 2,
+                answerText: "Immediately stop all training for that athlete",
+                isCorrect: false,
+                explanation: "A single elevated reading after planned hard training isn't cause for a full stop -- it's a cue for a more careful recovery period, not a shutdown.",
+              },
+              {
+                orderIndex: 3,
+                answerText: "Increase volume further to \"push through\" the spike",
+                isCorrect: false,
+                explanation: "This is the exact opposite of the appropriate response -- adding more volume on top of an elevated ACWR is how spikes turn into injuries.",
+              },
+            ],
+          },
+          {
+            orderIndex: 1,
+            questionText: "What does a flagged leg-drive asymmetry most accurately represent?",
+            answers: [
+              {
+                orderIndex: 0,
+                answerText: "A screening signal worth a conversation, not a diagnosis",
+                isCorrect: true,
+                explanation: "Correct -- some asymmetry is normal for most athletes; a flag means it's worth asking the athlete directly whether something feels off, not concluding an injury exists.",
+              },
+              {
+                orderIndex: 1,
+                answerText: "Definitive proof of an existing injury",
+                isCorrect: false,
+                explanation: "The track is explicit that this is not a diagnosis -- it's a prompt for a conversation, since normal side-to-side variation exists in most athletes.",
+              },
+              {
+                orderIndex: 2,
+                answerText: "A sign the athlete should stop training that leg entirely",
+                isCorrect: false,
+                explanation: "That's a significant, specific intervention the flag alone doesn't justify -- the correct next step is asking questions, not prescribing a training change.",
+              },
+              {
+                orderIndex: 3,
+                answerText: "Something to note but never act on",
+                isCorrect: false,
+                explanation: "The flag should prompt at least a direct conversation with the athlete -- treating it as pure background noise defeats its purpose as an early-warning signal.",
+              },
+            ],
+          },
+          {
+            orderIndex: 2,
+            questionText: "How should a coach respond to an athlete's low readiness score on a given day?",
+            answers: [
+              {
+                orderIndex: 0,
+                answerText: "Adjust that day's session -- e.g., drop top-end intensity or swap to technique-focused work",
+                isCorrect: true,
+                explanation: "Correct -- the entire value of the readiness score comes from actually letting it change that day's plan, via concrete adjustments like reduced intensity or volume.",
+              },
+              {
+                orderIndex: 1,
+                answerText: "Ignore it since one bad day doesn't matter",
+                isCorrect: false,
+                explanation: "A single bad day is normal, but the score is only useful if it actually changes something about the session -- otherwise athletes stop trusting it's worth reporting honestly.",
+              },
+              {
+                orderIndex: 2,
+                answerText: "Automatically cancel the entire session",
+                isCorrect: false,
+                explanation: "Most low-readiness days call for an adjustment, not an outright cancellation -- reserve that for genuine patterns or more serious signals.",
+              },
+              {
+                orderIndex: 3,
+                answerText: "Add extra volume to compensate for the athlete being \"behind\"",
+                isCorrect: false,
+                explanation: "Adding volume on top of low readiness is exactly backwards -- it increases risk precisely when the athlete's capacity is reduced.",
+              },
+            ],
           },
         ],
       },
@@ -2953,6 +3419,98 @@ async function main() {
               "A well-structured practice follows a deliberate sequence for the same reason a well-structured training session does -- different types of work have different fatigue and skill-acquisition demands, and the order they happen in matters as much as what's included.\n\nStart with a genuine warm-up/movement-prep block -- dynamic movement that actually raises body temperature and rehearses movement patterns the practice will use, at progressively higher effort.\n\nPlace your highest-skill, highest-cognitive-demand work early, while athletes are freshest -- new technical instruction or anything requiring fine motor precision should never be introduced after athletes are already fatigued, since fatigue is exactly when technical learning and retention suffer most.\n\nCompetitive/scrimmage work generally fits in the middle-to-later portion of practice, once foundational skill work is done but before athletes are too depleted to compete at a meaningful intensity.\n\nSave dedicated conditioning for the end of practice. Conditioning athletes early leaves them fatigued for the technical work that follows, defeating the purpose of the ordering above.\n\nFinally, always end with a genuine cool-down and, where relevant, sport-specific arm-care or recovery work -- the last few minutes of practice are often the first thing cut when time runs short, but they're doing real, cumulative injury-prevention work over a season.",
           },
         ],
+        quizQuestions: [
+          {
+            orderIndex: 0,
+            questionText: "What is the main goal of in-season strength training, compared to off-season?",
+            answers: [
+              {
+                orderIndex: 0,
+                answerText: "Preserve off-season gains with minimum-effective-dose training, not continue building at the same rate",
+                isCorrect: true,
+                explanation: "Correct -- research consistently shows maintaining strength requires meaningfully less volume than building it, which is good news for fitting lifting around a busy game schedule.",
+              },
+              {
+                orderIndex: 1,
+                answerText: "Push for the same rate of strength gains as the off-season",
+                isCorrect: false,
+                explanation: "Trying to build at the off-season rate during a demanding game schedule risks adding fatigue the athlete can't afford -- the goal shifts to maintenance.",
+              },
+              {
+                orderIndex: 2,
+                answerText: "Stop all strength training once the season starts",
+                isCorrect: false,
+                explanation: "Stopping entirely tends to lose real strength over a season -- a well-designed low-volume maintenance approach preserves far more than doing nothing.",
+              },
+              {
+                orderIndex: 3,
+                answerText: "Increase training frequency to compensate for game fatigue",
+                isCorrect: false,
+                explanation: "This is backwards -- in-season programming typically reduces frequency/volume specifically because game fatigue is already a competing demand on recovery.",
+              },
+            ],
+          },
+          {
+            orderIndex: 1,
+            questionText: "What's the key principle behind an effective competition taper?",
+            answers: [
+              {
+                orderIndex: 0,
+                answerText: "Reduce volume while keeping intensity relatively high",
+                isCorrect: true,
+                explanation: "Correct -- cutting volume clears fatigue quickly, while maintaining intensity preserves the specific fitness qualities the taper is meant to protect; cutting both together is just detraining.",
+              },
+              {
+                orderIndex: 1,
+                answerText: "Reduce both volume and intensity together as much as possible",
+                isCorrect: false,
+                explanation: "This is explicitly called out as a mistake -- reducing both isn't a taper, it's detraining, and it costs the athlete real fitness right before competition.",
+              },
+              {
+                orderIndex: 2,
+                answerText: "Increase volume right before competition to \"peak\" fitness",
+                isCorrect: false,
+                explanation: "This is the opposite of tapering -- adding volume right before competition adds fatigue exactly when freshness matters most.",
+              },
+              {
+                orderIndex: 3,
+                answerText: "Tapering only matters for very long competitive seasons",
+                isCorrect: false,
+                explanation: "Tapering applies at any scale -- even a single important regular-season game can warrant a lighter day or two beforehand.",
+              },
+            ],
+          },
+          {
+            orderIndex: 2,
+            questionText: "In what order should a single practice generally be structured?",
+            answers: [
+              {
+                orderIndex: 0,
+                answerText: "Warm-up, high-skill/technical work, competitive/scrimmage work, conditioning, cooldown",
+                isCorrect: true,
+                explanation: "Correct -- this order matches fatigue and skill-acquisition demands: technical learning suffers most under fatigue, so it goes early, while conditioning (lower skill demand) tolerates fatigue best at the end.",
+              },
+              {
+                orderIndex: 1,
+                answerText: "Conditioning first to build a base of fatigue for the rest of practice",
+                isCorrect: false,
+                explanation: "Conditioning first leaves athletes fatigued for the technical work that follows, which is exactly backwards for skill retention.",
+              },
+              {
+                orderIndex: 2,
+                answerText: "Cooldown and arm care first, then everything else",
+                isCorrect: false,
+                explanation: "Cooldown/recovery work belongs at the end, addressing the fatigue and tightness practice itself creates -- doing it first doesn't serve that purpose.",
+              },
+              {
+                orderIndex: 3,
+                answerText: "Whatever order keeps the athletes most entertained",
+                isCorrect: false,
+                explanation: "Entertainment isn't the organizing principle -- the order is based on when the nervous system can best absorb technical learning versus tolerate fatigue.",
+              },
+            ],
+          },
+        ],
       },
       {
         title: "Coaching Communication & Culture",
@@ -2990,18 +3548,119 @@ async function main() {
               "A team culture of genuine accountability isn't built from a single speech at the start of the season -- it's built from consistently applied standards that don't bend based on who the athlete is or how good they are, applied over the course of an entire season.\n\nThe single fastest way to destroy a culture of accountability is applying standards unevenly based on talent -- letting your best player skip standards everyone else is held to. Athletes notice this immediately, and the message it sends is that the standard is actually optional if you're good enough.\n\nPeer accountability, once established, is more powerful and more sustainable than a coach enforcing every single standard personally. A captain or respected veteran reinforcing a standard to a teammate carries different weight than the same reminder from a coach.\n\nConsistency over time matters more than intensity in any single moment. A standard that's strictly enforced during a good week and quietly ignored during a stressful or losing stretch teaches athletes that the standard was situational all along -- whereas a standard that holds steady specifically during the hard stretches is what actually builds trust that the standard is real.",
           },
         ],
+        quizQuestions: [
+          {
+            orderIndex: 0,
+            questionText: "What's the key difference between compliance and buy-in?",
+            answers: [
+              {
+                orderIndex: 0,
+                answerText: "Buy-in comes from understanding the \"why\" and persists even without direct supervision; compliance is authority-driven and often stops there",
+                isCorrect: true,
+                explanation: "Correct -- an athlete who understands why they're doing something tends to apply it even when the coach isn't watching, while pure compliance often doesn't generalize beyond the exact instruction given.",
+              },
+              {
+                orderIndex: 1,
+                answerText: "They produce identical long-term results",
+                isCorrect: false,
+                explanation: "The track specifically argues they produce different durability of behavior -- buy-in tends to generalize and persist, compliance often doesn't.",
+              },
+              {
+                orderIndex: 2,
+                answerText: "Compliance is always the better approach for safety-critical instructions",
+                isCorrect: false,
+                explanation: "Compliance does have its place for safety-critical moments, but that's a narrower claim than saying it's always superior overall -- buy-in is presented as generally the more durable approach.",
+              },
+              {
+                orderIndex: 3,
+                answerText: "Buy-in requires a long lecture before every single instruction",
+                isCorrect: false,
+                explanation: "The track explicitly says building buy-in doesn't require a lecture every time -- usually a short, genuine \"why\" attached to the \"what\" is enough.",
+              },
+            ],
+          },
+          {
+            orderIndex: 1,
+            questionText: "How should a coach generally handle correcting an individual athlete's poor effort or attitude?",
+            answers: [
+              {
+                orderIndex: 0,
+                answerText: "Address it privately, separating the behavior from the athlete's identity",
+                isCorrect: true,
+                explanation: "Correct -- private correction avoids the defensiveness public correction tends to produce, and describing a specific action (rather than labeling the person) gives the athlete something concrete to fix.",
+              },
+              {
+                orderIndex: 1,
+                answerText: "Call it out immediately in front of the team to set an example",
+                isCorrect: false,
+                explanation: "Public correction tends to produce defensiveness and can turn into a performance for teammates to react to, rather than genuine correction.",
+              },
+              {
+                orderIndex: 2,
+                answerText: "Say nothing and hope it improves on its own",
+                isCorrect: false,
+                explanation: "Unaddressed behavior doesn't reliably self-correct, and the track's whole framework is about active, deliberate correction -- just privately, not publicly.",
+              },
+              {
+                orderIndex: 3,
+                answerText: "Assign extra conditioning as the primary response",
+                isCorrect: false,
+                explanation: "Punishment conditioning is called out as a common but often counterproductive instinct -- it treats the symptom rather than addressing the actual behavior directly.",
+              },
+            ],
+          },
+          {
+            orderIndex: 2,
+            questionText: "What's the fastest way to undermine a team's culture of accountability?",
+            answers: [
+              {
+                orderIndex: 0,
+                answerText: "Applying standards unevenly based on an athlete's talent level",
+                isCorrect: true,
+                explanation: "Correct -- letting a star player skip a standard everyone else follows sends a clear signal that the standard is optional if you're good enough, which erodes trust in every other standard.",
+              },
+              {
+                orderIndex: 1,
+                answerText: "Empowering team captains to reinforce standards among teammates",
+                isCorrect: false,
+                explanation: "This is actually a positive, sustainable practice (peer accountability) -- it's presented as something that strengthens culture, not undermines it.",
+              },
+              {
+                orderIndex: 2,
+                answerText: "Holding the same standard steady during a difficult losing stretch",
+                isCorrect: false,
+                explanation: "Consistency specifically during hard stretches is what builds genuine trust that a standard is real -- this strengthens culture rather than undermining it.",
+              },
+              {
+                orderIndex: 3,
+                answerText: "Following up after a correction to reinforce the standard",
+                isCorrect: false,
+                explanation: "Following up closes the loop and reinforces that a correction was about improvement -- this supports accountability rather than undermining it.",
+              },
+            ],
+          },
+        ],
       },
     ];
 
     for (const track of seedAcademyTracks) {
-      if (existingTrackTitles.has(track.title)) continue;
-      await storage.createAcademyTrackWithStructure({
-        title: track.title,
-        description: track.description,
-        keyPrinciplesForAi: track.keyPrinciplesForAi,
-        orderIndex: seedAcademyTracks.indexOf(track),
-        lessons: track.lessons,
-      });
+      const existingId = existingTrackIdByTitle.get(track.title);
+      if (existingId == null) {
+        await storage.createAcademyTrackWithStructure({
+          title: track.title,
+          description: track.description,
+          keyPrinciplesForAi: track.keyPrinciplesForAi,
+          orderIndex: seedAcademyTracks.indexOf(track),
+          lessons: track.lessons,
+          quizQuestions: track.quizQuestions,
+        });
+      } else {
+        // Track already exists from an earlier deploy (lessons already
+        // seeded) -- just backfill its quiz if it doesn't have one yet,
+        // without touching lessons (see addQuizQuestionsToTrackIfNone's
+        // comment on why this can't reuse updateAcademyTrackStructure).
+        await storage.addQuizQuestionsToTrackIfNone(existingId, track.quizQuestions);
+      }
     }
   }
 

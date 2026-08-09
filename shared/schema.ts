@@ -2050,8 +2050,60 @@ export const academyLessonCompletions = pgTable(
   }),
 );
 
+// One quiz per track, shown after the lesson list -- a self-check, not a
+// scored exam (no attempt/score persistence). Every answer carries its own
+// explanation, correct or not, so a coach can expand any answer at any
+// time to see why it's right or wrong, not just the one they picked.
+export const academyQuizQuestions = pgTable(
+  "academy_quiz_questions",
+  {
+    id: serial("id").primaryKey(),
+    trackId: integer("track_id")
+      .notNull()
+      .references(() => academyTracks.id, { onDelete: "cascade" }),
+    orderIndex: integer("order_index").notNull().default(0),
+    questionText: text("question_text").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    trackIdx: index("academy_quiz_questions_track_idx").on(table.trackId),
+  }),
+);
+
+export const academyQuizAnswers = pgTable(
+  "academy_quiz_answers",
+  {
+    id: serial("id").primaryKey(),
+    questionId: integer("question_id")
+      .notNull()
+      .references(() => academyQuizQuestions.id, { onDelete: "cascade" }),
+    orderIndex: integer("order_index").notNull().default(0),
+    answerText: text("answer_text").notNull(),
+    isCorrect: boolean("is_correct").notNull().default(false),
+    // Shown when this specific answer is expanded -- written to stand on its
+    // own regardless of which answer the coach actually picked first.
+    explanation: text("explanation").notNull(),
+  },
+  (table) => ({
+    questionIdx: index("academy_quiz_answers_question_idx").on(table.questionId),
+  }),
+);
+
 export const academyTracksRelations = relations(academyTracks, ({ many }) => ({
   lessons: many(academyLessons),
+  quizQuestions: many(academyQuizQuestions),
+}));
+
+export const academyQuizQuestionsRelations = relations(academyQuizQuestions, ({ one, many }) => ({
+  track: one(academyTracks, { fields: [academyQuizQuestions.trackId], references: [academyTracks.id] }),
+  answers: many(academyQuizAnswers),
+}));
+
+export const academyQuizAnswersRelations = relations(academyQuizAnswers, ({ one }) => ({
+  question: one(academyQuizQuestions, {
+    fields: [academyQuizAnswers.questionId],
+    references: [academyQuizQuestions.id],
+  }),
 }));
 
 export const academyLessonsRelations = relations(academyLessons, ({ one, many }) => ({
@@ -2069,6 +2121,8 @@ export const academyLessonCompletionsRelations = relations(academyLessonCompleti
 
 export type AcademyTrack = typeof academyTracks.$inferSelect;
 export type AcademyLesson = typeof academyLessons.$inferSelect;
+export type AcademyQuizQuestion = typeof academyQuizQuestions.$inferSelect;
+export type AcademyQuizAnswer = typeof academyQuizAnswers.$inferSelect;
 
 export const academyLessonInputSchema = z.object({
   // Present when editing an existing lesson (matches it for in-place
@@ -2080,16 +2134,34 @@ export const academyLessonInputSchema = z.object({
   estMinutes: z.number().int().min(1).nullable().optional(),
 });
 
+export const academyQuizAnswerInputSchema = z.object({
+  id: z.number().optional(),
+  orderIndex: z.number().int().default(0),
+  answerText: z.string().trim().min(1).max(300),
+  isCorrect: z.boolean().default(false),
+  explanation: z.string().trim().min(1).max(1000),
+});
+
+export const academyQuizQuestionInputSchema = z.object({
+  id: z.number().optional(),
+  orderIndex: z.number().int().default(0),
+  questionText: z.string().trim().min(1).max(500),
+  answers: z.array(academyQuizAnswerInputSchema).min(2).max(6),
+});
+
 export const academyTrackStructureSchema = z.object({
   title: z.string().trim().min(1).max(200),
   description: z.string().trim().min(1).max(2000),
   keyPrinciplesForAi: z.string().trim().min(1).max(4000),
   orderIndex: z.number().int().default(0),
   lessons: z.array(academyLessonInputSchema).default([]),
+  quizQuestions: z.array(academyQuizQuestionInputSchema).default([]),
 });
 
 export type AcademyTrackStructureInput = z.infer<typeof academyTrackStructureSchema>;
 export type AcademyLessonInput = z.infer<typeof academyLessonInputSchema>;
+export type AcademyQuizQuestionInput = z.infer<typeof academyQuizQuestionInputSchema>;
+export type AcademyQuizAnswerInput = z.infer<typeof academyQuizAnswerInputSchema>;
 
 export const aiKnowledgeChatRoleEnum = pgEnum("ai_knowledge_chat_role", ["admin", "assistant"]);
 
