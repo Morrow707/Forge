@@ -763,6 +763,16 @@ CREATE TABLE IF NOT EXISTS "goniometer_readings" (
 CREATE INDEX IF NOT EXISTS "goniometer_readings_athlete_idx" ON "goniometer_readings" ("athlete_id");
 CREATE INDEX IF NOT EXISTS "goniometer_readings_athlete_joint_idx" ON "goniometer_readings" ("athlete_id", "joint");
 
+CREATE TABLE IF NOT EXISTS "weakness_reports" (
+  "id" serial PRIMARY KEY,
+  "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "generated_by" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "summary" text NOT NULL,
+  "deficits" json NOT NULL,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "weakness_reports_athlete_idx" ON "weakness_reports" ("athlete_id");
+
 CREATE TABLE IF NOT EXISTS "goals" (
   "id" serial PRIMARY KEY,
   "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,

@@ -1763,6 +1763,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
+  // AI weakness-identification report -- analyzes whatever goniometer/
+  // asymmetry/ACWR/wellness/testing data already exists for one roster
+  // athlete. Coach-side generation is ungated (same as every other coach
+  // AI feature -- see hasCoachesCornerAccess/requirePaidAiAccess's own
+  // comment on why coach routes never hit the Free-Agent paywall), but the
+  // read route below is shared with the athlete's own view of it.
+  app.post(
+    "/api/coach/roster/:athleteId/weakness-report",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      const onRoster = await storage.getRosterAthleteForCoach(user.id, athleteId);
+      if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
+      const report = await storage.generateWeaknessReport(athleteId, user.id);
+      if (!report) {
+        return res
+          .status(422)
+          .json({ message: "Not enough PT/S&C data logged yet to generate a report." });
+      }
+      res.status(201).json(report);
+    },
+  );
+
+  app.get(
+    "/api/coach/roster/:athleteId/weakness-reports",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      const onRoster = await storage.getRosterAthleteForCoach(user.id, athleteId);
+      if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
+      const reports = await storage.getWeaknessReportsForAthlete(athleteId);
+      res.json(reports);
+    },
+  );
+
+  // An athlete (coached or Free Agent) can always read their own reports,
+  // whoever generated them -- this is the "provide detailed data to the
+  // patient" half of the feature. Free Agent self-generation is a separate,
+  // paywalled route below.
+  app.get("/api/athlete/weakness-reports", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const reports = await storage.getWeaknessReportsForAthlete(user.id);
+    res.json(reports);
+  });
+
+  app.post(
+    "/api/athlete/weakness-report",
+    requireRole("athlete"),
+    requireFreeAgent,
+    requirePaidAiAccess("strengthAi"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const report = await storage.generateWeaknessReport(user.id, user.id);
+      if (!report) {
+        return res
+          .status(422)
+          .json({ message: "Not enough PT/S&C data logged yet to generate a report." });
+      }
+      res.status(201).json(report);
+    },
+  );
+
   app.get("/api/coach/testing-trends", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     const parsed = testingTrendsQuerySchema.safeParse(req.query);

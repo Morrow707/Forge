@@ -37,6 +37,7 @@ import {
   bodyMetrics,
   testingResults,
   goniometerReadings,
+  weaknessReports,
   nutritionTargets,
   goals,
   wellnessCheckins,
@@ -62,8 +63,10 @@ import {
   nutritionKnowledgeMessages,
   nutritionKnowledge,
   foodLogEntries,
+  weaknessDeficitSchema,
   type InsertUser,
 } from "@shared/schema";
+import { classifyGoniometerReading, GONIOMETER_JOINTS } from "@shared/goniometer";
 import type {
   ProgramStructureInput,
   SkillProgramStructureInput,
@@ -80,6 +83,7 @@ import type {
   CreateBodyMetricInput,
   TestingMetric,
   InsertGoniometerReading,
+  WeaknessDeficit,
   UpdateNutritionTargetsInput,
   CreateGoalInput,
   AiKnowledgeMessage,
@@ -118,6 +122,7 @@ import {
 } from "./auth-utils";
 import {
   addDays,
+  subDays,
   parseISO,
   formatISO,
   isWithinInterval,
@@ -131,6 +136,10 @@ import {
 // limb-symmetry-index cutoff sports-science literature commonly treats as
 // injury-risk-relevant, not an arbitrary round number.
 const LEG_DRIVE_ASYMMETRY_FLAG_THRESHOLD = 15;
+
+function jointLabelFor(jointKey: string): string {
+  return GONIOMETER_JOINTS.find((j) => j.key === jointKey)?.label ?? jointKey;
+}
 
 function initialsFor(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -2676,6 +2685,172 @@ Write a short (2-4 sentence) plain-language weekly training summary for this ath
     if (existing) return { digest: existing, isNew: false };
     const generated = await this.generateAthleteDigest(athleteId, weekStart);
     return { digest: generated, isNew: generated != null };
+  },
+
+  // ---------- AI weakness-identification report ----------
+  // Analyzes whatever PT/S&C data currently exists for this athlete --
+  // goniometer ROM readings, leg-drive asymmetry flags, ACWR load-
+  // management risk, recent wellness/pain trends, and combine testing
+  // history -- and asks Claude to name specific deficits, each grounded in
+  // one of those data sources, with a plain-language explanation of why it
+  // matters. A point-in-time snapshot (see weaknessReports' comment in
+  // shared/schema.ts), not a live dashboard: re-run it later to see
+  // whether a flagged deficit actually improved. Returns null (never a
+  // fabricated report) if there isn't enough real data to say anything
+  // grounded yet, or if AI isn't configured.
+  async generateWeaknessReport(athleteId: number, generatedBy: number) {
+    const [athlete, latestGoniometer, legAsymmetryFlags, acwrHistory, wellnessHistory, testingHistory] =
+      await Promise.all([
+        db.query.users.findFirst({ where: eq(users.id, athleteId) }),
+        this.getLatestGoniometerReadingsForAthlete(athleteId),
+        this.getRecentLegAsymmetryFlagsForAthlete(athleteId),
+        this.getAcwrHistoryForAthlete(athleteId, 60),
+        this.getWellnessHistoryForAthlete(athleteId, 14),
+        this.getTestingHistoryForAthlete(athleteId),
+      ]);
+    if (!athlete) return null;
+
+    const restrictedGoniometer = latestGoniometer
+      .map((r) => ({ ...r, status: classifyGoniometerReading(r.joint, r.movement, r.angleDegrees) }))
+      .filter((r) => r.status === "restricted" || r.status === "hypermobile");
+
+    const acwrNow = acwrHistory.length > 0 ? acwrHistory[acwrHistory.length - 1] : null;
+
+    const painCounts = new Map<string, number>();
+    for (const w of wellnessHistory) {
+      for (const part of w.bodyPainMap ?? []) {
+        painCounts.set(part, (painCounts.get(part) ?? 0) + 1);
+      }
+    }
+    const recurringPain = Array.from(painCounts.entries())
+      .filter(([, count]) => count >= 3)
+      .map(([part, count]) => ({ part, count }));
+
+    const avgSoreness =
+      wellnessHistory.length > 0
+        ? wellnessHistory.reduce((sum, w) => sum + w.soreness, 0) / wellnessHistory.length
+        : null;
+
+    const hasAnyData =
+      restrictedGoniometer.length > 0 ||
+      legAsymmetryFlags.length > 0 ||
+      (acwrNow && acwrNow.level !== "green") ||
+      recurringPain.length > 0 ||
+      testingHistory.length >= 2;
+    if (!hasAnyData) return null;
+
+    const goniometerText =
+      restrictedGoniometer.length > 0
+        ? restrictedGoniometer
+            .map(
+              (r) =>
+                `${jointLabelFor(r.joint)} ${r.movement.replace(/_/g, " ")}: ${r.angleDegrees}° (${r.status}, measured ${r.date})`,
+            )
+            .join("; ")
+        : "no restricted or hypermobile joints flagged";
+
+    const asymmetryText =
+      legAsymmetryFlags.length > 0
+        ? legAsymmetryFlags
+            .map((f) => `${f.exerciseName}: ${f.avgAsymmetryPercent}% weaker on the ${f.weakSide} side`)
+            .join("; ")
+        : "no significant leg-drive asymmetry detected in recent bilateral lifts";
+
+    const acwrText = acwrNow
+      ? `current ratio ${acwrNow.ratio?.toFixed(2) ?? "n/a"}, risk level ${acwrNow.level} (green=sweet spot 0.8-1.3, yellow=watch, red=high risk of spike or steep drop in training load)`
+      : "not enough logged training history to compute yet";
+
+    const painText =
+      recurringPain.length > 0
+        ? recurringPain
+            .map((p) => `${p.part.replace(/_/g, " ")} reported sore/painful on ${p.count} of the last ${wellnessHistory.length} check-ins`)
+            .join("; ")
+        : "no body part reported as sore/painful on 3+ of the last check-ins";
+
+    const testingText =
+      testingHistory.length > 0
+        ? testingHistory
+            .slice(-3)
+            .map((t) => {
+              const parts: string[] = [];
+              if (t.fortyYardDash != null) parts.push(`40yd ${t.fortyYardDash}s`);
+              if (t.verticalJumpIn != null) parts.push(`vertical ${t.verticalJumpIn}in`);
+              if (t.broadJumpIn != null) parts.push(`broad jump ${t.broadJumpIn}in`);
+              if (t.proAgilitySeconds != null) parts.push(`pro agility ${t.proAgilitySeconds}s`);
+              if (t.benchMaxLbs != null) parts.push(`bench ${t.benchMaxLbs}lbs`);
+              if (t.squatMaxLbs != null) parts.push(`squat ${t.squatMaxLbs}lbs`);
+              if (t.deadliftMaxLbs != null) parts.push(`deadlift ${t.deadliftMaxLbs}lbs`);
+              return `${t.date}: ${parts.join(", ")}`;
+            })
+            .join(" | ")
+        : "no combine/testing history recorded";
+
+    const prompt = `Athlete: ${athlete.name}${athlete.sport ? `, sport: ${athlete.sport}` : ""}${athlete.position ? `, position: ${athlete.position}` : ""}.
+
+Joint range-of-motion (goniometer readings flagged outside the normal band): ${goniometerText}
+Leg-drive asymmetry (bilateral lower-body lifts, from camera-tracked reps): ${asymmetryText}
+Acute:chronic training load ratio (ACWR): ${acwrText}
+Recurring soreness/pain over the last ${wellnessHistory.length} wellness check-ins (avg soreness ${avgSoreness != null ? avgSoreness.toFixed(1) : "n/a"}/5): ${painText}
+Combine/testing history (most recent up to 3 sessions): ${testingText}
+
+Identify 2-5 specific, concrete deficits grounded ONLY in the data above -- do not invent a deficit that isn't actually supported by one of these data points. For each: a short title, which category of data it comes from, the specific evidence (cite the actual numbers given above), a plain-language explanation of why this matters for injury risk or performance, and a concrete suggested focus area (not a full program, just the direction). If the data genuinely doesn't support finding anything concerning, return an empty deficits array rather than manufacturing one.`;
+
+    const result = await askClaudeStructured<{ summary: string; deficits: WeaknessDeficit[] }>(
+      "You are an expert physical therapist and strength & conditioning analyst. You identify specific, data-grounded physical deficits from PT/S&C metrics and explain clearly why each matters -- never invent a finding the data doesn't support, never diagnose a medical condition, never recommend anything beyond a general training focus area. If asked to analyze data that shows nothing concerning, say so plainly rather than manufacturing a deficit.",
+      prompt,
+      {
+        name: "report_weaknesses",
+        description: "Report specific, data-grounded physical deficits and why they matter.",
+        input_schema: {
+          type: "object",
+          properties: {
+            summary: {
+              type: "string",
+              description: "2-3 sentence plain-language overview of this athlete's overall physical status.",
+            },
+            deficits: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  title: { type: "string" },
+                  category: { type: "string" },
+                  evidence: { type: "string" },
+                  whyItMatters: { type: "string" },
+                  suggestedFocus: { type: "string" },
+                },
+                required: ["title", "category", "evidence", "whyItMatters", "suggestedFocus"],
+              },
+            },
+          },
+          required: ["summary", "deficits"],
+        },
+      },
+      { maxTokens: 1500 },
+    );
+    if (!result) return null;
+    const parsed = z
+      .object({ summary: z.string(), deficits: z.array(weaknessDeficitSchema) })
+      .safeParse(result);
+    if (!parsed.success) return null;
+
+    const [row] = await db
+      .insert(weaknessReports)
+      .values({
+        athleteId,
+        generatedBy,
+        summary: parsed.data.summary,
+        deficits: parsed.data.deficits,
+      })
+      .returning();
+    return row;
+  },
+
+  async getWeaknessReportsForAthlete(athleteId: number) {
+    return db.query.weaknessReports.findMany({
+      where: eq(weaknessReports.athleteId, athleteId),
+      orderBy: desc(weaknessReports.createdAt),
+    });
   },
 
   async getCoachDigest(coachId: number, weekStart: string) {
@@ -8405,6 +8580,91 @@ ${catalog}`;
     );
 
     return { coachId: assignment.coachId, flags };
+  },
+
+  // Retroactive version of evaluateLegDriveAsymmetryFlags above -- that one
+  // only ever looks at the single workout log just submitted (and fires a
+  // notification); this scans an athlete's recent history for the same
+  // weak-side signal, for read-only reporting (e.g. the AI weakness
+  // report) rather than a one-time alert.
+  async getRecentLegAsymmetryFlagsForAthlete(athleteId: number, days = 30) {
+    const since = formatISO(subDays(new Date(), days), { representation: "date" });
+    const rows = await db
+      .select({
+        date: workoutLogs.date,
+        programExerciseId: workoutLogEntries.programExerciseId,
+        correctiveId: workoutLogEntries.correctiveId,
+        legDriveAsymmetry: workoutSetEntries.legDriveAsymmetry,
+      })
+      .from(workoutSetEntries)
+      .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
+      .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
+      .where(
+        and(
+          eq(workoutLogs.athleteId, athleteId),
+          gte(workoutLogs.date, since),
+          isNotNull(workoutSetEntries.legDriveAsymmetry),
+        ),
+      );
+
+    const byExercise = new Map<
+      string,
+      { programExerciseId: number | null; correctiveId: number | null; percents: number[]; leftCount: number; rightCount: number }
+    >();
+    for (const row of rows) {
+      const reps = row.legDriveAsymmetry as
+        | { asymmetryPercent: number; dominantSide: "left" | "right" }[]
+        | null;
+      if (!reps || reps.length === 0) continue;
+      const key =
+        row.programExerciseId != null ? `pe:${row.programExerciseId}` : `c:${row.correctiveId}`;
+      const bucket = byExercise.get(key) ?? {
+        programExerciseId: row.programExerciseId,
+        correctiveId: row.correctiveId,
+        percents: [],
+        leftCount: 0,
+        rightCount: 0,
+      };
+      for (const r of reps) {
+        bucket.percents.push(r.asymmetryPercent);
+        if (r.dominantSide === "left") bucket.leftCount++;
+        else bucket.rightCount++;
+      }
+      byExercise.set(key, bucket);
+    }
+
+    const flags: { exerciseName: string; avgAsymmetryPercent: number; weakSide: "left" | "right" }[] = [];
+    for (const bucket of byExercise.values()) {
+      const total = bucket.leftCount + bucket.rightCount;
+      if (total === 0) continue;
+      const consistency = Math.max(bucket.leftCount, bucket.rightCount) / total;
+      if (consistency < 0.7) continue;
+      const avgAsymmetryPercent =
+        bucket.percents.reduce((sum, p) => sum + p, 0) / bucket.percents.length;
+      if (avgAsymmetryPercent < LEG_DRIVE_ASYMMETRY_FLAG_THRESHOLD) continue;
+      const dominantSide = bucket.leftCount >= bucket.rightCount ? "left" : "right";
+
+      let exerciseName = "an exercise";
+      if (bucket.programExerciseId != null) {
+        const pe = await db.query.programExercises.findFirst({
+          where: eq(programExercises.id, bucket.programExerciseId),
+          with: { exercise: true },
+        });
+        if (pe) exerciseName = pe.exercise.name;
+      } else if (bucket.correctiveId != null) {
+        const c = await db.query.assignmentCorrectives.findFirst({
+          where: eq(assignmentCorrectives.id, bucket.correctiveId),
+          with: { exercise: true },
+        });
+        if (c) exerciseName = c.exercise.name;
+      }
+      flags.push({
+        exerciseName,
+        avgAsymmetryPercent: Math.round(avgAsymmetryPercent),
+        weakSide: dominantSide === "left" ? "right" : "left",
+      });
+    }
+    return flags;
   },
 
   // ---------- Coach analytics ----------
