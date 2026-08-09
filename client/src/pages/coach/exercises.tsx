@@ -15,6 +15,7 @@ export default function CoachExercises() {
           exercisesHref="/coach/exercises"
           skillProgramsHref="/coach/skill-programs"
           skillBankHref="/coach/skills"
+          classesHref="/coach/classes"
         />
       }
     />
