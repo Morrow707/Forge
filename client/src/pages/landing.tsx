@@ -1,7 +1,7 @@
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
+import { ForgeMark } from "@/components/forge-mark";
 import {
-  Flame,
   Sparkles,
   Video,
   LineChart,
@@ -129,7 +129,7 @@ export default function LandingPage() {
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 md:px-8">
           <div className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
-              <Flame className="h-4.5 w-4.5" />
+              <ForgeMark className="h-5 w-5" />
             </div>
             <span className="font-display text-xl font-extrabold uppercase tracking-wider">
               Forge
@@ -404,7 +404,7 @@ export default function LandingPage() {
         <GlowBlob className="left-1/2 top-0 h-96 w-96 -translate-x-1/2" />
         <div className="relative mx-auto max-w-2xl">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-            <Flame className="h-8 w-8" />
+            <ForgeMark className="h-9 w-9" />
           </div>
           <h2 className="mt-6 font-display text-4xl font-extrabold uppercase tracking-wide md:text-5xl">
             Ready to forge better athletes?
@@ -433,7 +433,7 @@ export default function LandingPage() {
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 text-sm text-muted-foreground sm:flex-row">
           <div className="flex items-center gap-2">
             <div className="flex h-6 w-6 items-center justify-center rounded bg-primary text-primary-foreground">
-              <Flame className="h-3.5 w-3.5" />
+              <ForgeMark className="h-4 w-4" />
             </div>
             <span className="font-display font-bold uppercase tracking-wide text-foreground">
               Forge
