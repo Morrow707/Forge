@@ -1,47 +1,62 @@
-import { useId } from "react";
-
-/** Forge's brand glyph -- an anvil (forging/strength) topped with a flame,
- * standing on a barbell whose plates double as the anvil's feet (gym +
- * forge in one shape, instead of two motifs bolted together). Drop-in
+/** Forge's brand glyph -- a flame rising off an anvil, resting on a gym
+ * weight stack, so the forge and the gym read as one emblem stacked
+ * top-to-bottom rather than two motifs bolted together. Drop-in
  * replacement for the old plain Lucide `Flame` wherever it was used as the
  * actual logo mark (the colored badge next to the "Forge" wordmark) --
- * NOT for places Flame is used as a generic icon (streaks, nav items).
- * The plate centers are real masked-out holes, so they show whatever sits
- * behind the mark rather than needing to match a hardcoded background.
- * Mask ids are per-instance (useId) since a page can mount this more than
- * once at a time (e.g. landing.tsx's nav bar and footer both do). */
+ * NOT for places Flame is used as a generic icon (streaks, nav items). */
 export function ForgeMark({ className }: { className?: string }) {
-  const uid = useId();
-  const leftMask = `${uid}-plate-l`;
-  const rightMask = `${uid}-plate-r`;
   return (
-    <svg viewBox="50 43 400 400" xmlns="http://www.w3.org/2000/svg" className={className}>
-      <defs>
-        <mask id={leftMask} maskUnits="userSpaceOnUse" x="0" y="0" width="500" height="500">
-          <rect x="0" y="0" width="500" height="500" fill="#fff" />
-          <circle cx="168" cy="358" r="26" fill="#000" />
-        </mask>
-        <mask id={rightMask} maskUnits="userSpaceOnUse" x="0" y="0" width="500" height="500">
-          <rect x="0" y="0" width="500" height="500" fill="#fff" />
-          <circle cx="344" cy="358" r="26" fill="#000" />
-        </mask>
-      </defs>
+    <svg viewBox="161 55 190 400" xmlns="http://www.w3.org/2000/svg" className={className}>
       <g fill="currentColor">
-        <rect x="190" y="344" width="132" height="28" rx="6" />
-        <circle cx="168" cy="358" r="56" mask={`url(#${leftMask})`} />
-        <circle cx="344" cy="358" r="56" mask={`url(#${rightMask})`} />
-        <polygon points="205,274 307,274 288,352 224,352" />
-        <polygon points="168,236 168,270 100,260" />
-        <rect x="168" y="228" width="176" height="48" rx="8" />
-        <path
-          d="M260,72
-             C224,120 212,162 226,199
-             C232,214 246,224 258,228
-             C270,223 286,214 294,198
-             C308,170 302,130 278,105
-             C272,98 265,85 260,72
-             Z"
-        />
+        {/* weight stack */}
+        <g transform="translate(102.4,269) scale(0.6)">
+          <rect x="196" y="110" width="120" height="26" rx="6" />
+          <rect x="188" y="142" width="136" height="28" rx="6" />
+          <rect x="180" y="176" width="152" height="30" rx="6" />
+          <rect x="170" y="212" width="172" height="32" rx="7" />
+          <rect x="158" y="250" width="196" height="34" rx="7" />
+        </g>
+        {/* anvil */}
+        <g transform="translate(83,83.2) scale(0.73)">
+          <path
+            d="M180,208
+               C180,200 184,194 192,194
+               L332,194
+               C340,194 346,200 346,208
+               L346,244
+               C346,252 340,258 332,258
+               L232,258
+               C204,258 178,244 140,238
+               C130,236 128,228 134,222
+               C160,214 172,210 180,208
+               Z"
+          />
+          <path
+            d="M212,258
+               C212,258 220,300 236,320
+               C244,330 244,340 236,346
+               L226,352
+               C270,352 286,352 296,346
+               L286,340
+               C278,330 278,320 286,310
+               C298,296 300,270 300,258
+               Z"
+          />
+        </g>
+        {/* flame */}
+        <g transform="translate(3,30)">
+          <path
+            d="M256,40
+               C280,70 298,90 302,110
+               C305,135 296,158 286,175
+               C276,192 266,204 256,208
+               C246,204 218,196 208,175
+               C200,158 208,140 232,132
+               C224,110 222,88 238,66
+               C244,56 250,46 256,40
+               Z"
+          />
+        </g>
       </g>
     </svg>
   );
