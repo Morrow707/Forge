@@ -1799,6 +1799,25 @@ export const storage = {
     return { entries, totals };
   },
 
+  // Bulk, today-only version of getNutritionTargetsForAthlete +
+  // getFoodLogForDate's totals -- powers the roster-wide Nutrition tab's
+  // per-athlete "goal vs hit today" summary without a dialog-per-athlete
+  // waterfall. Full history/editing still lives on the athlete's own
+  // nutrition tab (NutritionPanel), this is just the at-a-glance list view.
+  async getNutritionSummaryForRoster(coachId: number) {
+    const roster = await this.getRosterForCoach(coachId);
+    const today = formatISO(new Date(), { representation: "date" });
+    return Promise.all(
+      roster.map(async (athlete) => {
+        const [targets, { totals }] = await Promise.all([
+          this.getNutritionTargetsForAthlete(athlete.id),
+          this.getFoodLogForDate(athlete.id, today),
+        ]);
+        return { athleteId: athlete.id, targets: targets ?? null, totals };
+      }),
+    );
+  },
+
   async addFoodLogEntry(athleteId: number, input: CreateFoodLogEntryInput) {
     const [row] = await db
       .insert(foodLogEntries)

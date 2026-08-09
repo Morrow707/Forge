@@ -1544,6 +1544,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(roster);
   });
 
+  // Today-only "goal vs hit" summary for every roster athlete at once --
+  // powers the Nutrition tab's list view. Full history/editing per athlete
+  // still goes through /api/coach/roster/:athleteId/nutrition + /food-log.
+  app.get("/api/coach/nutrition-summary", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const summary = await storage.getNutritionSummaryForRoster(user.id);
+    res.json(summary);
+  });
+
   app.get("/api/coach/roster/:athleteId", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     const athleteId = Number(req.params.athleteId);
