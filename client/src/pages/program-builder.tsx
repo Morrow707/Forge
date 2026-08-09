@@ -542,7 +542,7 @@ export function ProgramBuilderPage({
                         </Badge>
                       )}
                     </div>
-                    <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+                    <div className="grid items-start gap-4 lg:grid-cols-2 xl:grid-cols-3">
                       {chunk.map((day, di) => (
                         <DayCard
                           key={day.key}
@@ -570,13 +570,10 @@ export function ProgramBuilderPage({
         </fieldset>
 
         {showAiChat && (
-          // flex/flex-col/overflow-hidden here (not just a fixed height) is
-          // load-bearing: ProgramAiChatPanel's Card sizes itself with
-          // flex-1/min-h-0 expecting a flex parent to stretch into -- without
-          // that, the card just grows to fit every message instead of
-          // scrolling internally, and the whole page has to scroll to read
-          // the conversation instead of this box scrolling on its own.
-          <div className="flex h-[75vh] max-h-[720px] flex-col overflow-hidden lg:sticky lg:top-24">
+          // ProgramAiChatPanel sizes and collapses itself (see its `open`
+          // state) -- this wrapper only needs to keep it pinned while the
+          // main column scrolls past it.
+          <div className="lg:sticky lg:top-24">
             <ProgramAiChatPanel apiBase={apiBase} programId={programId} onApplied={handleChatApplied} />
           </div>
         )}
@@ -702,7 +699,7 @@ function DayCard({
         />
 
         {day.isRestDay ? (
-          <div className="flex items-center justify-center gap-2 rounded-md border border-dashed border-border py-6 text-sm text-muted-foreground">
+          <div className="flex items-center justify-center gap-2 rounded-md border border-dashed border-border py-3 text-sm text-muted-foreground">
             <MoonStar className="h-4 w-4" />
             Recovery day
           </div>
@@ -801,20 +798,20 @@ function SupersetConnector({
   onToggle: () => void;
 }) {
   return (
-    <div className="flex items-center gap-2 py-0.5 pl-3">
-      <div className={cn("h-3 w-px", linked ? "bg-blue-500" : "bg-transparent")} />
+    <div className="flex items-center gap-1.5 py-0 pl-3">
+      <div className={cn("h-2 w-px", linked ? "bg-blue-500" : "bg-transparent")} />
       <button
         type="button"
         onClick={onToggle}
         title={linked ? "Unlink superset" : "Link into a superset"}
         className={cn(
-          "flex items-center gap-1 rounded-full border-2 px-2.5 py-1 text-[11px] font-bold transition-colors",
+          "flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold transition-colors",
           linked
             ? "border-blue-500 bg-blue-500 text-white"
-            : "border-blue-500 text-blue-500 hover:bg-blue-500/10",
+            : "border-border text-muted-foreground hover:border-blue-500 hover:text-blue-500",
         )}
       >
-        <Link2 className="h-3 w-3" />
+        <Link2 className="h-2.5 w-2.5" />
         {linked ? "Linked" : "Link"}
       </button>
     </div>

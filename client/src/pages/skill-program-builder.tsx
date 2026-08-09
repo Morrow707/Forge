@@ -300,7 +300,7 @@ export function SkillProgramBuilderPage({
                         className="h-8 max-w-xs border-none bg-transparent px-0 text-xs font-bold uppercase tracking-wide text-muted-foreground focus-visible:ring-0"
                       />
                     </div>
-                    <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+                    <div className="grid items-start gap-4 lg:grid-cols-2 xl:grid-cols-3">
                       {chunk.map((day, di) => (
                         <DayCard
                           key={day.key}
@@ -327,7 +327,7 @@ export function SkillProgramBuilderPage({
         </fieldset>
 
         {showAiChat && (
-          <div className="flex h-[75vh] max-h-[720px] flex-col overflow-hidden lg:sticky lg:top-24">
+          <div className="lg:sticky lg:top-24">
             <ProgramAiChatPanel
               apiBase={apiBase}
               programId={programId}
@@ -435,7 +435,7 @@ function DayCard({
         />
 
         {day.isRestDay ? (
-          <div className="flex items-center justify-center gap-2 rounded-md border border-dashed border-border py-6 text-sm text-muted-foreground">
+          <div className="flex items-center justify-center gap-2 rounded-md border border-dashed border-border py-3 text-sm text-muted-foreground">
             <MoonStar className="h-4 w-4" />
             Recovery day
           </div>

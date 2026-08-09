@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { apiRequest, getJson, ApiError } from "@/lib/queryClient";
 import { format, parseISO } from "date-fns";
 import { toast } from "sonner";
-import { Send, Sparkles, Lock, Loader2, Copy, Check } from "lucide-react";
+import { Send, Sparkles, Lock, Loader2, Copy, Check, ChevronUp, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { copyToClipboard } from "@/lib/clipboard";
 
@@ -50,6 +50,11 @@ export function ProgramAiChatPanel({
   const qc = useQueryClient();
   const [content, setContent] = useState("");
   const [copiedId, setCopiedId] = useState<number | null>(null);
+  // Collapsed by default -- a brand-new program shouldn't have to give up a
+  // full-height column just to advertise a feature nobody's used yet. Once
+  // a conversation already exists (loaded below), it opens automatically so
+  // a coach doesn't lose sight of prior turns.
+  const [open, setOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const fetchUrl = `${apiBase}/${resourcePath}/${programId}/chat`;
 
@@ -73,6 +78,10 @@ export function ProgramAiChatPanel({
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages?.length]);
 
+  useEffect(() => {
+    if (messages && messages.length > 0) setOpen(true);
+  }, [messages]);
+
   const send = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", fetchUrl, { content });
@@ -93,14 +102,14 @@ export function ProgramAiChatPanel({
   // can never sit between hooks.
   if (error instanceof ApiError && error.status === 402) {
     return (
-      <Card className="flex min-h-0 flex-1 flex-col">
+      <Card>
         <CardHeader className="shrink-0">
           <CardTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" />
             {title}
           </CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-1 flex-col items-center justify-center gap-3 py-10 text-center">
+        <CardContent className="flex flex-col items-center justify-center gap-3 py-10 text-center">
           <Lock className="h-8 w-8 text-muted-foreground" />
           <p className="max-w-xs text-sm text-muted-foreground">{error.message}</p>
         </CardContent>
@@ -109,16 +118,31 @@ export function ProgramAiChatPanel({
   }
 
   return (
-    <Card className="flex min-h-0 flex-1 flex-col">
+    <Card className={cn("flex flex-col overflow-hidden", open && "h-[75vh] max-h-[720px] min-h-0 flex-1")}>
       <CardHeader className="shrink-0">
-        <CardTitle className="flex items-center gap-2">
-          <Sparkles className="h-5 w-5 text-primary" />
-          {title}
-        </CardTitle>
-        <CardDescription>
-          Describe what you want -- the AI rewrites the program and applies it immediately.
-        </CardDescription>
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+          className="flex w-full items-center justify-between gap-2 text-left"
+        >
+          <CardTitle className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-primary" />
+            {title}
+          </CardTitle>
+          {open ? (
+            <ChevronUp className="h-4 w-4 shrink-0 text-muted-foreground" />
+          ) : (
+            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+          )}
+        </button>
+        {open && (
+          <CardDescription>
+            Describe what you want -- the AI rewrites the program and applies it immediately.
+          </CardDescription>
+        )}
       </CardHeader>
+      {open && (
       <CardContent className="flex min-h-0 flex-1 flex-col gap-3">
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto">
           {isLoading && <div className="h-24 animate-pulse rounded-md bg-surface" />}
@@ -209,6 +233,7 @@ export function ProgramAiChatPanel({
           </Button>
         </form>
       </CardContent>
+      )}
     </Card>
   );
 }
