@@ -14,6 +14,12 @@ function videoSearchUrl(name: string) {
   return `https://www.youtube.com/results?search_query=${encodeURIComponent(`${name} exercise tutorial`)}`;
 }
 
+// Same reasoning as videoSearchUrl above, phrased for skill/drill content
+// instead of a strength exercise so the search results actually match.
+function skillVideoSearchUrl(name: string) {
+  return `https://www.youtube.com/results?search_query=${encodeURIComponent(`${name} baseball softball drill`)}`;
+}
+
 // Derives what an exercise's athlete-facing logging fields should be from
 // its existing equipment/name text -- box combines with weight/bodyweight
 // rather than replacing it (e.g. "Dumbbell Box Step-Up" needs both).
@@ -2166,6 +2172,552 @@ async function main() {
       await storage.setUserRole(scott.id, "admin");
     }
     await storage.transferExerciseOwnership(coach.id, scott.id);
+  }
+
+  // Skills system: seed the Forge official Skill Bank with real
+  // baseball/softball drills across all six skill-taxonomy categories (see
+  // SKILL_TYPES in client/src/lib/skill-taxonomy.ts). Unlike the strength
+  // exercise library above, there's no legacy "seeded under the demo coach,
+  // transferred later" history to replicate -- these go straight to
+  // whichever admin currently owns the official Forge library
+  // (scott.morrow@live.com in production, the demo admin locally) so every
+  // coach sees them immediately via getVisibleSkillExercisesForCoach's
+  // admin-ownership union.
+  {
+    const skillLibraryOwner = scott ?? demoAdmin;
+    const allSkillExercises = await storage.getAllSkillExercises();
+    const existingSkillNames = new Set(allSkillExercises.map((e) => e.name));
+
+    const seedSkillDrills: Array<{
+      name: string;
+      skillType: string;
+      equipment: string;
+      instructions: string;
+    }> = [
+      // Hitting
+      {
+        name: "Tee Work - Inside Pitch",
+        skillType: "Hitting",
+        equipment: "Batting Tee, Balls",
+        instructions:
+          "Set the tee on the inside third of the plate and work on keeping the barrel inside the ball, driving it to the pull side.",
+      },
+      {
+        name: "Tee Work - Outside Pitch",
+        skillType: "Hitting",
+        equipment: "Batting Tee, Balls",
+        instructions:
+          "Set the tee on the outside third and practice staying back to drive the ball the other way without pulling off.",
+      },
+      {
+        name: "Front Toss",
+        skillType: "Hitting",
+        equipment: "Screen, Balls",
+        instructions:
+          "Coach flips underhand from the side behind an L-screen; focus on timing the load to the toss.",
+      },
+      {
+        name: "Soft Toss",
+        skillType: "Hitting",
+        equipment: "Balls, Net",
+        instructions:
+          "Partner tosses from a 45-degree angle into a net; work on a short, direct path to contact.",
+      },
+      {
+        name: "Live Batting Practice",
+        skillType: "Hitting",
+        equipment: "Bat, Balls, Screen",
+        instructions:
+          "Full-speed pitches from a mound or machine; track pitch recognition and apply game-speed timing.",
+      },
+      {
+        name: "One-Hand Drill",
+        skillType: "Hitting",
+        equipment: "Bat, Tee",
+        instructions:
+          "Hit off a tee using only the top hand to isolate and strengthen the direction of the swing path.",
+      },
+      {
+        name: "Walk-Up Swing Drill",
+        skillType: "Hitting",
+        equipment: "Bat, Tee or Toss",
+        instructions:
+          "Start with feet together, stride into the box as the ball is delivered to build a rhythmic load and stride.",
+      },
+      {
+        name: "Load and Stride Drill",
+        skillType: "Hitting",
+        equipment: "Bat",
+        instructions:
+          "Shadow-swing focusing on a controlled weight shift back before striding forward, no ball.",
+      },
+      {
+        name: "Two-Strike Approach Drill",
+        skillType: "Hitting",
+        equipment: "Bat, Balls, Screen",
+        instructions:
+          "Simulate two-strike counts, choking up and shortening the swing to protect the plate.",
+      },
+      {
+        name: "Opposite Field Hitting Drill",
+        skillType: "Hitting",
+        equipment: "Bat, Balls, Tee or Toss",
+        instructions: "Work pitches on the outer half specifically to drive the ball the opposite way.",
+      },
+      {
+        name: "High Tee Drill (Top Hand Path)",
+        skillType: "Hitting",
+        equipment: "Tee (raised), Balls",
+        instructions:
+          "Set the tee at chest height to train the top hand's path staying above the ball into contact.",
+      },
+      {
+        name: "Bunt Placement Drill",
+        skillType: "Hitting",
+        equipment: "Bat, Balls, Cones",
+        instructions: "Square around early and practice directing bunts to marked zones down each baseline.",
+      },
+      {
+        name: "Overload/Underload Bat Drill",
+        skillType: "Hitting",
+        equipment: "Weighted Bats",
+        instructions: "Alternate swings with a heavier and lighter bat to build bat speed through contrast training.",
+      },
+      {
+        name: "Contact Point Drill",
+        skillType: "Hitting",
+        equipment: "Tee, Balls, Cones",
+        instructions:
+          "Move the tee to different contact points (front hip, middle, deep) to feel how location changes the swing.",
+      },
+      // Fielding
+      {
+        name: "Short Hop Fielding Drill",
+        skillType: "Fielding",
+        equipment: "Glove, Balls",
+        instructions:
+          "Partner throws or rolls balls that bounce just in front of the glove; work on soft hands absorbing the short hop.",
+      },
+      {
+        name: "Backhand Fielding Drill",
+        skillType: "Fielding",
+        equipment: "Glove, Balls",
+        instructions: "Field ground balls hit to the backhand side, working on footwork to get the glove out in front.",
+      },
+      {
+        name: "Forehand Fielding Drill",
+        skillType: "Fielding",
+        equipment: "Glove, Balls",
+        instructions: "Field balls hit to the glove side, staying low and funneling the ball to the center of the body.",
+      },
+      {
+        name: "Barehand Charge Drill",
+        skillType: "Fielding",
+        equipment: "Balls (no glove)",
+        instructions:
+          "Charge slow rollers and field them barehand, fielding off the glove-side foot for a quick transfer and throw.",
+      },
+      {
+        name: "Double Play Turn Drill",
+        skillType: "Fielding",
+        equipment: "Glove, Balls, Bases",
+        instructions: "Practice receiving a feed at second base and completing the pivot and throw to first.",
+      },
+      {
+        name: "First Base Scoop Drill",
+        skillType: "Fielding",
+        equipment: "Glove, Balls",
+        instructions:
+          "Practice scooping short-hop and in-the-dirt throws at first base, working footwork to stay on the bag.",
+      },
+      {
+        name: "Pop Fly Communication Drill",
+        skillType: "Fielding",
+        equipment: "Glove, Balls",
+        instructions: "Two or more fielders call loudly for a fly ball to practice communication and avoid collisions.",
+      },
+      {
+        name: "Slow Roller Drill",
+        skillType: "Fielding",
+        equipment: "Glove, Balls",
+        instructions: "Charge a slow-hit ground ball, field it on the move, and make an accurate off-balance throw.",
+      },
+      {
+        name: "Bunt Fielding Drill",
+        skillType: "Fielding",
+        equipment: "Glove, Balls",
+        instructions:
+          "Infielders and pitchers practice charging bunts, barehanding, and making a quick throw to the correct base.",
+      },
+      {
+        name: "Wall Ball Reaction Drill",
+        skillType: "Fielding",
+        equipment: "Wall, Ball",
+        instructions: "Throw the ball against a wall at varying angles and speeds to react and field quick rebounds.",
+      },
+      {
+        name: "Ground Ball Angles Drill",
+        skillType: "Fielding",
+        equipment: "Glove, Balls, Cones",
+        instructions: "Field ground balls from varied angles to train proper angle of approach and shuffle-step positioning.",
+      },
+      {
+        name: "Diving Drill (Lateral Range)",
+        skillType: "Fielding",
+        equipment: "Glove, Balls, Mats",
+        instructions:
+          "Roll or hit balls just out of reach to either side, working the extension dive and quick recovery to a knee.",
+      },
+      {
+        name: "Glove-to-Hand Transfer Drill",
+        skillType: "Fielding",
+        equipment: "Glove, Balls",
+        instructions: "Field a ball and practice a rapid, clean transfer from glove to throwing hand without wasted motion.",
+      },
+      // Throwing
+      {
+        name: "Long Toss Progression",
+        skillType: "Throwing",
+        equipment: "Balls, Open Field",
+        instructions:
+          "Gradually increase throwing distance with an arc, then work back down with a flatter, more direct throw.",
+      },
+      {
+        name: "Crow Hop Throwing Drill",
+        skillType: "Throwing",
+        equipment: "Balls",
+        instructions:
+          "Practice the crow-hop footwork pattern (skip-step into throw) to generate momentum on outfield throws.",
+      },
+      {
+        name: "Rapid Fire Throws",
+        skillType: "Throwing",
+        equipment: "Balls, Partner",
+        instructions: "Two partners throw back and forth quickly at short distance to build quick hands and a fast release.",
+      },
+      {
+        name: "One-Knee Throwing Drill",
+        skillType: "Throwing",
+        equipment: "Balls, Partner",
+        instructions:
+          "Throw from a kneeling position to isolate the arm path and upper body mechanics without the lower half.",
+      },
+      {
+        name: "Wall Throw Drill",
+        skillType: "Throwing",
+        equipment: "Ball, Wall",
+        instructions: "Throw against a wall and field the rebound solo to repeat proper arm mechanics at high volume.",
+      },
+      {
+        name: "Quick Release Drill",
+        skillType: "Throwing",
+        equipment: "Balls, Partner",
+        instructions: "Emphasize getting rid of the ball as fast as possible after the catch, minimizing extra glove movement.",
+      },
+      {
+        name: "Turn and Burn Drill (Outfield)",
+        skillType: "Throwing",
+        equipment: "Balls",
+        instructions: "Outfielder fields the ball on the run and immediately turns the hips to throw without resetting the feet.",
+      },
+      {
+        name: "Jump Throw Drill (Infield)",
+        skillType: "Throwing",
+        equipment: "Glove, Balls",
+        instructions: "Field in the hole and practice a jump-throw to generate arm strength and carry on off-balance throws.",
+      },
+      {
+        name: "4-Seam Grip Accuracy Drill",
+        skillType: "Throwing",
+        equipment: "Balls, Target or Net",
+        instructions: "Throw at a fixed target focusing on a clean four-seam grip and consistent release point for accuracy.",
+      },
+      {
+        name: "Reverse Throws (Arm Care)",
+        skillType: "Throwing",
+        equipment: "Light Ball or Towel",
+        instructions: "Perform the throwing motion in reverse, decelerating patterns as a light arm-care warmup routine.",
+      },
+      {
+        name: "Shuffle Throw Drill",
+        skillType: "Throwing",
+        equipment: "Glove, Balls",
+        instructions: "Field a ball moving laterally and practice a quick shuffle of the feet before delivering an accurate throw.",
+      },
+      {
+        name: "Relay Throw Drill",
+        skillType: "Throwing",
+        equipment: "Balls, Multiple Players",
+        instructions: "Outfielder throws to a relay man who redirects the throw to a base, working exchange speed and accuracy.",
+      },
+      {
+        name: "Pull-Down Throwing Drill",
+        skillType: "Throwing",
+        equipment: "Balls, Radar Gun (optional)",
+        instructions:
+          "Short-distance, max-effort throws off a small crow hop to build arm strength and measure throwing velocity.",
+      },
+      // Catching
+      {
+        name: "Receiving Drill - Framing",
+        skillType: "Catching",
+        equipment: "Catcher's Gear, Balls",
+        instructions: "Receive pitches on the edges of the zone, working quiet hands and a subtle glove turn to frame strikes.",
+      },
+      {
+        name: "Blocking Balls in the Dirt",
+        skillType: "Catching",
+        equipment: "Catcher's Gear, Balls",
+        instructions: "Drop to the block position on pitches thrown short-hop to smother the ball in front of the plate.",
+      },
+      {
+        name: "Pop-Time Transfer Drill",
+        skillType: "Catching",
+        equipment: "Catcher's Gear, Balls, Stopwatch",
+        instructions:
+          "Receive a pitch and time the transfer/throw to second base, working to shave time off the exchange.",
+      },
+      {
+        name: "Blocking Drill - Two Knee",
+        skillType: "Catching",
+        equipment: "Catcher's Gear, Balls",
+        instructions:
+          "Practice the two-knee blocking stance for pitches in the dirt, rounding the shoulders to keep the ball in front.",
+      },
+      {
+        name: "Framing Low Strikes Drill",
+        skillType: "Catching",
+        equipment: "Catcher's Gear, Balls",
+        instructions: "Set up low in the zone and work receiving low strikes without stabbing downward at the pitch.",
+      },
+      {
+        name: "Bare-Hand Transfer Drill",
+        skillType: "Catching",
+        equipment: "Catcher's Gear, Balls",
+        instructions:
+          "Practice pulling the throwing hand out of the glove quickly on the transfer to speed up throws to bases.",
+      },
+      {
+        name: "Passed Ball Recovery Drill",
+        skillType: "Catching",
+        equipment: "Catcher's Gear, Balls, Backstop",
+        instructions: "Simulate a ball getting past the catcher and practice the sprint, recovery, and throw home.",
+      },
+      {
+        name: "Throw-Down to Second Drill",
+        skillType: "Catching",
+        equipment: "Catcher's Gear, Balls, Bases",
+        instructions: "From the crouch, receive and throw down to second base focusing on footwork out of the stance.",
+      },
+      {
+        name: "Backpick Drill",
+        skillType: "Catching",
+        equipment: "Catcher's Gear, Balls",
+        instructions: "Practice a quick backpick throw to first or third base to keep runners honest on their leads.",
+      },
+      {
+        name: "One-Hand Catching Drill",
+        skillType: "Catching",
+        equipment: "Catcher's Gear, Balls",
+        instructions:
+          "Receive pitches with the throwing hand tucked behind the back to build confidence in one-handed receiving.",
+      },
+      {
+        name: "Pitch Tracking Drill",
+        skillType: "Catching",
+        equipment: "Catcher's Gear, Balls",
+        instructions:
+          "Track the ball fully into the glove without peeking at the target early, improving focus through the catch.",
+      },
+      {
+        name: "Blocking Drill - Lateral Movement",
+        skillType: "Catching",
+        equipment: "Catcher's Gear, Balls",
+        instructions:
+          "Block pitches thrown to either side of the plate, working the shuffle needed to square the body to the ball.",
+      },
+      {
+        name: "Catcher Footwork Reset Drill",
+        skillType: "Catching",
+        equipment: "Catcher's Gear",
+        instructions: "Practice quickly resetting the feet into a strong throwing base immediately after receiving a pitch.",
+      },
+      // Footwork
+      {
+        name: "Ladder Drill - Infield Feet",
+        skillType: "Footwork",
+        equipment: "Agility Ladder",
+        instructions: "Run quick-feet ladder patterns to build the fast, choppy footwork needed for infield range.",
+      },
+      {
+        name: "First-Step Quickness Drill",
+        skillType: "Footwork",
+        equipment: "Cones",
+        instructions: "React to a visual or verbal cue and explode the first step in a random direction to train reaction time.",
+      },
+      {
+        name: "Crossover Step Drill",
+        skillType: "Footwork",
+        equipment: "Cones",
+        instructions: "Practice the crossover step used to cover ground laterally on balls hit into the gap or hole.",
+      },
+      {
+        name: "Base Running - Turn at First",
+        skillType: "Footwork",
+        equipment: "Bases",
+        instructions:
+          "Run through first base, working a proper banana-shaped turn to be in position to advance on an overthrow.",
+      },
+      {
+        name: "Lead-Off and Return Drill",
+        skillType: "Footwork",
+        equipment: "Bases",
+        instructions: "Practice taking a secondary lead and diving or sprinting back safely on a pickoff throw.",
+      },
+      {
+        name: "Rounding Bases Drill",
+        skillType: "Footwork",
+        equipment: "Bases",
+        instructions: "Run the bases at full speed, working the footwork to round each bag efficiently without losing speed.",
+      },
+      {
+        name: "Shuffle Step Fielding Drill",
+        skillType: "Footwork",
+        equipment: "Cones",
+        instructions:
+          "Practice the low, wide shuffle step infielders and outfielders use to move laterally while staying balanced.",
+      },
+      {
+        name: "Drop Step Drill (Outfield)",
+        skillType: "Footwork",
+        equipment: "Cones",
+        instructions: "Work the outfielder's first-step drop and turn to run down balls hit over the head.",
+      },
+      {
+        name: "Pivot Footwork Drill (Middle Infield)",
+        skillType: "Footwork",
+        equipment: "Glove, Balls, Bases",
+        instructions: "Practice the different pivot footwork options at second base for turning a double play.",
+      },
+      {
+        name: "Steal Break Drill",
+        skillType: "Footwork",
+        equipment: "Bases, Stopwatch",
+        instructions: "Practice the first-step burst out of a lead when stealing a base, timing the break for efficiency.",
+      },
+      {
+        name: "Home to First Sprint Drill",
+        skillType: "Footwork",
+        equipment: "Bases, Stopwatch",
+        instructions: "Sprint from home plate to first base at game speed, timing the run to track improvement.",
+      },
+      {
+        name: "Angle Route Drill (Outfield)",
+        skillType: "Footwork",
+        equipment: "Cones, Balls",
+        instructions: "Take proper pursuit angles to fly balls hit to either gap instead of running a direct, inefficient path.",
+      },
+      {
+        name: "Split-Step Timing Drill",
+        skillType: "Footwork",
+        equipment: "Balls",
+        instructions: "Practice timing a split-step (small hop) as the ball is hit to be ready to move in any direction.",
+      },
+      // Pitching
+      {
+        name: "Bullpen Session - Fastball Command",
+        skillType: "Pitching",
+        equipment: "Mound, Balls, Catcher",
+        instructions: "Throw a structured bullpen focused on locating the fastball to specific quadrants of the zone.",
+      },
+      {
+        name: "Towel Drill",
+        skillType: "Pitching",
+        equipment: "Towel",
+        instructions: "Go through the full pitching motion snapping a towel instead of a ball to groove arm-path mechanics.",
+      },
+      {
+        name: "Balance Point Drill",
+        skillType: "Pitching",
+        equipment: "None",
+        instructions: "Lift the leg to the balance point and hold to reinforce a stable, controlled leg lift before driving forward.",
+      },
+      {
+        name: "Long Toss for Pitchers",
+        skillType: "Pitching",
+        equipment: "Balls, Open Field",
+        instructions: "Extend throwing distance to build arm strength as part of a between-starts throwing program.",
+      },
+      {
+        name: "Change-Up Grip and Feel Drill",
+        skillType: "Pitching",
+        equipment: "Balls",
+        instructions: "Throw change-ups at short distance focusing purely on grip and release feel rather than velocity.",
+      },
+      {
+        name: "Curveball Spin Drill",
+        skillType: "Pitching",
+        equipment: "Balls, Spin Indicator (optional)",
+        instructions: "Throw curveballs focusing on consistent spin direction and finishing the pitch out in front.",
+      },
+      {
+        name: "Slide Step Drill (Runners On)",
+        skillType: "Pitching",
+        equipment: "Mound, Balls",
+        instructions: "Practice a quickened leg lift and delivery to hold runners on base while maintaining pitch quality.",
+      },
+      {
+        name: "Pickoff Move Drill - First Base",
+        skillType: "Pitching",
+        equipment: "Mound, Bases",
+        instructions: "Practice the pickoff move to first base, working quick, deceptive footwork within the rules.",
+      },
+      {
+        name: "Fielding Position Drill (PFP)",
+        skillType: "Pitching",
+        equipment: "Glove, Balls",
+        instructions: "Practice fielding comebackers and bunts off the mound and making accurate throws to each base.",
+      },
+      {
+        name: "Mound Repeat Drill",
+        skillType: "Pitching",
+        equipment: "Mound, Balls",
+        instructions: "Throw consecutive pitches focusing on repeating the exact same arm slot and release point each time.",
+      },
+      {
+        name: "Stride Length Drill",
+        skillType: "Pitching",
+        equipment: "Mound, Tape Measure (optional)",
+        instructions: "Mark and check stride length down the mound to build a consistent, athletic stride every pitch.",
+      },
+      {
+        name: "Glove-Side Command Drill",
+        skillType: "Pitching",
+        equipment: "Balls, Target or Net",
+        instructions: "Throw specifically to the glove-side edge of the plate to build command away from the arm side.",
+      },
+      {
+        name: "Rocker Drill (Weight Transfer)",
+        skillType: "Pitching",
+        equipment: "None",
+        instructions: "Rock weight back onto the drive leg and then transfer forward to reinforce proper sequencing off the rubber.",
+      },
+      {
+        name: "Bullpen Session - Off-Speed Mix",
+        skillType: "Pitching",
+        equipment: "Mound, Balls, Catcher",
+        instructions: "Throw a bullpen mixing fastballs with off-speed pitches to simulate real at-bat sequencing.",
+      },
+    ];
+
+    for (const drill of seedSkillDrills) {
+      if (existingSkillNames.has(drill.name)) continue;
+      await storage.createSkillExercise(skillLibraryOwner.id, {
+        ...drill,
+        sports: ["Baseball", "Softball"],
+        videoUrl: skillVideoSearchUrl(drill.name),
+      });
+    }
   }
 
   // Looked up system-wide (not scoped to this coach), same reasoning as the

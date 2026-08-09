@@ -3463,6 +3463,13 @@ Athlete's data:
   // CRUD) but against its own table, so a skills coach's bank and a
   // strength coach's bank never mix -- see the comment on skillExercises in
   // shared/schema.ts.
+  // System-wide, unfiltered -- same idempotency purpose as getAllExercises:
+  // used by one-off seeding scripts that need to know what already exists
+  // by name regardless of current owner.
+  async getAllSkillExercises() {
+    return db.query.skillExercises.findMany();
+  },
+
   async getVisibleSkillExercisesForCoach(coachId: number) {
     const coachIds = await this.getEffectiveCoachIds(coachId);
     const admins = await db.query.users.findMany({ where: eq(users.role, "admin") });
