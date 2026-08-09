@@ -255,6 +255,32 @@ async function assertCoachOwnsClass(coachId: number, classId: number) {
   return cls;
 }
 
+// Fires exactly at the moment a lesson actually becomes available -- never
+// on a schedule, since recomputeClassProgress only ever runs lazily off a
+// real request. Covers every reason a lesson opens: enrollment landing on
+// lesson 1, a coach's manual override, a paid unlock, or enough time/reps/
+// sessions having quietly accumulated since anyone last checked.
+async function notifyNewlyUnlockedLessons(
+  newlyUnlocked: Array<{
+    lessonId: number;
+    lessonNumber: number;
+    title: string;
+    classId: number;
+    className: string;
+    athleteId: number;
+  }>,
+) {
+  for (const lesson of newlyUnlocked) {
+    await notifyUser(
+      lesson.athleteId,
+      "class_lesson_unlocked",
+      "New Lesson Unlocked",
+      `Lesson ${lesson.lessonNumber}: ${lesson.title} is now available in ${lesson.className}.`,
+      `/athlete/classes/${lesson.classId}`,
+    );
+  }
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
   app.use("/uploads", express.static(path.join(process.cwd(), "server", "uploads")));
@@ -585,12 +611,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!roster.some((a) => a.id === parsed.data.athleteId)) {
       return res.status(400).json({ message: "Athlete not on your roster" });
     }
-    const enrollment = await storage.enrollAthleteInClass(
+    const { enrollment, newlyUnlocked } = await storage.enrollAthleteInClass(
       user.id,
       id,
       parsed.data.athleteId,
       parsed.data.startDate,
     );
+    await notifyNewlyUnlockedLessons(newlyUnlocked);
     res.status(201).json(enrollment);
   });
 
@@ -610,7 +637,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const enrollment = await storage.getClassEnrollmentForAthlete(parsed.data.athleteId, id);
       if (!enrollment) return res.status(404).json({ message: "Athlete not enrolled" });
-      await storage.manuallyUnlockLesson(enrollment.id, lessonId);
+      const newlyUnlocked = await storage.manuallyUnlockLesson(enrollment.id, lessonId);
+      await notifyNewlyUnlockedLessons(newlyUnlocked);
       const progress = await storage.getClassProgressForAthlete(parsed.data.athleteId, id);
       res.json(progress);
     },
@@ -3898,6 +3926,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // preview of a class they haven't joined yet.
       const coaches = await storage.getCoachesForAthlete(user.id);
       if (coaches.length > 0) return res.status(404).json({ message: "Class not found" });
+    } else {
+      // This is the one place an automatic (time/reps/sessions) unlock
+      // actually gets detected, since nothing runs on a schedule -- the
+      // athlete opening their own progress page IS the trigger.
+      const newlyUnlocked = await storage.recomputeClassProgress(enrollment.id);
+      await notifyNewlyUnlockedLessons(newlyUnlocked);
     }
     const progress = await storage.getClassProgressForAthlete(user.id, id);
     if (!progress || (!enrollment && !progress.class.isForgeOfficial)) {
@@ -3921,7 +3955,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!cls || !cls.isForgeOfficial) {
         return res.status(404).json({ message: "Class not found" });
       }
-      const enrollment = await storage.enrollSelfInClass(user.id, id, parsed.data.startDate);
+      const { enrollment, newlyUnlocked } = await storage.enrollSelfInClass(
+        user.id,
+        id,
+        parsed.data.startDate,
+      );
+      await notifyNewlyUnlockedLessons(newlyUnlocked);
       res.status(201).json(enrollment);
     },
   );
@@ -3942,7 +3981,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const enrollment = await storage.getClassEnrollmentForAthlete(user.id, id);
       if (!enrollment) return res.status(404).json({ message: "Not enrolled in this class" });
-      await storage.markLessonPurchased(enrollment.id, lessonId);
+      const newlyUnlocked = await storage.markLessonPurchased(enrollment.id, lessonId);
+      await notifyNewlyUnlockedLessons(newlyUnlocked);
       const progress = await storage.getClassProgressForAthlete(user.id, id);
       res.json(progress);
     },
