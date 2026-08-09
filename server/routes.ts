@@ -2592,6 +2592,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(entries);
   });
 
+  app.get("/api/coach/day-briefing", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const schema = z.object({ date: z.string() });
+    const parsed = schema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "date query param required" });
+    }
+    const briefing = await storage.getDayBriefingForCoach(user.id, parsed.data.date);
+    res.json(briefing);
+  });
+
   app.get("/api/coach/program-days/:id", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     const id = Number(req.params.id);

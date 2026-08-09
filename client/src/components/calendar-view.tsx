@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   addDays,
   addMonths,
@@ -46,7 +46,7 @@ export type CalendarEntry = {
 export type CalendarViewMode = "single-day" | "month" | "week" | "day";
 
 const VIEW_LABEL: Record<CalendarViewMode, string> = {
-  "single-day": "Day",
+  "single-day": "Today",
   day: "3-Day",
   week: "Week",
   month: "Month",
@@ -120,6 +120,7 @@ export function CalendarView({
   onEntryClick,
   onDayClick,
   initialView = "month",
+  singleDayContent,
 }: {
   entries: CalendarEntry[];
   onRangeChange: (startISO: string, endISO: string, view: CalendarViewMode) => void;
@@ -133,6 +134,13 @@ export function CalendarView({
    * program-day, so there's nothing to combine there. */
   onDayClick?: (dateISO: string, dayEntries: CalendarEntry[]) => void;
   initialView?: CalendarViewMode;
+  /** Opt-in override for the "Today" tab's content, given the active
+   * dateISO -- lets the coach's calendar swap in its own richer per-athlete
+   * daily briefing (program + correctives + health/readiness/recovery)
+   * instead of the default DayDetailList. Admin/athlete calendars omit this
+   * and get the plain grouped-by-program list, since there's no roster of
+   * other athletes to brief there. */
+  singleDayContent?: (dateISO: string) => ReactNode;
 }) {
   const [view, setView] = useState<CalendarViewMode>(initialView);
   const [cursor, setCursor] = useState(() => new Date());
@@ -229,13 +237,16 @@ export function CalendarView({
       {view === "day" && (
         <ThreeDayAgenda centerDate={cursor} entriesByDate={entriesByDate} onEntryClick={onEntryClick} />
       )}
-      {view === "single-day" && (
-        <DayDetailList
-          entries={entriesByDate.get(startISO) ?? []}
-          onEntryClick={onEntryClick}
-          emptyLabel="Nothing scheduled."
-        />
-      )}
+      {view === "single-day" &&
+        (singleDayContent ? (
+          singleDayContent(startISO)
+        ) : (
+          <DayDetailList
+            entries={entriesByDate.get(startISO) ?? []}
+            onEntryClick={onEntryClick}
+            emptyLabel="Nothing scheduled."
+          />
+        ))}
     </div>
   );
 }
