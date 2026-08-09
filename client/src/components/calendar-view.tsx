@@ -70,7 +70,7 @@ function rangeFor(mode: CalendarViewMode, cursor: Date) {
   return { start: subDays(cursor, 1), end: addDays(cursor, 1) };
 }
 
-function entryIcon(entry: CalendarEntry, className: string) {
+export function entryIcon(entry: CalendarEntry, className: string) {
   if (entry.isRestDay) return <MoonStar className={className} />;
   if (entry.kind === "skill") return <Target className={className} />;
   if (entry.completed) return <CheckCircle2 className={className} />;
@@ -114,11 +114,20 @@ export function CalendarView({
   entries,
   onRangeChange,
   onEntryClick,
+  onDayClick,
   initialView = "month",
 }: {
   entries: CalendarEntry[];
   onRangeChange: (startISO: string, endISO: string, view: CalendarViewMode) => void;
   onEntryClick: (entry: CalendarEntry) => void;
+  /** Opt-in: when provided, the month view combines same-program-same-day
+   * entries shared by multiple athletes into a single pill (instead of one
+   * colored pill per athlete), and both that combined pill and the date
+   * number become clickable to open a full day-detail view via this
+   * callback. Only the coach's roster-wide calendar passes this -- an
+   * athlete's or admin's own calendar never has more than one entry per
+   * program-day, so there's nothing to combine there. */
+  onDayClick?: (dateISO: string, dayEntries: CalendarEntry[]) => void;
   initialView?: CalendarViewMode;
 }) {
   const [view, setView] = useState<CalendarViewMode>(initialView);
@@ -205,6 +214,7 @@ export function CalendarView({
           cursor={cursor}
           entriesByDate={entriesByDate}
           onEntryClick={onEntryClick}
+          onDayClick={onDayClick}
         />
       )}
       {view === "week" && (
@@ -217,18 +227,69 @@ export function CalendarView({
   );
 }
 
+/** Same program, same day-in-program, same kind -- multiple athletes on an
+ * identical assignment collapse to one visual group. Different athletes on
+ * the same program but at different points in it (started on different
+ * dates) keep their own groups, since they're not actually on the same day. */
+function groupKey(e: CalendarEntry) {
+  return `${e.kind}:${e.programId}:${e.programDayId}`;
+}
+
+function groupDayEntries(dayEntries: CalendarEntry[]) {
+  const order: string[] = [];
+  const groups = new Map<string, CalendarEntry[]>();
+  for (const e of dayEntries) {
+    const key = groupKey(e);
+    const list = groups.get(key);
+    if (list) list.push(e);
+    else {
+      groups.set(key, [e]);
+      order.push(key);
+    }
+  }
+  return order.map((key) => groups.get(key)!);
+}
+
+function GroupedEntryPill({ group, onClick }: { group: CalendarEntry[]; onClick: () => void }) {
+  const rep = group[0];
+  const completedCount = group.filter((e) => e.completed).length;
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "flex w-full items-center gap-1 truncate rounded px-1.5 py-1 text-left text-[11px] font-semibold transition-colors sm:text-xs",
+        rep.isRestDay
+          ? "bg-secondary text-muted-foreground"
+          : rep.kind === "skill"
+            ? "bg-teal-500/20 text-teal-400 hover:bg-teal-500/30"
+            : completedCount === group.length
+              ? "bg-success/20 text-success hover:bg-success/30"
+              : "bg-primary/20 text-primary hover:bg-primary/30",
+      )}
+    >
+      {entryIcon(rep, "h-3 w-3 shrink-0")}
+      <span className="truncate">{rep.title}</span>
+      <span className="ml-auto shrink-0 rounded-full bg-background/40 px-1.5 text-[10px] leading-normal">
+        {rep.isRestDay ? group.length : `${completedCount}/${group.length}`}
+      </span>
+    </button>
+  );
+}
+
 function MonthGrid({
   start,
   end,
   cursor,
   entriesByDate,
   onEntryClick,
+  onDayClick,
 }: {
   start: Date;
   end: Date;
   cursor: Date;
   entriesByDate: Map<string, CalendarEntry[]>;
   onEntryClick: (entry: CalendarEntry) => void;
+  onDayClick?: (dateISO: string, dayEntries: CalendarEntry[]) => void;
 }) {
   const days = eachDayOfInterval({ start, end });
   return (
@@ -244,6 +305,7 @@ function MonthGrid({
         {days.map((day) => {
           const dateStr = formatISO(day, { representation: "date" });
           const dayEntries = entriesByDate.get(dateStr) ?? [];
+          const dayGroups = onDayClick ? groupDayEntries(dayEntries) : dayEntries.map((e) => [e]);
           const inMonth = isSameMonth(day, cursor);
           return (
             <div
@@ -255,50 +317,82 @@ function MonthGrid({
                 isToday(day) && "border-primary",
               )}
             >
-              <span
-                className={cn(
-                  "flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-semibold sm:h-5 sm:w-5 sm:text-xs",
-                  isToday(day) && "bg-primary text-primary-foreground",
-                )}
-              >
-                {format(day, "d")}
-                {isToday(day) && <span className="sr-only"> (Today)</span>}
-              </span>
+              {onDayClick && dayEntries.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => onDayClick(dateStr, dayEntries)}
+                  aria-label={`View full details for ${format(day, "MMMM d, yyyy")}`}
+                  className={cn(
+                    "flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-semibold transition-shadow hover:ring-2 hover:ring-primary/50 sm:h-5 sm:w-5 sm:text-xs",
+                    isToday(day) && "bg-primary text-primary-foreground",
+                  )}
+                >
+                  {format(day, "d")}
+                  {isToday(day) && <span className="sr-only"> (Today)</span>}
+                </button>
+              ) : (
+                <span
+                  className={cn(
+                    "flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-semibold sm:h-5 sm:w-5 sm:text-xs",
+                    isToday(day) && "bg-primary text-primary-foreground",
+                  )}
+                >
+                  {format(day, "d")}
+                  {isToday(day) && <span className="sr-only"> (Today)</span>}
+                </span>
+              )}
 
               {/* Mobile: icon-only dots so a full month fits on one screen
-                  without scrolling -- tapping still opens that entry. */}
+                  without scrolling -- tapping still opens that entry (or,
+                  once grouped, the full day detail). */}
               <div className="flex flex-1 flex-wrap items-end gap-0.5 sm:hidden">
-                {dayEntries.slice(0, 3).map((e) => (
-                  <button
-                    key={`${e.assignmentId}-${e.programDayId}`}
-                    onClick={() => onEntryClick(e)}
-                    aria-label={e.title}
-                    title={e.title}
-                    className={cn(
-                      "flex h-4 w-4 items-center justify-center rounded-full",
-                      e.isRestDay
-                        ? "bg-secondary text-muted-foreground"
-                        : e.kind === "skill"
-                          ? "bg-teal-500/25 text-teal-400"
-                          : e.completed
-                            ? "bg-success/25 text-success"
-                            : "bg-primary/25 text-primary",
-                    )}
-                  >
-                    {entryIcon(e, "h-2.5 w-2.5")}
-                  </button>
-                ))}
+                {dayGroups.slice(0, 3).map((group) => {
+                  const e = group[0];
+                  return (
+                    <button
+                      key={groupKey(e)}
+                      onClick={() =>
+                        group.length > 1 && onDayClick
+                          ? onDayClick(dateStr, dayEntries)
+                          : onEntryClick(e)
+                      }
+                      aria-label={e.title}
+                      title={e.title}
+                      className={cn(
+                        "flex h-4 w-4 items-center justify-center rounded-full",
+                        e.isRestDay
+                          ? "bg-secondary text-muted-foreground"
+                          : e.kind === "skill"
+                            ? "bg-teal-500/25 text-teal-400"
+                            : e.completed
+                              ? "bg-success/25 text-success"
+                              : "bg-primary/25 text-primary",
+                      )}
+                    >
+                      {entryIcon(e, "h-2.5 w-2.5")}
+                    </button>
+                  );
+                })}
               </div>
 
-              {/* Desktop/tablet: full text pills. */}
+              {/* Desktop/tablet: full text pills -- combined into one pill
+                  per shared program-day when onDayClick is wired up. */}
               <div className="hidden flex-1 flex-col gap-1 sm:flex">
-                {dayEntries.map((e) => (
-                  <EntryPill
-                    key={`${e.assignmentId}-${e.programDayId}`}
-                    entry={e}
-                    onClick={() => onEntryClick(e)}
-                  />
-                ))}
+                {dayGroups.map((group) =>
+                  group.length > 1 ? (
+                    <GroupedEntryPill
+                      key={groupKey(group[0])}
+                      group={group}
+                      onClick={() => onDayClick!(dateStr, dayEntries)}
+                    />
+                  ) : (
+                    <EntryPill
+                      key={groupKey(group[0])}
+                      entry={group[0]}
+                      onClick={() => onEntryClick(group[0])}
+                    />
+                  ),
+                )}
               </div>
             </div>
           );

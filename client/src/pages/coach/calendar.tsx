@@ -4,6 +4,7 @@ import { AppShell } from "@/components/app-shell";
 import { CalendarView, type CalendarEntry } from "@/components/calendar-view";
 import { CoachDayEditDialog } from "@/components/coach-day-edit-dialog";
 import { SkillDayViewDialog } from "@/components/skill-day-view-dialog";
+import { CoachDayDetailDialog } from "@/components/coach-day-detail-dialog";
 import {
   Select,
   SelectContent,
@@ -35,6 +36,9 @@ export default function CoachCalendar() {
     skillProgramDayId: number;
     athleteName: string;
   } | null>(null);
+  const [viewingDay, setViewingDay] = useState<{ date: string; entries: CalendarEntry[] } | null>(
+    null,
+  );
 
   const { data: entries = [], isLoading } = useQuery<CalendarEntry[]>({
     queryKey: ["/api/coach/calendar", range.start, range.end, athleteId],
@@ -49,6 +53,24 @@ export default function CoachCalendar() {
     refetchInterval: 60_000,
     refetchOnWindowFocus: true,
   });
+
+  function openEntry(e: CalendarEntry) {
+    setViewingDay(null);
+    if (e.kind === "skill") {
+      setViewingSkill({
+        skillProgramId: e.programId,
+        skillProgramDayId: e.programDayId,
+        athleteName: e.athleteName!,
+      });
+    } else {
+      setEditing({
+        programDayId: e.programDayId,
+        assignmentId: e.assignmentId,
+        athleteId: e.athleteId!,
+        athleteName: e.athleteName!,
+      });
+    }
+  }
 
   return (
     <AppShell
@@ -72,20 +94,8 @@ export default function CoachCalendar() {
       <CalendarView
         entries={entries}
         onRangeChange={(start, end) => setRange({ start, end })}
-        onEntryClick={(e) =>
-          e.kind === "skill"
-            ? setViewingSkill({
-                skillProgramId: e.programId,
-                skillProgramDayId: e.programDayId,
-                athleteName: e.athleteName!,
-              })
-            : setEditing({
-                programDayId: e.programDayId,
-                assignmentId: e.assignmentId,
-                athleteId: e.athleteId!,
-                athleteName: e.athleteName!,
-              })
-        }
+        onEntryClick={openEntry}
+        onDayClick={(date, dayEntries) => setViewingDay({ date, entries: dayEntries })}
       />
 
       {!isLoading && entries.length === 0 && (
@@ -120,6 +130,14 @@ export default function CoachCalendar() {
           }}
         />
       )}
+
+      <CoachDayDetailDialog
+        date={viewingDay?.date ?? null}
+        entries={viewingDay?.entries ?? []}
+        open={viewingDay !== null}
+        onOpenChange={(open) => !open && setViewingDay(null)}
+        onEntryClick={openEntry}
+      />
     </AppShell>
   );
 }
