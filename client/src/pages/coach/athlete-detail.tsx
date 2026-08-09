@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useParams, useLocation } from "wouter";
+import { useParams, useLocation, useSearch } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
@@ -98,6 +98,12 @@ export default function AthleteDetailPage() {
   const id = Number(athleteId);
   const [, navigate] = useLocation();
   const qc = useQueryClient();
+
+  // Lets the Nutrition list page (and anywhere else) deep-link straight to
+  // a specific tab -- e.g. /coach/roster/123?tab=nutrition -- instead of
+  // always landing on Body Metrics and making the coach click again.
+  const initialTab = new URLSearchParams(useSearch()).get("tab") || "metrics";
+  const [activeTab, setActiveTab] = useState(initialTab);
 
   const { data: athlete, isLoading } = useQuery<Athlete>({
     queryKey: [`/api/coach/roster/${id}`],
@@ -357,7 +363,7 @@ export default function AthleteDetailPage() {
           </div>
 
           <div>
-            <Tabs defaultValue="metrics">
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
               <TabsList className="h-auto flex-wrap justify-start">
                 <TabsTrigger value="metrics">Body Metrics</TabsTrigger>
                 <TabsTrigger value="testing">Testing History</TabsTrigger>

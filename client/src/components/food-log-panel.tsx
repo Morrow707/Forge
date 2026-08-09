@@ -101,7 +101,7 @@ const MICRO_TARGET_FIELDS = [
   ["zincMg", "Zinc", "mg"],
 ] as const;
 
-function ProgressBar({ label, value, target, unit }: { label: string; value: number; target: number | null; unit: string }) {
+export function ProgressBar({ label, value, target, unit }: { label: string; value: number; target: number | null; unit: string }) {
   const pct = target ? Math.min(100, Math.round((value / target) * 100)) : null;
   return (
     <div className="space-y-1">
