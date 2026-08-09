@@ -12,6 +12,7 @@ import { CalendarLinkDialog } from "@/components/calendar-link-dialog";
 import { BodyMetricsPanel } from "@/components/body-metrics-panel";
 import { TestingHistoryPanel } from "@/components/testing-history-panel";
 import { GoniometerPanel } from "@/components/goniometer-panel";
+import { WeaknessReportPanel } from "@/components/weakness-report-panel";
 import { GoalsPanel } from "@/components/goals-panel";
 import { SkillSessionsPanel } from "@/components/skill-sessions-panel";
 import { NutritionPanel } from "@/components/nutrition-panel";
@@ -369,6 +370,7 @@ export default function AthleteDetailPage() {
                 <TabsTrigger value="metrics">Body Metrics</TabsTrigger>
                 <TabsTrigger value="testing">Testing History</TabsTrigger>
                 <TabsTrigger value="rom">Goniometer</TabsTrigger>
+                <TabsTrigger value="weakness">Weakness Report</TabsTrigger>
                 <TabsTrigger value="goals">Goals</TabsTrigger>
                 <TabsTrigger value="skills">Skill Clips</TabsTrigger>
                 <TabsTrigger value="trophies">Trophies</TabsTrigger>
@@ -399,6 +401,17 @@ export default function AthleteDetailPage() {
                 <Card>
                   <CardContent className="p-5">
                     <GoniometerPanel athleteId={athlete.id} />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="weakness">
+                <Card>
+                  <CardContent className="p-5">
+                    <WeaknessReportPanel
+                      fetchUrl={`/api/coach/roster/${athlete.id}/weakness-reports`}
+                      generateUrl={`/api/coach/roster/${athlete.id}/weakness-report`}
+                    />
                   </CardContent>
                 </Card>
               </TabsContent>

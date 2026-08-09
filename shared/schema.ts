@@ -1459,6 +1459,42 @@ export const insertGoniometerReadingSchema = z.object({
   notes: z.string().optional().nullable(),
 });
 
+// One AI-generated deficit within a weakness report -- see weaknessReports
+// below. category is free text (not an enum) since the AI names it from
+// whatever data actually produced the flag (e.g. "Joint Mobility",
+// "Left/Right Asymmetry", "Load Management") rather than being boxed into
+// a fixed list that may not fit every situation.
+export const weaknessDeficitSchema = z.object({
+  title: z.string(),
+  category: z.string(),
+  evidence: z.string(),
+  whyItMatters: z.string(),
+  suggestedFocus: z.string(),
+});
+export type WeaknessDeficit = z.infer<typeof weaknessDeficitSchema>;
+
+// A point-in-time analysis, not a live-updating dashboard -- generated on
+// demand (coach-triggered, or a Free Agent analyzing themselves) from
+// whatever PT/S&C data exists at that moment, then kept as a dated snapshot
+// so a coach can look back and see whether a previously flagged deficit
+// actually improved. deficits stays a snapshot even if the underlying
+// goniometer/asymmetry/ACWR data it was built from is edited or deleted
+// afterward -- re-generating produces a new row, it never mutates this one.
+export const weaknessReports = pgTable("weakness_reports", {
+  id: serial("id").primaryKey(),
+  athleteId: integer("athlete_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  generatedBy: integer("generated_by")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  summary: text("summary").notNull(),
+  deficits: json("deficits").$type<WeaknessDeficit[]>().notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export type WeaknessReport = typeof weaknessReports.$inferSelect;
+
 // "skill" is Skills' own goal type -- targets a best (lowest) sprint-timing
 // elapsedSeconds for one skill drill, computed off skillSessionLogs the
 // same read-only, never-stored-achieved way "exercise"/"testing" are

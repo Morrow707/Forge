@@ -40,8 +40,10 @@ import {
   Target,
   Trophy,
   FileDown,
+  Sparkles,
 } from "lucide-react";
 import { GoalsPanel } from "@/components/goals-panel";
+import { WeaknessReportPanel } from "@/components/weakness-report-panel";
 import { StreakBadges } from "@/components/streak-badge";
 import { DigestBanner } from "@/components/digest-banner";
 import { TrophyCase, type AthleteTrophyView } from "@/components/trophy-case";
@@ -79,6 +81,11 @@ export default function AthleteProgress() {
   const [sharingPrIndex, setSharingPrIndex] = useState<number | null>(null);
   const [trendExercise, setTrendExercise] = useState<{ id: number; name: string } | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
+  const { data: coaches } = useQuery<{ id: number }[]>({
+    queryKey: ["/api/athlete/coaches"],
+    enabled: user?.role === "athlete",
+  });
+  const isFreeAgent = !!coaches && coaches.length === 0;
 
   async function handleSharePr(
     pr: {
@@ -368,6 +375,27 @@ export default function AthleteProgress() {
                 goalsUrl="/api/athlete/goals"
                 exercisesUrl="/api/athlete/exercises-with-history"
                 skillExercisesUrl="/api/athlete/skill-exercises-with-history"
+              />
+            </CardContent>
+          </Card>
+
+          <Card className="mt-4">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-primary" />
+                Weakness Report
+              </CardTitle>
+              <CardDescription>
+                {isFreeAgent
+                  ? "AI analysis of your ROM, asymmetry, load, wellness, and testing data."
+                  : "AI analysis of your ROM, asymmetry, load, wellness, and testing data -- ask your coach to generate a new one."}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <WeaknessReportPanel
+                fetchUrl="/api/athlete/weakness-reports"
+                generateUrl="/api/athlete/weakness-report"
+                canGenerate={isFreeAgent}
               />
             </CardContent>
           </Card>
