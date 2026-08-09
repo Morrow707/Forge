@@ -15,7 +15,6 @@ import {
   isYesterday,
   startOfMonth,
   startOfWeek,
-  subDays,
   subMonths,
   subWeeks,
 } from "date-fns";
@@ -44,9 +43,10 @@ export type CalendarEntry = {
   athleteName?: string;
 };
 
-export type CalendarViewMode = "month" | "week" | "day";
+export type CalendarViewMode = "single-day" | "month" | "week" | "day";
 
 const VIEW_LABEL: Record<CalendarViewMode, string> = {
+  "single-day": "Day",
   day: "3-Day",
   week: "Week",
   month: "Month",
@@ -65,9 +65,13 @@ function rangeFor(mode: CalendarViewMode, cursor: Date) {
       end: endOfWeek(cursor, { weekStartsOn: 1 }),
     };
   }
-  // "day" mode is actually a 3-day window (yesterday/today/tomorrow relative
-  // to the cursor) -- a single isolated day was rarely useful on its own.
-  return { start: subDays(cursor, 1), end: addDays(cursor, 1) };
+  if (mode === "single-day") {
+    return { start: cursor, end: cursor };
+  }
+  // "day" mode is a 3-day window starting at the cursor (cursor, +1, +2) --
+  // matches the dashboard's "Next 3 Days" widget, which is always
+  // forward-looking rather than centered on the cursor.
+  return { start: cursor, end: addDays(cursor, 2) };
 }
 
 export function entryIcon(entry: CalendarEntry, className: string) {
@@ -170,7 +174,9 @@ export function CalendarView({
       ? format(cursor, "MMMM yyyy")
       : view === "week"
         ? `${format(start, "MMM d")} – ${format(end, "MMM d, yyyy")}`
-        : `${format(start, "MMM d")} – ${format(end, "MMM d")}`;
+        : view === "single-day"
+          ? format(cursor, "EEEE, MMM d")
+          : `${format(start, "MMM d")} – ${format(end, "MMM d")}`;
 
   return (
     <div>
@@ -190,7 +196,7 @@ export function CalendarView({
           </Button>
         </div>
         <div className="flex items-center gap-1 rounded-md bg-secondary p-1">
-          {(["day", "week", "month"] as CalendarViewMode[]).map((m) => (
+          {(["single-day", "day", "week", "month"] as CalendarViewMode[]).map((m) => (
             <button
               key={m}
               onClick={() => setView(m)}
@@ -223,6 +229,13 @@ export function CalendarView({
       {view === "day" && (
         <ThreeDayAgenda centerDate={cursor} entriesByDate={entriesByDate} onEntryClick={onEntryClick} />
       )}
+      {view === "single-day" && (
+        <DayDetailList
+          entries={entriesByDate.get(startISO) ?? []}
+          onEntryClick={onEntryClick}
+          emptyLabel="Nothing scheduled."
+        />
+      )}
     </div>
   );
 }
@@ -248,6 +261,79 @@ function groupDayEntries(dayEntries: CalendarEntry[]) {
     }
   }
   return order.map((key) => groups.get(key)!);
+}
+
+/** The full "everything going on this day" breakdown -- every athlete
+ * scheduled that day, grouped by program so duplicates read as one block
+ * instead of a wall of identical rows. Shared by the "Day" tab above and
+ * CoachDayDetailDialog (opened from a month-view date), so both surfaces
+ * stay in sync automatically. */
+export function DayDetailList({
+  entries,
+  onEntryClick,
+  emptyLabel = "Nothing scheduled.",
+}: {
+  entries: CalendarEntry[];
+  onEntryClick: (entry: CalendarEntry) => void;
+  emptyLabel?: string;
+}) {
+  const groups = groupDayEntries(entries);
+
+  if (groups.length === 0) {
+    return <p className="py-8 text-center text-sm text-muted-foreground">{emptyLabel}</p>;
+  }
+
+  return (
+    <div className="space-y-4">
+      {groups.map((group) => {
+        const rep = group[0];
+        return (
+          <div key={groupKey(rep)}>
+            <div className="mb-1.5 flex items-center gap-2">
+              <div
+                className={cn(
+                  "flex h-7 w-7 shrink-0 items-center justify-center rounded-md",
+                  rep.isRestDay
+                    ? "bg-secondary text-muted-foreground"
+                    : rep.kind === "skill"
+                      ? "bg-teal-500/15 text-teal-400"
+                      : "bg-primary/15 text-primary",
+                )}
+              >
+                {entryIcon(rep, "h-4 w-4")}
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold">{rep.title}</p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {rep.programName}
+                  {!rep.isRestDay &&
+                    ` · ${rep.exerciseCount} exercise${rep.exerciseCount === 1 ? "" : "s"}`}
+                </p>
+              </div>
+              {group.length > 1 && (
+                <span className="ml-auto shrink-0 rounded-full bg-secondary px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                  {group.length} athletes
+                </span>
+              )}
+            </div>
+            <div className="space-y-1.5 pl-9">
+              {group.map((e) => (
+                <button
+                  key={e.assignmentId}
+                  type="button"
+                  onClick={() => onEntryClick(e)}
+                  className="flex w-full items-center justify-between gap-2 rounded-md border border-border px-3 py-2 text-left text-sm transition-colors hover:bg-surface-elevated"
+                >
+                  <span className="truncate font-medium">{e.athleteName ?? "View details"}</span>
+                  {e.completed && <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />}
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 function GroupedEntryPill({ group, onClick }: { group: CalendarEntry[]; onClick: () => void }) {
@@ -505,7 +591,7 @@ function ThreeDayAgenda({
   entriesByDate: Map<string, CalendarEntry[]>;
   onEntryClick: (entry: CalendarEntry) => void;
 }) {
-  const days = [subDays(centerDate, 1), centerDate, addDays(centerDate, 1)];
+  const days = [centerDate, addDays(centerDate, 1), addDays(centerDate, 2)];
   return (
     <div className="space-y-5">
       {days.map((day) => {
