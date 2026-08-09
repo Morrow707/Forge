@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Flame, Copy, Mail, ArrowLeft } from "lucide-react";
+import { Copy, Mail, ArrowLeft } from "lucide-react";
+import { ForgeMark } from "@/components/forge-mark";
 import { toast } from "sonner";
 
 export default function ForgotPasswordPage() {
@@ -38,7 +39,7 @@ export default function ForgotPasswordPage() {
       <div className="w-full max-w-md">
         <div className="mb-8 flex flex-col items-center gap-3">
           <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-            <Flame className="h-8 w-8" />
+            <ForgeMark className="h-9 w-9" />
           </div>
           <h1 className="font-display text-4xl font-extrabold uppercase tracking-wider">
             Forge
