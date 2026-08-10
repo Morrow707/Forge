@@ -1417,11 +1417,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
-    // athleteId is optional and only ever read from inside generateProgramDraft
-    // if it's the caller's own id or a real roster relationship -- an
-    // unrelated id just falls back to no profile, never an error, since
-    // this is best-effort personalization, not an authorization boundary
-    // guarding sensitive data.
+    // athleteId is optional; generateProgramDraft (via getAuthorizedAthleteAiContext)
+    // only reads that athlete's profile/analytics if it's the caller's own
+    // id or a real roster relationship -- this now includes coach-only
+    // health/ROM/asymmetry/ACWR data, so an unrelated id is a real
+    // authorization boundary, not just best-effort personalization: it
+    // resolves to no profile rather than an error, but never leaks another
+    // coach's athlete data.
     const draft = await storage.generateProgramDraft(
       user.id,
       parsed.data.prompt,
