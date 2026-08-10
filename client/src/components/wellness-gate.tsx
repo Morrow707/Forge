@@ -6,7 +6,6 @@ import { Label } from "@/components/ui/label";
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { useAuth } from "@/hooks/use-auth";
 import { Moon, Activity, Brain, Droplets, Focus, Pencil, X } from "lucide-react";
 import {
   SORENESS_SCALE,
@@ -27,7 +26,6 @@ type WellnessCheckin = {
   hydration: number;
   mentalFocus: number;
   bodyPainMap: string[];
-  onPeriod: boolean;
 } | null;
 
 /** Inline, always-editable check-in card for today's training session --
@@ -40,7 +38,6 @@ type WellnessCheckin = {
  * and only ever appears in the expanded edit form. */
 export function WellnessGate() {
   const qc = useQueryClient();
-  const { user } = useAuth();
   const { data, isLoading } = useQuery<WellnessCheckin>({
     queryKey: ["/api/athlete/wellness/today"],
     queryFn: () => getJson("/api/athlete/wellness/today"),
@@ -53,14 +50,6 @@ export function WellnessGate() {
   const [hydration, setHydration] = useState<number | null>(null);
   const [mentalFocus, setMentalFocus] = useState<number | null>(null);
   const [bodyPainMap, setBodyPainMap] = useState<string[]>([]);
-  const [onPeriod, setOnPeriod] = useState(false);
-
-  // Anyone who hasn't told us they're male gets the option -- gender is
-  // self-reported and non-binary/prefer-not-to-say/not-set athletes may
-  // still menstruate, so excluding anyone but an explicit "male" answer is
-  // the least presumptuous default. See onPeriod's own comment in
-  // shared/schema.ts for why this never reaches the athlete's coach.
-  const showPeriodToggle = user?.gender !== "male";
 
   // Re-sync the editable fields from whatever's on file whenever it
   // changes (first load, or right after a save) so opening the editor
@@ -73,7 +62,6 @@ export function WellnessGate() {
       setHydration(data.hydration);
       setMentalFocus(data.mentalFocus);
       setBodyPainMap(data.bodyPainMap);
-      setOnPeriod(data.onPeriod);
     }
   }, [data]);
 
@@ -86,7 +74,6 @@ export function WellnessGate() {
         hydration,
         mentalFocus,
         bodyPainMap,
-        onPeriod,
       });
       return res.json();
     },
@@ -251,27 +238,6 @@ export function WellnessGate() {
           })}
         </div>
       </div>
-      {showPeriodToggle && (
-        <div className="space-y-1.5">
-          <Label className="text-xs">On your period today? (optional, private)</Label>
-          <button
-            type="button"
-            aria-pressed={onPeriod}
-            onClick={() => setOnPeriod((v) => !v)}
-            className={cn(
-              "rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors",
-              onPeriod
-                ? "border-destructive bg-destructive/15 text-destructive"
-                : "border-border text-muted-foreground hover:border-primary/50",
-            )}
-          >
-            {onPeriod ? "Yes ✓" : "Yes"}
-          </button>
-          <p className="text-xs text-muted-foreground">
-            Only ever factors into your own readiness score -- your coach never sees this answer.
-          </p>
-        </div>
-      )}
       <Button
         className="w-full sm:w-auto"
         disabled={!canSubmit || submitMutation.isPending}

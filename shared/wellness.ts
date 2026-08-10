@@ -73,18 +73,6 @@ export type BodyPainPart = (typeof BODY_PAIN_PARTS)[number]["key"];
 // sixth input. Soreness and stress are inverted first (a lower raw value
 // there means better readiness); hydration and mental focus already run
 // low-to-high the same direction as the final score.
-//
-// onPeriod is the same kind of corroborating evidence as the pain map, not
-// an equally-weighted input: menstruation is a well-documented, real driver
-// of same-day fatigue/soreness/perceived readiness (lower estrogen/
-// progesterone in the early follicular phase measurably affects perceived
-// recovery for many athletes), so a flat penalty here reflects that rather
-// than requiring the athlete to somehow already know to rate their soreness
-// or sleep lower on those days. Deliberately smaller than the pain map's max
-// (10 vs. up to 20) since this is one factor, not open-ended per-spot
-// evidence. This field is optional and self-reported -- see onPeriod's own
-// comment on wellnessCheckins in shared/schema.ts for why it's never shown
-// to the athlete's coach, only its effect on the score they already see.
 export function computeReadiness(c: {
   sleepHours: number;
   soreness: number;
@@ -92,7 +80,6 @@ export function computeReadiness(c: {
   hydration: number;
   mentalFocus: number;
   bodyPainMap?: string[] | null;
-  onPeriod?: boolean | null;
 }): { score: number; level: ReadinessLevel } {
   const sleepScore =
     c.sleepHours >= 8
@@ -109,8 +96,7 @@ export function computeReadiness(c: {
   const avg = (sleepScore + sorenessScore + stressScore + c.hydration + c.mentalFocus) / 5;
   const base100 = ((avg - 1) / 4) * 100;
   const painPenalty = Math.min((c.bodyPainMap?.length ?? 0) * 4, 20);
-  const periodPenalty = c.onPeriod ? 10 : 0;
-  const score = Math.max(0, Math.min(100, Math.round(base100 - painPenalty - periodPenalty)));
+  const score = Math.max(0, Math.min(100, Math.round(base100 - painPenalty)));
   const level: ReadinessLevel = score >= 70 ? "green" : score >= 40 ? "yellow" : "red";
   return { score, level };
 }
