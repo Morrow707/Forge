@@ -426,28 +426,44 @@ export function BarTrackerDialog({
       streamRef.current = stream;
       if (videoRef.current) videoRef.current.srcObject = stream;
     };
-    // Jump mode also asks for the mic, purely for the optional landing-audio
-    // confirmation (see audio-landing.ts) -- lift modes never request it at
-    // all. If the combined request fails (mic permission denied, no mic
-    // present), fall back to video-only rather than blocking the athlete
-    // from tracking at all over an optional refinement.
+    // Video-only, always -- jump mode used to also request the mic here for
+    // the optional landing-audio confirmation (see audio-landing.ts), but on
+    // iOS that silently interrupts (and doesn't resume) whatever music the
+    // athlete had playing, just to capture a signal that's explicitly a
+    // supplementary confirmation and never a requirement. Not a trade worth
+    // making for every jump-mode session -- LandingAudioListener.start()
+    // already no-ops cleanly against a stream with no audio track, so
+    // dropping the mic request here doesn't need any change on that end.
     const videoOnlyConstraints = { video: { facingMode: "environment" as const } };
-    if (mode === "jump") {
-      navigator.mediaDevices
-        .getUserMedia({ ...videoOnlyConstraints, audio: true })
-        .then(attachStream)
-        .catch(() => {
-          navigator.mediaDevices
-            .getUserMedia(videoOnlyConstraints)
-            .then(attachStream)
-            .catch(() => setCameraError("Camera access denied or unavailable."));
-        });
-    } else {
+    const acquireCamera = () => {
       navigator.mediaDevices
         .getUserMedia(videoOnlyConstraints)
-        .then(attachStream)
+        .then((stream) => {
+          setCameraError(null);
+          attachStream(stream);
+        })
         .catch(() => setCameraError("Camera access denied or unavailable."));
-    }
+    };
+    acquireCamera();
+
+    // Mobile browsers -- iOS Safari and installed PWAs especially -- suspend
+    // or fully end the camera's tracks once the app is backgrounded, and
+    // never resume them on their own. Without this, coming back from the
+    // home screen leaves the athlete staring at a dead, frozen/black
+    // <video> with no way back into tracking short of force-quitting the
+    // app. Stop whatever's left of the old stream and grab a fresh one the
+    // moment the tab is visible again -- previewTick/tick already poll
+    // until the video has real dimensions, so a freshly attached stream
+    // picks the preview/tracking loop back up on its own.
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== "visible") return;
+      const stillLive = streamRef.current?.getVideoTracks().some((t) => t.readyState === "live");
+      if (stillLive) return;
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+      acquireCamera();
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     const handleOrientation = (e: DeviceOrientationEvent) => {
       if (e.beta != null) setTilt(Math.round(e.beta) - 90);
@@ -456,6 +472,7 @@ export function BarTrackerDialog({
 
     return () => {
       window.removeEventListener("deviceorientation", handleOrientation);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       streamRef.current?.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
