@@ -94,6 +94,25 @@ export const trainingStylePreferenceEnum = pgEnum("training_style_preference", [
   "traditional",
   "combination_circuit",
 ]);
+// Free Agent nutrition AI personalization, asked once via a short
+// questionnaire (see setNutritionGoalSchema/the nutrition goal routes) and
+// remembered thereafter -- the person doesn't change, but their goal might,
+// which is what the "Set new goal" reset (nulling both users columns below)
+// is for. Deliberately short -- four broad buckets, not a diet plan.
+export const NUTRITION_GOALS = [
+  "build_muscle",
+  "lose_fat",
+  "improve_performance",
+  "general_health",
+] as const;
+export type NutritionGoal = (typeof NUTRITION_GOALS)[number];
+export const nutritionGoalEnum = pgEnum("nutrition_goal", NUTRITION_GOALS);
+export const NUTRITION_GOAL_LABEL: Record<NutritionGoal, string> = {
+  build_muscle: "Build muscle",
+  lose_fat: "Lose fat",
+  improve_performance: "Improve sport performance",
+  general_health: "General health",
+};
 // Classic block-periodization phase for a coach-defined training block
 // (a run of one or more weeks grouped under one goal) -- distinct from
 // seasonPhase above, which is the athlete's competitive-calendar context,
@@ -159,6 +178,13 @@ export const users = pgTable(
     position: text("position"),
     seasonPhase: seasonPhaseEnum("season_phase"),
     trainingStylePreference: trainingStylePreferenceEnum("training_style_preference"),
+    // Free Agent nutrition AI personalization -- see NUTRITION_GOALS above
+    // and setNutritionGoalSchema below. Null means the athlete hasn't
+    // answered the one-time questionnaire yet, which is exactly what the
+    // client checks to decide whether to show it instead of the normal ask
+    // box. "Set new goal" just nulls both back out to re-trigger it.
+    nutritionGoal: nutritionGoalEnum("nutrition_goal"),
+    nutritionGoalNote: text("nutrition_goal_note"),
     // Coach-entered testing/combine snapshot -- a fast manual number from a
     // testing day (tryouts, combine, quick assessment), deliberately
     // separate from and not derived from actual logged workout sets (which
@@ -1617,6 +1643,44 @@ export const submitWellnessCheckinSchema = z.object({
   mentalFocus: z.number().int().min(1).max(5).default(3),
   bodyPainMap: z.array(z.string()).max(BODY_PAIN_PARTS.length).default([]),
 });
+
+// Self-reported by the athlete (or logged by a coach for a roster athlete),
+// one row per injury -- when it happened and which body part, so the AI
+// program builder can add correctives around it or stay cautious near it
+// (see getAthleteAiContext) without the athlete having to re-explain it in
+// every chat. `resolved` lets an old, healed injury stay on file as useful
+// history while the AI weighs it less heavily than something still active
+// -- see the "months ago" framing built in storage.ts. `bodyPart` reuses
+// the same BODY_PAIN_PARTS vocabulary as the daily wellness check-in's pain
+// map for a consistent taxonomy across the app, but stays free text (not a
+// DB enum) the same way exercise taxonomy fields do, so a coach can always
+// describe something the fixed list doesn't cover.
+export const injuryHistory = pgTable(
+  "injury_history",
+  {
+    id: serial("id").primaryKey(),
+    athleteId: integer("athlete_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    bodyPart: text("body_part").notNull(),
+    occurredOn: date("occurred_on").notNull(),
+    description: text("description"),
+    resolved: boolean("resolved").notNull().default(false),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    athleteIdx: index("injury_history_athlete_idx").on(table.athleteId, table.occurredOn),
+  }),
+);
+
+export type InjuryHistoryEntry = typeof injuryHistory.$inferSelect;
+
+export const submitInjurySchema = z.object({
+  bodyPart: z.string().trim().min(1).max(60),
+  occurredOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD"),
+  description: z.string().trim().max(500).optional().nullable(),
+});
+export type SubmitInjuryInput = z.infer<typeof submitInjurySchema>;
 
 export const caraActivityTypeEnum = pgEnum("cara_activity_type", [
   "training", // auto-started the moment the day's readiness check-in is submitted
@@ -3273,6 +3337,14 @@ export const updateNutritionTargetsSchema = z.object({
 });
 export type UpdateNutritionTargetsInput = z.infer<typeof updateNutritionTargetsSchema>;
 export type NutritionTargets = typeof nutritionTargets.$inferSelect;
+
+// The nutrition AI's one-time (until reset) goal questionnaire -- see
+// NUTRITION_GOALS/the users.nutritionGoal columns above.
+export const setNutritionGoalSchema = z.object({
+  nutritionGoal: z.enum(NUTRITION_GOALS),
+  nutritionGoalNote: z.string().trim().max(300).optional().nullable(),
+});
+export type SetNutritionGoalInput = z.infer<typeof setNutritionGoalSchema>;
 
 export const testingTrendsQuerySchema = z.object({
   metric: z.enum([

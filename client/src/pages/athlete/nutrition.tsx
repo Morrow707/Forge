@@ -30,6 +30,7 @@ export default function AthleteNutrition() {
         nutritionUrl="/api/athlete/nutrition"
         editable={isFreeAgent}
         askUrl={isFreeAgent ? "/api/athlete/nutrition/ask" : undefined}
+        goalUrl={isFreeAgent ? "/api/athlete/nutrition/goal" : undefined}
         foodLogUrl="/api/athlete/food-log"
         foodLogEditable
       />

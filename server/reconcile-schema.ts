@@ -1039,6 +1039,23 @@ CREATE TABLE IF NOT EXISTS "academy_quiz_answers" (
   "explanation" text NOT NULL
 );
 CREATE INDEX IF NOT EXISTS "academy_quiz_answers_question_idx" ON "academy_quiz_answers" ("question_id");
+
+DO $$ BEGIN
+  CREATE TYPE "nutrition_goal" AS ENUM ('build_muscle', 'lose_fat', 'improve_performance', 'general_health');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "nutrition_goal" nutrition_goal;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "nutrition_goal_note" text;
+
+CREATE TABLE IF NOT EXISTS "injury_history" (
+  "id" serial PRIMARY KEY,
+  "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "body_part" text NOT NULL,
+  "occurred_on" date NOT NULL,
+  "description" text,
+  "resolved" boolean NOT NULL DEFAULT false,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "injury_history_athlete_idx" ON "injury_history" ("athlete_id", "occurred_on");
 `;
 
 async function main() {

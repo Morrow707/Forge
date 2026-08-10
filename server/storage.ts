@@ -41,6 +41,7 @@ import {
   nutritionTargets,
   goals,
   wellnessCheckins,
+  injuryHistory,
   caraSessions,
   athleteTrophies,
   readinessBriefings,
@@ -64,6 +65,8 @@ import {
   nutritionKnowledge,
   foodLogEntries,
   weaknessDeficitSchema,
+  PERIODIZATION_PHASE_LABEL,
+  NUTRITION_GOAL_LABEL,
   type InsertUser,
 } from "@shared/schema";
 import { classifyGoniometerReading, GONIOMETER_JOINTS } from "@shared/goniometer";
@@ -85,6 +88,8 @@ import type {
   InsertGoniometerReading,
   WeaknessDeficit,
   UpdateNutritionTargetsInput,
+  SubmitInjuryInput,
+  SetNutritionGoalInput,
   CreateGoalInput,
   AiKnowledgeMessage,
   NutritionKnowledgeMessage,
@@ -128,6 +133,7 @@ import {
   isWithinInterval,
   startOfWeek,
   differenceInCalendarDays,
+  differenceInCalendarMonths,
 } from "date-fns";
 
 // A rep's asymmetry only counts toward a flag when it's a real, repeated
@@ -470,6 +476,44 @@ function formatTrainingStylePreference(pref: string | null | undefined): string 
     default:
       return "not set -- infer from the request's own wording";
   }
+}
+
+// Same vocabulary-matching role as formatSeasonPhase above, for the
+// nutrition AI's dynamicSystem prompt.
+function formatNutritionGoal(goal: string | null | undefined, note: string | null | undefined): string {
+  if (!goal) return "not set yet -- the athlete hasn't answered the nutrition goal questionnaire";
+  const label = NUTRITION_GOAL_LABEL[goal as keyof typeof NUTRITION_GOAL_LABEL] ?? goal;
+  return note ? `${label} (athlete's own note: "${note}")` : label;
+}
+
+// Summarizes an athlete's logged injury history for the AI, newest first,
+// with a plain-language recency label ("this month" / "N months ago" / "N
+// years ago") so the model can reason about staleness itself -- e.g. "no
+// injuries within the last 6 months" -- without the caller having to
+// pre-filter by date. Resolved injuries stay in the list (useful context,
+// e.g. "used to have knee pain") but are labeled as such so the AI weighs
+// them less heavily than something still active.
+function formatInjuryHistoryForAi(
+  entries: { bodyPart: string; occurredOn: string; description: string | null; resolved: boolean }[],
+): string {
+  if (entries.length === 0) return "none logged";
+  const today = new Date();
+  return entries
+    .map((e) => {
+      const months = differenceInCalendarMonths(today, parseISO(e.occurredOn));
+      const recency =
+        months <= 0
+          ? "this month"
+          : months === 1
+            ? "1 month ago"
+            : months < 24
+              ? `${months} months ago`
+              : `${Math.floor(months / 12)} years ago`;
+      const status = e.resolved ? "resolved" : "not marked resolved -- stay cautious";
+      const desc = e.description ? ` -- ${e.description}` : "";
+      return `${e.bodyPart.replace(/_/g, " ")}, occurred ${recency} (${e.occurredOn}), ${status}${desc}`;
+    })
+    .join("; ");
 }
 
 // ============================================================================
@@ -1802,6 +1846,42 @@ export const storage = {
     return row;
   },
 
+  // ---------- Nutrition goal (nutrition AI personalization) ----------
+  // Null means the athlete hasn't answered the one-time questionnaire yet
+  // -- the client checks this to decide whether to show it instead of the
+  // normal ask box. See users.nutritionGoal in schema.ts.
+  async getNutritionGoalForAthlete(athleteId: number) {
+    const [row] = await db
+      .select({
+        nutritionGoal: users.nutritionGoal,
+        nutritionGoalNote: users.nutritionGoalNote,
+      })
+      .from(users)
+      .where(eq(users.id, athleteId));
+    return row ?? null;
+  },
+
+  async setNutritionGoalForAthlete(athleteId: number, input: SetNutritionGoalInput) {
+    const [row] = await db
+      .update(users)
+      .set({ nutritionGoal: input.nutritionGoal, nutritionGoalNote: input.nutritionGoalNote ?? null })
+      .where(eq(users.id, athleteId))
+      .returning({ nutritionGoal: users.nutritionGoal, nutritionGoalNote: users.nutritionGoalNote });
+    return row;
+  },
+
+  // Wipes the goal so the client re-shows the questionnaire -- the "Set new
+  // goal" action, not a delete of any history (there isn't one; this is a
+  // single current-state pair of columns, same treatment as healthStatus).
+  async resetNutritionGoalForAthlete(athleteId: number) {
+    const [row] = await db
+      .update(users)
+      .set({ nutritionGoal: null, nutritionGoalNote: null })
+      .where(eq(users.id, athleteId))
+      .returning({ nutritionGoal: users.nutritionGoal, nutritionGoalNote: users.nutritionGoalNote });
+    return row;
+  },
+
   // ---------- Food log ----------
   // What an athlete actually ate, logged against the nutritionTargets plan
   // above -- barcode-scan/search results (see server/food-lookup.ts) or
@@ -2059,6 +2139,45 @@ export const storage = {
       if (!latestByKey.has(key)) latestByKey.set(key, r);
     }
     return Array.from(latestByKey.values());
+  },
+
+  // ---------- Injury history ----------
+  // Self-reported (or coach-logged) history of injuries by body part and
+  // date -- feeds getAthleteAiContext below so the program-builder AI can
+  // add correctives around a still-recent or unresolved injury, or just
+  // stay cautious near it, without the athlete re-explaining it in every
+  // chat.
+  async addInjuryHistoryEntry(athleteId: number, data: SubmitInjuryInput) {
+    const [row] = await db
+      .insert(injuryHistory)
+      .values({ athleteId, ...data })
+      .returning();
+    return row;
+  },
+
+  async getInjuryHistoryForAthlete(athleteId: number) {
+    return db.query.injuryHistory.findMany({
+      where: eq(injuryHistory.athleteId, athleteId),
+      orderBy: desc(injuryHistory.occurredOn),
+    });
+  },
+
+  // Scoped to this athlete's own rows -- returns null (so the caller can
+  // 404) rather than updating/deleting nothing silently if the id doesn't
+  // belong to them.
+  async setInjuryResolved(athleteId: number, id: number, resolved: boolean) {
+    const [row] = await db
+      .update(injuryHistory)
+      .set({ resolved })
+      .where(and(eq(injuryHistory.id, id), eq(injuryHistory.athleteId, athleteId)))
+      .returning();
+    return row ?? null;
+  },
+
+  async deleteInjuryHistoryEntry(athleteId: number, id: number) {
+    await db
+      .delete(injuryHistory)
+      .where(and(eq(injuryHistory.id, id), eq(injuryHistory.athleteId, athleteId)));
   },
 
   // ---------- Goals ----------
@@ -2590,12 +2709,33 @@ Based on this athlete's actual rate of improvement, suggest a realistic target v
   // briefings, digests, form-check review) should instruct the model not to
   // recite the coach-only figures back to the athlete verbatim -- use them
   // to inform a better answer, not to leak them.
+  // Resolves today's active assignment (if any) to its program block/phase
+  // via the calendar -- reuses getCalendarForAthlete rather than
+  // reimplementing its date-to-week-number/overlapping-assignment logic,
+  // since that's already solved correctly there. Null if there's no
+  // training entry today or its week isn't assigned to a block.
+  async getCurrentTrainingPhaseForAthlete(athleteId: number): Promise<string | null> {
+    const today = formatISO(new Date(), { representation: "date" });
+    const entries = await this.getCalendarForAthlete(athleteId, today, today);
+    const exerciseEntry = entries.find((e: any) => e.kind === "exercise" && !e.isRestDay);
+    if (!exerciseEntry) return null;
+    const day = await db.query.programDays.findFirst({
+      where: eq(programDays.id, (exerciseEntry as any).programDayId),
+      with: { week: { with: { block: true } } },
+    });
+    const block = day?.week?.block;
+    if (!block) return null;
+    return `${block.name}${block.phase ? ` (${PERIODIZATION_PHASE_LABEL[block.phase]} phase)` : ""}`;
+  },
+
   async getAthleteAiContext(athleteId: number): Promise<string> {
-    const [user, latestGoniometer, asymmetryFlags, acwrHistory] = await Promise.all([
+    const [user, latestGoniometer, asymmetryFlags, acwrHistory, currentPhase, injuries] = await Promise.all([
       db.query.users.findFirst({ where: eq(users.id, athleteId) }),
       this.getLatestGoniometerReadingsForAthlete(athleteId),
       this.getRecentLegAsymmetryFlagsForAthlete(athleteId),
       this.getAcwrHistoryForAthlete(athleteId, 60),
+      this.getCurrentTrainingPhaseForAthlete(athleteId),
+      this.getInjuryHistoryForAthlete(athleteId),
     ]);
     if (!user) return "No profile on file for this athlete.";
 
@@ -2642,6 +2782,9 @@ Based on this athlete's actual rate of improvement, suggest a realistic target v
 - Position: ${user.position?.trim() || "not set"}
 - Season phase: ${formatSeasonPhase(user.seasonPhase)}
 - Training style preference: ${formatTrainingStylePreference(user.trainingStylePreference)}
+- Current training block/phase (from their active assigned program, if any -- cross-reference this against nutrition and program-building decisions, e.g. a new strength/intensification block usually means higher protein and calorie needs): ${currentPhase ?? "no active training block today (no assignment, a rest day, or the assigned program doesn't use blocks)"}
+- Nutrition goal (Free Agent nutrition AI questionnaire): ${formatNutritionGoal(user.nutritionGoal, user.nutritionGoalNote)}
+- Injury history (self-reported, dates and body parts): ${formatInjuryHistoryForAi(injuries)}
 - Health status (coach-flagged, not shown to the athlete directly): ${user.healthStatus}
 - Combine/testing bests on file: ${testingParts.length > 0 ? testingParts.join(", ") : "none recorded"}
 - Joint range-of-motion flags (coach/PT-measured, not shown to the athlete directly): ${goniometerText}

@@ -54,6 +54,8 @@ import {
   substituteExerciseSchema,
   formFaultSchema,
   updateNutritionTargetsSchema,
+  setNutritionGoalSchema,
+  submitInjurySchema,
   createFoodLogEntrySchema,
   updateFoodLogEntrySchema,
   logCaraActivitySchema,
@@ -1773,6 +1775,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
+  // Injury history -- a coach can view and log entries for their own
+  // roster athlete, same roster-scoped pattern as goniometer readings
+  // above. The athlete's own /api/athlete/injury-history routes cover
+  // self-logging.
+  app.get(
+    "/api/coach/roster/:athleteId/injury-history",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      const onRoster = await storage.getRosterAthleteForCoach(user.id, athleteId);
+      if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
+      const history = await storage.getInjuryHistoryForAthlete(athleteId);
+      res.json(history);
+    },
+  );
+
+  app.post(
+    "/api/coach/roster/:athleteId/injury-history",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      const onRoster = await storage.getRosterAthleteForCoach(user.id, athleteId);
+      if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
+      const parsed = submitInjurySchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      const entry = await storage.addInjuryHistoryEntry(athleteId, parsed.data);
+      res.status(201).json(entry);
+    },
+  );
+
+  app.delete(
+    "/api/coach/roster/:athleteId/injury-history/:id",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      const onRoster = await storage.getRosterAthleteForCoach(user.id, athleteId);
+      if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
+      await storage.deleteInjuryHistoryEntry(athleteId, Number(req.params.id));
+      res.status(204).end();
+    },
+  );
+
   // AI weakness-identification report -- analyzes whatever goniometer/
   // asymmetry/ACWR/wellness/testing data already exists for one roster
   // athlete. Coach-side generation is ungated (same as every other coach
@@ -3112,6 +3161,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
+  // Nutrition goal -- the nutrition AI's one-time (until reset) "what are
+  // you trying to do" questionnaire. Free-Agent-only, same as the ask box
+  // it personalizes (a coached athlete's nutrition plan is their coach's
+  // call, not a self-serve AI goal). GET returns null goal to mean "hasn't
+  // answered yet," which is exactly what the client uses to decide whether
+  // to show the questionnaire instead of the normal ask UI.
+  app.get(
+    "/api/athlete/nutrition/goal",
+    requireRole("athlete"),
+    requireFreeAgent,
+    async (req, res) => {
+      const user = currentUser(req);
+      const goal = await storage.getNutritionGoalForAthlete(user.id);
+      res.json(goal ?? { nutritionGoal: null, nutritionGoalNote: null });
+    },
+  );
+
+  app.post(
+    "/api/athlete/nutrition/goal",
+    requireRole("athlete"),
+    requireFreeAgent,
+    async (req, res) => {
+      const user = currentUser(req);
+      const parsed = setNutritionGoalSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      const goal = await storage.setNutritionGoalForAthlete(user.id, parsed.data);
+      res.status(201).json(goal);
+    },
+  );
+
+  // "Set new goal" -- wipes the stored answer so the questionnaire re-shows
+  // next time the athlete opens Nutrition, without touching their numeric
+  // targets or food log.
+  app.delete(
+    "/api/athlete/nutrition/goal",
+    requireRole("athlete"),
+    requireFreeAgent,
+    async (req, res) => {
+      const user = currentUser(req);
+      const goal = await storage.resetNutritionGoalForAthlete(user.id);
+      res.json(goal);
+    },
+  );
+
   // Food log -- every athlete, coached or Free Agent, can log what they ate
   // against the targets above. This is data entry (a barcode/name lookup is
   // just a convenience proxy to a public food database, never an AI call --
@@ -3430,6 +3525,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const user = currentUser(req);
     const history = await storage.getWellnessHistoryForAthlete(user.id);
     res.json(history.map((h) => ({ ...h, ...computeReadiness(h) })));
+  });
+
+  // Injury history -- every athlete, coached or Free Agent, can log their
+  // own (a coach can also log one for a roster athlete via the roster route
+  // below). Feeds getAthleteAiContext so every AI bot -- program builder,
+  // nutrition, readiness, form-check -- knows about it, not just whichever
+  // one the athlete happens to mention it to.
+  app.get("/api/athlete/injury-history", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const history = await storage.getInjuryHistoryForAthlete(user.id);
+    res.json(history);
+  });
+
+  app.post("/api/athlete/injury-history", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = submitInjurySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const entry = await storage.addInjuryHistoryEntry(user.id, parsed.data);
+    res.status(201).json(entry);
+  });
+
+  app.patch("/api/athlete/injury-history/:id", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const schema = z.object({ resolved: z.boolean() });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "resolved must be true or false" });
+    }
+    const entry = await storage.setInjuryResolved(user.id, Number(req.params.id), parsed.data.resolved);
+    if (!entry) return res.status(404).json({ message: "Injury entry not found" });
+    res.json(entry);
+  });
+
+  app.delete("/api/athlete/injury-history/:id", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    await storage.deleteInjuryHistoryEntry(user.id, Number(req.params.id));
+    res.status(204).end();
   });
 
   // Deliberately its own endpoint, not folded into /api/athlete/day -- an AI

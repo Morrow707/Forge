@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/select";
 import { AssignProgramDialog } from "@/components/assign-program-dialog";
 import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
+import { RadioChipGroup } from "@/components/filter-chip-group";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
 import {
@@ -36,6 +37,24 @@ import {
   Sparkles,
   CalendarPlus,
 } from "lucide-react";
+
+const NEW_PROGRAM_GOALS = [
+  "Strength",
+  "Muscle gain",
+  "General fitness",
+  "Sport performance",
+  "Fast, heart-rate-up circuits",
+];
+const NEW_PROGRAM_EXPERIENCE = ["Beginner", "Intermediate", "Advanced"];
+const NEW_PROGRAM_EQUIPMENT = ["Full gym", "Home gym", "Minimal equipment", "Bodyweight only"];
+
+// Session-scoped handoff from the questionnaire below to the AI chat panel
+// once the blank program it describes has been created -- keyed by the
+// fresh program's id since that's not known until the create call returns.
+// A plain prop can't carry this across the navigate() to the builder route.
+function pendingAiPromptKey(programId: number) {
+  return `forge:pendingAiPrompt:${programId}`;
+}
 
 type ProgramSummary = {
   id: number;
@@ -111,22 +130,36 @@ export function ProgramListPage({
   const [selfAssignDate, setSelfAssignDate] = useState(() =>
     new Date().toISOString().slice(0, 10),
   );
+  const [questionnaireOpen, setQuestionnaireOpen] = useState(false);
+  const [qGoal, setQGoal] = useState("");
+  const [qDaysPerWeek, setQDaysPerWeek] = useState("");
+  const [qExperience, setQExperience] = useState("");
+  const [qEquipment, setQEquipment] = useState("");
 
   const createMutation = useMutation({
-    mutationFn: async (overrideName?: string) => {
+    mutationFn: async (vars?: { name?: string; initialPrompt?: string }) => {
       const res = await apiRequest("POST", `${apiBase}/programs`, {
-        name: overrideName ?? name,
+        name: vars?.name ?? name,
         description,
         weeks: [],
       });
-      return res.json();
+      return { program: await res.json(), initialPrompt: vars?.initialPrompt };
     },
-    onSuccess: (program) => {
+    onSuccess: ({ program, initialPrompt }) => {
       qc.invalidateQueries({ queryKey: [`${apiBase}/programs`] });
-      toast.success("Program created — start adding days");
+      if (initialPrompt) {
+        sessionStorage.setItem(pendingAiPromptKey(program.id), initialPrompt);
+      } else {
+        toast.success("Program created — start adding days");
+      }
       setDialogOpen(false);
+      setQuestionnaireOpen(false);
       setName("");
       setDescription("");
+      setQGoal("");
+      setQDaysPerWeek("");
+      setQExperience("");
+      setQEquipment("");
       navigate(`${routeBase}/${program.id}`);
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not create program"),
@@ -258,10 +291,7 @@ export function ProgramListPage({
             </Button>
           )}
           <Button
-            onClick={() =>
-              aiFirstCreate ? createMutation.mutate("New Program") : setDialogOpen(true)
-            }
-            disabled={aiFirstCreate && createMutation.isPending}
+            onClick={() => (aiFirstCreate ? setQuestionnaireOpen(true) : setDialogOpen(true))}
           >
             <Plus className="h-4 w-4" />
             New Program
@@ -275,10 +305,7 @@ export function ProgramListPage({
             <ListChecks className="h-10 w-10 text-muted-foreground" />
             <p className="text-muted-foreground">{emptyStateText}</p>
             <Button
-              onClick={() =>
-                aiFirstCreate ? createMutation.mutate("New Program") : setDialogOpen(true)
-              }
-              disabled={aiFirstCreate && createMutation.isPending}
+              onClick={() => (aiFirstCreate ? setQuestionnaireOpen(true) : setDialogOpen(true))}
             >
               <Plus className="h-4 w-4" />
               New Program
@@ -420,6 +447,81 @@ export function ProgramListPage({
           </form>
         </DialogContent>
       </Dialog>
+
+      {aiFirstCreate && (
+        <Dialog open={questionnaireOpen} onOpenChange={setQuestionnaireOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-primary" />
+                Build Your Program
+              </DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground">
+              A few quick questions -- the AI uses these to start your program, then you can keep
+              chatting with it to refine anything.
+            </p>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const parts = [
+                  `Build me a training program. My main goal is ${qGoal.toLowerCase()}.`,
+                  qDaysPerWeek.trim()
+                    ? `I can train ${qDaysPerWeek.trim()} days a week.`
+                    : null,
+                  qExperience ? `My experience level is ${qExperience.toLowerCase()}.` : null,
+                  qEquipment ? `Equipment I have access to: ${qEquipment.toLowerCase()}.` : null,
+                ].filter(Boolean);
+                createMutation.mutate({ name: "New Program", initialPrompt: parts.join(" ") });
+              }}
+              className="space-y-4"
+            >
+              <RadioChipGroup
+                label="Main goal"
+                options={NEW_PROGRAM_GOALS}
+                value={qGoal}
+                onChange={setQGoal}
+              />
+              <div className="space-y-1.5">
+                <Label htmlFor="q-days">Days per week you can train</Label>
+                <Input
+                  id="q-days"
+                  type="number"
+                  min={1}
+                  max={7}
+                  value={qDaysPerWeek}
+                  onChange={(e) => setQDaysPerWeek(e.target.value)}
+                  placeholder="e.g. 4"
+                />
+              </div>
+              <RadioChipGroup
+                label="Experience level"
+                options={NEW_PROGRAM_EXPERIENCE}
+                value={qExperience}
+                onChange={setQExperience}
+              />
+              <RadioChipGroup
+                label="Equipment"
+                options={NEW_PROGRAM_EQUIPMENT}
+                value={qEquipment}
+                onChange={setQEquipment}
+              />
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setQuestionnaireOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={!qGoal || createMutation.isPending}>
+                  {createMutation.isPending ? "Creating…" : "Start Building"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {showAssign && (
         <AssignProgramDialog
