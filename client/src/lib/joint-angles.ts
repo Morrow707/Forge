@@ -2,8 +2,8 @@
 // video-analysis-dialog.tsx) -- the same standard joint set OnForm's
 // skeleton-linked angle tool exposes: tap near a joint, see its angle,
 // and it re-measures every frame as the skeleton moves with the athlete.
-import type { NormalizedLandmark } from "@mediapipe/tasks-vision";
-import { POSE_LANDMARKS, angleAtVertex } from "./pose-tracking";
+import type { Landmark, NormalizedLandmark } from "@mediapipe/tasks-vision";
+import { POSE_LANDMARKS, worldAngleAtVertex } from "./pose-tracking";
 
 export type MeasurableJoint = {
   key: string;
@@ -97,16 +97,37 @@ export function findNearestJoint(
 // The joint's current inside angle (0-180) plus the point to label it at, or
 // null for a frame where one of the three landmarks isn't visible enough to
 // trust -- callers should just skip drawing that frame's label rather than
-// showing a stale or fabricated number.
+// showing a stale or fabricated number. Unlike the fully free-form tap-
+// anywhere angle tool (which measures whatever points the athlete tapped,
+// never real body landmarks, so image-space is the correct space for it --
+// see angleAtVertex's own comment), this measures an actual joint, so the
+// angle VALUE comes from worldLandmarks the same way the automated knee-
+// angle pipeline does. `landmarks` (image-space) is only used for `at`,
+// where to draw the label on screen -- that's just an on-screen position,
+// not a measurement, so it stays in the space the canvas already draws in.
 export function measureJoint(
   landmarks: NormalizedLandmark[],
+  worldLandmarks: Landmark[],
   joint: MeasurableJoint,
 ): { insideDeg: number; at: { x: number; y: number } } | null {
   const [ai, bi, ci] = joint.triple;
   const a = landmarks[ai];
   const b = landmarks[bi];
   const c = landmarks[ci];
-  if (!a || !b || !c || a.visibility < MIN_VISIBILITY || b.visibility < MIN_VISIBILITY || c.visibility < MIN_VISIBILITY)
+  const wa = worldLandmarks[ai];
+  const wb = worldLandmarks[bi];
+  const wc = worldLandmarks[ci];
+  if (
+    !a ||
+    !b ||
+    !c ||
+    !wa ||
+    !wb ||
+    !wc ||
+    a.visibility < MIN_VISIBILITY ||
+    b.visibility < MIN_VISIBILITY ||
+    c.visibility < MIN_VISIBILITY
+  )
     return null;
-  return { insideDeg: angleAtVertex(a, b, c), at: { x: b.x, y: b.y } };
+  return { insideDeg: worldAngleAtVertex(wa, wb, wc), at: { x: b.x, y: b.y } };
 }

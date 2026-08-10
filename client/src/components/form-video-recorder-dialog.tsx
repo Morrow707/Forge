@@ -142,8 +142,15 @@ export function FormVideoRecorderDialog({
       stopCamera();
       return;
     }
+    // Video-only -- requesting a mic track here silently interrupts (and
+    // doesn't resume) whatever background music the athlete had playing on
+    // iOS, the same WebKit audio-session behavior that forced the camera
+    // tracker's jump-landing-audio feature to be dropped entirely (see
+    // bar-tracker-dialog.tsx's own comment on this). A form-check video
+    // losing its own audio track costs less than muting music on every
+    // single recording.
     navigator.mediaDevices
-      .getUserMedia({ video: { facingMode: "environment" }, audio: true })
+      .getUserMedia({ video: { facingMode: "environment" } })
       .then((stream) => {
         streamRef.current = stream;
         if (videoRef.current) videoRef.current.srcObject = stream;

@@ -59,17 +59,18 @@ export const POSE_LANDMARKS = {
 const MIN_VISIBILITY = 0.5;
 
 // landmarks (normalized image-space) still drive same-axis ratio checks
-// (knee angle, valgus) -- an x-only or y-only comparison stays scale-
-// invariant under 2D projection. Anything that measures an angle FROM
-// VERTICAL by mixing an x-component with a y-component (torso lean, bar
-// tilt, the squat/deadlift movement-pattern guess) needs worldLandmarks
-// instead: a normalized image's x and y axes are each independently divided
-// by frame width/height, so on any non-square video -- portrait phone video,
-// essentially always -- that mismatched scaling bends the angle, and gets
-// worse again with any camera tilt. worldLandmarks (real-world meters,
-// hip-centered) sidestep that entirely, and also drive every absolute-
-// distance metric (bar path, velocity, ROM, power) -- see deriveBarPoint et
-// al. below.
+// (valgus: knee width over ankle width, both x-only) -- an x-only or y-only
+// comparison stays scale-invariant under 2D projection. Anything that
+// measures an actual angle -- a joint's inside angle (knee, elbow, hip...),
+// or an angle FROM VERTICAL (torso lean, bar tilt, the squat/deadlift
+// movement-pattern guess) -- mixes an x-component with a y-component, and
+// needs worldLandmarks instead: a normalized image's x and y axes are each
+// independently divided by frame width/height, so on any non-square video
+// -- portrait phone video, essentially always -- that mismatched scaling
+// bends the angle, and gets worse again with any camera tilt.
+// worldLandmarks (real-world meters, hip-centered) sidestep that entirely,
+// and also drive every absolute-distance metric (bar path, velocity, ROM,
+// power) -- see deriveBarPoint et al. below.
 export type PoseFrame = { t: number; landmarks: NormalizedLandmark[]; worldLandmarks: Landmark[] };
 
 let landmarkerPromise: Promise<PoseLandmarker> | null = null;
@@ -351,6 +352,32 @@ export function angleAtVertex(
   return (Math.acos(cos) * 180) / Math.PI;
 }
 
+// Same 3-point inside-angle formula as angleAtVertex, but for real-world
+// (meters) points instead of normalized image-space ones -- angleAtVertex's
+// dot-product math mixes an x-component and a y-component exactly the way
+// the torso-lean/bar-tilt calculations above used to, so it's just as
+// exposed to portrait video's aspect-ratio distortion for ANY joint angle,
+// not only "angle from vertical." angleAtVertex itself stays as-is (it's
+// shared with joint-angles.ts's fully free-form tap-anywhere tool, which
+// measures points that were never real body landmarks in the first place --
+// see that file's own comment), but every joint angle actually measured off
+// the skeleton -- automated knee angle below, and the tap-a-joint tool's
+// preset joints -- needs this version instead.
+export function worldAngleAtVertex(
+  a: { x: number; y: number; z: number },
+  b: { x: number; y: number; z: number },
+  c: { x: number; y: number; z: number },
+): number {
+  const v1 = { x: a.x - b.x, y: a.y - b.y, z: a.z - b.z };
+  const v2 = { x: c.x - b.x, y: c.y - b.y, z: c.z - b.z };
+  const dot = v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
+  const mag1 = Math.hypot(v1.x, v1.y, v1.z);
+  const mag2 = Math.hypot(v2.x, v2.y, v2.z);
+  if (mag1 === 0 || mag2 === 0) return 180;
+  const cos = Math.min(1, Math.max(-1, dot / (mag1 * mag2)));
+  return (Math.acos(cos) * 180) / Math.PI;
+}
+
 // Nth percentile (0-1) of a numeric array -- used wherever a single
 // misdetected frame could otherwise dominate a min/max reduction taken
 // across many frames: a knee/hip/ankle triple briefly reading as nearly
@@ -366,17 +393,19 @@ function percentile(values: number[], p: number): number {
 
 // Knee angle(s) visible in a single frame (0, 1, or 2 -- whichever legs are
 // in frame), shared by detectFormFaults (aggregates across a whole set) and
-// computeRepDepths (aggregates within one rep's time window).
-function frameKneeAngles(lm: NormalizedLandmark[]): number[] {
+// computeRepDepths (aggregates within one rep's time window). Takes world
+// landmarks, not image-space -- see worldAngleAtVertex's own comment for
+// why a knee's real inside angle needs the same fix torso lean/bar tilt got.
+function frameKneeAngles(worldLm: Landmark[]): number[] {
   const angles: number[] = [];
-  const lHip = lm[POSE_LANDMARKS.LEFT_HIP];
-  const rHip = lm[POSE_LANDMARKS.RIGHT_HIP];
-  const lKnee = lm[POSE_LANDMARKS.LEFT_KNEE];
-  const rKnee = lm[POSE_LANDMARKS.RIGHT_KNEE];
-  const lAnkle = lm[POSE_LANDMARKS.LEFT_ANKLE];
-  const rAnkle = lm[POSE_LANDMARKS.RIGHT_ANKLE];
-  if (visible(lHip) && visible(lKnee) && visible(lAnkle)) angles.push(angleAtVertex(lHip, lKnee, lAnkle));
-  if (visible(rHip) && visible(rKnee) && visible(rAnkle)) angles.push(angleAtVertex(rHip, rKnee, rAnkle));
+  const lHip = worldLm[POSE_LANDMARKS.LEFT_HIP];
+  const rHip = worldLm[POSE_LANDMARKS.RIGHT_HIP];
+  const lKnee = worldLm[POSE_LANDMARKS.LEFT_KNEE];
+  const rKnee = worldLm[POSE_LANDMARKS.RIGHT_KNEE];
+  const lAnkle = worldLm[POSE_LANDMARKS.LEFT_ANKLE];
+  const rAnkle = worldLm[POSE_LANDMARKS.RIGHT_ANKLE];
+  if (visible(lHip) && visible(lKnee) && visible(lAnkle)) angles.push(worldAngleAtVertex(lHip, lKnee, lAnkle));
+  if (visible(rHip) && visible(rKnee) && visible(rAnkle)) angles.push(worldAngleAtVertex(rHip, rKnee, rAnkle));
   return angles;
 }
 
@@ -393,7 +422,7 @@ export function computeRepDepths(
     const angles: number[] = [];
     for (const frame of frames) {
       if (frame.t < startT || frame.t > endT) continue;
-      angles.push(...frameKneeAngles(frame.landmarks));
+      angles.push(...frameKneeAngles(frame.worldLandmarks));
     }
     if (angles.length === 0) return null;
     // 5th percentile, not a raw min -- see percentile's own comment: a
@@ -405,17 +434,17 @@ export function computeRepDepths(
 
 // Knee angle(s) kept per-side rather than pooled -- the leg-drive-asymmetry
 // companion to frameKneeAngles above, which deliberately discards which leg
-// a given angle came from.
-function frameKneeAnglesBySide(lm: NormalizedLandmark[]): { left: number | null; right: number | null } {
-  const lHip = lm[POSE_LANDMARKS.LEFT_HIP];
-  const rHip = lm[POSE_LANDMARKS.RIGHT_HIP];
-  const lKnee = lm[POSE_LANDMARKS.LEFT_KNEE];
-  const rKnee = lm[POSE_LANDMARKS.RIGHT_KNEE];
-  const lAnkle = lm[POSE_LANDMARKS.LEFT_ANKLE];
-  const rAnkle = lm[POSE_LANDMARKS.RIGHT_ANKLE];
+// a given angle came from. Same world-landmark reasoning as frameKneeAngles.
+function frameKneeAnglesBySide(worldLm: Landmark[]): { left: number | null; right: number | null } {
+  const lHip = worldLm[POSE_LANDMARKS.LEFT_HIP];
+  const rHip = worldLm[POSE_LANDMARKS.RIGHT_HIP];
+  const lKnee = worldLm[POSE_LANDMARKS.LEFT_KNEE];
+  const rKnee = worldLm[POSE_LANDMARKS.RIGHT_KNEE];
+  const lAnkle = worldLm[POSE_LANDMARKS.LEFT_ANKLE];
+  const rAnkle = worldLm[POSE_LANDMARKS.RIGHT_ANKLE];
   return {
-    left: visible(lHip) && visible(lKnee) && visible(lAnkle) ? angleAtVertex(lHip, lKnee, lAnkle) : null,
-    right: visible(rHip) && visible(rKnee) && visible(rAnkle) ? angleAtVertex(rHip, rKnee, rAnkle) : null,
+    left: visible(lHip) && visible(lKnee) && visible(lAnkle) ? worldAngleAtVertex(lHip, lKnee, lAnkle) : null,
+    right: visible(rHip) && visible(rKnee) && visible(rAnkle) ? worldAngleAtVertex(rHip, rKnee, rAnkle) : null,
   };
 }
 
@@ -455,7 +484,7 @@ export function computeLegDriveAsymmetry(
     let bottomIdx = 0;
     let bottomAngle = Infinity;
     windowFrames.forEach((frame, i) => {
-      for (const angle of frameKneeAngles(frame.landmarks)) {
+      for (const angle of frameKneeAngles(frame.worldLandmarks)) {
         if (angle < bottomAngle) {
           bottomAngle = angle;
           bottomIdx = i;
@@ -467,7 +496,7 @@ export function computeLegDriveAsymmetry(
     const left: { t: number; angle: number }[] = [];
     const right: { t: number; angle: number }[] = [];
     for (const frame of driveFrames) {
-      const sides = frameKneeAnglesBySide(frame.landmarks);
+      const sides = frameKneeAnglesBySide(frame.worldLandmarks);
       if (sides.left != null) left.push({ t: frame.t, angle: sides.left });
       if (sides.right != null) right.push({ t: frame.t, angle: sides.right });
     }
@@ -585,7 +614,7 @@ export function detectFormFaults(
     const lAnkle = lm[POSE_LANDMARKS.LEFT_ANKLE];
     const rAnkle = lm[POSE_LANDMARKS.RIGHT_ANKLE];
 
-    kneeAngles.push(...frameKneeAngles(lm));
+    kneeAngles.push(...frameKneeAngles(worldLm));
 
     // Valgus proxy: knee width vs. ankle width -- a healthy squat keeps
     // knees tracking roughly over the ankles, so this ratio stays near 1;
@@ -714,7 +743,7 @@ export function guessMovementPattern(frames: PoseFrame[]): MovementGuess {
   for (const frame of frames) {
     const lm = frame.landmarks;
     const worldLm = frame.worldLandmarks;
-    for (const angle of frameKneeAngles(lm)) {
+    for (const angle of frameKneeAngles(worldLm)) {
       kneeMin = Math.min(kneeMin, angle);
       kneeMax = Math.max(kneeMax, angle);
     }

@@ -260,7 +260,7 @@ export function VideoAnalysisDialog({
 
     if (selectedJointKey && frame) {
       const joint = MEASURABLE_JOINTS.find((j) => j.key === selectedJointKey);
-      const measured = joint ? measureJoint(frame.landmarks, joint) : null;
+      const measured = joint ? measureJoint(frame.landmarks, frame.worldLandmarks, joint) : null;
       if (measured) {
         const deg = flipAngle ? 360 - measured.insideDeg : measured.insideDeg;
         drawAngleLabel(ctx, measured.at.x * canvas.width, measured.at.y * canvas.height, deg, ANGLE_COLOR);
