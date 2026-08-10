@@ -216,24 +216,48 @@ export async function askClaudeVisionStructured<T>(
  * where it shouldn't touch anything yet, rather than being forced to
  * produce a real change (or a guess) on every single turn. Returns which
  * tool was called alongside its input so the caller can branch on it; same
- * validate-before-trusting caveat as askClaudeStructured applies. */
+ * validate-before-trusting caveat as askClaudeStructured applies.
+ *
+ * `serverTools` (e.g. web search) run entirely on Anthropic's side and are
+ * merged ahead of the custom tools -- their results land as extra content
+ * blocks in the same response, so the `tool_use` lookup below still finds
+ * our own tool call untouched (a server tool's own invocation block is a
+ * differently-typed `server_tool_use`, never `tool_use`). A research
+ * tangent can occasionally hit the server's own round-trip cap mid-turn
+ * (`stop_reason: "pause_turn"`) before reaching one of our tools -- resume
+ * by resending the conversation with the paused turn appended, exactly as
+ * Anthropic's own docs describe (never inject a synthetic "continue"
+ * message; the API detects the trailing server-tool-use block itself). */
 export async function askClaudeWithTools<T = any>(
   system: SystemPrompt,
   userPrompt: string,
   tools: { name: string; description: string; input_schema: Record<string, unknown> }[],
-  { maxTokens = 1024, model }: CallOptions = {},
+  {
+    maxTokens = 1024,
+    model,
+    serverTools,
+  }: CallOptions & { serverTools?: Record<string, unknown>[] } = {},
 ): Promise<{ toolName: string; input: T } | null> {
   if (!aiEnabled) return null;
-  const data = await callAnthropic({
-    model: model || defaultModel,
-    max_tokens: maxTokens,
-    system: buildSystemField(system),
-    messages: [{ role: "user", content: userPrompt }],
-    tools,
-    tool_choice: { type: "auto" },
-  });
-  if (!data) return null;
-  const toolUse = data.content?.find((b: any) => b.type === "tool_use");
-  if (!toolUse) return null;
-  return { toolName: toolUse.name as string, input: toolUse.input as T };
+  const allTools = serverTools ? [...serverTools, ...tools] : tools;
+  let messages: any[] = [{ role: "user", content: userPrompt }];
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const data = await callAnthropic({
+      model: model || defaultModel,
+      max_tokens: maxTokens,
+      system: buildSystemField(system),
+      messages,
+      tools: allTools,
+      tool_choice: { type: "auto" },
+    });
+    if (!data) return null;
+    const toolUse = data.content?.find((b: any) => b.type === "tool_use");
+    if (toolUse) return { toolName: toolUse.name as string, input: toolUse.input as T };
+    if (data.stop_reason === "pause_turn") {
+      messages = [...messages, { role: "assistant", content: data.content }];
+      continue;
+    }
+    return null;
+  }
+  return null;
 }
