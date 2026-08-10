@@ -63,6 +63,13 @@ export type JumpRep = {
   // Time on the ground before this jump's takeoff, from the previous jump's
   // landing -- null for the first jump (nothing to measure from).
   groundContactSeconds: number | null;
+  // Same clock as TrackedPoint.t (ms since tracking started) -- lift mode's
+  // RepBreakdown has always carried startT/endT for exactly this reason
+  // (video-overlay.ts locating which rep a given video timestamp falls
+  // in); this is the jump-mode equivalent so that code doesn't need two
+  // different lookup strategies per mode.
+  takeoffT: number;
+  landingT: number;
 };
 
 export type JumpSetMetrics = {
@@ -199,6 +206,8 @@ export function summarizeJumpSet(
               peakHeightCm: Math.round(peakHeightCm * 10) / 10,
               horizontalDistanceCm,
               groundContactSeconds,
+              takeoffT,
+              landingT,
             });
 
             previousLandingT = landingT;
