@@ -54,9 +54,18 @@ export type JumpSetMetrics = {
 // loadKg has no equivalent here (jumps have no external load to base power
 // on the way summarizeTrackedSet's does) -- this is display of body-flight
 // kinematics, not force or power.
+//
+// minFlightAmplitudeCm is the smallest ankle-height rise the state machine
+// above will trust as a real takeoff rather than standing sway or a
+// weight-shift between reps -- 8cm is barely above ordinary in-place
+// wobble, so a moment of resettling footing on top of a box (or even just
+// breathing/postural sway) could cross it and register as its own jump on
+// top of the real one. A genuine vertical or broad jump -- box jump
+// included -- clears well over 15cm of ankle travel, so raising the floor
+// here costs nothing on real reps while cutting out the sway-driven ones.
 export function summarizeJumpSet(
   rawPoints: TrackedPoint[],
-  minFlightAmplitudeCm = 8,
+  minFlightAmplitudeCm = 15,
 ): JumpSetMetrics | null {
   if (rawPoints.length < 6) return null;
 

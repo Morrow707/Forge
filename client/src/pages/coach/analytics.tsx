@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearch } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -224,9 +225,15 @@ function ChartVisibilityMenu({
  * their own set, this page is where the history/coaching value lives. */
 export default function CoachAnalytics() {
   const [distanceUnit] = useDistanceUnit();
-  const [athleteId, setAthleteId] = useState<string>("");
+  // A "View Analytics" link elsewhere (e.g. the day-edit dialog, or a
+  // video/comment notification) can deep-link straight to a specific
+  // athlete + exercise via these params instead of requiring the coach to
+  // reselect both from the dropdowns below every time -- read once on
+  // mount; the dropdowns own the state from here.
+  const initialParams = new URLSearchParams(useSearch());
+  const [athleteId, setAthleteId] = useState<string>(initialParams.get("athleteId") ?? "");
   const [athleteSearch, setAthleteSearch] = useState("");
-  const [exerciseId, setExerciseId] = useState<string>("");
+  const [exerciseId, setExerciseId] = useState<string>(initialParams.get("exerciseId") ?? "");
   const [hiddenCharts, setHiddenCharts] = useState<Set<ChartKey>>(() => loadHiddenCharts());
   // Read-only preview of an athlete's per-set form-check clip from the raw
   // table below -- unlike the comment-thread video annotation flow, a coach

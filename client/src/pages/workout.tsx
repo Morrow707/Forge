@@ -1474,6 +1474,7 @@ export function WorkoutPage({
                         unit={unit}
                         assignmentId={Number(assignmentId)}
                         programDayId={Number(programDayId)}
+                        date={date}
                         apiBase={apiBase}
                         programsApiBase={programsApiBase}
                         videoCheckMode={videoCheckMode}
@@ -1527,6 +1528,7 @@ export function WorkoutPage({
             role="athlete"
             assignmentId={Number(assignmentId)}
             programDayId={Number(programDayId)}
+            date={date}
           />
         )}
       </div>
@@ -1577,6 +1579,7 @@ function ExerciseLogContent({
   unit,
   assignmentId,
   programDayId,
+  date,
   apiBase,
   programsApiBase,
   videoCheckMode,
@@ -1593,6 +1596,7 @@ function ExerciseLogContent({
   unit: "lbs" | "kg";
   assignmentId: number;
   programDayId: number;
+  date: string;
   apiBase: string;
   programsApiBase: string;
   videoCheckMode: "comment" | "ai" | "off";
@@ -1701,6 +1705,7 @@ function ExerciseLogContent({
       const res = await apiRequest("POST", commentsPath, {
         body: `Form check: ${item.exerciseName} — Set ${setNumber}`,
         videoUrl,
+        date,
       });
       return res.json();
     },

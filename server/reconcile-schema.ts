@@ -622,9 +622,11 @@ CREATE TABLE IF NOT EXISTS "workout_comments" (
   "body" text NOT NULL,
   "video_url" text,
   "image_url" text,
+  "date" text,
   "created_at" timestamp NOT NULL DEFAULT now()
 );
 ALTER TABLE "workout_comments" ADD COLUMN IF NOT EXISTS "image_url" text;
+ALTER TABLE "workout_comments" ADD COLUMN IF NOT EXISTS "date" text;
 
 CREATE TABLE IF NOT EXISTS "notifications" (
   "id" serial PRIMARY KEY,

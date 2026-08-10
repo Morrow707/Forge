@@ -265,10 +265,20 @@ const GRAVITY_MPS2 = 9.81;
 // entered weight, converted to kg by the caller) -- power is mass * g *
 // velocity, so it's left null throughout whenever there's no load to use
 // as mass (bodyweight-only sets have no well-defined external load here).
+//
+// minRepAmplitudeCm is the smallest vertical reversal segmentPhases will
+// treat as a real rep boundary rather than noise -- 5cm (the original
+// default) is well within pose-jitter and incidental-motion range (settling
+// under the bar, a grip adjustment, unracking/reracking at the start and
+// end of the set), so a set tracked start-to-finish could segment several
+// extra "reps" out of motion that was never a rep at all. Every exercise
+// this tracks -- squat, deadlift, press, row, curl -- moves the bar/wrist
+// well over 15cm through a genuine rep, so 20cm (~8in) comfortably clears
+// real reps of any of them while sitting well above ordinary rack noise.
 export function summarizeTrackedSet(
   rawPoints: TrackedPoint[],
   loadKg?: number,
-  minRepAmplitudeCm = 5,
+  minRepAmplitudeCm = 20,
 ): RepMetrics | null {
   if (rawPoints.length < 6) return null;
 

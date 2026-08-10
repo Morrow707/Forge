@@ -8,13 +8,14 @@ import { FormVideoRecorderDialog } from "@/components/form-video-recorder-dialog
 import { VideoAnnotationDialog } from "@/components/video-annotation-dialog";
 import { toast } from "sonner";
 import { MessageSquare, Video, Send, X, Pencil } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow, format, parseISO } from "date-fns";
 
 type Comment = {
   id: number;
   body: string;
   videoUrl: string | null;
   imageUrl: string | null;
+  date: string | null;
   createdAt: string;
   author: { id: number; name: string; role: "coach" | "athlete" };
 };
@@ -27,10 +28,17 @@ export function WorkoutCommentThread({
   role,
   assignmentId,
   programDayId,
+  date,
 }: {
   role: "coach" | "athlete";
   assignmentId: number;
   programDayId: number;
+  // The calendar date this thread is being viewed/posted from, when known
+  // (the athlete's own workout page always knows it; the coach's day-edit
+  // dialog edits the recurring program day template, not one occurrence of
+  // it, so it has no date to attach) -- see workoutComments.date's comment
+  // in shared/schema.ts for why this matters for a backfilled log.
+  date?: string;
 }) {
   const qc = useQueryClient();
   const basePath = `/api/${role}/assignments/${assignmentId}/days/${programDayId}/comments`;
@@ -52,6 +60,7 @@ export function WorkoutCommentThread({
         body,
         videoUrl: videoUrl.trim() || undefined,
         imageUrl: imageUrl || undefined,
+        date: date || undefined,
       });
       return res.json();
     },
@@ -84,8 +93,19 @@ export function WorkoutCommentThread({
                     {c.author.role}
                   </span>
                 </span>
-                <span className="shrink-0 text-[10px] text-muted-foreground">
-                  {formatDistanceToNow(new Date(c.createdAt), { addSuffix: true })}
+                <span className="shrink-0 text-right text-[10px] text-muted-foreground">
+                  {c.date ? (
+                    <>
+                      <span className="block font-semibold text-foreground/70">
+                        For {format(parseISO(c.date), "MMM d, yyyy")}
+                      </span>
+                      <span className="block">
+                        submitted {formatDistanceToNow(new Date(c.createdAt), { addSuffix: true })}
+                      </span>
+                    </>
+                  ) : (
+                    formatDistanceToNow(new Date(c.createdAt), { addSuffix: true })
+                  )}
                 </span>
               </div>
               <p className="mt-0.5 whitespace-pre-wrap text-muted-foreground">{c.body}</p>
