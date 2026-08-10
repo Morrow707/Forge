@@ -9,8 +9,15 @@
 // ground-contact time). A level-crossing state machine fires exactly once at
 // the true landing moment regardless of how long the athlete stands still
 // afterward.
-import { movingAverage, buildPathTrace, type TrackedPoint, type PathTracePoint } from "./bar-tracking";
+import {
+  movingAverage,
+  buildPathTrace,
+  heightScaledAmplitudeCm,
+  type TrackedPoint,
+  type PathTracePoint,
+} from "./bar-tracking";
 import type { FormFault } from "./pose-tracking";
+import { wasLandingAudioConfirmed, type AudioSample } from "./audio-landing";
 
 const GRAVITY_MPS2 = 9.81;
 const SMOOTHING_WINDOW = 5;
@@ -31,6 +38,11 @@ export type JumpRep = {
   // Time on the ground before this jump's takeoff, from the previous jump's
   // landing -- null for the first jump (nothing to measure from).
   groundContactSeconds: number | null;
+  // Whether a loud transient in the mic audio lined up with this landing --
+  // see audio-landing.ts's own comment for why this is a three-state signal
+  // (null meaning "no usable audio trace to check at all", never coerced to
+  // false) and purely corroborating rather than gating the visual count.
+  audioConfirmed: boolean | null;
 };
 
 export type JumpSetMetrics = {
@@ -51,23 +63,35 @@ export type JumpSetMetrics = {
   formFaults: FormFault[];
 };
 
+const BASE_MIN_FLIGHT_AMPLITUDE_CM = 15;
+
 // loadKg has no equivalent here (jumps have no external load to base power
 // on the way summarizeTrackedSet's does) -- this is display of body-flight
 // kinematics, not force or power.
 //
-// minFlightAmplitudeCm is the smallest ankle-height rise the state machine
-// above will trust as a real takeoff rather than standing sway or a
-// weight-shift between reps -- 8cm is barely above ordinary in-place
-// wobble, so a moment of resettling footing on top of a box (or even just
-// breathing/postural sway) could cross it and register as its own jump on
-// top of the real one. A genuine vertical or broad jump -- box jump
-// included -- clears well over 15cm of ankle travel, so raising the floor
-// here costs nothing on real reps while cutting out the sway-driven ones.
+// heightIn (the athlete's stored height, when on file) scales
+// BASE_MIN_FLIGHT_AMPLITUDE_CM via bar-tracking.ts's heightScaledAmplitudeCm
+// -- the smallest ankle-height rise the state machine above will trust as
+// a real takeoff rather than standing sway or a weight-shift between
+// reps. 8cm (the original flat floor before this existed) is barely above
+// ordinary in-place wobble, so a moment of resettling footing on top of a
+// box (or even just breathing/postural sway) could cross it and register
+// as its own jump on top of the real one. A genuine vertical or broad
+// jump -- box jump included -- clears well over 15cm of ankle travel for
+// an average-height athlete, so that floor costs nothing on real reps
+// while cutting out the sway-driven ones; the height scaling shifts it
+// proportionally for anyone far from average.
+// audioSamples (from bar-tracker-dialog.tsx's LandingAudioListener, jump
+// mode only) is optional and can be an empty array -- wasLandingAudioConfirmed
+// already treats "too little/no usable audio" as null per rep rather than a
+// misleading false, so there's nothing extra to gate here.
 export function summarizeJumpSet(
   rawPoints: TrackedPoint[],
-  minFlightAmplitudeCm = 15,
+  heightIn?: number | null,
+  audioSamples?: AudioSample[],
 ): JumpSetMetrics | null {
   if (rawPoints.length < 6) return null;
+  const minFlightAmplitudeCm = heightScaledAmplitudeCm(BASE_MIN_FLIGHT_AMPLITUDE_CM, heightIn);
 
   const ySmoothed = movingAverage(rawPoints.map((p) => p.y), SMOOTHING_WINDOW);
   const minAmplitudeM = minFlightAmplitudeCm / 100;
@@ -159,6 +183,7 @@ export function summarizeJumpSet(
               peakHeightCm: Math.round(peakHeightCm * 10) / 10,
               horizontalDistanceCm,
               groundContactSeconds,
+              audioConfirmed: wasLandingAudioConfirmed(audioSamples ?? [], landingT),
             });
 
             previousLandingT = landingT;
