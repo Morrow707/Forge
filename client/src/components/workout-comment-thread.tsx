@@ -7,8 +7,10 @@ import { Input } from "@/components/ui/input";
 import { FormVideoRecorderDialog } from "@/components/form-video-recorder-dialog";
 import { VideoAnnotationDialog } from "@/components/video-annotation-dialog";
 import { toast } from "sonner";
-import { MessageSquare, Video, Send, X, Pencil } from "lucide-react";
+import { MessageSquare, Video, Send, X, Pencil, Download, Loader2 } from "lucide-react";
 import { formatDistanceToNow, format, parseISO } from "date-fns";
+import { watermarkVideo } from "@/lib/video-watermark";
+import { shareOrDownloadBlob } from "@/lib/share-file";
 
 type Comment = {
   id: number;
@@ -49,10 +51,26 @@ export function WorkoutCommentThread({
   const [recorderOpen, setRecorderOpen] = useState(false);
   const [imageUrl, setImageUrl] = useState("");
   const [annotatingUrl, setAnnotatingUrl] = useState<string | null>(null);
+  // Which comment's video is currently being watermarked for download --
+  // a re-encode takes a few seconds for a longer clip, so this drives a
+  // per-row loading state rather than a single global one.
+  const [downloadingId, setDownloadingId] = useState<number | null>(null);
 
   const { data: comments = [] } = useQuery<Comment[]>({
     queryKey: [basePath],
   });
+
+  async function downloadWithWatermark(commentId: number, url: string) {
+    setDownloadingId(commentId);
+    try {
+      const blob = await watermarkVideo(url);
+      await shareOrDownloadBlob(blob, "forge-form-check.webm", "Forge form check");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not prepare that video for download");
+    } finally {
+      setDownloadingId(null);
+    }
+  }
 
   const postMutation = useMutation({
     mutationFn: async () => {
@@ -137,6 +155,22 @@ export function WorkoutCommentThread({
                       <Pencil className="h-3 w-3" /> Annotate
                     </button>
                   )}
+                  <button
+                    type="button"
+                    disabled={downloadingId === c.id}
+                    onClick={() => downloadWithWatermark(c.id, c.videoUrl!)}
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline disabled:opacity-60"
+                  >
+                    {downloadingId === c.id ? (
+                      <>
+                        <Loader2 className="h-3 w-3 animate-spin" /> Preparing…
+                      </>
+                    ) : (
+                      <>
+                        <Download className="h-3 w-3" /> Download
+                      </>
+                    )}
+                  </button>
                 </div>
               )}
             </div>
