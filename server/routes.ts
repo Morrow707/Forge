@@ -2057,7 +2057,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/coach/roster-wellness", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     const rows = await storage.getRosterWellnessToday(user.id, todayIso());
-    res.json(rows.map((r) => ({ ...r, ...computeReadiness(r) })));
+    // onPeriod feeds computeReadiness but is deliberately never included in
+    // what actually reaches the coach -- see its own comment on
+    // wellnessCheckins in shared/schema.ts.
+    res.json(rows.map(({ onPeriod, ...r }) => ({ ...r, ...computeReadiness({ ...r, onPeriod }) })));
   });
 
   // ---------- CARA (countable athletically-related activity) compliance ----------
@@ -2162,7 +2165,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const onRoster = await storage.getRosterAthleteForCoach(user.id, athleteId);
       if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
       const history = await storage.getWellnessHistoryForAthlete(athleteId);
-      res.json(history.map((h) => ({ ...h, ...computeReadiness(h) })));
+      // onPeriod feeds computeReadiness (below) but is deliberately never
+      // included in what actually reaches the coach -- see its own comment
+      // on wellnessCheckins in shared/schema.ts.
+      res.json(
+        history.map(({ onPeriod, ...h }) => ({ ...h, ...computeReadiness({ ...h, onPeriod }) })),
+      );
     },
   );
 

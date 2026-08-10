@@ -1176,6 +1176,7 @@ async function buildPlatformTrends() {
             hydration: wellnessCheckins.hydration,
             mentalFocus: wellnessCheckins.mentalFocus,
             bodyPainMap: wellnessCheckins.bodyPainMap,
+            onPeriod: wellnessCheckins.onPeriod,
           })
           .from(wellnessCheckins)
           .where(gte(wellnessCheckins.date, sinceDate))
@@ -2307,6 +2308,7 @@ Based on this athlete's actual rate of improvement, suggest a realistic target v
       hydration: number;
       mentalFocus: number;
       bodyPainMap: string[];
+      onPeriod: boolean;
     },
   ) {
     const [row] = await db
@@ -2348,6 +2350,7 @@ Based on this athlete's actual rate of improvement, suggest a realistic target v
         hydration: wellnessCheckins.hydration,
         mentalFocus: wellnessCheckins.mentalFocus,
         bodyPainMap: wellnessCheckins.bodyPainMap,
+        onPeriod: wellnessCheckins.onPeriod,
       })
       .from(coachAthletes)
       .innerJoin(wellnessCheckins, eq(wellnessCheckins.athleteId, coachAthletes.athleteId))
@@ -3032,6 +3035,7 @@ Identify 2-5 specific, concrete deficits grounded ONLY in the data above -- do n
           hydration: wellnessCheckins.hydration,
           mentalFocus: wellnessCheckins.mentalFocus,
           bodyPainMap: wellnessCheckins.bodyPainMap,
+          onPeriod: wellnessCheckins.onPeriod,
         })
         .from(wellnessCheckins)
         .where(
