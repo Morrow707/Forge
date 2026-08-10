@@ -7452,6 +7452,7 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
       body: r.body,
       videoUrl: r.videoUrl,
       imageUrl: r.imageUrl,
+      date: r.date,
       createdAt: r.createdAt,
       author: { id: r.author.id, name: r.author.name, role: r.author.role },
     }));
@@ -7472,6 +7473,7 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
         body: input.body,
         videoUrl: input.videoUrl || null,
         imageUrl: input.imageUrl || null,
+        date: input.date || null,
       })
       .returning();
     const author = await db.query.users.findFirst({ where: eq(users.id, authorId) });
@@ -7480,6 +7482,7 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
       body: row.body,
       videoUrl: row.videoUrl,
       imageUrl: row.imageUrl,
+      date: row.date,
       createdAt: row.createdAt,
       author: { id: author!.id, name: author!.name, role: author!.role },
     };

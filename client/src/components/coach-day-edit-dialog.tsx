@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
@@ -27,7 +28,7 @@ import {
   colorForLabel,
 } from "@/lib/supersets";
 import { toast } from "sonner";
-import { Plus, Trash2, MoonStar, Link2, Stethoscope, Copy, Clock, Repeat } from "lucide-react";
+import { Plus, Trash2, MoonStar, Link2, Stethoscope, Copy, Clock, Repeat, LineChart } from "lucide-react";
 import type { Exercise } from "@shared/schema";
 
 type TrackingLevel = "none" | "bar_path" | "full" | "jump";
@@ -129,6 +130,7 @@ export function CoachDayEditDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const qc = useQueryClient();
+  const [, navigate] = useLocation();
   const { data, isLoading } = useQuery<DayDetail>({
     queryKey: ["/api/coach/program-days", programDayId],
     queryFn: () => getJson(`/api/coach/program-days/${programDayId}`),
@@ -484,7 +486,7 @@ export function CoachDayEditDialog({
                               }
                             />
                           </div>
-                          <div className="mt-1.5">
+                          <div className="mt-1.5 flex items-center gap-2">
                             <VideoTrackingToggle
                               trackingLevel={ex.trackingLevel}
                               category={ex.category}
@@ -494,6 +496,21 @@ export function CoachDayEditDialog({
                                 )
                               }
                             />
+                            {ex.trackingLevel !== "none" && athleteId != null && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  onOpenChange(false);
+                                  navigate(
+                                    `/coach/analytics?athleteId=${athleteId}&exerciseId=${ex.exerciseId}`,
+                                  );
+                                }}
+                                className="flex shrink-0 items-center gap-1 text-xs font-semibold text-primary hover:underline"
+                              >
+                                <LineChart className="h-3.5 w-3.5" />
+                                View Analytics
+                              </button>
+                            )}
                           </div>
                         </div>
                         {i < exercises.length - 1 && (

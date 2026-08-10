@@ -3768,7 +3768,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const hasVideo = !!parsed.data.videoUrl;
       const title = hasVideo ? "New video from an athlete" : "New comment from an athlete";
       const body = `${user.name}: ${parsed.data.body}`;
-      await notifyUser(owned.coachId, hasVideo ? "video" : "comment", title, body, "/coach/calendar");
+      // A bare "/coach/calendar" link landed the coach on whatever day the
+      // calendar happened to default to (today), not the day this comment
+      // is actually about -- easy to read as "broken" when the athlete
+      // backfilled a past date, since nothing relevant shows up. Carrying
+      // the day's identity lets the calendar page open straight to it (see
+      // the query-param handling in coach/calendar.tsx).
+      const link =
+        `/coach/calendar?assignmentId=${assignmentId}&programDayId=${programDayId}` +
+        `&athleteId=${user.id}&athleteName=${encodeURIComponent(user.name)}`;
+      await notifyUser(owned.coachId, hasVideo ? "video" : "comment", title, body, link);
 
       res.status(201).json(comment);
     },

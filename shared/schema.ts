@@ -1112,6 +1112,15 @@ export const workoutComments = pgTable(
     // circling a knee valgus moment -- saved as a PNG and attached the same
     // way a video link is, just a different media type on the same comment.
     imageUrl: text("image_url"),
+    // The workout day this comment/video is actually FOR (the athlete's
+    // calendar date, e.g. logging a session for last Friday two days late)
+    // -- deliberately separate from createdAt below, which is just when the
+    // comment row was written and can be well after the fact for a
+    // backfilled log. Null for older rows written before this existed, and
+    // for a coach's own reply/annotation (a reply isn't "for" any one
+    // occurrence of a recurring program day the way an athlete's submission
+    // is), in which case display falls back to createdAt.
+    date: text("date"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({
@@ -2910,6 +2919,10 @@ export const createWorkoutCommentSchema = z.object({
   body: z.string().trim().min(1).max(2000),
   videoUrl: z.string().trim().max(500).optional().nullable(),
   imageUrl: z.string().trim().max(500).optional().nullable(),
+  // The calendar date this comment/video is for -- see workoutComments.date.
+  // Optional since a coach's reply isn't tied to one occurrence the way an
+  // athlete's submission is.
+  date: z.string().trim().max(20).optional().nullable(),
 });
 
 export const createAnnotationSchema = z.object({

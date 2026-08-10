@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearch } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
 import { CalendarView, type CalendarEntry } from "@/components/calendar-view";
@@ -40,6 +41,33 @@ export default function CoachCalendar() {
   const [viewingDay, setViewingDay] = useState<{ date: string; entries: CalendarEntry[] } | null>(
     null,
   );
+
+  // A video/comment notification links here with these params (see the
+  // athlete comment route in server/routes.ts) instead of relying on
+  // whatever day the calendar happens to default to -- without this, the
+  // notification landed on "today," which usually has nothing to do with
+  // the day the athlete actually commented on (e.g. backfilling a past
+  // date) and looked like a broken link. Runs once on mount; the params
+  // aren't needed again after the dialog's open, so there's no need to keep
+  // watching them.
+  const search = useSearch();
+  useEffect(() => {
+    const params = new URLSearchParams(search);
+    const notifAssignmentId = params.get("assignmentId");
+    const notifProgramDayId = params.get("programDayId");
+    const notifAthleteId = params.get("athleteId");
+    if (notifAssignmentId && notifProgramDayId && notifAthleteId) {
+      setEditing({
+        assignmentId: Number(notifAssignmentId),
+        programDayId: Number(notifProgramDayId),
+        athleteId: Number(notifAthleteId),
+        athleteName: params.get("athleteName") ?? "",
+      });
+    }
+    // Only ever read on first mount -- the dialog owns its own open/close
+    // state from here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const { data: entries = [], isLoading } = useQuery<CalendarEntry[]>({
     queryKey: ["/api/coach/calendar", range.start, range.end, athleteId],
