@@ -165,8 +165,20 @@ export function MechanicsTrackerDialog({
 
   useEffect(() => {
     if (!open || step !== "capture") return;
+    // ideal, not exact -- see bar-tracker-dialog.tsx's own comment on this
+    // same constraint shape. A bat swing or throw is the fastest motion
+    // this app tracks, so peakAngularVelocityTime's sequencing precision
+    // (hip vs. shoulder vs. arm peak timing) benefits from 60fps more here
+    // than almost anywhere else in the camera tracker.
     navigator.mediaDevices
-      .getUserMedia({ video: { facingMode: "environment" } })
+      .getUserMedia({
+        video: {
+          facingMode: { ideal: "environment" },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          frameRate: { ideal: 60, min: 30 },
+        },
+      })
       .then((stream) => {
         streamRef.current = stream;
         if (videoRef.current) videoRef.current.srcObject = stream;

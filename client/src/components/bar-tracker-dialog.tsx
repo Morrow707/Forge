@@ -419,6 +419,18 @@ export function BarTrackerDialog({
     const attachStream = (stream: MediaStream) => {
       streamRef.current = stream;
       if (videoRef.current) videoRef.current.srcObject = stream;
+      // Soft (ideal) constraints below don't guarantee 60fps -- the device
+      // may have negotiated 30 anyway. Every velocity/flight-time
+      // calculation already derives dt from consecutive frames' own
+      // timestamps rather than assuming a fixed interval, so this log is
+      // purely diagnostic (confirming what a given device actually granted
+      // in the field), never something the math depends on.
+      const settings = stream.getVideoTracks()[0]?.getSettings();
+      if (settings) {
+        console.debug(
+          `[camera-tracker] negotiated ${settings.width}x${settings.height} @ ${settings.frameRate}fps`,
+        );
+      }
     };
     // Video-only, always -- jump mode used to also request the mic here for
     // an optional landing-audio confirmation signal, but on iOS that
@@ -426,7 +438,25 @@ export function BarTrackerDialog({
     // had playing, just to capture a signal that was only ever a
     // supplementary confirmation and never a requirement. Not a trade worth
     // making for every jump-mode session, so the feature's gone entirely.
-    const videoOnlyConstraints = { video: { facingMode: "environment" as const } };
+    //
+    // frameRate/width/height are all `ideal`, not `exact` -- a hard
+    // requirement throws OverconstrainedError on hardware that can't meet
+    // it, which would turn "prefer 60fps" into "camera doesn't open on an
+    // older phone." 720p is requested (not 1080p) because pushing for both
+    // high resolution AND 60fps on a phone's ISP commonly forces it back
+    // down to 30fps anyway -- 720p has plenty of pixel density for
+    // MediaPipe's landmark model and leaves the bandwidth headroom to
+    // actually land 60fps, which is what velocity/flight-time precision on
+    // a fast rep or jump actually benefits from. `min: 30` keeps a floor
+    // under only-mildly-capable hardware without insisting on 60.
+    const videoOnlyConstraints = {
+      video: {
+        facingMode: { ideal: "environment" as const },
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+        frameRate: { ideal: 60, min: 30 },
+      },
+    };
     const acquireCamera = () => {
       navigator.mediaDevices
         .getUserMedia(videoOnlyConstraints)
