@@ -807,6 +807,7 @@ CREATE TABLE IF NOT EXISTS "wellness_checkins" (
 ALTER TABLE "wellness_checkins" ADD COLUMN IF NOT EXISTS "hydration" integer NOT NULL DEFAULT 3;
 ALTER TABLE "wellness_checkins" ADD COLUMN IF NOT EXISTS "mental_focus" integer NOT NULL DEFAULT 3;
 ALTER TABLE "wellness_checkins" ADD COLUMN IF NOT EXISTS "body_pain_map" json NOT NULL DEFAULT '[]';
+ALTER TABLE "wellness_checkins" ADD COLUMN IF NOT EXISTS "on_period" boolean NOT NULL DEFAULT false;
 CREATE INDEX IF NOT EXISTS "wellness_checkins_athlete_idx" ON "wellness_checkins" ("athlete_id");
 CREATE UNIQUE INDEX IF NOT EXISTS "wellness_checkins_athlete_date_idx" ON "wellness_checkins" ("athlete_id", "date");
 

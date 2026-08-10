@@ -1596,6 +1596,17 @@ export const wellnessCheckins = pgTable(
     // shown/edited in the expanded check-in form, never the collapsed
     // one-line summary. Empty array is the common case (nothing hurts).
     bodyPainMap: json("body_pain_map").$type<string[]>().notNull().default([]),
+    // Optional, self-reported -- feeds computeReadiness's periodPenalty (see
+    // shared/wellness.ts) so a day of menstruation-driven fatigue shows up
+    // in the score the same way flagged pain does, without the athlete
+    // having to guess at rating their soreness/stress lower to account for
+    // it. Deliberately never selected into any coach-facing query (see
+    // getRosterWellnessToday in storage.ts and the explicit strip in the
+    // /api/coach/roster/:athleteId/wellness-history route) -- a coach sees
+    // the resulting lower readiness score, exactly like any other day, but
+    // never this specific flag. Same "shown only in the expanded form"
+    // treatment as bodyPainMap above on the athlete's own side.
+    onPeriod: boolean("on_period").notNull().default(false),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({
@@ -1616,6 +1627,7 @@ export const submitWellnessCheckinSchema = z.object({
   hydration: z.number().int().min(1).max(5).default(3),
   mentalFocus: z.number().int().min(1).max(5).default(3),
   bodyPainMap: z.array(z.string()).max(BODY_PAIN_PARTS.length).default([]),
+  onPeriod: z.boolean().default(false),
 });
 
 export const caraActivityTypeEnum = pgEnum("cara_activity_type", [
