@@ -17,7 +17,6 @@ import {
   type PathTracePoint,
 } from "./bar-tracking";
 import type { FormFault } from "./pose-tracking";
-import { wasLandingAudioConfirmed, type AudioSample } from "./audio-landing";
 
 const GRAVITY_MPS2 = 9.81;
 const SMOOTHING_WINDOW = 5;
@@ -38,11 +37,6 @@ export type JumpRep = {
   // Time on the ground before this jump's takeoff, from the previous jump's
   // landing -- null for the first jump (nothing to measure from).
   groundContactSeconds: number | null;
-  // Whether a loud transient in the mic audio lined up with this landing --
-  // see audio-landing.ts's own comment for why this is a three-state signal
-  // (null meaning "no usable audio trace to check at all", never coerced to
-  // false) and purely corroborating rather than gating the visual count.
-  audioConfirmed: boolean | null;
 };
 
 export type JumpSetMetrics = {
@@ -81,14 +75,9 @@ const BASE_MIN_FLIGHT_AMPLITUDE_CM = 15;
 // an average-height athlete, so that floor costs nothing on real reps
 // while cutting out the sway-driven ones; the height scaling shifts it
 // proportionally for anyone far from average.
-// audioSamples (from bar-tracker-dialog.tsx's LandingAudioListener, jump
-// mode only) is optional and can be an empty array -- wasLandingAudioConfirmed
-// already treats "too little/no usable audio" as null per rep rather than a
-// misleading false, so there's nothing extra to gate here.
 export function summarizeJumpSet(
   rawPoints: TrackedPoint[],
   heightIn?: number | null,
-  audioSamples?: AudioSample[],
 ): JumpSetMetrics | null {
   if (rawPoints.length < 6) return null;
   const minFlightAmplitudeCm = heightScaledAmplitudeCm(BASE_MIN_FLIGHT_AMPLITUDE_CM, heightIn);
@@ -183,7 +172,6 @@ export function summarizeJumpSet(
               peakHeightCm: Math.round(peakHeightCm * 10) / 10,
               horizontalDistanceCm,
               groundContactSeconds,
-              audioConfirmed: wasLandingAudioConfirmed(audioSamples ?? [], landingT),
             });
 
             previousLandingT = landingT;
