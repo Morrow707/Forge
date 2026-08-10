@@ -10,7 +10,7 @@
 // where it crosses each checkpoint's screen-x position. The real-world
 // distance between checkpoints comes from the coach (marker/known-distance
 // calibration), not from the camera.
-import type { NormalizedLandmark } from "@mediapipe/tasks-vision";
+import type { Landmark, NormalizedLandmark } from "@mediapipe/tasks-vision";
 import { POSE_LANDMARKS } from "./pose-tracking";
 import {
   DEFAULT_SKILL_FAULT_THRESHOLDS,
@@ -129,8 +129,17 @@ export type SprintCameraAngle = "side" | "front_behind";
 // Both cutoffs are coach-adjustable (see shared/skill-fault-thresholds.ts)
 // -- they started as fixed values picked from general sprint-coaching
 // knowledge, not calibrated against any real athlete's data.
+// Minimum real-world hip width (meters) for the front/behind hip-drop check
+// to trust a frame's hip landmarks -- comfortably under any adult's true
+// hip width (world landmarks track real anatomical scale regardless of
+// camera angle, unlike an image-space projection, which is the whole
+// reason this switched off normalized landmarks -- see below), so this only
+// ever excludes a frame where both hip landmarks have collapsed onto
+// (nearly) the same point from a tracking dropout.
+const MIN_HIP_WIDTH_M = 0.1;
+
 export function detectSprintFaults(
-  frames: { landmarks: NormalizedLandmark[] }[],
+  frames: { landmarks: NormalizedLandmark[]; worldLandmarks: Landmark[] }[],
   cameraAngle: SprintCameraAngle,
   accelerationPhaseFraction = 1 / 3,
   thresholds: SkillFaultThresholds = DEFAULT_SKILL_FAULT_THRESHOLDS,
@@ -142,24 +151,26 @@ export function detectSprintFaults(
     const accelFrameCount = Math.max(2, Math.round(frames.length * accelerationPhaseFraction));
     const leanAngles: number[] = [];
     for (const frame of frames.slice(0, accelFrameCount)) {
-      const leftHip = frame.landmarks[POSE_LANDMARKS.LEFT_HIP];
-      const rightHip = frame.landmarks[POSE_LANDMARKS.RIGHT_HIP];
-      const leftShoulder = frame.landmarks[POSE_LANDMARKS.LEFT_SHOULDER];
-      const rightShoulder = frame.landmarks[POSE_LANDMARKS.RIGHT_SHOULDER];
+      const leftHip = frame.worldLandmarks[POSE_LANDMARKS.LEFT_HIP];
+      const rightHip = frame.worldLandmarks[POSE_LANDMARKS.RIGHT_HIP];
+      const leftShoulder = frame.worldLandmarks[POSE_LANDMARKS.LEFT_SHOULDER];
+      const rightShoulder = frame.worldLandmarks[POSE_LANDMARKS.RIGHT_SHOULDER];
       if (!leftHip || !rightHip || !leftShoulder || !rightShoulder) continue;
-      const hipX = (leftHip.x + rightHip.x) / 2;
-      const hipY = (leftHip.y + rightHip.y) / 2;
-      const shoulderX = (leftShoulder.x + rightShoulder.x) / 2;
-      const shoulderY = (leftShoulder.y + rightShoulder.y) / 2;
-      // Image y grows downward, so a torso leaning "forward" (in either
-      // screen direction) has a nonzero horizontal offset between hip and
-      // shoulder relative to their vertical separation -- atan2 of that
-      // ratio gives degrees from vertical regardless of which way the
-      // athlete is running across the frame.
-      const dx = Math.abs(shoulderX - hipX);
-      const dy = Math.abs(hipY - shoulderY);
-      if (dy === 0) continue;
-      leanAngles.push((Math.atan2(dx, dy) * 180) / Math.PI);
+      // Real-world meters, not normalized image-space -- a normalized
+      // frame's x and y axes are each independently divided by frame width
+      // vs. height, so on portrait video (or with any camera tilt) an angle
+      // computed by mixing the two comes out distorted. World landmarks
+      // have no such distortion, same reasoning and same fix as
+      // pose-tracking.ts's torso-lean/bar-tilt calculations. Unsigned via
+      // acos(|dy|/magnitude) -- this direction doesn't need to know which
+      // way world-Y's sign points, since flipping it only flips dy's sign,
+      // never |dy|.
+      const dx = (leftShoulder.x + rightShoulder.x) / 2 - (leftHip.x + rightHip.x) / 2;
+      const dy = (leftShoulder.y + rightShoulder.y) / 2 - (leftHip.y + rightHip.y) / 2;
+      const dz = (leftShoulder.z + rightShoulder.z) / 2 - (leftHip.z + rightHip.z) / 2;
+      const magnitude = Math.hypot(dx, dy, dz);
+      if (magnitude === 0) continue;
+      leanAngles.push((Math.acos(Math.min(1, Math.abs(dy) / magnitude)) * 180) / Math.PI);
     }
     if (leanAngles.length > 0) {
       const avgLean = leanAngles.reduce((a, b) => a + b, 0) / leanAngles.length;
@@ -173,11 +184,17 @@ export function detectSprintFaults(
   } else {
     const hipDropRatios: number[] = [];
     for (const frame of frames) {
-      const leftHip = frame.landmarks[POSE_LANDMARKS.LEFT_HIP];
-      const rightHip = frame.landmarks[POSE_LANDMARKS.RIGHT_HIP];
+      const leftHip = frame.worldLandmarks[POSE_LANDMARKS.LEFT_HIP];
+      const rightHip = frame.worldLandmarks[POSE_LANDMARKS.RIGHT_HIP];
       if (!leftHip || !rightHip) continue;
+      // Also switched to world landmarks: the ratio mixes a y-based
+      // numerator with an x-based denominator, which is just as exposed to
+      // the aspect-ratio distortion above as an explicit angle would be --
+      // normalizing by hip width doesn't cancel it out, since width (x) and
+      // drop (y) are each divided by a different, generally-unequal frame
+      // dimension in image-space.
       const hipWidth = Math.abs(leftHip.x - rightHip.x);
-      if (hipWidth < 0.02) continue;
+      if (hipWidth < MIN_HIP_WIDTH_M) continue;
       hipDropRatios.push(Math.abs(leftHip.y - rightHip.y) / hipWidth);
     }
     if (hipDropRatios.length > 0) {

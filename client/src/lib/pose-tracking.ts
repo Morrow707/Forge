@@ -351,6 +351,19 @@ export function angleAtVertex(
   return (Math.acos(cos) * 180) / Math.PI;
 }
 
+// Nth percentile (0-1) of a numeric array -- used wherever a single
+// misdetected frame could otherwise dominate a min/max reduction taken
+// across many frames: a knee/hip/ankle triple briefly reading as nearly
+// collinear, a torso or bar-tilt angle spiking for one bad frame. Unmoved
+// by the one or two worst samples in an otherwise-clean rep/set, the same
+// reasoning bar-tracking.ts's robustPeakSpeed and barPathDeviationCm
+// already use for the equivalent position/velocity failure mode.
+function percentile(values: number[], p: number): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  const idx = Math.min(sorted.length - 1, Math.max(0, Math.floor(sorted.length * p)));
+  return sorted[idx];
+}
+
 // Knee angle(s) visible in a single frame (0, 1, or 2 -- whichever legs are
 // in frame), shared by detectFormFaults (aggregates across a whole set) and
 // computeRepDepths (aggregates within one rep's time window).
@@ -377,14 +390,16 @@ export function computeRepDepths(
   repWindows: { startT: number; endT: number }[],
 ): (number | null)[] {
   return repWindows.map(({ startT, endT }) => {
-    let minAngle: number | null = null;
+    const angles: number[] = [];
     for (const frame of frames) {
       if (frame.t < startT || frame.t > endT) continue;
-      for (const angle of frameKneeAngles(frame.landmarks)) {
-        if (minAngle === null || angle < minAngle) minAngle = angle;
-      }
+      angles.push(...frameKneeAngles(frame.landmarks));
     }
-    return minAngle === null ? null : Math.round(minAngle);
+    if (angles.length === 0) return null;
+    // 5th percentile, not a raw min -- see percentile's own comment: a
+    // single misdetected frame reading as a near-0deg knee angle isn't
+    // real anatomy, and shouldn't get to define the whole rep's depth.
+    return Math.round(percentile(angles, 0.05));
   });
 }
 
@@ -602,8 +617,11 @@ export function detectFormFaults(
     }
   }
 
-  const minKneeAngle = kneeAngles.length ? Math.min(...kneeAngles) : 180;
-  const kneeRangeOfMotion = kneeAngles.length ? Math.max(...kneeAngles) - minKneeAngle : 0;
+  // 5th/95th percentile rather than raw min/max -- see percentile's own
+  // comment: a single misdetected frame shouldn't get to set the reported
+  // depth or ROM for the whole set.
+  const minKneeAngle = kneeAngles.length ? percentile(kneeAngles, 0.05) : 180;
+  const kneeRangeOfMotion = kneeAngles.length ? percentile(kneeAngles, 0.95) - minKneeAngle : 0;
   // Only a squat/hinge/lunge-pattern movement bends the knee this much --
   // skip lower-body checks entirely for presses, rows, etc. where knees
   // barely move, so those never get a nonsensical "shallow depth" flag.
@@ -624,7 +642,7 @@ export function detectFormFaults(
   }
 
   if (isKneeDrivenMovement && valgusRatios.length) {
-    const minValgusRatio = Math.min(...valgusRatios);
+    const minValgusRatio = percentile(valgusRatios, 0.05);
     if (minValgusRatio < 0.75) {
       faults.push({
         code: "knee_valgus",
@@ -634,7 +652,7 @@ export function detectFormFaults(
   }
 
   if (isKneeDrivenMovement && torsoAngles.length) {
-    const maxTorsoAngle = Math.max(...torsoAngles);
+    const maxTorsoAngle = percentile(torsoAngles, 0.95);
     if (maxTorsoAngle > 45) {
       faults.push({
         code: "forward_lean",
@@ -651,9 +669,14 @@ export function detectFormFaults(
   }
 
   if (tiltAngles.length) {
-    // Worst (largest-magnitude) tilt observed, keeping its sign so the
-    // label can say which side was dropping.
-    const worstTilt = tiltAngles.reduce((worst, t) => (Math.abs(t) > Math.abs(worst) ? t : worst), 0);
+    // 95th percentile of |tilt|, not a raw max -- see percentile's own
+    // comment. Sign comes from the first sample that reaches this robust
+    // magnitude, so the label still says which side was actually dropping.
+    const worstMagnitude = percentile(
+      tiltAngles.map((t) => Math.abs(t)),
+      0.95,
+    );
+    const worstTilt = tiltAngles.find((t) => Math.abs(t) >= worstMagnitude) ?? 0;
     if (Math.abs(worstTilt) > 7) {
       const side = worstTilt > 0 ? "right" : "left";
       faults.push({
@@ -682,7 +705,7 @@ export function guessMovementPattern(frames: PoseFrame[]): MovementGuess {
 
   let kneeMin = 180;
   let kneeMax = 0;
-  let torsoMax = 0;
+  const torsoAngles: number[] = [];
   let wristYMin = 1;
   let wristYMax = 0;
   let wristAboveShoulderCount = 0;
@@ -726,7 +749,7 @@ export function guessMovementPattern(frames: PoseFrame[]): MovementGuess {
       const dz = (lShoulder3d.z + rShoulder3d.z) / 2 - (lHip3d.z + rHip3d.z) / 2;
       const magnitude = Math.hypot(dx, dy, dz);
       if (magnitude > 0) {
-        torsoMax = Math.max(torsoMax, (Math.acos(Math.min(1, Math.abs(dy) / magnitude)) * 180) / Math.PI);
+        torsoAngles.push((Math.acos(Math.min(1, Math.abs(dy) / magnitude)) * 180) / Math.PI);
       }
     }
   }
@@ -734,6 +757,10 @@ export function guessMovementPattern(frames: PoseFrame[]): MovementGuess {
   const kneeRangeOfMotion = kneeMax - kneeMin;
   const wristVerticalRange = wristYMax - wristYMin;
   const wristMostlyOverhead = wristSampleCount > 0 && wristAboveShoulderCount / wristSampleCount > 0.6;
+  // 95th percentile, not a raw max -- see percentile's own comment: a
+  // single misdetected frame shouldn't get to decide "deadlift" vs. "squat"
+  // for the whole set.
+  const torsoMax = torsoAngles.length ? percentile(torsoAngles, 0.95) : 0;
 
   if (kneeRangeOfMotion > 30) {
     // Both fold the knees and hips substantially -- a deadlift keeps the
