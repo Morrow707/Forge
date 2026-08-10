@@ -130,6 +130,27 @@ export function deriveBarPoint(worldLandmarks: Landmark[], requireBothWrists = f
   return averageWorldPoint([left, right]);
 }
 
+// Same wrist-midpoint concept as deriveBarPoint above, but in normalized
+// [0,1] image-space rather than real-world meters -- for implement-tracking.ts's
+// motion-diff scan, which works directly in downscaled pixel space and has
+// no use for a metric coordinate. Mirrors the same requireBothWrists
+// gating so the two stay consistent when called together on the same
+// frame (see bar-tracker-dialog.tsx's usesSharedBar).
+export function deriveNormalizedWristPoint(
+  landmarks: NormalizedLandmark[],
+  requireBothWrists = false,
+): { x: number; y: number } | null {
+  const left = landmarks[POSE_LANDMARKS.LEFT_WRIST];
+  const right = landmarks[POSE_LANDMARKS.RIGHT_WRIST];
+  if (requireBothWrists && !(visible(left) && visible(right))) return null;
+  const points = [left, right].filter(visible);
+  if (points.length === 0) return null;
+  return {
+    x: points.reduce((a, p) => a + p.x, 0) / points.length,
+    y: points.reduce((a, p) => a + p.y, 0) / points.length,
+  };
+}
+
 // World landmarks' vertical axis isn't documented as matching (or opposing)
 // normalized image-space landmarks' "y grows downward" convention, and there
 // is no way to confirm it empirically without a live camera + real body in

@@ -19,13 +19,14 @@ import {
   type RepMetrics,
 } from "@/lib/bar-tracking";
 import { summarizeJumpSet, type JumpSetMetrics } from "@/lib/jump-tracking";
-import { refineBarHeightFromEdges } from "@/lib/bar-edge-detection";
+import { ImplementTracker } from "@/lib/implement-tracking";
 import { PoseSmoother } from "@/lib/one-euro-filter";
 import { playSuccessChime } from "@/lib/audio-cues";
 import { recordedVideoType, videoFilenameForBlob } from "@/lib/video-recording";
 import {
   getPoseLandmarker,
   deriveBarPoint,
+  deriveNormalizedWristPoint,
   deriveJumpPoint,
   deriveWristPoints,
   detectFormFaults,
@@ -272,6 +273,10 @@ export function BarTrackerDialog({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const videoChunksRef = useRef<Blob[]>([]);
   const recordedBlobRef = useRef<Blob | null>(null);
+  // Stateful across frames within one tracked set -- see
+  // implement-tracking.ts's own comment for why this replaces the old
+  // wide-grip-only static edge detector.
+  const implementTrackerRef = useRef(new ImplementTracker());
 
   const [step, setStepState] = useState<Step>("setup");
   function changeStep(next: Step) {
@@ -287,12 +292,12 @@ export function BarTrackerDialog({
   const [poseVisible, setPoseVisible] = useState(true);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [alignmentHint, setAlignmentHint] = useState<string | null>(null);
-  // Whether refineBarHeightFromEdges found a confident real bar edge on the
-  // most recent frame -- purely informational, so the athlete can see
-  // whether tracking is reading the actual bar or has fallen back to the
-  // wrist-only estimate (e.g. a bare hand exercise, poor lighting, or the
-  // bar out of the search window).
-  const [barEdgeDetected, setBarEdgeDetected] = useState(false);
+  // Whether the implement tracker found confident motion this frame --
+  // purely informational, so the athlete can see whether tracking is
+  // reading the actual barbell/dumbbell/kettlebell/etc. or has fallen back
+  // to the plain wrist estimate (e.g. a bodyweight exercise with nothing
+  // held, poor lighting, or a moment with no motion to key off of).
+  const [implementDetected, setImplementDetected] = useState(false);
   const [result, setResult] = useState<RepMetrics | JumpSetMetrics | null>(null);
   const [movementGuess, setMovementGuess] = useState<MovementGuess | null>(null);
   const [voiceEnabled, setVoiceEnabled] = useState(loadVoicePref);
@@ -325,10 +330,11 @@ export function BarTrackerDialog({
     framesRef.current = [];
     lastVideoTimeRef.current = -1;
     setLiveTiltDeg(null);
-    setBarEdgeDetected(false);
+    setImplementDetected(false);
     verticalSignRef.current = 1;
     displaySmootherRef.current.reset();
     worldSmootherRef.current.reset();
+    implementTrackerRef.current.reset();
     lastDisplayYRef.current = null;
     readyStartTimeRef.current = null;
     autoStartTriggeredRef.current = false;
@@ -533,7 +539,8 @@ export function BarTrackerDialog({
     repCountRef.current = 0;
     setRepCount(0);
     setLiveTiltDeg(null);
-    setBarEdgeDetected(false);
+    setImplementDetected(false);
+    implementTrackerRef.current.reset();
 
     if (recordVideo && streamRef.current) {
       videoChunksRef.current = [];
@@ -604,7 +611,7 @@ export function BarTrackerDialog({
     setLiveTiltDeg(
       displayLandmarks && mode !== "jump" && usesSharedBar ? computeBarTiltDegrees(displayLandmarks) : null,
     );
-    if (!landmarks || !worldLandmarks) setBarEdgeDetected(false);
+    if (!landmarks || !worldLandmarks) setImplementDetected(false);
 
     if (landmarks && worldLandmarks && displayLandmarks && displayWorldLandmarks) {
       drawSkeleton(ctx, displayLandmarks, overlay.width, overlay.height);
@@ -652,17 +659,21 @@ export function BarTrackerDialog({
         const t = now - startTimeRef.current;
         const trace = traceRef.current;
         const prev = trace[trace.length - 1];
-        // Wrist height stands in for bar height by default, but the wrist
-        // joint and the bar itself aren't at the same point -- grip
-        // thickness and wrist flexion shift them apart. When there's a
-        // confident real pixel edge nearby (the bar's actual rim against
-        // the background), use that instead; jump mode has no bar to find
-        // an edge of, so it's skipped there.
-        const edgeOffset =
-          mode === "jump" ? null : refineBarHeightFromEdges(video, landmarks, worldLandmarks);
-        setBarEdgeDetected(edgeOffset != null);
-        const y = verticalSignRef.current * worldPoint.y + (edgeOffset ?? 0);
-        const point = { t, x: worldPoint.x, y, z: worldPoint.z };
+        // Wrist position stands in for the implement by default, but the
+        // wrist joint and whatever's actually in the athlete's hand aren't
+        // at the same point -- grip thickness, wrist flexion, and (for a
+        // kettlebell or med ball) just not being rigidly attached to the
+        // hand all shift the two apart. When the implement tracker finds
+        // confident motion nearby, use that instead; jump mode has nothing
+        // held, so it's skipped there.
+        const normalizedWrist = mode === "jump" ? null : deriveNormalizedWristPoint(landmarks, usesSharedBar);
+        const implementOffset =
+          normalizedWrist &&
+          implementTrackerRef.current.track(video, normalizedWrist.x, normalizedWrist.y, landmarks, worldLandmarks);
+        setImplementDetected(!!implementOffset);
+        const x = worldPoint.x + (implementOffset ? implementOffset.x : 0);
+        const y = verticalSignRef.current * worldPoint.y + (implementOffset ? implementOffset.y : 0);
+        const point = { t, x, y, z: worldPoint.z };
         // A brief camera dropout right before this point (an arm crossing
         // the bar, a chalk cloud) shouldn't read as one giant instantaneous
         // jump once it resolves -- see interpolateOcclusionGap's own
@@ -908,10 +919,10 @@ export function BarTrackerDialog({
                   <span
                     className={cn(
                       "rounded-full px-2.5 py-1 text-[11px] font-semibold",
-                      barEdgeDetected ? "bg-success/80 text-success-foreground" : "bg-black/40 text-white/70",
+                      implementDetected ? "bg-success/80 text-success-foreground" : "bg-black/40 text-white/70",
                     )}
                   >
-                    {barEdgeDetected ? "Bar detected" : "Estimating from grip"}
+                    {implementDetected ? "Object detected" : "Estimating from hand position"}
                   </span>
                 </div>
               )}
