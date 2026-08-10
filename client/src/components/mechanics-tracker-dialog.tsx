@@ -28,6 +28,7 @@ import { PoseLandmarker, type NormalizedLandmark, type Landmark } from "@mediapi
 import { toast } from "sonner";
 import { AlertTriangle, Play, Square, RotateCcw, Check, Activity, Eye, EyeOff } from "lucide-react";
 import { SuggestedCorrective } from "@/components/suggested-corrective";
+import { recordedVideoType, videoFilenameForBlob } from "@/lib/video-recording";
 
 type Step = "warning" | "capture" | "review";
 
@@ -229,7 +230,7 @@ export function MechanicsTrackerDialog({
       if (e.data.size > 0) chunksRef.current.push(e.data);
     };
     recorder.onstop = () => {
-      const blob = new Blob(chunksRef.current, { type: mimeType ?? "video/webm" });
+      const blob = new Blob(chunksRef.current, { type: recordedVideoType(recorder, mimeType) });
       finishCapture(blob);
     };
     recorderRef.current = recorder;
@@ -311,7 +312,11 @@ export function MechanicsTrackerDialog({
       let uploadedVideoUrl: string | null = null;
       if (saveClipForCoach && recordedBlobRef.current) {
         const formData = new FormData();
-        formData.append("video", recordedBlobRef.current, "skill-clip.webm");
+        formData.append(
+          "video",
+          recordedBlobRef.current,
+          videoFilenameForBlob(recordedBlobRef.current, "skill-clip"),
+        );
         const uploadRes = await apiRequest("POST", "/api/athlete/skill-video", formData);
         uploadedVideoUrl = (await uploadRes.json()).url;
       }

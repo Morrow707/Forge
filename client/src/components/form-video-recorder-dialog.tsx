@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { recordedVideoType, videoFilenameForBlob } from "@/lib/video-recording";
 
 const MAX_SECONDS = 10;
 
@@ -52,7 +53,7 @@ async function trimClip(sourceUrl: string, start: number, end: number): Promise<
         recorder.ondataavailable = (e) => {
           if (e.data.size > 0) chunks.push(e.data);
         };
-        recorder.onstop = () => resolve(new Blob(chunks, { type: mimeType ?? "video/webm" }));
+        recorder.onstop = () => resolve(new Blob(chunks, { type: recordedVideoType(recorder, mimeType) }));
         recorder.onerror = () => reject(new Error("Trim failed -- try again."));
         recorder.start();
         src.play().catch(() => {});
@@ -168,7 +169,7 @@ export function FormVideoRecorderDialog({
       if (e.data.size > 0) chunksRef.current.push(e.data);
     };
     recorder.onstop = () => {
-      const recordedBlob = new Blob(chunksRef.current, { type: mimeType ?? "video/webm" });
+      const recordedBlob = new Blob(chunksRef.current, { type: recordedVideoType(recorder, mimeType) });
       setBlob(recordedBlob);
       setPreviewUrl(URL.createObjectURL(recordedBlob));
       setStep("preview");
@@ -240,9 +241,7 @@ export function FormVideoRecorderDialog({
     setStep("uploading");
     try {
       const formData = new FormData();
-      const type = blob.type || "video/webm";
-      const ext = type.includes("mp4") ? "mp4" : type.includes("quicktime") ? "mov" : "webm";
-      formData.append("video", blob, `form-check.${ext}`);
+      formData.append("video", blob, videoFilenameForBlob(blob, "form-check"));
       const res = await apiRequest("POST", "/api/athlete/form-video", formData);
       const { url } = await res.json();
       onSaved(url);

@@ -106,8 +106,28 @@ function averageWorldPoint(points: (Landmark | undefined)[]): WorldPoint | null 
 // athlete's own path. Real-world meters (hip-centered origin), not pixels --
 // no frame dimensions needed and no calibration step to derive a
 // pixels-per-meter scale factor first.
-export function deriveBarPoint(worldLandmarks: Landmark[]): WorldPoint | null {
-  return averageWorldPoint([worldLandmarks[POSE_LANDMARKS.LEFT_WRIST], worldLandmarks[POSE_LANDMARKS.RIGHT_WRIST]]);
+//
+// requireBothWrists (only meaningful for a real shared two-handed implement
+// -- see usesSharedBarEquipment) skips averaging-whatever's-visible when
+// only one wrist clears MIN_VISIBILITY: a real bar is rigid, so both hands
+// should read together or not at all, and briefly falling back to a single
+// wrist mid-set (a head turn or the other arm dipping behind the torso, both
+// common on a back squat) silently shifts the "bar point" by about half a
+// shoulder width for those frames -- not real motion, but indistinguishable
+// from it once it's in the trace, and exactly the kind of spurious jump
+// bar-path-deviation's percentile stat can't tell apart from a genuinely
+// bad rep. Returning null for those frames instead lets the caller's own
+// occlusion-gap interpolation (see interpolateOcclusionGap) smooth over the
+// brief dropout the same way it already does for a chalk cloud or an arm
+// crossing the bar, rather than baking the jump into the trace. Left off by
+// default so bodyweight/dumbbell/unilateral tracking keeps its existing,
+// more forgiving fallback -- a real single-visible-wrist frame is common
+// and legitimate there, not just tracking noise.
+export function deriveBarPoint(worldLandmarks: Landmark[], requireBothWrists = false): WorldPoint | null {
+  const left = worldLandmarks[POSE_LANDMARKS.LEFT_WRIST];
+  const right = worldLandmarks[POSE_LANDMARKS.RIGHT_WRIST];
+  if (requireBothWrists && !(visible(left) && visible(right))) return null;
+  return averageWorldPoint([left, right]);
 }
 
 // World landmarks' vertical axis isn't documented as matching (or opposing)
@@ -410,6 +430,21 @@ export type FormFault = {
 // a bench press is just wrong regardless of what the numbers say.
 const LOWER_BODY_MOVEMENT_TYPES = new Set(["Squat", "Hinge", "Lunge"]);
 
+// "Tilt" and "drifted off a straight line" only describe something real when
+// both hands share one rigid implement -- for anything else (dumbbells,
+// bodyweight, bands, machines with independent handles) each hand moves on
+// its own, so the wrist-midpoint math just reports normal independent arm
+// motion as if it were a fault. Same Barbell/Trap Bar convention
+// workout.tsx's usesPlateCalc already uses for "this has plates to load."
+const SHARED_BAR_EQUIPMENT = new Set(["Barbell", "Trap Bar"]);
+
+// Exported so callers (the live tilt overlay, the review screen's "Bar Path
+// Deviation" vs. "Hand Path Deviation" label) can apply the same gate
+// detectFormFaults uses below, without duplicating the equipment list.
+export function usesSharedBarEquipment(equipment?: string | null): boolean {
+  return !!equipment && SHARED_BAR_EQUIPMENT.has(equipment);
+}
+
 export function detectFormFaults(
   frames: PoseFrame[],
   barPathDeviationCm: number,
@@ -426,9 +461,16 @@ export function detectFormFaults(
   // behavior) rather than required, so this can be threaded through
   // gradually without breaking existing callers.
   movementType?: string | null,
+  // The tracked exercise's equipment string, when known -- gates tilt/
+  // path-drift off entirely for non-barbell equipment (see
+  // SHARED_BAR_EQUIPMENT above). Left undefined by any caller that doesn't
+  // have it, same gradual-threading reasoning as movementType.
+  equipment?: string | null,
 ): FormFault[] {
   const faults: FormFault[] = [];
   if (frames.length < 6) return faults;
+
+  const usesSharedBar = context === "lift" && usesSharedBarEquipment(equipment);
 
   const kneeAngles: number[] = [];
   const valgusRatios: number[] = [];
@@ -437,8 +479,10 @@ export function detectFormFaults(
 
   for (const frame of frames) {
     const lm = frame.landmarks;
-    const tilt = computeBarTiltDegrees(lm);
-    if (tilt != null) tiltAngles.push(tilt);
+    if (usesSharedBar) {
+      const tilt = computeBarTiltDegrees(lm);
+      if (tilt != null) tiltAngles.push(tilt);
+    }
 
     const lKnee = lm[POSE_LANDMARKS.LEFT_KNEE];
     const rKnee = lm[POSE_LANDMARKS.RIGHT_KNEE];
@@ -511,7 +555,7 @@ export function detectFormFaults(
     }
   }
 
-  if (context === "lift" && barPathDeviationCm > 8) {
+  if (usesSharedBar && barPathDeviationCm > 8) {
     faults.push({
       code: "bar_path_drift",
       label: `Bar drifted ${barPathDeviationCm}cm off a straight vertical line`,
