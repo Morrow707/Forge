@@ -22,6 +22,7 @@ import { summarizeJumpSet, type JumpSetMetrics } from "@/lib/jump-tracking";
 import { refineBarHeightFromEdges } from "@/lib/bar-edge-detection";
 import { PoseSmoother } from "@/lib/one-euro-filter";
 import { playSuccessChime } from "@/lib/audio-cues";
+import { recordedVideoType, videoFilenameForBlob } from "@/lib/video-recording";
 import {
   getPoseLandmarker,
   deriveBarPoint,
@@ -35,6 +36,7 @@ import {
   worldVerticalSign,
   isFullBodyInFrame,
   assessCameraAlignment,
+  usesSharedBarEquipment,
   POSE_LANDMARKS,
   type PoseFrame,
   type MovementGuess,
@@ -170,6 +172,7 @@ export function BarTrackerDialog({
   exerciseName,
   movementType,
   laterality,
+  equipment,
   targetReps,
   loadKg,
   recordVideo,
@@ -185,6 +188,13 @@ export function BarTrackerDialog({
   // The exercise's movementType (Squat/Hinge/Press/etc.) -- gates which
   // form faults even make sense to check for (see detectFormFaults).
   movementType?: string | null;
+  // The exercise's equipment (Barbell/Dumbbell/Bodyweight/etc.) -- gates bar
+  // tilt and bar-path-drift off entirely for anything that isn't a shared
+  // two-handed implement (see SHARED_BAR_EQUIPMENT in pose-tracking.ts):
+  // without a rigid bar connecting both hands, each hand moves on its own,
+  // so a "tilt"/"drift" reading off the wrist midpoint is just describing
+  // normal independent arm motion, not a form fault.
+  equipment?: string | null;
   // "unilateral" exercises (single-leg squats, lunges) load one leg at a
   // time across reps/sets rather than both at once, so a same-rep left-vs-
   // right comparison wouldn't mean anything -- gates leg-drive asymmetry
@@ -287,6 +297,12 @@ export function BarTrackerDialog({
   const [movementGuess, setMovementGuess] = useState<MovementGuess | null>(null);
   const [voiceEnabled, setVoiceEnabled] = useState(loadVoicePref);
   const [savingVideo, setSavingVideo] = useState(false);
+
+  // Whether tilt/bar-path-drift mean anything for what's being tracked --
+  // see usesSharedBarEquipment's own comment. Gates the live tilt readout
+  // below the same way detectFormFaults gates the saved bar_tilt/
+  // bar_path_drift faults at Stop.
+  const usesSharedBar = mode !== "jump" && usesSharedBarEquipment(equipment);
 
   function toggleVoice(next: boolean) {
     setVoiceEnabled(next);
@@ -528,7 +544,9 @@ export function BarTrackerDialog({
         if (e.data.size > 0) videoChunksRef.current.push(e.data);
       };
       recorder.onstop = () => {
-        recordedBlobRef.current = new Blob(videoChunksRef.current, { type: mimeType ?? "video/webm" });
+        recordedBlobRef.current = new Blob(videoChunksRef.current, {
+          type: recordedVideoType(recorder, mimeType),
+        });
       };
       mediaRecorderRef.current = recorder;
       recorder.start();
@@ -579,10 +597,13 @@ export function BarTrackerDialog({
       ? worldSmootherRef.current.smooth(worldLandmarks, now)
       : null;
 
-    // Bar tilt is meaningless with no bar in hand -- skip it in jump mode
-    // rather than showing a readout from whatever the arms happen to be
-    // doing mid-jump.
-    setLiveTiltDeg(displayLandmarks && mode !== "jump" ? computeBarTiltDegrees(displayLandmarks) : null);
+    // Bar tilt is meaningless with no bar in hand -- skip it in jump mode,
+    // and skip it for any equipment that isn't a shared two-handed implement
+    // (see SHARED_BAR_EQUIPMENT in pose-tracking.ts), same gate
+    // detectFormFaults applies to the saved bar_tilt fault below.
+    setLiveTiltDeg(
+      displayLandmarks && mode !== "jump" && usesSharedBar ? computeBarTiltDegrees(displayLandmarks) : null,
+    );
     if (!landmarks || !worldLandmarks) setBarEdgeDetected(false);
 
     if (landmarks && worldLandmarks && displayLandmarks && displayWorldLandmarks) {
@@ -611,7 +632,9 @@ export function BarTrackerDialog({
       // below (and the final saved peak/mean velocity) stays on the raw
       // point, untouched.
       const displayWorldPoint =
-        mode === "jump" ? deriveJumpPoint(displayWorldLandmarks) : deriveBarPoint(displayWorldLandmarks);
+        mode === "jump"
+          ? deriveJumpPoint(displayWorldLandmarks)
+          : deriveBarPoint(displayWorldLandmarks, usesSharedBar);
       if (displayWorldPoint) {
         const displayY = verticalSignRef.current * displayWorldPoint.y;
         if (lastDisplayYRef.current != null) {
@@ -622,7 +645,8 @@ export function BarTrackerDialog({
         lastDisplayTRef.current = now;
       }
 
-      const worldPoint = mode === "jump" ? deriveJumpPoint(worldLandmarks) : deriveBarPoint(worldLandmarks);
+      const worldPoint =
+        mode === "jump" ? deriveJumpPoint(worldLandmarks) : deriveBarPoint(worldLandmarks, usesSharedBar);
 
       if (worldPoint) {
         const t = now - startTimeRef.current;
@@ -728,7 +752,7 @@ export function BarTrackerDialog({
       // Landing mechanics (valgus, forward lean) still matter for a jump;
       // squat-depth judgment and bar-path drift don't -- see the "jump"
       // context branch in detectFormFaults.
-      jumpMetrics.formFaults = detectFormFaults(framesRef.current, 0, "jump", movementType);
+      jumpMetrics.formFaults = detectFormFaults(framesRef.current, 0, "jump", movementType, equipment);
       if (voiceEnabledRef.current) {
         speak(`Set complete. Best jump ${jumpMetrics.bestJumpHeightCm} centimeters.`);
       }
@@ -743,7 +767,13 @@ export function BarTrackerDialog({
       changeStep("setup");
       return;
     }
-    metrics.formFaults = detectFormFaults(framesRef.current, metrics.barPathDeviationCm, "lift", movementType);
+    metrics.formFaults = detectFormFaults(
+      framesRef.current,
+      metrics.barPathDeviationCm,
+      "lift",
+      movementType,
+      equipment,
+    );
 
     const depths = computeRepDepths(
       framesRef.current,
@@ -1015,7 +1045,7 @@ export function BarTrackerDialog({
               )}
               <Stat label="Avg. ROM" value={`${liftResult.romCm} cm`} />
               <Stat
-                label="Bar Path Deviation"
+                label={usesSharedBar ? "Bar Path Deviation" : "Hand Path Deviation"}
                 value={`${liftResult.barPathDeviationCm} cm`}
                 full={mode === "bar_path"}
               />
@@ -1147,7 +1177,11 @@ export function BarTrackerDialog({
                     setSavingVideo(true);
                     try {
                       const formData = new FormData();
-                      formData.append("video", recordedBlobRef.current, "form-check.webm");
+                      formData.append(
+                        "video",
+                        recordedBlobRef.current,
+                        videoFilenameForBlob(recordedBlobRef.current, "form-check"),
+                      );
                       const res = await apiRequest("POST", "/api/athlete/form-video", formData);
                       const { url } = await res.json();
                       onCapture(result, url);

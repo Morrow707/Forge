@@ -913,6 +913,51 @@ export function WorkoutPage({
     dayCompletedRef.current = data?.log?.completed ?? false;
   }, [data?.log?.completed]);
 
+  // Every save -- debounced autosave, immediate autosave, and an explicit
+  // "Mark Workout Complete" tap alike -- funnels through this single
+  // in-flight queue so at most one /log POST is ever outstanding at once.
+  // Without it, two overlapping requests race purely on network timing:
+  // submitWorkoutLog does a full delete-and-reinsert of the day's entries
+  // per request, so whichever response the server *finishes processing*
+  // last wins entirely, even if its request started earlier and carries an
+  // older, now-stale snapshot. That silently erases anything saved by the
+  // request that "lost" the race -- a just-captured camera set, a
+  // just-uploaded form-check video -- with no error surfaced anywhere.
+  // Queuing guarantees requests hit the server strictly one at a time, in
+  // the order they were queued, so there's never a second in-flight
+  // response that could land out of turn.
+  const saveInFlightRef = useRef(false);
+  const pendingSaveRef = useRef<{ completed: boolean; itemsSnapshot: ItemState[]; silent: boolean } | null>(
+    null,
+  );
+
+  function runQueuedSave(args: { completed: boolean; itemsSnapshot: ItemState[]; silent: boolean }) {
+    saveInFlightRef.current = true;
+    submitMutation.mutate(args, {
+      onSettled: () => {
+        saveInFlightRef.current = false;
+        const next = pendingSaveRef.current;
+        if (next) {
+          pendingSaveRef.current = null;
+          runQueuedSave(next);
+        }
+      },
+    });
+  }
+
+  // Only the most recently queued snapshot ever needs to actually reach the
+  // server -- it already reflects every earlier one's edits, since they're
+  // all just consecutive updates to the same `items` array -- so a save
+  // requested while one's in flight replaces whatever was queued rather
+  // than piling up a backlog of stale in-between snapshots to send later.
+  function queueSave(args: { completed: boolean; itemsSnapshot: ItemState[]; silent: boolean }) {
+    if (saveInFlightRef.current) {
+      pendingSaveRef.current = args;
+      return;
+    }
+    runQueuedSave(args);
+  }
+
   // Debounced background save on any field edit -- weight, reps, RPE, notes,
   // camera-tracked metrics, all of it. Takes the just-computed items array
   // directly (not the `items` state) so it never races the setItems update
@@ -923,7 +968,7 @@ export function WorkoutPage({
     if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
     autosaveTimerRef.current = setTimeout(() => {
       autosaveTimerRef.current = null;
-      submitMutation.mutate({
+      queueSave({
         completed: dayCompletedRef.current,
         itemsSnapshot: nextItems,
         silent: true,
@@ -939,7 +984,7 @@ export function WorkoutPage({
       clearTimeout(autosaveTimerRef.current);
       autosaveTimerRef.current = null;
     }
-    submitMutation.mutate({
+    queueSave({
       completed: dayCompletedRef.current,
       itemsSnapshot: nextItems,
       silent: true,
@@ -1369,7 +1414,7 @@ export function WorkoutPage({
                   </Button>
                   <Button
                     className="flex-1"
-                    onClick={() => submitMutation.mutate({ completed: true })}
+                    onClick={() => queueSave({ completed: true, itemsSnapshot: items, silent: false })}
                     disabled={submitMutation.isPending}
                   >
                     <CheckCircle2 className="h-4 w-4" />
@@ -1461,7 +1506,7 @@ export function WorkoutPage({
                   <Button
                     className="flex-1"
                     onClick={() => {
-                      submitMutation.mutate({ completed: true });
+                      queueSave({ completed: true, itemsSnapshot: items, silent: false });
                       setViewMode("overview");
                     }}
                     disabled={submitMutation.isPending}
@@ -2184,6 +2229,7 @@ function ExerciseLogContent({
               exerciseName={item.exerciseName}
               movementType={item.movementType}
               laterality={item.laterality}
+              equipment={item.equipment}
               targetReps={parseTargetReps(item.prescribedReps)}
               loadKg={loadKg}
               recordVideo={mergedTracking}

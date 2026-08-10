@@ -87,16 +87,24 @@ const VIDEO_EXTENSION_BY_MIME: Record<string, string> = {
   "video/quicktime": ".mov",
 };
 
+// Browsers sometimes append codec parameters to the multipart Content-Type
+// (e.g. "video/mp4;codecs=avc1.4D401E") -- only the base type before the
+// semicolon is meaningful for picking a container extension, so this is the
+// single place both upload routes below look one up from.
+function videoExtensionForMimetype(mimetype: string): string | undefined {
+  return VIDEO_EXTENSION_BY_MIME[mimetype.split(";")[0].trim().toLowerCase()];
+}
+
 const uploadFormVideo = multer({
   storage: multer.diskStorage({
     destination: UPLOADS_DIR,
     filename: (_req, file, cb) => {
-      cb(null, `${crypto.randomUUID()}${VIDEO_EXTENSION_BY_MIME[file.mimetype] ?? ""}`);
+      cb(null, `${crypto.randomUUID()}${videoExtensionForMimetype(file.mimetype) ?? ""}`);
     },
   }),
   limits: { fileSize: 100 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
-    if (!VIDEO_EXTENSION_BY_MIME[file.mimetype]) {
+    if (!videoExtensionForMimetype(file.mimetype)) {
       return cb(new Error("Unsupported video format"));
     }
     cb(null, true);
@@ -116,12 +124,12 @@ const uploadSkillVideo = multer({
   storage: multer.diskStorage({
     destination: SKILL_VIDEOS_DIR,
     filename: (_req, file, cb) => {
-      cb(null, `${crypto.randomUUID()}${VIDEO_EXTENSION_BY_MIME[file.mimetype] ?? ""}`);
+      cb(null, `${crypto.randomUUID()}${videoExtensionForMimetype(file.mimetype) ?? ""}`);
     },
   }),
   limits: { fileSize: 100 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
-    if (!VIDEO_EXTENSION_BY_MIME[file.mimetype]) {
+    if (!videoExtensionForMimetype(file.mimetype)) {
       return cb(new Error("Unsupported video format"));
     }
     cb(null, true);
