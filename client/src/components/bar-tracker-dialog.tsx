@@ -21,7 +21,6 @@ import {
 import { summarizeJumpSet, type JumpSetMetrics } from "@/lib/jump-tracking";
 import { ImplementTracker } from "@/lib/implement-tracking";
 import { getHandLandmarker, refineGripPoint } from "@/lib/hand-tracking";
-import { LandingAudioListener } from "@/lib/audio-landing";
 import { PoseSmoother } from "@/lib/one-euro-filter";
 import { playSuccessChime } from "@/lib/audio-cues";
 import { recordedVideoType, videoFilenameForBlob } from "@/lib/video-recording";
@@ -64,7 +63,6 @@ import {
   Info,
   Volume2,
   VolumeX,
-  Mic,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis } from "recharts";
@@ -266,10 +264,6 @@ export function BarTrackerDialog({
   // enough at 30fps for every single frame to need its own full second
   // Pose inference.
   const roiTickCounterRef = useRef(0);
-  // Jump mode only -- see audio-landing.ts's own comment. Harmless to
-  // construct unconditionally; start() is a no-op whenever the captured
-  // stream has no audio track (lift modes never request one).
-  const landingAudioListenerRef = useRef(new LandingAudioListener());
   const lastVideoTimeRef = useRef(-1);
   const voiceEnabledRef = useRef(loadVoicePref());
   // Which sign to multiply worldLandmarks' y by so "up" always means a
@@ -427,13 +421,11 @@ export function BarTrackerDialog({
       if (videoRef.current) videoRef.current.srcObject = stream;
     };
     // Video-only, always -- jump mode used to also request the mic here for
-    // the optional landing-audio confirmation (see audio-landing.ts), but on
-    // iOS that silently interrupts (and doesn't resume) whatever music the
-    // athlete had playing, just to capture a signal that's explicitly a
+    // an optional landing-audio confirmation signal, but on iOS that
+    // silently interrupts (and doesn't resume) whatever music the athlete
+    // had playing, just to capture a signal that was only ever a
     // supplementary confirmation and never a requirement. Not a trade worth
-    // making for every jump-mode session -- LandingAudioListener.start()
-    // already no-ops cleanly against a stream with no audio track, so
-    // dropping the mic request here doesn't need any change on that end.
+    // making for every jump-mode session, so the feature's gone entirely.
     const videoOnlyConstraints = { video: { facingMode: "environment" as const } };
     const acquireCamera = () => {
       navigator.mediaDevices
@@ -480,10 +472,6 @@ export function BarTrackerDialog({
       // up to fire against a dialog nobody's looking at anymore.
       autoStartTimersRef.current.forEach((id) => window.clearTimeout(id));
       autoStartTimersRef.current = [];
-      // Closing mid-set shouldn't leave the AudioContext/interval running
-      // against a dialog nobody's looking at anymore, same reasoning as the
-      // camera stream above.
-      landingAudioListenerRef.current.reset();
     };
   }, [open]);
 
@@ -633,12 +621,6 @@ export function BarTrackerDialog({
     rightTraceRef.current = [];
     framesRef.current = [];
     startTimeRef.current = performance.now();
-    if (mode === "jump" && streamRef.current) {
-      // Same clock origin as the trace's own `t` values below (both measured
-      // off startTimeRef.current) so a rep's landingT lines up directly
-      // against the audio trace's timestamps in wasLandingAudioConfirmed.
-      landingAudioListenerRef.current.start(streamRef.current, startTimeRef.current);
-    }
     lastRepDirRef.current = 0;
     lastVideoTimeRef.current = -1;
     repCountRef.current = 0;
@@ -712,9 +694,16 @@ export function BarTrackerDialog({
     // Bar tilt is meaningless with no bar in hand -- skip it in jump mode,
     // and skip it for any equipment that isn't a shared two-handed implement
     // (see SHARED_BAR_EQUIPMENT in pose-tracking.ts), same gate
-    // detectFormFaults applies to the saved bar_tilt fault below.
+    // detectFormFaults applies to the saved bar_tilt fault below. Reads
+    // world landmarks (not image-space, see computeBarTiltDegrees's own
+    // comment for why) and the last confidently-known vertical sign --
+    // that ref is updated below whenever a fresh frame can confirm it, and
+    // holds steady otherwise, so this stays correct even the instant before
+    // the very first confident reading lands.
     setLiveTiltDeg(
-      displayLandmarks && mode !== "jump" && usesSharedBar ? computeBarTiltDegrees(displayLandmarks) : null,
+      displayWorldLandmarks && mode !== "jump" && usesSharedBar
+        ? computeBarTiltDegrees(displayWorldLandmarks, verticalSignRef.current)
+        : null,
     );
     if (!landmarks || !worldLandmarks) setImplementDetected(false);
 
@@ -884,8 +873,7 @@ export function BarTrackerDialog({
     if (mediaRecorderRef.current?.state === "recording") mediaRecorderRef.current.stop();
 
     if (mode === "jump") {
-      const audioSamples = landingAudioListenerRef.current.stop();
-      const jumpMetrics = summarizeJumpSet(traceRef.current, heightIn, audioSamples);
+      const jumpMetrics = summarizeJumpSet(traceRef.current, heightIn);
       if (!jumpMetrics) {
         toast.error("Couldn't get a clean read — make sure your feet leave the ground clearly in frame.");
         changeStep("setup");
@@ -1149,12 +1137,6 @@ export function BarTrackerDialog({
                         {r.horizontalDistanceCm != null && <span>{r.horizontalDistanceCm} cm dist.</span>}
                         {r.groundContactSeconds != null && (
                           <span>{r.groundContactSeconds}s contact</span>
-                        )}
-                        {r.audioConfirmed === true && (
-                          <Mic
-                            className="h-3 w-3 text-emerald-500"
-                            aria-label="Landing confirmed by audio"
-                          />
                         )}
                       </span>
                     </div>

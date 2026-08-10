@@ -58,11 +58,18 @@ export const POSE_LANDMARKS = {
 
 const MIN_VISIBILITY = 0.5;
 
-// landmarks (normalized image-space) still drive every angle/ratio-based
-// check (knee angle, valgus, torso lean, bar tilt, movement-pattern guess) --
-// those are scale-invariant so 2D projection is fine for them. worldLandmarks
-// (real-world meters, hip-centered) drive every absolute-distance metric
-// (bar path, velocity, ROM, power) -- see deriveBarPoint et al. below.
+// landmarks (normalized image-space) still drive same-axis ratio checks
+// (knee angle, valgus) -- an x-only or y-only comparison stays scale-
+// invariant under 2D projection. Anything that measures an angle FROM
+// VERTICAL by mixing an x-component with a y-component (torso lean, bar
+// tilt, the squat/deadlift movement-pattern guess) needs worldLandmarks
+// instead: a normalized image's x and y axes are each independently divided
+// by frame width/height, so on any non-square video -- portrait phone video,
+// essentially always -- that mismatched scaling bends the angle, and gets
+// worse again with any camera tilt. worldLandmarks (real-world meters,
+// hip-centered) sidestep that entirely, and also drive every absolute-
+// distance metric (bar path, velocity, ROM, power) -- see deriveBarPoint et
+// al. below.
 export type PoseFrame = { t: number; landmarks: NormalizedLandmark[]; worldLandmarks: Landmark[] };
 
 let landmarkerPromise: Promise<PoseLandmarker> | null = null;
@@ -200,6 +207,12 @@ export function worldVerticalSign(worldLandmarks: Landmark[]): 1 | -1 | null {
   return shoulderY < hipY ? 1 : -1;
 }
 
+// Minimum real-world hand separation (meters) for computeBarTiltDegrees to
+// trust the pair as an actual two-handed bar grip rather than a misdetected/
+// collapsed wrist pair -- comfortably under even a narrow bench-press grip,
+// generously under a full-width squat/deadlift grip, for an average adult.
+const MIN_BAR_GRIP_SEPARATION_M = 0.15;
+
 // Signed tilt of the wrist-to-wrist LINE from horizontal, in degrees -- 0 is
 // level, positive means the right hand is lower than the left. This is the
 // same idea as an oriented bounding box around the bar (its rotation angle
@@ -209,28 +222,39 @@ export function worldVerticalSign(worldLandmarks: Landmark[]): 1 | -1 | null {
 // actual barbell/handle grip), so returns null for single-arm work or any
 // frame where the hands are stacked rather than spread on a bar.
 //
+// Takes worldLandmarks (real-world meters), not normalized image-space --
+// image-space x/y are each independently normalized by frame width/height,
+// which on portrait video (or with any camera tilt) distorts an angle
+// computed by mixing the two, the same bug that inflated torso lean above.
+// World-space has no such distortion.
+//
 // Deliberately atan(dy/dx), not atan2(dy,dx): a line has no direction, only
-// slope, so the sign of dx (which wrist happens to have the larger pixel x)
-// must not affect the magnitude. atan2 over the full vector is direction-
-// sensitive -- whenever the anatomical right wrist sits at a smaller pixel x
-// than the left (the ordinary case when facing the camera, since screen-left
-// is the athlete's own right), it reports an angle near +/-180 for what is
+// slope, so the sign of dx (which wrist happens to be further right) must
+// not affect the magnitude. atan2 over the full vector is direction-
+// sensitive -- whenever the anatomical right wrist sits at a smaller x than
+// the left (the ordinary case facing the camera, since screen-left is the
+// athlete's own right), it reports an angle near +/-180 for what is
 // actually a nearly level bar. atan(dy/dx) always lands in (-90, 90),
-// correctly describing slope regardless of which wrist is on which side of
-// the frame. The sign is then reattached from the raw dy comparison (which
-// wrist is physically lower in the image) rather than trusted from the atan
-// result, since dividing by a negative dx flips it independently of dy.
-export function computeBarTiltDegrees(landmarks: NormalizedLandmark[]): number | null {
-  const left = landmarks[POSE_LANDMARKS.LEFT_WRIST];
-  const right = landmarks[POSE_LANDMARKS.RIGHT_WRIST];
+// correctly describing slope regardless of which wrist is on which side.
+// Magnitude doesn't need vertical-sign correction either -- atan is odd, so
+// flipping dy's sign only flips the result's sign, never its magnitude.
+//
+// The sign DOES need correction, though: world Y's up/down convention is
+// ambiguous per worldVerticalSign's own comment, so `verticalSign` (the
+// caller's best current reading, from worldVerticalSign) is applied to dy
+// first to bring it into the same "larger = lower" convention the rest of
+// the codebase already assumes before reading off which wrist is lower.
+export function computeBarTiltDegrees(worldLandmarks: Landmark[], verticalSign: 1 | -1): number | null {
+  const left = worldLandmarks[POSE_LANDMARKS.LEFT_WRIST];
+  const right = worldLandmarks[POSE_LANDMARKS.RIGHT_WRIST];
   if (!visible(left) || !visible(right)) return null;
   const dx = right.x - left.x;
   const dy = right.y - left.y;
-  if (Math.abs(dx) < 0.05) return null;
+  if (Math.abs(dx) < MIN_BAR_GRIP_SEPARATION_M) return null;
   const magnitude = Math.abs((Math.atan(dy / dx) * 180) / Math.PI);
-  // y increases downward, so a positive dy means the right wrist is lower.
-  if (dy > 0) return magnitude;
-  if (dy < 0) return -magnitude;
+  const correctedDy = verticalSign * dy;
+  if (correctedDy > 0) return magnitude;
+  if (correctedDy < 0) return -magnitude;
   return 0;
 }
 
@@ -523,10 +547,21 @@ export function detectFormFaults(
   const torsoAngles: number[] = [];
   const tiltAngles: number[] = [];
 
+  // Best current reading of which way world-Y points "up" -- refined every
+  // frame it can be (see worldVerticalSign), held from the last confident
+  // frame otherwise, same pattern bar-tracker-dialog.tsx's verticalSignRef
+  // uses live. Only bar tilt's sign needs this; torso lean below is
+  // unsigned and doesn't care which way world-Y points.
+  let currentVerticalSign: 1 | -1 = 1;
+
   for (const frame of frames) {
     const lm = frame.landmarks;
+    const worldLm = frame.worldLandmarks;
+    const sign = worldVerticalSign(worldLm);
+    if (sign != null) currentVerticalSign = sign;
+
     if (usesSharedBar) {
-      const tilt = computeBarTiltDegrees(lm);
+      const tilt = computeBarTiltDegrees(worldLm, currentVerticalSign);
       if (tilt != null) tiltAngles.push(tilt);
     }
 
@@ -534,10 +569,6 @@ export function detectFormFaults(
     const rKnee = lm[POSE_LANDMARKS.RIGHT_KNEE];
     const lAnkle = lm[POSE_LANDMARKS.LEFT_ANKLE];
     const rAnkle = lm[POSE_LANDMARKS.RIGHT_ANKLE];
-    const lHip = lm[POSE_LANDMARKS.LEFT_HIP];
-    const rHip = lm[POSE_LANDMARKS.RIGHT_HIP];
-    const lShoulder = lm[POSE_LANDMARKS.LEFT_SHOULDER];
-    const rShoulder = lm[POSE_LANDMARKS.RIGHT_SHOULDER];
 
     kneeAngles.push(...frameKneeAngles(lm));
 
@@ -550,13 +581,24 @@ export function detectFormFaults(
       if (ankleWidth > 0.02) valgusRatios.push(kneeWidth / ankleWidth);
     }
 
-    if (visible(lShoulder) && visible(rShoulder) && visible(lHip) && visible(rHip)) {
-      const shoulderMid = { x: (lShoulder.x + rShoulder.x) / 2, y: (lShoulder.y + rShoulder.y) / 2 };
-      const hipMid = { x: (lHip.x + rHip.x) / 2, y: (lHip.y + rHip.y) / 2 };
-      // Angle of the torso line from vertical (0deg = perfectly upright).
-      const dx = shoulderMid.x - hipMid.x;
-      const dy = shoulderMid.y - hipMid.y;
-      torsoAngles.push((Math.atan2(Math.abs(dx), Math.abs(dy)) * 180) / Math.PI);
+    // Torso lean from vertical, in real-world meters (see the PoseFrame
+    // comment up top for why this can't be done in image-space). Unsigned
+    // and computed via acos(|dy|/magnitude) rather than atan2 -- this needs
+    // no vertical-sign correction at all, since flipping world-Y's sign
+    // flips dy's sign but not |dy|, and magnitude (a plain 3D distance) is
+    // sign-independent by construction.
+    const lShoulder3d = worldLm[POSE_LANDMARKS.LEFT_SHOULDER];
+    const rShoulder3d = worldLm[POSE_LANDMARKS.RIGHT_SHOULDER];
+    const lHip3d = worldLm[POSE_LANDMARKS.LEFT_HIP];
+    const rHip3d = worldLm[POSE_LANDMARKS.RIGHT_HIP];
+    if (visible(lShoulder3d) && visible(rShoulder3d) && visible(lHip3d) && visible(rHip3d)) {
+      const dx = (lShoulder3d.x + rShoulder3d.x) / 2 - (lHip3d.x + rHip3d.x) / 2;
+      const dy = (lShoulder3d.y + rShoulder3d.y) / 2 - (lHip3d.y + rHip3d.y) / 2;
+      const dz = (lShoulder3d.z + rShoulder3d.z) / 2 - (lHip3d.z + rHip3d.z) / 2;
+      const magnitude = Math.hypot(dx, dy, dz);
+      if (magnitude > 0) {
+        torsoAngles.push((Math.acos(Math.min(1, Math.abs(dy) / magnitude)) * 180) / Math.PI);
+      }
     }
   }
 
@@ -648,28 +690,43 @@ export function guessMovementPattern(frames: PoseFrame[]): MovementGuess {
 
   for (const frame of frames) {
     const lm = frame.landmarks;
+    const worldLm = frame.worldLandmarks;
     for (const angle of frameKneeAngles(lm)) {
       kneeMin = Math.min(kneeMin, angle);
       kneeMax = Math.max(kneeMax, angle);
     }
 
+    // Wrist-vs-shoulder height stays in image-space -- it's a same-axis (y
+    // vs y) comparison within one frame, not an angle, so it isn't subject
+    // to the aspect-ratio distortion torso lean below has to avoid.
     const lShoulder = lm[POSE_LANDMARKS.LEFT_SHOULDER];
     const rShoulder = lm[POSE_LANDMARKS.RIGHT_SHOULDER];
-    const lHip = lm[POSE_LANDMARKS.LEFT_HIP];
-    const rHip = lm[POSE_LANDMARKS.RIGHT_HIP];
-    if (visible(lShoulder) && visible(rShoulder) && visible(lHip) && visible(rHip)) {
-      const shoulderMid = { x: (lShoulder.x + rShoulder.x) / 2, y: (lShoulder.y + rShoulder.y) / 2 };
-      const hipMid = { x: (lHip.x + rHip.x) / 2, y: (lHip.y + rHip.y) / 2 };
-      const dx = shoulderMid.x - hipMid.x;
-      const dy = shoulderMid.y - hipMid.y;
-      torsoMax = Math.max(torsoMax, (Math.atan2(Math.abs(dx), Math.abs(dy)) * 180) / Math.PI);
-
+    if (visible(lShoulder) && visible(rShoulder)) {
+      const shoulderMidY = (lShoulder.y + rShoulder.y) / 2;
       for (const w of [lm[POSE_LANDMARKS.LEFT_WRIST], lm[POSE_LANDMARKS.RIGHT_WRIST]]) {
         if (!visible(w)) continue;
         wristSampleCount += 1;
         wristYMin = Math.min(wristYMin, w.y);
         wristYMax = Math.max(wristYMax, w.y);
-        if (w.y < shoulderMid.y) wristAboveShoulderCount += 1;
+        if (w.y < shoulderMidY) wristAboveShoulderCount += 1;
+      }
+    }
+
+    // Torso lean from vertical, in real-world meters -- same world-space,
+    // unsigned acos(|dy|/magnitude) approach as detectFormFaults uses, and
+    // for the same reason (image-space atan2 here is what previously
+    // misread an upright squat as a deadlift-steep torso angle).
+    const lShoulder3d = worldLm[POSE_LANDMARKS.LEFT_SHOULDER];
+    const rShoulder3d = worldLm[POSE_LANDMARKS.RIGHT_SHOULDER];
+    const lHip3d = worldLm[POSE_LANDMARKS.LEFT_HIP];
+    const rHip3d = worldLm[POSE_LANDMARKS.RIGHT_HIP];
+    if (visible(lShoulder3d) && visible(rShoulder3d) && visible(lHip3d) && visible(rHip3d)) {
+      const dx = (lShoulder3d.x + rShoulder3d.x) / 2 - (lHip3d.x + rHip3d.x) / 2;
+      const dy = (lShoulder3d.y + rShoulder3d.y) / 2 - (lHip3d.y + rHip3d.y) / 2;
+      const dz = (lShoulder3d.z + rShoulder3d.z) / 2 - (lHip3d.z + rHip3d.z) / 2;
+      const magnitude = Math.hypot(dx, dy, dz);
+      if (magnitude > 0) {
+        torsoMax = Math.max(torsoMax, (Math.acos(Math.min(1, Math.abs(dy) / magnitude)) * 180) / Math.PI);
       }
     }
   }
