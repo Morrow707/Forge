@@ -11,7 +11,14 @@ import { apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { Plus, Trash2, Dumbbell, Search, Video, Stethoscope } from "lucide-react";
 import type { ExerciseWithOwnership } from "@/lib/exercise-types";
-import { MOVEMENT_TYPES, MUSCLE_GROUPS, SPORTS, BODY_REGIONS, PLANES } from "@/lib/exercise-taxonomy";
+import {
+  MOVEMENT_TYPES,
+  MUSCLE_GROUPS,
+  SPORTS,
+  BODY_REGIONS,
+  PLANES,
+  MOVEMENT_COMPLEXITIES,
+} from "@/lib/exercise-taxonomy";
 import { FilterChipGroup, toggleInSet } from "@/components/filter-chip-group";
 import {
   CATEGORY_BADGE_CLASS,
@@ -23,6 +30,7 @@ import {
   OWNER_FILTER_ACTIVE_CLASS,
   BODY_REGION_FILTER_ACTIVE_CLASS,
   PLANE_FILTER_ACTIVE_CLASS,
+  MOVEMENT_COMPLEXITY_FILTER_ACTIVE_CLASS,
 } from "@/lib/exercise-colors";
 import { toast } from "sonner";
 import { ApiError } from "@/lib/queryClient";
@@ -74,6 +82,7 @@ export function ExerciseBankPage({
   const [lateralityFilter, setLateralityFilter] = useState<Set<string>>(new Set());
   const [bodyRegionFilter, setBodyRegionFilter] = useState<Set<string>>(new Set());
   const [planeFilter, setPlaneFilter] = useState<Set<string>>(new Set());
+  const [complexityFilter, setComplexityFilter] = useState<Set<string>>(new Set());
   const [sportFilter, setSportFilter] = useState<Set<string>>(new Set());
   const [ownerFilter, setOwnerFilter] = useState<Set<string>>(new Set());
   const [correctivesOnly, setCorrectivesOnly] = useState(false);
@@ -112,6 +121,9 @@ export function ExerciseBankPage({
       const matchesBodyRegion =
         bodyRegionFilter.size === 0 || (ex.bodyRegion != null && bodyRegionFilter.has(ex.bodyRegion));
       const matchesPlane = planeFilter.size === 0 || (ex.plane != null && planeFilter.has(ex.plane));
+      const matchesComplexity =
+        complexityFilter.size === 0 ||
+        (ex.movementComplexity != null && complexityFilter.has(ex.movementComplexity));
       const matchesSport =
         sportFilter.size === 0 || (ex.sports ?? []).some((s) => sportFilter.has(s));
       const matchesOwner = ownerFilter.size === 0 || ownerFilter.has(ex.ownerLabel);
@@ -124,6 +136,7 @@ export function ExerciseBankPage({
         matchesLaterality &&
         matchesBodyRegion &&
         matchesPlane &&
+        matchesComplexity &&
         matchesSport &&
         matchesOwner &&
         matchesCorrective
@@ -138,6 +151,7 @@ export function ExerciseBankPage({
     lateralityFilter,
     bodyRegionFilter,
     planeFilter,
+    complexityFilter,
     sportFilter,
     ownerFilter,
     correctivesOnly,
@@ -241,6 +255,13 @@ export function ExerciseBankPage({
             onToggle={(v) => toggleInSet(setPlaneFilter, v)}
             colorClass={PLANE_FILTER_ACTIVE_CLASS}
           />
+          <FilterChipGroup
+            label="Complexity"
+            options={MOVEMENT_COMPLEXITIES}
+            selected={complexityFilter}
+            onToggle={(v) => toggleInSet(setComplexityFilter, v)}
+            colorClass={MOVEMENT_COMPLEXITY_FILTER_ACTIVE_CLASS}
+          />
         </div>
         <FilterChipGroup
           label="Muscle"
@@ -289,6 +310,7 @@ export function ExerciseBankPage({
                       {ex.plane ? ` (${ex.plane})` : ""}
                       {ex.laterality ? ` · ${ex.laterality}` : ""}
                       {ex.bodyRegion ? ` · ${ex.bodyRegion}` : ""}
+                      {ex.movementComplexity ? ` · ${ex.movementComplexity}` : ""}
                     </p>
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-1">

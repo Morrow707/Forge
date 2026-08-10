@@ -38,7 +38,14 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import type { ExerciseWithOwnership } from "@/lib/exercise-types";
-import { MOVEMENT_TYPES, MUSCLE_GROUPS, SPORTS, BODY_REGIONS, PLANES } from "@/lib/exercise-taxonomy";
+import {
+  MOVEMENT_TYPES,
+  MUSCLE_GROUPS,
+  SPORTS,
+  BODY_REGIONS,
+  PLANES,
+  MOVEMENT_COMPLEXITIES,
+} from "@/lib/exercise-taxonomy";
 import {
   CATEGORY_BADGE_CLASS,
   CATEGORY_FILTER_ACTIVE_CLASS,
@@ -48,6 +55,7 @@ import {
   SPORT_FILTER_ACTIVE_CLASS,
   BODY_REGION_FILTER_ACTIVE_CLASS,
   PLANE_FILTER_ACTIVE_CLASS,
+  MOVEMENT_COMPLEXITY_FILTER_ACTIVE_CLASS,
 } from "@/lib/exercise-colors";
 import { FilterChipGroup, RadioChipGroup } from "@/components/filter-chip-group";
 
@@ -82,6 +90,7 @@ type ExerciseForm = {
   laterality: string;
   bodyRegion: string;
   plane: string;
+  movementComplexity: string;
   isCorrective: boolean;
   videoUrl: string;
   instructions: string;
@@ -102,6 +111,7 @@ const emptyForm: ExerciseForm = {
   laterality: "",
   bodyRegion: "",
   plane: "",
+  movementComplexity: "",
   isCorrective: false,
   videoUrl: "",
   instructions: "",
@@ -123,6 +133,7 @@ function formFrom(ex: ExerciseWithOwnership): ExerciseForm {
     laterality: ex.laterality ?? "",
     bodyRegion: ex.bodyRegion ?? "",
     plane: ex.plane ?? "",
+    movementComplexity: ex.movementComplexity ?? "",
     isCorrective: ex.isCorrective,
     videoUrl: ex.videoUrl ?? "",
     instructions: ex.instructions ?? "",
@@ -173,6 +184,7 @@ export function ExerciseDetailPage({
         laterality: form.laterality || null,
         bodyRegion: form.bodyRegion || null,
         plane: form.plane || null,
+        movementComplexity: form.movementComplexity || null,
         isCorrective: form.isCorrective,
         videoUrl: form.videoUrl || null,
         instructions: form.instructions || null,
@@ -329,6 +341,7 @@ export function ExerciseDetailPage({
                 <Field label="Equipment" value={exercise.equipment} />
                 <Field label="Body region" value={exercise.bodyRegion || "—"} />
                 <Field label="Plane" value={exercise.plane || "—"} />
+                <Field label="Complexity" value={exercise.movementComplexity || "—"} />
               </div>
               {exercise.secondaryMuscles && exercise.secondaryMuscles.length > 0 && (
                 <div>
@@ -524,6 +537,25 @@ export function ExerciseDetailPage({
                   <p className="text-xs text-muted-foreground">
                     Only meaningful alongside a Push/Press/Pull movement type -- e.g. bench press
                     is horizontal, overhead press is vertical.
+                  </p>
+                </div>
+                <div className="space-y-1.5">
+                  <RadioChipGroup
+                    label="Complexity"
+                    options={
+                      form.movementComplexity && !MOVEMENT_COMPLEXITIES.includes(form.movementComplexity)
+                        ? [form.movementComplexity, ...MOVEMENT_COMPLEXITIES]
+                        : MOVEMENT_COMPLEXITIES
+                    }
+                    value={form.movementComplexity}
+                    onChange={(v) => setForm((f) => ({ ...f, movementComplexity: v }))}
+                    colorClass={MOVEMENT_COMPLEXITY_FILTER_ACTIVE_CLASS}
+                    allowNone
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Compound (multi-joint, e.g. a squat or bench press), Isolation (single-joint,
+                    one muscle, e.g. a curl), or Combination (two or more patterns chained into one
+                    rep, e.g. a step-up into a shoulder press).
                   </p>
                 </div>
                 <div className="space-y-1.5">

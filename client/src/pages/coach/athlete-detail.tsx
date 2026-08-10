@@ -51,6 +51,7 @@ type Athlete = {
   sport?: string | null;
   position?: string | null;
   seasonPhase?: string | null;
+  trainingStylePreference?: string | null;
   fortyYardDash?: number | null;
   verticalJumpIn?: number | null;
   broadJumpIn?: number | null;

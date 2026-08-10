@@ -34,6 +34,7 @@ export const SPORT_FILTER_ACTIVE_CLASS = "border-rose-500 bg-rose-500/15 text-ro
 export const OWNER_FILTER_ACTIVE_CLASS = "border-slate-400 bg-slate-400/15 text-slate-300";
 export const BODY_REGION_FILTER_ACTIVE_CLASS = "border-sky-500 bg-sky-500/15 text-sky-400";
 export const PLANE_FILTER_ACTIVE_CLASS = "border-fuchsia-500 bg-fuchsia-500/15 text-fuchsia-400";
+export const MOVEMENT_COMPLEXITY_FILTER_ACTIVE_CLASS = "border-orange-500 bg-orange-500/15 text-orange-400";
 
 // Skills is a wholly separate system from Exercises (see shared/schema.ts's
 // skillExercises comment) and gets its own single hue -- teal -- not reused
