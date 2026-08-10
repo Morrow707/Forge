@@ -2,10 +2,24 @@ services:
   - type: web
     name: forge
     env: node
-    plan: free
+    plan: starter
     buildCommand: npm install --include=dev && npm run build && npm run db:reconcile && npm run db:seed
     startCommand: npm start
     healthCheckPath: /
+    # Coach/athlete-uploaded form-check and skill videos, plus coach-drawn
+    # annotation PNGs, live on local disk under server/uploads (see
+    # UPLOADS_DIR/SKILL_VIDEOS_DIR/ANNOTATIONS_DIR in server/routes.ts) --
+    # without a persistent disk, a web service's filesystem is wiped on
+    # every redeploy and every restart, silently deleting every video
+    # anyone has ever saved. Free-plan web services can't attach a disk at
+    # all, hence the "starter" plan above -- if this ever needs to move off
+    # Render's own disks (multi-instance scaling, wanting a CDN in front of
+    # video), swap the uploads' multer disk storage for an S3-compatible
+    # object store instead and drop this block.
+    disk:
+      name: forge-uploads
+      mountPath: /opt/render/project/src/server/uploads
+      sizeGB: 10
     envVars:
       - key: NODE_ENV
         value: production
