@@ -21,6 +21,21 @@ import type { FormFault } from "./pose-tracking";
 const GRAVITY_MPS2 = 9.81;
 const SMOOTHING_WINDOW = 5;
 
+// No standing vertical jump, broad jump, or box jump for any real athlete
+// has flight time anywhere near this, even at an elite level (well under a
+// second for all three) -- this is purely a sanity ceiling against the
+// state machine mistaking a tracking dropout for a very long "flight."
+// A broad jump in particular can send the ankle point out of a tightly
+// framed shot for a moment; if pose tracking loses (and later reacquires)
+// the athlete mid-air, nothing in the trace between those two points flags
+// the gap, so the state machine's next "settled" frame gets read as a
+// real landing arbitrarily far downstream in time. Since jumpHeightCm
+// grows with the SQUARE of flightSeconds, that turns a several-second
+// tracking gap into a physically impossible triple-digit "jump height"
+// instead of a merely-wrong one -- worth rejecting outright rather than
+// reporting.
+const MAX_FLIGHT_SECONDS = 1.2;
+
 export type JumpRep = {
   repNumber: number;
   flightSeconds: number;
@@ -146,7 +161,7 @@ export function summarizeJumpSet(
           const landingT = rawPoints[landingIdx].t;
           const flightSeconds = (landingT - takeoffT) / 1000;
 
-          if (flightSeconds > 0) {
+          if (flightSeconds > 0 && flightSeconds <= MAX_FLIGHT_SECONDS) {
             const jumpHeightCm = (GRAVITY_MPS2 * flightSeconds * flightSeconds * 100) / 8;
 
             const peakHeightCm = Math.max(0, amplitudeSoFar * 100);

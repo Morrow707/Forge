@@ -199,6 +199,35 @@ function computeSpeeds(points: TrackedPoint[], positions: number[]): number[] {
   return speeds;
 }
 
+// Same failure mode barPathDeviationCm's own comment describes below for
+// position -- a wrist/bar briefly misdetected for one frame (occlusion
+// recovery, the implement tracker latching onto the wrong point) -- hits
+// velocity even harder: velocity is a rate, so one bad position reading
+// turns into one absurd single-frame speed spike, and a raw Math.max
+// reports that spike as if it were the athlete's real peak effort. The 95th
+// percentile of a phase's speed samples is unmoved by the one or two worst
+// frames in an otherwise clean phase (a concentric phase is comfortably
+// more than 20 frames at 30fps), while still tracking genuine peak effort
+// -- true peak velocity is reached over several consecutive frames, not a
+// single isolated one, so trimming just the extreme tail costs nothing on a
+// clean rep. peakIdx (for "time to peak velocity") lands on the first frame
+// that actually reaches this robust peak, not necessarily the single
+// highest raw sample -- that sample may be exactly the outlier the trim
+// excluded.
+function robustPeakSpeed(
+  speedsMps: number[],
+  startIdx: number,
+  endIdx: number,
+): { peak: number; peakIdx: number } {
+  const samples: { v: number; idx: number }[] = [];
+  for (let i = startIdx; i <= endIdx; i++) samples.push({ v: speedsMps[i], idx: i });
+  if (samples.length === 0) return { peak: 0, peakIdx: startIdx };
+  const sorted = [...samples].sort((a, b) => a.v - b.v);
+  const peak = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))].v;
+  const peakIdx = samples.find((s) => s.v >= peak)?.idx ?? startIdx;
+  return { peak, peakIdx };
+}
+
 // Splits a continuous vertical-position trace into alternating up/down
 // phases using a running-extreme zigzag: a phase only ends once the
 // position has retraced by minAmplitude from its peak/trough so far, not
@@ -325,19 +354,11 @@ export function summarizeTrackedSet(
   const phaseStats = phases.map((phase) => {
     const slice = speedsMps.slice(phase.startIdx, phase.endIdx + 1);
     const duration = (rawPoints[phase.endIdx].t - rawPoints[phase.startIdx].t) / 1000;
-    const peak = slice.length ? Math.max(...slice) : 0;
     const mean = slice.length ? slice.reduce((a, b) => a + b, 0) / slice.length : 0;
-    // Index (within the whole trace, not the slice) of the peak-speed frame
-    // -- used to report how long it took to reach peak velocity, a standard
-    // VBT metric ("time to peak velocity") this didn't previously compute.
-    let peakIdx = phase.startIdx;
-    let peakSpeed = -Infinity;
-    for (let i = phase.startIdx; i <= phase.endIdx; i++) {
-      if (speedsMps[i] > peakSpeed) {
-        peakSpeed = speedsMps[i];
-        peakIdx = i;
-      }
-    }
+    // peak/peakIdx (index within the whole trace, used to report how long
+    // it took to reach peak velocity, a standard VBT metric) come from
+    // robustPeakSpeed rather than a raw max -- see its own comment above.
+    const { peak, peakIdx } = robustPeakSpeed(speedsMps, phase.startIdx, phase.endIdx);
     return { peak, mean, duration, startIdx: phase.startIdx, endIdx: phase.endIdx, peakIdx };
   });
 

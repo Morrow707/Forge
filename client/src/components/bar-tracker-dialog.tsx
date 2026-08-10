@@ -1167,8 +1167,17 @@ export function BarTrackerDialog({
                   )}
                   {liftResult.velocityLossPercent != null && (
                     <Stat
-                      label="Velocity Loss"
-                      value={`${liftResult.velocityLossPercent > 0 ? "-" : "+"}${Math.abs(liftResult.velocityLossPercent)}%`}
+                      // velocityLossPercent is signed (positive = later reps
+                      // slower, negative = later reps faster -- see its own
+                      // comment in bar-tracking.ts). A static "Velocity Loss"
+                      // label with a flipped sign printed something like
+                      // "+132% Velocity Loss" for a rep that got FASTER,
+                      // which reads as an even bigger loss than 100% -- the
+                      // label now swaps to match which direction it actually
+                      // went, so the number and the word next to it always
+                      // agree.
+                      label={liftResult.velocityLossPercent >= 0 ? "Velocity Loss" : "Velocity Gain"}
+                      value={`${Math.abs(liftResult.velocityLossPercent)}%`}
                     />
                   )}
                 </>
