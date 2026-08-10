@@ -24,6 +24,7 @@ import { getHandLandmarker, refineGripPoint } from "@/lib/hand-tracking";
 import { PoseSmoother } from "@/lib/one-euro-filter";
 import { playSuccessChime } from "@/lib/audio-cues";
 import { recordedVideoType, videoFilenameForBlob } from "@/lib/video-recording";
+import { burnTrackingOverlay, type OverlayRepMarker } from "@/lib/video-overlay";
 import { refineLowerBodyLandmarks } from "@/lib/roi-refine";
 import {
   getPoseLandmarker,
@@ -327,7 +328,12 @@ export function BarTrackerDialog({
   const [result, setResult] = useState<RepMetrics | JumpSetMetrics | null>(null);
   const [movementGuess, setMovementGuess] = useState<MovementGuess | null>(null);
   const [voiceEnabled, setVoiceEnabled] = useState(loadVoicePref);
-  const [savingVideo, setSavingVideo] = useState(false);
+  // "overlay" runs in real time (roughly the clip's own duration, since it
+  // plays the recording through to draw each frame) BEFORE any network
+  // activity starts -- a flat "Saving..." across both phases would read as
+  // stuck for a long set with no visible progress, so the button label
+  // tracks which phase is actually happening.
+  const [savePhase, setSavePhase] = useState<"idle" | "overlay" | "uploading">("idle");
 
   // Whether tilt/bar-path-drift mean anything for what's being tracked --
   // see usesSharedBarEquipment's own comment. Gates the live tilt readout
@@ -370,7 +376,7 @@ export function BarTrackerDialog({
     setAlignmentHint(null);
     videoChunksRef.current = [];
     recordedBlobRef.current = null;
-    setSavingVideo(false);
+    setSavePhase("idle");
 
     setModelLoading(true);
     getPoseLandmarker()
@@ -1339,18 +1345,45 @@ export function BarTrackerDialog({
                 Retry
               </Button>
               <Button
-                disabled={savingVideo}
+                disabled={savePhase !== "idle"}
                 onClick={async () => {
                   if (!result) return;
                   if (recordVideo && recordedBlobRef.current) {
-                    setSavingVideo(true);
+                    let videoToUpload: Blob = recordedBlobRef.current;
+                    // Burning the trail/rep badges in is cosmetic -- never
+                    // worth blocking the actual save over. Any failure
+                    // (unsupported browser API, a mid-encode error) just
+                    // falls back to uploading the plain recorded clip, the
+                    // same clip that would have been saved before this
+                    // feature existed.
+                    if (framesRef.current.length > 0) {
+                      setSavePhase("overlay");
+                      try {
+                        const repMarkers: OverlayRepMarker[] = liftResult
+                          ? liftResult.repBreakdown.map((r) => ({
+                              startMs: r.startT,
+                              label: `REP ${r.repNumber} · ${r.peakVelocityMps} m/s`,
+                            }))
+                          : jumpResult
+                            ? jumpResult.repBreakdown.map((r) => ({
+                                startMs: r.takeoffT,
+                                label: `JUMP ${r.repNumber} · ${r.jumpHeightCm}cm`,
+                              }))
+                            : [];
+                        videoToUpload = await burnTrackingOverlay(
+                          recordedBlobRef.current,
+                          framesRef.current,
+                          mode,
+                          repMarkers,
+                        );
+                      } catch {
+                        videoToUpload = recordedBlobRef.current;
+                      }
+                    }
+                    setSavePhase("uploading");
                     try {
                       const formData = new FormData();
-                      formData.append(
-                        "video",
-                        recordedBlobRef.current,
-                        videoFilenameForBlob(recordedBlobRef.current, "form-check"),
-                      );
+                      formData.append("video", videoToUpload, videoFilenameForBlob(videoToUpload, "form-check"));
                       const res = await apiRequest("POST", "/api/athlete/form-video", formData);
                       const { url } = await res.json();
                       onCapture(result, url);
@@ -1360,7 +1393,7 @@ export function BarTrackerDialog({
                       onCapture(result);
                       onOpenChange(false);
                     } finally {
-                      setSavingVideo(false);
+                      setSavePhase("idle");
                     }
                   } else {
                     onCapture(result);
@@ -1369,7 +1402,7 @@ export function BarTrackerDialog({
                 }}
               >
                 <Check className="h-4 w-4" />
-                {savingVideo ? "Saving…" : "Use This Data"}
+                {savePhase === "overlay" ? "Adding overlay…" : savePhase === "uploading" ? "Uploading…" : "Use This Data"}
               </Button>
             </>
           )}
