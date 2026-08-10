@@ -81,6 +81,19 @@ export const genderEnum = pgEnum("gender", [
   "non_binary",
   "prefer_not_to_say",
 ]);
+// Self-reported training-style preference, fed directly to the AI program
+// builder as a strong signal alongside whatever the coach's/athlete's
+// prompt text implies -- see COMBINATION_EXERCISE_TRAINING_PRINCIPLES in
+// storage.ts. Null means unset/no preference, not "traditional" -- the AI
+// still infers from the request's own wording when this is null.
+// "traditional" = standard compound-main-lift-plus-isolation-accessory
+// programming; "combination_circuit" = prioritize chained, multi-pattern
+// exercises for a time-efficient, heart-rate-elevating session over
+// loading any one pattern heavy.
+export const trainingStylePreferenceEnum = pgEnum("training_style_preference", [
+  "traditional",
+  "combination_circuit",
+]);
 // Classic block-periodization phase for a coach-defined training block
 // (a run of one or more weeks grouped under one goal) -- distinct from
 // seasonPhase above, which is the athlete's competitive-calendar context,
@@ -145,6 +158,7 @@ export const users = pgTable(
     sport: text("sport"),
     position: text("position"),
     seasonPhase: seasonPhaseEnum("season_phase"),
+    trainingStylePreference: trainingStylePreferenceEnum("training_style_preference"),
     // Coach-entered testing/combine snapshot -- a fast manual number from a
     // testing day (tryouts, combine, quick assessment), deliberately
     // separate from and not derived from actual logged workout sets (which
@@ -450,6 +464,20 @@ export const exercises = pgTable("exercises", {
   // beside it instead of being encoded into the movement name itself.
   bodyRegion: text("body_region"),
   plane: text("plane"),
+  // A third classification axis: how many joints/patterns a rep actually
+  // involves. "Compound" (multi-joint -- a squat, a bench press, a row),
+  // "Isolation" (single-joint, one target muscle -- a bicep curl, a leg
+  // extension), or "Combination" (two or more DIFFERENT patterns chained
+  // into one continuous rep, e.g. a step-up into a shoulder press) -- see
+  // COMBINATION_EXERCISE_TRAINING_PRINCIPLES in storage.ts for why that
+  // third bucket exists as its own thing rather than just "a compound
+  // exercise": a combination exercise is built for a time-crunched
+  // general-fitness goal (elevated heart rate, max variety per minute),
+  // not for loading any one pattern heavy, which is a genuinely different
+  // programming intent than either compound or isolation work. Free text
+  // like bodyRegion/plane above, not an enum, so a coach can always
+  // override the seeded/inferred value.
+  movementComplexity: text("movement_complexity"),
   // What the athlete actually logs for this exercise, set once here by the
   // coach instead of re-chosen by the athlete on every set -- not mutually
   // exclusive (a dumbbell box step-up needs both usesWeight and usesBox).
@@ -2720,6 +2748,7 @@ export const updateProfileSchema = z.object({
   sport: z.string().trim().max(60).optional().nullable(),
   position: z.string().trim().max(60).optional().nullable(),
   seasonPhase: z.enum(["off_season", "pre_season", "in_season", "taper"]).optional().nullable(),
+  trainingStylePreference: z.enum(["traditional", "combination_circuit"]).optional().nullable(),
   fortyYardDash: z.number().min(0).max(20).optional().nullable(),
   verticalJumpIn: z.number().min(0).max(60).optional().nullable(),
   broadJumpIn: z.number().min(0).max(200).optional().nullable(),

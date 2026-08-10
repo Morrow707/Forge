@@ -2064,6 +2064,536 @@ async function main() {
       exerciseMap[ex.name] = row.id;
     }
 
+    // Combination/complex exercises -- two (or three) movement patterns
+    // chained into one continuous rep (a lower-body pattern feeding
+    // straight into an upper-body one, e.g. a step-up into a shoulder
+    // press) rather than one pattern loaded heavy. These exist for a
+    // genuinely different goal than the rest of the library: a time-
+    // crunched general-fitness client (a "weekend warrior," a parent, a
+    // busy professional) who wants to work as many muscle groups as
+    // possible per minute and keep their heart rate elevated throughout a
+    // session, not chase a max on any single lift. See
+    // COMBINATION_EXERCISE_TRAINING_PRINCIPLES below for how the AI is
+    // taught to tell these apart from compound and isolation work and when
+    // to actually reach for them. movementType "Combination" (added
+    // alongside the rest of MOVEMENT_TYPES in exercise-taxonomy.ts) is
+    // what makes these filterable/queryable as their own category instead
+    // of just living inside "conditioning" undifferentiated from a sled
+    // push or a rowing interval; muscleGroup "Full Body" here (rather than
+    // one specific group) is what makes the bodyRegion backfill below tag
+    // them "Full Body" too, since a chained exercise doesn't have a single
+    // primary region the way an isolated lift does.
+    const combinationExercises = [
+      {
+        name: "Goblet Squat to Overhead Press",
+        category: "conditioning" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Quads", "Glutes", "Shoulders", "Core"],
+        equipment: "Dumbbell",
+        movementType: "Combination",
+        laterality: "bilateral" as const,
+        instructions: "Hold one dumbbell goblet-style at the chest, squat to depth, then press it overhead as you stand. Pairs a lower-body pattern with a shoulder press in one continuous rep -- a time-efficient way to keep the heart rate up in a circuit rather than a max-load lower-body lift, since the lighter of the two patterns caps how much weight the whole movement can use.",
+      },
+      {
+        name: "Squat to Bicep Curl",
+        category: "conditioning" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Quads", "Glutes", "Biceps", "Core"],
+        equipment: "Dumbbell",
+        movementType: "Combination",
+        laterality: "bilateral" as const,
+        instructions: "Squat to depth holding a dumbbell in each hand, then curl both as you stand back up. Good for a general-fitness circuit that wants continuous full-body movement -- not for building a heavy squat or a heavy curl, since the load has to stay light enough for the curl the whole set.",
+      },
+      {
+        name: "Squat to Upright Row",
+        category: "conditioning" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Quads", "Glutes", "Shoulders", "Traps"],
+        equipment: "Dumbbell",
+        movementType: "Combination",
+        laterality: "bilateral" as const,
+        instructions: "Squat to depth, then as you stand pull both dumbbells straight up along the body to chest height, elbows leading. Chains a lower-body pattern into a shoulder/trap pull for a time-efficient circuit exercise.",
+      },
+      {
+        name: "Sumo Squat to Overhead Press",
+        category: "conditioning" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Glutes", "Adductors", "Quads", "Shoulders"],
+        equipment: "Kettlebell",
+        movementType: "Combination",
+        laterality: "bilateral" as const,
+        instructions: "Wide stance, toes out, squat holding one kettlebell at the chest, then press it overhead as you stand. The wide stance shifts more emphasis to the inner thigh/glutes than a standard squat while still pairing it with a press for full-body, elevated-heart-rate work.",
+      },
+      {
+        name: "Squat to Front Raise",
+        category: "conditioning" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Quads", "Glutes", "Shoulders", "Core"],
+        equipment: "Dumbbell",
+        movementType: "Combination",
+        laterality: "bilateral" as const,
+        instructions: "Squat to depth, then as you stand raise both dumbbells straight out in front to shoulder height. Front delts are a small muscle group, so this stays light -- the point is continuous full-body movement for a circuit, not loading either half of the pair heavy.",
+      },
+      {
+        name: "Dumbbell Thruster",
+        category: "conditioning" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Quads", "Glutes", "Shoulders", "Core"],
+        equipment: "Dumbbell",
+        movementType: "Combination",
+        laterality: "bilateral" as const,
+        instructions: "Squat to depth with a dumbbell in each hand at shoulder height, then drive up explosively and press both overhead using the momentum from the stand. The classic squat-to-press combination -- widely used in circuit and conditioning formats specifically because it's demanding on the heart rate without needing much load.",
+      },
+      {
+        name: "Barbell Thruster",
+        category: "conditioning" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Quads", "Glutes", "Shoulders", "Core"],
+        equipment: "Barbell",
+        movementType: "Combination",
+        laterality: "bilateral" as const,
+        instructions: "Front squat to depth, then drive up and press the bar overhead in one continuous motion. Same combined pattern as the dumbbell version, at a heavier relative load thanks to the two-handed bar -- still governed by the shoulder press's lower ceiling, not the squat's.",
+      },
+      {
+        name: "Goblet Squat to Hammer Curl",
+        category: "conditioning" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Quads", "Glutes", "Biceps", "Forearms", "Core"],
+        equipment: "Dumbbell",
+        movementType: "Combination",
+        laterality: "bilateral" as const,
+        instructions: "Hold two dumbbells at the sides, squat to depth, then curl both with a neutral (hammer) grip as you stand. Neutral grip shifts some emphasis to the forearms alongside the biceps while keeping the same time-efficient full-body pairing.",
+      },
+      {
+        name: "Reverse Lunge to Bicep Curl",
+        category: "conditioning" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Quads", "Glutes", "Biceps", "Core"],
+        equipment: "Dumbbell",
+        movementType: "Combination",
+        laterality: "unilateral" as const,
+        instructions: "Step back into a reverse lunge, and as you drive back up to standing, curl both dumbbells. A single-leg pattern also challenges balance/stability on top of the combined muscle groups -- good for general-fitness circuits, not for loading either the lunge or the curl heavy.",
+      },
+      {
+        name: "Reverse Lunge to Overhead Press",
+        category: "conditioning" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Quads", "Glutes", "Shoulders", "Core"],
+        equipment: "Dumbbell",
+        movementType: "Combination",
+        laterality: "unilateral" as const,
+        instructions: "Step back into a reverse lunge, then press both dumbbells overhead as you return to standing. Pairs a single-leg pattern with a shoulder press -- the balance demand of the lunge is as much of the training effect here as the muscles worked.",
+      },
+      {
+        name: "Walking Lunge with Bicep Curl",
+        category: "conditioning" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Quads", "Glutes", "Biceps", "Core"],
+        equipment: "Dumbbell",
+        movementType: "Combination",
+        laterality: "unilateral" as const,
+        instructions: "Curl both dumbbells at the top of each lunge step as you travel forward. Continuous forward movement plus an upper-body pattern on every rep makes this a staple for a moving, heart-rate-elevating circuit station rather than a stationary strength exercise.",
+      },
+      {
+        name: "Walking Lunge with Overhead Press",
+        category: "conditioning" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Quads", "Glutes", "Shoulders", "Core"],
+        equipment: "Dumbbell",
+        movementType: "Combination",
+        laterality: "unilateral" as const,
+        instructions: "Press both dumbbells overhead at the top of each lunge step as you travel forward. Same traveling-lunge conditioning value as the curl variant, with a pressing pattern instead of a pull.",
+      },
+      {
+        name: "Curtsy Lunge with Lateral Raise",
+        category: "conditioning" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Glutes", "Adductors", "Shoulders", "Core"],
+        equipment: "Dumbbell",
+        movementType: "Combination",
+        laterality: "unilateral" as const,
+        instructions: "Step one leg diagonally behind the other into a curtsy lunge, and as you stand raise both dumbbells out to the sides. The diagonal step hits the glute medius/adductors differently than a straight reverse lunge, paired here with a shoulder raise for a full-body circuit movement.",
+      },
+      {
+        name: "Lateral Lunge with Overhead Press",
+        category: "conditioning" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Glutes", "Adductors", "Quads", "Shoulders"],
+        equipment: "Dumbbell",
+        movementType: "Combination",
+        laterality: "unilateral" as const,
+        instructions: "Step out to the side into a lateral lunge, and as you push back to center press both dumbbells overhead. The side-to-side lower-body pattern trains a plane a straight lunge or squat doesn't, chained into an overhead press for the same time-efficient full-body effect.",
+      },
+      {
+        name: "Reverse Lunge with Front Raise",
+        category: "conditioning" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Quads", "Glutes", "Shoulders", "Core"],
+        equipment: "Dumbbell",
+        movementType: "Combination",
+        laterality: "unilateral" as const,
+        instructions: "Step back into a reverse lunge, and as you return to standing raise both dumbbells straight out in front to shoulder height. Keep the load light -- the front raise is the limiting factor for how much weight the whole movement can use.",
+      },
+      {
+        name: "Reverse Lunge with Tricep Kickback",
+        category: "conditioning" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Quads", "Glutes", "Triceps", "Core"],
+        equipment: "Dumbbell",
+        movementType: "Combination",
+        laterality: "unilateral" as const,
+        instructions: "Hinge slightly forward with elbows pinned back, step into a reverse lunge, and extend both forearms back into a kickback at the top of the step. Pairs a lower-body pattern with a small, isolated triceps movement -- one of the lighter-load combinations in this group.",
+      },
+      {
+        name: "Split Squat with Hammer Curl",
+        category: "conditioning" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Quads", "Glutes", "Biceps", "Forearms"],
+        equipment: "Dumbbell",
+        movementType: "Combination",
+        laterality: "unilateral" as const,
+        instructions: "From a static split stance, lower into a lunge and curl both dumbbells with a neutral grip as you rise. The rear-foot-elevated or flat-footed split stance holds the lower body in one spot rather than stepping, so this reads as more of a controlled single-leg strength movement than the traveling lunge variants above, still chained to an upper-body pull.",
+      },
+      {
+        name: "Walking Lunge with Overhead Tricep Extension",
+        category: "conditioning" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Quads", "Glutes", "Triceps", "Core"],
+        equipment: "Dumbbell",
+        movementType: "Combination",
+        laterality: "unilateral" as const,
+        instructions: "Hold one dumbbell overhead with both hands, and extend it behind the head into a tricep extension at the top of each traveling lunge step. A balance-demanding combination -- the overhead load and the single-leg step both challenge stability at once.",
+      },
+      {
+        name: "Reverse Lunge with Torso Rotation",
+        category: "conditioning" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Quads", "Glutes", "Obliques", "Core"],
+        equipment: "Dumbbell",
+        movementType: "Combination",
+        laterality: "unilateral" as const,
+        instructions: "Hold one dumbbell or medicine ball at the chest, step back into a reverse lunge, and rotate the torso toward the front leg at the bottom of the step. Pairs a lower-body pattern with rotational core work instead of an arm pattern -- a good substitute in this family for a client whose goal is core/rotational control rather than arm work.",
+      },
+      {
+        name: "Step-Up to Shoulder Press",
+        category: "conditioning" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Quads", "Glutes", "Hamstrings", "Shoulders"],
+        equipment: "Dumbbell",
+        movementType: "Combination",
+        laterality: "unilateral" as const,
+        instructions: "Drive through the lead heel to step up onto a box, pressing both dumbbells overhead as you reach the top; step down with control. One of the most common combination-exercise pairings for a time-efficient circuit -- a full step-up drive plus a full shoulder press in one rep, without needing max load on either.",
+      },
+      {
+        name: "Step-Up with Bicep Curl",
+        category: "conditioning" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Quads", "Glutes", "Hamstrings", "Biceps"],
+        equipment: "Dumbbell",
+        movementType: "Combination",
+        laterality: "unilateral" as const,
+        instructions: "Step up onto a box, curling both dumbbells as you reach the top; step down with control. Same time-efficient logic as the step-up-to-press variant, with a curl instead of a press.",
+      },
+      {
+        name: "Step-Up with Lateral Raise",
+        category: "conditioning" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Quads", "Glutes", "Hamstrings", "Shoulders"],
+        equipment: "Dumbbell",
+        movementType: "Combination",
+        laterality: "unilateral" as const,
+        instructions: "Step up onto a box, raising both dumbbells out to the sides as you reach the top; step down with control. Lateral raise is a small-muscle movement, so keep the load light -- it's the limiting factor for the whole pairing.",
+      },
+      {
+        name: "Step-Up with Front Raise",
+        category: "conditioning" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Quads", "Glutes", "Hamstrings", "Shoulders"],
+        equipment: "Dumbbell",
+        movementType: "Combination",
+        laterality: "unilateral" as const,
+        instructions: "Step up onto a box, raising both dumbbells out in front to shoulder height as you reach the top; step down with control. Same pairing logic as the lateral-raise variant, targeting the front delts instead of the side delts.",
+      },
+      {
+        name: "Step-Up with Hammer Curl",
+        category: "conditioning" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Quads", "Glutes", "Hamstrings", "Biceps", "Forearms"],
+        equipment: "Dumbbell",
+        movementType: "Combination",
+        laterality: "unilateral" as const,
+        instructions: "Step up onto a box, curling both dumbbells with a neutral grip as you reach the top; step down with control. Neutral grip adds forearm involvement to the standard step-up-plus-curl pairing.",
+      },
+      {
+        name: "Step-Up to Push Press",
+        category: "conditioning" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Quads", "Glutes", "Hamstrings", "Shoulders"],
+        equipment: "Dumbbell",
+        movementType: "Combination",
+        laterality: "unilateral" as const,
+        instructions: "Step up onto a box, using the drive out of the top of the step to help press both dumbbells overhead; step down with control. The leg drive assisting the press lets this move slightly more load than a strict step-up-to-shoulder-press, while staying in the same combination family.",
+      },
+      {
+        name: "Deadlift to Upright Row",
+        category: "conditioning" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Hamstrings", "Glutes", "Lower Back", "Shoulders", "Traps"],
+        equipment: "Dumbbell",
+        movementType: "Combination",
+        laterality: "bilateral" as const,
+        instructions: "Hinge to pick up both dumbbells, and as you stand pull them straight up the body to chest height, elbows leading. Pairs a hip-hinge pattern with a shoulder/trap pull -- keep the load moderate since the upright row is the more load-limited half of the pair.",
+      },
+      {
+        name: "Deadlift to Bent-Over Row",
+        category: "conditioning" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Hamstrings", "Glutes", "Lower Back", "Back", "Lats"],
+        equipment: "Barbell",
+        movementType: "Combination",
+        laterality: "bilateral" as const,
+        instructions: "Deadlift the bar to standing, then hinge back forward into a bent-over row before standing tall again. Two hinge-adjacent patterns chained together -- a genuinely demanding combination that still trains as circuit/conditioning work at the loads it's typically used with, not a max-effort deadlift.",
+      },
+      {
+        name: "Single-Leg RDL to Row",
+        category: "conditioning" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Hamstrings", "Glutes", "Back", "Core"],
+        equipment: "Dumbbell",
+        movementType: "Combination",
+        laterality: "unilateral" as const,
+        instructions: "Balance on one leg, hinge forward until the torso is roughly parallel to the floor, and row the dumbbell to the ribs before standing back up. Combines a single-leg balance/hinge pattern with a back row -- a demanding stability challenge on top of the two muscle groups worked.",
+      },
+      {
+        name: "Romanian Deadlift to Bicep Curl",
+        category: "conditioning" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Hamstrings", "Glutes", "Biceps"],
+        equipment: "Dumbbell",
+        movementType: "Combination",
+        laterality: "bilateral" as const,
+        instructions: "Hinge at the hips keeping a soft knee bend, lower both dumbbells along the legs, then stand and curl at the top. A hamstring-dominant hinge paired with an arm pattern -- useful when a circuit wants hamstring work but a straight RDL alone would leave the block feeling too load-focused for the setting.",
+      },
+      {
+        name: "Sumo Deadlift High Pull",
+        category: "conditioning" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Glutes", "Adductors", "Hamstrings", "Shoulders", "Traps"],
+        equipment: "Kettlebell",
+        movementType: "Combination",
+        laterality: "bilateral" as const,
+        instructions: "Wide stance, hinge to grip the kettlebell between the feet, then stand explosively and pull it up along the body to chin height, elbows out. A classic conditioning-format staple precisely because it links a wide-stance hip hinge to an explosive upper-body pull in one continuous, heart-rate-driving motion.",
+      },
+      {
+        name: "Kettlebell Swing to Goblet Squat",
+        category: "conditioning" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Glutes", "Hamstrings", "Quads", "Core"],
+        equipment: "Kettlebell",
+        movementType: "Combination",
+        laterality: "bilateral" as const,
+        instructions: "Perform one kettlebell swing, then on the backswing catch it at the chest and drop straight into a goblet squat before standing back to the next swing. Links the ballistic hip-snap of the swing with the controlled squat pattern -- a genuinely different training stimulus (explosive then controlled) in the same rep, well suited to a conditioning-format circuit.",
+      },
+      {
+        name: "Kettlebell Clean to Press",
+        category: "conditioning" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Glutes", "Hamstrings", "Shoulders", "Core"],
+        equipment: "Kettlebell",
+        movementType: "Combination",
+        laterality: "unilateral" as const,
+        instructions: "Hike the kettlebell back, then explosively clean it to the rack position at the shoulder, and press it overhead. More technical than most exercises in this family -- worth coaching the clean's catch position separately before combining it with the press, same as any other technical pull.",
+      },
+      {
+        name: "Push-Up to Renegade Row",
+        category: "conditioning" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Chest", "Shoulders", "Back", "Core"],
+        equipment: "Dumbbell",
+        movementType: "Combination",
+        laterality: "bilateral" as const,
+        instructions: "From a plank with hands on dumbbells, perform a push-up, then row one dumbbell to the ribs and the other on the next rep, bracing the core to resist rotating. Combines a horizontal push with an anti-rotation row -- the core stability demand is as much the point as the chest and back muscles worked.",
+      },
+      {
+        name: "Push-Up to Shoulder Tap",
+        category: "conditioning" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Chest", "Shoulders", "Core", "Obliques"],
+        equipment: "Bodyweight",
+        movementType: "Combination",
+        laterality: "bilateral" as const,
+        instructions: "Perform a push-up, then from the top of a plank tap one hand to the opposite shoulder without letting the hips rotate, alternating sides. A no-equipment combination that pairs a push pattern with anti-rotation core control -- easy to scale down to knees for a true beginner.",
+      },
+      {
+        name: "Bear Crawl to Push-Up",
+        category: "conditioning" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Chest", "Shoulders", "Core", "Quads"],
+        equipment: "Bodyweight",
+        movementType: "Combination",
+        laterality: "bilateral" as const,
+        instructions: "Crawl forward a set distance in a bear-crawl position, then drop to a push-up at the end before crawling back. Pairs continuous full-body crawling (shoulders, core, and legs all loaded at once) with a push pattern -- a genuinely high-heart-rate combination even with zero equipment.",
+      },
+      {
+        name: "Burpee to Overhead Press",
+        category: "conditioning" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Chest", "Quads", "Glutes", "Shoulders", "Core"],
+        equipment: "Dumbbell",
+        movementType: "Combination",
+        laterality: "bilateral" as const,
+        instructions: "Perform a burpee, and on standing at the top press both dumbbells overhead instead of just a jump. Adds a pressing pattern onto an already full-body movement -- one of the more demanding conditioning combinations in this group, so scale volume down before scaling load up.",
+      },
+      {
+        name: "Burpee with Broad Jump",
+        category: "conditioning" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Chest", "Quads", "Glutes", "Calves", "Core"],
+        equipment: "Bodyweight",
+        movementType: "Combination",
+        laterality: "bilateral" as const,
+        instructions: "Perform a burpee, and instead of a vertical jump at the top, jump forward for distance before turning around to repeat. Combines a full-body conditioning movement with an explosive horizontal jump -- needs enough space to travel, unlike a standard burpee done in place.",
+      },
+      {
+        name: "Man Maker",
+        category: "conditioning" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Chest", "Back", "Shoulders", "Quads", "Glutes", "Core"],
+        equipment: "Dumbbell",
+        movementType: "Combination",
+        laterality: "bilateral" as const,
+        instructions: "From a plank with hands on dumbbells: row each arm once, perform a push-up, jump the feet up outside the hands, stand and curl the dumbbells to the shoulders, then press overhead. The most complete combination exercise in this library -- five distinct patterns in one rep -- so it's built entirely for conditioning-format work; nobody should be chasing a load PR on this.",
+      },
+      {
+        name: "Squat with Woodchopper",
+        category: "conditioning" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Quads", "Glutes", "Obliques", "Core"],
+        equipment: "Dumbbell",
+        movementType: "Combination",
+        laterality: "bilateral" as const,
+        instructions: "Squat to depth holding one dumbbell with both hands at one hip, then as you stand rotate the weight diagonally up and across to the opposite shoulder. Trades an arm pattern for rotational core work while keeping the same lower-body/upper-body combination structure as the rest of this family.",
+      },
+      {
+        name: "Lunge with Woodchopper",
+        category: "conditioning" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Quads", "Glutes", "Obliques", "Core"],
+        equipment: "Dumbbell",
+        movementType: "Combination",
+        laterality: "unilateral" as const,
+        instructions: "Step into a reverse lunge holding one dumbbell at the hip, and as you drive back up rotate it diagonally across the body to the opposite shoulder. Same rotational-core pairing as the squat version, on a single-leg base for an added balance challenge.",
+      },
+      {
+        name: "Step-Up with Woodchopper",
+        category: "conditioning" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Quads", "Glutes", "Obliques", "Core"],
+        equipment: "Dumbbell",
+        movementType: "Combination",
+        laterality: "unilateral" as const,
+        instructions: "Step up onto a box holding one dumbbell at the hip, rotating it diagonally up and across to the opposite shoulder as you reach the top. Rounds out the woodchopper family with the step-up's added balance/stability demand.",
+      },
+      {
+        name: "Squat to Push Press",
+        category: "conditioning" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Quads", "Glutes", "Shoulders", "Core"],
+        equipment: "Dumbbell",
+        movementType: "Combination",
+        laterality: "bilateral" as const,
+        instructions: "Squat to depth, then use the drive out of the bottom to help press both dumbbells overhead. Nearly identical to a thruster, named separately since some coaches distinguish the deliberate two-part tempo (a controlled squat, then a driven press) from the thruster's more continuous single motion -- either name points at the same combined pattern.",
+      },
+      {
+        name: "Lateral Lunge with Bicep Curl",
+        category: "conditioning" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Glutes", "Adductors", "Quads", "Biceps"],
+        equipment: "Dumbbell",
+        movementType: "Combination",
+        laterality: "unilateral" as const,
+        instructions: "Step out to the side into a lateral lunge, and as you push back to center curl both dumbbells. A side-to-side lower-body pattern paired with an arm curl for the same time-efficient full-body effect as the rest of the lunge combinations.",
+      },
+      {
+        name: "Curtsy Lunge with Bicep Curl",
+        category: "conditioning" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Glutes", "Adductors", "Biceps"],
+        equipment: "Dumbbell",
+        movementType: "Combination",
+        laterality: "unilateral" as const,
+        instructions: "Step one leg diagonally behind the other into a curtsy lunge, curling both dumbbells as you stand back up. Combines the curtsy lunge's glute-medius emphasis with a curl instead of a raise or press.",
+      },
+      {
+        name: "Deadlift to Hammer Curl",
+        category: "conditioning" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Hamstrings", "Glutes", "Lower Back", "Biceps", "Forearms"],
+        equipment: "Dumbbell",
+        movementType: "Combination",
+        laterality: "bilateral" as const,
+        instructions: "Hinge to pick up both dumbbells, and curl them with a neutral grip as you stand to finish. Same hip-hinge-plus-arm-pattern logic as the other deadlift combinations, with a neutral grip adding forearm work.",
+      },
+      {
+        name: "Suitcase Deadlift to Row",
+        category: "conditioning" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Hamstrings", "Glutes", "Obliques", "Back", "Core"],
+        equipment: "Dumbbell",
+        movementType: "Combination",
+        laterality: "unilateral" as const,
+        instructions: "Deadlift a single dumbbell held at one side like a suitcase, then row it to the ribs before lowering back to the floor for the next rep. The offset, one-sided load makes the core work anti-laterally the whole set -- a different core demand than the bilateral deadlift-row variants above.",
+      },
+      {
+        name: "Goblet Squat with Front Raise",
+        category: "conditioning" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Quads", "Glutes", "Shoulders", "Core"],
+        equipment: "Dumbbell",
+        movementType: "Combination",
+        laterality: "bilateral" as const,
+        instructions: "Hold one dumbbell goblet-style, squat to depth, then switch to a two-handed front raise to shoulder height as you stand. An easy entry-level combination -- the goblet hold itself already reinforces upright torso position for a beginner before the raise is added.",
+      },
+      {
+        name: "Box Step-Up with Overhead Tricep Extension",
+        category: "conditioning" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Quads", "Glutes", "Hamstrings", "Triceps"],
+        equipment: "Dumbbell",
+        movementType: "Combination",
+        laterality: "unilateral" as const,
+        instructions: "Step up onto a box holding one dumbbell overhead with both hands, extending it into a tricep extension as you reach the top; step down with control. Combines the step-up's balance demand with an overhead triceps movement rather than a curl or press.",
+      },
+      {
+        name: "Reverse Lunge to Bicep Curl to Press",
+        category: "conditioning" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Quads", "Glutes", "Biceps", "Shoulders", "Core"],
+        equipment: "Dumbbell",
+        movementType: "Combination",
+        laterality: "unilateral" as const,
+        instructions: "Step back into a reverse lunge; as you stand, curl both dumbbells to the shoulders, then press them overhead. A three-part combination (lunge, curl, press) rather than two -- one of the more complete single-rep circuits in this library, and a good example for the AI of how far a combination exercise can be chained before it becomes its own mini-circuit.",
+      },
+      {
+        name: "Squat to Bicep Curl to Press",
+        category: "conditioning" as const,
+        muscleGroup: "Full Body",
+        secondaryMuscles: ["Quads", "Glutes", "Biceps", "Shoulders", "Core"],
+        equipment: "Dumbbell",
+        movementType: "Combination",
+        laterality: "bilateral" as const,
+        instructions: "Squat to depth; as you stand, curl both dumbbells to the shoulders, then press them overhead. The bilateral version of the three-part lunge/curl/press combination above -- three patterns chained into one rep, built for a conditioning circuit rather than any single strength number.",
+      },
+    ];
+    for (const ex of combinationExercises) {
+      if (existingExerciseNames.has(ex.name)) continue;
+      const row = await storage.createExercise(coach.id, {
+        ...ex,
+        videoUrl: videoSearchUrl(ex.name),
+      });
+      exerciseMap[ex.name] = row.id;
+    }
+
     // One-time backfill for exercises that already existed before the
     // materials columns were added -- only touches rows still at the
     // just-added default (usesWeight true, everything else false), so it
@@ -4163,6 +4693,98 @@ async function main() {
     }
     if (backfilled > 0) {
       console.log(`Backfilled bodyRegion/plane on ${backfilled} existing exercise(s).`);
+    }
+  }
+
+  // One-time backfill (fully idempotent -- only ever touches rows where the
+  // column is still NULL, never overwrites a coach's own choice) of the
+  // movementComplexity axis (Compound/Isolation/Combination) across the
+  // ENTIRE existing exercise library, not just newly-seeded combination
+  // exercises -- see movementComplexity's own comment in shared/schema.ts.
+  // Heuristic, not authoritative, same posture as the bodyRegion/plane
+  // backfill above: a coach can always correct an individual exercise
+  // afterward via the edit form.
+  //
+  // The tricky part is that neither category nor movementType alone
+  // reliably signals compound vs. isolation in this library -- e.g.
+  // "Bulgarian Split Squat" is tagged category "accessory" (it's not a
+  // day's MAIN lift) despite being a genuinely multi-joint, compound lunge
+  // pattern, and "Barbell Curl" carries movementType "Pull" (the same tag
+  // a compound row or pull-up gets) despite being single-joint isolation
+  // work. So this leans on muscleGroup + a small set of well-known
+  // single-joint name keywords for the ambiguous cases, and only trusts
+  // movementType directly for the movement types that are unambiguously
+  // multi-joint by definition (there's no isolated version of a squat, a
+  // hinge, a lunge, a carry, or a rotational throw).
+  {
+    const movementComplexityToBackfill = await db.query.exercises.findMany({
+      where: isNull(exercises.movementComplexity),
+    });
+
+    // Muscle groups essentially always trained single-joint by gym
+    // convention, regardless of movementType or category tag.
+    const ISOLATION_MUSCLES = new Set(["Biceps", "Triceps", "Forearms", "Calves"]);
+    // Movement types that are inherently multi-joint -- no single-joint
+    // version of a squat/hinge/lunge/carry/rotational-throw exists in
+    // standard strength & conditioning vocabulary.
+    const COMPOUND_MOVEMENT_TYPES = new Set(["Squat", "Hinge", "Lunge", "Carry", "Rotation"]);
+    // Name keywords for the well-known single-joint exercises that live on
+    // a larger muscle group's tag and would otherwise read as compound
+    // (Leg Extension/Leg Curl on Quads/Hamstrings, Lateral/Front Raise and
+    // Face Pull on Shoulders, a Chest/Rear-Delt Fly, a Shrug on Traps).
+    const ISOLATION_NAME_HINTS = [
+      "curl", "extension", "raise", "kickback", "pushdown", "fly", "flye",
+      "pec deck", "face pull", "shrug", "wrist",
+    ];
+
+    function inferMovementComplexity(
+      category: string,
+      movementType: string | null,
+      muscleGroup: string,
+      name: string,
+    ): string | null {
+      if (movementType === "Combination") return "Combination";
+      // Checked before the isolation-muscle-group shortcut below so it
+      // always wins -- e.g. a Suitcase Carry is tagged muscleGroup
+      // "Forearms" for its grip demand, but the carry itself loads the
+      // whole body, so it must never fall through to "Isolation" just
+      // because Forearms is usually a reliable isolation signal.
+      if (movementType && COMPOUND_MOVEMENT_TYPES.has(movementType)) return "Compound";
+      // Only trust the isolation-muscle-group/name-keyword signals for
+      // actual resistance-training categories -- a conditioning-modality
+      // exercise (Jump Rope, an assault bike) isn't a deliberate
+      // single-joint accessory lift just because its tagged muscleGroup
+      // happens to be a small one like Calves.
+      if (category !== "conditioning") {
+        if (ISOLATION_MUSCLES.has(muscleGroup)) return "Isolation";
+        const nm = name.toLowerCase();
+        if (
+          muscleGroup !== "Full Body" &&
+          ISOLATION_NAME_HINTS.some((hint) => nm.includes(hint))
+        ) {
+          return "Isolation";
+        }
+      }
+      if (movementType === "Press" || movementType === "Push" || movementType === "Pull") {
+        return "Compound";
+      }
+      return null;
+    }
+
+    let complexityBackfilled = 0;
+    for (const ex of movementComplexityToBackfill) {
+      const movementComplexity = inferMovementComplexity(
+        ex.category,
+        ex.movementType,
+        ex.muscleGroup,
+        ex.name,
+      );
+      if (!movementComplexity) continue;
+      await db.update(exercises).set({ movementComplexity }).where(eq(exercises.id, ex.id));
+      complexityBackfilled++;
+    }
+    if (complexityBackfilled > 0) {
+      console.log(`Backfilled movementComplexity on ${complexityBackfilled} existing exercise(s).`);
     }
   }
 

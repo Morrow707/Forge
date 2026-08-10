@@ -280,6 +280,7 @@ ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "movement_type" text;
 ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "laterality" laterality;
 ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "body_region" text;
 ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "plane" text;
+ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "movement_complexity" text;
 ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "is_corrective" boolean NOT NULL DEFAULT false;
 ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "uses_weight" boolean NOT NULL DEFAULT true;
 ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "uses_bodyweight" boolean NOT NULL DEFAULT false;
@@ -936,6 +937,11 @@ DO $$ BEGIN
   CREATE TYPE "gender" AS ENUM ('male', 'female', 'non_binary', 'prefer_not_to_say');
 EXCEPTION WHEN duplicate_object THEN null; END $$;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "gender" gender;
+
+DO $$ BEGIN
+  CREATE TYPE "training_style_preference" AS ENUM ('traditional', 'combination_circuit');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "training_style_preference" training_style_preference;
 
 CREATE TABLE IF NOT EXISTS "classes" (
   "id" serial PRIMARY KEY,

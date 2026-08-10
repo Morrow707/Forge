@@ -20,6 +20,11 @@ export type ProfileFieldsValue = {
   // matching the DB) -- fed straight to the AI so it doesn't have to guess
   // or ask where in the season this athlete currently is.
   seasonPhase: string;
+  // "" means no preference; otherwise one of trainingStylePreferenceEnum's
+  // values -- fed to the AI program builder as a standing instruction (see
+  // COMBINATION_EXERCISE_TRAINING_PRINCIPLES in storage.ts) so it doesn't
+  // have to be re-asked for on every single program request.
+  trainingStylePreference: string;
   fortyYardDash: string;
   verticalJumpIn: string;
   broadJumpIn: string;
@@ -38,6 +43,7 @@ export const emptyProfileFields: ProfileFieldsValue = {
   sport: "",
   position: "",
   seasonPhase: "",
+  trainingStylePreference: "",
   fortyYardDash: "",
   verticalJumpIn: "",
   broadJumpIn: "",
@@ -52,6 +58,11 @@ const SEASON_PHASE_OPTIONS = [
   { value: "pre_season", label: "Pre-season" },
   { value: "in_season", label: "In-season" },
   { value: "taper", label: "Taper / playoffs" },
+];
+
+const TRAINING_STYLE_OPTIONS = [
+  { value: "traditional", label: "Traditional (compound + isolation)" },
+  { value: "combination_circuit", label: "Combination / circuit-style" },
 ];
 
 const GENDER_OPTIONS = [
@@ -125,6 +136,32 @@ export function ProfileFieldsForm({
               ))}
             </SelectContent>
           </Select>
+        </div>
+        <div className="space-y-1.5 sm:col-span-2">
+          <Label htmlFor={`${idPrefix}-training-style`}>Training style preference</Label>
+          <Select
+            value={value.trainingStylePreference || "unset"}
+            onValueChange={(v) =>
+              onChange({ ...value, trainingStylePreference: v === "unset" ? "" : v })
+            }
+          >
+            <SelectTrigger id={`${idPrefix}-training-style`}>
+              <SelectValue placeholder="No preference" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="unset">No preference</SelectItem>
+              {TRAINING_STYLE_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value}>
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            Tells the AI program builder whether to lean on standard compound lifts and isolation
+            accessories, or prioritize combination/circuit-style exercises that chain multiple
+            movements together to keep the heart rate up in less time.
+          </p>
         </div>
         <div className="space-y-1.5">
           <Label htmlFor={`${idPrefix}-age`}>Age</Label>
