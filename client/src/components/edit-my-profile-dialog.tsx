@@ -13,6 +13,7 @@ import {
   emptyProfileFields,
   type ProfileFieldsValue,
 } from "@/components/profile-fields-form";
+import { InjuryHistoryPanel } from "@/components/injury-history-panel";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
 import type { PublicUser } from "@shared/schema";
@@ -94,6 +95,7 @@ export function EditMyProfileDialog({
           Your coach uses this to build the team leaderboard and get to know you.
         </p>
         <ProfileFieldsForm value={value} onChange={setValue} idPrefix="my-profile" />
+        <InjuryHistoryPanel baseUrl="/api/athlete/injury-history" />
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Cancel

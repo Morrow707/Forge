@@ -32,6 +32,7 @@ export function ProgramAiChatPanel({
   onApplied,
   resourcePath = "programs",
   title = "AI Program Builder",
+  initialPrompt,
 }: {
   apiBase: string;
   programId: number;
@@ -46,6 +47,12 @@ export function ProgramAiChatPanel({
    * Builder" for skills, so the two paywalled products never read as the
    * same one. */
   title?: string;
+  /** Compiled from the "New Program" questionnaire (see program-list.tsx) --
+   * auto-sent as the first turn the moment this program's chat loads with no
+   * existing messages, so the athlete never has to retype what they just
+   * answered. Undefined for every other entry point (manual "New Program",
+   * an existing program), which is the common case. */
+  initialPrompt?: string;
 }) {
   const qc = useQueryClient();
   const [content, setContent] = useState("");
@@ -53,8 +60,11 @@ export function ProgramAiChatPanel({
   // Collapsed by default -- a brand-new program shouldn't have to give up a
   // full-height column just to advertise a feature nobody's used yet. Once
   // a conversation already exists (loaded below), it opens automatically so
-  // a coach doesn't lose sight of prior turns.
-  const [open, setOpen] = useState(false);
+  // a coach doesn't lose sight of prior turns. An initialPrompt is itself
+  // about to become the first message, so it opens immediately too rather
+  // than waiting on that round-trip.
+  const [open, setOpen] = useState(!!initialPrompt);
+  const autoSentRef = useRef(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const fetchUrl = `${apiBase}/${resourcePath}/${programId}/chat`;
 
@@ -83,8 +93,8 @@ export function ProgramAiChatPanel({
   }, [messages]);
 
   const send = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", fetchUrl, { content });
+    mutationFn: async (overrideContent?: string) => {
+      const res = await apiRequest("POST", fetchUrl, { content: overrideContent ?? content });
       return res.json();
     },
     onSuccess: (result) => {
@@ -94,6 +104,19 @@ export function ProgramAiChatPanel({
     },
     onError: () => toast.error("Couldn't send that -- try again"),
   });
+
+  useEffect(() => {
+    if (
+      initialPrompt &&
+      !autoSentRef.current &&
+      !isLoading &&
+      messages &&
+      messages.length === 0
+    ) {
+      autoSentRef.current = true;
+      send.mutate(initialPrompt);
+    }
+  }, [initialPrompt, isLoading, messages]);
 
   // A Free Agent who hasn't paid gets a 402 here (see requirePaidAiAccess
   // in routes.ts) -- that's an expected, permanent state, not a transient
@@ -211,7 +234,7 @@ export function ProgramAiChatPanel({
           onSubmit={(e) => {
             e.preventDefault();
             if (!content.trim() || send.isPending) return;
-            send.mutate();
+            send.mutate(undefined);
           }}
           className="flex shrink-0 items-end gap-2 border-t border-border pt-3"
         >
@@ -224,7 +247,7 @@ export function ProgramAiChatPanel({
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
-                if (content.trim() && !send.isPending) send.mutate();
+                if (content.trim() && !send.isPending) send.mutate(undefined);
               }
             }}
           />

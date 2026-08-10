@@ -13,6 +13,7 @@ import {
   emptyProfileFields,
   type ProfileFieldsValue,
 } from "@/components/profile-fields-form";
+import { InjuryHistoryPanel } from "@/components/injury-history-panel";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
 
@@ -118,6 +119,10 @@ export function AthleteProfileDialog({
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">{athlete.email}</p>
             <ProfileFieldsForm value={value} onChange={setValue} idPrefix="athlete-profile" />
+            <InjuryHistoryPanel
+              baseUrl={`/api/coach/roster/${athlete.id}/injury-history`}
+              canToggleResolved={false}
+            />
           </div>
         )}
         <DialogFooter>
