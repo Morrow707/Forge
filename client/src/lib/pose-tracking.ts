@@ -159,8 +159,24 @@ function averageWorldPoint(points: (Landmark | undefined)[]): WorldPoint | null 
 export function deriveBarPoint(worldLandmarks: Landmark[], requireBothWrists = false): WorldPoint | null {
   const left = worldLandmarks[POSE_LANDMARKS.LEFT_WRIST];
   const right = worldLandmarks[POSE_LANDMARKS.RIGHT_WRIST];
-  if (requireBothWrists && !(visible(left) && visible(right))) return null;
-  return averageWorldPoint([left, right]);
+  if (!requireBothWrists) return averageWorldPoint([left, right]);
+  if (visible(left) && visible(right)) return averageWorldPoint([left, right]);
+  // Exactly one side occluded on an otherwise-rigid two-handed bar (a rack
+  // post blocking one hand, a heavy plate stack in the way) -- mirror the
+  // confident wrist across the body's own midline instead of losing the
+  // frame. World landmarks are hip-centered, so x=0 IS that midline;
+  // averaging a real point with its own mirror image always collapses to
+  // x=0 exactly, which is the bar's CENTER under a roughly even grip --
+  // the same assumption bar-tilt/valgus already lean on for a real barbell
+  // (see usesSharedBarEquipment, the only caller that ever sets
+  // requireBothWrists true). This covers a different failure mode than
+  // interpolateOcclusionGap: that smooths a BRIEF dropout with a confident
+  // frame on both sides of the gap, but can't help a SUSTAINED one-side
+  // occlusion with no recovery point to interpolate toward (one hand
+  // blocked for a whole set, not just a few frames).
+  const visibleWrist = visible(left) ? left : visible(right) ? right : null;
+  if (!visibleWrist) return null;
+  return { x: 0, y: visibleWrist.y, z: visibleWrist.z };
 }
 
 // Same wrist-midpoint concept as deriveBarPoint above, but in normalized

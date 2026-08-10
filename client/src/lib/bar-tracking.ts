@@ -170,7 +170,26 @@ export function interpolateOcclusionGap(
   return points;
 }
 
-const SMOOTHING_WINDOW = 5;
+// 5 samples was tuned back when every device was assumed to feed ~30fps --
+// at 30fps that's ~165ms of averaging, enough to steady position jitter
+// without smearing a fast rep. Left as a flat frame count, the same "5
+// frames" describes half as much real-world smoothing once a device
+// actually grants the 60fps bar-tracker-dialog.tsx now requests (see its
+// getUserMedia constraints) -- framesForDuration below converts a fixed
+// TIME target into however many frames that takes on THIS trace's own
+// measured sample rate, so smoothing strength stays consistent in
+// wall-clock terms regardless of what frame rate a given device actually
+// negotiated.
+const TARGET_SMOOTHING_MS = 165;
+
+// Exported for jump-tracking.ts, which needs the same fps-independent
+// window sizing for its own smoothing pass and landing-settle detection.
+export function framesForDuration(points: { t: number }[], durationMs: number): number {
+  if (points.length < 2) return 1;
+  const avgIntervalMs = (points[points.length - 1].t - points[0].t) / (points.length - 1);
+  if (avgIntervalMs <= 0) return 1;
+  return Math.max(1, Math.round(durationMs / avgIntervalMs));
+}
 
 // Exported for jump-tracking.ts, which reuses this same smoothing +
 // phase-segmentation pipeline on an ankle trace instead of a wrist/bar
@@ -344,7 +363,7 @@ export function summarizeTrackedSet(
   if (rawPoints.length < 6) return null;
   const minRepAmplitudeCm = heightScaledAmplitudeCm(BASE_MIN_REP_AMPLITUDE_CM, heightIn);
 
-  const ySmoothed = movingAverage(rawPoints.map((p) => p.y), SMOOTHING_WINDOW);
+  const ySmoothed = movingAverage(rawPoints.map((p) => p.y), framesForDuration(rawPoints, TARGET_SMOOTHING_MS));
   const speedsMps = computeSpeeds(rawPoints, ySmoothed);
 
   const minAmplitudeM = minRepAmplitudeCm / 100;

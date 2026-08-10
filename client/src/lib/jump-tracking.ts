@@ -13,13 +13,24 @@ import {
   movingAverage,
   buildPathTrace,
   heightScaledAmplitudeCm,
+  framesForDuration,
   type TrackedPoint,
   type PathTracePoint,
 } from "./bar-tracking";
 import type { FormFault } from "./pose-tracking";
 
 const GRAVITY_MPS2 = 9.81;
-const SMOOTHING_WINDOW = 5;
+// A flat frame count here would describe half as much real-world smoothing
+// once a device grants the 60fps bar-tracker-dialog.tsx now requests
+// instead of the ~30fps this was tuned around -- see bar-tracking.ts's own
+// comment on TARGET_SMOOTHING_MS/framesForDuration, which this reuses so a
+// jump's ankle trace gets the same fps-independent smoothing strength a
+// lift's bar-path trace does.
+const TARGET_SMOOTHING_MS = 165;
+// Same reasoning, for how many consecutive near-still SAMPLES count as
+// "landed" -- see its own comment further down where it's turned into an
+// actual frame count via framesForDuration.
+const TARGET_SETTLE_MS = 100;
 
 // No standing vertical jump, broad jump, or box jump for any real athlete
 // has flight time anywhere near this, even at an elite level (well under a
@@ -97,7 +108,7 @@ export function summarizeJumpSet(
   if (rawPoints.length < 6) return null;
   const minFlightAmplitudeCm = heightScaledAmplitudeCm(BASE_MIN_FLIGHT_AMPLITUDE_CM, heightIn);
 
-  const ySmoothed = movingAverage(rawPoints.map((p) => p.y), SMOOTHING_WINDOW);
+  const ySmoothed = movingAverage(rawPoints.map((p) => p.y), framesForDuration(rawPoints, TARGET_SMOOTHING_MS));
   const minAmplitudeM = minFlightAmplitudeCm / 100;
   // A fraction of the minimum flight amplitude, used both as the
   // takeoff/landing trigger threshold and as the jitter tolerance the
@@ -105,10 +116,11 @@ export function summarizeJumpSet(
   // a real push-off promptly, large enough to ignore pose-noise sway.
   const triggerM = minAmplitudeM * 0.3;
 
-  // How many consecutive near-still frames count as "landed" rather than a
-  // single noisy sample -- long enough to reject jitter, short enough not
-  // to eat into the next rep's ground-contact time.
-  const SETTLE_FRAMES = 3;
+  // How many consecutive near-still SAMPLES count as "landed" rather than a
+  // single noisy one -- long enough (in real time, via framesForDuration)
+  // to reject jitter, short enough not to eat into the next rep's
+  // ground-contact time.
+  const SETTLE_FRAMES = framesForDuration(rawPoints, TARGET_SETTLE_MS);
   const settleToleranceM = triggerM;
 
   const reps: JumpRep[] = [];
