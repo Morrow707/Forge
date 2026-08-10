@@ -168,8 +168,20 @@ export function SprintTrackerDialog({
   // picked an angle.
   useEffect(() => {
     if (!open || step === "warning" || step === "review") return;
+    // ideal, not exact -- see bar-tracker-dialog.tsx's own comment on this
+    // same constraint shape. Checkpoint-crossing time is interpolated
+    // between frames either way, but a higher frame rate still means less
+    // real screen-x distance the reference point can cover between two
+    // samples, which tightens that interpolation for a fast sprint.
     navigator.mediaDevices
-      .getUserMedia({ video: { facingMode: "environment" } })
+      .getUserMedia({
+        video: {
+          facingMode: { ideal: "environment" },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          frameRate: { ideal: 60, min: 30 },
+        },
+      })
       .then((stream) => {
         streamRef.current = stream;
         if (videoRef.current) videoRef.current.srcObject = stream;

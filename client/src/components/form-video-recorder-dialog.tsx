@@ -149,8 +149,21 @@ export function FormVideoRecorderDialog({
     // bar-tracker-dialog.tsx's own comment on this). A form-check video
     // losing its own audio track costs less than muting music on every
     // single recording.
+    //
+    // ideal, not exact -- see bar-tracker-dialog.tsx's own comment on this
+    // same constraint shape. This recorder has no live math riding on frame
+    // rate (it's a plain saved clip for a coach to watch back later, not a
+    // tracked set), but a smoother capture still makes a fast movement less
+    // of a blur when scrubbing the review, for the same reasons.
     navigator.mediaDevices
-      .getUserMedia({ video: { facingMode: "environment" } })
+      .getUserMedia({
+        video: {
+          facingMode: { ideal: "environment" },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          frameRate: { ideal: 60, min: 30 },
+        },
+      })
       .then((stream) => {
         streamRef.current = stream;
         if (videoRef.current) videoRef.current.srcObject = stream;
