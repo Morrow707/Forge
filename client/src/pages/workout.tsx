@@ -1608,6 +1608,7 @@ function ExerciseLogContent({
   onRemoveSet: () => void;
 }) {
   const isCorrective = item.kind === "corrective";
+  const { user } = useAuth();
   const [distanceUnit] = useDistanceUnit();
   const [trackingSet, setTrackingSet] = useState<number | null>(null);
   // Which set the "Record" pill is currently recording for -- one form-check
@@ -2235,6 +2236,7 @@ function ExerciseLogContent({
               movementType={item.movementType}
               laterality={item.laterality}
               equipment={item.equipment}
+              heightIn={user?.heightIn}
               targetReps={parseTargetReps(item.prescribedReps)}
               loadKg={loadKg}
               recordVideo={mergedTracking}

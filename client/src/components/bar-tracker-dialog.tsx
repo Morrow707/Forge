@@ -20,11 +20,15 @@ import {
 } from "@/lib/bar-tracking";
 import { summarizeJumpSet, type JumpSetMetrics } from "@/lib/jump-tracking";
 import { ImplementTracker } from "@/lib/implement-tracking";
+import { getHandLandmarker, refineGripPoint } from "@/lib/hand-tracking";
+import { LandingAudioListener } from "@/lib/audio-landing";
 import { PoseSmoother } from "@/lib/one-euro-filter";
 import { playSuccessChime } from "@/lib/audio-cues";
 import { recordedVideoType, videoFilenameForBlob } from "@/lib/video-recording";
+import { refineLowerBodyLandmarks } from "@/lib/roi-refine";
 import {
   getPoseLandmarker,
+  getRoiPoseLandmarker,
   deriveBarPoint,
   deriveNormalizedWristPoint,
   deriveJumpPoint,
@@ -43,7 +47,12 @@ import {
   type MovementGuess,
   type MovementPattern,
 } from "@/lib/pose-tracking";
-import { PoseLandmarker, type NormalizedLandmark, type Landmark } from "@mediapipe/tasks-vision";
+import {
+  PoseLandmarker,
+  type HandLandmarker,
+  type NormalizedLandmark,
+  type Landmark,
+} from "@mediapipe/tasks-vision";
 import {
   Camera,
   Video,
@@ -55,6 +64,7 @@ import {
   Info,
   Volume2,
   VolumeX,
+  Mic,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis } from "recharts";
@@ -174,6 +184,7 @@ export function BarTrackerDialog({
   movementType,
   laterality,
   equipment,
+  heightIn,
   targetReps,
   loadKg,
   recordVideo,
@@ -196,6 +207,11 @@ export function BarTrackerDialog({
   // so a "tilt"/"drift" reading off the wrist midpoint is just describing
   // normal independent arm motion, not a form fault.
   equipment?: string | null;
+  // The athlete's stored height (inches), when on file -- scales the
+  // minimum rep/jump amplitude thresholds via heightScaledAmplitudeCm so a
+  // notably shorter or taller athlete isn't measured against a flat,
+  // average-height noise floor. Undefined falls back to that flat default.
+  heightIn?: number | null;
   // "unilateral" exercises (single-leg squats, lunges) load one leg at a
   // time across reps/sets rather than both at once, so a same-rep left-vs-
   // right comparison wouldn't mean anything -- gates leg-drive asymmetry
@@ -238,6 +254,22 @@ export function BarTrackerDialog({
   const lastRepDirRef = useRef<1 | -1 | 0>(0);
   const repCountRef = useRef(0);
   const poseLandmarkerRef = useRef<PoseLandmarker | null>(null);
+  // Optional -- see hand-tracking.ts's own comment. Left null until (and
+  // unless) it finishes loading; every read site treats that as "hand
+  // refinement isn't available this frame," never as an error.
+  const handLandmarkerRef = useRef<HandLandmarker | null>(null);
+  // Optional -- see roi-refine.ts's own comment for why this is a
+  // SEPARATE PoseLandmarker instance, never poseLandmarkerRef itself.
+  const roiLandmarkerRef = useRef<PoseLandmarker | null>(null);
+  // Throttles how often the ROI crop-and-refine pass actually runs (see
+  // ROI_REFINE_INTERVAL below) -- knee/ankle angle doesn't move fast
+  // enough at 30fps for every single frame to need its own full second
+  // Pose inference.
+  const roiTickCounterRef = useRef(0);
+  // Jump mode only -- see audio-landing.ts's own comment. Harmless to
+  // construct unconditionally; start() is a no-op whenever the captured
+  // stream has no audio track (lift modes never request one).
+  const landingAudioListenerRef = useRef(new LandingAudioListener());
   const lastVideoTimeRef = useRef(-1);
   const voiceEnabledRef = useRef(loadVoicePref());
   // Which sign to multiply worldLandmarks' y by so "up" always means a
@@ -363,13 +395,59 @@ export function BarTrackerDialog({
         setModelLoading(false);
       });
 
-    navigator.mediaDevices
-      .getUserMedia({ video: { facingMode: "environment" } })
-      .then((stream) => {
-        streamRef.current = stream;
-        if (videoRef.current) videoRef.current.srcObject = stream;
+    // Loaded in parallel, never blocking on it -- hand tracking is a
+    // refinement (see hand-tracking.ts), not a requirement, so a slow or
+    // failed load here shouldn't hold up Pose or show an error the
+    // athlete would have no way to act on.
+    handLandmarkerRef.current = null;
+    getHandLandmarker()
+      .then((landmarker) => {
+        handLandmarkerRef.current = landmarker;
       })
-      .catch(() => setCameraError("Camera access denied or unavailable."));
+      .catch(() => {
+        // Silently stays null -- tick() already treats that as "fall back
+        // to Pose's own wrist point."
+      });
+
+    // Same non-blocking, optional-refinement loading as hand tracking
+    // above -- see roi-refine.ts's own comment.
+    roiLandmarkerRef.current = null;
+    roiTickCounterRef.current = 0;
+    getRoiPoseLandmarker()
+      .then((landmarker) => {
+        roiLandmarkerRef.current = landmarker;
+      })
+      .catch(() => {
+        // Silently stays null -- tick() already treats that as "skip the
+        // ROI refinement pass, keep the full-frame landmarks as-is."
+      });
+
+    const attachStream = (stream: MediaStream) => {
+      streamRef.current = stream;
+      if (videoRef.current) videoRef.current.srcObject = stream;
+    };
+    // Jump mode also asks for the mic, purely for the optional landing-audio
+    // confirmation (see audio-landing.ts) -- lift modes never request it at
+    // all. If the combined request fails (mic permission denied, no mic
+    // present), fall back to video-only rather than blocking the athlete
+    // from tracking at all over an optional refinement.
+    const videoOnlyConstraints = { video: { facingMode: "environment" as const } };
+    if (mode === "jump") {
+      navigator.mediaDevices
+        .getUserMedia({ ...videoOnlyConstraints, audio: true })
+        .then(attachStream)
+        .catch(() => {
+          navigator.mediaDevices
+            .getUserMedia(videoOnlyConstraints)
+            .then(attachStream)
+            .catch(() => setCameraError("Camera access denied or unavailable."));
+        });
+    } else {
+      navigator.mediaDevices
+        .getUserMedia(videoOnlyConstraints)
+        .then(attachStream)
+        .catch(() => setCameraError("Camera access denied or unavailable."));
+    }
 
     const handleOrientation = (e: DeviceOrientationEvent) => {
       if (e.beta != null) setTilt(Math.round(e.beta) - 90);
@@ -385,6 +463,10 @@ export function BarTrackerDialog({
       // up to fire against a dialog nobody's looking at anymore.
       autoStartTimersRef.current.forEach((id) => window.clearTimeout(id));
       autoStartTimersRef.current = [];
+      // Closing mid-set shouldn't leave the AudioContext/interval running
+      // against a dialog nobody's looking at anymore, same reasoning as the
+      // camera stream above.
+      landingAudioListenerRef.current.reset();
     };
   }, [open]);
 
@@ -534,6 +616,12 @@ export function BarTrackerDialog({
     rightTraceRef.current = [];
     framesRef.current = [];
     startTimeRef.current = performance.now();
+    if (mode === "jump" && streamRef.current) {
+      // Same clock origin as the trace's own `t` values below (both measured
+      // off startTimeRef.current) so a rep's landingT lines up directly
+      // against the audio trace's timestamps in wasLandingAudioConfirmed.
+      landingAudioListenerRef.current.start(streamRef.current, startTimeRef.current);
+    }
     lastRepDirRef.current = 0;
     lastVideoTimeRef.current = -1;
     repCountRef.current = 0;
@@ -666,7 +754,17 @@ export function BarTrackerDialog({
         // hand all shift the two apart. When the implement tracker finds
         // confident motion nearby, use that instead; jump mode has nothing
         // held, so it's skipped there.
-        const normalizedWrist = mode === "jump" ? null : deriveNormalizedWristPoint(landmarks, usesSharedBar);
+        let normalizedWrist = mode === "jump" ? null : deriveNormalizedWristPoint(landmarks, usesSharedBar);
+        // When Hand Landmarker is loaded and confidently finds a hand near
+        // Pose's coarser wrist point, use its much higher-resolution palm
+        // read as the search center instead -- see hand-tracking.ts's own
+        // comment for why this is a seed-point refinement, not a
+        // replacement for anything downstream of it.
+        if (normalizedWrist && handLandmarkerRef.current) {
+          const handsResult = handLandmarkerRef.current.detectForVideo(video, now);
+          const refined = refineGripPoint(handsResult.landmarks, normalizedWrist.x, normalizedWrist.y);
+          if (refined) normalizedWrist = refined;
+        }
         const implementOffset =
           normalizedWrist &&
           implementTrackerRef.current.track(video, normalizedWrist.x, normalizedWrist.y, landmarks, worldLandmarks);
@@ -689,7 +787,22 @@ export function BarTrackerDialog({
           for (const gapPoint of interpolateOcclusionGap(prev, point, mode === "jump" ? 400 : 300))
             trace.push(gapPoint);
         trace.push(point);
-        framesRef.current.push({ t, landmarks, worldLandmarks });
+        // Refines just the hip/knee/ankle landmarks in the SAVED frame
+        // history (what detectFormFaults/computeRepDepths/
+        // computeLegDriveAsymmetry read back at Stop) via a cropped
+        // second Pose pass -- see roi-refine.ts's own comment. Throttled
+        // rather than run every tick, and left off entirely whenever the
+        // optional second model hasn't loaded; the live skeleton overlay
+        // keeps using the plain full-frame landmarks regardless, so this
+        // never affects what's drawn on screen, only what gets analyzed
+        // after Stop.
+        roiTickCounterRef.current += 1;
+        const ROI_REFINE_INTERVAL = 3;
+        const savedLandmarks =
+          roiLandmarkerRef.current && roiTickCounterRef.current % ROI_REFINE_INTERVAL === 0
+            ? refineLowerBodyLandmarks(roiLandmarkerRef.current, video, landmarks, now)
+            : landmarks;
+        framesRef.current.push({ t, landmarks: savedLandmarks, worldLandmarks });
 
         const wrists = deriveWristPoints(worldLandmarks);
         if (wrists.left) {
@@ -754,7 +867,8 @@ export function BarTrackerDialog({
     if (mediaRecorderRef.current?.state === "recording") mediaRecorderRef.current.stop();
 
     if (mode === "jump") {
-      const jumpMetrics = summarizeJumpSet(traceRef.current);
+      const audioSamples = landingAudioListenerRef.current.stop();
+      const jumpMetrics = summarizeJumpSet(traceRef.current, heightIn, audioSamples);
       if (!jumpMetrics) {
         toast.error("Couldn't get a clean read — make sure your feet leave the ground clearly in frame.");
         changeStep("setup");
@@ -772,7 +886,7 @@ export function BarTrackerDialog({
       return;
     }
 
-    const metrics = summarizeTrackedSet(traceRef.current, loadKg);
+    const metrics = summarizeTrackedSet(traceRef.current, loadKg, heightIn);
     if (!metrics) {
       toast.error("Couldn't get a clean read — try again with your whole body in frame.");
       changeStep("setup");
@@ -1018,6 +1132,12 @@ export function BarTrackerDialog({
                         {r.horizontalDistanceCm != null && <span>{r.horizontalDistanceCm} cm dist.</span>}
                         {r.groundContactSeconds != null && (
                           <span>{r.groundContactSeconds}s contact</span>
+                        )}
+                        {r.audioConfirmed === true && (
+                          <Mic
+                            className="h-3 w-3 text-emerald-500"
+                            aria-label="Landing confirmed by audio"
+                          />
                         )}
                       </span>
                     </div>

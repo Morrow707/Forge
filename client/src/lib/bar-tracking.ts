@@ -258,6 +258,34 @@ export function segmentPhases(
 
 const GRAVITY_MPS2 = 9.81;
 
+// Reference height (5'9", a common adult-average baseline) the flat
+// per-movement minimum amplitudes below are calibrated around -- a
+// meaningfully shorter or taller athlete moves proportionally less or
+// more through the same exercise (a 5'6" squat's absolute depth isn't a
+// 6'3" squat's), so a single flat cm threshold either lets a tall
+// athlete's genuine partial rep through as "big enough motion," or risks
+// reading a short athlete's full-depth rep as barely-there movement by
+// comparison. This is a coarse linear nudge, not a real biomechanical
+// model of how limb length actually maps to range of motion (which varies
+// by exercise and by individual proportions, not just height) -- clamped
+// to +/-25% so an unusually short or tall entry doesn't overcorrect into
+// a threshold that's worse than the flat one it's replacing.
+const REFERENCE_HEIGHT_IN = 69;
+const MIN_HEIGHT_SCALE = 0.75;
+const MAX_HEIGHT_SCALE = 1.25;
+
+// Exported for jump-tracking.ts, which applies the same height nudge to
+// its own flight-amplitude floor. Returns baseCm unscaled when heightIn
+// isn't on file -- an athlete who hasn't filled in their profile gets
+// exactly today's flat behavior, not a guess.
+export function heightScaledAmplitudeCm(baseCm: number, heightIn?: number | null): number {
+  if (!heightIn || heightIn <= 0) return baseCm;
+  const scale = Math.min(MAX_HEIGHT_SCALE, Math.max(MIN_HEIGHT_SCALE, heightIn / REFERENCE_HEIGHT_IN));
+  return baseCm * scale;
+}
+
+const BASE_MIN_REP_AMPLITUDE_CM = 20;
+
 // Turns a raw pixel-space trace for one set into real-world metrics. Returns
 // null when there isn't enough signal to say anything meaningful (marker
 // lost for most of the take, or the athlete stopped before moving).
@@ -266,21 +294,26 @@ const GRAVITY_MPS2 = 9.81;
 // velocity, so it's left null throughout whenever there's no load to use
 // as mass (bodyweight-only sets have no well-defined external load here).
 //
-// minRepAmplitudeCm is the smallest vertical reversal segmentPhases will
-// treat as a real rep boundary rather than noise -- 5cm (the original
-// default) is well within pose-jitter and incidental-motion range (settling
-// under the bar, a grip adjustment, unracking/reracking at the start and
-// end of the set), so a set tracked start-to-finish could segment several
-// extra "reps" out of motion that was never a rep at all. Every exercise
-// this tracks -- squat, deadlift, press, row, curl -- moves the bar/wrist
-// well over 15cm through a genuine rep, so 20cm (~8in) comfortably clears
-// real reps of any of them while sitting well above ordinary rack noise.
+// heightIn (the athlete's stored height, when on file) scales
+// BASE_MIN_REP_AMPLITUDE_CM via heightScaledAmplitudeCm above -- the
+// smallest vertical reversal segmentPhases will treat as a real rep
+// boundary rather than noise. 5cm (the original flat default before this
+// existed) was well within pose-jitter and incidental-motion range
+// (settling under the bar, a grip adjustment, unracking/reracking at the
+// start and end of the set), so a set tracked start-to-finish could
+// segment several extra "reps" out of motion that was never a rep at all.
+// Every exercise this tracks -- squat, deadlift, press, row, curl --
+// moves the bar/wrist well over 15cm through a genuine rep for an
+// average-height athlete, so 20cm (~8in) comfortably clears real reps of
+// any of them while sitting well above ordinary rack noise; the height
+// scaling shifts that floor proportionally for anyone far from average.
 export function summarizeTrackedSet(
   rawPoints: TrackedPoint[],
   loadKg?: number,
-  minRepAmplitudeCm = 20,
+  heightIn?: number | null,
 ): RepMetrics | null {
   if (rawPoints.length < 6) return null;
+  const minRepAmplitudeCm = heightScaledAmplitudeCm(BASE_MIN_REP_AMPLITUDE_CM, heightIn);
 
   const ySmoothed = movingAverage(rawPoints.map((p) => p.y), SMOOTHING_WINDOW);
   const speedsMps = computeSpeeds(rawPoints, ySmoothed);

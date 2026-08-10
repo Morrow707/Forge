@@ -83,6 +83,31 @@ export function getPoseLandmarker(): Promise<PoseLandmarker> {
   return landmarkerPromise;
 }
 
+let roiLandmarkerPromise: Promise<PoseLandmarker> | null = null;
+
+// A second, independent PoseLandmarker instance for roi-refine.ts's
+// crop-and-re-detect pass -- deliberately NOT the same instance
+// getPoseLandmarker returns. MediaPipe's VIDEO running mode keeps
+// temporal tracking state per instance, assuming each detectForVideo call
+// is the next frame of one continuous video; feeding the same instance a
+// same-timestamp, spatially-unrelated cropped image between ordinary
+// full-frame calls would confuse that state rather than just costing
+// extra compute. A second instance costs roughly double the model's
+// memory footprint, which is the real tradeoff for the sharper lower-body
+// read roi-refine.ts uses it for.
+export function getRoiPoseLandmarker(): Promise<PoseLandmarker> {
+  if (!roiLandmarkerPromise) {
+    roiLandmarkerPromise = FilesetResolver.forVisionTasks(WASM_BASE_PATH).then((fileset) =>
+      PoseLandmarker.createFromOptions(fileset, {
+        baseOptions: { modelAssetPath: MODEL_URL, delegate: "GPU" },
+        runningMode: "VIDEO",
+        numPoses: 1,
+      }),
+    );
+  }
+  return roiLandmarkerPromise;
+}
+
 function visible<T extends { visibility: number }>(lm: T | undefined): lm is T {
   return !!lm && lm.visibility >= MIN_VISIBILITY;
 }
