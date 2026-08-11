@@ -972,7 +972,7 @@ export function BarTrackerDialog({
           }
         : null;
 
-    const guess = guessMovementPattern(framesRef.current);
+    const guess = guessMovementPattern(framesRef.current, movementType);
     setMovementGuess(guess);
 
     if (voiceEnabledRef.current) {
