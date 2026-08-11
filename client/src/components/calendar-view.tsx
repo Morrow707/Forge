@@ -41,6 +41,13 @@ export type CalendarEntry = {
   completed: boolean;
   athleteId?: number;
   athleteName?: string;
+  // True only on a coach's own calendar, for a program they assigned to
+  // themselves rather than an athlete (see getCalendarForCoach's own
+  // comment) -- renders violet everywhere a skill entry renders teal, so a
+  // coach can tell their own training apart from their roster's at a
+  // glance. Always false/undefined for an athlete's or admin's calendar,
+  // since neither has a "someone else's" entry to distinguish from.
+  isSelfAssigned?: boolean;
 };
 
 export type CalendarViewMode = "single-day" | "month" | "week" | "day";
@@ -100,9 +107,11 @@ export function EntryPill({
           ? "bg-secondary text-muted-foreground"
           : entry.kind === "skill"
             ? "bg-teal-500/20 text-teal-400 hover:bg-teal-500/30"
-            : entry.completed
-              ? "bg-success/20 text-success hover:bg-success/30"
-              : "bg-primary/20 text-primary hover:bg-primary/30",
+            : entry.isSelfAssigned
+              ? "bg-violet-500/20 text-violet-400 hover:bg-violet-500/30"
+              : entry.completed
+                ? "bg-success/20 text-success hover:bg-success/30"
+                : "bg-primary/20 text-primary hover:bg-primary/30",
       )}
     >
       {entryIcon(entry, "h-3 w-3 shrink-0")}
@@ -308,7 +317,9 @@ export function DayDetailList({
                     ? "bg-secondary text-muted-foreground"
                     : rep.kind === "skill"
                       ? "bg-teal-500/15 text-teal-400"
-                      : "bg-primary/15 text-primary",
+                      : rep.isSelfAssigned
+                        ? "bg-violet-500/15 text-violet-400"
+                        : "bg-primary/15 text-primary",
                 )}
               >
                 {entryIcon(rep, "h-4 w-4")}
@@ -359,9 +370,11 @@ function GroupedEntryPill({ group, onClick }: { group: CalendarEntry[]; onClick:
           ? "bg-secondary text-muted-foreground"
           : rep.kind === "skill"
             ? "bg-teal-500/20 text-teal-400 hover:bg-teal-500/30"
-            : completedCount === group.length
-              ? "bg-success/20 text-success hover:bg-success/30"
-              : "bg-primary/20 text-primary hover:bg-primary/30",
+            : rep.isSelfAssigned
+              ? "bg-violet-500/20 text-violet-400 hover:bg-violet-500/30"
+              : completedCount === group.length
+                ? "bg-success/20 text-success hover:bg-success/30"
+                : "bg-primary/20 text-primary hover:bg-primary/30",
       )}
     >
       {entryIcon(rep, "h-3 w-3 shrink-0")}
@@ -461,9 +474,11 @@ function MonthGrid({
                           ? "bg-secondary text-muted-foreground"
                           : e.kind === "skill"
                             ? "bg-teal-500/25 text-teal-400"
-                            : e.completed
-                              ? "bg-success/25 text-success"
-                              : "bg-primary/25 text-primary",
+                            : e.isSelfAssigned
+                              ? "bg-violet-500/25 text-violet-400"
+                              : e.completed
+                                ? "bg-success/25 text-success"
+                                : "bg-primary/25 text-primary",
                       )}
                     >
                       {entryIcon(e, "h-2.5 w-2.5")}
@@ -649,9 +664,11 @@ function ThreeDayAgenda({
                             ? "bg-secondary text-muted-foreground"
                             : e.kind === "skill"
                               ? "bg-teal-500/15 text-teal-400"
-                              : e.completed
-                                ? "bg-success/15 text-success"
-                                : "bg-primary/15 text-primary",
+                              : e.isSelfAssigned
+                                ? "bg-violet-500/15 text-violet-400"
+                                : e.completed
+                                  ? "bg-success/15 text-success"
+                                  : "bg-primary/15 text-primary",
                         )}
                       >
                         {entryIcon(e, "h-4.5 w-4.5")}

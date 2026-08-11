@@ -35,6 +35,7 @@ const CoachRoster = lazy(() => import("@/pages/coach/roster"));
 const CoachAthleteDetail = lazy(() => import("@/pages/coach/athlete-detail"));
 const CoachNutrition = lazy(() => import("@/pages/coach/nutrition"));
 const CoachCalendar = lazy(() => import("@/pages/coach/calendar"));
+const CoachMyWorkout = lazy(() => import("@/pages/coach/my-workout"));
 const CoachAnalytics = lazy(() => import("@/pages/coach/analytics"));
 const CoachLeaderboard = lazy(() => import("@/pages/coach/leaderboard"));
 const CoachTeamBoard = lazy(() => import("@/pages/coach/team-board"));
@@ -149,6 +150,9 @@ function Router() {
         </Route>
         <Route path="/coach/calendar">
           <ProtectedRoute role="coach" component={CoachCalendar} />
+        </Route>
+        <Route path="/coach/my/day/:assignmentId/:programDayId/:date">
+          <ProtectedRoute role="coach" component={CoachMyWorkout} />
         </Route>
         <Route path="/coach/exercises/:id">
           <ProtectedRoute role="coach" component={CoachExerciseDetail} />
