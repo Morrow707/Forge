@@ -307,31 +307,58 @@ export function DayDetailList({
     <div className="space-y-4">
       {groups.map((group) => {
         const rep = group[0];
+        const iconBox = (
+          <div
+            className={cn(
+              "flex h-7 w-7 shrink-0 items-center justify-center rounded-md",
+              rep.isRestDay
+                ? "bg-secondary text-muted-foreground"
+                : rep.kind === "skill"
+                  ? "bg-teal-500/15 text-teal-400"
+                  : rep.isSelfAssigned
+                    ? "bg-violet-500/15 text-violet-400"
+                    : "bg-primary/15 text-primary",
+            )}
+          >
+            {entryIcon(rep, "h-4 w-4")}
+          </div>
+        );
+        const titleBlock = (
+          <div className="min-w-0 flex-1 text-left">
+            <p className="truncate text-sm font-semibold">{rep.title}</p>
+            <p className="truncate text-xs text-muted-foreground">
+              {rep.programName}
+              {!rep.isRestDay &&
+                ` · ${rep.exerciseCount} exercise${rep.exerciseCount === 1 ? "" : "s"}`}
+            </p>
+          </div>
+        );
+
+        // A lone entry with no athleteName is someone looking at their own
+        // day (athlete's calendar, or a coach/admin's self-assigned entry)
+        // -- there's no "which athlete" list to disambiguate, so the header
+        // itself is the tappable row instead of a redundant "View details"
+        // button underneath restating what's already on screen.
+        if (group.length === 1 && !rep.athleteName) {
+          return (
+            <button
+              key={groupKey(rep)}
+              type="button"
+              onClick={() => onEntryClick(rep)}
+              className="flex w-full items-center gap-2 rounded-md border border-border p-2.5 text-left transition-colors hover:bg-surface-elevated"
+            >
+              {iconBox}
+              {titleBlock}
+              {rep.completed && <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />}
+            </button>
+          );
+        }
+
         return (
           <div key={groupKey(rep)}>
             <div className="mb-1.5 flex items-center gap-2">
-              <div
-                className={cn(
-                  "flex h-7 w-7 shrink-0 items-center justify-center rounded-md",
-                  rep.isRestDay
-                    ? "bg-secondary text-muted-foreground"
-                    : rep.kind === "skill"
-                      ? "bg-teal-500/15 text-teal-400"
-                      : rep.isSelfAssigned
-                        ? "bg-violet-500/15 text-violet-400"
-                        : "bg-primary/15 text-primary",
-                )}
-              >
-                {entryIcon(rep, "h-4 w-4")}
-              </div>
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold">{rep.title}</p>
-                <p className="truncate text-xs text-muted-foreground">
-                  {rep.programName}
-                  {!rep.isRestDay &&
-                    ` · ${rep.exerciseCount} exercise${rep.exerciseCount === 1 ? "" : "s"}`}
-                </p>
-              </div>
+              {iconBox}
+              {titleBlock}
               {group.length > 1 && (
                 <span className="ml-auto shrink-0 rounded-full bg-secondary px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
                   {group.length} athletes
@@ -346,7 +373,7 @@ export function DayDetailList({
                   onClick={() => onEntryClick(e)}
                   className="flex w-full items-center justify-between gap-2 rounded-md border border-border px-3 py-2 text-left text-sm transition-colors hover:bg-surface-elevated"
                 >
-                  <span className="truncate font-medium">{e.athleteName ?? "View details"}</span>
+                  <span className="truncate font-medium">{e.athleteName}</span>
                   {e.completed && <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />}
                 </button>
               ))}
@@ -422,7 +449,7 @@ function MonthGrid({
               key={dateStr}
               aria-current={isToday(day) ? "date" : undefined}
               className={cn(
-                "flex min-h-11 flex-col gap-0.5 rounded-md border border-border p-1 sm:min-h-28 sm:gap-1 sm:p-2",
+                "flex min-h-16 flex-col gap-1 rounded-md border border-border p-1 sm:min-h-28 sm:gap-1 sm:p-2",
                 !inMonth && "opacity-30",
                 isToday(day) && "border-primary",
               )}
@@ -454,8 +481,10 @@ function MonthGrid({
 
               {/* Mobile: icon-only dots so a full month fits on one screen
                   without scrolling -- tapping still opens that entry (or,
-                  once grouped, the full day detail). */}
-              <div className="flex flex-1 flex-wrap items-end gap-0.5 sm:hidden">
+                  once grouped, the full day detail). Sized to a real touch
+                  target (not just a legible dot) since these are the only
+                  way to open an entry on a phone in this view. */}
+              <div className="flex flex-1 flex-wrap items-end gap-1 sm:hidden">
                 {dayGroups.slice(0, 3).map((group) => {
                   const e = group[0];
                   return (
@@ -469,7 +498,7 @@ function MonthGrid({
                       aria-label={e.title}
                       title={e.title}
                       className={cn(
-                        "flex h-4 w-4 items-center justify-center rounded-full",
+                        "flex h-6 w-6 shrink-0 items-center justify-center rounded-full",
                         e.isRestDay
                           ? "bg-secondary text-muted-foreground"
                           : e.kind === "skill"
@@ -481,7 +510,7 @@ function MonthGrid({
                                 : "bg-primary/25 text-primary",
                       )}
                     >
-                      {entryIcon(e, "h-2.5 w-2.5")}
+                      {entryIcon(e, "h-3.5 w-3.5")}
                     </button>
                   );
                 })}
@@ -510,6 +539,79 @@ function MonthGrid({
           );
         })}
       </div>
+    </div>
+  );
+}
+
+/** One day's worth of entries as a label + a stack of full-width, generously
+ * padded rows -- shared by the 3-day agenda and (on phones) the week view,
+ * so both read the same way instead of the week view falling back to a
+ * cramped grid of tiny fixed-height boxes on a narrow screen. */
+function DayAgendaRow({
+  day,
+  dayEntries,
+  onEntryClick,
+  label,
+}: {
+  day: Date;
+  dayEntries: CalendarEntry[];
+  onEntryClick: (entry: CalendarEntry) => void;
+  label: string;
+}) {
+  return (
+    <div>
+      <div className="mb-2 flex items-baseline justify-between">
+        <span
+          className={cn("text-sm font-bold uppercase tracking-wide", isToday(day) && "text-primary")}
+        >
+          {label}
+        </span>
+        <span className="text-xs text-muted-foreground">{format(day, "MMM d")}</span>
+      </div>
+      {dayEntries.length === 0 ? (
+        <div className="flex items-center justify-center gap-1.5 rounded-md border border-dashed border-border py-6 text-xs text-muted-foreground">
+          <MoonStar className="h-3.5 w-3.5" />
+          Nothing scheduled
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {dayEntries.map((e) => (
+            <button
+              key={`${e.assignmentId}-${e.programDayId}`}
+              onClick={() => onEntryClick(e)}
+              className="flex w-full items-center justify-between gap-3 rounded-md border border-border p-3.5 text-left transition-colors hover:bg-surface-elevated"
+            >
+              <div className="flex items-center gap-3">
+                <div
+                  className={cn(
+                    "flex h-9 w-9 shrink-0 items-center justify-center rounded-md",
+                    e.isRestDay
+                      ? "bg-secondary text-muted-foreground"
+                      : e.kind === "skill"
+                        ? "bg-teal-500/15 text-teal-400"
+                        : e.isSelfAssigned
+                          ? "bg-violet-500/15 text-violet-400"
+                          : e.completed
+                            ? "bg-success/15 text-success"
+                            : "bg-primary/15 text-primary",
+                  )}
+                >
+                  {entryIcon(e, "h-4.5 w-4.5")}
+                </div>
+                <div>
+                  {e.athleteName && <p className="text-xs text-muted-foreground">{e.athleteName}</p>}
+                  <p className="font-semibold">{e.title}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {e.programName}
+                    {!e.isRestDay && ` · ${e.exerciseCount} exercise${e.exerciseCount === 1 ? "" : "s"}`}
+                  </p>
+                </div>
+              </div>
+              {e.completed && <CheckCircle2 className="h-5 w-5 shrink-0 text-success" />}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -555,7 +657,27 @@ function WeekRow({
           </div>
         </div>
       )}
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-7">
+
+      {/* Phones: the same agenda-row layout as the 3-day view, just for all
+          7 days -- a grid of fixed-height boxes at this width left most of
+          them empty and cramped at once. */}
+      <div className="space-y-5 sm:hidden">
+        {days.map((day) => {
+          const dateStr = formatISO(day, { representation: "date" });
+          return (
+            <DayAgendaRow
+              key={dateStr}
+              day={day}
+              dayEntries={entriesByDate.get(dateStr) ?? []}
+              onEntryClick={onEntryClick}
+              label={isToday(day) ? "Today" : format(day, "EEEE")}
+            />
+          );
+        })}
+      </div>
+
+      {/* Tablet/desktop: a real 7-column week grid, with room to spare. */}
+      <div className="hidden gap-2 sm:grid sm:grid-cols-7">
         {days.map((day) => {
           const dateStr = formatISO(day, { representation: "date" });
           const dayEntries = entriesByDate.get(dateStr) ?? [];
@@ -622,7 +744,6 @@ function ThreeDayAgenda({
     <div className="space-y-5">
       {days.map((day) => {
         const dateStr = formatISO(day, { representation: "date" });
-        const dayEntries = entriesByDate.get(dateStr) ?? [];
         const label = isToday(day)
           ? "Today"
           : isYesterday(day)
@@ -631,66 +752,13 @@ function ThreeDayAgenda({
               ? "Tomorrow"
               : format(day, "EEEE");
         return (
-          <div key={dateStr}>
-            <div className="mb-2 flex items-baseline justify-between">
-              <span
-                className={cn(
-                  "text-sm font-bold uppercase tracking-wide",
-                  isToday(day) && "text-primary",
-                )}
-              >
-                {label}
-              </span>
-              <span className="text-xs text-muted-foreground">{format(day, "MMM d")}</span>
-            </div>
-            {dayEntries.length === 0 ? (
-              <div className="flex items-center justify-center gap-1.5 rounded-md border border-dashed border-border py-6 text-xs text-muted-foreground">
-                <MoonStar className="h-3.5 w-3.5" />
-                Nothing scheduled
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {dayEntries.map((e) => (
-                  <button
-                    key={`${e.assignmentId}-${e.programDayId}`}
-                    onClick={() => onEntryClick(e)}
-                    className="flex w-full items-center justify-between gap-3 rounded-md border border-border p-3.5 text-left transition-colors hover:bg-surface-elevated"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={cn(
-                          "flex h-9 w-9 shrink-0 items-center justify-center rounded-md",
-                          e.isRestDay
-                            ? "bg-secondary text-muted-foreground"
-                            : e.kind === "skill"
-                              ? "bg-teal-500/15 text-teal-400"
-                              : e.isSelfAssigned
-                                ? "bg-violet-500/15 text-violet-400"
-                                : e.completed
-                                  ? "bg-success/15 text-success"
-                                  : "bg-primary/15 text-primary",
-                        )}
-                      >
-                        {entryIcon(e, "h-4.5 w-4.5")}
-                      </div>
-                      <div>
-                        {e.athleteName && (
-                          <p className="text-xs text-muted-foreground">{e.athleteName}</p>
-                        )}
-                        <p className="font-semibold">{e.title}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {e.programName}
-                          {!e.isRestDay &&
-                            ` · ${e.exerciseCount} exercise${e.exerciseCount === 1 ? "" : "s"}`}
-                        </p>
-                      </div>
-                    </div>
-                    {e.completed && <CheckCircle2 className="h-5 w-5 shrink-0 text-success" />}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          <DayAgendaRow
+            key={dateStr}
+            day={day}
+            dayEntries={entriesByDate.get(dateStr) ?? []}
+            onEntryClick={onEntryClick}
+            label={label}
+          />
         );
       })}
     </div>
