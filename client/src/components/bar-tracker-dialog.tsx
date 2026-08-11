@@ -566,12 +566,13 @@ export function BarTrackerDialog({
   // check -- previously a second person had to look at the screen and
   // confirm the athlete was framed correctly before tapping Start Set,
   // which never worked for someone tracking themselves alone. Once the
-  // whole body is in frame AND the camera looks roughly square to the
-  // athlete (see assessCameraAlignment) continuously for READY_HOLD_MS,
-  // tracking starts on its own with an audible countdown -- nobody has to
-  // watch the screen or touch the phone. Still runs (not gated on having
-  // already triggered) once counting down, so stepping out of frame mid-
-  // countdown cancels it rather than starting on an empty rack.
+  // whole body is in frame AND the camera isn't rotated off-square or
+  // impossible to read (see assessCameraAlignment) continuously for
+  // READY_HOLD_MS, tracking starts on its own with an audible countdown --
+  // nobody has to watch the screen or touch the phone. Still runs (not
+  // gated on having already triggered) once counting down, so stepping out
+  // of frame mid-countdown cancels it rather than starting on an empty
+  // rack.
   function evaluateAutoStartReadiness(
     landmarks: NormalizedLandmark[] | null,
     worldLandmarks: Landmark[] | null,
@@ -581,15 +582,26 @@ export function BarTrackerDialog({
 
     const bodyIn = !!landmarks && isFullBodyInFrame(landmarks);
     const alignment = worldLandmarks ? assessCameraAlignment(worldLandmarks) : null;
-    const ready = bodyIn && (alignment?.aligned ?? false);
+    // "axial" (camera facing the athlete head-on or foot-on, rather than
+    // from the side) doesn't block auto-start the way "angled" does -- it's
+    // a deliberate, legitimate framing choice when bar tilt or shoulder
+    // symmetry matters more than a clean vertical bar path (see
+    // computeBarTiltDegrees, which reads only x/y and is actually MORE
+    // reliable head-on than from the side, where the two hands sit at
+    // different depths instead of different frame positions and often
+    // occlude each other entirely). "angled" (camera rotated off-square)
+    // and "unknown" (can't tell) have no such legitimate use, so those
+    // still hold the countdown back.
+    const blocksStart = alignment != null && alignment.reason !== "ok" && alignment.reason !== "axial";
+    const ready = bodyIn && !blocksStart;
 
     if (!autoStartTriggeredRef.current) {
       setAlignmentHint(
-        alignment && !alignment.aligned
-          ? alignment.reason === "axial"
-            ? "Camera looks lined up with your body -- film from the side, level with the bar"
-            : "Camera looks angled -- try to face it squarely for accurate readings"
-          : null,
+        alignment?.reason === "angled"
+          ? "Camera looks angled -- try to face it squarely for accurate readings"
+          : alignment?.reason === "axial"
+            ? "Front-on framing -- good for bar tilt and shoulder symmetry, but bar-path distance and velocity will be less reliable from this angle"
+            : null,
       );
     }
 
