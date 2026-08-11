@@ -8067,7 +8067,7 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
     athleteId?: number,
   ) {
     const coachIds = await this.getEffectiveCoachIds(coachId);
-    const coachAssignments = await db.query.assignments.findMany({
+    const rawAssignments = await db.query.assignments.findMany({
       where: athleteId
         ? and(inArray(assignments.coachId, coachIds), eq(assignments.athleteId, athleteId))
         : inArray(assignments.coachId, coachIds),
@@ -8084,6 +8084,17 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
         },
       },
     });
+    // A coach who programs their own training (see /api/coach/my/assignments)
+    // creates an assignments row with coachId === athleteId. getEffectiveCoachIds
+    // widens coachIds to every staff member sharing a primary coach, which
+    // would otherwise leak a co-staff coach's own self-assigned lifts into
+    // everyone else's team calendar -- a self-assigned row only ever belongs
+    // on the assigning coach's OWN calendar, never a colleague's, so anything
+    // self-assigned that isn't this specific viewer's own is dropped here
+    // before it ever becomes an entry.
+    const coachAssignments = rawAssignments.filter(
+      (a) => a.coachId !== a.athleteId || a.coachId === coachId,
+    );
 
     const start = parseISO(rangeStart);
     const end = parseISO(rangeEnd);
@@ -8101,11 +8112,16 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
       isRestDay: boolean;
       exerciseCount: number;
       completed: boolean;
+      // True only for the viewing coach's own self-programmed lifts (see the
+      // filter above) -- lets the client color/route these differently from
+      // an actual roster athlete's entry without a second calendar fetch.
+      isSelfAssigned: boolean;
     };
 
     const entries: CoachCalendarEntry[] = [];
 
     for (const a of coachAssignments) {
+      const isSelfAssigned = a.coachId === a.athleteId;
       for (const { week, calendarWeekNumber, isFirstCycle } of assignmentWeekOccurrences(
         a.program.weeks,
         a.durationWeeks,
@@ -8126,6 +8142,7 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
               isRestDay: day.isRestDay,
               exerciseCount: day.exercises.length,
               completed: false,
+              isSelfAssigned,
             });
           }
         }

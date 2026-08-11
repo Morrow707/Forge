@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useSearch } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
 import { CalendarView, type CalendarEntry } from "@/components/calendar-view";
@@ -21,6 +21,7 @@ import { CalendarDays } from "lucide-react";
 type RosterEntry = { id: number; name: string };
 
 export default function CoachCalendar() {
+  const [, setLocation] = useLocation();
   const { data: roster = [] } = useQuery<RosterEntry[]>({
     queryKey: ["/api/coach/roster"],
   });
@@ -91,6 +92,14 @@ export default function CoachCalendar() {
         skillProgramDayId: e.programDayId,
         athleteName: e.athleteName!,
       });
+    } else if (e.isSelfAssigned) {
+      // The coach's own lift, not a roster athlete's -- CoachDayEditDialog
+      // is a prescribe/edit-the-athlete's-day editor (fetches roster-scoped
+      // data like correctives history) that would 404 against the coach's
+      // own id, since they're never a row on their own roster. Route to the
+      // same workout-logging page /coach/my/assignments' entries are meant
+      // to be logged from instead.
+      setLocation(`/coach/my/day/${e.assignmentId}/${e.programDayId}/${e.date}`);
     } else {
       setEditing({
         programDayId: e.programDayId,
