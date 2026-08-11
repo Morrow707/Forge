@@ -586,7 +586,9 @@ export function BarTrackerDialog({
     if (!autoStartTriggeredRef.current) {
       setAlignmentHint(
         alignment && !alignment.aligned
-          ? "Camera looks angled -- try to face it squarely for accurate readings"
+          ? alignment.reason === "axial"
+            ? "Camera looks lined up with your body -- film from the side, level with the bar"
+            : "Camera looks angled -- try to face it squarely for accurate readings"
           : null,
       );
     }

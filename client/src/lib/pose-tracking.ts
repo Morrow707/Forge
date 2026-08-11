@@ -301,7 +301,7 @@ export function isFullBodyInFrame(landmarks: NormalizedLandmark[]): boolean {
   return FULL_BODY_CHECKPOINTS.every((i) => visible(landmarks[i]));
 }
 
-export type CameraAlignment = { aligned: boolean; reason: "ok" | "angled" | "unknown" };
+export type CameraAlignment = { aligned: boolean; reason: "ok" | "angled" | "axial" | "unknown" };
 
 // Whether the camera is roughly square to the athlete rather than shooting
 // from an oblique angle -- an angled camera is the single biggest source of
@@ -321,7 +321,44 @@ export function assessCameraAlignment(worldLandmarks: Landmark[]): CameraAlignme
   const shoulderWidth = Math.abs(lShoulder.x - rShoulder.x);
   if (shoulderWidth < 0.05) return { aligned: false, reason: "unknown" };
   const depthGap = Math.abs(lShoulder.z - rShoulder.z);
-  return depthGap / shoulderWidth > 0.5 ? { aligned: false, reason: "angled" } : { aligned: true, reason: "ok" };
+  if (depthGap / shoulderWidth > 0.5) return { aligned: false, reason: "angled" };
+
+  // A second, unrelated way to be misaligned that the shoulder check above
+  // can't see: the camera pointed along the athlete's body -- filming a
+  // bench press from the feet (or the head) instead of the side. Shoulders
+  // can still sit level with each other in that framing (it isn't a
+  // left/right rotation at all), but the body's whole length collapses
+  // toward the lens instead of spreading across the frame, which is just as
+  // fatal for bar-path/velocity accuracy: nearly all real motion becomes
+  // toward/away from the camera, exactly where a single 2D camera has the
+  // least ability to resolve position, and is the likeliest explanation for
+  // wildly inflated velocity/drift numbers and flickering ("ghost") skeleton
+  // detections. Ankle-to-shoulder is the longest stable segment available
+  // (spans the whole body), compared as its own-plane spread (x/y -- however
+  // that segment happens to be oriented in the image) against its depth (z)
+  // spread: a good side view keeps that segment roughly in the camera's
+  // image plane (small z change along its length); an axial shot points it
+  // straight at the lens instead (z change dominates). No division needed
+  // (and no risk of a div-by-zero on a compact pose) since both sides are
+  // compared directly; the 0.2m floor on the depth term keeps ordinary pose
+  // noise or a curled-up position from tripping this on their own.
+  const lAnkle = worldLandmarks[POSE_LANDMARKS.LEFT_ANKLE];
+  const rAnkle = worldLandmarks[POSE_LANDMARKS.RIGHT_ANKLE];
+  if (visible(lAnkle) && visible(rAnkle)) {
+    const ankleMidZ = (lAnkle.z + rAnkle.z) / 2;
+    const shoulderMidZ = (lShoulder.z + rShoulder.z) / 2;
+    const ankleMidX = (lAnkle.x + rAnkle.x) / 2;
+    const ankleMidY = (lAnkle.y + rAnkle.y) / 2;
+    const shoulderMidX = (lShoulder.x + rShoulder.x) / 2;
+    const shoulderMidY = (lShoulder.y + rShoulder.y) / 2;
+    const acrossFrame = Math.hypot(shoulderMidX - ankleMidX, shoulderMidY - ankleMidY);
+    const towardCamera = Math.abs(shoulderMidZ - ankleMidZ);
+    if (towardCamera > 0.2 && towardCamera > acrossFrame) {
+      return { aligned: false, reason: "axial" };
+    }
+  }
+
+  return { aligned: true, reason: "ok" };
 }
 
 // The tracked point for "jump" mode -- the ankle midpoint rather than the
