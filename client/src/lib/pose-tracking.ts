@@ -745,7 +745,19 @@ export type MovementGuess = { pattern: MovementPattern; label: string };
 // single camera and no idea which way it's pointed) and always shown as an
 // informational guess/sanity-check, never used to silently relabel
 // anything the athlete tracked.
-export function guessMovementPattern(frames: PoseFrame[]): MovementGuess {
+//
+// movementType (optional, same taxonomy detectFormFaults gates on) is the
+// hard gate for the squat/deadlift branch below -- without it, a bench
+// press reliably mislabels as "Deadlift": kneeRangeOfMotion can drift past
+// 30 from nothing more than pose noise in legs that are just stabilizing,
+// not the focus of the movement, and torsoMax (angle from VERTICAL) reads
+// close to 90deg on essentially every rep regardless of form, because the
+// torso's correct, neutral orientation for a lying-down press IS
+// horizontal -- there's no camera angle or fix to the angle math that
+// changes that, it's the wrong question to ask of a supine exercise.
+// Left undefined by any caller that doesn't have it, same gradual-
+// threading fallback detectFormFaults already established.
+export function guessMovementPattern(frames: PoseFrame[], movementType?: string | null): MovementGuess {
   if (frames.length < 6) return { pattern: "unknown", label: "Not enough motion to guess" };
 
   let kneeMin = 180;
@@ -806,8 +818,15 @@ export function guessMovementPattern(frames: PoseFrame[]): MovementGuess {
   // single misdetected frame shouldn't get to decide "deadlift" vs. "squat"
   // for the whole set.
   const torsoMax = torsoAngles.length ? percentile(torsoAngles, 0.95) : 0;
+  // Only worth attempting the squat/deadlift guess when the exercise is
+  // unknown (preserving the old fallback for callers without
+  // movementType) or already known to be a lower-body pattern -- see this
+  // function's own comment above for why a known non-lower-body
+  // movementType (Push, Pull, Carry...) makes this branch's signals
+  // meaningless rather than just noisy.
+  const canGuessLowerBody = movementType == null || LOWER_BODY_MOVEMENT_TYPES.has(movementType);
 
-  if (kneeRangeOfMotion > 30) {
+  if (canGuessLowerBody && kneeRangeOfMotion > 30) {
     // Both fold the knees and hips substantially -- a deadlift keeps the
     // torso pitched forward well past a squat's comparatively upright depth.
     if (torsoMax > 40) return { pattern: "deadlift", label: "Deadlift" };
