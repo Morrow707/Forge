@@ -592,6 +592,15 @@ export function BarTrackerDialog({
     // occlude each other entirely). "angled" (camera rotated off-square)
     // and "unknown" (can't tell) have no such legitimate use, so those
     // still hold the countdown back.
+    //
+    // Peak/mean velocity and depth (bar-tracking.ts's computeSpeeds) come
+    // entirely from the smoothed vertical (world Y) trace, never x or z, so
+    // those numbers hold up fine from either angle as long as the camera
+    // itself is held level -- what actually degrades head-on is
+    // barPathDeviationCm (the straight-line-drift fault), which reads x/z:
+    // a bench press's real forward/back drift toward the face or the feet
+    // is exactly the axis that becomes camera depth in this framing, the
+    // least precise axis any single 2D camera has.
     const blocksStart = alignment != null && alignment.reason !== "ok" && alignment.reason !== "axial";
     const ready = bodyIn && !blocksStart;
 
@@ -600,7 +609,7 @@ export function BarTrackerDialog({
         alignment?.reason === "angled"
           ? "Camera looks angled -- try to face it squarely for accurate readings"
           : alignment?.reason === "axial"
-            ? "Front-on framing -- good for bar tilt and shoulder symmetry, but bar-path distance and velocity will be less reliable from this angle"
+            ? "Front-on framing -- good for bar tilt and shoulder symmetry; forward/back drift readings will be less reliable from this angle"
             : null,
       );
     }
