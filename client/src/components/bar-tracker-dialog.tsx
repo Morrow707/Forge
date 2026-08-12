@@ -31,11 +31,13 @@ import {
   getRoiPoseLandmarker,
   deriveBarPoint,
   deriveNormalizedWristPoint,
+  deriveNormalizedWristPoints,
   deriveJumpPoint,
   deriveWristPoints,
   barPointConfidence,
+  wristConfidence as singleWristConfidence,
   detectFormFaults,
-  computeBarTiltDegrees,
+  tiltDegreesFromPoints,
   computeRepDepths,
   computeLegDriveAsymmetry,
   guessMovementPattern,
@@ -327,8 +329,23 @@ export function BarTrackerDialog({
   // implement-tracking.ts's own comment for why this replaces the old
   // wide-grip-only static edge detector.
   const implementTrackerRef = useRef(new ImplementTracker());
+  // Two more instances, one per grip point, entirely separate from the
+  // combined one above -- bar tilt needs two independently-tracked points
+  // to compare (there's no such thing as "the tilt" of one point), and
+  // fusing each side against ITS OWN wrist the same way the combined point
+  // fuses against the wrist midpoint means a wrist that briefly misreads
+  // during occlusion recovery (the actual cause of the "89 degrees" bug)
+  // has a second, independent signal to fall back on for THAT side instead
+  // of tilt reading straight off two raw, unfused landmarks. Kept
+  // deliberately separate from implementTrackerRef above rather than
+  // trying to unify all three into one system -- the combined tracker
+  // drives position/velocity/ROM, already tuned and working; these two
+  // only ever feed the tilt reading and the left/right symmetry traces
+  // below, so a rough edge here can't put the primary numbers at risk.
+  const leftImplementTrackerRef = useRef(new ImplementTracker());
+  const rightImplementTrackerRef = useRef(new ImplementTracker());
   // Rolling buffer of the last few LIVE tilt readings (raw single-frame
-  // computeBarTiltDegrees output, only pushed when a frame actually
+  // tiltDegreesFromPoints output, only pushed when a frame actually
   // produced one) -- see liveTiltDeg's own comment below for why this
   // exists.
   const liveTiltHistoryRef = useRef<number[]>([]);
@@ -396,6 +413,8 @@ export function BarTrackerDialog({
     displaySmootherRef.current.reset();
     worldSmootherRef.current.reset();
     implementTrackerRef.current.reset();
+    leftImplementTrackerRef.current.reset();
+    rightImplementTrackerRef.current.reset();
     lastDisplayYRef.current = null;
     readyStartTimeRef.current = null;
     autoStartTriggeredRef.current = false;
@@ -717,6 +736,8 @@ export function BarTrackerDialog({
     liveTiltHistoryRef.current = [];
     setImplementDetected(false);
     implementTrackerRef.current.reset();
+    leftImplementTrackerRef.current.reset();
+    rightImplementTrackerRef.current.reset();
 
     if (recordVideo && streamRef.current) {
       videoChunksRef.current = [];
@@ -780,28 +801,10 @@ export function BarTrackerDialog({
       ? worldSmootherRef.current.smooth(worldLandmarks, now)
       : null;
 
-    // Bar tilt is meaningless with no bar in hand -- skip it in jump mode,
-    // and skip it for any equipment that isn't a shared two-handed implement
-    // (see SHARED_BAR_EQUIPMENT in pose-tracking.ts), same gate
-    // detectFormFaults applies to the saved bar_tilt fault below. Reads
-    // world landmarks (not image-space, see computeBarTiltDegrees's own
-    // comment for why) and the last confidently-known vertical sign --
-    // that ref is updated below whenever a fresh frame can confirm it, and
-    // holds steady otherwise, so this stays correct even the instant before
-    // the very first confident reading lands.
-    const rawTilt =
-      displayWorldLandmarks && mode !== "jump" && usesSharedBar
-        ? computeBarTiltDegrees(displayWorldLandmarks, verticalSignRef.current)
-        : null;
-    // See LIVE_TILT_HISTORY_SIZE's own comment -- only real readings go in
-    // the buffer (an occluded frame contributes nothing, rather than
-    // diluting the window with a zero/null), and the displayed number is
-    // the buffer's median, not just whatever this one frame produced.
-    if (rawTilt != null) {
-      liveTiltHistoryRef.current.push(rawTilt);
-      if (liveTiltHistoryRef.current.length > LIVE_TILT_HISTORY_SIZE) liveTiltHistoryRef.current.shift();
-    }
-    setLiveTiltDeg(liveTiltHistoryRef.current.length > 0 ? medianOf(liveTiltHistoryRef.current) : null);
+    // Bar tilt itself is computed further down, once the left/right
+    // implement trackers have run (see leftImplementTrackerRef's own
+    // comment) -- it needs two independently-fused grip points, not just
+    // the raw wrist landmarks this early in the tick has available.
     if (!landmarks || !worldLandmarks) setImplementDetected(false);
 
     if (landmarks && worldLandmarks && displayLandmarks && displayWorldLandmarks) {
@@ -870,8 +873,15 @@ export function BarTrackerDialog({
         // detection and not a misread -- exactly the failure mode ("ghost"
         // skeletons, phantom landmarks) that's otherwise hardest to catch.
         let gripConfirmed = false;
-        if (normalizedWrist && handLandmarkerRef.current) {
-          const handsResult = handLandmarkerRef.current.detectForVideo(video, now);
+        // Hoisted (rather than called again below) so the left/right grip
+        // tracking further down can reuse this same detection -- MediaPipe's
+        // VIDEO-mode detectForVideo expects a strictly increasing timestamp
+        // per call, so this can only run once per tick, not once per point.
+        const handsResult =
+          normalizedWrist && handLandmarkerRef.current
+            ? handLandmarkerRef.current.detectForVideo(video, now)
+            : null;
+        if (handsResult && normalizedWrist) {
           const refined = refineGripPoint(handsResult.landmarks, normalizedWrist.x, normalizedWrist.y);
           if (refined) {
             normalizedWrist = refined;
@@ -1002,6 +1012,113 @@ export function BarTrackerDialog({
               rightTraceRef.current.push(g);
           rightTraceRef.current.push(rightPoint);
         }
+
+        // Left/right implement tracking, purely to make bar tilt a real
+        // two-signal fusion instead of two raw wrist landmarks -- entirely
+        // separate from the combined tracker and the raw wrist traces just
+        // above (see leftImplementTrackerRef's own comment for why).
+        // Skipped for jump mode (nothing held) and non-shared-bar equipment
+        // (tilt isn't a real concept there either), same gate the saved
+        // bar_tilt fault already uses.
+        let fusedLeft: { x: number; y: number } | null = null;
+        let fusedRight: { x: number; y: number } | null = null;
+        if (mode !== "jump" && usesSharedBar) {
+          const normalizedWrists = deriveNormalizedWristPoints(landmarks);
+          // Same plausibility reasoning as MAX_PLAUSIBLE_IMPLEMENT_OFFSET_M
+          // above, just tighter -- a single grip point has to sit right at
+          // the hand holding it, not somewhere across a whole bar's width
+          // the way the combined center can legitimately be.
+          const MAX_PLAUSIBLE_GRIP_OFFSET_M = 0.35;
+
+          if (normalizedWrists.left) {
+            let seed = normalizedWrists.left;
+            const refined = handsResult ? refineGripPoint(handsResult.landmarks, seed.x, seed.y) : null;
+            if (refined) seed = refined;
+            const leftWristWorld = worldLandmarks[POSE_LANDMARKS.LEFT_WRIST];
+            let leftTrack = leftImplementTrackerRef.current.track(
+              video,
+              seed.x,
+              seed.y,
+              landmarks,
+              worldLandmarks,
+              leftWristWorld.x,
+              leftWristWorld.y,
+            );
+            if (
+              leftTrack &&
+              Math.hypot(leftTrack.worldX - leftWristWorld.x, leftTrack.worldY - leftWristWorld.y) >
+                MAX_PLAUSIBLE_GRIP_OFFSET_M
+            ) {
+              leftImplementTrackerRef.current.rejectLock();
+              leftTrack = null;
+            }
+            const leftWristConf = singleWristConfidence(worldLandmarks, "left");
+            const leftBarConf = leftTrack ? leftTrack.confidence : 0;
+            const leftTotal = leftWristConf + leftBarConf;
+            fusedLeft =
+              leftTotal > 0
+                ? {
+                    x:
+                      (leftWristConf * leftWristWorld.x + leftBarConf * (leftTrack ? leftTrack.worldX : 0)) /
+                      leftTotal,
+                    y:
+                      (leftWristConf * leftWristWorld.y + leftBarConf * (leftTrack ? leftTrack.worldY : 0)) /
+                      leftTotal,
+                  }
+                : null;
+          }
+
+          if (normalizedWrists.right) {
+            let seed = normalizedWrists.right;
+            const refined = handsResult ? refineGripPoint(handsResult.landmarks, seed.x, seed.y) : null;
+            if (refined) seed = refined;
+            const rightWristWorld = worldLandmarks[POSE_LANDMARKS.RIGHT_WRIST];
+            let rightTrack = rightImplementTrackerRef.current.track(
+              video,
+              seed.x,
+              seed.y,
+              landmarks,
+              worldLandmarks,
+              rightWristWorld.x,
+              rightWristWorld.y,
+            );
+            if (
+              rightTrack &&
+              Math.hypot(rightTrack.worldX - rightWristWorld.x, rightTrack.worldY - rightWristWorld.y) >
+                MAX_PLAUSIBLE_GRIP_OFFSET_M
+            ) {
+              rightImplementTrackerRef.current.rejectLock();
+              rightTrack = null;
+            }
+            const rightWristConf = singleWristConfidence(worldLandmarks, "right");
+            const rightBarConf = rightTrack ? rightTrack.confidence : 0;
+            const rightTotal = rightWristConf + rightBarConf;
+            fusedRight =
+              rightTotal > 0
+                ? {
+                    x:
+                      (rightWristConf * rightWristWorld.x + rightBarConf * (rightTrack ? rightTrack.worldX : 0)) /
+                      rightTotal,
+                    y:
+                      (rightWristConf * rightWristWorld.y + rightBarConf * (rightTrack ? rightTrack.worldY : 0)) /
+                      rightTotal,
+                  }
+                : null;
+          }
+        }
+
+        // The live tilt reading itself: needs both sides fused this frame
+        // to mean anything (same MIN_BAR_GRIP_SEPARATION_M-style reasoning
+        // tiltDegreesFromPoints already applies). See LIVE_TILT_HISTORY_SIZE's
+        // own comment for why this feeds a rolling median rather than
+        // setting state straight from one frame.
+        const rawTilt =
+          fusedLeft && fusedRight ? tiltDegreesFromPoints(fusedLeft, fusedRight, verticalSignRef.current) : null;
+        if (rawTilt != null) {
+          liveTiltHistoryRef.current.push(rawTilt);
+          if (liveTiltHistoryRef.current.length > LIVE_TILT_HISTORY_SIZE) liveTiltHistoryRef.current.shift();
+        }
+        setLiveTiltDeg(liveTiltHistoryRef.current.length > 0 ? medianOf(liveTiltHistoryRef.current) : null);
 
         // Cheap live rep counter: count direction reversals bigger than
         // ~4cm, same idea as segmentPhases but incremental for the live
