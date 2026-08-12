@@ -757,35 +757,20 @@ export function BarTrackerDialog({
     // so it captures whatever the camera's real framing was right before
     // the set started.
     if (alignment) lastAlignmentReasonRef.current = alignment.reason;
-    // "axial" (camera facing the athlete head-on or foot-on, rather than
-    // from the side) doesn't block auto-start the way "angled" does -- it's
-    // a deliberate, legitimate framing choice when bar tilt or shoulder
-    // symmetry matters more than a clean vertical bar path (see
-    // computeBarTiltDegrees, which reads only x/y and is actually MORE
-    // reliable head-on than from the side, where the two hands sit at
-    // different depths instead of different frame positions and often
-    // occlude each other entirely). "angled" (camera rotated off-square)
-    // and "unknown" (can't tell) have no such legitimate use, so those
-    // still hold the countdown back.
-    //
-    // Peak/mean velocity and depth (bar-tracking.ts's computeSpeeds) come
-    // entirely from the smoothed vertical (world Y) trace, never x or z, so
-    // those numbers hold up fine from either angle as long as the camera
-    // itself is held level -- what actually degrades head-on is
-    // barPathDeviationCm (the straight-line-drift fault), which reads x/z:
-    // a bench press's real forward/back drift toward the face or the feet
-    // is exactly the axis that becomes camera depth in this framing, the
-    // least precise axis any single 2D camera has.
-    const blocksStart = alignment != null && alignment.reason !== "ok" && alignment.reason !== "axial";
+    // Only "unknown" (shoulders not readable at all, so framing genuinely
+    // can't be assessed) still holds the countdown back. "angled" used to
+    // block here too, but a rotated camera doesn't cost enough accuracy to
+    // be worth stalling the athlete over -- computeRepTrustScores still
+    // notes it after the fact (see its own alignmentReason handling), just
+    // without stopping the set from starting.
+    const blocksStart = alignment != null && alignment.reason === "unknown";
     const ready = bodyIn && !blocksStart;
 
     if (!autoStartTriggeredRef.current) {
       setAlignmentHint(
-        alignment?.reason === "angled"
-          ? "Camera looks angled -- try to face it squarely for accurate readings"
-          : alignment?.reason === "axial"
-            ? "Front-on framing -- good for bar tilt and shoulder symmetry; forward/back drift readings will be less reliable from this angle"
-            : null,
+        alignment?.reason === "axial"
+          ? "Front-on framing -- good for bar tilt and shoulder symmetry; forward/back drift readings will be less reliable from this angle"
+          : null,
       );
     }
 
