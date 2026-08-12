@@ -114,6 +114,37 @@ export function findMotionCentroid(
   return { x: sumX / hotCount, y: sumY / hotCount };
 }
 
+export type ColorSignature = { r: number; g: number; b: number };
+
+// Average color in a small neighborhood around a pixel -- a coarse
+// appearance fingerprint of whatever the motion search just landed on,
+// for the caller to optionally corroborate against a remembered signature
+// (see implement-appearance-memory.ts). A single-pixel sample would be too
+// noisy (compression artifacts, a specular highlight); a few pixels'
+// average is stable without smearing across the implement's actual edge.
+function sampleAverageColor(data: Uint8ClampedArray, w: number, h: number, cx: number, cy: number): ColorSignature {
+  const radius = 2;
+  const left = Math.max(0, Math.round(cx) - radius);
+  const right = Math.min(w, Math.round(cx) + radius + 1);
+  const top = Math.max(0, Math.round(cy) - radius);
+  const bottom = Math.min(h, Math.round(cy) + radius + 1);
+  let r = 0;
+  let g = 0;
+  let b = 0;
+  let count = 0;
+  for (let y = top; y < bottom; y++) {
+    for (let x = left; x < right; x++) {
+      const idx = (y * w + x) * 4;
+      r += data[idx];
+      g += data[idx + 1];
+      b += data[idx + 2];
+      count++;
+    }
+  }
+  if (count === 0) return { r: 0, g: 0, b: 0 };
+  return { r: r / count, g: g / count, b: b / count };
+}
+
 // Real meters per working-resolution pixel, derived fresh every frame from
 // shoulder width in both normalized image-space and world-space -- pure
 // landmark math, split out for the same testability reason as
@@ -187,6 +218,14 @@ export type BarTrackResult = {
   // header comment above for why that's the one point the wrist
   // contributes) and climbs back to 1 the longer the lock holds unbroken.
   confidence: number;
+  // Average color where the tracker is currently locked (or, during a
+  // stationary hold -- see MIN_WRIST_SPEED_PX below -- the last position it
+  // actually sampled), for the caller to optionally corroborate against a
+  // remembered appearance signature (see implement-appearance-memory.ts).
+  // Never used by this class itself to influence tracking -- purely
+  // reported for the caller's own, separate fusion, same as confidence.
+  // Null only before any lock has ever been sampled this set.
+  color: ColorSignature | null;
 };
 
 // Stateful across frames within one tracked set (keeps the previous
@@ -213,6 +252,10 @@ export class ImplementTracker {
   private lockWorldX: number | null = null;
   private lockWorldY: number | null = null;
   private lockStreak = 0;
+  // See BarTrackResult's color field -- carried alongside the lock itself
+  // (cleared wherever the lock is) since a color sampled from a position
+  // the tracker no longer trusts isn't a color worth reporting either.
+  private lastColor: ColorSignature | null = null;
 
   reset(): void {
     this.prevGray = null;
@@ -221,6 +264,7 @@ export class ImplementTracker {
     this.lockWorldX = null;
     this.lockWorldY = null;
     this.lockStreak = 0;
+    this.lastColor = null;
   }
 
   private getCanvas(): HTMLCanvasElement {
@@ -232,6 +276,7 @@ export class ImplementTracker {
     this.lockPixelX = null;
     this.lockPixelY = null;
     this.lockStreak = 0;
+    this.lastColor = null;
   }
 
   // Public escape hatch for a caller-side sanity check this tracker has no
@@ -329,6 +374,7 @@ export class ImplementTracker {
           worldX: this.lockWorldX,
           worldY: this.lockWorldY,
           confidence: Math.min(1, this.lockStreak / LOCK_RAMP_FRAMES),
+          color: this.lastColor,
         };
       }
       return null;
@@ -375,11 +421,13 @@ export class ImplementTracker {
     }
     this.lockPixelX = centroid.x;
     this.lockPixelY = centroid.y;
+    this.lastColor = sampleAverageColor(data, w, h, centroid.x, centroid.y);
 
     return {
       worldX: this.lockWorldX,
       worldY: this.lockWorldY,
       confidence: Math.min(1, this.lockStreak / LOCK_RAMP_FRAMES),
+      color: this.lastColor,
     };
   }
 }
