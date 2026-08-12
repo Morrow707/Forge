@@ -825,11 +825,21 @@ export function BarTrackerDialog({
         // Pose's coarser wrist point, use its much higher-resolution palm
         // read as the search center instead -- see hand-tracking.ts's own
         // comment for why this is a seed-point refinement, not a
-        // replacement for anything downstream of it.
+        // replacement for anything downstream of it. Whether it found a
+        // match is also kept as its own signal below: Hand Landmarker is a
+        // completely separate, hand-specialized model, so a real hand
+        // turning up right where Pose says the wrist is amounts to a
+        // second, independent vote that Pose's landmark is a genuine
+        // detection and not a misread -- exactly the failure mode ("ghost"
+        // skeletons, phantom landmarks) that's otherwise hardest to catch.
+        let gripConfirmed = false;
         if (normalizedWrist && handLandmarkerRef.current) {
           const handsResult = handLandmarkerRef.current.detectForVideo(video, now);
           const refined = refineGripPoint(handsResult.landmarks, normalizedWrist.x, normalizedWrist.y);
-          if (refined) normalizedWrist = refined;
+          if (refined) {
+            normalizedWrist = refined;
+            gripConfirmed = true;
+          }
         }
         const barTrack =
           normalizedWrist &&
@@ -852,7 +862,14 @@ export function BarTrackerDialog({
         // once the implement tracker is fully confident. Depth (z) has no
         // 2D-motion equivalent for the tracker to contribute, so it's
         // wrist-only regardless.
-        const wristConfidence = normalizedWrist ? barPointConfidence(worldLandmarks, usesSharedBar) : 0;
+        //
+        // Hand Landmarker's corroboration (gripConfirmed, above) nudges
+        // the wrist side of this up a little further -- capped well short
+        // of a full-confidence override, since it's still only a 2D
+        // location check, not a validation of Pose's world-space Y/depth
+        // estimate specifically.
+        const rawWristConfidence = normalizedWrist ? barPointConfidence(worldLandmarks, usesSharedBar) : 0;
+        const wristConfidence = gripConfirmed ? Math.min(1, rawWristConfidence * 1.25) : rawWristConfidence;
         const barConfidence = barTrack ? barTrack.confidence : 0;
         const totalConfidence = wristConfidence + barConfidence;
         const x =
