@@ -644,7 +644,7 @@ export function computeLegDriveAsymmetry(
 }
 
 export type FormFault = {
-  code: "shallow_depth" | "knee_valgus" | "forward_lean" | "bar_path_drift" | "bar_tilt";
+  code: "shallow_depth" | "knee_valgus" | "forward_lean" | "bar_path_drift" | "bar_tilt" | "grip_shift";
   label: string;
 };
 
@@ -699,6 +699,26 @@ export function detectFormFaults(
   // SHARED_BAR_EQUIPMENT above). Left undefined by any caller that doesn't
   // have it, same gradual-threading reasoning as movementType.
   equipment?: string | null,
+  // Already-fused tilt readings from live tracking (bar-tracker-dialog.tsx
+  // runs a left AND a right implement tracker, each corroborated against
+  // its own wrist, and computes tilt from those two fused points every
+  // frame -- see leftImplementTrackerRef's own comment). When provided,
+  // used INSTEAD of recomputing tilt from these frames' raw, single-source
+  // wrist landmarks below, so the SAVED fault benefits from the same
+  // cross-corroborated signal the live readout already does, rather than
+  // a strictly worse one. Left undefined by any caller that doesn't have
+  // it (falls back to the frame-by-frame raw computation, the prior
+  // behavior) -- this can be threaded through gradually the same way
+  // movementType/equipment were.
+  precomputedTiltDegrees?: number[],
+  // Lateral (x-only) separation between the same two fused left/right grip
+  // points, in meters, one reading per tracked frame -- lets a genuine
+  // regrip (hand sliding to a new position on the bar mid-set) surface as
+  // its own fault instead of silently changing what "the grip" means
+  // partway through a set. No raw-landmark fallback exists for this one
+  // (it's new, not a replacement for prior behavior), so it's simply
+  // skipped when not provided.
+  gripWidthReadings?: number[],
 ): FormFault[] {
   const faults: FormFault[] = [];
   if (frames.length < 6) return faults;
@@ -708,7 +728,7 @@ export function detectFormFaults(
   const kneeAngles: number[] = [];
   const valgusRatios: number[] = [];
   const torsoAngles: number[] = [];
-  const tiltAngles: number[] = [];
+  const tiltAngles: number[] = precomputedTiltDegrees ? [...precomputedTiltDegrees] : [];
 
   // Best current reading of which way world-Y points "up" -- refined every
   // frame it can be (see worldVerticalSign), held from the last confident
@@ -723,7 +743,7 @@ export function detectFormFaults(
     const sign = worldVerticalSign(worldLm);
     if (sign != null) currentVerticalSign = sign;
 
-    if (usesSharedBar) {
+    if (usesSharedBar && !precomputedTiltDegrees) {
       const tilt = computeBarTiltDegrees(worldLm, currentVerticalSign);
       if (tilt != null) tiltAngles.push(tilt);
     }
@@ -830,6 +850,24 @@ export function detectFormFaults(
       faults.push({
         code: "bar_tilt",
         label: `Bar tilted ~${Math.round(Math.abs(worstTilt))}° toward the ${side} arm`,
+      });
+    }
+  }
+
+  // 5th/95th spread rather than raw min/max, same reasoning as everywhere
+  // else in this function -- a couple of noisy frames at either end
+  // shouldn't read as a regrip that never happened. A shoulder-width grip
+  // is comfortably under half a meter; an 8cm swing between the widest and
+  // narrowest readings across a whole set is well past ordinary per-frame
+  // jitter and into "the hands actually moved to a different spot on the
+  // bar" territory.
+  if (usesSharedBar && gripWidthReadings && gripWidthReadings.length) {
+    const narrowest = percentile(gripWidthReadings, 0.05);
+    const widest = percentile(gripWidthReadings, 0.95);
+    if (widest - narrowest > 0.08) {
+      faults.push({
+        code: "grip_shift",
+        label: `Grip width shifted ~${Math.round((widest - narrowest) * 100)}cm during the set`,
       });
     }
   }

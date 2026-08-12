@@ -349,6 +349,19 @@ export function BarTrackerDialog({
   // produced one) -- see liveTiltDeg's own comment below for why this
   // exists.
   const liveTiltHistoryRef = useRef<number[]>([]);
+  // EVERY real tilt reading for the whole set, not just the last few --
+  // passed to detectFormFaults at Stop as precomputedTiltDegrees, so the
+  // SAVED bar_tilt fault is built from the same left/right-fused readings
+  // the live display uses instead of recomputing tilt from raw, unfused
+  // wrist landmarks the way it used to. Separate ref from the rolling
+  // buffer above since they serve different windows (a handful of recent
+  // frames for the live number, the entire set for the saved one).
+  const tiltReadingsRef = useRef<number[]>([]);
+  // Lateral separation between the same two fused grip points, one
+  // reading per frame -- passed to detectFormFaults at Stop as
+  // gripWidthReadings so a genuine mid-set regrip surfaces as its own
+  // fault (see FormFault's "grip_shift" code).
+  const gripWidthReadingsRef = useRef<number[]>([]);
 
   const [step, setStepState] = useState<Step>("setup");
   function changeStep(next: Step) {
@@ -408,6 +421,8 @@ export function BarTrackerDialog({
     lastVideoTimeRef.current = -1;
     setLiveTiltDeg(null);
     liveTiltHistoryRef.current = [];
+    tiltReadingsRef.current = [];
+    gripWidthReadingsRef.current = [];
     setImplementDetected(false);
     verticalSignRef.current = 1;
     displaySmootherRef.current.reset();
@@ -734,6 +749,8 @@ export function BarTrackerDialog({
     setRepCount(0);
     setLiveTiltDeg(null);
     liveTiltHistoryRef.current = [];
+    tiltReadingsRef.current = [];
+    gripWidthReadingsRef.current = [];
     setImplementDetected(false);
     implementTrackerRef.current.reset();
     leftImplementTrackerRef.current.reset();
@@ -1117,8 +1134,15 @@ export function BarTrackerDialog({
         if (rawTilt != null) {
           liveTiltHistoryRef.current.push(rawTilt);
           if (liveTiltHistoryRef.current.length > LIVE_TILT_HISTORY_SIZE) liveTiltHistoryRef.current.shift();
+          tiltReadingsRef.current.push(rawTilt);
         }
         setLiveTiltDeg(liveTiltHistoryRef.current.length > 0 ? medianOf(liveTiltHistoryRef.current) : null);
+        // Same two fused points, a different measurement -- lateral
+        // separation instead of angle, tracked for the whole set so a
+        // mid-set regrip can be caught (see FormFault's "grip_shift" code).
+        if (fusedLeft && fusedRight) {
+          gripWidthReadingsRef.current.push(Math.abs(fusedRight.x - fusedLeft.x));
+        }
 
         // Cheap live rep counter: count direction reversals bigger than
         // ~4cm, same idea as segmentPhases but incremental for the live
@@ -1185,6 +1209,14 @@ export function BarTrackerDialog({
       "lift",
       movementType,
       equipment,
+      // See tiltReadingsRef's own comment -- the saved bar_tilt fault now
+      // reads from the same left/right-fused readings the live display
+      // used, instead of recomputing tilt from these frames' raw,
+      // single-source wrist landmarks.
+      tiltReadingsRef.current,
+      // See gripWidthReadingsRef's own comment -- new fault, no prior
+      // behavior to preserve.
+      gripWidthReadingsRef.current,
     );
 
     const depths = computeRepDepths(
