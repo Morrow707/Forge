@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import {
   summarizeTrackedSet,
   fuseSideVelocity,
+  computeArmDriveAsymmetry,
   buildPathTrace,
   interpolateOcclusionGap,
   type TrackedPoint,
@@ -372,6 +373,12 @@ export function BarTrackerDialog({
   // velocity is a confidence-weighted blend of both, not just the primary
   // trace alone -- see fuseSideVelocity's own comment.
   const sideVelocitySamplesRef = useRef<VelocitySample[]>([]);
+  // The same two fused grip points AGAIN, this time kept apart instead of
+  // averaged -- sideVelocitySamplesRef above answers "how fast overall,"
+  // these answer "how fast each arm on its own," which is what
+  // computeArmDriveAsymmetry needs to compare left against right.
+  const leftVelocitySamplesRef = useRef<VelocitySample[]>([]);
+  const rightVelocitySamplesRef = useRef<VelocitySample[]>([]);
 
   const [step, setStepState] = useState<Step>("setup");
   function changeStep(next: Step) {
@@ -434,6 +441,8 @@ export function BarTrackerDialog({
     tiltReadingsRef.current = [];
     gripWidthReadingsRef.current = [];
     sideVelocitySamplesRef.current = [];
+    leftVelocitySamplesRef.current = [];
+    rightVelocitySamplesRef.current = [];
     setImplementDetected(false);
     verticalSignRef.current = 1;
     displaySmootherRef.current.reset();
@@ -763,6 +772,8 @@ export function BarTrackerDialog({
     tiltReadingsRef.current = [];
     gripWidthReadingsRef.current = [];
     sideVelocitySamplesRef.current = [];
+    leftVelocitySamplesRef.current = [];
+    rightVelocitySamplesRef.current = [];
     setImplementDetected(false);
     implementTrackerRef.current.reset();
     leftImplementTrackerRef.current.reset();
@@ -1172,6 +1183,17 @@ export function BarTrackerDialog({
             y: verticalSignRef.current * ((fusedLeft.y + fusedRight.y) / 2),
             confidence: (leftConfidence + rightConfidence) / 2,
           });
+          // And kept apart too -- see leftVelocitySamplesRef's own comment.
+          leftVelocitySamplesRef.current.push({
+            t,
+            y: verticalSignRef.current * fusedLeft.y,
+            confidence: leftConfidence,
+          });
+          rightVelocitySamplesRef.current.push({
+            t,
+            y: verticalSignRef.current * fusedRight.y,
+            confidence: rightConfidence,
+          });
         }
 
         // Cheap live rep counter: count direction reversals bigger than
@@ -1275,6 +1297,25 @@ export function BarTrackerDialog({
       metrics.legDriveAsymmetry = null;
     }
 
+    // Same idea, arms instead of legs -- only meaningful for a bilateral
+    // press/pull on a shared bar (Push: bench/overhead press, Pull: rows).
+    // Squat/Hinge/Lunge are excluded the same way they are from the leg
+    // check above, just from the other direction: the bar there is driven
+    // by the legs, not compared arm-to-arm.
+    if (usesSharedBar && laterality !== "unilateral" && (movementType === "Push" || movementType === "Pull")) {
+      const armDrive = computeArmDriveAsymmetry(
+        leftVelocitySamplesRef.current,
+        rightVelocitySamplesRef.current,
+        metrics.repBreakdown.map((r) => ({ startT: r.startT, endT: r.endT })),
+      );
+      const validArmEntries = armDrive
+        .map((d, i) => (d ? { repNumber: metrics.repBreakdown[i].repNumber, ...d } : null))
+        .filter((d): d is NonNullable<typeof d> => d !== null);
+      metrics.armDriveAsymmetry = validArmEntries.length > 0 ? validArmEntries : null;
+    } else {
+      metrics.armDriveAsymmetry = null;
+    }
+
     const origin = { x: traceRef.current[0]?.x ?? 0, y: traceRef.current[0]?.y ?? 0 };
     metrics.armPathTrace =
       leftTraceRef.current.length > 1 && rightTraceRef.current.length > 1
@@ -1322,6 +1363,7 @@ export function BarTrackerDialog({
             liftResult.legDriveAsymmetry.length,
         )
       : null;
+  const armDriveByRep = new Map((liftResult?.armDriveAsymmetry ?? []).map((d) => [d.repNumber, d]));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1602,6 +1644,18 @@ export function BarTrackerDialog({
                             >
                               {legDriveByRep.get(r.repNumber)!.dominantSide === "left" ? "R" : "L"} weaker{" "}
                               {legDriveByRep.get(r.repNumber)!.asymmetryPercent}%
+                            </span>
+                          )}
+                          {armDriveByRep.has(r.repNumber) && (
+                            <span
+                              className={
+                                armDriveByRep.get(r.repNumber)!.asymmetryPercent >= 15
+                                  ? "font-semibold text-amber-500"
+                                  : undefined
+                              }
+                            >
+                              {armDriveByRep.get(r.repNumber)!.dominantSide === "left" ? "R" : "L"} arm weaker{" "}
+                              {armDriveByRep.get(r.repNumber)!.asymmetryPercent}%
                             </span>
                           )}
                         </span>

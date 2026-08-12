@@ -21,6 +21,18 @@ export type LegDriveAsymmetryEntry = {
   dominantSide: "left" | "right";
 };
 
+// Same idea as LegDriveAsymmetryEntry above, but for a press/pull's two
+// arms instead of a squat's two legs -- see computeArmDriveAsymmetry
+// further down for how this gets built from the same left/right
+// implement-tracker data bar tilt and grip width already use.
+export type ArmDriveAsymmetryEntry = {
+  repNumber: number;
+  leftVelocityMps: number;
+  rightVelocityMps: number;
+  asymmetryPercent: number;
+  dominantSide: "left" | "right";
+};
+
 const LBS_PER_KG = 2.20462;
 
 // Converts a set's entered weight to kg for summarizeTrackedSet's loadKg --
@@ -87,6 +99,11 @@ export type RepMetrics = {
   // armPathTrace above. Null when the movement doesn't apply or no rep had
   // enough clean data.
   legDriveAsymmetry?: LegDriveAsymmetryEntry[] | null;
+  // Populated by the caller from this module's own computeArmDriveAsymmetry
+  // -- only for a shared-bar press/pull (see bar-tracker-dialog.tsx's gate),
+  // same "caller fills it in" pattern as legDriveAsymmetry above. Null when
+  // the equipment doesn't apply or no rep had enough clean left/right data.
+  armDriveAsymmetry?: ArmDriveAsymmetryEntry[] | null;
   // Populated by the caller from pose-tracking.ts's detectFormFaults --
   // kept as a plain field here (rather than computed inside
   // summarizeTrackedSet) since fault detection needs the full per-frame
@@ -524,6 +541,17 @@ export function summarizeTrackedSet(
 // session's fusion work uses it (0 = no signal at all, 1 = fully trusted).
 export type VelocitySample = { t: number; y: number; confidence: number };
 
+// computeArmDriveAsymmetry's own return shape, further down -- repNumber-
+// free the same way pose-tracking.ts's LegDriveAsymmetry is (the caller
+// zips repNumber back in when building ArmDriveAsymmetryEntry above, same
+// pattern bar-tracker-dialog.tsx already uses for legs).
+export type ArmDriveAsymmetry = {
+  leftVelocityMps: number;
+  rightVelocityMps: number;
+  asymmetryPercent: number;
+  dominantSide: "left" | "right";
+};
+
 // Confidence-weighted fusion of the primary trace's per-rep velocity
 // (source A -- summarizeTrackedSet's own output, computed above) against
 // this second source (source B). Not an override, a blend: source A keeps
@@ -544,6 +572,36 @@ export type VelocitySample = { t: number; y: number; confidence: number };
 // fused values the same way summarizeTrackedSet itself derives them --
 // romCm, eccentric numbers, bar-path deviation, and everything else that
 // doesn't come from concentric peak/mean velocity are left untouched.
+// Peak/mean speed (and average confidence) for one VelocitySample[] source
+// over one rep window, using the same moving-average+robust-percentile
+// pipeline the primary trace itself uses (see summarizeTrackedSet above) --
+// shared by fuseSideVelocity and computeArmDriveAsymmetry below rather than
+// each reimplementing "read a rate off part of a trace." Returns null when
+// there aren't enough samples in the window to trust a rate off of, same
+// floor computeLegDriveAsymmetry applies to its own per-rep window.
+function velocityForWindow(
+  speeds: number[],
+  points: TrackedPoint[],
+  confidences: number[],
+  startT: number,
+  endT: number,
+): { peak: number; mean: number; confidence: number } | null {
+  const startIdx = points.findIndex((p) => p.t >= startT);
+  let endIdx = -1;
+  for (let i = points.length - 1; i >= 0; i--) {
+    if (points[i].t <= endT) {
+      endIdx = i;
+      break;
+    }
+  }
+  if (startIdx === -1 || endIdx === -1 || endIdx - startIdx < 3) return null;
+  const { peak } = robustPeakSpeed(speeds, startIdx, endIdx);
+  const windowSpeeds = speeds.slice(startIdx, endIdx + 1);
+  const mean = windowSpeeds.reduce((a, b) => a + b, 0) / windowSpeeds.length;
+  const confidence = confidences.slice(startIdx, endIdx + 1).reduce((a, c) => a + c, 0) / windowSpeeds.length;
+  return { peak, mean, confidence };
+}
+
 export function fuseSideVelocity(
   metrics: RepMetrics,
   sideSamples: VelocitySample[],
@@ -557,33 +615,20 @@ export function fuseSideVelocity(
     framesForDuration(sidePoints, TARGET_SMOOTHING_MS),
   );
   const sideSpeeds = computeSpeeds(sidePoints, sideSmoothed);
+  const sideConfidences = sideSamples.map((s) => s.confidence);
 
   const fusedRepBreakdown = metrics.repBreakdown.map((rep) => {
-    const startIdx = sidePoints.findIndex((p) => p.t >= rep.startT);
-    let endIdx = -1;
-    for (let i = sidePoints.length - 1; i >= 0; i--) {
-      if (sidePoints[i].t <= rep.endT) {
-        endIdx = i;
-        break;
-      }
-    }
-    // Fewer than a handful of side samples across the whole rep isn't
-    // enough to trust a rate off of (same reasoning computeLegDriveAsymmetry
-    // already applies to its own per-rep window) -- this rep just keeps
-    // source A's numbers untouched rather than blending in something built
-    // from almost nothing.
-    if (startIdx === -1 || endIdx === -1 || endIdx - startIdx < 3) return rep;
+    const window = velocityForWindow(sideSpeeds, sidePoints, sideConfidences, rep.startT, rep.endT);
+    // No side data for this rep (too little of it, or none at all) --
+    // keep source A's numbers untouched rather than blending in something
+    // built from almost nothing.
+    if (!window || window.confidence <= 0) return rep;
 
-    const { peak: sidePeak } = robustPeakSpeed(sideSpeeds, startIdx, endIdx);
-    const windowSpeeds = sideSpeeds.slice(startIdx, endIdx + 1);
-    const sideMean = windowSpeeds.reduce((a, b) => a + b, 0) / windowSpeeds.length;
-    const sideConfidence =
-      sideSamples.slice(startIdx, endIdx + 1).reduce((a, s) => a + s.confidence, 0) / windowSpeeds.length;
-
-    if (sideConfidence <= 0) return rep;
-    const totalWeight = 1 + sideConfidence;
-    const peakVelocityMps = Math.round(((rep.peakVelocityMps + sideConfidence * sidePeak) / totalWeight) * 100) / 100;
-    const meanVelocityMps = Math.round(((rep.meanVelocityMps + sideConfidence * sideMean) / totalWeight) * 100) / 100;
+    const totalWeight = 1 + window.confidence;
+    const peakVelocityMps =
+      Math.round(((rep.peakVelocityMps + window.confidence * window.peak) / totalWeight) * 100) / 100;
+    const meanVelocityMps =
+      Math.round(((rep.meanVelocityMps + window.confidence * window.mean) / totalWeight) * 100) / 100;
     return {
       ...rep,
       peakVelocityMps,
@@ -615,5 +660,66 @@ export function fuseSideVelocity(
           ) / 10
         : null,
   };
+}
+
+// How much harder one arm drove than the other during each rep's concentric
+// (pressing/pulling) phase -- the same idea as pose-tracking.ts's
+// computeLegDriveAsymmetry, but built from the left/right implement
+// trackers' own fused traces instead of a joint angle, since a press/pull
+// doesn't have a knee to measure drive rate from the way a squat does.
+// Reuses velocityForWindow (see its own comment) over the exact same rep
+// windows the primary trace already identified, same "borrow the caller's
+// segmentation, don't re-derive it" pattern fuseSideVelocity uses.
+// Returns null for a rep without enough clean, confident data on BOTH
+// sides to trust a comparison -- same "no number beats a fake-confident
+// one" stance computeLegDriveAsymmetry already takes.
+export function computeArmDriveAsymmetry(
+  leftSamples: VelocitySample[],
+  rightSamples: VelocitySample[],
+  repWindows: { startT: number; endT: number }[],
+): (ArmDriveAsymmetry | null)[] {
+  if (leftSamples.length < 6 || rightSamples.length < 6) return repWindows.map(() => null);
+
+  const leftPoints: TrackedPoint[] = leftSamples.map((s) => ({ t: s.t, x: 0, y: s.y, z: 0 }));
+  const rightPoints: TrackedPoint[] = rightSamples.map((s) => ({ t: s.t, x: 0, y: s.y, z: 0 }));
+  const leftSmoothed = movingAverage(
+    leftPoints.map((p) => p.y),
+    framesForDuration(leftPoints, TARGET_SMOOTHING_MS),
+  );
+  const rightSmoothed = movingAverage(
+    rightPoints.map((p) => p.y),
+    framesForDuration(rightPoints, TARGET_SMOOTHING_MS),
+  );
+  const leftSpeeds = computeSpeeds(leftPoints, leftSmoothed);
+  const rightSpeeds = computeSpeeds(rightPoints, rightSmoothed);
+  const leftConfidences = leftSamples.map((s) => s.confidence);
+  const rightConfidences = rightSamples.map((s) => s.confidence);
+
+  // Below this, a side's own data for the window is too sparse or too
+  // unconfident to trust as "this arm's real speed" rather than mostly the
+  // wrist landmark alone -- same spirit as MIN_DRIVE_DURATION_SEC's own
+  // floor in computeLegDriveAsymmetry, just expressed as confidence
+  // instead of duration since that's what this source actually carries.
+  const MIN_WINDOW_CONFIDENCE = 0.3;
+
+  return repWindows.map(({ startT, endT }) => {
+    const left = velocityForWindow(leftSpeeds, leftPoints, leftConfidences, startT, endT);
+    const right = velocityForWindow(rightSpeeds, rightPoints, rightConfidences, startT, endT);
+    if (!left || !right || left.confidence < MIN_WINDOW_CONFIDENCE || right.confidence < MIN_WINDOW_CONFIDENCE) {
+      return null;
+    }
+
+    const leftVelocityMps = Math.round(left.peak * 100) / 100;
+    const rightVelocityMps = Math.round(right.peak * 100) / 100;
+    const maxVelocity = Math.max(leftVelocityMps, rightVelocityMps);
+    if (maxVelocity <= 0) return null;
+
+    return {
+      leftVelocityMps,
+      rightVelocityMps,
+      asymmetryPercent: Math.round((Math.abs(leftVelocityMps - rightVelocityMps) / maxVelocity) * 1000) / 10,
+      dominantSide: leftVelocityMps >= rightVelocityMps ? "left" : "right",
+    };
+  });
 }
 
