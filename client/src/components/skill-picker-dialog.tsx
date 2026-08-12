@@ -58,7 +58,7 @@ export function SkillPickerDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="inset-0 top-0 left-0 flex h-screen w-screen max-w-none max-h-none translate-x-0 translate-y-0 flex-col gap-0 rounded-none border-0 p-0">
+      <DialogContent className="inset-0 top-0 left-0 flex h-screen w-screen max-w-none max-h-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 p-0">
         <div className="shrink-0 space-y-4 border-b border-border p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle>Add Skill Drill</DialogTitle>
