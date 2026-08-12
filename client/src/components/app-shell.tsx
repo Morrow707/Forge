@@ -3,7 +3,6 @@ import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { getJson } from "@/lib/queryClient";
-import { ForgeMark } from "@/components/forge-mark";
 import {
   Dumbbell,
   Users,
@@ -184,7 +183,7 @@ export function AppShell({
         <div className="flex items-center justify-between gap-3 px-4 py-3 md:px-8">
           <div className="flex items-center gap-2">
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
-              <ForgeMark className="h-5 w-5" />
+              <Flame className="h-4.5 w-4.5" />
             </div>
             <span className="font-display text-xl font-extrabold uppercase tracking-wider">
               Forge
