@@ -179,6 +179,27 @@ export function deriveBarPoint(worldLandmarks: Landmark[], requireBothWrists = f
   return { x: 0, y: visibleWrist.y, z: visibleWrist.z };
 }
 
+// Confidence companion to deriveBarPoint above -- same wrist selection
+// logic (both averaged, or the one confident wrist in a mirrored read),
+// but returns how much to trust that position (the pose model's own
+// per-landmark visibility score, 0-1) rather than the position itself.
+// bar-tracker-dialog.tsx uses this to weight the wrist-derived position
+// against the implement tracker's own confidence when fusing the two into
+// one tracked point every frame -- a genuine blend, not an either/or
+// switch, so a marginally-visible wrist still gets some say even once the
+// implement tracker is fully confident, and vice versa.
+export function barPointConfidence(worldLandmarks: Landmark[], requireBothWrists = false): number {
+  const left = worldLandmarks[POSE_LANDMARKS.LEFT_WRIST];
+  const right = worldLandmarks[POSE_LANDMARKS.RIGHT_WRIST];
+  if (!requireBothWrists) {
+    const vis = [left, right].filter(visible);
+    return vis.length ? vis.reduce((a, p) => a + p.visibility, 0) / vis.length : 0;
+  }
+  if (visible(left) && visible(right)) return (left.visibility + right.visibility) / 2;
+  const visibleWrist = visible(left) ? left : visible(right) ? right : null;
+  return visibleWrist ? visibleWrist.visibility : 0;
+}
+
 // Same wrist-midpoint concept as deriveBarPoint above, but in normalized
 // [0,1] image-space rather than real-world meters -- for implement-tracking.ts's
 // motion-diff scan, which works directly in downscaled pixel space and has

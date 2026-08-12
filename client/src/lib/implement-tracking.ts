@@ -12,6 +12,23 @@
 // it's excluded by construction -- no per-object recognition needed, and
 // it generalizes to any implement (including ones nobody thought to name)
 // instead of only the few classes a trained model would have been taught.
+//
+// Once it has a lock on the implement, ImplementTracker follows the
+// implement's OWN frame-to-frame motion -- each new search centers on
+// where IT last found the implement, not on the current wrist reading, and
+// a successful match advances its own tracked world position by the
+// motion it itself just measured. The wrist only feeds in at the moment a
+// lock is (re)acquired, as a seed/anchor -- never on a frame where a lock
+// is already held. That's deliberate: a per-frame "wrist plus a local
+// offset" design (the previous version of this file) means noise in the
+// wrist estimate passes straight through to the reported position every
+// single frame, correction or not. Tracking the implement's own trajectory
+// once locked means it isn't limited by wrist accuracy anymore -- it's an
+// independent second signal, not a decoration on the first one. The two
+// still don't compete, though: bar-tracker-dialog.tsx fuses this tracker's
+// own confidence (how long the current lock has held) against the wrist's
+// own visibility score every frame, so both have a real, continuous say in
+// the final tracked point rather than one silently overriding the other.
 import type { Landmark, NormalizedLandmark } from "@mediapipe/tasks-vision";
 import { POSE_LANDMARKS } from "./pose-tracking";
 
@@ -133,20 +150,72 @@ export function shoulderPixelsPerMeter(
   return perMeter > 0 ? perMeter : null;
 }
 
-export type ImplementOffset = { x: number; y: number };
+// How many consecutive locked frames it takes for the tracker's own
+// confidence to ramp from a fresh (re)acquisition up to fully trusted.
+// Short enough that a real set (seconds of continuously holding the same
+// implement) spends most of its time at full confidence; long enough that
+// one or two lucky matches in a row right after a reacquire can't
+// immediately outweigh the wrist in the caller's fusion.
+const LOCK_RAMP_FRAMES = 5;
+
+// How far (working-resolution pixels) a held lock is allowed to drift from
+// the CURRENT wrist reading before it's no longer trusted as "still the
+// same implement" and has to reacquire fresh from the wrist instead.
+// Generous enough to cover an implement that hangs or swings some real
+// distance from the hand (a kettlebell, a med ball at the chest), tight
+// enough that a lock can't wander clear across the frame onto some
+// unrelated moving object and stay stuck there.
+const MAX_LOCK_DRIFT_FRACTION = 0.45;
+
+export type BarTrackResult = {
+  // World-space position the tracker itself is reporting this frame, in
+  // the same raw (hip-centered, not yet vertical-sign-corrected)
+  // convention deriveBarPoint's own output uses -- callers combine this
+  // with the wrist's own reading, not substitute it wholesale, so it needs
+  // to already be directly comparable/addable, not a delta.
+  worldX: number;
+  worldY: number;
+  // 0-1, ramping up over LOCK_RAMP_FRAMES of continuous, unbroken lock on
+  // what this tracker believes is the same object -- the caller's cue for
+  // how much weight to give worldX/Y against the wrist's own reading, not
+  // a hard yes/no gate. Starts low right after a (re)acquisition (see the
+  // header comment above for why that's the one point the wrist
+  // contributes) and climbs back to 1 the longer the lock holds unbroken.
+  confidence: number;
+};
 
 // Stateful across frames within one tracked set (keeps the previous
-// frame's downscaled grayscale image to diff against) -- one instance per
-// tracking session, reset() between sets so a stale previous frame from
-// the last rep never gets diffed against the first frame of a new one.
+// frame's downscaled grayscale image to diff against, plus wherever it
+// currently believes the implement is) -- one instance per tracking
+// session, reset() between sets so a stale previous frame or lock from the
+// last rep never carries into the first frame of a new one.
 export class ImplementTracker {
   private prevGray: Uint8ClampedArray | null = null;
   private prevWristX = 0;
   private prevWristY = 0;
   private canvas: HTMLCanvasElement | null = null;
+  // The tracker's own running lock -- once set, each new frame's motion
+  // search centers HERE instead of on the wrist, and a successful match
+  // advances lockWorldX/Y by the motion THIS search measured (not by
+  // re-reading the wrist), so a held lock follows the implement's own
+  // trajectory rather than the pose model's per-frame wrist estimate.
+  // Pixel-space (for the search window and the drift check) and
+  // world-space (what callers actually want) are carried together and
+  // always cleared together, so one is never briefly stale relative to
+  // the other.
+  private lockPixelX: number | null = null;
+  private lockPixelY: number | null = null;
+  private lockWorldX: number | null = null;
+  private lockWorldY: number | null = null;
+  private lockStreak = 0;
 
   reset(): void {
     this.prevGray = null;
+    this.lockPixelX = null;
+    this.lockPixelY = null;
+    this.lockWorldX = null;
+    this.lockWorldY = null;
+    this.lockStreak = 0;
   }
 
   private getCanvas(): HTMLCanvasElement {
@@ -154,23 +223,31 @@ export class ImplementTracker {
     return this.canvas;
   }
 
+  private dropLock(): void {
+    this.lockPixelX = null;
+    this.lockPixelY = null;
+    this.lockStreak = 0;
+  }
+
   // wristNormX/Y: the tracked wrist point (or wrist midpoint for a
   // two-handed grip), in normalized [0,1] image-space -- same convention
-  // as every landmark elsewhere in this codebase, so callers can pass
-  // whatever they already derive the "bar point" from directly. Returns a
-  // real-world-meters (x, y) offset to add to that point's world
-  // position -- the same contract the old edge-detector had (just now
-  // covering x as well as y, since an implement isn't always purely
-  // vertically offset from the wrist the way a barbell grip is), or null
-  // when no confident implement motion was found this frame (callers
-  // should fall back to the plain wrist position).
+  // as every landmark elsewhere in this codebase. wristWorldX/Y: that same
+  // point's real-world position (deriveBarPoint's own raw x/y, before
+  // vertical-sign correction) -- used ONLY to seed or reacquire a lock,
+  // never blended in on a frame where a lock is already held, so wrist
+  // noise can't leak into an established, independently-tracked position.
+  // Returns null when no confident implement motion was found this frame
+  // (callers should fall back to the wrist position entirely, same as
+  // before).
   track(
     video: HTMLVideoElement,
     wristNormX: number,
     wristNormY: number,
     landmarks: NormalizedLandmark[],
     worldLandmarks: Landmark[],
-  ): ImplementOffset | null {
+    wristWorldX: number,
+    wristWorldY: number,
+  ): BarTrackResult | null {
     if (!video.videoWidth || !video.videoHeight) return null;
 
     let w = WORKING_MAX_DIM;
@@ -202,25 +279,68 @@ export class ImplementTracker {
     const prevWristY = this.prevWristY;
     // Store this frame as the baseline for the next call before any early
     // return below -- every path from here needs it updated regardless of
-    // whether this particular frame yields a confident offset.
+    // whether this particular frame yields a confident result.
     this.prevGray = currGray;
     this.prevWristX = wristX;
     this.prevWristY = wristY;
 
-    if (!prevGray || prevGray.length !== currGray.length) return null;
+    if (!prevGray || prevGray.length !== currGray.length) {
+      this.dropLock();
+      return null;
+    }
 
     const wristSpeed = Math.hypot(wristX - prevWristX, wristY - prevWristY);
-    if (wristSpeed < MIN_WRIST_SPEED_PX) return null;
+    if (wristSpeed < MIN_WRIST_SPEED_PX) {
+      this.dropLock();
+      return null;
+    }
 
-    const centroid = findMotionCentroid(currGray, prevGray, w, h, wristX, wristY);
-    if (!centroid) return null;
+    // Search around the held lock's own last position when it still looks
+    // plausible (within MAX_LOCK_DRIFT_FRACTION of the current wrist);
+    // otherwise fall back to searching around the wrist itself, which
+    // doubles as a fresh acquisition attempt.
+    const maxDrift = MAX_LOCK_DRIFT_FRACTION * Math.min(w, h);
+    const hasPlausibleLock =
+      this.lockPixelX != null &&
+      this.lockPixelY != null &&
+      Math.hypot(this.lockPixelX - wristX, this.lockPixelY - wristY) < maxDrift;
+    const searchX = hasPlausibleLock ? this.lockPixelX! : wristX;
+    const searchY = hasPlausibleLock ? this.lockPixelY! : wristY;
+
+    const centroid = findMotionCentroid(currGray, prevGray, w, h, searchX, searchY);
+    if (!centroid) {
+      this.dropLock();
+      return null;
+    }
 
     const pixelsPerMeter = shoulderPixelsPerMeter(landmarks, worldLandmarks, w, h);
-    if (!pixelsPerMeter) return null;
+    if (!pixelsPerMeter) {
+      this.dropLock();
+      return null;
+    }
+
+    if (hasPlausibleLock && this.lockWorldX != null && this.lockWorldY != null) {
+      // Continuing a held lock: advance by the motion THIS search measured
+      // relative to the tracker's own last pixel position, not by
+      // re-reading the wrist -- the whole point of a held lock.
+      this.lockWorldX += (centroid.x - this.lockPixelX!) / pixelsPerMeter;
+      this.lockWorldY += (centroid.y - this.lockPixelY!) / pixelsPerMeter;
+      this.lockStreak += 1;
+    } else {
+      // Fresh acquisition or reacquisition: the one point per lock where
+      // the wrist contributes directly, seeding both the pixel and world
+      // position so the next frame has something to continue from.
+      this.lockWorldX = wristWorldX + (centroid.x - wristX) / pixelsPerMeter;
+      this.lockWorldY = wristWorldY + (centroid.y - wristY) / pixelsPerMeter;
+      this.lockStreak = 1;
+    }
+    this.lockPixelX = centroid.x;
+    this.lockPixelY = centroid.y;
 
     return {
-      x: (centroid.x - wristX) / pixelsPerMeter,
-      y: (centroid.y - wristY) / pixelsPerMeter,
+      worldX: this.lockWorldX,
+      worldY: this.lockWorldY,
+      confidence: Math.min(1, this.lockStreak / LOCK_RAMP_FRAMES),
     };
   }
 }
