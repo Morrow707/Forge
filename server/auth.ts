@@ -6,6 +6,9 @@ import type { Express, RequestHandler } from "express";
 import { storage } from "./storage";
 import { hashPassword, comparePasswords } from "./auth-utils";
 import { pool } from "./db";
+import { sendEmail } from "./email";
+import { buildWelcomeEmail } from "./welcome-email";
+import { buildPasswordResetEmail } from "./password-reset-email";
 import {
   signupSchema,
   requestPasswordResetSchema,
@@ -106,6 +109,14 @@ export function setupAuth(app: Express) {
 
       req.login(user, (err) => {
         if (err) return next(err);
+        // Fire-and-forget: sendEmail never throws (see email.ts) and a slow
+        // or failed welcome email is never a reason to hold up the response
+        // an athlete or coach is waiting on right after signing up.
+        sendEmail({
+          to: user.email,
+          subject: "Welcome to Forge",
+          html: buildWelcomeEmail(user, coach?.name ?? null),
+        });
         res.status(201).json(toPublicUser(user));
       });
     } catch (err) {
@@ -139,14 +150,13 @@ export function setupAuth(app: Express) {
     });
   });
 
-  // No email service is wired up in this environment yet, so the reset
-  // token is handed straight back in the response instead of being emailed
-  // -- the frontend shows it directly as a copyable link. This does mean an
-  // attacker can tell whether an email is registered (a real provider would
-  // hide that by always responding the same way); acceptable for now given
-  // there's no delivery mechanism to hide behind. Swap this for a real send
-  // once a provider is connected -- everything else here already assumes
-  // token-based reset, not email content.
+  // Emails the reset link via Resend now that a provider is connected,
+  // rather than handing the token straight back in the response for the
+  // frontend to show as a copyable link (the previous stopgap while no
+  // email service existed). Responds identically whether or not the email
+  // is registered, and never reflects the token or any other tell back to
+  // the caller -- otherwise this endpoint would let anyone check which
+  // emails have accounts just by watching which responses differ.
   app.post("/api/auth/request-password-reset", async (req, res, next) => {
     try {
       const parsed = requestPasswordResetSchema.safeParse(req.body);
@@ -154,11 +164,16 @@ export function setupAuth(app: Express) {
         return res.status(400).json({ message: parsed.error.issues[0]?.message });
       }
       const user = await storage.getUserByEmail(parsed.data.email);
-      if (!user) {
-        return res.json({ resetToken: null });
+      if (user) {
+        const resetToken = await storage.createPasswordResetToken(user.id);
+        const resetLink = `${req.protocol}://${req.get("host")}/reset-password?token=${resetToken}`;
+        await sendEmail({
+          to: user.email,
+          subject: "Reset your Forge password",
+          html: buildPasswordResetEmail(resetLink),
+        });
       }
-      const resetToken = await storage.createPasswordResetToken(user.id);
-      res.json({ resetToken });
+      res.json({ ok: true });
     } catch (err) {
       next(err);
     }
