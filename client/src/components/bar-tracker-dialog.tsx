@@ -21,6 +21,7 @@ import {
   type TrackedPoint,
   type RepMetrics,
   type VelocitySample,
+  type FirstPhaseHint,
 } from "@/lib/bar-tracking";
 import { lockCameraExposure } from "@/lib/camera-exposure";
 import {
@@ -119,6 +120,39 @@ function expectedPatternFromName(name: string): MovementPattern | null {
   if (n.includes("squat")) return "squat";
   if (/overhead|shoulder press|push press|military press/.test(n)) return "overhead_press";
   if (n.includes("bench") || n.includes("row") || n.includes("press")) return "horizontal_press_or_row";
+  return null;
+}
+
+// The predetermined exercise's known starting posture, for
+// summarizeTrackedSet's firstPhaseHint (see its own comment -- a
+// tie-breaker only, never a hard override of the trace's own speed).
+// Deliberately conservative: only returns a hint where the movementType
+// taxonomy is unambiguous about what happens first.
+//   - Squat/Lunge: starts standing or racked -- the first thing that
+//     happens is the descent.
+//   - Pull (a row): the handle/bar starts at arm's length -- the first
+//     thing that happens is the pull in.
+//   - Hinge whose name is a conventional/sumo/trap-bar deadlift: dead-stops
+//     on the floor each rep -- the first thing that happens is the pull up.
+//     Romanian deadlifts, stiff-leg deadlifts, and good mornings all carry
+//     the same "Hinge" movementType but start standing and lower first, so
+//     those are excluded by name rather than assumed away -- a plain
+//     "Hinge" without a safely-identified conventional-deadlift name stays
+//     unhinted, same as everything below.
+//   - Everything else (an unidentified Hinge, Push, Press -- a bench press
+//     starts at lockout and lowers first, an overhead press starts racked
+//     and presses first, opposite directions under the same rough
+//     taxonomy -- Carry, Rotation, Isometric, Combination, Activation,
+//     Mobility, or no movementType at all) has no single safe answer, so
+//     this returns null and the phase-speed comparison decides alone, same
+//     as before this existed.
+function inferFirstPhaseHint(movementType: string | null | undefined, exerciseName: string): FirstPhaseHint {
+  if (movementType === "Squat" || movementType === "Lunge") return "eccentric";
+  if (movementType === "Pull") return "concentric";
+  if (movementType === "Hinge") {
+    const n = exerciseName.toLowerCase();
+    if (n.includes("deadlift") && !/romanian|rdl|stiff|good morning/.test(n)) return "concentric";
+  }
   return null;
 }
 
@@ -1375,7 +1409,12 @@ export function BarTrackerDialog({
       return;
     }
 
-    let metrics = summarizeTrackedSet(traceRef.current, loadKg, heightIn);
+    let metrics = summarizeTrackedSet(
+      traceRef.current,
+      loadKg,
+      heightIn,
+      inferFirstPhaseHint(movementType, exerciseName),
+    );
     if (!metrics) {
       toast.error("Couldn't get a clean read — try again with your whole body in frame.");
       changeStep("setup");
