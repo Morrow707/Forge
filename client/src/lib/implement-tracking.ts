@@ -234,6 +234,20 @@ export class ImplementTracker {
     this.lockStreak = 0;
   }
 
+  // Public escape hatch for a caller-side sanity check this tracker has no
+  // way to run on its own: it only ever compares its held lock against the
+  // CURRENT wrist reading (see MAX_LOCK_DRIFT_FRACTION), never against
+  // where that lock ended up relative to the wrist in real-world meters --
+  // it doesn't carry a world scale to judge that with. When the caller's
+  // own fusion decides this frame's reported worldX/Y disagreed with the
+  // wrist by more than any real implement plausibly could (see
+  // bar-tracker-dialog.tsx), it calls this to force a clean reacquisition
+  // next frame instead of continuing to dead-reckon forward from a
+  // position it's just been told is implausible.
+  rejectLock(): void {
+    this.dropLock();
+  }
+
   // wristNormX/Y: the tracked wrist point (or wrist midpoint for a
   // two-handed grip), in normalized [0,1] image-space -- same convention
   // as every landmark elsewhere in this codebase. wristWorldX/Y: that same
