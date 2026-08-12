@@ -163,6 +163,7 @@ const CHART_OPTIONS = [
 ] as const;
 type ChartKey = (typeof CHART_OPTIONS)[number]["key"];
 const HIDDEN_CHARTS_STORAGE_KEY = "forge-analytics-hidden-charts";
+const CHART_TYPE_STORAGE_KEY = "forge-analytics-chart-type";
 
 function loadHiddenCharts(): Set<ChartKey> {
   try {
@@ -239,6 +240,47 @@ function formatSetWeight(p: {
 
 function fmtNum(value: number | null | undefined, decimals: number): string {
   return value == null ? "-" : value.toFixed(decimals);
+}
+
+/** One data series in a trend chart, rendered as either a line or a bar
+ * depending on the coach's Line/Bar toggle -- lets every chart below stay a
+ * single ComposedChart (which supports both) instead of branching between
+ * two whole chart components. */
+function TrendSeries({
+  chartType,
+  dataKey,
+  name,
+  color,
+  strokeWidth = 2,
+  strokeDasharray,
+  dot = { r: 3 },
+  yAxisId,
+}: {
+  chartType: "line" | "bar";
+  dataKey: string;
+  name: string;
+  color: string;
+  strokeWidth?: number;
+  strokeDasharray?: string;
+  dot?: object | boolean;
+  yAxisId?: string;
+}) {
+  if (chartType === "bar") {
+    return <Bar yAxisId={yAxisId} dataKey={dataKey} name={name} fill={color} radius={[3, 3, 0, 0]} />;
+  }
+  return (
+    <Line
+      yAxisId={yAxisId}
+      type="monotone"
+      dataKey={dataKey}
+      name={name}
+      stroke={color}
+      strokeWidth={strokeWidth}
+      strokeDasharray={strokeDasharray}
+      connectNulls
+      dot={dot}
+    />
+  );
 }
 
 function average(values: (number | null | undefined)[]): number | null {
@@ -426,6 +468,17 @@ export default function CoachAnalytics() {
   // suite of line graphs for spotting a longer trend visually ("chart").
   const [viewMode, setViewMode] = useState<"byDate" | "trends" | "chart">("byDate");
   const [selectedDate, setSelectedDate] = useState("");
+  // Line vs. bar rendering for the Line Graph mode's trend charts -- purely
+  // a display preference, so it lives alongside the other localStorage'd
+  // chart prefs rather than resetting every time the coach switches athlete
+  // or exercise.
+  const [chartType, setChartType] = useState<"line" | "bar">(
+    () => (localStorage.getItem(CHART_TYPE_STORAGE_KEY) === "bar" ? "bar" : "line"),
+  );
+  function handleChartTypeChange(next: "line" | "bar") {
+    setChartType(next);
+    localStorage.setItem(CHART_TYPE_STORAGE_KEY, next);
+  }
   // Read-only preview of an athlete's per-set form-check clip from the raw
   // table below -- unlike the comment-thread video annotation flow, a coach
   // can't retake/remove/re-flag from here, this is just "watch what they
@@ -747,7 +800,32 @@ export default function CoachAnalytics() {
                 ))}
               </div>
               {viewMode === "chart" && (
-                <ChartVisibilityMenu hidden={hiddenCharts} onChange={setHiddenCharts} />
+                <>
+                  <div className="flex rounded-md border border-border p-0.5">
+                    {(
+                      [
+                        ["line", "Line"],
+                        ["bar", "Bar"],
+                      ] as const
+                    ).map(([type, label]) => (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() => handleChartTypeChange(type)}
+                        aria-pressed={chartType === type}
+                        className={cn(
+                          "rounded px-2.5 py-1.5 text-xs font-semibold transition-colors",
+                          chartType === type
+                            ? "bg-primary text-primary-foreground"
+                            : "text-muted-foreground hover:text-foreground",
+                        )}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <ChartVisibilityMenu hidden={hiddenCharts} onChange={setHiddenCharts} />
+                </>
               )}
             </div>
           </div>
@@ -778,7 +856,7 @@ export default function CoachAnalytics() {
               </CardHeader>
               <CardContent className="h-72">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart
+                  <ComposedChart
                     data={chartData.filter((p) => p.weightMode === "numeric")}
                     margin={{ left: 4, right: 12 }}
                   >
@@ -796,43 +874,52 @@ export default function CoachAnalytics() {
                       ]}
                     />
                     <Legend wrapperStyle={{ fontSize: 12 }} />
-                    <Line
-                      type="monotone"
-                      dataKey="weight"
-                      name="Weight"
-                      stroke="hsl(var(--primary))"
-                      strokeWidth={2}
-                      connectNulls
-                      dot={(props: any) =>
-                        props.payload.isPR ? (
-                          <svg
-                            key={props.key}
-                            x={props.cx - 7}
-                            y={props.cy - 7}
-                            width={14}
-                            height={14}
-                            viewBox="0 0 24 24"
-                            fill="#fbbf24"
-                            stroke="#000"
-                          >
-                            <path d="M2 20h20v2H2zM3 8l4 4 5-8 5 8 4-4v10H3z" />
-                          </svg>
-                        ) : (
-                          <circle key={props.key} cx={props.cx} cy={props.cy} r={3} fill="hsl(var(--primary))" />
-                        )
-                      }
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="estimatedOneRm"
-                      name="Est. 1RM"
-                      stroke="#3b82f6"
-                      strokeWidth={1.5}
-                      strokeDasharray="4 3"
-                      connectNulls
-                      dot={{ r: 2 }}
-                    />
-                  </LineChart>
+                    {chartType === "line" ? (
+                      <>
+                        <Line
+                          type="monotone"
+                          dataKey="weight"
+                          name="Weight"
+                          stroke="hsl(var(--primary))"
+                          strokeWidth={2}
+                          connectNulls
+                          dot={(props: any) =>
+                            props.payload.isPR ? (
+                              <svg
+                                key={props.key}
+                                x={props.cx - 7}
+                                y={props.cy - 7}
+                                width={14}
+                                height={14}
+                                viewBox="0 0 24 24"
+                                fill="#fbbf24"
+                                stroke="#000"
+                              >
+                                <path d="M2 20h20v2H2zM3 8l4 4 5-8 5 8 4-4v10H3z" />
+                              </svg>
+                            ) : (
+                              <circle key={props.key} cx={props.cx} cy={props.cy} r={3} fill="hsl(var(--primary))" />
+                            )
+                          }
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="estimatedOneRm"
+                          name="Est. 1RM"
+                          stroke="#3b82f6"
+                          strokeWidth={1.5}
+                          strokeDasharray="4 3"
+                          connectNulls
+                          dot={{ r: 2 }}
+                        />
+                      </>
+                    ) : (
+                      <>
+                        <Bar dataKey="weight" name="Weight" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} />
+                        <Bar dataKey="estimatedOneRm" name="Est. 1RM" fill="#3b82f6" radius={[3, 3, 0, 0]} />
+                      </>
+                    )}
+                  </ComposedChart>
                 </ResponsiveContainer>
               </CardContent>
             </Card>
@@ -849,7 +936,7 @@ export default function CoachAnalytics() {
               </CardHeader>
               <CardContent className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData} margin={{ left: 4, right: 12 }}>
+                  <ComposedChart data={chartData} margin={{ left: 4, right: 12 }}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                     <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                     <YAxis tick={{ fontSize: 11 }} width={48} tickFormatter={(v) => `${v}`} />
@@ -857,34 +944,25 @@ export default function CoachAnalytics() {
                       contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))" }}
                     />
                     <Legend wrapperStyle={{ fontSize: 12 }} />
-                    <Line
-                      type="monotone"
+                    <TrendSeries
+                      chartType={chartType}
                       dataKey="peakVelocityMps"
                       name="Peak velocity"
-                      stroke="hsl(var(--primary))"
-                      strokeWidth={2}
-                      connectNulls
-                      dot={{ r: 3 }}
+                      color="hsl(var(--primary))"
                     />
-                    <Line
-                      type="monotone"
+                    <TrendSeries
+                      chartType={chartType}
                       dataKey="meanVelocityMps"
                       name="Mean velocity"
-                      stroke="#3b82f6"
-                      strokeWidth={2}
-                      connectNulls
-                      dot={{ r: 3 }}
+                      color="#3b82f6"
                     />
-                    <Line
-                      type="monotone"
+                    <TrendSeries
+                      chartType={chartType}
                       dataKey="eccentricMeanVelocityMps"
                       name="Eccentric velocity"
-                      stroke="#a855f7"
-                      strokeWidth={2}
-                      connectNulls
-                      dot={{ r: 3 }}
+                      color="#a855f7"
                     />
-                  </LineChart>
+                  </ComposedChart>
                 </ResponsiveContainer>
               </CardContent>
             </Card>
@@ -998,7 +1076,7 @@ export default function CoachAnalytics() {
               </CardHeader>
               <CardContent className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData} margin={{ left: 4, right: 12 }}>
+                  <ComposedChart data={chartData} margin={{ left: 4, right: 12 }}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                     <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                     <YAxis tick={{ fontSize: 11 }} width={48} unit="W" />
@@ -1006,25 +1084,19 @@ export default function CoachAnalytics() {
                       contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))" }}
                     />
                     <Legend wrapperStyle={{ fontSize: 12 }} />
-                    <Line
-                      type="monotone"
+                    <TrendSeries
+                      chartType={chartType}
                       dataKey="peakPowerWatts"
                       name="Peak power"
-                      stroke="hsl(var(--primary))"
-                      strokeWidth={2}
-                      connectNulls
-                      dot={{ r: 3 }}
+                      color="hsl(var(--primary))"
                     />
-                    <Line
-                      type="monotone"
+                    <TrendSeries
+                      chartType={chartType}
                       dataKey="meanPowerWatts"
                       name="Mean power"
-                      stroke="#3b82f6"
-                      strokeWidth={2}
-                      connectNulls
-                      dot={{ r: 3 }}
+                      color="#3b82f6"
                     />
-                  </LineChart>
+                  </ComposedChart>
                 </ResponsiveContainer>
               </CardContent>
             </Card>
@@ -1042,23 +1114,20 @@ export default function CoachAnalytics() {
               </CardHeader>
               <CardContent className="h-56">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData} margin={{ left: 4, right: 12 }}>
+                  <ComposedChart data={chartData} margin={{ left: 4, right: 12 }}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                     <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                     <YAxis tick={{ fontSize: 11 }} width={40} unit="%" />
                     <Tooltip
                       contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))" }}
                     />
-                    <Line
-                      type="monotone"
+                    <TrendSeries
+                      chartType={chartType}
                       dataKey="velocityLossPercent"
                       name="Velocity loss"
-                      stroke="#ef4444"
-                      strokeWidth={2}
-                      connectNulls
-                      dot={{ r: 3 }}
+                      color="#ef4444"
                     />
-                  </LineChart>
+                  </ComposedChart>
                 </ResponsiveContainer>
               </CardContent>
             </Card>
@@ -1074,23 +1143,20 @@ export default function CoachAnalytics() {
               </CardHeader>
               <CardContent className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData} margin={{ left: 4, right: 12 }}>
+                  <ComposedChart data={chartData} margin={{ left: 4, right: 12 }}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                     <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                     <YAxis tick={{ fontSize: 11 }} width={40} tickFormatter={(v) => `${v}`} />
                     <Tooltip
                       contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))" }}
                     />
-                    <Line
-                      type="monotone"
+                    <TrendSeries
+                      chartType={chartType}
                       dataKey="barPathDeviationCm"
                       name="Deviation"
-                      stroke="#f59e0b"
-                      strokeWidth={2}
-                      connectNulls
-                      dot={{ r: 3 }}
+                      color="#f59e0b"
                     />
-                  </LineChart>
+                  </ComposedChart>
                 </ResponsiveContainer>
               </CardContent>
             </Card>
@@ -1110,7 +1176,7 @@ export default function CoachAnalytics() {
               </CardHeader>
               <CardContent className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData} margin={{ left: 4, right: 12 }}>
+                  <ComposedChart data={chartData} margin={{ left: 4, right: 12 }}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                     <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                     <YAxis tick={{ fontSize: 11 }} width={40} unit={distanceUnit} />
@@ -1118,25 +1184,19 @@ export default function CoachAnalytics() {
                       contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))" }}
                     />
                     <Legend wrapperStyle={{ fontSize: 12 }} />
-                    <Line
-                      type="monotone"
+                    <TrendSeries
+                      chartType={chartType}
                       dataKey="jumpHeightCm"
                       name="Jump height"
-                      stroke="hsl(var(--primary))"
-                      strokeWidth={2}
-                      connectNulls
-                      dot={{ r: 3 }}
+                      color="hsl(var(--primary))"
                     />
-                    <Line
-                      type="monotone"
+                    <TrendSeries
+                      chartType={chartType}
                       dataKey="jumpDistanceCm"
                       name="Broad jump distance"
-                      stroke="#3b82f6"
-                      strokeWidth={2}
-                      connectNulls
-                      dot={{ r: 3 }}
+                      color="#3b82f6"
                     />
-                  </LineChart>
+                  </ComposedChart>
                 </ResponsiveContainer>
               </CardContent>
             </Card>
@@ -1154,7 +1214,7 @@ export default function CoachAnalytics() {
               </CardHeader>
               <CardContent className="h-56">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData} margin={{ left: 4, right: 12 }}>
+                  <ComposedChart data={chartData} margin={{ left: 4, right: 12 }}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                     <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                     <YAxis yAxisId="left" tick={{ fontSize: 11 }} width={40} unit="s" />
@@ -1163,27 +1223,21 @@ export default function CoachAnalytics() {
                       contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))" }}
                     />
                     <Legend wrapperStyle={{ fontSize: 12 }} />
-                    <Line
+                    <TrendSeries
+                      chartType={chartType}
                       yAxisId="left"
-                      type="monotone"
                       dataKey="groundContactSeconds"
                       name="Ground contact"
-                      stroke="#f59e0b"
-                      strokeWidth={2}
-                      connectNulls
-                      dot={{ r: 3 }}
+                      color="#f59e0b"
                     />
-                    <Line
+                    <TrendSeries
+                      chartType={chartType}
                       yAxisId="right"
-                      type="monotone"
                       dataKey="reactiveStrengthIndex"
                       name="RSI"
-                      stroke="#a855f7"
-                      strokeWidth={2}
-                      connectNulls
-                      dot={{ r: 3 }}
+                      color="#a855f7"
                     />
-                  </LineChart>
+                  </ComposedChart>
                 </ResponsiveContainer>
               </CardContent>
             </Card>
@@ -1302,7 +1356,7 @@ export default function CoachAnalytics() {
               </CardHeader>
               <CardContent className="h-56">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={latestLegDriveSet.legDriveAsymmetry!} margin={{ left: 4, right: 12 }}>
+                  <ComposedChart data={latestLegDriveSet.legDriveAsymmetry!} margin={{ left: 4, right: 12 }}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                     <XAxis dataKey="repNumber" tick={{ fontSize: 11 }} tickFormatter={(v) => `Rep ${v}`} />
                     <YAxis tick={{ fontSize: 11 }} width={48} unit="°/s" />
@@ -1310,23 +1364,19 @@ export default function CoachAnalytics() {
                       contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))" }}
                     />
                     <Legend wrapperStyle={{ fontSize: 12 }} />
-                    <Line
-                      type="monotone"
+                    <TrendSeries
+                      chartType={chartType}
                       dataKey="leftDriveDegPerSec"
                       name="Left leg"
-                      stroke={TREND_COLORS[0]}
-                      strokeWidth={2}
-                      dot={{ r: 3 }}
+                      color={TREND_COLORS[0]}
                     />
-                    <Line
-                      type="monotone"
+                    <TrendSeries
+                      chartType={chartType}
                       dataKey="rightDriveDegPerSec"
                       name="Right leg"
-                      stroke={TREND_COLORS[1]}
-                      strokeWidth={2}
-                      dot={{ r: 3 }}
+                      color={TREND_COLORS[1]}
                     />
-                  </LineChart>
+                  </ComposedChart>
                 </ResponsiveContainer>
               </CardContent>
             </Card>
@@ -1347,7 +1397,7 @@ export default function CoachAnalytics() {
               </CardHeader>
               <CardContent className="h-56">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={latestRepDecaySet.repBreakdown!} margin={{ left: 4, right: 12 }}>
+                  <ComposedChart data={latestRepDecaySet.repBreakdown!} margin={{ left: 4, right: 12 }}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                     <XAxis dataKey="repNumber" tick={{ fontSize: 11 }} tickFormatter={(v) => `Rep ${v}`} />
                     <YAxis yAxisId="left" tick={{ fontSize: 11 }} width={48} unit=" m/s" />
@@ -1356,26 +1406,21 @@ export default function CoachAnalytics() {
                       contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))" }}
                     />
                     <Legend wrapperStyle={{ fontSize: 12 }} />
-                    <Line
+                    <TrendSeries
+                      chartType={chartType}
                       yAxisId="left"
-                      type="monotone"
                       dataKey="peakVelocityMps"
                       name="Peak velocity"
-                      stroke="hsl(var(--primary))"
-                      strokeWidth={2}
-                      dot={{ r: 3 }}
+                      color="hsl(var(--primary))"
                     />
-                    <Line
+                    <TrendSeries
+                      chartType={chartType}
                       yAxisId="right"
-                      type="monotone"
                       dataKey="timeToPeakVelocitySeconds"
                       name="Time to peak velocity"
-                      stroke="#f59e0b"
-                      strokeWidth={2}
-                      connectNulls
-                      dot={{ r: 3 }}
+                      color="#f59e0b"
                     />
-                  </LineChart>
+                  </ComposedChart>
                 </ResponsiveContainer>
               </CardContent>
             </Card>
@@ -1389,7 +1434,7 @@ export default function CoachAnalytics() {
               </CardHeader>
               <CardContent className="h-56">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData} margin={{ left: 4, right: 12 }}>
+                  <ComposedChart data={chartData} margin={{ left: 4, right: 12 }}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                     <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                     <YAxis tick={{ fontSize: 11 }} width={32} tickFormatter={(v) => `${v}`} />
@@ -1397,25 +1442,19 @@ export default function CoachAnalytics() {
                       contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))" }}
                     />
                     <Legend wrapperStyle={{ fontSize: 12 }} />
-                    <Line
-                      type="monotone"
+                    <TrendSeries
+                      chartType={chartType}
                       dataKey="concentricSeconds"
                       name="Concentric"
-                      stroke="hsl(var(--success))"
-                      strokeWidth={2}
-                      connectNulls
-                      dot={{ r: 3 }}
+                      color="hsl(var(--success))"
                     />
-                    <Line
-                      type="monotone"
+                    <TrendSeries
+                      chartType={chartType}
                       dataKey="eccentricSeconds"
                       name="Eccentric"
-                      stroke="#a855f7"
-                      strokeWidth={2}
-                      connectNulls
-                      dot={{ r: 3 }}
+                      color="#a855f7"
                     />
-                  </LineChart>
+                  </ComposedChart>
                 </ResponsiveContainer>
               </CardContent>
             </Card>
@@ -1433,23 +1472,20 @@ export default function CoachAnalytics() {
               </CardHeader>
               <CardContent className="h-56">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData} margin={{ left: 4, right: 12 }}>
+                  <ComposedChart data={chartData} margin={{ left: 4, right: 12 }}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                     <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                     <YAxis tick={{ fontSize: 11 }} width={40} unit="cm" />
                     <Tooltip
                       contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))" }}
                     />
-                    <Line
-                      type="monotone"
+                    <TrendSeries
+                      chartType={chartType}
                       dataKey="romCm"
                       name="Avg. ROM"
-                      stroke="hsl(var(--success))"
-                      strokeWidth={2}
-                      connectNulls
-                      dot={{ r: 3 }}
+                      color="hsl(var(--success))"
                     />
-                  </LineChart>
+                  </ComposedChart>
                 </ResponsiveContainer>
               </CardContent>
             </Card>
@@ -1466,7 +1502,7 @@ export default function CoachAnalytics() {
               </CardHeader>
               <CardContent className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={faultTrendData} margin={{ left: 4, right: 12 }}>
+                  <ComposedChart data={faultTrendData} margin={{ left: 4, right: 12 }}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                     <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                     <YAxis tick={{ fontSize: 11 }} width={40} unit="%" domain={[0, 100]} />
@@ -1475,17 +1511,15 @@ export default function CoachAnalytics() {
                     />
                     <Legend wrapperStyle={{ fontSize: 12 }} />
                     {faultCodesSeen.map((code, i) => (
-                      <Line
+                      <TrendSeries
                         key={code}
-                        type="monotone"
+                        chartType={chartType}
                         dataKey={code}
                         name={FAULT_NAMES[code] ?? code}
-                        stroke={TREND_COLORS[i % TREND_COLORS.length]}
-                        strokeWidth={2}
-                        dot={{ r: 3 }}
+                        color={TREND_COLORS[i % TREND_COLORS.length]}
                       />
                     ))}
-                  </LineChart>
+                  </ComposedChart>
                 </ResponsiveContainer>
               </CardContent>
             </Card>
