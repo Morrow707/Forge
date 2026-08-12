@@ -484,6 +484,7 @@ export function BarTrackerDialog({
   // stuck for a long set with no visible progress, so the button label
   // tracks which phase is actually happening.
   const [savePhase, setSavePhase] = useState<"idle" | "overlay" | "uploading">("idle");
+  const [overlayProgress, setOverlayProgress] = useState(0);
 
   // Whether tilt/bar-path-drift mean anything for what's being tracked --
   // see usesSharedBarEquipment's own comment. Gates the live tilt readout
@@ -1957,6 +1958,7 @@ export function BarTrackerDialog({
                     // feature existed.
                     if (framesRef.current.length > 0) {
                       setSavePhase("overlay");
+                      setOverlayProgress(0);
                       try {
                         const repMarkers: OverlayRepMarker[] = liftResult
                           ? liftResult.repBreakdown.map((r) => ({
@@ -1974,6 +1976,7 @@ export function BarTrackerDialog({
                           framesRef.current,
                           mode,
                           repMarkers,
+                          setOverlayProgress,
                         );
                       } catch {
                         videoToUpload = recordedBlobRef.current;
@@ -2001,7 +2004,11 @@ export function BarTrackerDialog({
                 }}
               >
                 <Check className="h-4 w-4" />
-                {savePhase === "overlay" ? "Adding overlay…" : savePhase === "uploading" ? "Uploading…" : "Use This Data"}
+                {savePhase === "overlay"
+                  ? `Adding overlay… ${Math.round(overlayProgress * 100)}%`
+                  : savePhase === "uploading"
+                    ? "Uploading…"
+                    : "Use This Data"}
               </Button>
             </>
           )}

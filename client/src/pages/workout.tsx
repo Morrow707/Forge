@@ -66,7 +66,6 @@ import {
   GitCompare,
   Share2,
   Headphones,
-  Lock,
   Copy,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
@@ -1637,13 +1636,9 @@ function ExerciseLogContent({
   const mergedTracking = item.trackingLevel !== "none" && videoRequired;
 
   // Shared by the three "Use" shortcut buttons below (1RM/progression/last-
-  // performance suggestions) -- they bulk-fill every set at once, so they
-  // have to respect the same video-first gate handleWeightChange's Input
-  // enforces one set at a time, or a coach's video requirement would be
-  // trivially bypassed by tapping "Use" instead of typing.
+  // performance suggestions) -- they bulk-fill every set at once.
   function fillSuggestedWeight(value: string) {
     for (const set of item.sets) {
-      if (videoRequired && !set.formCheckVideoUrl) continue;
       onUpdateSet(set.setNumber, { weight: value });
     }
   }
@@ -1991,17 +1986,9 @@ function ExerciseLogContent({
             const isPR =
               complete &&
               isRepCountPR(item.setHistory, set.reps, item.weightMode, set.weight, earlierSetsThisSession);
-            // Safety gate, not a UX nicety: with a video required, the
-            // number can't be typed in until the proof it happened exists --
-            // opens the instant the video finishes uploading (formCheckVideoUrl
-            // lands via the same onUpdateSet call that saves the capture), no
-            // separate confirmation step, so there's no CARA-relevant dead
-            // time between recording and logging.
-            const videoGateOpen = !videoRequired || !!set.formCheckVideoUrl;
             const prevSet = item.sets.find((s) => s.setNumber === set.setNumber - 1);
             const canQuickFillSame =
               item.weightMode === "numeric" &&
-              videoGateOpen &&
               !!prevSet?.weight.trim() &&
               set.weight.trim() !== prevSet.weight.trim();
             return (
@@ -2028,12 +2015,7 @@ function ExerciseLogContent({
                           key="weight"
                           type="number"
                           inputMode="decimal"
-                          disabled={!videoGateOpen}
-                          placeholder={
-                            videoGateOpen
-                              ? historyMatch?.weight || item.lastPerformance?.weight || "0"
-                              : "Record video first"
-                          }
+                          placeholder={historyMatch?.weight || item.lastPerformance?.weight || "0"}
                           value={set.weight}
                           onChange={(e) => handleWeightChange(set.setNumber, e.target.value)}
                           className="h-9 text-sm"
@@ -2041,8 +2023,7 @@ function ExerciseLogContent({
                       ) : col.type === "band" ? (
                         <Input
                           key="band"
-                          disabled={!videoGateOpen}
-                          placeholder={videoGateOpen ? "e.g. Green" : "Record video first"}
+                          placeholder="e.g. Green"
                           value={set.bandColor}
                           onChange={(e) => onUpdateSet(set.setNumber, { bandColor: e.target.value })}
                           className="h-9 text-sm"
@@ -2052,8 +2033,7 @@ function ExerciseLogContent({
                           key="box"
                           type="number"
                           inputMode="decimal"
-                          disabled={!videoGateOpen}
-                          placeholder={videoGateOpen ? "Height" : "Record video first"}
+                          placeholder="Height"
                           value={set.boxHeight}
                           onChange={(e) => onUpdateSet(set.setNumber, { boxHeight: e.target.value })}
                           className="h-9 text-sm"
@@ -2163,12 +2143,6 @@ function ExerciseLogContent({
                             ? "Worst set video"
                             : "View video"}
                       </button>
-                    )}
-                    {!videoGateOpen && (
-                      <span className="flex items-center gap-1 text-[10px] font-semibold text-amber-500">
-                        <Lock className="h-3 w-3" />
-                        Record video to unlock weight
-                      </span>
                     )}
                     {usesPlateCalc && (
                       <button
