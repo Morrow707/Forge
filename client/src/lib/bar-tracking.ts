@@ -33,6 +33,17 @@ export type ArmDriveAsymmetryEntry = {
   dominantSide: "left" | "right";
 };
 
+// See computeRepTrustScores further down -- one entry per rep, folding
+// several separate accuracy signals into a single number/label instead of
+// leaving the athlete to weigh a handful of indicator pills against each
+// other themselves.
+export type RepTrustScore = {
+  repNumber: number;
+  score: number;
+  label: "high" | "medium" | "low";
+  notes: string[];
+};
+
 const LBS_PER_KG = 2.20462;
 
 // Converts a set's entered weight to kg for summarizeTrackedSet's loadKg --
@@ -104,6 +115,13 @@ export type RepMetrics = {
   // same "caller fills it in" pattern as legDriveAsymmetry above. Null when
   // the equipment doesn't apply or no rep had enough clean left/right data.
   armDriveAsymmetry?: ArmDriveAsymmetryEntry[] | null;
+  // Populated by the caller from this module's own computeRepTrustScores --
+  // one entry per rep in repBreakdown, folding position-fusion confidence,
+  // tracker-disagreement rejections, and the whole set's movement-mismatch/
+  // camera-alignment status into a single trust indicator. Null when there
+  // weren't enough reps/samples to say anything (mirrors the other optional
+  // caller-populated fields above).
+  trustScores?: RepTrustScore[] | null;
   // Populated by the caller from pose-tracking.ts's detectFormFaults --
   // kept as a plain field here (rather than computed inside
   // summarizeTrackedSet) since fault detection needs the full per-frame
@@ -720,6 +738,76 @@ export function computeArmDriveAsymmetry(
       asymmetryPercent: Math.round((Math.abs(leftVelocityMps - rightVelocityMps) / maxVelocity) * 1000) / 10,
       dominantSide: leftVelocityMps >= rightVelocityMps ? "left" : "right",
     };
+  });
+}
+
+// Folds every accuracy signal this module and its caller already track into
+// ONE number/label per rep, instead of leaving the athlete to weigh several
+// separate indicators (implement-detected pill, tilt warning, mismatch
+// warning, camera-alignment hint) against each other themselves. Not a new
+// measurement -- purely a summary of ones that already exist:
+//   - confidenceSamples: how much the position fusion actually trusted its
+//     own sources frame to frame (the same wristConfidence+barConfidence mix
+//     that decides the primary trace's position every tick).
+//   - rejectionEvents: timestamps where a tracker's own reported position
+//     disagreed with the wrist badly enough to be thrown out entirely (see
+//     MAX_PLAUSIBLE_IMPLEMENT_OFFSET_M/MAX_PLAUSIBLE_GRIP_OFFSET_M in the
+//     caller) -- however briefly, a rejection inside a rep's window is a
+//     moment that rep's numbers leaned on a single, unfused source.
+//   - patternMismatch/alignmentReason: whole-SET properties (the exercise's
+//     motion didn't look like what was selected; the camera wasn't square to
+//     the lift) that apply equally to every rep, since neither one changes
+//     rep to rep.
+export function computeRepTrustScores(
+  repBreakdown: { repNumber: number; startT: number; endT: number }[],
+  confidenceSamples: { t: number; confidence: number }[],
+  rejectionEvents: number[],
+  patternMismatch: boolean,
+  alignmentReason: "ok" | "angled" | "axial" | "unknown" | null,
+): RepTrustScore[] {
+  return repBreakdown.map((rep) => {
+    const windowSamples = confidenceSamples.filter((s) => s.t >= rep.startT && s.t <= rep.endT);
+    // No confidence samples for this rep (shouldn't normally happen -- every
+    // tracked frame pushes one) reads as neutral, not failing: there's
+    // nothing here to be confident OR unconfident about, unlike a low
+    // reading that IS present.
+    const avgConfidence =
+      windowSamples.length > 0 ? windowSamples.reduce((a, s) => a + s.confidence, 0) / windowSamples.length : 0.6;
+
+    const rejectionCount = rejectionEvents.filter((t) => t >= rep.startT && t <= rep.endT).length;
+
+    const notes: string[] = [];
+    let score = avgConfidence * 100;
+
+    if (rejectionCount > 0) {
+      score -= Math.min(30, rejectionCount * 8);
+      notes.push(
+        rejectionCount === 1
+          ? "Tracking briefly lost and recovered once during this rep"
+          : `Tracking briefly lost and recovered ${rejectionCount} times during this rep`,
+      );
+    }
+
+    if (patternMismatch) {
+      score -= 20;
+      notes.push("This set's motion didn't clearly match the selected exercise");
+    }
+
+    if (alignmentReason === "angled") {
+      score -= 15;
+      notes.push("Camera was angled rather than square to the lift");
+    } else if (alignmentReason === "unknown") {
+      score -= 10;
+      notes.push("Camera framing couldn't be confirmed");
+    }
+    // "axial" (front/foot-on framing) is a legitimate choice -- see
+    // evaluateAutoStartReadiness's own comment in bar-tracker-dialog.tsx --
+    // so it earns no penalty here; it degrades bar-path drift specifically,
+    // not the position/velocity confidence this score is built from.
+
+    score = Math.max(5, Math.min(100, Math.round(score)));
+    const label: RepTrustScore["label"] = score >= 80 ? "high" : score >= 55 ? "medium" : "low";
+    return { repNumber: rep.repNumber, score, label, notes };
   });
 }
 

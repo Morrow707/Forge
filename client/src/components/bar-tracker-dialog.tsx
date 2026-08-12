@@ -15,6 +15,7 @@ import {
   summarizeTrackedSet,
   fuseSideVelocity,
   computeArmDriveAsymmetry,
+  computeRepTrustScores,
   buildPathTrace,
   interpolateOcclusionGap,
   type TrackedPoint,
@@ -52,6 +53,7 @@ import {
   type PoseFrame,
   type MovementGuess,
   type MovementPattern,
+  type CameraAlignment,
 } from "@/lib/pose-tracking";
 import {
   PoseLandmarker,
@@ -383,6 +385,21 @@ export function BarTrackerDialog({
   // computeArmDriveAsymmetry needs to compare left against right.
   const leftVelocitySamplesRef = useRef<VelocitySample[]>([]);
   const rightVelocitySamplesRef = useRef<VelocitySample[]>([]);
+  // The primary trace's own per-frame position-fusion confidence (the same
+  // wristConfidence+barConfidence mix that decides x/y every tick, just kept
+  // around here too) -- feeds computeRepTrustScores at Stop so each rep's
+  // trust score is built from what the fusion itself actually trusted, not
+  // a fresh guess.
+  const primaryConfidenceSamplesRef = useRef<{ t: number; confidence: number }[]>([]);
+  // Timestamps of every tracker-vs-wrist disagreement rejection this set --
+  // combined tracker and both per-side trackers all push here (see each
+  // rejectLock() call site) -- feeds computeRepTrustScores the same way.
+  const rejectionEventsRef = useRef<number[]>([]);
+  // The most recent camera-alignment read from the setup step (see
+  // evaluateAutoStartReadiness) -- frozen once tracking starts, since the
+  // phone's physical position doesn't change mid-set, and used as a
+  // whole-set input to computeRepTrustScores at Stop.
+  const lastAlignmentReasonRef = useRef<CameraAlignment["reason"] | null>(null);
 
   const [step, setStepState] = useState<Step>("setup");
   function changeStep(next: Step) {
@@ -454,6 +471,9 @@ export function BarTrackerDialog({
     sideVelocitySamplesRef.current = [];
     leftVelocitySamplesRef.current = [];
     rightVelocitySamplesRef.current = [];
+    primaryConfidenceSamplesRef.current = [];
+    rejectionEventsRef.current = [];
+    lastAlignmentReasonRef.current = null;
     setImplementDetected(false);
     verticalSignRef.current = 1;
     displaySmootherRef.current.reset();
@@ -678,6 +698,11 @@ export function BarTrackerDialog({
 
     const bodyIn = !!landmarks && isFullBodyInFrame(landmarks);
     const alignment = worldLandmarks ? assessCameraAlignment(worldLandmarks) : null;
+    // Kept for computeRepTrustScores at Stop -- see lastAlignmentReasonRef's
+    // own comment. Only written here (setup step), never during tracking,
+    // so it captures whatever the camera's real framing was right before
+    // the set started.
+    if (alignment) lastAlignmentReasonRef.current = alignment.reason;
     // "axial" (camera facing the athlete head-on or foot-on, rather than
     // from the side) doesn't block auto-start the way "angled" does -- it's
     // a deliberate, legitimate framing choice when bar tilt or shoulder
@@ -789,6 +814,8 @@ export function BarTrackerDialog({
     sideVelocitySamplesRef.current = [];
     leftVelocitySamplesRef.current = [];
     rightVelocitySamplesRef.current = [];
+    primaryConfidenceSamplesRef.current = [];
+    rejectionEventsRef.current = [];
     setImplementDetected(false);
     implementTrackerRef.current.reset();
     leftImplementTrackerRef.current.reset();
@@ -974,6 +1001,7 @@ export function BarTrackerDialog({
             MAX_PLAUSIBLE_IMPLEMENT_OFFSET_M
         ) {
           implementTrackerRef.current.rejectLock();
+          rejectionEventsRef.current.push(t);
           barTrack = null;
         }
         setImplementDetected(!!barTrack);
@@ -996,6 +1024,11 @@ export function BarTrackerDialog({
         const wristConfidence = gripConfirmed ? Math.min(1, rawWristConfidence * 1.25) : rawWristConfidence;
         const barConfidence = barTrack ? barTrack.confidence : 0;
         const totalConfidence = wristConfidence + barConfidence;
+        // wristConfidence can reach 1.25 (the Hand Landmarker corroboration
+        // bump above) and barConfidence up to 1, so this normalizes back to
+        // the same 0-1 scale every other confidence value in this file uses
+        // -- see primaryConfidenceSamplesRef's own comment.
+        primaryConfidenceSamplesRef.current.push({ t, confidence: Math.min(1, totalConfidence / 2) });
         const x =
           totalConfidence > 0
             ? (wristConfidence * worldPoint.x + barConfidence * (barTrack ? barTrack.worldX : 0)) /
@@ -1112,6 +1145,7 @@ export function BarTrackerDialog({
                 MAX_PLAUSIBLE_GRIP_OFFSET_M
             ) {
               leftImplementTrackerRef.current.rejectLock();
+              rejectionEventsRef.current.push(t);
               leftTrack = null;
             }
             const leftWristConf = singleWristConfidence(worldLandmarks, "left");
@@ -1151,6 +1185,7 @@ export function BarTrackerDialog({
                 MAX_PLAUSIBLE_GRIP_OFFSET_M
             ) {
               rightImplementTrackerRef.current.rejectLock();
+              rejectionEventsRef.current.push(t);
               rightTrack = null;
             }
             const rightWristConf = singleWristConfidence(worldLandmarks, "right");
@@ -1369,6 +1404,21 @@ export function BarTrackerDialog({
     const guess = guessMovementPattern(framesRef.current, movementType);
     setMovementGuess(guess);
 
+    // Same mismatch logic the review screen's own patternMismatch (further
+    // down, computed from state) uses -- done here with the local guess
+    // instead of the not-yet-updated movementGuess state, since
+    // computeRepTrustScores needs it this same tick.
+    const guessExpectedPattern = expectedPatternFromName(exerciseName);
+    const guessMismatch =
+      guess.pattern !== "unknown" && !!guessExpectedPattern && guess.pattern !== guessExpectedPattern;
+    metrics.trustScores = computeRepTrustScores(
+      metrics.repBreakdown.map((r) => ({ repNumber: r.repNumber, startT: r.startT, endT: r.endT })),
+      primaryConfidenceSamplesRef.current,
+      rejectionEventsRef.current,
+      guessMismatch,
+      lastAlignmentReasonRef.current,
+    );
+
     if (voiceEnabledRef.current) {
       const count = metrics.formFaults.length;
       speak(count > 0 ? `Set complete. ${count} form note${count > 1 ? "s" : ""}.` : "Set complete.");
@@ -1405,6 +1455,7 @@ export function BarTrackerDialog({
         )
       : null;
   const armDriveByRep = new Map((liftResult?.armDriveAsymmetry ?? []).map((d) => [d.repNumber, d]));
+  const trustByRep = new Map((liftResult?.trustScores ?? []).map((d) => [d.repNumber, d]));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1674,7 +1725,28 @@ export function BarTrackerDialog({
                         : 0;
                     return (
                       <div key={r.repNumber} className="flex items-center justify-between gap-2 text-xs">
-                        <span className="font-semibold">Rep {r.repNumber}</span>
+                        <span className="flex items-center gap-1.5 font-semibold">
+                          Rep {r.repNumber}
+                          {trustByRep.has(r.repNumber) && (
+                            <span
+                              title={
+                                trustByRep.get(r.repNumber)!.notes.length > 0
+                                  ? `Tracking confidence: ${trustByRep.get(r.repNumber)!.score}%. ${trustByRep
+                                      .get(r.repNumber)!
+                                      .notes.join(". ")}`
+                                  : `Tracking confidence: ${trustByRep.get(r.repNumber)!.score}%`
+                              }
+                              className={cn(
+                                "inline-block h-1.5 w-1.5 rounded-full",
+                                trustByRep.get(r.repNumber)!.label === "high"
+                                  ? "bg-success"
+                                  : trustByRep.get(r.repNumber)!.label === "medium"
+                                    ? "bg-amber-500"
+                                    : "bg-destructive",
+                              )}
+                            />
+                          )}
+                        </span>
                         <span className="flex items-center gap-2 text-muted-foreground">
                           {mode === "full" && (
                             <span className={decayPct > 15 ? "font-semibold text-amber-500" : undefined}>
