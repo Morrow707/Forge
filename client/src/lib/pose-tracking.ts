@@ -58,6 +58,16 @@ export const POSE_LANDMARKS = {
 
 const MIN_VISIBILITY = 0.5;
 
+// Stricter than MIN_VISIBILITY above -- used only by isFullBodyInFrame's
+// "is anyone actually here" gate, not by anything mid-tracking. Getting
+// this gate wrong is worse than getting a mid-rep confidence check wrong:
+// a real athlete briefly losing a landmark to occlusion just means one
+// noisier frame, but a false "yes, a person is in frame" on an empty rack
+// (a rack's hanging bands/straps and other loosely humanoid-shaped gym
+// clutter can accidentally clear a lower bar) starts a whole set on
+// nothing, so the presence check alone gets held to a tighter standard.
+const PRESENCE_MIN_VISIBILITY = 0.75;
+
 // landmarks (normalized image-space) still drive same-axis ratio checks
 // (valgus: knee width over ankle width, both x-only) -- an x-only or y-only
 // comparison stays scale-invariant under 2D projection. Anything that
@@ -364,7 +374,10 @@ const FULL_BODY_CHECKPOINTS = [
 // propping the phone up and walking into position is enough; nobody has to
 // watch the preview or tap anything.
 export function isFullBodyInFrame(landmarks: NormalizedLandmark[]): boolean {
-  return FULL_BODY_CHECKPOINTS.every((i) => visible(landmarks[i]));
+  return FULL_BODY_CHECKPOINTS.every((i) => {
+    const lm = landmarks[i];
+    return !!lm && lm.visibility >= PRESENCE_MIN_VISIBILITY;
+  });
 }
 
 export type CameraAlignment = { aligned: boolean; reason: "ok" | "angled" | "axial" | "unknown" };
