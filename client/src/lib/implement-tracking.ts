@@ -152,11 +152,16 @@ export function shoulderPixelsPerMeter(
 
 // How many consecutive locked frames it takes for the tracker's own
 // confidence to ramp from a fresh (re)acquisition up to fully trusted.
-// Short enough that a real set (seconds of continuously holding the same
-// implement) spends most of its time at full confidence; long enough that
-// one or two lucky matches in a row right after a reacquire can't
-// immediately outweigh the wrist in the caller's fusion.
-const LOCK_RAMP_FRAMES = 5;
+// Now that a stationary pause holds the existing lock instead of dropping
+// it (see the MIN_WRIST_SPEED_PX branch in track() below), a genuine
+// (re)acquisition is a rarer event than it used to be -- normally just
+// once, at the very start of a set, plus the occasional real tracking
+// loss (an arm crossing the bar, a misdetected frame), rather than at the
+// top/bottom of every single rep. That's what makes it safe to keep this
+// short: 3 frames is enough that one or two lucky matches right after a
+// reacquire can't immediately outweigh the wrist, without dragging out
+// full confidence for the whole rest of a rep the way a longer ramp would.
+const LOCK_RAMP_FRAMES = 3;
 
 // How far (working-resolution pixels) a held lock is allowed to drift from
 // the CURRENT wrist reading before it's no longer trusted as "still the
@@ -291,7 +296,27 @@ export class ImplementTracker {
 
     const wristSpeed = Math.hypot(wristX - prevWristX, wristY - prevWristY);
     if (wristSpeed < MIN_WRIST_SPEED_PX) {
-      this.dropLock();
+      // A stationary bar (top of a squat, bottom of a paused bench press,
+      // any dead-still moment between reps) hasn't gone anywhere -- there's
+      // no new motion to search for, but also no reason to believe an
+      // already-held lock is suddenly wrong. Dropping it here (the
+      // previous behavior) meant every single rep re-earned its confidence
+      // from zero the instant it started moving again, even though nothing
+      // was ever actually lost -- the practical effect was the SAME brief
+      // dip in tracked precision repeating at the start of every rep, not
+      // just the first. Hold the lock's position and confidence exactly as
+      // they were instead; only a frame that actually FAILS to reacquire
+      // below (no lock ever established, or a real search that turns up
+      // nothing) drops it. A lock that was never established yet has
+      // nothing to hold, so this still reports null before the first real
+      // acquisition of the set.
+      if (this.lockWorldX != null && this.lockWorldY != null) {
+        return {
+          worldX: this.lockWorldX,
+          worldY: this.lockWorldY,
+          confidence: Math.min(1, this.lockStreak / LOCK_RAMP_FRAMES),
+        };
+      }
       return null;
     }
 
