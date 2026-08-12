@@ -841,7 +841,7 @@ export function BarTrackerDialog({
             gripConfirmed = true;
           }
         }
-        const barTrack =
+        let barTrack =
           normalizedWrist &&
           implementTrackerRef.current.track(
             video,
@@ -852,6 +852,28 @@ export function BarTrackerDialog({
             worldPoint.x,
             worldPoint.y,
           );
+        // Two independent measurements agreeing is reassuring; two
+        // independent measurements disagreeing is INFORMATION, not
+        // something to average away. No real implement sits this far from
+        // the hand holding it -- if the tracker's own reported position
+        // is further than that from the wrist, it's latched onto the
+        // wrong thing (a rack post, another lifter, a shadow), and a
+        // confidence-weighted blend between "right" and "wildly wrong"
+        // isn't a meaningfully better answer than either extreme. Reject
+        // it outright: force the tracker to reacquire fresh next frame
+        // (rather than keep dead-reckoning forward from a position that's
+        // just been judged implausible) and fall back to the wrist alone
+        // for this one frame, the same as if no implement had been found
+        // at all.
+        const MAX_PLAUSIBLE_IMPLEMENT_OFFSET_M = 0.5;
+        if (
+          barTrack &&
+          Math.hypot(barTrack.worldX - worldPoint.x, barTrack.worldY - worldPoint.y) >
+            MAX_PLAUSIBLE_IMPLEMENT_OFFSET_M
+        ) {
+          implementTrackerRef.current.rejectLock();
+          barTrack = null;
+        }
         setImplementDetected(!!barTrack);
         // Fuse the wrist-derived position with the implement tracker's own
         // independently-held lock (see implement-tracking.ts's header
