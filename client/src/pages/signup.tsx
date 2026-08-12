@@ -15,8 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { Dumbbell, ClipboardList, Sparkles, Check, Lock } from "lucide-react";
-import { ForgeMark } from "@/components/forge-mark";
+import { Flame, Dumbbell, ClipboardList, Sparkles, Check, Lock } from "lucide-react";
 
 export default function SignupPage() {
   const { user, isLoading, signupMutation } = useAuth();
@@ -72,7 +71,7 @@ export default function SignupPage() {
       <div className="w-full max-w-md">
         <div className="mb-8 flex flex-col items-center gap-3">
           <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-            <ForgeMark className="h-9 w-9" />
+            <Flame className="h-8 w-8" />
           </div>
           <h1 className="font-display text-4xl font-extrabold uppercase tracking-wider">
             Forge
