@@ -68,6 +68,15 @@ export async function burnTrackingOverlay(
     src.src = sourceUrl;
     src.muted = false;
     src.playsInline = true;
+    // Burning the overlay in at normal speed means waiting out the entire
+    // clip's real duration a second time (a 30s set -> a 30s wait) on top
+    // of whatever the recording itself took -- this is a cosmetic pass, not
+    // something worth making an athlete sit through at 1x. Playing the
+    // source faster shortens that wait proportionally; canvas.captureStream
+    // still samples at a fixed 30fps of *wall-clock* time regardless of
+    // playbackRate, so the output is a normal-speed clip, just captured
+    // from fewer, more spread-out source frames.
+    src.playbackRate = 4;
 
     src.addEventListener(
       "loadedmetadata",
