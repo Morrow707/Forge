@@ -126,6 +126,7 @@ const FAULT_NAMES: Record<string, string> = {
   forward_lean: "Forward lean",
   bar_path_drift: "Bar path drift",
   bar_tilt: "Bar tilt",
+  grip_shift: "Grip shift",
 };
 type RecentSession = {
   date: string;
