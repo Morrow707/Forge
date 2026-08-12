@@ -12,6 +12,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { apiRequest, getJson } from "@/lib/queryClient";
 import { getPoseLandmarker } from "@/lib/pose-tracking";
+import { lockCameraExposure } from "@/lib/camera-exposure";
 import {
   analyzeMechanics,
   detectMechanicsFaults,
@@ -182,6 +183,12 @@ export function MechanicsTrackerDialog({
       .then((stream) => {
         streamRef.current = stream;
         if (videoRef.current) videoRef.current.srcObject = stream;
+        // Best-effort, Chrome/Android-only -- see lockCameraExposure's own
+        // comment. A bat swing or throw is the fastest motion this app
+        // tracks, so it's also the motion a longer auto-exposure shutter
+        // blurs hardest.
+        const videoTrack = stream.getVideoTracks()[0];
+        if (videoTrack) void lockCameraExposure(videoTrack);
       })
       .catch(() => setCameraError("Camera access denied or unavailable."));
     rafRef.current = requestAnimationFrame(tick);

@@ -15,6 +15,7 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { recordedVideoType, videoFilenameForBlob } from "@/lib/video-recording";
+import { lockCameraExposure } from "@/lib/camera-exposure";
 
 const MAX_SECONDS = 10;
 
@@ -167,6 +168,11 @@ export function FormVideoRecorderDialog({
       .then((stream) => {
         streamRef.current = stream;
         if (videoRef.current) videoRef.current.srcObject = stream;
+        // Best-effort, Chrome/Android-only -- see lockCameraExposure's own
+        // comment. Same "less blur on a fast movement" reasoning as the
+        // frameRate constraint above.
+        const videoTrack = stream.getVideoTracks()[0];
+        if (videoTrack) void lockCameraExposure(videoTrack);
       })
       .catch(() => setCameraError("Camera access denied or unavailable."));
     return stopCamera;
