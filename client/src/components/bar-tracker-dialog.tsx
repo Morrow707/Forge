@@ -13,10 +13,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import {
   summarizeTrackedSet,
+  fuseSideVelocity,
   buildPathTrace,
   interpolateOcclusionGap,
   type TrackedPoint,
   type RepMetrics,
+  type VelocitySample,
 } from "@/lib/bar-tracking";
 import { summarizeJumpSet, type JumpSetMetrics } from "@/lib/jump-tracking";
 import { ImplementTracker } from "@/lib/implement-tracking";
@@ -362,6 +364,14 @@ export function BarTrackerDialog({
   // gripWidthReadings so a genuine mid-set regrip surfaces as its own
   // fault (see FormFault's "grip_shift" code).
   const gripWidthReadingsRef = useRef<number[]>([]);
+  // Midpoint of the same two fused grip points, one sample per frame --
+  // a second, independently-tracked read on the bar's own vertical
+  // position (two separate ImplementTracker locks, each fused against its
+  // own wrist, averaged) alongside the primary trace's own wrist+bar
+  // fusion. Passed to fuseSideVelocity at Stop so the reported peak/mean
+  // velocity is a confidence-weighted blend of both, not just the primary
+  // trace alone -- see fuseSideVelocity's own comment.
+  const sideVelocitySamplesRef = useRef<VelocitySample[]>([]);
 
   const [step, setStepState] = useState<Step>("setup");
   function changeStep(next: Step) {
@@ -423,6 +433,7 @@ export function BarTrackerDialog({
     liveTiltHistoryRef.current = [];
     tiltReadingsRef.current = [];
     gripWidthReadingsRef.current = [];
+    sideVelocitySamplesRef.current = [];
     setImplementDetected(false);
     verticalSignRef.current = 1;
     displaySmootherRef.current.reset();
@@ -751,6 +762,7 @@ export function BarTrackerDialog({
     liveTiltHistoryRef.current = [];
     tiltReadingsRef.current = [];
     gripWidthReadingsRef.current = [];
+    sideVelocitySamplesRef.current = [];
     setImplementDetected(false);
     implementTrackerRef.current.reset();
     leftImplementTrackerRef.current.reset();
@@ -1039,6 +1051,13 @@ export function BarTrackerDialog({
         // bar_tilt fault already uses.
         let fusedLeft: { x: number; y: number } | null = null;
         let fusedRight: { x: number; y: number } | null = null;
+        // Normalized (0-1) confidence per side, for sideVelocitySamplesRef
+        // below -- each of leftTotal/rightTotal below can reach as high as
+        // 2 (wrist confidence and bar-track confidence are each already
+        // 0-1 on their own), so this halves it back down to the same 0-1
+        // scale VelocitySample promises everywhere else.
+        let leftConfidence = 0;
+        let rightConfidence = 0;
         if (mode !== "jump" && usesSharedBar) {
           const normalizedWrists = deriveNormalizedWristPoints(landmarks);
           // Same plausibility reasoning as MAX_PLAUSIBLE_IMPLEMENT_OFFSET_M
@@ -1072,6 +1091,7 @@ export function BarTrackerDialog({
             const leftWristConf = singleWristConfidence(worldLandmarks, "left");
             const leftBarConf = leftTrack ? leftTrack.confidence : 0;
             const leftTotal = leftWristConf + leftBarConf;
+            leftConfidence = leftTotal / 2;
             fusedLeft =
               leftTotal > 0
                 ? {
@@ -1110,6 +1130,7 @@ export function BarTrackerDialog({
             const rightWristConf = singleWristConfidence(worldLandmarks, "right");
             const rightBarConf = rightTrack ? rightTrack.confidence : 0;
             const rightTotal = rightWristConf + rightBarConf;
+            rightConfidence = rightTotal / 2;
             fusedRight =
               rightTotal > 0
                 ? {
@@ -1142,6 +1163,15 @@ export function BarTrackerDialog({
         // mid-set regrip can be caught (see FormFault's "grip_shift" code).
         if (fusedLeft && fusedRight) {
           gripWidthReadingsRef.current.push(Math.abs(fusedRight.x - fusedLeft.x));
+          // A third measurement from the same two points -- this time their
+          // own midpoint's vertical position, a second independent read on
+          // the bar's own height alongside the primary trace's wrist+bar
+          // fusion above. See sideVelocitySamplesRef's own comment.
+          sideVelocitySamplesRef.current.push({
+            t,
+            y: verticalSignRef.current * ((fusedLeft.y + fusedRight.y) / 2),
+            confidence: (leftConfidence + rightConfidence) / 2,
+          });
         }
 
         // Cheap live rep counter: count direction reversals bigger than
@@ -1197,12 +1227,16 @@ export function BarTrackerDialog({
       return;
     }
 
-    const metrics = summarizeTrackedSet(traceRef.current, loadKg, heightIn);
+    let metrics = summarizeTrackedSet(traceRef.current, loadKg, heightIn);
     if (!metrics) {
       toast.error("Couldn't get a clean read — try again with your whole body in frame.");
       changeStep("setup");
       return;
     }
+    // See fuseSideVelocity's own comment -- confidence-weighted blend of
+    // the primary trace's peak/mean velocity against the independent
+    // left/right average, not a plain average of the two.
+    metrics = fuseSideVelocity(metrics, sideVelocitySamplesRef.current, loadKg);
     metrics.formFaults = detectFormFaults(
       framesRef.current,
       metrics.barPathDeviationCm,

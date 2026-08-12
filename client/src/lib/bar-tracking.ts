@@ -515,3 +515,105 @@ export function summarizeTrackedSet(
   };
 }
 
+// One reading of a second, independently-tracked position source --
+// bar-tracker-dialog.tsx averages its left and right implement trackers'
+// fused grip points into this every frame (see leftImplementTrackerRef's
+// own comment for why those are independent of the primary trace this
+// whole file otherwise works with). confidence carries that frame's own
+// wrist+bar-track blend weight, same scale as everywhere else this
+// session's fusion work uses it (0 = no signal at all, 1 = fully trusted).
+export type VelocitySample = { t: number; y: number; confidence: number };
+
+// Confidence-weighted fusion of the primary trace's per-rep velocity
+// (source A -- summarizeTrackedSet's own output, computed above) against
+// this second source (source B). Not an override, a blend: source A keeps
+// a fixed baseline weight of 1 -- it's the more mature pipeline, with its
+// own internal wrist+bar fusion already built in -- while source B is
+// computed the same way (moving-average smoothed, 95th-percentile peak)
+// over the EXACT SAME rep window source A already identified, weighted by
+// how confident that source actually was during that specific window. A
+// rep where the side samples barely showed up, or the wrists were barely
+// visible, ends up close to 100% source A; a rep with strong left/right
+// tracking throughout pulls the reported number meaningfully toward
+// source B's own read -- literally "bar speed isn't an average, it's a
+// knowledgeable guess between multiple factors."
+//
+// Mutates nothing; returns a new RepMetrics with updated repBreakdown
+// entries and every whole-set number that's derived FROM repBreakdown
+// (peak/mean velocity, peak/mean power, velocity loss) recomputed from the
+// fused values the same way summarizeTrackedSet itself derives them --
+// romCm, eccentric numbers, bar-path deviation, and everything else that
+// doesn't come from concentric peak/mean velocity are left untouched.
+export function fuseSideVelocity(
+  metrics: RepMetrics,
+  sideSamples: VelocitySample[],
+  loadKg?: number,
+): RepMetrics {
+  if (sideSamples.length < 6 || metrics.repBreakdown.length === 0) return metrics;
+
+  const sidePoints: TrackedPoint[] = sideSamples.map((s) => ({ t: s.t, x: 0, y: s.y, z: 0 }));
+  const sideSmoothed = movingAverage(
+    sidePoints.map((p) => p.y),
+    framesForDuration(sidePoints, TARGET_SMOOTHING_MS),
+  );
+  const sideSpeeds = computeSpeeds(sidePoints, sideSmoothed);
+
+  const fusedRepBreakdown = metrics.repBreakdown.map((rep) => {
+    const startIdx = sidePoints.findIndex((p) => p.t >= rep.startT);
+    let endIdx = -1;
+    for (let i = sidePoints.length - 1; i >= 0; i--) {
+      if (sidePoints[i].t <= rep.endT) {
+        endIdx = i;
+        break;
+      }
+    }
+    // Fewer than a handful of side samples across the whole rep isn't
+    // enough to trust a rate off of (same reasoning computeLegDriveAsymmetry
+    // already applies to its own per-rep window) -- this rep just keeps
+    // source A's numbers untouched rather than blending in something built
+    // from almost nothing.
+    if (startIdx === -1 || endIdx === -1 || endIdx - startIdx < 3) return rep;
+
+    const { peak: sidePeak } = robustPeakSpeed(sideSpeeds, startIdx, endIdx);
+    const windowSpeeds = sideSpeeds.slice(startIdx, endIdx + 1);
+    const sideMean = windowSpeeds.reduce((a, b) => a + b, 0) / windowSpeeds.length;
+    const sideConfidence =
+      sideSamples.slice(startIdx, endIdx + 1).reduce((a, s) => a + s.confidence, 0) / windowSpeeds.length;
+
+    if (sideConfidence <= 0) return rep;
+    const totalWeight = 1 + sideConfidence;
+    const peakVelocityMps = Math.round(((rep.peakVelocityMps + sideConfidence * sidePeak) / totalWeight) * 100) / 100;
+    const meanVelocityMps = Math.round(((rep.meanVelocityMps + sideConfidence * sideMean) / totalWeight) * 100) / 100;
+    return {
+      ...rep,
+      peakVelocityMps,
+      meanVelocityMps,
+      peakPowerWatts: loadKg && loadKg > 0 ? Math.round(loadKg * GRAVITY_MPS2 * peakVelocityMps) : null,
+    };
+  });
+
+  const concentricPeaks = fusedRepBreakdown.map((r) => r.peakVelocityMps);
+  const concentricMeans = fusedRepBreakdown.map((r) => r.meanVelocityMps);
+  const peakVelocityMps = Math.round(Math.max(...concentricPeaks, 0) * 100) / 100;
+  const meanVelocityMps =
+    Math.round((concentricMeans.reduce((a, b) => a + b, 0) / concentricMeans.length) * 100) / 100;
+
+  return {
+    ...metrics,
+    repBreakdown: fusedRepBreakdown,
+    peakVelocityMps,
+    meanVelocityMps,
+    peakPowerWatts: loadKg && loadKg > 0 ? Math.round(loadKg * GRAVITY_MPS2 * peakVelocityMps) : null,
+    meanPowerWatts: loadKg && loadKg > 0 ? Math.round(loadKg * GRAVITY_MPS2 * meanVelocityMps) : null,
+    velocityLossPercent:
+      fusedRepBreakdown.length > 1 && fusedRepBreakdown[0].peakVelocityMps > 0
+        ? Math.round(
+            ((fusedRepBreakdown[0].peakVelocityMps -
+              fusedRepBreakdown[fusedRepBreakdown.length - 1].peakVelocityMps) /
+              fusedRepBreakdown[0].peakVelocityMps) *
+              1000,
+          ) / 10
+        : null,
+  };
+}
+
