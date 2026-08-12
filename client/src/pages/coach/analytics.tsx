@@ -20,7 +20,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { RadioChipGroup } from "@/components/filter-chip-group";
 import { PinnedExercisePicker, MAJOR_LIFTS } from "@/components/pinned-exercise-picker";
 import { apiRequest, getJson } from "@/lib/queryClient";
-import { useDistanceUnit, cmToDisplayUnit } from "@/lib/distance-unit";
+import { useDistanceUnit, cmToDisplayUnit, type DistanceUnit } from "@/lib/distance-unit";
 import { DistanceUnitToggle } from "@/components/distance-unit-toggle";
 import {
   Users,
@@ -87,6 +87,10 @@ type AnalyticsPoint = {
     | {
         repNumber: number;
         peakVelocityMps: number;
+        meanVelocityMps?: number;
+        romCm?: number | null;
+        peakPowerWatts?: number | null;
+        meanPowerWatts?: number | null;
         depthDeg?: number | null;
         timeToPeakVelocitySeconds?: number;
       }[]
@@ -156,7 +160,6 @@ const CHART_OPTIONS = [
   { key: "tempo", label: "Tempo" },
   { key: "rom", label: "Range of Motion" },
   { key: "faultTrend", label: "Form Fault Trend" },
-  { key: "table", label: "Every Data Point (raw table)" },
 ] as const;
 type ChartKey = (typeof CHART_OPTIONS)[number]["key"];
 const HIDDEN_CHARTS_STORAGE_KEY = "forge-analytics-hidden-charts";
@@ -220,6 +223,186 @@ function ChartVisibilityMenu({
   );
 }
 
+function formatSetWeight(p: {
+  weightMode: "numeric" | "bodyweight" | "band" | "box";
+  weight: string | null;
+  weightUnit: "lbs" | "kg" | null;
+  bandColor: string | null;
+  boxHeight: string | null;
+  boxHeightUnit: "in" | "m" | null;
+}): string {
+  if (p.weightMode === "numeric") return `${p.weight ?? "-"} ${p.weightUnit ?? ""}`;
+  if (p.weightMode === "band") return p.bandColor ?? p.weight ?? "Band";
+  if (p.weightMode === "box") return `${p.boxHeight ?? "-"} ${p.boxHeightUnit ?? ""}`;
+  return "Bodyweight";
+}
+
+function fmtNum(value: number | null | undefined, decimals: number): string {
+  return value == null ? "-" : value.toFixed(decimals);
+}
+
+function average(values: (number | null | undefined)[]): number | null {
+  const nums = values.filter((v): v is number => v != null);
+  if (nums.length === 0) return null;
+  return nums.reduce((a, b) => a + b, 0) / nums.length;
+}
+
+type RepRow = NonNullable<AnalyticsPoint["repBreakdown"]>[number];
+
+/** One set's per-rep breakdown, laid out like a VBT app's at-a-glance
+ * summary (avg/peak velocity, ROM, avg/peak power, time-to-peak-velocity
+ * per rep, plus an averaged row) rather than a line graph -- see
+ * RepBreakdownByDate below for why this is the default view. */
+function SetRepTable({
+  point: p,
+  distanceUnit,
+  onWatchVideo,
+}: {
+  point: AnalyticsPoint;
+  distanceUnit: DistanceUnit;
+  onWatchVideo: (preview: { url: string; flag: "best" | "worst" | null; label: string }) => void;
+}) {
+  const reps = p.repBreakdown;
+  const romInUnit = (r: RepRow) => (r.romCm != null ? cmToDisplayUnit(r.romCm, distanceUnit) : null);
+
+  return (
+    <Card>
+      <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
+        <div>
+          <CardTitle className="text-base">
+            Set {p.setNumber}
+            {p.isPR && (
+              <Badge className="ml-2 gap-1 bg-amber-400 text-black hover:bg-amber-400">
+                <Crown className="h-3 w-3" />
+                PR
+              </Badge>
+            )}
+          </CardTitle>
+          <CardDescription>
+            {formatSetWeight(p)}
+            {p.reps ? ` × ${p.reps}` : ""}
+            {p.rpe != null ? ` · RPE ${p.rpe}` : ""}
+          </CardDescription>
+        </div>
+        {p.formCheckVideoUrl && (
+          <button
+            type="button"
+            onClick={() =>
+              onWatchVideo({
+                url: p.formCheckVideoUrl!,
+                flag: p.formCheckFlag,
+                label: `${format(parseISO(p.date), "MMM d")} · Set ${p.setNumber}`,
+              })
+            }
+            className="flex shrink-0 items-center gap-1 text-xs font-semibold text-primary hover:underline"
+          >
+            <Video className="h-3.5 w-3.5" />
+            Watch
+            {p.formCheckFlag === "best" && <ThumbsUp className="h-3 w-3 text-success" />}
+            {p.formCheckFlag === "worst" && <ThumbsDown className="h-3 w-3 text-destructive" />}
+          </button>
+        )}
+      </CardHeader>
+      <CardContent className="overflow-x-auto">
+        {!reps || reps.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Not camera-tracked -- no per-rep data.</p>
+        ) : (
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="border-b border-border text-[10px] uppercase text-muted-foreground">
+                <th className="py-1.5 pr-3">Rep</th>
+                <th className="py-1.5 pr-3">Avg [m/s]</th>
+                <th className="py-1.5 pr-3">Peak [m/s]</th>
+                <th className="py-1.5 pr-3">ROM [{distanceUnit}]</th>
+                <th className="py-1.5 pr-3">Avg [W]</th>
+                <th className="py-1.5 pr-3">Peak [W]</th>
+                <th className="py-1.5">TPV [s]</th>
+              </tr>
+            </thead>
+            <tbody>
+              {reps.map((r) => (
+                <tr key={r.repNumber} className="border-b border-border/50">
+                  <td className="py-1.5 pr-3 font-semibold">{r.repNumber}</td>
+                  <td className="py-1.5 pr-3">{fmtNum(r.meanVelocityMps, 2)}</td>
+                  <td className="py-1.5 pr-3">{fmtNum(r.peakVelocityMps, 2)}</td>
+                  <td className="py-1.5 pr-3">{fmtNum(romInUnit(r), 1)}</td>
+                  <td className="py-1.5 pr-3">{fmtNum(r.meanPowerWatts, 0)}</td>
+                  <td className="py-1.5 pr-3">{fmtNum(r.peakPowerWatts, 0)}</td>
+                  <td className="py-1.5">{fmtNum(r.timeToPeakVelocitySeconds, 2)}</td>
+                </tr>
+              ))}
+              <tr className="bg-secondary/40 font-semibold">
+                <td className="py-1.5 pr-3">Avg</td>
+                <td className="py-1.5 pr-3">{fmtNum(average(reps.map((r) => r.meanVelocityMps)), 2)}</td>
+                <td className="py-1.5 pr-3">{fmtNum(average(reps.map((r) => r.peakVelocityMps)), 2)}</td>
+                <td className="py-1.5 pr-3">{fmtNum(average(reps.map(romInUnit)), 1)}</td>
+                <td className="py-1.5 pr-3">{fmtNum(average(reps.map((r) => r.meanPowerWatts)), 0)}</td>
+                <td className="py-1.5 pr-3">{fmtNum(average(reps.map((r) => r.peakPowerWatts)), 0)}</td>
+                <td className="py-1.5">
+                  {fmtNum(average(reps.map((r) => r.timeToPeakVelocitySeconds)), 2)}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Default exercise-history view: pick one workout date, see every set
+ * logged that day as its own per-rep table -- the "how did today go"
+ * question a coach actually opens this page to answer, without reading a
+ * line graph to get there. Line Graph and All Trends (see CoachAnalytics)
+ * cover the longer-arc questions instead. */
+function RepBreakdownByDate({
+  chartData,
+  selectedDate,
+  onSelectDate,
+  distanceUnit,
+  onWatchVideo,
+}: {
+  chartData: AnalyticsPoint[];
+  selectedDate: string;
+  onSelectDate: (date: string) => void;
+  distanceUnit: DistanceUnit;
+  onWatchVideo: (preview: { url: string; flag: "best" | "worst" | null; label: string }) => void;
+}) {
+  const dates = Array.from(new Set(chartData.map((p) => p.date))).sort().reverse();
+  const effectiveDate = dates.includes(selectedDate) ? selectedDate : dates[0];
+  const setsForDate = chartData
+    .filter((p) => p.date === effectiveDate)
+    .sort((a, b) => a.setNumber - b.setNumber);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <CalendarDays className="h-4 w-4 shrink-0 text-muted-foreground" />
+        <Select value={effectiveDate} onValueChange={onSelectDate}>
+          <SelectTrigger className="w-56">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {dates.map((d) => (
+              <SelectItem key={d} value={d}>
+                {format(parseISO(d), "EEE, MMM d, yyyy")}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      {setsForDate.map((p) => (
+        <SetRepTable
+          key={p.setNumber}
+          point={p}
+          distanceUnit={distanceUnit}
+          onWatchVideo={onWatchVideo}
+        />
+      ))}
+    </div>
+  );
+}
+
 /** Coach-only performance history -- weight, PRs, and (when tracked)
  * velocity/bar-path/tempo for one athlete's exercise. Deliberately has no
  * athlete-facing equivalent -- athletes only see the live number during
@@ -236,6 +419,13 @@ export default function CoachAnalytics() {
   const [athleteSearch, setAthleteSearch] = useState("");
   const [exerciseId, setExerciseId] = useState<string>(initialParams.get("exerciseId") ?? "");
   const [hiddenCharts, setHiddenCharts] = useState<Set<ChartKey>>(() => loadHiddenCharts());
+  // Three ways to look at the same exercise history: a quick per-set,
+  // per-rep breakdown for one workout ("byDate", the default -- a coach
+  // opening this page wants to see today's numbers at a glance, not parse a
+  // line graph), a raw table across every date ("trends"), or the original
+  // suite of line graphs for spotting a longer trend visually ("chart").
+  const [viewMode, setViewMode] = useState<"byDate" | "trends" | "chart">("byDate");
+  const [selectedDate, setSelectedDate] = useState("");
   // Read-only preview of an athlete's per-set form-check clip from the raw
   // table below -- unlike the comment-thread video annotation flow, a coach
   // can't retake/remove/re-flag from here, this is just "watch what they
@@ -531,9 +721,52 @@ export default function CoachAnalytics() {
                 </Badge>
               )}
             </div>
-            <ChartVisibilityMenu hidden={hiddenCharts} onChange={setHiddenCharts} />
+            <div className="flex items-center gap-2">
+              <div className="flex rounded-md border border-border p-0.5">
+                {(
+                  [
+                    ["byDate", "By Date"],
+                    ["trends", "All Trends"],
+                    ["chart", "Line Graph"],
+                  ] as const
+                ).map(([mode, label]) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setViewMode(mode)}
+                    aria-pressed={viewMode === mode}
+                    className={cn(
+                      "rounded px-2.5 py-1.5 text-xs font-semibold transition-colors",
+                      viewMode === mode
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {viewMode === "chart" && (
+                <ChartVisibilityMenu hidden={hiddenCharts} onChange={setHiddenCharts} />
+              )}
+            </div>
           </div>
 
+          {viewMode === "byDate" && (
+            <RepBreakdownByDate
+              chartData={chartData}
+              selectedDate={selectedDate}
+              onSelectDate={setSelectedDate}
+              distanceUnit={distanceUnit}
+              onWatchVideo={(preview) => {
+                setVideoPreviewError(false);
+                setVideoPreview(preview);
+              }}
+            />
+          )}
+
+          {viewMode === "chart" && (
+          <>
           {hasNumericWeight && !hiddenCharts.has("weight") && (
             <Card>
               <CardHeader>
@@ -1257,12 +1490,14 @@ export default function CoachAnalytics() {
               </CardContent>
             </Card>
           )}
+          </>
+          )}
 
-          {!hiddenCharts.has("table") && (
+          {viewMode === "trends" && (
           <Card>
             <CardHeader>
               <CardTitle>Every Data Point</CardTitle>
-              <CardDescription>The complete raw history behind the charts above.</CardDescription>
+              <CardDescription>The complete raw history across every logged date.</CardDescription>
             </CardHeader>
             <CardContent className="overflow-x-auto">
               <table className="w-full text-left text-sm">
@@ -1297,15 +1532,7 @@ export default function CoachAnalytics() {
                       </td>
                       <td className="py-1.5 pr-3">{p.setNumber}</td>
                       <td className="py-1.5 pr-3">{p.reps ?? "-"}</td>
-                      <td className="py-1.5 pr-3">
-                        {p.weightMode === "numeric"
-                          ? `${p.weight ?? "-"} ${p.weightUnit ?? ""}`
-                          : p.weightMode === "band"
-                            ? (p.bandColor ?? p.weight ?? "Band")
-                            : p.weightMode === "box"
-                              ? `${p.boxHeight ?? "-"} ${p.boxHeightUnit ?? ""}`
-                              : "Bodyweight"}
-                      </td>
+                      <td className="py-1.5 pr-3">{formatSetWeight(p)}</td>
                       <td className="py-1.5 pr-3">{p.estimatedOneRm ?? "-"}</td>
                       <td className="py-1.5 pr-3">{p.rpe ?? "-"}</td>
                       <td className="py-1.5 pr-3">{p.peakVelocityMps ?? "-"}</td>
