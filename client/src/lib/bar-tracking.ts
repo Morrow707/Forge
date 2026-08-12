@@ -81,10 +81,11 @@ export type RepBreakdown = {
   velocityCurve?: { positionCm: number; velocityMps: number }[];
   // Vertical range of motion for this rep's concentric phase, in cm.
   romCm: number;
-  // Peak concentric power for this rep -- null whenever the caller didn't
-  // supply a load (summarizeTrackedSet's loadKg), same as the whole-set
-  // power fields below being null in that case.
+  // Peak and mean concentric power for this rep -- null whenever the
+  // caller didn't supply a load (summarizeTrackedSet's loadKg), same as
+  // the whole-set power fields below being null in that case.
   peakPowerWatts: number | null;
+  meanPowerWatts: number | null;
   // The eccentric (lowering) phase immediately before this rep's lift --
   // null for rep 1 when the set starts from a dead stop, since there's
   // nothing to lower first.
@@ -525,6 +526,8 @@ export function summarizeTrackedSet(
       romCm,
       peakPowerWatts:
         loadKg && loadKg > 0 ? Math.round(loadKg * GRAVITY_MPS2 * phase.peak) : null,
+      meanPowerWatts:
+        loadKg && loadKg > 0 ? Math.round(loadKg * GRAVITY_MPS2 * phase.mean) : null,
       eccentricSeconds: pairedEccentric ? Math.round(pairedEccentric.duration * 100) / 100 : null,
       eccentricVelocityMps: pairedEccentric ? Math.round(pairedEccentric.mean * 100) / 100 : null,
     });
@@ -715,6 +718,7 @@ export function fuseSideVelocity(
       peakVelocityMps,
       meanVelocityMps,
       peakPowerWatts: loadKg && loadKg > 0 ? Math.round(loadKg * GRAVITY_MPS2 * peakVelocityMps) : null,
+      meanPowerWatts: loadKg && loadKg > 0 ? Math.round(loadKg * GRAVITY_MPS2 * meanVelocityMps) : null,
     };
   });
 

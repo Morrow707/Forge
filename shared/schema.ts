@@ -3129,6 +3129,7 @@ export const repBreakdownEntrySchema = z.object({
   // just added alongside them rather than as a separate array.
   romCm: z.number().optional().nullable(),
   peakPowerWatts: z.number().optional().nullable(),
+  meanPowerWatts: z.number().optional().nullable(),
   // The eccentric (lowering) phase immediately preceding this rep's
   // concentric lift -- null for rep 1 when the set starts from a dead
   // stop (nothing to lower first).
