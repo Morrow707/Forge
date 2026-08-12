@@ -419,10 +419,23 @@ const BASE_MIN_REP_AMPLITUDE_CM = 20;
 // average-height athlete, so 20cm (~8in) comfortably clears real reps of
 // any of them while sitting well above ordinary rack noise; the height
 // scaling shifts that floor proportionally for anyone far from average.
+// The exercise's known starting posture, when the caller can say so safely
+// (see bar-tracker-dialog.tsx's inferFirstPhaseHint) -- "concentric" means
+// the very first phase of the trace is known to be the lift itself (a
+// conventional deadlift dead-stops on the floor each rep, a row's handle
+// starts at arm's length), "eccentric" means it's known to be a controlled
+// descent first (a squat/lunge starts standing or racked). Deliberately
+// only ever used as a TIE-BREAKER (see FIRST_PHASE_AMBIGUITY_THRESHOLD
+// below), never a hard override of what the trace's own speed actually
+// shows -- the caller's knowledge of the exercise is a helpful prior on an
+// otherwise-close call, not a substitute for what was actually measured.
+export type FirstPhaseHint = "concentric" | "eccentric" | null;
+
 export function summarizeTrackedSet(
   rawPoints: TrackedPoint[],
   loadKg?: number,
   heightIn?: number | null,
+  firstPhaseHint?: FirstPhaseHint,
 ): RepMetrics | null {
   if (rawPoints.length < 6) return null;
   const minRepAmplitudeCm = heightScaledAmplitudeCm(BASE_MIN_REP_AMPLITUDE_CM, heightIn);
@@ -453,9 +466,22 @@ export function summarizeTrackedSet(
   // average speed is concentric (the explosive half of a rep) and the
   // other is eccentric -- there's no way to know "up" vs "down" in image
   // space without knowing the exercise, but concentric-is-faster holds
-  // for the compound lifts this feature targets.
+  // for the compound lifts this feature targets. This is reliable enough on
+  // every phase that has two clearly-different-speed neighbors to compare;
+  // the one place it can genuinely misfire is the very first phase of the
+  // whole trace, which sometimes isn't a real rep at all yet (settling into
+  // position, a first partial movement) and can end up close in speed to
+  // the phase right after it -- exactly where firstPhaseHint, when the
+  // caller could safely infer one, gets a say.
+  const FIRST_PHASE_AMBIGUITY_THRESHOLD = 0.15;
   const isConcentric = phaseStats.map((phase, i) => {
     const neighbor = phaseStats[i + 1] ?? phaseStats[i - 1];
+    if (i === 0 && firstPhaseHint) {
+      if (!neighbor) return firstPhaseHint === "concentric";
+      const maxMean = Math.max(phase.mean, neighbor.mean);
+      const tooCloseToCall = maxMean > 0 && Math.abs(phase.mean - neighbor.mean) / maxMean < FIRST_PHASE_AMBIGUITY_THRESHOLD;
+      if (tooCloseToCall) return firstPhaseHint === "concentric";
+    }
     return !neighbor || phase.mean >= neighbor.mean;
   });
   const concentric = phaseStats.filter((_, i) => isConcentric[i]);
