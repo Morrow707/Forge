@@ -22,6 +22,7 @@ import {
   type RepMetrics,
   type VelocitySample,
 } from "@/lib/bar-tracking";
+import { lockCameraExposure } from "@/lib/camera-exposure";
 import { summarizeJumpSet, type JumpSetMetrics } from "@/lib/jump-tracking";
 import { ImplementTracker } from "@/lib/implement-tracking";
 import { getHandLandmarker, refineGripPoint } from "@/lib/hand-tracking";
@@ -540,12 +541,17 @@ export function BarTrackerDialog({
       // timestamps rather than assuming a fixed interval, so this log is
       // purely diagnostic (confirming what a given device actually granted
       // in the field), never something the math depends on.
-      const settings = stream.getVideoTracks()[0]?.getSettings();
+      const videoTrack = stream.getVideoTracks()[0];
+      const settings = videoTrack?.getSettings();
       if (settings) {
         console.debug(
           `[camera-tracker] negotiated ${settings.width}x${settings.height} @ ${settings.frameRate}fps`,
         );
       }
+      // Best-effort, Chrome/Android-only -- see lockCameraExposure's own
+      // comment. Never awaited: a fast rep can start tracking well before
+      // this settles, and there's nothing useful to block on here anyway.
+      if (videoTrack) void lockCameraExposure(videoTrack);
     };
     // Video-only, always -- jump mode used to also request the mic here for
     // an optional landing-audio confirmation signal, but on iOS that

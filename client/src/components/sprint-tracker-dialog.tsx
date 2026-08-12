@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { apiRequest, getJson } from "@/lib/queryClient";
 import { getPoseLandmarker, POSE_LANDMARKS, type PoseFrame } from "@/lib/pose-tracking";
+import { lockCameraExposure } from "@/lib/camera-exposure";
 import {
   deriveSprintReferencePoint,
   detectSprintCrossings,
@@ -185,6 +186,11 @@ export function SprintTrackerDialog({
       .then((stream) => {
         streamRef.current = stream;
         if (videoRef.current) videoRef.current.srcObject = stream;
+        // Best-effort, Chrome/Android-only -- see lockCameraExposure's own
+        // comment. A sprint is exactly the fast-motion case a longer
+        // auto-exposure shutter blurs hardest.
+        const videoTrack = stream.getVideoTracks()[0];
+        if (videoTrack) void lockCameraExposure(videoTrack);
       })
       .catch(() => setCameraError("Camera access denied or unavailable."));
     rafRef.current = requestAnimationFrame(tick);
