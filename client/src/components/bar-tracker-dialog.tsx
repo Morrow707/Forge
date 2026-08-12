@@ -280,6 +280,10 @@ export function BarTrackerDialog({
   const startTimeRef = useRef<number>(0);
   const lastRepDirRef = useRef<1 | -1 | 0>(0);
   const repCountRef = useRef(0);
+  // Throttles the live movement-mismatch check (see liveMismatchHint) --
+  // guessMovementPattern rescans the whole frame history each call, so this
+  // runs it every MISMATCH_CHECK_INTERVAL ticks rather than every frame.
+  const mismatchTickCounterRef = useRef(0);
   const poseLandmarkerRef = useRef<PoseLandmarker | null>(null);
   // Optional -- see hand-tracking.ts's own comment. Left null until (and
   // unless) it finishes loading; every read site treats that as "hand
@@ -394,6 +398,13 @@ export function BarTrackerDialog({
   const [poseVisible, setPoseVisible] = useState(true);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [alignmentHint, setAlignmentHint] = useState<string | null>(null);
+  // Live counterpart to the Stop-time patternMismatch check below -- once at
+  // least one rep has completed (so guessMovementPattern has an actual
+  // range-of-motion sample instead of a handful of noisy early frames), this
+  // flags an exercise/motion mismatch WHILE the athlete can still fix it
+  // (wrong exercise selected, camera picked up someone else's set) instead
+  // of only after the whole set is already logged.
+  const [liveMismatchHint, setLiveMismatchHint] = useState<string | null>(null);
   // Whether the implement tracker found confident motion this frame --
   // purely informational, so the athlete can see whether tracking is
   // reading the actual barbell/dumbbell/kettlebell/etc. or has fallen back
@@ -457,6 +468,8 @@ export function BarTrackerDialog({
     autoStartTimersRef.current = [];
     setCountdown(null);
     setAlignmentHint(null);
+    setLiveMismatchHint(null);
+    mismatchTickCounterRef.current = 0;
     videoChunksRef.current = [];
     recordedBlobRef.current = null;
     setSavePhase("idle");
@@ -767,6 +780,8 @@ export function BarTrackerDialog({
     lastVideoTimeRef.current = -1;
     repCountRef.current = 0;
     setRepCount(0);
+    mismatchTickCounterRef.current = 0;
+    setLiveMismatchHint(null);
     setLiveTiltDeg(null);
     liveTiltHistoryRef.current = [];
     tiltReadingsRef.current = [];
@@ -1220,6 +1235,32 @@ export function BarTrackerDialog({
             }
           }
         }
+
+        // Live counterpart to the Stop-time patternMismatch check further
+        // down -- same guessMovementPattern/expectedPatternFromName pair,
+        // just re-run periodically WHILE tracking instead of once at the
+        // end, so a wrong-exercise-selected or camera-picked-up-someone-
+        // else's-set mistake can be caught and fixed mid-set. Gated on at
+        // least one completed rep: guessMovementPattern accumulates min/max
+        // range-of-motion across the WHOLE frame history it's given (see
+        // its own frames.length < 6 guard), so calling it on a handful of
+        // early frames before any real range of motion exists would just
+        // produce noisy, misleading early guesses. Throttled to avoid
+        // rescanning the whole frame history every single tick.
+        if (mode !== "jump" && repCountRef.current >= 1) {
+          mismatchTickCounterRef.current += 1;
+          const MISMATCH_CHECK_INTERVAL = 45;
+          if (mismatchTickCounterRef.current % MISMATCH_CHECK_INTERVAL === 0) {
+            const liveGuess = guessMovementPattern(framesRef.current, movementType);
+            const expected = expectedPatternFromName(exerciseName);
+            const mismatch = liveGuess.pattern !== "unknown" && !!expected && liveGuess.pattern !== expected;
+            setLiveMismatchHint(
+              mismatch
+                ? `Motion looks more like a ${liveGuess.label} — double check you're tracking ${exerciseName}.`
+                : null,
+            );
+          }
+        }
       }
       drawTrail(ctx, pixelTraceRef.current);
     }
@@ -1432,6 +1473,13 @@ export function BarTrackerDialog({
                     )}
                   >
                     {implementDetected ? "Object detected" : "Estimating from hand position"}
+                  </span>
+                </div>
+              )}
+              {liveMismatchHint && (
+                <div className="flex justify-center">
+                  <span className="rounded-full bg-amber-500/80 px-2.5 py-1 text-[11px] font-semibold text-black">
+                    {liveMismatchHint}
                   </span>
                 </div>
               )}
