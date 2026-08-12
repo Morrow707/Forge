@@ -385,12 +385,6 @@ export function BarTrackerDialog({
   // computeArmDriveAsymmetry needs to compare left against right.
   const leftVelocitySamplesRef = useRef<VelocitySample[]>([]);
   const rightVelocitySamplesRef = useRef<VelocitySample[]>([]);
-  // The primary trace's own per-frame position-fusion confidence (the same
-  // wristConfidence+barConfidence mix that decides x/y every tick, just kept
-  // around here too) -- feeds computeRepTrustScores at Stop so each rep's
-  // trust score is built from what the fusion itself actually trusted, not
-  // a fresh guess.
-  const primaryConfidenceSamplesRef = useRef<{ t: number; confidence: number }[]>([]);
   // Timestamps of every tracker-vs-wrist disagreement rejection this set --
   // combined tracker and both per-side trackers all push here (see each
   // rejectLock() call site) -- feeds computeRepTrustScores the same way.
@@ -471,7 +465,6 @@ export function BarTrackerDialog({
     sideVelocitySamplesRef.current = [];
     leftVelocitySamplesRef.current = [];
     rightVelocitySamplesRef.current = [];
-    primaryConfidenceSamplesRef.current = [];
     rejectionEventsRef.current = [];
     lastAlignmentReasonRef.current = null;
     setImplementDetected(false);
@@ -814,7 +807,6 @@ export function BarTrackerDialog({
     sideVelocitySamplesRef.current = [];
     leftVelocitySamplesRef.current = [];
     rightVelocitySamplesRef.current = [];
-    primaryConfidenceSamplesRef.current = [];
     rejectionEventsRef.current = [];
     setImplementDetected(false);
     implementTrackerRef.current.reset();
@@ -1024,11 +1016,6 @@ export function BarTrackerDialog({
         const wristConfidence = gripConfirmed ? Math.min(1, rawWristConfidence * 1.25) : rawWristConfidence;
         const barConfidence = barTrack ? barTrack.confidence : 0;
         const totalConfidence = wristConfidence + barConfidence;
-        // wristConfidence can reach 1.25 (the Hand Landmarker corroboration
-        // bump above) and barConfidence up to 1, so this normalizes back to
-        // the same 0-1 scale every other confidence value in this file uses
-        // -- see primaryConfidenceSamplesRef's own comment.
-        primaryConfidenceSamplesRef.current.push({ t, confidence: Math.min(1, totalConfidence / 2) });
         const x =
           totalConfidence > 0
             ? (wristConfidence * worldPoint.x + barConfidence * (barTrack ? barTrack.worldX : 0)) /
@@ -1040,7 +1027,14 @@ export function BarTrackerDialog({
               totalConfidence
             : worldPoint.y;
         const y = verticalSignRef.current * rawY;
-        const point = { t, x, y, z: worldPoint.z };
+        // wristConfidence can reach 1.25 (the Hand Landmarker corroboration
+        // bump above) and barConfidence up to 1, so this normalizes back to
+        // the same 0-1 scale every other confidence value in this file uses
+        // -- lets summarizeTrackedSet's own smoothing (see TrackedPoint's
+        // confidence field) and computeRepTrustScores (derived from this
+        // trace at Stop) both weight by how much this specific frame was
+        // actually trusted, instead of treating every frame equally.
+        const point = { t, x, y, z: worldPoint.z, confidence: Math.min(1, totalConfidence / 2) };
         // A brief camera dropout right before this point (an arm crossing
         // the bar, a chalk cloud) shouldn't read as one giant instantaneous
         // jump once it resolves -- see interpolateOcclusionGap's own
@@ -1413,7 +1407,16 @@ export function BarTrackerDialog({
       guess.pattern !== "unknown" && !!guessExpectedPattern && guess.pattern !== guessExpectedPattern;
     metrics.trustScores = computeRepTrustScores(
       metrics.repBreakdown.map((r) => ({ repNumber: r.repNumber, startT: r.startT, endT: r.endT })),
-      primaryConfidenceSamplesRef.current,
+      // Reads confidence straight off the primary trace's own points (see
+      // TrackedPoint's confidence field) rather than a separately-tracked
+      // ref -- it's the exact same per-frame value the position fusion and
+      // now the trace's own smoothing (summarizeTrackedSet's ySmoothed)
+      // already used, just filtered here to the reps that need it. An
+      // interpolated occlusion-gap filler point (see interpolateOcclusionGap)
+      // has no confidence of its own, so it reads as neutral rather than
+      // untrustworthy, same fallback movingAverage/computeRepTrustScores use
+      // elsewhere.
+      traceRef.current.map((p) => ({ t: p.t, confidence: p.confidence ?? 0.6 })),
       rejectionEventsRef.current,
       guessMismatch,
       lastAlignmentReasonRef.current,

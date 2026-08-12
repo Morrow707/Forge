@@ -6,7 +6,13 @@
 // origin), not pixels -- no pixelsPerMeter calibration needed to interpret
 // them. y follows pose-tracking.ts's worldVerticalSign convention (smaller y
 // = higher), applied by the caller before points ever reach this module.
-export type TrackedPoint = { t: number; x: number; y: number; z: number };
+// confidence (0-1) is optional -- only the primary trace's caller currently
+// sets it (the same wristConfidence+barConfidence fusion weight that already
+// decided this point's x/y), so movingAverage can weight the smoothing pass
+// by it; a point with no confidence set (an interpolated occlusion-gap
+// filler, a trace built before this field existed) is treated as neutral
+// rather than untrustworthy -- see movingAverage's own comment.
+export type TrackedPoint = { t: number; x: number; y: number; z: number; confidence?: number };
 
 // One entry per rep that had enough clean per-side pose data to trust a
 // left/right comparison -- see pose-tracking.ts's computeLegDriveAsymmetry.
@@ -230,13 +236,36 @@ export function framesForDuration(points: { t: number }[], durationMs: number): 
 // phase-segmentation pipeline on an ankle trace instead of a wrist/bar
 // trace -- the zigzag logic below has no idea what it's tracking, so
 // there's no reason to duplicate it for a second signal source.
-export function movingAverage(values: number[], window: number): number[] {
+//
+// weights, when given, must be the same length as values -- one confidence
+// (0-1) per sample -- and turns the plain average within each window into a
+// confidence-weighted one: a frame the position fusion barely trusted (a
+// misdetected wrist, a rejected tracker lock) contributes less to the
+// smoothed value than a frame it trusted fully, rather than every frame in
+// the window counting equally regardless of how good a reading it actually
+// was. Omitting weights (every other caller -- jump-tracking.ts's ankle
+// trace has no per-frame confidence to weight by) keeps the exact plain
+// average this function always computed.
+export function movingAverage(values: number[], window: number, weights?: number[]): number[] {
   const out: number[] = [];
   for (let i = 0; i < values.length; i++) {
     const start = Math.max(0, i - Math.floor(window / 2));
     const end = Math.min(values.length, i + Math.ceil(window / 2));
-    const slice = values.slice(start, end);
-    out.push(slice.reduce((a, b) => a + b, 0) / slice.length);
+    if (!weights) {
+      const slice = values.slice(start, end);
+      out.push(slice.reduce((a, b) => a + b, 0) / slice.length);
+      continue;
+    }
+    let weightedSum = 0;
+    let weightTotal = 0;
+    for (let j = start; j < end; j++) {
+      weightedSum += values[j] * weights[j];
+      weightTotal += weights[j];
+    }
+    // Every weight in the window happened to be 0 (every sample fully
+    // distrusted) -- fall back to this frame's own raw value rather than
+    // dividing by zero or silently reporting 0.
+    out.push(weightTotal > 0 ? weightedSum / weightTotal : values[i]);
   }
   return out;
 }
@@ -398,7 +427,11 @@ export function summarizeTrackedSet(
   if (rawPoints.length < 6) return null;
   const minRepAmplitudeCm = heightScaledAmplitudeCm(BASE_MIN_REP_AMPLITUDE_CM, heightIn);
 
-  const ySmoothed = movingAverage(rawPoints.map((p) => p.y), framesForDuration(rawPoints, TARGET_SMOOTHING_MS));
+  const ySmoothed = movingAverage(
+    rawPoints.map((p) => p.y),
+    framesForDuration(rawPoints, TARGET_SMOOTHING_MS),
+    rawPoints.map((p) => p.confidence ?? 1),
+  );
   const speedsMps = computeSpeeds(rawPoints, ySmoothed);
 
   const minAmplitudeM = minRepAmplitudeCm / 100;
@@ -628,12 +661,16 @@ export function fuseSideVelocity(
   if (sideSamples.length < 6 || metrics.repBreakdown.length === 0) return metrics;
 
   const sidePoints: TrackedPoint[] = sideSamples.map((s) => ({ t: s.t, x: 0, y: s.y, z: 0 }));
+  const sideConfidences = sideSamples.map((s) => s.confidence);
+  // Confidence-weighted the same way summarizeTrackedSet's own ySmoothed is
+  // -- this source's smoothing shouldn't lean on a frame it barely trusted
+  // any more than the primary trace's does.
   const sideSmoothed = movingAverage(
     sidePoints.map((p) => p.y),
     framesForDuration(sidePoints, TARGET_SMOOTHING_MS),
+    sideConfidences,
   );
   const sideSpeeds = computeSpeeds(sidePoints, sideSmoothed);
-  const sideConfidences = sideSamples.map((s) => s.confidence);
 
   const fusedRepBreakdown = metrics.repBreakdown.map((rep) => {
     const window = velocityForWindow(sideSpeeds, sidePoints, sideConfidences, rep.startT, rep.endT);
@@ -700,18 +737,22 @@ export function computeArmDriveAsymmetry(
 
   const leftPoints: TrackedPoint[] = leftSamples.map((s) => ({ t: s.t, x: 0, y: s.y, z: 0 }));
   const rightPoints: TrackedPoint[] = rightSamples.map((s) => ({ t: s.t, x: 0, y: s.y, z: 0 }));
+  const leftConfidences = leftSamples.map((s) => s.confidence);
+  const rightConfidences = rightSamples.map((s) => s.confidence);
+  // Same confidence-weighted smoothing as fuseSideVelocity's sideSmoothed --
+  // see its own comment.
   const leftSmoothed = movingAverage(
     leftPoints.map((p) => p.y),
     framesForDuration(leftPoints, TARGET_SMOOTHING_MS),
+    leftConfidences,
   );
   const rightSmoothed = movingAverage(
     rightPoints.map((p) => p.y),
     framesForDuration(rightPoints, TARGET_SMOOTHING_MS),
+    rightConfidences,
   );
   const leftSpeeds = computeSpeeds(leftPoints, leftSmoothed);
   const rightSpeeds = computeSpeeds(rightPoints, rightSmoothed);
-  const leftConfidences = leftSamples.map((s) => s.confidence);
-  const rightConfidences = rightSamples.map((s) => s.confidence);
 
   // Below this, a side's own data for the window is too sparse or too
   // unconfident to trust as "this arm's real speed" rather than mostly the
