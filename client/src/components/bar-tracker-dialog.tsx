@@ -23,6 +23,12 @@ import {
   type VelocitySample,
 } from "@/lib/bar-tracking";
 import { lockCameraExposure } from "@/lib/camera-exposure";
+import {
+  recordConfirmedAppearance,
+  getRememberedAppearance,
+  appearanceSimilarity,
+  type ColorSignature,
+} from "@/lib/implement-appearance-memory";
 import { summarizeJumpSet, type JumpSetMetrics } from "@/lib/jump-tracking";
 import { ImplementTracker } from "@/lib/implement-tracking";
 import { getHandLandmarker, refineGripPoint } from "@/lib/hand-tracking";
@@ -395,6 +401,18 @@ export function BarTrackerDialog({
   // phone's physical position doesn't change mid-set, and used as a
   // whole-set input to computeRepTrustScores at Stop.
   const lastAlignmentReasonRef = useRef<CameraAlignment["reason"] | null>(null);
+  // This exercise's remembered implement color, if any -- looked up once
+  // when tracking starts (see startTracking) and held fixed for the whole
+  // set, same "doesn't change mid-set" reasoning as lastAlignmentReasonRef
+  // above. Null means no memory yet (first time tracking this exercise, or
+  // localStorage unavailable), in which case appearance plays no role this
+  // set -- see implement-appearance-memory.ts's own comment.
+  const rememberedAppearanceRef = useRef<ColorSignature | null>(null);
+  // Colors sampled from the combined tracker's lock whenever it's fully
+  // confident this set (see LOCK_RAMP_FRAMES) -- averaged and saved back
+  // into the appearance memory at Stop, so a single bad frame can't skew
+  // what gets remembered the way recording every frame individually would.
+  const confirmedColorSamplesRef = useRef<ColorSignature[]>([]);
 
   const [step, setStepState] = useState<Step>("setup");
   function changeStep(next: Step) {
@@ -468,6 +486,8 @@ export function BarTrackerDialog({
     rightVelocitySamplesRef.current = [];
     rejectionEventsRef.current = [];
     lastAlignmentReasonRef.current = null;
+    rememberedAppearanceRef.current = null;
+    confirmedColorSamplesRef.current = [];
     setImplementDetected(false);
     verticalSignRef.current = 1;
     displaySmootherRef.current.reset();
@@ -814,6 +834,10 @@ export function BarTrackerDialog({
     leftVelocitySamplesRef.current = [];
     rightVelocitySamplesRef.current = [];
     rejectionEventsRef.current = [];
+    confirmedColorSamplesRef.current = [];
+    // Looked up once here (not read fresh every frame) since it can't
+    // change mid-set -- see rememberedAppearanceRef's own comment.
+    rememberedAppearanceRef.current = getRememberedAppearance(exerciseName);
     setImplementDetected(false);
     implementTrackerRef.current.reset();
     leftImplementTrackerRef.current.reset();
@@ -1003,6 +1027,14 @@ export function BarTrackerDialog({
           barTrack = null;
         }
         setImplementDetected(!!barTrack);
+        // Confirmed-good implement color, sampled only from a fully-ramped
+        // lock (LOCK_RAMP_FRAMES worth of continuous, unbroken,
+        // plausibility-checked tracking) -- see confirmedColorSamplesRef's
+        // own comment for why these accumulate here and get averaged into
+        // one update at Stop rather than recording every single frame.
+        if (barTrack && barTrack.confidence >= 1 && barTrack.color) {
+          confirmedColorSamplesRef.current.push(barTrack.color);
+        }
         // Fuse the wrist-derived position with the implement tracker's own
         // independently-held lock (see implement-tracking.ts's header
         // comment), weighted by how much to trust each one THIS frame --
@@ -1020,7 +1052,25 @@ export function BarTrackerDialog({
         // estimate specifically.
         const rawWristConfidence = normalizedWrist ? barPointConfidence(worldLandmarks, usesSharedBar) : 0;
         const wristConfidence = gripConfirmed ? Math.min(1, rawWristConfidence * 1.25) : rawWristConfidence;
-        const barConfidence = barTrack ? barTrack.confidence : 0;
+        // A remembered appearance for this exercise (see
+        // implement-appearance-memory.ts, looked up once in startTracking)
+        // nudges this frame's bar confidence up or down a little based on
+        // how closely this frame's sampled color matches it -- a small
+        // multiplicative adjustment, same spirit as gripConfirmed's nudge to
+        // wristConfidence above. Deliberately modest (+-15% at most): color
+        // alone is weak corroboration on its own, so a mismatch should never
+        // undo most of the tracker's own motion-based confidence, and a
+        // match should never manufacture confidence the motion search
+        // didn't actually earn.
+        const appearanceMatch =
+          barTrack?.color && rememberedAppearanceRef.current
+            ? appearanceSimilarity(barTrack.color, rememberedAppearanceRef.current)
+            : null;
+        const barConfidence = barTrack
+          ? appearanceMatch != null
+            ? barTrack.confidence * (0.85 + 0.15 * appearanceMatch)
+            : barTrack.confidence
+          : 0;
         const totalConfidence = wristConfidence + barConfidence;
         const x =
           totalConfidence > 0
@@ -1400,6 +1450,21 @@ export function BarTrackerDialog({
             right: buildPathTrace(rightTraceRef.current, origin),
           }
         : null;
+
+    // One update to the appearance memory per set, averaged across every
+    // fully-confident frame instead of per-frame writes -- see
+    // confirmedColorSamplesRef's own comment. Requires a real handful of
+    // samples, not just one or two lucky frames, before trusting this set's
+    // color enough to fold into what gets remembered for next time.
+    if (confirmedColorSamplesRef.current.length >= 10) {
+      const samples = confirmedColorSamplesRef.current;
+      const avgColor = {
+        r: samples.reduce((sum, c) => sum + c.r, 0) / samples.length,
+        g: samples.reduce((sum, c) => sum + c.g, 0) / samples.length,
+        b: samples.reduce((sum, c) => sum + c.b, 0) / samples.length,
+      };
+      recordConfirmedAppearance(exerciseName, avgColor);
+    }
 
     const guess = guessMovementPattern(framesRef.current, movementType);
     setMovementGuess(guess);
