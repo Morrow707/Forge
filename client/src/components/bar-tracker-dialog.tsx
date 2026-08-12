@@ -33,6 +33,7 @@ import {
   deriveNormalizedWristPoint,
   deriveJumpPoint,
   deriveWristPoints,
+  barPointConfidence,
   detectFormFaults,
   computeBarTiltDegrees,
   computeRepDepths,
@@ -816,9 +817,9 @@ export function BarTrackerDialog({
         // wrist joint and whatever's actually in the athlete's hand aren't
         // at the same point -- grip thickness, wrist flexion, and (for a
         // kettlebell or med ball) just not being rigidly attached to the
-        // hand all shift the two apart. When the implement tracker finds
-        // confident motion nearby, use that instead; jump mode has nothing
-        // held, so it's skipped there.
+        // hand all shift the two apart. Jump mode has nothing held, so all
+        // of this (and the implement tracker below) is skipped there --
+        // worldPoint (the ankle midpoint) is used as-is.
         let normalizedWrist = mode === "jump" ? null : deriveNormalizedWristPoint(landmarks, usesSharedBar);
         // When Hand Landmarker is loaded and confidently finds a hand near
         // Pose's coarser wrist point, use its much higher-resolution palm
@@ -830,12 +831,41 @@ export function BarTrackerDialog({
           const refined = refineGripPoint(handsResult.landmarks, normalizedWrist.x, normalizedWrist.y);
           if (refined) normalizedWrist = refined;
         }
-        const implementOffset =
+        const barTrack =
           normalizedWrist &&
-          implementTrackerRef.current.track(video, normalizedWrist.x, normalizedWrist.y, landmarks, worldLandmarks);
-        setImplementDetected(!!implementOffset);
-        const x = worldPoint.x + (implementOffset ? implementOffset.x : 0);
-        const y = verticalSignRef.current * worldPoint.y + (implementOffset ? implementOffset.y : 0);
+          implementTrackerRef.current.track(
+            video,
+            normalizedWrist.x,
+            normalizedWrist.y,
+            landmarks,
+            worldLandmarks,
+            worldPoint.x,
+            worldPoint.y,
+          );
+        setImplementDetected(!!barTrack);
+        // Fuse the wrist-derived position with the implement tracker's own
+        // independently-held lock (see implement-tracking.ts's header
+        // comment), weighted by how much to trust each one THIS frame --
+        // not an either/or switch, so a marginal lock still nudges the
+        // result a little rather than being all-or-nothing, and a
+        // barely-visible wrist still keeps some floor of influence even
+        // once the implement tracker is fully confident. Depth (z) has no
+        // 2D-motion equivalent for the tracker to contribute, so it's
+        // wrist-only regardless.
+        const wristConfidence = normalizedWrist ? barPointConfidence(worldLandmarks, usesSharedBar) : 0;
+        const barConfidence = barTrack ? barTrack.confidence : 0;
+        const totalConfidence = wristConfidence + barConfidence;
+        const x =
+          totalConfidence > 0
+            ? (wristConfidence * worldPoint.x + barConfidence * (barTrack ? barTrack.worldX : 0)) /
+              totalConfidence
+            : worldPoint.x;
+        const rawY =
+          totalConfidence > 0
+            ? (wristConfidence * worldPoint.y + barConfidence * (barTrack ? barTrack.worldY : 0)) /
+              totalConfidence
+            : worldPoint.y;
+        const y = verticalSignRef.current * rawY;
         const point = { t, x, y, z: worldPoint.z };
         // A brief camera dropout right before this point (an arm crossing
         // the bar, a chalk cloud) shouldn't read as one giant instantaneous
