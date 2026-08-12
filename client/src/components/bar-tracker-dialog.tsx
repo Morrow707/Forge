@@ -108,6 +108,28 @@ function expectedPatternFromName(name: string): MovementPattern | null {
   return null;
 }
 
+// A wrist reappearing after even a brief occlusion is exactly when a pose
+// model is likeliest to misplace it for a frame or two -- and because bar
+// tilt is an angle (atan(dy/dx)), even a modest position error on a single
+// frame can read as a wild swing: as the two wrists' horizontal separation
+// happens to read small that frame, the same formula that correctly reports
+// a real near-vertical bar also reports a barely-off one as if it were
+// dramatically tilted. The saved, end-of-set bar_tilt fault is already
+// protected from this (see detectFormFaults's percentile trim across the
+// whole set), but the LIVE on-screen readout updates straight off a single
+// frame with nothing to catch a one-frame spike before it's already on
+// screen. Median of the last few real readings instead of the newest one
+// alone -- a single bad frame needs company before it can move the display,
+// the same "no fake-confident number beats one bad frame" reasoning as the
+// saved fault, just scoped down to a live-sized window instead of a whole
+// set.
+const LIVE_TILT_HISTORY_SIZE = 5;
+function medianOf(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+}
+
 function drawSkeleton(
   ctx: CanvasRenderingContext2D,
   landmarks: NormalizedLandmark[],
@@ -305,6 +327,11 @@ export function BarTrackerDialog({
   // implement-tracking.ts's own comment for why this replaces the old
   // wide-grip-only static edge detector.
   const implementTrackerRef = useRef(new ImplementTracker());
+  // Rolling buffer of the last few LIVE tilt readings (raw single-frame
+  // computeBarTiltDegrees output, only pushed when a frame actually
+  // produced one) -- see liveTiltDeg's own comment below for why this
+  // exists.
+  const liveTiltHistoryRef = useRef<number[]>([]);
 
   const [step, setStepState] = useState<Step>("setup");
   function changeStep(next: Step) {
@@ -363,6 +390,7 @@ export function BarTrackerDialog({
     framesRef.current = [];
     lastVideoTimeRef.current = -1;
     setLiveTiltDeg(null);
+    liveTiltHistoryRef.current = [];
     setImplementDetected(false);
     verticalSignRef.current = 1;
     displaySmootherRef.current.reset();
@@ -686,6 +714,7 @@ export function BarTrackerDialog({
     repCountRef.current = 0;
     setRepCount(0);
     setLiveTiltDeg(null);
+    liveTiltHistoryRef.current = [];
     setImplementDetected(false);
     implementTrackerRef.current.reset();
 
@@ -760,11 +789,19 @@ export function BarTrackerDialog({
     // that ref is updated below whenever a fresh frame can confirm it, and
     // holds steady otherwise, so this stays correct even the instant before
     // the very first confident reading lands.
-    setLiveTiltDeg(
+    const rawTilt =
       displayWorldLandmarks && mode !== "jump" && usesSharedBar
         ? computeBarTiltDegrees(displayWorldLandmarks, verticalSignRef.current)
-        : null,
-    );
+        : null;
+    // See LIVE_TILT_HISTORY_SIZE's own comment -- only real readings go in
+    // the buffer (an occluded frame contributes nothing, rather than
+    // diluting the window with a zero/null), and the displayed number is
+    // the buffer's median, not just whatever this one frame produced.
+    if (rawTilt != null) {
+      liveTiltHistoryRef.current.push(rawTilt);
+      if (liveTiltHistoryRef.current.length > LIVE_TILT_HISTORY_SIZE) liveTiltHistoryRef.current.shift();
+    }
+    setLiveTiltDeg(liveTiltHistoryRef.current.length > 0 ? medianOf(liveTiltHistoryRef.current) : null);
     if (!landmarks || !worldLandmarks) setImplementDetected(false);
 
     if (landmarks && worldLandmarks && displayLandmarks && displayWorldLandmarks) {
