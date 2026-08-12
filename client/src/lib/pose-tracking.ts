@@ -221,6 +221,34 @@ export function deriveNormalizedWristPoint(
   };
 }
 
+// Same normalized image-space concept as deriveNormalizedWristPoint above,
+// but each wrist kept separate rather than averaged into one midpoint --
+// world-space deriveWristPoints' own sibling. Seeds a per-side implement
+// tracker (bar-tracker-dialog.tsx runs one for the left grip and one for
+// the right) so each side's motion search starts from ITS OWN wrist
+// instead of the combined midpoint, which for a wide grip could be
+// nowhere near either individual hand.
+export function deriveNormalizedWristPoints(
+  landmarks: NormalizedLandmark[],
+): { left: { x: number; y: number } | null; right: { x: number; y: number } | null } {
+  const left = landmarks[POSE_LANDMARKS.LEFT_WRIST];
+  const right = landmarks[POSE_LANDMARKS.RIGHT_WRIST];
+  return {
+    left: visible(left) ? { x: left.x, y: left.y } : null,
+    right: visible(right) ? { x: right.x, y: right.y } : null,
+  };
+}
+
+// Single-side confidence companion to deriveWristPoints -- how much to
+// trust JUST the left or right wrist's own position (the pose model's
+// visibility score for that one landmark), for fusing it against that
+// side's own implement tracker rather than the combined bar-point
+// confidence barPointConfidence above already covers.
+export function wristConfidence(worldLandmarks: Landmark[], side: "left" | "right"): number {
+  const lm = worldLandmarks[side === "left" ? POSE_LANDMARKS.LEFT_WRIST : POSE_LANDMARKS.RIGHT_WRIST];
+  return visible(lm) ? lm.visibility : 0;
+}
+
 // World landmarks' vertical axis isn't documented as matching (or opposing)
 // normalized image-space landmarks' "y grows downward" convention, and there
 // is no way to confirm it empirically without a live camera + real body in
@@ -286,6 +314,23 @@ export function computeBarTiltDegrees(worldLandmarks: Landmark[], verticalSign: 
   const left = worldLandmarks[POSE_LANDMARKS.LEFT_WRIST];
   const right = worldLandmarks[POSE_LANDMARKS.RIGHT_WRIST];
   if (!visible(left) || !visible(right)) return null;
+  return tiltDegreesFromPoints(left, right, verticalSign);
+}
+
+// Same core math as computeBarTiltDegrees above, split out to take two
+// explicit world-space points instead of a full landmarks array -- lets a
+// caller feed in something OTHER than the raw pose wrist landmarks (e.g.
+// bar-tracker-dialog.tsx's own left/right implement-tracker fusion, which
+// produces a point per side that's already been corroborated against a
+// second, independent signal) without duplicating the angle formula.
+// Doesn't itself gate on visibility (a plain WorldPoint has none to check)
+// -- callers that DO have visibility to check (like computeBarTiltDegrees
+// above) do so before calling in.
+export function tiltDegreesFromPoints(
+  left: { x: number; y: number },
+  right: { x: number; y: number },
+  verticalSign: 1 | -1,
+): number | null {
   const dx = right.x - left.x;
   const dy = right.y - left.y;
   if (Math.abs(dx) < MIN_BAR_GRIP_SEPARATION_M) return null;
