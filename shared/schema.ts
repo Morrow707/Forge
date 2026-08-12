@@ -2842,8 +2842,12 @@ export const insertExerciseSchema = createInsertSchema(exercises)
     laterality: z.enum(["bilateral", "unilateral"]).optional().nullable(),
     bodyRegion: z.string().optional().nullable(),
     plane: z.string().optional().nullable(),
-    secondaryMuscles: z.array(z.string().trim().min(1)).max(8).optional().nullable(),
-    sports: z.array(z.string().trim().min(1)).max(8).optional().nullable(),
+    secondaryMuscles: z
+      .array(z.string().trim().min(1))
+      .max(8, "You can select up to 8 secondary muscles")
+      .optional()
+      .nullable(),
+    sports: z.array(z.string().trim().min(1)).max(8, "You can select up to 8 sports").optional().nullable(),
     isCorrective: z.boolean().default(false),
     usesWeight: z.boolean().default(true),
     usesBodyweight: z.boolean().default(false),
@@ -2860,7 +2864,7 @@ export const insertSkillExerciseSchema = createInsertSchema(skillExercises)
     instructions: true,
   })
   .extend({
-    sports: z.array(z.string().trim().min(1)).max(8).optional().nullable(),
+    sports: z.array(z.string().trim().min(1)).max(8, "You can select up to 8 sports").optional().nullable(),
   });
 
 // ---------- Skill Programs (fully separate from Programs) ----------

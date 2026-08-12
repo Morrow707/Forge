@@ -273,8 +273,14 @@ export function SkillDetailPage({ apiBase, routeBase }: { apiBase: string; route
                     onToggle={(v) =>
                       setForm((f) => {
                         const next = new Set(f.sports);
-                        if (next.has(v)) next.delete(v);
-                        else next.add(v);
+                        if (next.has(v)) {
+                          next.delete(v);
+                        } else if (next.size >= 8) {
+                          toast.error("You can select up to 8 sports");
+                          return f;
+                        } else {
+                          next.add(v);
+                        }
                         return { ...f, sports: next };
                       })
                     }
