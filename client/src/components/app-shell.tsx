@@ -28,6 +28,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ForgeMark } from "@/components/forge-mark";
 import { EditMyProfileDialog } from "@/components/edit-my-profile-dialog";
 import { NotificationBell } from "@/components/notification-bell";
 import { NotificationSettingsDialog } from "@/components/notification-settings-dialog";
@@ -183,7 +184,7 @@ export function AppShell({
         <div className="flex items-center justify-between gap-3 px-4 py-3 md:px-8">
           <div className="flex items-center gap-2">
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
-              <Flame className="h-4.5 w-4.5" />
+              <ForgeMark className="h-4.5 w-4.5" />
             </div>
             <span className="font-display text-xl font-extrabold uppercase tracking-wider">
               Forge

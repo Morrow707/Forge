@@ -11,14 +11,13 @@ import { recordedVideoType } from "./video-recording";
 
 // Inlined rather than imported as a component -- this needs to become a
 // canvas-drawable Image, not JSX, and duplicating this small a path string
-// is simpler and more robust than parsing lucide-react's Flame icon output
-// at runtime. Reproduces the brand mark exactly: a rounded #F65B23 (the
-// app's --primary) square with lucide-react's own Flame glyph -- see its
-// stroke path in node_modules/lucide-react/dist/esm/icons/flame.js -- in
-// white (--primary-foreground), same as the badge everywhere else in the
-// app (login/signup/app-shell headers). Keep this in sync if that badge
-// ever changes.
-const FORGE_MARK_SVG = `<svg viewBox="0 0 56 56" xmlns="http://www.w3.org/2000/svg"><rect width="56" height="56" rx="12" fill="#F65B23"/><g transform="translate(12,12) scale(1.3333)" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></g></svg>`;
+// is simpler and more robust than parsing forge-mark.tsx's output at
+// runtime. Reproduces the brand mark exactly: a rounded #F65B23 (the app's
+// --primary) square with the same flame+anvil glyph as ForgeMark
+// (client/src/components/forge-mark.tsx) in white (--primary-foreground),
+// same as the badge everywhere else in the app (login/signup/app-shell
+// headers). Keep this in sync if that component ever changes.
+const FORGE_MARK_SVG = `<svg viewBox="0 0 56 56" xmlns="http://www.w3.org/2000/svg"><rect width="56" height="56" rx="12" fill="#F65B23"/><g transform="translate(18,6) scale(0.8333)" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></g><g transform="translate(18,30) scale(0.8333)" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10H6a4 4 0 0 1-4-4 1 1 0 0 1 1-1h4"/><path d="M7 5a1 1 0 0 1 1-1h13a1 1 0 0 1 1 1 7 7 0 0 1-7 7H8a1 1 0 0 1-1-1z"/><path d="M9 12v5"/><path d="M15 12v5"/><path d="M5 20a3 3 0 0 1 3-3h8a3 3 0 0 1 3 3 1 1 0 0 1-1 1H6a1 1 0 0 1-1-1"/></g></svg>`;
 
 let markImagePromise: Promise<HTMLImageElement> | null = null;
 function loadMarkImage(): Promise<HTMLImageElement> {
