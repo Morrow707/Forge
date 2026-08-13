@@ -285,6 +285,19 @@ async function assertCoachOwnsClass(coachId: number, classId: number) {
   return cls;
 }
 
+// The admin-authoring counterpart to assertCoachOwnsClass above -- deliberately
+// NOT scoped to "this specific admin's own effective coach ids" the way that
+// one is, because "only the admin profiles are allowed to add/edit" means any
+// admin account, not just whichever admin happened to create the row. A
+// coach's own (non-Forge) class still can't be reached through the admin
+// routes at all, since every admin route only ever creates/targets
+// isForgeOfficial classes in the first place.
+async function assertAdminOwnsForgeClass(classId: number) {
+  const cls = await storage.getClassFull(classId);
+  if (!cls || !cls.isForgeOfficial) return null;
+  return cls;
+}
+
 // Shared gate for the athlete-facing lesson-reader routes -- only "ready"
 // (reachable, paid for, quiz not yet passed/activated) or "active" (already
 // on the calendar) lessons are actually readable; a "locked" or
@@ -1004,11 +1017,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.get("/api/admin/classes/:id", requireRole("admin"), async (req, res) => {
-    const user = currentUser(req);
     const id = Number(req.params.id);
-    const owned = await assertCoachOwnsClass(user.id, id);
-    if (!owned) return res.status(404).json({ message: "Class not found" });
-    res.json({ ...owned, isForgeOfficial: true, ownerLabel: "FORGE", editable: true });
+    const cls = await assertAdminOwnsForgeClass(id);
+    if (!cls) return res.status(404).json({ message: "Class not found" });
+    res.json({ ...cls, isForgeOfficial: true, ownerLabel: "FORGE", editable: true });
   });
 
   app.post("/api/admin/classes", requireRole("admin"), async (req, res) => {
@@ -1022,9 +1034,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.put("/api/admin/classes/:id", requireRole("admin"), async (req, res) => {
-    const user = currentUser(req);
     const id = Number(req.params.id);
-    const owned = await assertCoachOwnsClass(user.id, id);
+    const owned = await assertAdminOwnsForgeClass(id);
     if (!owned) return res.status(404).json({ message: "Class not found" });
     const parsed = classStructureSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -1036,9 +1047,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.delete("/api/admin/classes/:id", requireRole("admin"), async (req, res) => {
-    const user = currentUser(req);
     const id = Number(req.params.id);
-    const owned = await assertCoachOwnsClass(user.id, id);
+    const owned = await assertAdminOwnsForgeClass(id);
     if (!owned) return res.status(404).json({ message: "Class not found" });
     await storage.deleteClass(id);
     res.status(204).end();

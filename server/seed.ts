@@ -2,8 +2,9 @@ import "dotenv/config";
 import { db } from "./db";
 import { storage } from "./storage";
 import { hashPassword } from "./auth-utils";
-import { users, programs, exercises } from "@shared/schema";
+import { users, programs, exercises, classes, classStructureSchema } from "@shared/schema";
 import { eq, isNull, and } from "drizzle-orm";
+import { AMERICAN_HITTING_CHAPTERS } from "./seed-data/american-hitting-content";
 
 // We don't have live web access from this environment to verify specific
 // YouTube video IDs are real and still online, so hand-picking exact links
@@ -3483,6 +3484,115 @@ async function main() {
         sports: ["Baseball", "Softball"],
         videoUrl: skillVideoSearchUrl(drill.name),
       });
+    }
+  }
+
+  // The platform's first paid, drip-content Class: "American Hitting -
+  // Athletic Hitting Development Program", 8 chapters of original
+  // instructional content (server/seed-data/american-hitting-content.ts)
+  // over the Hitting skill drills seeded just above. isForgeOfficial
+  // (owned by the admin, same as the Skill Bank/Coaches Corner above) --
+  // available to every coach to assign, and the only kind of Class a Free
+  // Agent (no coach) can ever see or enroll in. Chapter 1 is free; Chapter
+  // 2 is the payment wall; Chapters 3-8 ride free once past it, since
+  // paymentRequired is checked per-lesson (see recomputeClassProgress).
+  // Every lesson keeps the "immediate" default unlock rule -- reachability
+  // for lesson N+1 already requires lesson N's skillAssignmentId to exist,
+  // which for a quiz-bearing lesson only happens once the athlete has read
+  // it, passed its quiz, and tapped Add to Calendar (activateClassLesson);
+  // a coach who wants to additionally force real practice reps or a
+  // minimum wait between chapters can layer that on with their own
+  // classCoachSettings pacing override without touching this content.
+  {
+    const classOwner = scott ?? demoAdmin;
+    const AMERICAN_HITTING_CLASS_NAME = "American Hitting: Athletic Hitting Development Program";
+    const existingClass = await db.query.classes.findFirst({
+      where: and(eq(classes.name, AMERICAN_HITTING_CLASS_NAME), eq(classes.coachId, classOwner.id)),
+    });
+    if (!existingClass) {
+      const allSkills = await storage.getAllSkillExercises();
+      const skillIdByName = new Map(allSkills.map((s) => [s.name, s.id]));
+      function drillEx(name: string, orderIndex: number) {
+        const skillExerciseId = skillIdByName.get(name);
+        if (!skillExerciseId) {
+          throw new Error(`American Hitting seed: missing skill exercise "${name}"`);
+        }
+        return {
+          skillExerciseId,
+          orderIndex,
+          sets: 3,
+          reps: "10",
+          restSeconds: null,
+          notes: null,
+          trackingLevel: "none" as const,
+        };
+      }
+
+      const CHAPTER_DRILLS: Record<number, string[]> = {
+        1: ["Athletic Stance Hold", "Tee Work - Inside Pitch", "Tee Work - Outside Pitch"],
+        2: [
+          "Athletic Stance Hold",
+          "Stance-to-Load Walkthrough",
+          "Ground Force Hop-to-Stance Drill",
+          "Posture Line Drill",
+        ],
+        3: [
+          "Colored-Ball Recognition Drill",
+          "Front Toss Recognition Drill",
+          "Velocity Variation Round",
+          "Take/Swing Decision Drill",
+          "Ball/Strike Recognition Drill",
+        ],
+        4: [
+          "Pause-and-Go Load Drill",
+          "Timing-Window Toss Drill",
+          "Rhythm-to-Launch Drill",
+          "Variable-Speed Batting Practice",
+          "Two-Speed Front Toss Drill",
+        ],
+        5: [
+          "Rotational Med Ball Scoop Throw",
+          "Standing Rotational Med Ball Throw",
+          "Resisted Rotation Drill",
+          "Bat Speed Overload/Underload Rounds",
+          "Max-Intent Tee Rounds",
+        ],
+        6: [
+          "Contact Point Drill",
+          "Tee Work - Inside Pitch",
+          "Tee Work - Outside Pitch",
+          "High Tee Drill (Top Hand Path)",
+          "Opposite Field Hitting Drill",
+        ],
+        7: [
+          "Fastball/Changeup Recognition Rounds",
+          "Random Pitch Sequence Drill",
+          "Breaking Ball Recognition Drill",
+          "Two-Strike Approach Drill",
+          "Competitive At-Bat Simulation",
+        ],
+        8: ["Live Batting Practice", "Max-Intent Tee Rounds"],
+      };
+
+      const structure = classStructureSchema.parse({
+        name: AMERICAN_HITTING_CLASS_NAME,
+        description:
+          "Develop the athlete. Educate the hitter. Build the competitor. An 8-chapter athletic hitting development program teaching baseball and softball players to understand their swing, track and decide on pitches, and become complete, adjustable hitters -- not just memorize mechanical positions.",
+        lessons: AMERICAN_HITTING_CHAPTERS.map((chapter) => ({
+          lessonNumber: chapter.lessonNumber,
+          title: chapter.title,
+          description: chapter.description,
+          unlockRule: "immediate" as const,
+          unlockThreshold: null,
+          priceCents: chapter.lessonNumber === 2 ? 4999 : null,
+          exercises: (CHAPTER_DRILLS[chapter.lessonNumber] ?? []).map((name, i) => drillEx(name, i)),
+          content: chapter.content,
+          quizQuestions: chapter.quizQuestions,
+        })),
+      });
+
+      await storage.createClassWithStructure(classOwner.id, structure, true);
+      console.log(`Seeded "${AMERICAN_HITTING_CLASS_NAME}" class.`);
     }
   }
 
