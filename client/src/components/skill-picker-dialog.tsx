@@ -73,6 +73,14 @@ export function SkillPickerDialog({
               className="pl-9"
             />
           </div>
+        </div>
+        {/* Filters and results share ONE scrollable region -- see
+            exercise-picker-dialog.tsx's own comment on this same layout:
+            a shrink-0 filter panel inside an overflow-hidden dialog clips
+            (invisibly and unreachably) rather than scrolls once the panel
+            -- Sport alone can run 30+ chips -- is taller than the
+            viewport, taking the results list under it down with it. */}
+        <div className="flex-1 space-y-4 overflow-y-auto p-4 sm:p-6">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <FilterChipGroup
               label="Skill Type"
@@ -91,35 +99,35 @@ export function SkillPickerDialog({
               className="col-span-2 sm:col-span-2"
             />
           </div>
-        </div>
-        <div className="flex-1 space-y-1 overflow-y-auto p-4 sm:p-6">
-          {filtered.length === 0 && (
-            <div className="flex flex-col items-center gap-2 py-10 text-center text-sm text-muted-foreground">
-              <Target className="h-8 w-8" />
-              No skill drills found matching these filters.
-            </div>
-          )}
-          {filtered.map((sk) => (
-            <button
-              key={sk.id}
-              type="button"
-              onClick={() => {
-                onSelect(sk);
-                onOpenChange(false);
-                setSearch("");
-              }}
-              className="flex w-full items-center justify-between rounded-md px-3 py-2.5 text-left transition-colors hover:bg-surface-elevated"
-            >
-              <div>
-                <p className="text-sm font-semibold">{sk.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {sk.skillType}
-                  {sk.equipment ? ` · ${sk.equipment}` : ""}
-                </p>
+          <div className="space-y-1 border-t border-border pt-4">
+            {filtered.length === 0 && (
+              <div className="flex flex-col items-center gap-2 py-10 text-center text-sm text-muted-foreground">
+                <Target className="h-8 w-8" />
+                No skill drills found matching these filters.
               </div>
-              <ExerciseOwnershipBadge isForgeOfficial={sk.isForgeOfficial} ownerLabel={sk.ownerLabel} />
-            </button>
-          ))}
+            )}
+            {filtered.map((sk) => (
+              <button
+                key={sk.id}
+                type="button"
+                onClick={() => {
+                  onSelect(sk);
+                  onOpenChange(false);
+                  setSearch("");
+                }}
+                className="flex w-full items-center justify-between rounded-md px-3 py-2.5 text-left transition-colors hover:bg-surface-elevated"
+              >
+                <div>
+                  <p className="text-sm font-semibold">{sk.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {sk.skillType}
+                    {sk.equipment ? ` · ${sk.equipment}` : ""}
+                  </p>
+                </div>
+                <ExerciseOwnershipBadge isForgeOfficial={sk.isForgeOfficial} ownerLabel={sk.ownerLabel} />
+              </button>
+            ))}
+          </div>
         </div>
       </DialogContent>
     </Dialog>

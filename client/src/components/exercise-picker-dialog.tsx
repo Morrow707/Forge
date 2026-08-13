@@ -169,6 +169,20 @@ export function ExercisePickerDialog({
               className="pl-9"
             />
           </div>
+        </div>
+        {/* Filters and results now share ONE scrollable region instead of
+            two (a fixed-height filter panel above a separately-scrolling
+            results list) -- with nine filter groups (Sport alone runs 30+
+            chips), the filter panel alone can be taller than a phone's
+            viewport, and since the panel was shrink-0 inside an
+            overflow-hidden dialog, whatever didn't fit was simply clipped:
+            invisible AND unreachable, taking the results list under it
+            down with it. Only the title/search stays pinned above this,
+            since re-introducing a second independently-scrolling sibling
+            here is exactly what the PREVIOUS mobile-scroll fix (see git
+            blame) had to undo -- two nested/stacked scroll containers make
+            it ambiguous which one a touch-scroll gesture should hit. */}
+        <div className="flex-1 space-y-4 overflow-y-auto p-4 sm:p-6">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <FilterChipGroup
               label="Category"
@@ -252,44 +266,44 @@ export function ExercisePickerDialog({
               className="col-span-2 sm:col-span-4"
             />
           </div>
-        </div>
-        <div className="flex-1 space-y-1 overflow-y-auto p-4 sm:p-6">
-          {filtered.length === 0 && (
-            <div className="flex flex-col items-center gap-2 py-10 text-center text-sm text-muted-foreground">
-              <Dumbbell className="h-8 w-8" />
-              No exercises found matching these filters.
-            </div>
-          )}
-          {filtered.map((ex) => (
-            <button
-              key={ex.id}
-              type="button"
-              onClick={() => {
-                onSelect(ex);
-                onOpenChange(false);
-                setSearch("");
-              }}
-              className="flex w-full items-center justify-between rounded-md px-3 py-2.5 text-left transition-colors hover:bg-surface-elevated"
-            >
-              <div>
-                <p className="text-sm font-semibold">{ex.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {ex.muscleGroup} · {ex.equipment}
-                  {ex.movementType ? ` · ${ex.movementType}` : ""}
-                </p>
+          <div className="space-y-1 border-t border-border pt-4">
+            {filtered.length === 0 && (
+              <div className="flex flex-col items-center gap-2 py-10 text-center text-sm text-muted-foreground">
+                <Dumbbell className="h-8 w-8" />
+                No exercises found matching these filters.
               </div>
-              <div className="flex shrink-0 items-center gap-1">
-                {ex.isCorrective && <Stethoscope className="h-3.5 w-3.5 text-cyan-400" />}
-                <ExerciseOwnershipBadge
-                  isForgeOfficial={ex.isForgeOfficial}
-                  ownerLabel={ex.ownerLabel}
-                />
-                <Badge variant="secondary" className="capitalize">
-                  {ex.category}
-                </Badge>
-              </div>
-            </button>
-          ))}
+            )}
+            {filtered.map((ex) => (
+              <button
+                key={ex.id}
+                type="button"
+                onClick={() => {
+                  onSelect(ex);
+                  onOpenChange(false);
+                  setSearch("");
+                }}
+                className="flex w-full items-center justify-between rounded-md px-3 py-2.5 text-left transition-colors hover:bg-surface-elevated"
+              >
+                <div>
+                  <p className="text-sm font-semibold">{ex.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {ex.muscleGroup} · {ex.equipment}
+                    {ex.movementType ? ` · ${ex.movementType}` : ""}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-1">
+                  {ex.isCorrective && <Stethoscope className="h-3.5 w-3.5 text-cyan-400" />}
+                  <ExerciseOwnershipBadge
+                    isForgeOfficial={ex.isForgeOfficial}
+                    ownerLabel={ex.ownerLabel}
+                  />
+                  <Badge variant="secondary" className="capitalize">
+                    {ex.category}
+                  </Badge>
+                </div>
+              </button>
+            ))}
+          </div>
         </div>
       </DialogContent>
     </Dialog>
