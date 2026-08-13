@@ -1025,6 +1025,7 @@ CREATE TABLE IF NOT EXISTS "class_lesson_progress" (
 CREATE INDEX IF NOT EXISTS "class_lesson_progress_enrollment_idx" ON "class_lesson_progress" ("enrollment_id");
 ALTER TABLE "class_lesson_progress" ADD COLUMN IF NOT EXISTS "content_completed_at" timestamp;
 ALTER TABLE "class_lesson_progress" ADD COLUMN IF NOT EXISTS "quiz_passed_at" timestamp;
+ALTER TABLE "class_lesson_progress" ADD COLUMN IF NOT EXISTS "quiz_perfect_at" timestamp;
 
 CREATE TABLE IF NOT EXISTS "academy_tracks" (
   "id" serial PRIMARY KEY,
