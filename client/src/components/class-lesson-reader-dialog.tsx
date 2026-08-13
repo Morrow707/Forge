@@ -13,6 +13,7 @@ import {
   CalendarPlus,
   BookOpen,
   PlayCircle,
+  Trophy,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -33,9 +34,24 @@ type QuizSubmitResult = {
   correctCount: number;
   totalQuestions: number;
   passed: boolean;
+  perfect: boolean;
   passThreshold: number;
   results: QuizAnswerResult[];
 };
+
+/** Friendly, funny, a little whimsical -- picked at random per failed
+ * attempt so grinding through retries doesn't feel like reading a stern
+ * error message over and over. */
+const ENCOURAGING_FAIL_LINES = [
+  "Oh, so close! Hit the books (well, the chapter) and give it another go.",
+  "Not quite -- your swing needs a little more film study first.",
+  "Solid effort! Review the chapter and step back up to the plate.",
+  "Almost there! A quick re-read and you'll crush this one.",
+  "Good try! Brush up on the chapter and take another cut at it.",
+];
+function randomFailLine() {
+  return ENCOURAGING_FAIL_LINES[Math.floor(Math.random() * ENCOURAGING_FAIL_LINES.length)];
+}
 
 /** Full-screen, click/tap-through reader for a Class lesson's content pages
  * and end-of-chapter quiz -- the gate between a "ready" lesson (progression
@@ -49,7 +65,8 @@ export function ClassLessonReaderDialog({
   onOpenChange,
   classId,
   lesson,
-  reviewMode = false,
+  startAt = "reading",
+  alreadyActive = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -61,12 +78,16 @@ export function ClassLessonReaderDialog({
     contentCompletedAt: string | null;
     quizPassedAt: string | null;
   };
-  /** For a lesson that's already active (on the calendar) -- content and
-   * quiz are already done, so this is just letting the athlete re-read the
-   * chapter, not re-run the content/quiz/Add-to-Calendar gate. Skips
-   * straight to the reading pages regardless of progress, and the footer
-   * ends in "Close" instead of "Finish Reading". */
-  reviewMode?: boolean;
+  /** "reading" (the "Take Lesson" / "Take Lesson Again" button) always
+   * starts from page one. "quiz" (the "Take Test" button) jumps straight to
+   * the quiz -- lets an athlete who's already read the chapter retake it
+   * without re-paging through every page first. */
+  startAt?: "reading" | "quiz";
+  /** True once this lesson's drills are already on the athlete's calendar
+   * (state === "active"). Content/quiz are already done in that case, so
+   * finishing either one here just closes the dialog instead of running
+   * the Add-to-Calendar gate again. */
+  alreadyActive?: boolean;
 }) {
   const qc = useQueryClient();
   const { data: lessonContent, isLoading } = useQuery<LessonContent>({
@@ -78,33 +99,27 @@ export function ClassLessonReaderDialog({
   const [pageIndex, setPageIndex] = useState(0);
   const [selectedAnswers, setSelectedAnswers] = useState<Record<number, number>>({});
   const [quizResult, setQuizResult] = useState<QuizSubmitResult | null>(null);
-  // Driven locally (seeded from the server progress, advanced optimistically
-  // on each step's success) rather than read straight off the `lesson` prop
-  // every render -- the quiz-just-passed screen needs to stay on screen
-  // until the athlete taps Continue, not vanish the instant the background
-  // progress refetch (triggered by that same success) lands.
-  const [contentDone, setContentDone] = useState(!!lesson.contentCompletedAt);
-  const [quizPassed, setQuizPassed] = useState(!!lesson.quizPassedAt);
-  // reviewMode's own local step, independent of contentDone/quizPassed --
-  // those are already true for an already-active lesson, so gating review
-  // mode's phase off them (the way the normal take-the-lesson flow does)
-  // would skip straight past both the reading pages AND the quiz.
-  const [reviewStep, setReviewStep] = useState<"reading" | "quiz">("reading");
+  const [failLine, setFailLine] = useState("");
+  // Driven directly by which button opened the dialog (startAt), not
+  // derived from contentCompletedAt/quizPassedAt -- those flags mean
+  // "completed at least once," but "Take Test" needs to land on the quiz
+  // even when they're already both true, and "Take Lesson Again" needs to
+  // restart at page one even though they're already both true too.
+  const [phase, setPhase] = useState<"reading" | "quiz" | "ready">(startAt === "quiz" ? "quiz" : "reading");
 
   useEffect(() => {
     if (open) {
       setPageIndex(0);
       setSelectedAnswers({});
       setQuizResult(null);
-      setContentDone(!!lesson.contentCompletedAt);
-      setQuizPassed(!!lesson.quizPassedAt);
-      setReviewStep("reading");
+      setFailLine("");
+      setPhase(startAt === "quiz" ? "quiz" : "reading");
     }
     // Only re-seed when the dialog opens (or for a different lesson) -- not
     // on every progress refetch while it's open, which would fight the
-    // optimistic local state above.
+    // local phase state above.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, lesson.id]);
+  }, [open, lesson.id, startAt]);
 
   function invalidateProgress() {
     qc.invalidateQueries({ queryKey: [`/api/athlete/classes/${classId}/progress`] });
@@ -121,8 +136,14 @@ export function ClassLessonReaderDialog({
       return res.json();
     },
     onSuccess: () => {
-      setContentDone(true);
       invalidateProgress();
+      if (questions.length > 0) {
+        setPhase("quiz");
+      } else if (alreadyActive) {
+        onOpenChange(false);
+      } else {
+        setPhase("ready");
+      }
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not save your progress"),
   });
@@ -142,6 +163,7 @@ export function ClassLessonReaderDialog({
     },
     onSuccess: (result) => {
       setQuizResult(result);
+      if (!result.passed) setFailLine(randomFailLine());
       if (result.passed) invalidateProgress();
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not submit quiz"),
@@ -165,13 +187,6 @@ export function ClassLessonReaderDialog({
       toast.error(err.message || "Could not add this lesson to your calendar"),
   });
 
-  const phase: "reading" | "quiz" | "ready" = reviewMode
-    ? reviewStep
-    : !contentDone
-      ? "reading"
-      : !quizPassed
-        ? "quiz"
-        : "ready";
   const pages = lessonContent?.content ?? [];
   const questions = lessonContent?.quizQuestions ?? [];
   const allAnswered = questions.length > 0 && questions.every((q) => selectedAnswers[q.id] != null);
@@ -303,15 +318,21 @@ export function ClassLessonReaderDialog({
                     : "border-destructive/40 bg-destructive/10 text-destructive",
                 )}
               >
-                {quizResult.passed ? (
-                  <CheckCircle2 className="h-4 w-4" />
+                {quizResult.perfect ? (
+                  <Trophy className="h-4 w-4 shrink-0" />
+                ) : quizResult.passed ? (
+                  <CheckCircle2 className="h-4 w-4 shrink-0" />
                 ) : (
-                  <XCircle className="h-4 w-4" />
+                  <XCircle className="h-4 w-4 shrink-0" />
                 )}
-                {quizResult.correctCount}/{quizResult.totalQuestions} correct --{" "}
-                {quizResult.passed
-                  ? "you passed!"
-                  : `need ${Math.ceil(quizResult.passThreshold * quizResult.totalQuestions)} to pass`}
+                <span>
+                  {quizResult.correctCount}/{quizResult.totalQuestions} correct --{" "}
+                  {quizResult.perfect
+                    ? "perfect score! Gold star earned."
+                    : quizResult.passed
+                      ? "you passed!"
+                      : failLine}
+                </span>
               </div>
               {quizResult.results.map((r, ri) => (
                 <div key={r.questionId} className="space-y-2 rounded-md border border-border p-3">
@@ -393,15 +414,6 @@ export function ClassLessonReaderDialog({
                     Next
                     <ArrowRight className="h-5 w-5" />
                   </Button>
-                ) : reviewMode ? (
-                  <Button
-                    size="lg"
-                    className="flex-1"
-                    onClick={() => (questions.length > 0 ? setReviewStep("quiz") : onOpenChange(false))}
-                  >
-                    {questions.length > 0 ? "View Quiz" : "Close"}
-                    {questions.length > 0 && <ArrowRight className="h-5 w-5" />}
-                  </Button>
                 ) : (
                   <Button
                     size="lg"
@@ -409,8 +421,13 @@ export function ClassLessonReaderDialog({
                     onClick={() => completeContentMutation.mutate()}
                     disabled={completeContentMutation.isPending}
                   >
-                    <BookOpen className="h-5 w-5" />
-                    {completeContentMutation.isPending ? "Saving…" : "Finish Reading"}
+                    {questions.length === 0 && <BookOpen className="h-5 w-5" />}
+                    {completeContentMutation.isPending
+                      ? "Saving…"
+                      : questions.length > 0
+                        ? "View Quiz"
+                        : "Finish Reading"}
+                    {questions.length > 0 && <ArrowRight className="h-5 w-5" />}
                   </Button>
                 )}
               </>
@@ -435,27 +452,21 @@ export function ClassLessonReaderDialog({
                 onClick={() => {
                   setSelectedAnswers({});
                   setQuizResult(null);
+                  setFailLine("");
                 }}
               >
                 Try Again
               </Button>
             )}
 
-            {phase === "quiz" && quizResult && quizResult.passed && reviewMode && (
+            {phase === "quiz" && quizResult && quizResult.passed && alreadyActive && (
               <Button size="lg" className="ml-auto" onClick={() => onOpenChange(false)}>
                 Close
               </Button>
             )}
 
-            {phase === "quiz" && quizResult && quizResult.passed && !reviewMode && (
-              <Button
-                size="lg"
-                className="ml-auto"
-                onClick={() => {
-                  setQuizPassed(true);
-                  setQuizResult(null);
-                }}
-              >
+            {phase === "quiz" && quizResult && quizResult.passed && !alreadyActive && (
+              <Button size="lg" className="ml-auto" onClick={() => setPhase("ready")}>
                 Continue
                 <ArrowRight className="h-5 w-5" />
               </Button>

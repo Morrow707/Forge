@@ -2184,6 +2184,10 @@ export const classLessonProgress = pgTable(
     // lesson's quiz. Unlimited retries; earlier failed attempts aren't
     // persisted, only the eventual pass.
     quizPassedAt: timestamp("quiz_passed_at"),
+    // Set the first time the athlete gets every question right in one
+    // attempt (implies quizPassedAt). Drives the gold-vs-bronze star shown
+    // on the lesson card -- bronze for quizPassedAt, gold for this.
+    quizPerfectAt: timestamp("quiz_perfect_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({

@@ -5112,6 +5112,7 @@ ${athleteContext}
           purchasedAt: null,
           contentCompletedAt: null,
           quizPassedAt: null,
+          quizPerfectAt: null,
         })),
       };
     }
@@ -5137,6 +5138,7 @@ ${athleteContext}
       purchasedAt: Date | null;
       contentCompletedAt: Date | null;
       quizPassedAt: Date | null;
+      quizPerfectAt: Date | null;
     }> = [];
     let previousProgress: typeof classLessonProgress.$inferSelect | null = null;
     let frontierPassed = false;
@@ -5184,6 +5186,7 @@ ${athleteContext}
         purchasedAt: progress?.purchasedAt ?? null,
         contentCompletedAt: progress?.contentCompletedAt ?? null,
         quizPassedAt: progress?.quizPassedAt ?? null,
+        quizPerfectAt: progress?.quizPerfectAt ?? null,
       });
       previousProgress = progress;
     }
@@ -5317,6 +5320,7 @@ ${athleteContext}
 
     const score = correctCount / questions.length;
     const passed = score >= CLASS_QUIZ_PASS_THRESHOLD;
+    const perfect = correctCount === questions.length;
 
     if (passed) {
       const progress = await db.query.classLessonProgress.findFirst({
@@ -5325,11 +5329,13 @@ ${athleteContext}
           eq(classLessonProgress.classLessonId, classLessonId),
         ),
       });
-      if (progress && !progress.quizPassedAt) {
-        await db
-          .update(classLessonProgress)
-          .set({ quizPassedAt: new Date() })
-          .where(eq(classLessonProgress.id, progress.id));
+      if (progress) {
+        const updates: Partial<typeof classLessonProgress.$inferInsert> = {};
+        if (!progress.quizPassedAt) updates.quizPassedAt = new Date();
+        if (perfect && !progress.quizPerfectAt) updates.quizPerfectAt = new Date();
+        if (Object.keys(updates).length > 0) {
+          await db.update(classLessonProgress).set(updates).where(eq(classLessonProgress.id, progress.id));
+        }
       }
     }
 
@@ -5338,6 +5344,7 @@ ${athleteContext}
       correctCount,
       totalQuestions: questions.length,
       passed,
+      perfect,
       passThreshold: CLASS_QUIZ_PASS_THRESHOLD,
       results,
     };
