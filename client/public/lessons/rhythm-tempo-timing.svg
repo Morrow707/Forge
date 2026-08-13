@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 260" font-family="Arial, Helvetica, sans-serif">
+  <rect x="0" y="0" width="900" height="260" fill="#ffffff"/>
+  <text x="450" y="34" text-anchor="middle" font-size="20" font-weight="700" fill="#0f172a" letter-spacing="1">THE CORE SEQUENCE</text>
+
+  <!-- flowing wave suggesting cadence -->
+  <path d="M 60 150 Q 160 90 260 150 T 460 150 T 660 150 T 840 150" fill="none" stroke="#99f6e4" stroke-width="6" stroke-linecap="round"/>
+
+  <!-- stage boxes -->
+  <g>
+    <rect x="60" y="115" width="220" height="70" rx="12" fill="#f0fdfa" stroke="#14b8a6" stroke-width="4"/>
+    <text x="170" y="158" text-anchor="middle" font-size="22" font-weight="700" fill="#0f766e">RHYTHM</text>
+    <text x="170" y="205" text-anchor="middle" font-size="12" fill="#334155">The natural motion that</text>
+    <text x="170" y="220" text-anchor="middle" font-size="12" fill="#334155">gets the body moving</text>
+  </g>
+
+  <polygon points="290,150 320,140 320,160" fill="#64748b"/>
+
+  <g>
+    <rect x="340" y="115" width="220" height="70" rx="12" fill="#f0fdfa" stroke="#14b8a6" stroke-width="4"/>
+    <text x="450" y="158" text-anchor="middle" font-size="22" font-weight="700" fill="#0f766e">TEMPO</text>
+    <text x="450" y="205" text-anchor="middle" font-size="12" fill="#334155">A repeatable pace to</text>
+    <text x="450" y="220" text-anchor="middle" font-size="12" fill="#334155">that motion, every pitch</text>
+  </g>
+
+  <polygon points="570,150 600,140 600,160" fill="#64748b"/>
+
+  <g>
+    <rect x="620" y="115" width="220" height="70" rx="12" fill="#fff7ed" stroke="#f97316" stroke-width="4"/>
+    <text x="730" y="158" text-anchor="middle" font-size="22" font-weight="700" fill="#c2410c">TIMING</text>
+    <text x="730" y="205" text-anchor="middle" font-size="12" fill="#334155">The result -- matched</text>
+    <text x="730" y="220" text-anchor="middle" font-size="12" fill="#334155">to the actual pitch</text>
+  </g>
+</svg>

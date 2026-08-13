@@ -2262,6 +2262,19 @@ export type ClassCoachSettings = typeof classCoachSettings.$inferSelect;
 export const classLessonContentPageSchema = z.object({
   title: z.string().trim().max(200).optional(),
   body: z.string().trim().min(1).max(10000),
+  // A reference link for further instruction on this page's topic -- a
+  // YouTube search-results URL, same convention as skillVideoSearchUrl in
+  // server/seed.ts (a specific hand-picked video ID can go dead or turn out
+  // wrong with no way to verify it from here; a search link is always valid
+  // and always relevant, and upgrades to a real embed the moment an admin
+  // edits it with one).
+  videoUrl: z.string().trim().url().max(500).nullable().optional(),
+  // Original instructional diagrams, not stock photography (none licensed
+  // for use here) -- a relative static asset path (e.g. "/lessons/x.svg")
+  // or a full URL, shown as a small gallery under the page's body text.
+  // Not `.url()`-validated since a relative path is the expected common
+  // case, not an edge case.
+  imageUrls: z.array(z.string().trim().min(1).max(500)).max(6).optional(),
 });
 
 export const classLessonQuizAnswerInputSchema = z.object({

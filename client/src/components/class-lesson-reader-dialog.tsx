@@ -5,10 +5,18 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { ArrowLeft, ArrowRight, CheckCircle2, XCircle, CalendarPlus, BookOpen } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  CheckCircle2,
+  XCircle,
+  CalendarPlus,
+  BookOpen,
+  PlayCircle,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type ContentPage = { title?: string; body: string };
+type ContentPage = { title?: string; body: string; videoUrl?: string | null; imageUrls?: string[] };
 type QuizAnswerOption = { id: number; orderIndex: number; answerText: string };
 type QuizQuestion = { id: number; orderIndex: number; questionText: string; answers: QuizAnswerOption[] };
 type LessonContent = { id: number; title: string; content: ContentPage[]; quizQuestions: QuizQuestion[] };
@@ -41,6 +49,7 @@ export function ClassLessonReaderDialog({
   onOpenChange,
   classId,
   lesson,
+  reviewMode = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -52,6 +61,12 @@ export function ClassLessonReaderDialog({
     contentCompletedAt: string | null;
     quizPassedAt: string | null;
   };
+  /** For a lesson that's already active (on the calendar) -- content and
+   * quiz are already done, so this is just letting the athlete re-read the
+   * chapter, not re-run the content/quiz/Add-to-Calendar gate. Skips
+   * straight to the reading pages regardless of progress, and the footer
+   * ends in "Close" instead of "Finish Reading". */
+  reviewMode?: boolean;
 }) {
   const qc = useQueryClient();
   const { data: lessonContent, isLoading } = useQuery<LessonContent>({
@@ -144,7 +159,13 @@ export function ClassLessonReaderDialog({
       toast.error(err.message || "Could not add this lesson to your calendar"),
   });
 
-  const phase: "reading" | "quiz" | "ready" = !contentDone ? "reading" : !quizPassed ? "quiz" : "ready";
+  const phase: "reading" | "quiz" | "ready" = reviewMode
+    ? "reading"
+    : !contentDone
+      ? "reading"
+      : !quizPassed
+        ? "quiz"
+        : "ready";
   const pages = lessonContent?.content ?? [];
   const questions = lessonContent?.quizQuestions ?? [];
   const allAnswered = questions.length > 0 && questions.every((q) => selectedAnswers[q.id] != null);
@@ -186,6 +207,35 @@ export function ClassLessonReaderDialog({
                   <div className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">
                     {pages[pageIndex]?.body}
                   </div>
+                  {!!pages[pageIndex]?.imageUrls?.length && (
+                    <div
+                      className={cn(
+                        "grid gap-2",
+                        pages[pageIndex].imageUrls!.length > 1 ? "grid-cols-2" : "grid-cols-1",
+                      )}
+                    >
+                      {pages[pageIndex].imageUrls!.map((src) => (
+                        <img
+                          key={src}
+                          src={src}
+                          alt=""
+                          loading="lazy"
+                          className="w-full rounded-md border border-border bg-white"
+                        />
+                      ))}
+                    </div>
+                  )}
+                  {pages[pageIndex]?.videoUrl && (
+                    <a
+                      href={pages[pageIndex].videoUrl!}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 rounded-md border border-primary/30 bg-primary/5 p-3 text-sm font-medium text-primary hover:bg-primary/10"
+                    >
+                      <PlayCircle className="h-5 w-5 shrink-0" />
+                      Watch instructional video
+                    </a>
+                  )}
                 </>
               )}
             </div>
@@ -317,6 +367,8 @@ export function ClassLessonReaderDialog({
                   Next
                   <ArrowRight className="h-4 w-4" />
                 </Button>
+              ) : reviewMode ? (
+                <Button onClick={() => onOpenChange(false)}>Close</Button>
               ) : (
                 <Button
                   onClick={() => completeContentMutation.mutate()}
