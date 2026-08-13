@@ -57,6 +57,7 @@ import {
   isFullBodyInFrame,
   assessCameraAlignment,
   usesSharedBarEquipment,
+  LOWER_BODY_MOVEMENT_TYPES,
   POSE_LANDMARKS,
   type PoseFrame,
   type MovementGuess,
@@ -615,17 +616,27 @@ export function BarTrackerDialog({
       });
 
     // Same non-blocking, optional-refinement loading as hand tracking
-    // above -- see roi-refine.ts's own comment.
+    // above -- see roi-refine.ts's own comment. Only actually worth a
+    // second full pose model's worth of GPU/WASM memory for the movements
+    // that ever read a refined knee/hip/ankle landmark back (see
+    // LOWER_BODY_MOVEMENT_TYPES's own comment, plus jump mode's landing-
+    // mechanics valgus/lean checks) -- loading it unconditionally on every
+    // tracked set meant a single bench-press session permanently doubled
+    // the app's resident pose-model footprint for the rest of the page
+    // session, for a refinement that press never uses.
     roiLandmarkerRef.current = null;
     roiTickCounterRef.current = 0;
-    getRoiPoseLandmarker()
-      .then((landmarker) => {
-        roiLandmarkerRef.current = landmarker;
-      })
-      .catch(() => {
-        // Silently stays null -- tick() already treats that as "skip the
-        // ROI refinement pass, keep the full-frame landmarks as-is."
-      });
+    const needsRoiRefine = mode === "jump" || (movementType != null && LOWER_BODY_MOVEMENT_TYPES.has(movementType));
+    if (needsRoiRefine) {
+      getRoiPoseLandmarker()
+        .then((landmarker) => {
+          roiLandmarkerRef.current = landmarker;
+        })
+        .catch(() => {
+          // Silently stays null -- tick() already treats that as "skip the
+          // ROI refinement pass, keep the full-frame landmarks as-is."
+        });
+    }
 
     const attachStream = (stream: MediaStream) => {
       streamRef.current = stream;

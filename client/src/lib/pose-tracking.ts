@@ -516,8 +516,12 @@ export function worldAngleAtVertex(
 // collinear, a torso or bar-tilt angle spiking for one bad frame. Unmoved
 // by the one or two worst samples in an otherwise-clean rep/set, the same
 // reasoning bar-tracking.ts's robustPeakSpeed and barPathDeviationCm
-// already use for the equivalent position/velocity failure mode.
-function percentile(values: number[], p: number): number {
+// already use for the equivalent position/velocity failure mode. Exported
+// for sprint-tracking.ts/mechanics-tracking.ts, whose own fault/metric
+// calculations used to take a raw max/min straight off every frame with no
+// such protection -- the same single-bad-frame vulnerability this function
+// was written to close here, just not yet closed there.
+export function percentile(values: number[], p: number): number {
   const sorted = [...values].sort((a, b) => a - b);
   const idx = Math.min(sorted.length - 1, Math.max(0, Math.floor(sorted.length * p)));
   return sorted[idx];
@@ -673,8 +677,11 @@ export type FormFault = {
 // past the raw knee-ROM heuristic below from pose noise alone (especially
 // lying on a bench, where the knee-angle estimate is least reliable) with
 // the knees never actually doing anything, and a "knees caving in" flag on
-// a bench press is just wrong regardless of what the numbers say.
-const LOWER_BODY_MOVEMENT_TYPES = new Set(["Squat", "Hinge", "Lunge"]);
+// a bench press is just wrong regardless of what the numbers say. Exported
+// so bar-tracker-dialog.tsx can gate loading the (separate, second-model)
+// ROI landmarker off the same list -- knee/hip/ankle refinement is only
+// ever useful for the same movements this already gates knee faults to.
+export const LOWER_BODY_MOVEMENT_TYPES = new Set(["Squat", "Hinge", "Lunge"]);
 
 // "Tilt" and "drifted off a straight line" only describe something real when
 // both hands share one rigid implement -- for anything else (dumbbells,

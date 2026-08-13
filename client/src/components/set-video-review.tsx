@@ -142,13 +142,28 @@ export function SetVideoCompareDialog({
 }) {
   const [leftNumber, setLeftNumber] = useState<number | undefined>(undefined);
   const [rightNumber, setRightNumber] = useState<number | undefined>(undefined);
+  // Which side (if either) has its analysis tools open -- a comparison is
+  // exactly when a coach most wants to overlay a skeleton or measure an
+  // angle (this rep vs. that one), but until now the tools only existed on
+  // the single-video preview, not here. One shared dialog instance driven
+  // by this rather than one per side, since only one can ever be open at a
+  // time anyway.
+  const [analyzing, setAnalyzing] = useState<{ url: string; title: string } | null>(null);
 
   const left = sets.find((s) => s.setNumber === (leftNumber ?? pickDefault(sets, "worst", 0)));
   const right = sets.find(
     (s) => s.setNumber === (rightNumber ?? pickDefault(sets, "best", sets.length - 1)),
   );
 
-  function Slot({ video, onPick }: { video: FlaggedSetVideo | undefined; onPick: (n: number) => void }) {
+  function Slot({
+    video,
+    onPick,
+    onAnalyze,
+  }: {
+    video: FlaggedSetVideo | undefined;
+    onPick: (n: number) => void;
+    onAnalyze: () => void;
+  }) {
     if (!video) return null;
     return (
       <div className="space-y-1.5">
@@ -180,6 +195,10 @@ export function SetVideoCompareDialog({
           )}
         </div>
         <video src={video.videoUrl} controls playsInline className="w-full rounded-md bg-black" />
+        <Button size="sm" variant="outline" className="w-full" onClick={onAnalyze}>
+          <Wand2 className="h-3.5 w-3.5" />
+          Analysis Tools
+        </Button>
         <div className="flex items-center justify-center gap-2">
           <FlagButton
             active={video.flag === "best"}
@@ -207,10 +226,24 @@ export function SetVideoCompareDialog({
           <DialogTitle>Compare Sets</DialogTitle>
         </DialogHeader>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Slot video={left} onPick={setLeftNumber} />
-          <Slot video={right} onPick={setRightNumber} />
+          <Slot
+            video={left}
+            onPick={setLeftNumber}
+            onAnalyze={() => left && setAnalyzing({ url: left.videoUrl, title: `Set ${left.setNumber}` })}
+          />
+          <Slot
+            video={right}
+            onPick={setRightNumber}
+            onAnalyze={() => right && setAnalyzing({ url: right.videoUrl, title: `Set ${right.setNumber}` })}
+          />
         </div>
       </DialogContent>
+      <VideoAnalysisDialog
+        open={!!analyzing}
+        onOpenChange={(o) => !o && setAnalyzing(null)}
+        videoUrl={analyzing?.url ?? ""}
+        title={analyzing?.title}
+      />
     </Dialog>
   );
 }

@@ -21,7 +21,7 @@
 // single frame, or angles derived that way across frames, never absolute
 // position.
 import type { Landmark, NormalizedLandmark } from "@mediapipe/tasks-vision";
-import { POSE_LANDMARKS } from "./pose-tracking";
+import { POSE_LANDMARKS, percentile } from "./pose-tracking";
 import {
   DEFAULT_SKILL_FAULT_THRESHOLDS,
   type SkillFaultThresholds,
@@ -142,11 +142,20 @@ export function analyzeMechanics(
       return h != null && s != null ? Math.abs(s - h) : null;
     })
     .filter((v): v is number => v != null);
-  const hipShoulderSeparationDeg = separations.length > 0 ? Math.max(...separations) : null;
+  // 95th percentile, not a raw max -- see percentile's own comment in
+  // pose-tracking.ts. This is the headline X-factor number a coach reads
+  // off the swing, not just a pass/fail fault threshold, so a single
+  // misdetected frame distorting it directly is worse here than almost
+  // anywhere else in the app -- the same single-bad-frame vulnerability
+  // detectFormFaults' bar-tilt/valgus checks were already protected from.
+  const hipShoulderSeparationDeg = separations.length > 0 ? percentile(separations, 0.95) : null;
 
   const validHipAngles = hipAngles.filter((v): v is number => v != null);
+  // Trims both ends (95th minus 5th percentile) rather than raw max minus
+  // min -- a spike on EITHER end corrupts a plain range the same way, so
+  // both need the same protection.
   const hipRotationDeg =
-    validHipAngles.length > 0 ? Math.max(...validHipAngles) - Math.min(...validHipAngles) : null;
+    validHipAngles.length > 0 ? percentile(validHipAngles, 0.95) - percentile(validHipAngles, 0.05) : null;
 
   const hipPeakTimeMs0 = peakAngularVelocityTime(times, hipAngles);
   const shoulderPeakTimeMs0 = peakAngularVelocityTime(times, shoulderAngles);
