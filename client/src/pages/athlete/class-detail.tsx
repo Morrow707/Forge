@@ -88,82 +88,99 @@ export default function AthleteClassDetail() {
       )}
 
       <div className="space-y-3">
-        {data.lessons.map((lesson) => (
-          <Card
-            key={lesson.id}
-            className={cn(lesson.state === "locked" && "opacity-60")}
-          >
-            <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-start gap-3">
-                <div
-                  className={cn(
-                    "flex h-9 w-9 shrink-0 items-center justify-center rounded-md",
-                    lesson.state === "active" || lesson.state === "ready"
-                      ? "bg-primary/15 text-primary"
-                      : "bg-secondary text-muted-foreground",
-                  )}
-                >
-                  {lesson.state === "active" ? (
-                    <PlayCircle className="h-5 w-5" />
-                  ) : lesson.state === "ready" ? (
-                    <BookOpen className="h-4 w-4" />
-                  ) : (
-                    <Lock className="h-4 w-4" />
-                  )}
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline">Lesson {lesson.lessonNumber}</Badge>
-                    <p className="font-semibold">{lesson.title}</p>
+        {data.lessons.map((lesson) => {
+          // Both a completed lesson (review the content again) and a
+          // reachable-but-not-yet-active one (read it for the first time)
+          // open the same reader -- only the locked states have nothing to
+          // click into yet.
+          const isClickable = lesson.state === "active" || lesson.state === "ready";
+          return (
+            <Card
+              key={lesson.id}
+              className={cn(
+                lesson.state === "locked" && "opacity-60",
+                isClickable && "cursor-pointer transition-colors hover:bg-surface-elevated",
+              )}
+              onClick={isClickable ? () => setReaderLessonId(lesson.id) : undefined}
+            >
+              <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-3">
+                  <div
+                    className={cn(
+                      "flex h-9 w-9 shrink-0 items-center justify-center rounded-md",
+                      lesson.state === "active" || lesson.state === "ready"
+                        ? "bg-primary/15 text-primary"
+                        : "bg-secondary text-muted-foreground",
+                    )}
+                  >
+                    {lesson.state === "active" ? (
+                      <PlayCircle className="h-5 w-5" />
+                    ) : lesson.state === "ready" ? (
+                      <BookOpen className="h-4 w-4" />
+                    ) : (
+                      <Lock className="h-4 w-4" />
+                    )}
                   </div>
-                  {lesson.description && (
-                    <p className="mt-1 max-w-xl text-sm text-muted-foreground">{lesson.description}</p>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline">Lesson {lesson.lessonNumber}</Badge>
+                      <p className="font-semibold">{lesson.title}</p>
+                    </div>
+                    {lesson.description && (
+                      <p className="mt-1 max-w-xl text-sm text-muted-foreground">{lesson.description}</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="shrink-0 pl-12 sm:pl-0">
+                  {lesson.state === "active" && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-success hover:text-success"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate("/athlete");
+                      }}
+                    >
+                      <CheckCircle2 className="h-4 w-4" />
+                      On your calendar
+                    </Button>
+                  )}
+                  {lesson.state === "ready" && (
+                    <Button size="sm" onClick={() => setReaderLessonId(lesson.id)}>
+                      <BookOpen className="h-3.5 w-3.5" />
+                      {!lesson.contentCompletedAt
+                        ? "Start Lesson"
+                        : !lesson.quizPassedAt
+                          ? "Take Quiz"
+                          : "Add to Calendar"}
+                    </Button>
+                  )}
+                  {lesson.state === "locked_preview" && (
+                    <Button
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        purchaseMutation.mutate(lesson.id);
+                      }}
+                      disabled={purchaseMutation.isPending}
+                    >
+                      <Lock className="h-3.5 w-3.5" />
+                      Unlock
+                      {lesson.priceCents != null && ` — $${(lesson.priceCents / 100).toFixed(2)}`}
+                    </Button>
+                  )}
+                  {lesson.state === "locked" && (
+                    <span className="text-xs text-muted-foreground">
+                      Complete Lesson {lesson.lessonNumber - 1} to unlock
+                    </span>
                   )}
                 </div>
-              </div>
-
-              <div className="shrink-0 pl-12 sm:pl-0">
-                {lesson.state === "active" && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="text-success hover:text-success"
-                    onClick={() => navigate("/athlete")}
-                  >
-                    <CheckCircle2 className="h-4 w-4" />
-                    On your calendar
-                  </Button>
-                )}
-                {lesson.state === "ready" && (
-                  <Button size="sm" onClick={() => setReaderLessonId(lesson.id)}>
-                    <BookOpen className="h-3.5 w-3.5" />
-                    {!lesson.contentCompletedAt
-                      ? "Start Lesson"
-                      : !lesson.quizPassedAt
-                        ? "Take Quiz"
-                        : "Add to Calendar"}
-                  </Button>
-                )}
-                {lesson.state === "locked_preview" && (
-                  <Button
-                    size="sm"
-                    onClick={() => purchaseMutation.mutate(lesson.id)}
-                    disabled={purchaseMutation.isPending}
-                  >
-                    <Lock className="h-3.5 w-3.5" />
-                    Unlock
-                    {lesson.priceCents != null && ` — $${(lesson.priceCents / 100).toFixed(2)}`}
-                  </Button>
-                )}
-                {lesson.state === "locked" && (
-                  <span className="text-xs text-muted-foreground">
-                    Complete Lesson {lesson.lessonNumber - 1} to unlock
-                  </span>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
       {readerLesson && (
@@ -172,6 +189,7 @@ export default function AthleteClassDetail() {
           onOpenChange={(open) => !open && setReaderLessonId(null)}
           classId={classId}
           lesson={readerLesson}
+          reviewMode={readerLesson.state === "active"}
         />
       )}
     </AppShell>

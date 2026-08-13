@@ -52,7 +52,16 @@ type LocalExercise = {
   trackingLevel: SkillTrackingLevel;
 };
 
-type LocalContentPage = { key: string; title: string; body: string };
+type LocalContentPage = {
+  key: string;
+  title: string;
+  body: string;
+  videoUrl: string;
+  /** One image URL per line -- split into classLessonContentPageSchema's
+   * imageUrls array on save. A plain textarea is simpler to author than a
+   * dynamic repeatable-input list for what's usually 0-2 images a page. */
+  imageUrlsText: string;
+};
 type LocalQuizAnswer = {
   key: string;
   id?: number;
@@ -123,10 +132,14 @@ function stateFromClass(cls: any) {
         notes: pe.notes ?? "",
         trackingLevel: (pe.trackingLevel ?? "none") as SkillTrackingLevel,
       })),
-      content: ((l.content ?? []) as { title?: string; body: string }[]).map((p) => ({
+      content: (
+        (l.content ?? []) as { title?: string; body: string; videoUrl?: string | null; imageUrls?: string[] }[]
+      ).map((p) => ({
         key: uid(),
         title: p.title ?? "",
         body: p.body,
+        videoUrl: p.videoUrl ?? "",
+        imageUrlsText: (p.imageUrls ?? []).join("\n"),
       })),
       quizQuestions: ((l.quizQuestions ?? []) as any[]).map((q) => ({
         key: uid(),
@@ -274,7 +287,15 @@ export function ClassBuilderPage({
           })),
           content: l.content
             .filter((p) => p.body.trim())
-            .map((p) => ({ title: p.title.trim() || undefined, body: p.body })),
+            .map((p) => ({
+              title: p.title.trim() || undefined,
+              body: p.body,
+              videoUrl: p.videoUrl.trim() || undefined,
+              imageUrls: p.imageUrlsText
+                .split("\n")
+                .map((s) => s.trim())
+                .filter(Boolean),
+            })),
           quizQuestions: l.quizQuestions
             .filter((q) => q.questionText.trim())
             .map((q, qi) => ({
@@ -897,6 +918,27 @@ function ContentPagesEditor({
             placeholder="What the athlete reads on this page…"
             className="text-sm"
           />
+          <Input
+            value={page.videoUrl}
+            onChange={(e) => {
+              const val = e.target.value;
+              onChange((prev) => prev.map((p) => (p.key === page.key ? { ...p, videoUrl: val } : p)));
+            }}
+            placeholder="Video link (optional) -- e.g. a YouTube search or watch URL"
+            className="h-8 text-sm"
+          />
+          <Textarea
+            value={page.imageUrlsText}
+            onChange={(e) => {
+              const val = e.target.value;
+              onChange((prev) =>
+                prev.map((p) => (p.key === page.key ? { ...p, imageUrlsText: val } : p)),
+              );
+            }}
+            rows={2}
+            placeholder="Image URLs (optional), one per line"
+            className="text-xs"
+          />
         </div>
       ))}
       <Button
@@ -904,7 +946,12 @@ function ContentPagesEditor({
         variant="secondary"
         size="sm"
         className="w-full"
-        onClick={() => onChange((prev) => [...prev, { key: uid(), title: "", body: "" }])}
+        onClick={() =>
+          onChange((prev) => [
+            ...prev,
+            { key: uid(), title: "", body: "", videoUrl: "", imageUrlsText: "" },
+          ])
+        }
       >
         <Plus className="h-3.5 w-3.5" />
         Add Page

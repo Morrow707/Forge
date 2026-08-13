@@ -11,7 +11,7 @@ import {
   classStructureSchema,
   skillProgramExercises,
 } from "@shared/schema";
-import { eq, isNull, and } from "drizzle-orm";
+import { eq, isNull, and, asc } from "drizzle-orm";
 import { AMERICAN_HITTING_CHAPTERS } from "./seed-data/american-hitting-content";
 
 // We don't have live web access from this environment to verify specific
@@ -3657,6 +3657,23 @@ async function main() {
             .where(eq(skillProgramExercises.id, ex.id));
         }
       }
+    }
+  }
+
+  // Keeps each lesson's reading content (pages, videos, diagrams) in sync
+  // with AMERICAN_HITTING_CHAPTERS on every deploy -- safe to just overwrite
+  // in place, unlike the drill/exercise tree above, since `content` is a
+  // plain JSON column on classLessons itself with nothing else keyed off
+  // its shape (no session logs or ids reference it).
+  if (americanHittingClassId != null) {
+    const lessons = await db.query.classLessons.findMany({
+      where: eq(classLessons.classId, americanHittingClassId),
+      orderBy: asc(classLessons.lessonNumber),
+    });
+    for (const lesson of lessons) {
+      const chapter = AMERICAN_HITTING_CHAPTERS.find((c) => c.lessonNumber === lesson.lessonNumber);
+      if (!chapter) continue;
+      await db.update(classLessons).set({ content: chapter.content }).where(eq(classLessons.id, lesson.id));
     }
   }
 
