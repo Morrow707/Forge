@@ -39,6 +39,9 @@ import {
   Video,
   FileText,
   Trophy,
+  ImagePlus,
+  RotateCcw,
+  Medal,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { SkillExercise } from "@shared/schema";
@@ -128,6 +131,7 @@ function stateFromClass(cls: any) {
     description: (cls.description as string) ?? "",
     category: (cls.category as string | null) ?? "",
     prerequisiteClassId: (cls.prerequisiteClassId as number | null) ?? null,
+    isDraft: (cls.isDraft as boolean) ?? true,
     lessons: cls.lessons.map((l: any) => ({
       key: uid(),
       id: l.id,
@@ -225,6 +229,7 @@ export function ClassBuilderPage({
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("");
   const [prerequisiteClassId, setPrerequisiteClassId] = useState<number | null>(null);
+  const [isDraft, setIsDraft] = useState(true);
   const [lessons, setLessons] = useState<LocalLesson[]>([]);
   const [pickerForLesson, setPickerForLesson] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
@@ -241,6 +246,7 @@ export function ClassBuilderPage({
       setDescription(state.description);
       setCategory(state.category);
       setPrerequisiteClassId(state.prerequisiteClassId);
+      setIsDraft(state.isDraft);
       setLessons(state.lessons);
       setHydrated(true);
     }
@@ -295,6 +301,7 @@ export function ClassBuilderPage({
         description,
         category: category.trim() || null,
         prerequisiteClassId,
+        isDraft,
         lessons: lessons.map((l, i) => ({
           id: l.id,
           lessonNumber: i + 1,
@@ -417,7 +424,26 @@ export function ClassBuilderPage({
               Forge official — read-only
             </span>
           )}
+          {editable && (
+            <>
+              <Badge variant={isDraft ? "secondary" : "default"}>{isDraft ? "DRAFT" : "PUBLISHED"}</Badge>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 px-2 text-xs"
+                onClick={() => setIsDraft((v) => !v)}
+              >
+                {isDraft ? "Publish" : "Unpublish"}
+              </Button>
+            </>
+          )}
         </div>
+      )}
+      {editable && isDraft && (
+        <p className="mb-4 -mt-2 text-xs text-muted-foreground">
+          This class is a draft — hidden from browse and enrollment until you publish it and save.
+        </p>
       )}
 
       {/* Pacing is a coach-owned setting, never content -- available even on
@@ -678,12 +704,44 @@ type RosterProgressEntry = {
  * coach's own class and a Forge class they've enrolled athletes into
  * (enrollment is a per-coach concept independent of who authored it). */
 function ClassRosterProgress({ apiBase, classId }: { apiBase: string; classId: number }) {
+  const qc = useQueryClient();
+  const rosterQueryKey = [`${apiBase}/classes`, classId, "roster"];
   const { data: roster = [], isLoading } = useQuery<RosterProgressEntry[]>({
-    queryKey: [`${apiBase}/classes`, classId, "roster"],
+    queryKey: rosterQueryKey,
     queryFn: () => getJson(`${apiBase}/classes/${classId}/roster`),
   });
 
+  const resetMutation = useMutation({
+    mutationFn: async ({ athleteId, lessonId }: { athleteId: number; lessonId?: number }) => {
+      const res = await apiRequest(
+        "POST",
+        `${apiBase}/classes/${classId}/roster/${athleteId}/reset`,
+        lessonId != null ? { lessonId } : {},
+      );
+      return res.json();
+    },
+    onSuccess: (updatedRoster) => {
+      qc.setQueryData(rosterQueryKey, updatedRoster);
+      toast.success("Progress reset");
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Could not reset progress"),
+  });
+
   if (isLoading || roster.length === 0) return null;
+
+  // Simple points race so a coach can see who's leading at a glance: a
+  // perfect (gold-star) lesson quiz is worth more than a merely-passed
+  // (bronze) one, finishing the whole class is worth a flat bonus on top.
+  // Ties broken by who's read/attempted the most lessons so far.
+  const ranked = [...roster]
+    .map((entry) => ({
+      entry,
+      score:
+        entry.lessons.reduce((sum, l) => sum + (l.quizPerfectAt ? 2 : l.quizPassedAt ? 1 : 0), 0) +
+        (entry.completedAt ? 3 : 0),
+    }))
+    .sort((a, b) => b.score - a.score || b.entry.lessonsStarted - a.entry.lessonsStarted);
+  const medalClass = ["text-amber-400", "text-slate-300", "text-amber-700"];
 
   return (
     <Card className="mb-6">
@@ -691,10 +749,26 @@ function ClassRosterProgress({ apiBase, classId }: { apiBase: string; classId: n
         <div className="flex items-center gap-1.5">
           <Users className="h-4 w-4 text-muted-foreground" />
           <p className="text-sm font-semibold">Your roster's progress</p>
+          {roster.length > 1 && (
+            <span className="ml-auto flex items-center gap-1 text-[11px] font-normal text-muted-foreground">
+              <Medal className="h-3.5 w-3.5" />
+              Ranked by quiz points
+            </span>
+          )}
         </div>
         <div className="space-y-3">
-          {roster.map((entry) => (
+          {ranked.map(({ entry, score }, i) => (
             <div key={entry.enrollmentId} className="rounded-md border border-border p-3">
+              {roster.length > 1 && (
+                <div className="mb-1.5 flex items-center gap-1 text-[11px] font-semibold text-muted-foreground">
+                  {i < 3 ? (
+                    <Medal className={cn("h-3.5 w-3.5", medalClass[i])} />
+                  ) : (
+                    <span className="w-3.5 text-center">#{i + 1}</span>
+                  )}
+                  {score} pt{score === 1 ? "" : "s"}
+                </div>
+              )}
               <div className="mb-2 flex items-center justify-between gap-2">
                 <p className="flex items-center gap-1.5 text-sm font-semibold">
                   {entry.athleteName}
@@ -704,42 +778,78 @@ function ClassRosterProgress({ apiBase, classId }: { apiBase: string; classId: n
                     </span>
                   )}
                 </p>
-                <p className="text-xs text-muted-foreground">
-                  {entry.completedAt
-                    ? "Completed"
-                    : `${entry.lessonsStarted} of ${entry.lessonsTotal} lessons active`}
-                </p>
+                <div className="flex items-center gap-2">
+                  <p className="text-xs text-muted-foreground">
+                    {entry.completedAt
+                      ? "Completed"
+                      : `${entry.lessonsStarted} of ${entry.lessonsTotal} lessons active`}
+                  </p>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 gap-1 px-1.5 text-[11px] text-muted-foreground hover:text-destructive"
+                    disabled={resetMutation.isPending}
+                    onClick={() => {
+                      if (
+                        confirm(
+                          `Reset ALL of ${entry.athleteName}'s progress in this class? They'll need to re-read and re-pass every lesson to be marked done again. Their calendar assignments and logged training stay untouched.`,
+                        )
+                      ) {
+                        resetMutation.mutate({ athleteId: entry.athleteId });
+                      }
+                    }}
+                  >
+                    <RotateCcw className="h-3 w-3" />
+                    Reset class
+                  </Button>
+                </div>
               </div>
               <div className="flex flex-wrap gap-1.5">
-                {entry.lessons.map((l) => (
-                  <div
-                    key={l.lessonId}
-                    title={`Lesson ${l.lessonNumber}: ${l.title} — ${
-                      l.quizPerfectAt
-                        ? "perfect quiz score"
-                        : l.quizPassedAt
-                          ? "quiz passed"
-                          : l.contentCompletedAt
-                            ? "content read, quiz not yet passed"
-                            : l.state
-                    }`}
-                    className={cn(
-                      "relative flex h-7 w-7 shrink-0 items-center justify-center rounded-md border text-[10px] font-semibold",
-                      l.state === "active"
-                        ? "border-primary/40 bg-primary/10 text-primary"
-                        : l.state === "ready"
-                          ? "border-border bg-surface-elevated text-foreground"
-                          : "border-border/60 bg-secondary text-muted-foreground",
-                    )}
-                  >
-                    {l.lessonNumber}
-                    {l.quizPerfectAt ? (
-                      <Star className="absolute -right-1.5 -top-1.5 h-3.5 w-3.5 fill-amber-400 text-amber-400" />
-                    ) : l.quizPassedAt ? (
-                      <Star className="absolute -right-1.5 -top-1.5 h-3.5 w-3.5 fill-amber-700 text-amber-700" />
-                    ) : null}
-                  </div>
-                ))}
+                {entry.lessons.map((l) => {
+                  const hasProgress = !!(l.contentCompletedAt || l.quizPassedAt || l.quizPerfectAt);
+                  return (
+                    <button
+                      key={l.lessonId}
+                      type="button"
+                      disabled={!hasProgress || resetMutation.isPending}
+                      title={`Lesson ${l.lessonNumber}: ${l.title} — ${
+                        l.quizPerfectAt
+                          ? "perfect quiz score"
+                          : l.quizPassedAt
+                            ? "quiz passed"
+                            : l.contentCompletedAt
+                              ? "content read, quiz not yet passed"
+                              : l.state
+                      }${hasProgress ? " (click to reset this lesson)" : ""}`}
+                      onClick={() => {
+                        if (
+                          confirm(
+                            `Reset ${entry.athleteName}'s progress on Lesson ${l.lessonNumber}: "${l.title}"? They'll need to re-read and re-pass it to be marked done again.`,
+                          )
+                        ) {
+                          resetMutation.mutate({ athleteId: entry.athleteId, lessonId: l.lessonId });
+                        }
+                      }}
+                      className={cn(
+                        "relative flex h-7 w-7 shrink-0 items-center justify-center rounded-md border text-[10px] font-semibold",
+                        hasProgress ? "cursor-pointer" : "cursor-default",
+                        l.state === "active"
+                          ? "border-primary/40 bg-primary/10 text-primary"
+                          : l.state === "ready"
+                            ? "border-border bg-surface-elevated text-foreground"
+                            : "border-border/60 bg-secondary text-muted-foreground",
+                      )}
+                    >
+                      {l.lessonNumber}
+                      {l.quizPerfectAt ? (
+                        <Star className="absolute -right-1.5 -top-1.5 h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                      ) : l.quizPassedAt ? (
+                        <Star className="absolute -right-1.5 -top-1.5 h-3.5 w-3.5 fill-amber-700 text-amber-700" />
+                      ) : null}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           ))}
@@ -1100,6 +1210,7 @@ function ContentPageRow({
 }) {
   const videoInputRef = useRef<HTMLInputElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   const uploadVideoMutation = useMutation({
     mutationFn: async (file: File) => {
@@ -1127,6 +1238,23 @@ function ContentPageRow({
       toast.success("Attachment uploaded");
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not upload attachment"),
+  });
+
+  const uploadImageMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const form = new FormData();
+      form.append("image", file);
+      const res = await apiRequest("POST", "/api/classes/lesson-media/image", form);
+      return res.json() as Promise<{ url: string }>;
+    },
+    onSuccess: (data) => {
+      onUpdate((p) => ({
+        ...p,
+        imageUrlsText: p.imageUrlsText.trim() ? `${p.imageUrlsText}\n${data.url}` : data.url,
+      }));
+      toast.success("Image uploaded");
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Could not upload image"),
   });
 
   const isUploadedVideo = page.videoUrl.startsWith("/uploads/");
@@ -1208,16 +1336,40 @@ function ContentPageRow({
         )}
       </div>
 
-      <Textarea
-        value={page.imageUrlsText}
-        onChange={(e) => {
-          const val = e.target.value;
-          onUpdate((p) => ({ ...p, imageUrlsText: val }));
-        }}
-        rows={2}
-        placeholder="Image URLs (optional), one per line"
-        className="text-xs"
-      />
+      <div className="space-y-1">
+        <Textarea
+          value={page.imageUrlsText}
+          onChange={(e) => {
+            const val = e.target.value;
+            onUpdate((p) => ({ ...p, imageUrlsText: val }));
+          }}
+          rows={2}
+          placeholder="Image URLs (optional), one per line -- or upload a file below"
+          className="text-xs"
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-8 text-xs"
+          onClick={() => imageInputRef.current?.click()}
+          disabled={uploadImageMutation.isPending}
+        >
+          <ImagePlus className="h-3.5 w-3.5" />
+          {uploadImageMutation.isPending ? "Uploading…" : "Upload image"}
+        </Button>
+        <input
+          ref={imageInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) uploadImageMutation.mutate(file);
+            e.target.value = "";
+          }}
+        />
+      </div>
 
       <div className="flex items-center gap-1.5">
         {page.attachmentUrl ? (

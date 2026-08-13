@@ -68,6 +68,7 @@ const AdminMyWorkout = lazy(() => import("@/pages/admin/my-workout"));
 const AdminPlatformTrends = lazy(() => import("@/pages/admin/platform-trends"));
 const AdminVideos = lazy(() => import("@/pages/admin/videos"));
 const AdminClasses = lazy(() => import("@/pages/admin/classes"));
+const AdminClassesAnalytics = lazy(() => import("@/pages/admin/classes-analytics"));
 const AdminClassBuilder = lazy(() => import("@/pages/admin/class-builder"));
 const AdminCoachesCorner = lazy(() => import("@/pages/admin/coaches-corner"));
 const AdminAcademyTrackBuilder = lazy(() => import("@/pages/admin/academy-track-builder"));
@@ -280,6 +281,9 @@ function Router() {
         </Route>
         <Route path="/admin/classes">
           <ProtectedRoute role="admin" component={AdminClasses} />
+        </Route>
+        <Route path="/admin/classes-analytics">
+          <ProtectedRoute role="admin" component={AdminClassesAnalytics} />
         </Route>
         <Route path="/admin/coaches-corner">
           <ProtectedRoute role="admin" component={AdminCoachesCorner} />

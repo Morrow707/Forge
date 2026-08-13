@@ -254,17 +254,33 @@ export function ClassLessonReaderDialog({
                       ))}
                     </div>
                   )}
-                  {pages[pageIndex]?.videoUrl && (
-                    <a
-                      href={pages[pageIndex].videoUrl!}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 rounded-md border border-primary/30 bg-primary/5 p-3 text-sm font-medium text-primary hover:bg-primary/10"
-                    >
-                      <PlayCircle className="h-5 w-5 shrink-0" />
-                      Watch instructional video
-                    </a>
-                  )}
+                  {pages[pageIndex]?.videoUrl &&
+                    (pages[pageIndex].videoUrl!.startsWith("/uploads/lesson-videos/") ? (
+                      // A file uploaded straight to Forge (see Batch J's
+                      // /api/classes/lesson-media/video route) -- play it
+                      // right here instead of bouncing to a new tab, unlike
+                      // an external link (YouTube etc.) below, which a
+                      // <video> tag can't play directly.
+                      <video
+                        controls
+                        preload="metadata"
+                        playsInline
+                        src={pages[pageIndex].videoUrl!}
+                        className="w-full rounded-md border border-border bg-black"
+                      >
+                        Your browser doesn't support inline video playback.
+                      </video>
+                    ) : (
+                      <a
+                        href={pages[pageIndex].videoUrl!}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 rounded-md border border-primary/30 bg-primary/5 p-3 text-sm font-medium text-primary hover:bg-primary/10"
+                      >
+                        <PlayCircle className="h-5 w-5 shrink-0" />
+                        Watch instructional video
+                      </a>
+                    ))}
                   {pages[pageIndex]?.attachmentUrl && (
                     <a
                       href={pages[pageIndex].attachmentUrl!}

@@ -3623,6 +3623,12 @@ async function main() {
 
       const created = await storage.createClassWithStructure(classOwner.id, structure, true);
       americanHittingClassId = created.id;
+      // createClassWithStructure always starts a class as a private draft
+      // (see Batch N's "build in private, publish when ready" design) --
+      // this is the platform's real, live, for-sale flagship Class, so
+      // publish it immediately rather than leaving it invisible to every
+      // Free Agent and coach until someone remembers to flip it by hand.
+      await db.update(classes).set({ isDraft: false }).where(eq(classes.id, created.id));
       console.log(`Seeded "${AMERICAN_HITTING_CLASS_NAME}" class.`);
     }
   }
