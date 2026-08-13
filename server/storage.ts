@@ -4396,7 +4396,13 @@ ${athleteContext}
   // independent payment gate that only ever applies to a Forge-official
   // class sold to a Free Agent.
 
-  async getVisibleClassesForCoach(coachId: number) {
+  // isAdminCaller sees every Forge class regardless of draft state (matches
+  // "any admin can edit any Forge class" -- they need to see a draft to
+  // finish or collaborate on it). A regular coach caller always sees their
+  // own classes (draft or published -- it's their draft to keep editing)
+  // but only PUBLISHED Forge classes; an admin's in-progress draft simply
+  // doesn't show up for them to browse/assign yet.
+  async getVisibleClassesForCoach(coachId: number, isAdminCaller = false) {
     const coachIds = await this.getEffectiveCoachIds(coachId);
     const admins = await db.query.users.findMany({ where: eq(users.role, "admin") });
     const ownerIds = Array.from(new Set([...coachIds, ...admins.map((a) => a.id)]));
@@ -4405,7 +4411,8 @@ ${athleteContext}
       with: { lessons: true, enrollments: true, coach: true },
       orderBy: desc(classes.createdAt),
     });
-    return rows.map((c) => {
+    const visible = rows.filter((c) => isAdminCaller || coachIds.includes(c.coachId) || !c.isDraft);
+    return visible.map((c) => {
       const { lessons, enrollments, ...ownership } = this.withOwnership(c, coachId, coachIds);
       return {
         ...ownership,
@@ -4472,6 +4479,7 @@ ${athleteContext}
       description: cls.description,
       category: cls.category,
       prerequisiteClassId: cls.prerequisiteClassId,
+      isDraft: cls.isDraft,
       isForgeOfficial: cls.isForgeOfficial,
       lessons: cls.lessons.map((l) => {
         const day = l.skillProgram.weeks[0]?.days[0];
@@ -4505,6 +4513,11 @@ ${athleteContext}
           description: structure.description ?? null,
           category: structure.category ?? null,
           prerequisiteClassId: structure.prerequisiteClassId ?? null,
+          // Every freshly created class starts as a draft regardless of
+          // what's passed -- "build in private, publish when ready" --
+          // even though the very first POST (from the "Create & Build"
+          // button) never actually sends isDraft at all.
+          isDraft: true,
           isForgeOfficial,
         })
         .returning();
@@ -4588,6 +4601,10 @@ ${athleteContext}
           description: structure.description ?? null,
           category: structure.category ?? null,
           prerequisiteClassId: structure.prerequisiteClassId ?? null,
+          // Falls back to the row's current value (not a hardcoded
+          // default) if the caller omits it, so an unrelated PUT can never
+          // silently flip publish state.
+          isDraft: structure.isDraft ?? cls.isDraft,
         })
         .where(eq(classes.id, classId));
 
@@ -4760,7 +4777,7 @@ ${athleteContext}
   // (every Forge-official class) is the same for everyone.
   async getVisibleClassesForFreeAgent(athleteId: number) {
     const rows = await db.query.classes.findMany({
-      where: eq(classes.isForgeOfficial, true),
+      where: and(eq(classes.isForgeOfficial, true), eq(classes.isDraft, false)),
       with: { lessons: true },
       orderBy: desc(classes.createdAt),
     });
@@ -5687,6 +5704,131 @@ ${athleteContext}
       });
     }
     return results;
+  },
+
+  // Coach-driven "make them redo this" escape hatch -- clears ONLY the
+  // Classes-specific completion gating (content read, quiz pass/perfect,
+  // fail streak, stuck flag) for one lesson, or every lesson in the class
+  // when lessonId is omitted. Deliberately never touches
+  // skillAssignmentId/unlockedAt/purchasedAt/manuallyUnlocked -- the
+  // lesson's drills stay right where they are on the athlete's calendar
+  // (and any logged sets/videos against them are untouched); only whether
+  // Classes considers the lesson "done" resets. Clears the class's
+  // completedAt too, since a reset lesson can no longer be part of a
+  // finished class.
+  async resetClassLessonProgress(coachId: number, classId: number, athleteId: number, lessonId?: number) {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    const enrollment = await db.query.classEnrollments.findFirst({
+      where: and(
+        eq(classEnrollments.classId, classId),
+        eq(classEnrollments.athleteId, athleteId),
+        inArray(classEnrollments.coachId, coachIds),
+      ),
+    });
+    if (!enrollment) return null;
+    const lessons = await db.query.classLessons.findMany({
+      where: eq(classLessons.classId, classId),
+    });
+    const targetLessons = lessonId != null ? lessons.filter((l) => l.id === lessonId) : lessons;
+    if (lessonId != null && targetLessons.length === 0) return null;
+
+    for (const lesson of targetLessons) {
+      await db
+        .update(classLessonProgress)
+        .set({
+          contentCompletedAt: null,
+          quizPassedAt: null,
+          quizPerfectAt: null,
+          quizFailCount: 0,
+          coachNotifiedStuckAt: null,
+        })
+        .where(
+          and(
+            eq(classLessonProgress.enrollmentId, enrollment.id),
+            eq(classLessonProgress.classLessonId, lesson.id),
+          ),
+        );
+    }
+    if (enrollment.completedAt) {
+      await db
+        .update(classEnrollments)
+        .set({ completedAt: null })
+        .where(eq(classEnrollments.id, enrollment.id));
+    }
+    await this.recomputeClassProgress(enrollment.id);
+    return { enrollmentId: enrollment.id };
+  },
+
+  // Admin's platform-wide view across EVERY class (Forge-official and
+  // coach-authored alike -- an admin overseeing the platform cares about
+  // both, unlike a Free Agent's catalog which only ever shows Forge
+  // classes). Unlike getPlatformTrends this isn't athlete-demographic data,
+  // so there's no k-anonymity floor to apply -- these are aggregate counts
+  // against a piece of content (a class), not a cohort of people.
+  async getAdminClassAnalytics() {
+    const allClasses = await db.query.classes.findMany({
+      with: { lessons: { orderBy: asc(classLessons.lessonNumber) }, coach: true },
+      orderBy: desc(classes.createdAt),
+    });
+    const allEnrollments = await db.query.classEnrollments.findMany();
+    const enrollmentIds = allEnrollments.map((e) => e.id);
+    const allProgress =
+      enrollmentIds.length > 0
+        ? await db.query.classLessonProgress.findMany({
+            where: inArray(classLessonProgress.enrollmentId, enrollmentIds),
+          })
+        : [];
+    const progressByEnrollment = new Map<number, typeof allProgress>();
+    for (const p of allProgress) {
+      const list = progressByEnrollment.get(p.enrollmentId) ?? [];
+      list.push(p);
+      progressByEnrollment.set(p.enrollmentId, list);
+    }
+    const enrollmentsByClass = new Map<number, typeof allEnrollments>();
+    for (const e of allEnrollments) {
+      const list = enrollmentsByClass.get(e.classId) ?? [];
+      list.push(e);
+      enrollmentsByClass.set(e.classId, list);
+    }
+
+    const classRows = allClasses.map((cls) => {
+      const enrollments = enrollmentsByClass.get(cls.id) ?? [];
+      const enrolledCount = enrollments.length;
+      const completedCount = enrollments.filter((e) => e.completedAt).length;
+      // Per-lesson funnel: of everyone enrolled in this class, how many
+      // reached (read the content of) vs. cleared (passed the quiz on)
+      // each lesson number -- the drop-off curve a coach/admin actually
+      // wants to see, not just a single class-wide completion rate.
+      const lessons = cls.lessons.map((lesson) => {
+        let started = 0;
+        let passed = 0;
+        for (const e of enrollments) {
+          const progressRows = progressByEnrollment.get(e.id) ?? [];
+          const p = progressRows.find((row) => row.classLessonId === lesson.id);
+          if (p?.contentCompletedAt) started++;
+          if (p?.quizPassedAt) passed++;
+        }
+        return { lessonNumber: lesson.lessonNumber, title: lesson.title, started, passed };
+      });
+      return {
+        id: cls.id,
+        name: cls.name,
+        isForgeOfficial: cls.coach.role === "admin",
+        isDraft: cls.isDraft,
+        lessonCount: cls.lessons.length,
+        enrolledCount,
+        completedCount,
+        completionRate: enrolledCount > 0 ? completedCount / enrolledCount : 0,
+        lessons,
+      };
+    });
+
+    return {
+      totalClasses: allClasses.length,
+      totalEnrollments: allEnrollments.length,
+      totalCompletions: allEnrollments.filter((e) => e.completedAt).length,
+      classes: classRows,
+    };
   },
 
   // ---------- Coaches Corner (admin-authored coach education) ----------

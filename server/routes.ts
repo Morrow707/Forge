@@ -187,6 +187,37 @@ const uploadLessonAttachment = multer({
   },
 });
 
+// A diagram/photo for a lesson's content page -- same "paste a link or
+// upload a file" choice as videoUrl, just appended to imageUrls instead of
+// replacing a single field, since a page can carry more than one.
+const IMAGE_EXTENSION_BY_MIME: Record<string, string> = {
+  "image/png": ".png",
+  "image/jpeg": ".jpg",
+  "image/webp": ".webp",
+  "image/gif": ".gif",
+  "image/svg+xml": ".svg",
+};
+
+const LESSON_IMAGES_DIR = path.join(process.cwd(), "server", "uploads", "lesson-images");
+fs.mkdirSync(LESSON_IMAGES_DIR, { recursive: true });
+
+const uploadLessonImage = multer({
+  storage: multer.diskStorage({
+    destination: LESSON_IMAGES_DIR,
+    filename: (_req, file, cb) => {
+      const ext = IMAGE_EXTENSION_BY_MIME[file.mimetype.split(";")[0].trim().toLowerCase()];
+      cb(null, `${crypto.randomUUID()}${ext ?? ""}`);
+    },
+  }),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (!IMAGE_EXTENSION_BY_MIME[file.mimetype.split(";")[0].trim().toLowerCase()]) {
+      return cb(new Error("Unsupported image format"));
+    }
+    cb(null, true);
+  },
+});
+
 function currentUser(req: any) {
   return req.user as { id: number; role: "coach" | "athlete" | "admin"; name: string; email: string };
 }
@@ -716,11 +747,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(roster);
   });
 
+  // Reset an athlete's Classes-specific completion gating (per lesson, or
+  // the whole class when lessonId is omitted) so they have to re-read/
+  // re-pass to be marked done again. Never touches their calendar
+  // assignments or logged training data -- see resetClassLessonProgress.
+  app.post(
+    "/api/coach/classes/:id/roster/:athleteId/reset",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const id = Number(req.params.id);
+      const athleteId = Number(req.params.athleteId);
+      const usable = await storage.getClassIfUsableByCoach(user.id, id);
+      if (!usable) return res.status(404).json({ message: "Class not found" });
+      const schema = z.object({ lessonId: z.number().optional() });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      const result = await storage.resetClassLessonProgress(
+        user.id,
+        id,
+        athleteId,
+        parsed.data.lessonId,
+      );
+      if (!result) return res.status(404).json({ message: "Enrollment or lesson not found" });
+      const roster = await storage.getClassRosterForCoach(user.id, id);
+      res.json(roster);
+    },
+  );
+
   app.post("/api/coach/classes/:id/enroll", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     const id = Number(req.params.id);
     const usable = await storage.getClassIfUsableByCoach(user.id, id);
     if (!usable) return res.status(404).json({ message: "Class not found" });
+    if (usable.isDraft) {
+      return res.status(400).json({ message: "Publish this class before enrolling athletes." });
+    }
     const schema = z.object({ athleteId: z.number(), startDate: z.string() });
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) {
@@ -832,6 +896,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         url: `/uploads/lesson-attachments/${req.file.filename}`,
         name: req.file.originalname,
       });
+    });
+  });
+
+  app.post("/api/classes/lesson-media/image", requireRole(["coach", "admin"]), (req, res) => {
+    uploadLessonImage.single("image")(req, res, (err: unknown) => {
+      if (err) {
+        const message = err instanceof Error ? err.message : "Upload failed";
+        return res.status(400).json({ message });
+      }
+      if (!req.file) return res.status(400).json({ message: "No image file provided" });
+      res.status(201).json({ url: `/uploads/lesson-images/${req.file.filename}` });
     });
   });
 
@@ -1103,8 +1178,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // official already (see getVisibleClassesForCoach's ownerIds), so
     // override to true across the board, matching the single-class GET
     // below and assertAdminOwnsForgeClass's "any admin, any Forge class" rule.
-    const list = await storage.getVisibleClassesForCoach(user.id);
+    const list = await storage.getVisibleClassesForCoach(user.id, true);
     res.json(list.map((c) => ({ ...c, editable: true })));
+  });
+
+  // Registered before the /:id route below so this literal path wins --
+  // Express matches routes in registration order, and :id would otherwise
+  // swallow "analytics" as an (invalid, NaN) id.
+  app.get("/api/admin/classes/analytics", requireRole("admin"), async (_req, res) => {
+    const analytics = await storage.getAdminClassAnalytics();
+    res.json(analytics);
   });
 
   app.get("/api/admin/classes/:id", requireRole("admin"), async (req, res) => {
@@ -4727,6 +4810,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const cls = await storage.getClassById(id);
       if (!cls || !cls.isForgeOfficial) {
+        return res.status(404).json({ message: "Class not found" });
+      }
+      if (cls.isDraft) {
         return res.status(404).json({ message: "Class not found" });
       }
       const prereq = await storage.isClassPrerequisiteSatisfied(user.id, id);

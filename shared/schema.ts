@@ -2003,6 +2003,13 @@ export const classes = pgTable("classes", {
   prerequisiteClassId: integer("prerequisite_class_id").references((): AnyPgColumn => classes.id, {
     onDelete: "set null",
   }),
+  // Defaults to false at the column level so every class that existed
+  // before this migration (already live) stays visible -- createClassWithStructure
+  // explicitly inserts true for a freshly created class instead, so new
+  // classes start hidden from browse/enroll until their author flips this.
+  // Never gates access for someone already enrolled -- see
+  // getVisibleClassesForCoach/getVisibleClassesForFreeAgent's own notes.
+  isDraft: boolean("is_draft").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -2364,6 +2371,7 @@ export const classStructureSchema = z.object({
   description: z.string().trim().max(2000).nullable().optional(),
   category: z.string().trim().max(60).nullable().optional(),
   prerequisiteClassId: z.number().int().positive().nullable().optional(),
+  isDraft: z.boolean().optional(),
   lessons: z.array(classLessonInputSchema).default([]),
 });
 

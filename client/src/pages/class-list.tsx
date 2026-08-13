@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -31,6 +32,7 @@ type ClassSummary = {
   isForgeOfficial?: boolean;
   ownerLabel?: string;
   editable?: boolean;
+  isDraft?: boolean;
 };
 
 type RosterEntry = { id: number; name: string; email: string };
@@ -197,13 +199,16 @@ export function ClassListPage({
               <div className="cursor-pointer" onClick={() => navigate(`${routeBase}/${c.id}`)}>
                 <div className="flex items-start justify-between gap-2">
                   <p className="font-display text-xl font-bold uppercase tracking-wide">{c.name}</p>
-                  {c.ownerLabel && (
-                    <ExerciseOwnershipBadge
-                      isForgeOfficial={!!c.isForgeOfficial}
-                      ownerLabel={c.ownerLabel}
-                      className="shrink-0"
-                    />
-                  )}
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    {c.isDraft && (
+                      <Badge variant="secondary" className="text-[10px]">
+                        DRAFT
+                      </Badge>
+                    )}
+                    {c.ownerLabel && (
+                      <ExerciseOwnershipBadge isForgeOfficial={!!c.isForgeOfficial} ownerLabel={c.ownerLabel} />
+                    )}
+                  </div>
                 </div>
                 {c.category && (
                   <p className="mt-0.5 text-xs font-semibold uppercase tracking-wide text-primary">

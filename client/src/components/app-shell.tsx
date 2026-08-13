@@ -26,6 +26,7 @@ import {
   GraduationCap,
   BookOpen,
   HardDrive,
+  TrendingUp,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -102,6 +103,7 @@ const adminNav: NavItem[] = [
   { href: "/admin/exercises", label: "Forge Library", icon: Dumbbell },
   { href: "/admin/programs", label: "Forge Programs", icon: CalendarRange },
   { href: "/admin/classes", label: "Forge Classes", icon: GraduationCap },
+  { href: "/admin/classes-analytics", label: "Class Analytics", icon: TrendingUp },
   { href: "/admin/coaches-corner", label: "Coaches Corner", icon: BookOpen },
   { href: "/admin/review", label: "Review Queue", icon: ClipboardCheck },
   { href: "/admin/ai-knowledge", label: "Teach AI", icon: Sparkles },
