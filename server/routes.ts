@@ -1012,8 +1012,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/admin/classes", requireRole("admin"), async (req, res) => {
     const user = currentUser(req);
+    // getVisibleClassesForCoach computes `editable` off this admin's own
+    // effective coach ids, same as it does for a coach caller -- which
+    // would wrongly hide the delete action for a Forge Class a *different*
+    // admin authored. Every row it returns for an admin caller is Forge-
+    // official already (see getVisibleClassesForCoach's ownerIds), so
+    // override to true across the board, matching the single-class GET
+    // below and assertAdminOwnsForgeClass's "any admin, any Forge class" rule.
     const list = await storage.getVisibleClassesForCoach(user.id);
-    res.json(list);
+    res.json(list.map((c) => ({ ...c, editable: true })));
   });
 
   app.get("/api/admin/classes/:id", requireRole("admin"), async (req, res) => {
