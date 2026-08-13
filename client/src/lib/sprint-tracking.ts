@@ -11,7 +11,7 @@
 // distance between checkpoints comes from the coach (marker/known-distance
 // calibration), not from the camera.
 import type { Landmark, NormalizedLandmark } from "@mediapipe/tasks-vision";
-import { POSE_LANDMARKS } from "./pose-tracking";
+import { POSE_LANDMARKS, percentile } from "./pose-tracking";
 import {
   DEFAULT_SKILL_FAULT_THRESHOLDS,
   type SkillFaultThresholds,
@@ -198,7 +198,11 @@ export function detectSprintFaults(
       hipDropRatios.push(Math.abs(leftHip.y - rightHip.y) / hipWidth);
     }
     if (hipDropRatios.length > 0) {
-      const maxDrop = Math.max(...hipDropRatios);
+      // 95th percentile, not a raw max -- see percentile's own comment in
+      // pose-tracking.ts. A single misdetected hip landmark (a stride's
+      // occlusion moment, a tracking dropout) shouldn't get to single-
+      // handedly flag an otherwise-clean sprint.
+      const maxDrop = percentile(hipDropRatios, 0.95);
       if (maxDrop > thresholds.hipDropRatioThreshold) {
         faults.push({
           code: "hip_drop",

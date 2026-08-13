@@ -23,6 +23,7 @@ import {
   Loader2,
   FlipHorizontal2,
   VideoOff,
+  Download,
 } from "lucide-react";
 
 type Tool = "none" | "angle" | "draw" | "ruler";
@@ -34,7 +35,10 @@ const ANGLE_COLOR = "#fbbf24";
 const RULER_COLOR = "#38bdf8";
 const DRAW_COLORS = ["#fbbf24", "#f65b23", "#38bdf8", "#ffffff"];
 const MIN_VISIBILITY = 0.5;
-const SPEEDS = [0.1, 0.25, 0.5, 1];
+// 2x added alongside the existing slow-mo options -- those cover "study
+// this moment frame by frame," but a longer clip also needs a fast way to
+// scan past the parts that don't matter, which nothing here offered before.
+const SPEEDS = [0.1, 0.25, 0.5, 1, 2];
 const FRAME_STEP_SEC = 1 / 30;
 // Caps how tall the video/canvas area is allowed to render, as a fraction of
 // viewport height -- see the intrinsicSize comment below for why this
@@ -489,6 +493,39 @@ export function VideoAnalysisDialog({
     else video.pause();
   }
 
+  // Everything this dialog's tools produce -- a measured joint angle, a
+  // ruler reading, a circled fault -- used to be purely on-screen: close
+  // the dialog and it's gone, with no way to actually hand that specific
+  // insight to anyone. This composites the current frame with whatever the
+  // overlay canvas is already showing (skeleton, angle label, ruler,
+  // freehand strokes -- exactly what's visible on screen, since that's
+  // literally what's drawn in canvasRef) into one image and downloads it,
+  // so a coach can save/share the moment instead of just having looked at
+  // it once.
+  function saveSnapshot() {
+    const video = videoRef.current;
+    const overlay = canvasRef.current;
+    if (!video || !overlay) return;
+    video.pause();
+    const out = document.createElement("canvas");
+    out.width = video.videoWidth || overlay.width;
+    out.height = video.videoHeight || overlay.height;
+    const ctx = out.getContext("2d");
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0, out.width, out.height);
+    ctx.drawImage(overlay, 0, 0, out.width, out.height);
+    out.toBlob((blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const namePart = (title ?? "frame").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
+      a.href = url;
+      a.download = `${namePart}-${Math.round(video.currentTime * 100)}.png`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }, "image/png");
+  }
+
   function stepFrame(dir: 1 | -1) {
     const video = videoRef.current;
     if (!video) return;
@@ -597,6 +634,7 @@ export function VideoAnalysisDialog({
                   label="Stopwatch"
                   onClick={() => setShowStopwatch((v) => !v)}
                 />
+                <RailButton icon={Download} active={false} label="Save Snapshot" onClick={saveSnapshot} />
               </div>
             </>
           )}
