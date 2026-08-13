@@ -22,6 +22,7 @@ import {
   Trash2,
   Loader2,
   FlipHorizontal2,
+  VideoOff,
 } from "lucide-react";
 
 type Tool = "none" | "angle" | "draw" | "ruler";
@@ -190,6 +191,14 @@ export function VideoAnalysisDialog({
   const [currentTime, setCurrentTime] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
+  // Set when the <video> element's src fails to load -- most often a
+  // videoUrl whose file no longer exists on the server (see /uploads'
+  // own comment in server/routes.ts). Without this, a missing file just
+  // silently never fires onLoadedMetadata: duration stays 0, the play
+  // button does nothing, and there's no indication anywhere that
+  // anything's wrong, which is exactly the "00:00, nothing plays" dead
+  // end this exists to replace with an actual explanation.
+  const [loadError, setLoadError] = useState(false);
   // Width/height of the video's own encoded frame -- used to cap how wide
   // (and therefore how tall) a portrait phone recording is allowed to
   // render. A vertical clip at full dialog width can come out taller than
@@ -226,6 +235,7 @@ export function VideoAnalysisDialog({
     setPlaying(false);
     setSpeed(1);
     setIntrinsicSize(null);
+    setLoadError(false);
   }
 
   // Re-runs whenever the dialog opens on a (possibly new) video -- Dialog
@@ -533,55 +543,65 @@ export function VideoAnalysisDialog({
               space the video doesn't actually occupy, throwing the skeleton
               overlay out of alignment exactly like the videoWidth/clientWidth
               mismatch fixed elsewhere this session. */}
-          <div className="relative w-full">
-            <video
-              ref={videoRef}
-              src={videoUrl}
-              playsInline
-              className="block w-full"
-              onLoadedMetadata={() => {
-                const v = videoRef.current;
-                if (v) {
-                  setDuration(v.duration);
-                  if (v.videoWidth && v.videoHeight) setIntrinsicSize({ w: v.videoWidth, h: v.videoHeight });
-                }
-                redraw();
-              }}
-              onTimeUpdate={() => {
-                const v = videoRef.current;
-                if (v) setCurrentTime(v.currentTime);
-                redraw();
-              }}
-              onSeeked={handleFrameChanged}
-              onPlay={() => {
-                setPlaying(true);
-                handleFrameChanged();
-              }}
-              onPause={() => setPlaying(false)}
-            />
-            <canvas
-              ref={canvasRef}
-              onPointerDown={handlePointerDown}
-              onPointerMove={handlePointerMove}
-              onPointerUp={handlePointerUp}
-              className={cn("absolute inset-0 h-full w-full", activeTool !== "none" ? "touch-none" : "pointer-events-none")}
-            />
-          </div>
+          {loadError ? (
+            <div className="flex flex-col items-center gap-2 px-6 py-10 text-center text-sm text-white/70">
+              <VideoOff className="h-8 w-8" />
+              This video couldn't be loaded — it may not have finished uploading, or the file is missing.
+            </div>
+          ) : (
+            <>
+              <div className="relative w-full">
+                <video
+                  ref={videoRef}
+                  src={videoUrl}
+                  playsInline
+                  className="block w-full"
+                  onLoadedMetadata={() => {
+                    const v = videoRef.current;
+                    if (v) {
+                      setDuration(v.duration);
+                      if (v.videoWidth && v.videoHeight) setIntrinsicSize({ w: v.videoWidth, h: v.videoHeight });
+                    }
+                    redraw();
+                  }}
+                  onTimeUpdate={() => {
+                    const v = videoRef.current;
+                    if (v) setCurrentTime(v.currentTime);
+                    redraw();
+                  }}
+                  onSeeked={handleFrameChanged}
+                  onPlay={() => {
+                    setPlaying(true);
+                    handleFrameChanged();
+                  }}
+                  onPause={() => setPlaying(false)}
+                  onError={() => setLoadError(true)}
+                />
+                <canvas
+                  ref={canvasRef}
+                  onPointerDown={handlePointerDown}
+                  onPointerMove={handlePointerMove}
+                  onPointerUp={handlePointerUp}
+                  className={cn("absolute inset-0 h-full w-full", activeTool !== "none" ? "touch-none" : "pointer-events-none")}
+                />
+              </div>
 
-          <div className="absolute right-2 top-2 flex flex-col gap-1.5">
-            <RailButton icon={PersonStanding} active={showSkeleton} label="Skeleton" onClick={toggleSkeleton} />
-            <RailButton icon={Compass} active={activeTool === "angle"} label="Angle" onClick={() => selectTool("angle")} />
-            <RailButton icon={Pencil} active={activeTool === "draw"} label="Draw" onClick={() => selectTool("draw")} />
-            <RailButton icon={Ruler} active={activeTool === "ruler"} label="Ruler" onClick={() => selectTool("ruler")} />
-            <RailButton
-              icon={Timer}
-              active={showStopwatch}
-              label="Stopwatch"
-              onClick={() => setShowStopwatch((v) => !v)}
-            />
-          </div>
+              <div className="absolute right-2 top-2 flex flex-col gap-1.5">
+                <RailButton icon={PersonStanding} active={showSkeleton} label="Skeleton" onClick={toggleSkeleton} />
+                <RailButton icon={Compass} active={activeTool === "angle"} label="Angle" onClick={() => selectTool("angle")} />
+                <RailButton icon={Pencil} active={activeTool === "draw"} label="Draw" onClick={() => selectTool("draw")} />
+                <RailButton icon={Ruler} active={activeTool === "ruler"} label="Ruler" onClick={() => selectTool("ruler")} />
+                <RailButton
+                  icon={Timer}
+                  active={showStopwatch}
+                  label="Stopwatch"
+                  onClick={() => setShowStopwatch((v) => !v)}
+                />
+              </div>
+            </>
+          )}
 
-          {analyzing && (
+          {!loadError && analyzing && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/70 text-sm text-white">
               <Loader2 className="h-5 w-5 animate-spin" />
               Analyzing movement… {Math.round(analyzeProgress * 100)}%
@@ -696,6 +716,7 @@ export function VideoAnalysisDialog({
           )}
         </div>
 
+        {!loadError && (
         <div className="flex items-center gap-2 border-t border-border px-4 py-3">
           <Button size="icon" variant="ghost" onClick={togglePlay} className="h-8 w-8 shrink-0">
             {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
@@ -738,6 +759,7 @@ export function VideoAnalysisDialog({
             ))}
           </div>
         </div>
+        )}
       </DialogContent>
     </Dialog>
   );
