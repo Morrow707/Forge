@@ -140,6 +140,53 @@ const uploadSkillVideo = multer({
   },
 });
 
+// A coach/admin authoring a lesson's content page can either paste a link
+// (the existing videoUrl convention) or upload a video file directly --
+// same upload mechanics as the athlete/skill clip uploads above, just a
+// separate directory since this is authored instructional content, not an
+// athlete's own captured rep.
+const LESSON_VIDEOS_DIR = path.join(process.cwd(), "server", "uploads", "lesson-videos");
+fs.mkdirSync(LESSON_VIDEOS_DIR, { recursive: true });
+
+const uploadLessonVideo = multer({
+  storage: multer.diskStorage({
+    destination: LESSON_VIDEOS_DIR,
+    filename: (_req, file, cb) => {
+      cb(null, `${crypto.randomUUID()}${videoExtensionForMimetype(file.mimetype) ?? ""}`);
+    },
+  }),
+  limits: { fileSize: 100 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (!videoExtensionForMimetype(file.mimetype)) {
+      return cb(new Error("Unsupported video format"));
+    }
+    cb(null, true);
+  },
+});
+
+// A downloadable worksheet/handout attached to a lesson's content page --
+// PDF only, kept to a narrow allowlist (never an executable/script type)
+// since this ends up served back as a direct download link to any athlete
+// enrolled in the class.
+const LESSON_ATTACHMENTS_DIR = path.join(process.cwd(), "server", "uploads", "lesson-attachments");
+fs.mkdirSync(LESSON_ATTACHMENTS_DIR, { recursive: true });
+
+const uploadLessonAttachment = multer({
+  storage: multer.diskStorage({
+    destination: LESSON_ATTACHMENTS_DIR,
+    filename: (_req, file, cb) => {
+      cb(null, `${crypto.randomUUID()}.pdf`);
+    },
+  }),
+  limits: { fileSize: 20 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype !== "application/pdf") {
+      return cb(new Error("Only PDF attachments are supported"));
+    }
+    cb(null, true);
+  },
+});
+
 function currentUser(req: any) {
   return req.user as { id: number; role: "coach" | "athlete" | "admin"; name: string; email: string };
 }
@@ -683,6 +730,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!roster.some((a) => a.id === parsed.data.athleteId)) {
       return res.status(400).json({ message: "Athlete not on your roster" });
     }
+    const prereq = await storage.isClassPrerequisiteSatisfied(parsed.data.athleteId, id);
+    if (!prereq.satisfied) {
+      return res
+        .status(400)
+        .json({ message: `This athlete needs to complete "${prereq.prerequisiteName}" first.` });
+    }
     const { enrollment, newlyUnlocked } = await storage.enrollAthleteInClass(
       user.id,
       id,
@@ -748,6 +801,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({
       minSessionsRequired: settings.minSessionsRequired,
       minDaysElapsed: settings.minDaysElapsed,
+    });
+  });
+
+  // Not scoped to a specific class -- authored in the class builder before
+  // the page's own Save click, same "upload now, reference the returned
+  // URL, persist on the next real save" pattern as /api/coach/annotations.
+  // Shared by both a coach (their own class) and an admin (a Forge class);
+  // ownership of the class itself is still enforced by the classes PUT
+  // route that actually persists this URL onto a content page.
+  app.post("/api/classes/lesson-media/video", requireRole(["coach", "admin"]), (req, res) => {
+    uploadLessonVideo.single("video")(req, res, (err: unknown) => {
+      if (err) {
+        const message = err instanceof Error ? err.message : "Upload failed";
+        return res.status(400).json({ message });
+      }
+      if (!req.file) return res.status(400).json({ message: "No video file provided" });
+      res.status(201).json({ url: `/uploads/lesson-videos/${req.file.filename}` });
+    });
+  });
+
+  app.post("/api/classes/lesson-media/attachment", requireRole(["coach", "admin"]), (req, res) => {
+    uploadLessonAttachment.single("file")(req, res, (err: unknown) => {
+      if (err) {
+        const message = err instanceof Error ? err.message : "Upload failed";
+        return res.status(400).json({ message });
+      }
+      if (!req.file) return res.status(400).json({ message: "No file provided" });
+      res.status(201).json({
+        url: `/uploads/lesson-attachments/${req.file.filename}`,
+        name: req.file.originalname,
+      });
     });
   });
 
@@ -4602,7 +4686,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Free Agent only -- the Forge catalog to browse and self-enroll into.
   app.get("/api/athlete/classes", requireRole("athlete"), requireFreeAgent, async (req, res) => {
-    const list = await storage.getVisibleClassesForFreeAgent();
+    const user = currentUser(req);
+    const list = await storage.getVisibleClassesForFreeAgent(user.id);
     res.json(list);
   });
 
@@ -4643,6 +4728,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const cls = await storage.getClassById(id);
       if (!cls || !cls.isForgeOfficial) {
         return res.status(404).json({ message: "Class not found" });
+      }
+      const prereq = await storage.isClassPrerequisiteSatisfied(user.id, id);
+      if (!prereq.satisfied) {
+        return res
+          .status(400)
+          .json({ message: `Complete "${prereq.prerequisiteName}" before enrolling in this class.` });
       }
       const { enrollment, newlyUnlocked } = await storage.enrollSelfInClass(
         user.id,
@@ -4701,7 +4792,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const lessonId = Number(req.params.lessonId);
       const enrollment = await requireReadableClassLesson(user.id, id, lessonId);
       if (!enrollment) return res.status(404).json({ message: "Lesson not found" });
-      await storage.markClassLessonContentCompleted(enrollment.id, lessonId);
+      const { notifyCoach } = await storage.markClassLessonContentCompleted(enrollment.id, lessonId);
+      if (notifyCoach) {
+        await notifyUser(
+          notifyCoach.coachId,
+          "class_completed",
+          "Class completed!",
+          `${notifyCoach.athleteName} just finished every lesson in ${notifyCoach.className}.`,
+          `/coach/classes/${notifyCoach.classId}`,
+        );
+      }
       const progress = await storage.getClassProgressForAthlete(user.id, id);
       res.json(progress);
     },
@@ -4725,6 +4825,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       try {
         const result = await storage.submitClassLessonQuiz(enrollment.id, lessonId, parsed.data.answers);
+        if (result.completedNotify) {
+          const n = result.completedNotify;
+          await notifyUser(
+            n.coachId,
+            "class_completed",
+            "Class completed!",
+            `${n.athleteName} just finished every lesson in ${n.className}.`,
+            `/coach/classes/${n.classId}`,
+          );
+        } else if (result.stuckNotify) {
+          const n = result.stuckNotify;
+          await notifyUser(
+            n.coachId,
+            "class_quiz_stuck",
+            "Athlete could use a hand",
+            `${n.athleteName} hasn't passed the Lesson ${n.lessonNumber} (${n.lessonTitle}) quiz in ${n.className} after several tries.`,
+            `/coach/classes/${n.classId}`,
+          );
+        }
         res.json(result);
       } catch (err) {
         res.status(400).json({ message: err instanceof Error ? err.message : "Could not submit quiz" });

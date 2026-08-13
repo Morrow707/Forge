@@ -16,7 +16,8 @@ import { Label } from "@/components/ui/label";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { GraduationCap, ListOrdered, ArrowRight } from "lucide-react";
+import { GraduationCap, ListOrdered, ArrowRight, Search, Trophy, Lock } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 type EnrolledClass = {
   classId: number;
@@ -25,15 +26,20 @@ type EnrolledClass = {
   isForgeOfficial: boolean;
   lessonCount: number;
   lessonsStarted: number;
+  completedAt: string | null;
 };
 
 type BrowsableClass = {
   id: number;
   name: string;
   description: string | null;
+  category: string | null;
   lessonCount: number;
   isForgeOfficial: true;
   ownerLabel: string;
+  prerequisiteClassId: number | null;
+  prerequisiteName: string | null;
+  prerequisiteSatisfied: boolean;
 };
 
 /** Classes -- "My Classes" (enrolled, works for any athlete regardless of
@@ -60,6 +66,19 @@ export default function AthleteClasses() {
   const enrolledIds = new Set(myClasses.map((c) => c.classId));
   const [enrollTarget, setEnrollTarget] = useState<BrowsableClass | null>(null);
   const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [search, setSearch] = useState("");
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
+
+  const unenrolledCatalog = catalog.filter((c) => !enrolledIds.has(c.id));
+  const categories = Array.from(
+    new Set(unenrolledCatalog.map((c) => c.category?.trim()).filter((c): c is string => !!c)),
+  ).sort();
+  const filteredCatalog = unenrolledCatalog.filter((c) => {
+    if (activeCategory && c.category !== activeCategory) return false;
+    if (!search.trim()) return true;
+    const q = search.trim().toLowerCase();
+    return c.name.toLowerCase().includes(q) || (c.description ?? "").toLowerCase().includes(q);
+  });
 
   const enrollMutation = useMutation({
     mutationFn: async () => {
@@ -105,14 +124,23 @@ export default function AthleteClasses() {
                 onClick={() => navigate(`/athlete/classes/${c.classId}`)}
               >
                 <CardContent className="flex flex-1 flex-col gap-3 p-5">
-                  <p className="font-display text-xl font-bold uppercase tracking-wide">{c.name}</p>
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="font-display text-xl font-bold uppercase tracking-wide">{c.name}</p>
+                    {c.completedAt && (
+                      <span title="Class completed">
+                        <Trophy className="h-5 w-5 shrink-0 fill-amber-400 text-amber-400" />
+                      </span>
+                    )}
+                  </div>
                   {c.description && (
                     <p className="line-clamp-2 text-sm text-muted-foreground">{c.description}</p>
                   )}
                   <div className="mt-auto flex items-center justify-between border-t border-border pt-3 text-xs text-muted-foreground">
                     <span className="flex items-center gap-1">
                       <ListOrdered className="h-3.5 w-3.5" />
-                      Lesson {Math.min(c.lessonsStarted, c.lessonCount) || 1} of {c.lessonCount}
+                      {c.completedAt
+                        ? "Completed"
+                        : `Lesson ${Math.min(c.lessonsStarted, c.lessonCount) || 1} of ${c.lessonCount}`}
                     </span>
                     <ArrowRight className="h-3.5 w-3.5" />
                   </div>
@@ -130,37 +158,94 @@ export default function AthleteClasses() {
             {!catalogLoading && catalog.length === 0 && (
               <p className="text-sm text-muted-foreground">No Forge Classes published yet.</p>
             )}
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {catalog
-                .filter((c) => !enrolledIds.has(c.id))
-                .map((c) => (
-                  <Card key={c.id} className="flex flex-col">
-                    <CardContent className="flex flex-1 flex-col gap-3 p-5">
-                      <p className="font-display text-xl font-bold uppercase tracking-wide">{c.name}</p>
-                      {c.description && (
-                        <p className="line-clamp-2 text-sm text-muted-foreground">{c.description}</p>
+            {catalog.length > 0 && (
+              <div className="mb-4 space-y-2">
+                <div className="relative max-w-sm">
+                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search classes…"
+                    className="pl-8"
+                  />
+                </div>
+                {categories.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setActiveCategory(null)}
+                      className={cn(
+                        "rounded-full border px-3 py-1 text-xs font-semibold transition-colors",
+                        activeCategory === null
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-border text-muted-foreground hover:bg-surface-elevated",
                       )}
-                      <div className="mt-auto space-y-2">
-                        <div className="flex items-center border-t border-border pt-3 text-xs text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <ListOrdered className="h-3.5 w-3.5" />
-                            {c.lessonCount} lesson{c.lessonCount === 1 ? "" : "s"}
-                          </span>
-                        </div>
-                        <Button
-                          size="sm"
-                          className="w-full"
-                          onClick={() => {
-                            setStartDate(new Date().toISOString().slice(0, 10));
-                            setEnrollTarget(c);
-                          }}
-                        >
-                          Enroll
-                        </Button>
+                    >
+                      All
+                    </button>
+                    {categories.map((cat) => (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => setActiveCategory((prev) => (prev === cat ? null : cat))}
+                        className={cn(
+                          "rounded-full border px-3 py-1 text-xs font-semibold transition-colors",
+                          activeCategory === cat
+                            ? "border-primary bg-primary/10 text-primary"
+                            : "border-border text-muted-foreground hover:bg-surface-elevated",
+                        )}
+                      >
+                        {cat}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            {unenrolledCatalog.length > 0 && filteredCatalog.length === 0 && (
+              <p className="py-6 text-center text-sm text-muted-foreground">No classes match your search.</p>
+            )}
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {filteredCatalog.map((c) => (
+                <Card key={c.id} className="flex flex-col">
+                  <CardContent className="flex flex-1 flex-col gap-3 p-5">
+                    <p className="font-display text-xl font-bold uppercase tracking-wide">{c.name}</p>
+                    {c.category && (
+                      <p className="-mt-2 text-xs font-semibold uppercase tracking-wide text-primary">
+                        {c.category}
+                      </p>
+                    )}
+                    {c.description && (
+                      <p className="line-clamp-2 text-sm text-muted-foreground">{c.description}</p>
+                    )}
+                    <div className="mt-auto space-y-2">
+                      <div className="flex items-center border-t border-border pt-3 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <ListOrdered className="h-3.5 w-3.5" />
+                          {c.lessonCount} lesson{c.lessonCount === 1 ? "" : "s"}
+                        </span>
                       </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                      {c.prerequisiteName && !c.prerequisiteSatisfied ? (
+                        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <Lock className="h-3.5 w-3.5 shrink-0" />
+                          Complete "{c.prerequisiteName}" to unlock
+                        </p>
+                      ) : null}
+                      <Button
+                        size="sm"
+                        className="w-full"
+                        disabled={!c.prerequisiteSatisfied}
+                        onClick={() => {
+                          setStartDate(new Date().toISOString().slice(0, 10));
+                          setEnrollTarget(c);
+                        }}
+                      >
+                        Enroll
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
           </div>
         )}

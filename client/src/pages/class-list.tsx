@@ -18,12 +18,14 @@ import { EnrollInClassDialog } from "@/components/enroll-in-class-dialog";
 import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { Plus, GraduationCap, Trash2, Users, ListOrdered, UserPlus } from "lucide-react";
+import { Plus, GraduationCap, Trash2, Users, ListOrdered, UserPlus, Search } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 type ClassSummary = {
   id: number;
   name: string;
   description: string | null;
+  category?: string | null;
   lessonCount: number;
   enrolledAthleteCount: number;
   isForgeOfficial?: boolean;
@@ -69,6 +71,20 @@ export function ClassListPage({
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [enrollClassId, setEnrollClassId] = useState<number | null>(null);
+  const [search, setSearch] = useState("");
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
+
+  // Chips are derived from whatever categories actually exist rather than a
+  // hardcoded list -- see classes.category in shared/schema.ts.
+  const categories = Array.from(
+    new Set(classes.map((c) => c.category?.trim()).filter((c): c is string => !!c)),
+  ).sort();
+  const filteredClasses = classes.filter((c) => {
+    if (activeCategory && c.category !== activeCategory) return false;
+    if (!search.trim()) return true;
+    const q = search.trim().toLowerCase();
+    return c.name.toLowerCase().includes(q) || (c.description ?? "").toLowerCase().includes(q);
+  });
 
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -125,8 +141,57 @@ export function ClassListPage({
         </Card>
       )}
 
+      {classes.length > 0 && (
+        <div className="mb-4 space-y-2">
+          <div className="relative max-w-sm">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search classes…"
+              className="pl-8"
+            />
+          </div>
+          {categories.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                onClick={() => setActiveCategory(null)}
+                className={cn(
+                  "rounded-full border px-3 py-1 text-xs font-semibold transition-colors",
+                  activeCategory === null
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border text-muted-foreground hover:bg-surface-elevated",
+                )}
+              >
+                All
+              </button>
+              {categories.map((cat) => (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setActiveCategory((prev) => (prev === cat ? null : cat))}
+                  className={cn(
+                    "rounded-full border px-3 py-1 text-xs font-semibold transition-colors",
+                    activeCategory === cat
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border text-muted-foreground hover:bg-surface-elevated",
+                  )}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {classes.length > 0 && filteredClasses.length === 0 && (
+        <p className="py-8 text-center text-sm text-muted-foreground">No classes match your search.</p>
+      )}
+
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {classes.map((c) => (
+        {filteredClasses.map((c) => (
           <Card key={c.id} className="flex flex-col">
             <CardContent className="flex flex-1 flex-col gap-3 p-5">
               <div className="cursor-pointer" onClick={() => navigate(`${routeBase}/${c.id}`)}>
@@ -140,6 +205,11 @@ export function ClassListPage({
                     />
                   )}
                 </div>
+                {c.category && (
+                  <p className="mt-0.5 text-xs font-semibold uppercase tracking-wide text-primary">
+                    {c.category}
+                  </p>
+                )}
                 {c.description && (
                   <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{c.description}</p>
                 )}

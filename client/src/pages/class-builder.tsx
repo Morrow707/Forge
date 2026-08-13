@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
@@ -33,6 +33,12 @@ import {
   GraduationCap,
   BookOpen,
   HelpCircle,
+  Users,
+  Star,
+  Upload,
+  Video,
+  FileText,
+  Trophy,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { SkillExercise } from "@shared/schema";
@@ -56,11 +62,17 @@ type LocalContentPage = {
   key: string;
   title: string;
   body: string;
+  /** Either a pasted link or a relative /uploads/lesson-videos/... path
+   * from a direct upload -- see ContentPagesEditor's upload button. */
   videoUrl: string;
   /** One image URL per line -- split into classLessonContentPageSchema's
    * imageUrls array on save. A plain textarea is simpler to author than a
    * dynamic repeatable-input list for what's usually 0-2 images a page. */
   imageUrlsText: string;
+  /** A relative /uploads/lesson-attachments/... path from a direct PDF
+   * upload -- shown to the athlete as a "Download worksheet" link. */
+  attachmentUrl: string;
+  attachmentName: string;
 };
 type LocalQuizAnswer = {
   key: string;
@@ -114,6 +126,8 @@ function stateFromClass(cls: any) {
   return {
     name: cls.name as string,
     description: (cls.description as string) ?? "",
+    category: (cls.category as string | null) ?? "",
+    prerequisiteClassId: (cls.prerequisiteClassId as number | null) ?? null,
     lessons: cls.lessons.map((l: any) => ({
       key: uid(),
       id: l.id,
@@ -133,13 +147,22 @@ function stateFromClass(cls: any) {
         trackingLevel: (pe.trackingLevel ?? "none") as SkillTrackingLevel,
       })),
       content: (
-        (l.content ?? []) as { title?: string; body: string; videoUrl?: string | null; imageUrls?: string[] }[]
+        (l.content ?? []) as {
+          title?: string;
+          body: string;
+          videoUrl?: string | null;
+          imageUrls?: string[];
+          attachmentUrl?: string | null;
+          attachmentName?: string | null;
+        }[]
       ).map((p) => ({
         key: uid(),
         title: p.title ?? "",
         body: p.body,
         videoUrl: p.videoUrl ?? "",
         imageUrlsText: (p.imageUrls ?? []).join("\n"),
+        attachmentUrl: p.attachmentUrl ?? "",
+        attachmentName: p.attachmentName ?? "",
       })),
       quizQuestions: ((l.quizQuestions ?? []) as any[]).map((q) => ({
         key: uid(),
@@ -200,16 +223,24 @@ export function ClassBuilderPage({
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [category, setCategory] = useState("");
+  const [prerequisiteClassId, setPrerequisiteClassId] = useState<number | null>(null);
   const [lessons, setLessons] = useState<LocalLesson[]>([]);
   const [pickerForLesson, setPickerForLesson] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const [enrollOpen, setEnrollOpen] = useState(false);
+
+  const { data: otherClasses = [] } = useQuery<{ id: number; name: string }[]>({
+    queryKey: [`${apiBase}/classes`],
+  });
 
   useEffect(() => {
     if (cls && !hydrated) {
       const state = stateFromClass(cls);
       setName(state.name);
       setDescription(state.description);
+      setCategory(state.category);
+      setPrerequisiteClassId(state.prerequisiteClassId);
       setLessons(state.lessons);
       setHydrated(true);
     }
@@ -262,6 +293,8 @@ export function ClassBuilderPage({
       const payload = {
         name,
         description,
+        category: category.trim() || null,
+        prerequisiteClassId,
         lessons: lessons.map((l, i) => ({
           id: l.id,
           lessonNumber: i + 1,
@@ -295,6 +328,8 @@ export function ClassBuilderPage({
                 .split("\n")
                 .map((s) => s.trim())
                 .filter(Boolean),
+              attachmentUrl: p.attachmentUrl.trim() || undefined,
+              attachmentName: p.attachmentName.trim() || undefined,
             })),
           quizQuestions: l.quizQuestions
             .filter((q) => q.questionText.trim())
@@ -390,6 +425,7 @@ export function ClassBuilderPage({
           getClassIfUsableByCoach vs. assertCoachOwnsClass in routes.ts), so
           it lives outside the `editable`-gated fieldset below. */}
       {showEnroll && <CoachPacingSettings apiBase={apiBase} classId={classId} />}
+      {showEnroll && <ClassRosterProgress apiBase={apiBase} classId={classId} />}
 
       <fieldset disabled={!editable} className="contents">
         <Card className="mb-6">
@@ -399,8 +435,40 @@ export function ClassBuilderPage({
               <Input value={name} onChange={(e) => setName(e.target.value)} />
             </div>
             <div className="space-y-1.5">
+              <Label>Category (optional)</Label>
+              <Input
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                placeholder="e.g. Hitting, Pitching, Strength"
+              />
+            </div>
+            <div className="space-y-1.5 sm:col-span-2">
               <Label>Description</Label>
               <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={1} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Prerequisite class (optional)</Label>
+              <Select
+                value={prerequisiteClassId != null ? String(prerequisiteClassId) : "none"}
+                onValueChange={(v) => setPrerequisiteClassId(v === "none" ? null : Number(v))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  {otherClasses
+                    .filter((oc) => oc.id !== classId)
+                    .map((oc) => (
+                      <SelectItem key={oc.id} value={String(oc.id)}>
+                        {oc.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">
+                Athletes can't enroll in this class until they've completed the one you pick here.
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -579,6 +647,103 @@ function CoachPacingSettings({ apiBase, classId }: { apiBase: string; classId: n
           <Save className="h-3.5 w-3.5" />
           {saveMutation.isPending ? "Saving…" : "Save Pacing"}
         </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+type RosterLessonProgress = {
+  lessonId: number;
+  lessonNumber: number;
+  title: string;
+  state: "active" | "ready" | "locked_preview" | "locked";
+  contentCompletedAt: string | null;
+  quizPassedAt: string | null;
+  quizPerfectAt: string | null;
+};
+type RosterProgressEntry = {
+  enrollmentId: number;
+  athleteId: number;
+  athleteName: string;
+  completedAt: string | null;
+  lessonsStarted: number;
+  lessonsTotal: number;
+  lessons: RosterLessonProgress[];
+};
+
+/** Per-athlete, per-lesson progress for this coach's roster in this class --
+ * reuses getClassProgressForAthlete server-side (same source of truth the
+ * athlete sees for themselves), so a coach can see exactly which lesson
+ * someone's on and their quiz results without asking. Shown for both a
+ * coach's own class and a Forge class they've enrolled athletes into
+ * (enrollment is a per-coach concept independent of who authored it). */
+function ClassRosterProgress({ apiBase, classId }: { apiBase: string; classId: number }) {
+  const { data: roster = [], isLoading } = useQuery<RosterProgressEntry[]>({
+    queryKey: [`${apiBase}/classes`, classId, "roster"],
+    queryFn: () => getJson(`${apiBase}/classes/${classId}/roster`),
+  });
+
+  if (isLoading || roster.length === 0) return null;
+
+  return (
+    <Card className="mb-6">
+      <CardContent className="space-y-3 p-5">
+        <div className="flex items-center gap-1.5">
+          <Users className="h-4 w-4 text-muted-foreground" />
+          <p className="text-sm font-semibold">Your roster's progress</p>
+        </div>
+        <div className="space-y-3">
+          {roster.map((entry) => (
+            <div key={entry.enrollmentId} className="rounded-md border border-border p-3">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <p className="flex items-center gap-1.5 text-sm font-semibold">
+                  {entry.athleteName}
+                  {entry.completedAt && (
+                    <span title="Class completed">
+                      <Trophy className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                    </span>
+                  )}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {entry.completedAt
+                    ? "Completed"
+                    : `${entry.lessonsStarted} of ${entry.lessonsTotal} lessons active`}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {entry.lessons.map((l) => (
+                  <div
+                    key={l.lessonId}
+                    title={`Lesson ${l.lessonNumber}: ${l.title} — ${
+                      l.quizPerfectAt
+                        ? "perfect quiz score"
+                        : l.quizPassedAt
+                          ? "quiz passed"
+                          : l.contentCompletedAt
+                            ? "content read, quiz not yet passed"
+                            : l.state
+                    }`}
+                    className={cn(
+                      "relative flex h-7 w-7 shrink-0 items-center justify-center rounded-md border text-[10px] font-semibold",
+                      l.state === "active"
+                        ? "border-primary/40 bg-primary/10 text-primary"
+                        : l.state === "ready"
+                          ? "border-border bg-surface-elevated text-foreground"
+                          : "border-border/60 bg-secondary text-muted-foreground",
+                    )}
+                  >
+                    {l.lessonNumber}
+                    {l.quizPerfectAt ? (
+                      <Star className="absolute -right-1.5 -top-1.5 h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                    ) : l.quizPassedAt ? (
+                      <Star className="absolute -right-1.5 -top-1.5 h-3.5 w-3.5 fill-amber-700 text-amber-700" />
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
       </CardContent>
     </Card>
   );
@@ -885,61 +1050,15 @@ function ContentPagesEditor({
   return (
     <div className="space-y-2">
       {pages.map((page, i) => (
-        <div key={page.key} className="space-y-1.5 rounded-md border border-border p-2.5">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-[10px] font-semibold uppercase text-muted-foreground">
-              Page {i + 1}
-            </span>
-            <button
-              type="button"
-              aria-label={`Remove page ${i + 1}`}
-              onClick={() => onChange((prev) => prev.filter((p) => p.key !== page.key))}
-              className="text-muted-foreground hover:text-destructive"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
-          </div>
-          <Input
-            value={page.title}
-            onChange={(e) => {
-              const val = e.target.value;
-              onChange((prev) => prev.map((p) => (p.key === page.key ? { ...p, title: val } : p)));
-            }}
-            placeholder="Page title (optional)"
-            className="h-8 text-sm"
-          />
-          <Textarea
-            value={page.body}
-            onChange={(e) => {
-              const val = e.target.value;
-              onChange((prev) => prev.map((p) => (p.key === page.key ? { ...p, body: val } : p)));
-            }}
-            rows={4}
-            placeholder="What the athlete reads on this page…"
-            className="text-sm"
-          />
-          <Input
-            value={page.videoUrl}
-            onChange={(e) => {
-              const val = e.target.value;
-              onChange((prev) => prev.map((p) => (p.key === page.key ? { ...p, videoUrl: val } : p)));
-            }}
-            placeholder="Video link (optional) -- e.g. a YouTube search or watch URL"
-            className="h-8 text-sm"
-          />
-          <Textarea
-            value={page.imageUrlsText}
-            onChange={(e) => {
-              const val = e.target.value;
-              onChange((prev) =>
-                prev.map((p) => (p.key === page.key ? { ...p, imageUrlsText: val } : p)),
-              );
-            }}
-            rows={2}
-            placeholder="Image URLs (optional), one per line"
-            className="text-xs"
-          />
-        </div>
+        <ContentPageRow
+          key={page.key}
+          page={page}
+          index={i}
+          onUpdate={(updater) =>
+            onChange((prev) => prev.map((p) => (p.key === page.key ? updater(p) : p)))
+          }
+          onRemove={() => onChange((prev) => prev.filter((p) => p.key !== page.key))}
+        />
       ))}
       <Button
         type="button"
@@ -949,13 +1068,196 @@ function ContentPagesEditor({
         onClick={() =>
           onChange((prev) => [
             ...prev,
-            { key: uid(), title: "", body: "", videoUrl: "", imageUrlsText: "" },
+            {
+              key: uid(),
+              title: "",
+              body: "",
+              videoUrl: "",
+              imageUrlsText: "",
+              attachmentUrl: "",
+              attachmentName: "",
+            },
           ])
         }
       >
         <Plus className="h-3.5 w-3.5" />
         Add Page
       </Button>
+    </div>
+  );
+}
+
+function ContentPageRow({
+  page,
+  index,
+  onUpdate,
+  onRemove,
+}: {
+  page: LocalContentPage;
+  index: number;
+  onUpdate: (updater: (page: LocalContentPage) => LocalContentPage) => void;
+  onRemove: () => void;
+}) {
+  const videoInputRef = useRef<HTMLInputElement>(null);
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
+
+  const uploadVideoMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const form = new FormData();
+      form.append("video", file);
+      const res = await apiRequest("POST", "/api/classes/lesson-media/video", form);
+      return res.json() as Promise<{ url: string }>;
+    },
+    onSuccess: (data) => {
+      onUpdate((p) => ({ ...p, videoUrl: data.url }));
+      toast.success("Video uploaded");
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Could not upload video"),
+  });
+
+  const uploadAttachmentMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await apiRequest("POST", "/api/classes/lesson-media/attachment", form);
+      return res.json() as Promise<{ url: string; name: string }>;
+    },
+    onSuccess: (data) => {
+      onUpdate((p) => ({ ...p, attachmentUrl: data.url, attachmentName: data.name }));
+      toast.success("Attachment uploaded");
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Could not upload attachment"),
+  });
+
+  const isUploadedVideo = page.videoUrl.startsWith("/uploads/");
+
+  return (
+    <div className="space-y-1.5 rounded-md border border-border p-2.5">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[10px] font-semibold uppercase text-muted-foreground">
+          Page {index + 1}
+        </span>
+        <button
+          type="button"
+          aria-label={`Remove page ${index + 1}`}
+          onClick={onRemove}
+          className="text-muted-foreground hover:text-destructive"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      <Input
+        value={page.title}
+        onChange={(e) => {
+          const val = e.target.value;
+          onUpdate((p) => ({ ...p, title: val }));
+        }}
+        placeholder="Page title (optional)"
+        className="h-8 text-sm"
+      />
+      <Textarea
+        value={page.body}
+        onChange={(e) => {
+          const val = e.target.value;
+          onUpdate((p) => ({ ...p, body: val }));
+        }}
+        rows={4}
+        placeholder="What the athlete reads on this page…"
+        className="text-sm"
+      />
+
+      <div className="space-y-1">
+        <div className="flex gap-1.5">
+          <Input
+            value={page.videoUrl}
+            onChange={(e) => {
+              const val = e.target.value;
+              onUpdate((p) => ({ ...p, videoUrl: val }));
+            }}
+            placeholder="Video link, or upload a file -- e.g. a YouTube search or watch URL"
+            className="h-8 flex-1 text-sm"
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 shrink-0 px-2"
+            onClick={() => videoInputRef.current?.click()}
+            disabled={uploadVideoMutation.isPending}
+          >
+            <Upload className="h-3.5 w-3.5" />
+            {uploadVideoMutation.isPending ? "Uploading…" : "Upload"}
+          </Button>
+          <input
+            ref={videoInputRef}
+            type="file"
+            accept="video/mp4,video/webm,video/quicktime"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) uploadVideoMutation.mutate(file);
+              e.target.value = "";
+            }}
+          />
+        </div>
+        {isUploadedVideo && (
+          <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
+            <Video className="h-3 w-3" />
+            Uploaded video attached
+          </p>
+        )}
+      </div>
+
+      <Textarea
+        value={page.imageUrlsText}
+        onChange={(e) => {
+          const val = e.target.value;
+          onUpdate((p) => ({ ...p, imageUrlsText: val }));
+        }}
+        rows={2}
+        placeholder="Image URLs (optional), one per line"
+        className="text-xs"
+      />
+
+      <div className="flex items-center gap-1.5">
+        {page.attachmentUrl ? (
+          <div className="flex flex-1 items-center gap-1.5 rounded-md border border-border bg-surface-elevated px-2 py-1.5 text-xs">
+            <FileText className="h-3.5 w-3.5 shrink-0 text-primary" />
+            <span className="flex-1 truncate">{page.attachmentName || "Worksheet.pdf"}</span>
+            <button
+              type="button"
+              aria-label="Remove attachment"
+              onClick={() => onUpdate((p) => ({ ...p, attachmentUrl: "", attachmentName: "" }))}
+              className="text-muted-foreground hover:text-destructive"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ) : (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs"
+            onClick={() => attachmentInputRef.current?.click()}
+            disabled={uploadAttachmentMutation.isPending}
+          >
+            <FileText className="h-3.5 w-3.5" />
+            {uploadAttachmentMutation.isPending ? "Uploading…" : "Attach worksheet (PDF)"}
+          </Button>
+        )}
+        <input
+          ref={attachmentInputRef}
+          type="file"
+          accept="application/pdf"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) uploadAttachmentMutation.mutate(file);
+            e.target.value = "";
+          }}
+        />
+      </div>
     </div>
   );
 }

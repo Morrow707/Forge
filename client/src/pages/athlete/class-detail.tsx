@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { ArrowLeft, Lock, CheckCircle2, PlayCircle, BookOpen, ListChecks, Star } from "lucide-react";
+import { ArrowLeft, Lock, CheckCircle2, PlayCircle, BookOpen, ListChecks, Star, Trophy } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ClassLessonReaderDialog } from "@/components/class-lesson-reader-dialog";
 
@@ -30,6 +30,7 @@ type ClassProgress = {
   class: { id: number; name: string; description: string | null; isForgeOfficial: boolean };
   enrolled: boolean;
   startDate?: string;
+  completedAt?: string | null;
   lessons: LessonProgress[];
 };
 
@@ -92,6 +93,20 @@ export default function AthleteClassDetail() {
     >
       {data.class.description && (
         <p className="mb-6 max-w-2xl text-sm text-muted-foreground">{data.class.description}</p>
+      )}
+
+      {data.completedAt && (
+        <Card className="mb-6 border-amber-400/40 bg-amber-400/5">
+          <CardContent className="flex items-center gap-3 p-4">
+            <Trophy className="h-8 w-8 shrink-0 fill-amber-400 text-amber-400" />
+            <div>
+              <p className="font-semibold">Class completed!</p>
+              <p className="text-sm text-muted-foreground">
+                You've finished every lesson in {data.class.name}.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       <div className="space-y-3">

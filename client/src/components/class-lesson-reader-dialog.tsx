@@ -14,10 +14,18 @@ import {
   BookOpen,
   PlayCircle,
   Trophy,
+  FileDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type ContentPage = { title?: string; body: string; videoUrl?: string | null; imageUrls?: string[] };
+type ContentPage = {
+  title?: string;
+  body: string;
+  videoUrl?: string | null;
+  imageUrls?: string[];
+  attachmentUrl?: string | null;
+  attachmentName?: string | null;
+};
 type QuizAnswerOption = { id: number; orderIndex: number; answerText: string };
 type QuizQuestion = { id: number; orderIndex: number; questionText: string; answers: QuizAnswerOption[] };
 type LessonContent = { id: number; title: string; content: ContentPage[]; quizQuestions: QuizQuestion[] };
@@ -255,6 +263,17 @@ export function ClassLessonReaderDialog({
                     >
                       <PlayCircle className="h-5 w-5 shrink-0" />
                       Watch instructional video
+                    </a>
+                  )}
+                  {pages[pageIndex]?.attachmentUrl && (
+                    <a
+                      href={pages[pageIndex].attachmentUrl!}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 rounded-md border border-border bg-surface-elevated p-3 text-sm font-medium hover:bg-secondary"
+                    >
+                      <FileDown className="h-5 w-5 shrink-0 text-primary" />
+                      Download {pages[pageIndex]?.attachmentName || "worksheet"}
                     </a>
                   )}
                 </>
