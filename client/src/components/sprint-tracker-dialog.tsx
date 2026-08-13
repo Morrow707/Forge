@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { apiRequest, getJson } from "@/lib/queryClient";
 import { getPoseLandmarker, POSE_LANDMARKS, type PoseFrame } from "@/lib/pose-tracking";
@@ -27,8 +28,9 @@ import {
 import { DEFAULT_SKILL_FAULT_THRESHOLDS, type SkillFaultThresholds } from "@shared/skill-fault-thresholds";
 import { PoseLandmarker, type NormalizedLandmark } from "@mediapipe/tasks-vision";
 import { toast } from "sonner";
-import { AlertTriangle, Play, Square, RotateCcw, Check, Timer, Trophy } from "lucide-react";
+import { AlertTriangle, Play, Square, RotateCcw, Check, Timer, Trophy, Eye, EyeOff } from "lucide-react";
 import { SuggestedCorrective } from "@/components/suggested-corrective";
+import { recordedVideoType, videoFilenameForBlob } from "@/lib/video-recording";
 
 type Step = "warning" | "calibrate" | "capture" | "review";
 
@@ -95,6 +97,8 @@ export function SprintTrackerDialog({
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const reviewVideoRef = useRef<HTMLVideoElement>(null);
+  const reviewCanvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number | null>(null);
   const poseLandmarkerRef = useRef<PoseLandmarker | null>(null);
@@ -104,6 +108,14 @@ export function SprintTrackerDialog({
   const framesRef = useRef<PoseFrame[]>([]);
   const captureStartRef = useRef(0);
   const stepRef = useRef<Step>("warning");
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const recordedBlobRef = useRef<Blob | null>(null);
+  // Set right before recorder.stop() is called from a Cancel/Retry path so
+  // the onstop handler below knows to discard the chunks instead of turning
+  // them into a reviewable clip -- distinguishes "capture ended because the
+  // athlete crossed the finish" from "capture was abandoned."
+  const discardRecordingRef = useRef(false);
 
   const [step, setStepState] = useState<Step>("warning");
   function changeStep(next: Step) {
@@ -120,6 +132,9 @@ export function SprintTrackerDialog({
   const [saving, setSaving] = useState(false);
   const [savingToProfile, setSavingToProfile] = useState(false);
   const [savedToProfile, setSavedToProfile] = useState(false);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [showSkeleton, setShowSkeleton] = useState(true);
+  const [saveClipForCoach, setSaveClipForCoach] = useState(false);
 
   // Fetched once per dialog open, resolved via this drill's own coach --
   // see the route comment on /api/athlete/skill-fault-thresholds. Falls
@@ -145,6 +160,13 @@ export function SprintTrackerDialog({
     pointsRef.current = [];
     framesRef.current = [];
     lastVideoTimeRef.current = -1;
+    if (videoUrl) URL.revokeObjectURL(videoUrl);
+    setVideoUrl(null);
+    setShowSkeleton(true);
+    setSaveClipForCoach(false);
+    chunksRef.current = [];
+    recordedBlobRef.current = null;
+    discardRecordingRef.current = false;
 
     setModelLoading(true);
     getPoseLandmarker()
@@ -158,6 +180,10 @@ export function SprintTrackerDialog({
       });
 
     return () => {
+      if (recorderRef.current?.state === "recording") {
+        discardRecordingRef.current = true;
+        recorderRef.current.stop();
+      }
       streamRef.current?.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
@@ -253,6 +279,7 @@ export function SprintTrackerDialog({
 
   function finishCapture(crossing: SprintResult) {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    if (recorderRef.current?.state === "recording") recorderRef.current.stop();
     setResult(crossing);
     setFaults(
       cameraAngle
@@ -260,6 +287,34 @@ export function SprintTrackerDialog({
         : [],
     );
     changeStep("review");
+  }
+
+  // Redraws the skeleton on the review canvas at whatever frame is closest
+  // to the video's current scrub position -- same pairing as
+  // mechanics-tracker-dialog.tsx's own redrawReviewOverlay: frame timestamps
+  // and video time both start counting from the same "Start Capture" moment
+  // (captureStartRef), so they line up without any extra syncing.
+  function redrawReviewOverlay() {
+    const video = reviewVideoRef.current;
+    const canvas = reviewCanvasRef.current;
+    if (!video || !canvas) return;
+    canvas.width = video.clientWidth || canvas.width;
+    canvas.height = video.clientHeight || canvas.height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (!showSkeleton) return;
+    const targetMs = video.currentTime * 1000;
+    let closest: PoseFrame | null = null;
+    let closestDist = Infinity;
+    for (const frame of framesRef.current) {
+      const dist = Math.abs(frame.t - targetMs);
+      if (dist < closestDist) {
+        closestDist = dist;
+        closest = frame;
+      }
+    }
+    if (closest) drawSkeleton(ctx, closest.landmarks, canvas.width, canvas.height);
   }
 
   function handleCanvasClick(e: React.MouseEvent<HTMLCanvasElement>) {
@@ -280,9 +335,43 @@ export function SprintTrackerDialog({
     framesRef.current = [];
     captureStartRef.current = performance.now();
     changeStep("capture");
+
+    // Opt-in recording, mirroring mechanics-tracker-dialog.tsx's pattern --
+    // captured locally the same way, uploaded only if the athlete checks
+    // "save clip for coach" at review, discarded otherwise. Sprint has no
+    // separate Start/Stop for this since "Start Capture" already marks the
+    // moment the athlete takes off, and finishCapture (triggered by
+    // detectSprintCrossings, not a manual Stop) is the natural place to end
+    // it.
+    const stream = streamRef.current;
+    if (stream) {
+      chunksRef.current = [];
+      discardRecordingRef.current = false;
+      const mimeType = MediaRecorder.isTypeSupported("video/webm") ? "video/webm" : undefined;
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
+      recorder.onstop = () => {
+        if (discardRecordingRef.current) return;
+        const blob = new Blob(chunksRef.current, { type: recordedVideoType(recorder, mimeType) });
+        recordedBlobRef.current = blob;
+        setVideoUrl(URL.createObjectURL(blob));
+      };
+      recorderRef.current = recorder;
+      recorder.start();
+    }
   }
 
   function retry() {
+    if (recorderRef.current?.state === "recording") {
+      discardRecordingRef.current = true;
+      recorderRef.current.stop();
+    }
+    if (videoUrl) URL.revokeObjectURL(videoUrl);
+    setVideoUrl(null);
+    recordedBlobRef.current = null;
+    setSaveClipForCoach(false);
     resetCheckpoints();
     setResult(null);
     setFaults([]);
@@ -294,6 +383,22 @@ export function SprintTrackerDialog({
     if (!result) return;
     setSaving(true);
     try {
+      // Opt-in only, same as mechanics -- the clip is uploaded here for the
+      // first time, right before saving the session, never during capture.
+      // If the athlete never checks the box, recordedBlobRef is simply
+      // discarded when the dialog closes and no video ever leaves the
+      // device.
+      let uploadedVideoUrl: string | null = null;
+      if (saveClipForCoach && recordedBlobRef.current) {
+        const formData = new FormData();
+        formData.append(
+          "video",
+          recordedBlobRef.current,
+          videoFilenameForBlob(recordedBlobRef.current, "skill-clip"),
+        );
+        const uploadRes = await apiRequest("POST", "/api/athlete/skill-video", formData);
+        uploadedVideoUrl = (await uploadRes.json()).url;
+      }
       await apiRequest("POST", "/api/athlete/skill-session-logs", {
         skillAssignmentId,
         skillProgramDayId,
@@ -303,6 +408,7 @@ export function SprintTrackerDialog({
         distanceYards: Number(distanceYards) || null,
         cameraAngle,
         faults,
+        videoUrl: uploadedVideoUrl,
       });
       toast.success("Sprint saved");
       onOpenChange(false);
@@ -448,6 +554,34 @@ export function SprintTrackerDialog({
 
         {step === "review" && result && (
           <div className="space-y-4">
+            {videoUrl && (
+              <>
+                <div className="relative overflow-hidden rounded-md bg-black">
+                  <video
+                    ref={reviewVideoRef}
+                    src={videoUrl}
+                    playsInline
+                    controls
+                    className="w-full"
+                    onLoadedMetadata={redrawReviewOverlay}
+                    onTimeUpdate={redrawReviewOverlay}
+                    onSeeked={redrawReviewOverlay}
+                  />
+                  <canvas ref={reviewCanvasRef} className="pointer-events-none absolute inset-0 h-full w-full" />
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setShowSkeleton((v) => !v);
+                    requestAnimationFrame(redrawReviewOverlay);
+                  }}
+                >
+                  {showSkeleton ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                  {showSkeleton ? "Hide Skeleton" : "Show Skeleton"}
+                </Button>
+              </>
+            )}
             <div className="grid grid-cols-2 gap-3 rounded-md border border-border p-4 text-center">
               <div>
                 <p className="text-2xl font-bold text-teal-400">{result.totalElapsedSeconds.toFixed(2)}s</p>
@@ -488,6 +622,21 @@ export function SprintTrackerDialog({
                 <Trophy className="h-4 w-4" />
                 {savedToProfile ? "Saved to testing profile" : "Save as my 40-yard dash"}
               </Button>
+            )}
+
+            {videoUrl && (
+              <label className="flex items-start gap-2 text-sm">
+                <Checkbox
+                  checked={saveClipForCoach}
+                  onCheckedChange={(c) => setSaveClipForCoach(c === true)}
+                />
+                <span>
+                  Save this clip so my coach can review it
+                  <span className="block text-xs text-muted-foreground">
+                    Off by default -- only the numbers above are saved unless you turn this on.
+                  </span>
+                </span>
+              </label>
             )}
 
             <DialogFooter>

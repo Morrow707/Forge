@@ -65,13 +65,12 @@ type CapturedFrame = { t: number; landmarks: NormalizedLandmark[]; worldLandmark
  * capture starts with a mandatory camera-angle warning: face-on and
  * down-the-line each only unlock their own half of the metrics (weight
  * transfer/hip rotation vs. separation/sequencing/arm slot), so picking the
- * wrong one silently produces no feedback on the other half. Nothing about
- * the recorded video itself is ever uploaded -- only the derived numbers,
- * same privacy story as every other camera-tracking feature in the app
- * (see the module comment in pose-tracking.ts). The video stays in the
- * browser purely so this dialog's own review step can scrub through it with
- * a toggleable skeleton overlay; it's discarded the moment the dialog
- * closes. */
+ * wrong one silently produces no feedback on the other half. The recorded
+ * video is opt-in, off by default: it stays in the browser purely so this
+ * dialog's own review step can scrub through it with a toggleable skeleton
+ * overlay, and is discarded the moment the dialog closes unless the athlete
+ * explicitly checks "save clip for coach" (see save()), the same opt-in
+ * privacy story sprint-tracker-dialog.tsx now follows too. */
 export function MechanicsTrackerDialog({
   open,
   onOpenChange,
