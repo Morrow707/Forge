@@ -2,7 +2,15 @@ import "dotenv/config";
 import { db } from "./db";
 import { storage } from "./storage";
 import { hashPassword } from "./auth-utils";
-import { users, programs, exercises, classes, classStructureSchema } from "@shared/schema";
+import {
+  users,
+  programs,
+  exercises,
+  classes,
+  classLessons,
+  classStructureSchema,
+  skillProgramExercises,
+} from "@shared/schema";
 import { eq, isNull, and } from "drizzle-orm";
 import { AMERICAN_HITTING_CHAPTERS } from "./seed-data/american-hitting-content";
 
@@ -19,6 +27,24 @@ function videoSearchUrl(name: string) {
 // instead of a strength exercise so the search results actually match.
 function skillVideoSearchUrl(name: string) {
   return `https://www.youtube.com/results?search_query=${encodeURIComponent(`${name} baseball softball drill`)}`;
+}
+
+// The handful of American Hitting drills that are pure pitch-recognition/
+// decision-making with no swing to actually capture on camera -- everything
+// else in the curriculum involves a real swing, so it gets "mechanics"
+// tracking (see mechanicsModeFor in skill-day-view-dialog.tsx) so there's an
+// actual "Record Swing" action on the drill, not just a bare read-only name.
+// Without this, skill-day-view-dialog.tsx's own comment applies literally:
+// "skill days have no logging/completion flow yet... not an editable or
+// loggable workout page" -- trackingLevel is the ONLY thing that puts a
+// clickable action on a drill at all.
+const AMERICAN_HITTING_NO_TRACKING_DRILLS = new Set([
+  "Colored-Ball Recognition Drill",
+  "Ball/Strike Recognition Drill",
+  "Take/Swing Decision Drill",
+]);
+function americanHittingTrackingLevel(drillName: string): "none" | "mechanics" {
+  return AMERICAN_HITTING_NO_TRACKING_DRILLS.has(drillName) ? "none" : "mechanics";
 }
 
 // Derives what an exercise's athlete-facing logging fields should be from
@@ -3526,7 +3552,7 @@ async function main() {
           reps: "10",
           restSeconds: null,
           notes: null,
-          trackingLevel: "none" as const,
+          trackingLevel: americanHittingTrackingLevel(name),
         };
       }
 
@@ -3596,6 +3622,41 @@ async function main() {
       const created = await storage.createClassWithStructure(classOwner.id, structure, true);
       americanHittingClassId = created.id;
       console.log(`Seeded "${AMERICAN_HITTING_CLASS_NAME}" class.`);
+    }
+  }
+
+  // One-time (idempotent) correction: the class as originally seeded gave
+  // every drill trackingLevel "none", which left every American Hitting
+  // lesson entirely un-loggable -- see americanHittingTrackingLevel's own
+  // comment. Updates trackingLevel IN PLACE on the existing
+  // skillProgramExercises rows rather than going through
+  // updateClassStructure's wipe-and-rebuild path, which would cascade-
+  // delete any skillSessionLogs an athlete has already captured against
+  // those exercise ids (see the onDelete: "cascade" FKs on
+  // skillSessionLogs.skillProgramDayId/skillProgramExerciseId).
+  if (americanHittingClassId != null) {
+    const lessonsWithDrills = await db.query.classLessons.findMany({
+      where: eq(classLessons.classId, americanHittingClassId),
+      with: {
+        skillProgram: {
+          with: {
+            weeks: { with: { days: { with: { exercises: { with: { skillExercise: true } } } } } },
+          },
+        },
+      },
+    });
+    for (const lesson of lessonsWithDrills) {
+      const day = lesson.skillProgram.weeks[0]?.days[0];
+      if (!day) continue;
+      for (const ex of day.exercises) {
+        const desired = americanHittingTrackingLevel(ex.skillExercise.name);
+        if (ex.trackingLevel !== desired) {
+          await db
+            .update(skillProgramExercises)
+            .set({ trackingLevel: desired })
+            .where(eq(skillProgramExercises.id, ex.id));
+        }
+      }
     }
   }
 

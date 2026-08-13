@@ -4832,7 +4832,7 @@ ${athleteContext}
       orderBy: asc(classLessons.lessonNumber),
     });
 
-    for (const lesson of lessons) {
+    for (const [i, lesson] of lessons.entries()) {
       let progress = await db.query.classLessonProgress.findFirst({
         where: and(
           eq(classLessonProgress.enrollmentId, enrollment.id),
@@ -4846,25 +4846,41 @@ ${athleteContext}
           .returning();
         progress = created;
       }
-      if (progress.skillAssignmentId) continue;
 
-      const { created } = await this.createSkillAssignment(
-        enrollment.coachId,
-        lesson.skillProgramId,
-        [{ athleteId: enrollment.athleteId }],
-        formatISO(new Date(), { representation: "date" }),
-      );
-      await db
-        .update(classLessonProgress)
-        .set({
-          unlockedAt: new Date(),
-          purchasedAt: new Date(),
-          contentCompletedAt: new Date(),
-          quizPassedAt: new Date(),
-          manuallyUnlocked: true,
-          skillAssignmentId: created[0]?.id ?? null,
-        })
-        .where(eq(classLessonProgress.id, progress.id));
+      // One day apart per lesson, not all on today -- getSkillCalendarEntries
+      // runs every calendar day through reconcileOverlappingAssignments,
+      // which keeps only the most-recently-created assignment on any date
+      // two land on (by design, for the normal "reassigning replaces what
+      // was there" case). Landing all 8 lessons on the same date would
+      // silently bury the first 7 behind whichever finished last. Enforced
+      // on every call, not just first activation, so an account granted
+      // before this spacing existed gets its dates corrected too.
+      const targetDate = formatISO(addDays(new Date(), i), { representation: "date" });
+
+      if (!progress.skillAssignmentId) {
+        const { created } = await this.createSkillAssignment(
+          enrollment.coachId,
+          lesson.skillProgramId,
+          [{ athleteId: enrollment.athleteId }],
+          targetDate,
+        );
+        await db
+          .update(classLessonProgress)
+          .set({
+            unlockedAt: new Date(),
+            purchasedAt: new Date(),
+            contentCompletedAt: new Date(),
+            quizPassedAt: new Date(),
+            manuallyUnlocked: true,
+            skillAssignmentId: created[0]?.id ?? null,
+          })
+          .where(eq(classLessonProgress.id, progress.id));
+      } else {
+        await db
+          .update(skillAssignments)
+          .set({ startDate: targetDate })
+          .where(eq(skillAssignments.id, progress.skillAssignmentId));
+      }
     }
   },
 
