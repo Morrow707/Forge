@@ -312,6 +312,20 @@ async function notifyNewlyUnlockedLessons(
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
   app.use("/uploads", express.static(path.join(process.cwd(), "server", "uploads")));
+  // express.static calls next() rather than responding when a file isn't
+  // found, so a missing upload (a video whose row survived some past
+  // ephemeral-disk wipe, or any other vanished file) would otherwise fall
+  // all the way through to the SPA's catch-all in serveStatic() and come
+  // back as 200 + index.html -- a real page, just not the video. A <video
+  // src> pointed at that never fires its error event (there's no video
+  // data, but there's no error either), so playback just silently hangs at
+  // 0:00 forever with nothing anywhere to explain why. Answering with an
+  // honest 404 here instead lets every consumer (an athlete opening the
+  // link directly, a coach's <video onError>) react to a real, unambiguous
+  // failure.
+  app.use("/uploads", (_req, res) => {
+    res.status(404).json({ message: "File not found" });
+  });
 
   // ---------------- Public calendar subscribe feed ----------------
   // Deliberately unauthenticated: calendar apps (Google/Apple/Outlook)
