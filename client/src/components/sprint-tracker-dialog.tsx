@@ -190,11 +190,30 @@ export function SprintTrackerDialog({
     };
   }, [open]);
 
+  function stopCamera() {
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+  }
+
   // Camera only needs to actually turn on once the athlete's past the
   // warning step -- no point asking for permission before they've even
-  // picked an angle.
+  // picked an angle. "calibrate" and "capture" are BOTH camera-active
+  // steps here (unlike mechanics-tracker-dialog.tsx's single active
+  // step), so a transition between them -- Start Capture, or a Cancel
+  // back to calibrate -- still changes `step` and re-runs this effect.
+  // Stopping the previous stream first, both in the early-return guard
+  // below and in this effect's own cleanup, is what keeps that from
+  // silently leaking an extra live camera stream on every one of those
+  // transitions -- confirmed empirically: without this, three separate
+  // getUserMedia() streams were all still live (none ever had .stop()
+  // called) after one calibrate -> capture -> cancel cycle. Same
+  // stopCamera() pattern form-video-recorder-dialog.tsx already uses for
+  // its own record/retake cycle.
   useEffect(() => {
-    if (!open || step === "warning" || step === "review") return;
+    if (!open || step === "warning" || step === "review") {
+      stopCamera();
+      return;
+    }
     // ideal, not exact -- see bar-tracker-dialog.tsx's own comment on this
     // same constraint shape. Checkpoint-crossing time is interpolated
     // between frames either way, but a higher frame rate still means less
@@ -222,6 +241,7 @@ export function SprintTrackerDialog({
     rafRef.current = requestAnimationFrame(tick);
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      stopCamera();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, step]);
