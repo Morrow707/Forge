@@ -254,41 +254,6 @@ export const AMERICAN_HITTING_CHAPTERS: AmericanHittingChapterContent[] = [
               "This chapter doesn't recommend starting earlier as a fix — that specific idea is directly addressed and pushed back on in Chapter 4, which explains why simply starting earlier doesn't solve timing problems."
           }
         ]
-      },
-      {
-        orderIndex: 5,
-        questionText: "What is the stated purpose of the baseline swing video and Athletic Hitting Assessment in this chapter?",
-        answers: [
-          {
-            orderIndex: 0,
-            answerText:
-              "To create an honest, unmanipulated starting-point snapshot across all Five Pillars that can later be compared to the hitter's progress at the end of the program.",
-            isCorrect: true,
-            explanation:
-              "Correct. The chapter is explicit that this isn't about judging the swing as good or bad right now — it's a snapshot to compare against in Chapter 8, and its value depends on being honest."
-          },
-          {
-            orderIndex: 1,
-            answerText: "To compare the player directly against professional hitters.",
-            isCorrect: false,
-            explanation:
-              "The comparison described in the chapter is personal — this player's baseline versus this same player's later assessment — not a comparison to professional hitters."
-          },
-          {
-            orderIndex: 2,
-            answerText: "To determine which position the player should play.",
-            isCorrect: false,
-            explanation:
-              "Position assignment isn't discussed anywhere in this chapter. The assessment is about hitting skill across the Five Pillars, not fielding position."
-          },
-          {
-            orderIndex: 3,
-            answerText: "To give the player a final grade on their swing before starting the program.",
-            isCorrect: false,
-            explanation:
-              "The chapter specifically warns against treating this as a graded judgment — inflating or coaching up the baseline to look better defeats its purpose as an honest measurement point."
-          }
-        ]
       }
     ]
   },
@@ -509,41 +474,6 @@ export const AMERICAN_HITTING_CHAPTERS: AmericanHittingChapterContent[] = [
               "This is not a real reason given in the chapter. The actual reasoning is functional: staying dynamic preserves the ability to load and push off the ground effectively."
           }
         ]
-      },
-      {
-        orderIndex: 5,
-        questionText: "What is the purpose of training the athletic position through a stance-to-movement-to-load-to-swing progression?",
-        answers: [
-          {
-            orderIndex: 0,
-            answerText:
-              "To build and test the athletic position as a connected process that holds up all the way into the swing, and to identify exactly where it breaks down for a given hitter.",
-            isCorrect: true,
-            explanation:
-              "Correct. The chapter frames the progression as a way to connect stance qualities into movement, and to pinpoint precisely where a hitter's position breaks down, rather than giving a vague good/bad label."
-          },
-          {
-            orderIndex: 1,
-            answerText: "To help hitters memorize four separate, unrelated stances for different pitch types.",
-            isCorrect: false,
-            explanation:
-              "The progression isn't about separate stances for different pitches — it's one connected sequence tracing how a single athletic position should carry through the whole swing process."
-          },
-          {
-            orderIndex: 2,
-            answerText: "To increase how long a hitter's pre-pitch routine takes in a real at-bat.",
-            isCorrect: false,
-            explanation:
-              "Training time in practice isn't the same as at-bat routine length, and the chapter doesn't suggest this progression is meant to lengthen in-game timing."
-          },
-          {
-            orderIndex: 3,
-            answerText: "To replace the need for a baseline assessment.",
-            isCorrect: false,
-            explanation:
-              "This training progression is a teaching tool for the athletic position specifically — it doesn't replace the broader baseline assessment described in Chapter 1."
-          }
-        ]
       }
     ]
   },
@@ -760,41 +690,6 @@ export const AMERICAN_HITTING_CHAPTERS: AmericanHittingChapterContent[] = [
             isCorrect: false,
             explanation:
               "Grip strength isn't part of this chapter's content or Training Component — this chapter is entirely focused on visual tracking and recognition skills."
-          }
-        ]
-      },
-      {
-        orderIndex: 5,
-        questionText: "Why does recognizing spin matter to a hitter, according to this chapter?",
-        answers: [
-          {
-            orderIndex: 0,
-            answerText:
-              "Different pitch types create distinct spin patterns, so reading spin early gives the hitter an early clue about what kind of pitch is coming and how it's likely to move.",
-            isCorrect: true,
-            explanation:
-              "Correct. The chapter groups spin recognition with velocity and location as one of the three things a hitter needs to read quickly, specifically because spin patterns differ by pitch type."
-          },
-          {
-            orderIndex: 1,
-            answerText: "Spin recognition determines how hard a hitter should grip the bat.",
-            isCorrect: false,
-            explanation:
-              "Grip pressure isn't connected to spin recognition in this chapter — spin recognition is about identifying pitch type and likely movement, not bat grip."
-          },
-          {
-            orderIndex: 2,
-            answerText: "Spin has no real effect on how a pitch moves, so it's mostly a distraction.",
-            isCorrect: false,
-            explanation:
-              "This contradicts the chapter directly — spin is presented as a meaningful, useful cue for identifying pitch type and anticipated movement, not a distraction to ignore."
-          },
-          {
-            orderIndex: 3,
-            answerText: "Spin recognition is only useful for pitchers, not hitters.",
-            isCorrect: false,
-            explanation:
-              "The chapter frames spin recognition as a hitter's skill, directly useful for pitch identification and timing — not something limited to the pitching side of the game."
           }
         ]
       }
@@ -1015,40 +910,6 @@ export const AMERICAN_HITTING_CHAPTERS: AmericanHittingChapterContent[] = [
               "This is the opposite of the chapter's point — it specifically argues tempo needs to be adjustable and matched to the pitcher, not fixed."
           }
         ]
-      },
-      {
-        orderIndex: 5,
-        questionText: "Which of the following is described in this chapter as a training method for building adjustable timing?",
-        answers: [
-          {
-            orderIndex: 0,
-            answerText: "Variable-speed batting practice that mixes pitch speeds within the same session.",
-            isCorrect: true,
-            explanation:
-              "Correct — this is explicitly listed in the chapter's Training Component, along with slow/fast variations, pause drills, timing-window training, and rhythm-to-launch drills."
-          },
-          {
-            orderIndex: 1,
-            answerText: "Practicing exclusively against the same fixed pitch speed to build confidence.",
-            isCorrect: false,
-            explanation:
-              "The chapter explicitly warns against this — same-speed repetition builds comfort but doesn't build adjustable timing, which is the actual goal of this chapter's training."
-          },
-          {
-            orderIndex: 2,
-            answerText: "Heavy bat overload training to build forearm strength.",
-            isCorrect: false,
-            explanation:
-              "Overload/strength training isn't part of this chapter's Training Component — that type of training is more relevant to Chapter 5's focus on power."
-          },
-          {
-            orderIndex: 3,
-            answerText: "Watching video of professional hitters without taking any live swings.",
-            isCorrect: false,
-            explanation:
-              "This isn't listed as part of this chapter's Training Component, which focuses on live-rep drills like variable-speed BP, pause drills, and timing-window training."
-          }
-        ]
       }
     ]
   },
@@ -1266,40 +1127,6 @@ export const AMERICAN_HITTING_CHAPTERS: AmericanHittingChapterContent[] = [
             isCorrect: false,
             explanation:
               "This is specifically identified in the chapter as a cause of energy leaks and disconnection, not a requirement for efficient transfer."
-          }
-        ]
-      },
-      {
-        orderIndex: 5,
-        questionText: "Which of the following is described in this chapter as part of training power athletically?",
-        answers: [
-          {
-            orderIndex: 0,
-            answerText: "Medicine-ball movements that train explosive, whole-body rotational power mirroring the hip-to-torso sequence.",
-            isCorrect: true,
-            explanation:
-              "Correct — this is explicitly listed in the chapter's Training Component, alongside athletic rotation drills, explosive movement training, bat-speed development, and maximum-intent hitting rounds."
-          },
-          {
-            orderIndex: 1,
-            answerText: "Only taking soft, slow-motion swings to avoid ever using real effort.",
-            isCorrect: false,
-            explanation:
-              "The chapter includes maximum-intent hitting rounds as part of training power — avoiding real effort entirely would leave a hitter unable to apply what they've built under game-like intensity."
-          },
-          {
-            orderIndex: 2,
-            answerText: "Memorizing a list of professional hitters' listed exit velocities.",
-            isCorrect: false,
-            explanation:
-              "This isn't a training method described in the chapter — the training component focuses on physical, athletic drills like medicine-ball work and explosive movement training, not memorization."
-          },
-          {
-            orderIndex: 3,
-            answerText: "Practicing exclusively with a bat that is much lighter than a hitter's game bat.",
-            isCorrect: false,
-            explanation:
-              "Underload-only bat training isn't what's described here — the chapter's training component centers on athletic rotational movement (medicine balls, explosive training) plus direct bat-speed and maximum-intent work."
           }
         ]
       }
@@ -1522,40 +1349,6 @@ export const AMERICAN_HITTING_CHAPTERS: AmericanHittingChapterContent[] = [
               "This isn't the adjustment described in the chapter — a flatter bat path, not a steep chop, is described as generally fitting a higher pitch plane."
           }
         ]
-      },
-      {
-        orderIndex: 5,
-        questionText: "Which of these is described in this chapter as a training drill for developing adjustable bat path and contact?",
-        answers: [
-          {
-            orderIndex: 0,
-            answerText: "Deep/middle/front contact drills that train quality contact at different points relative to the body.",
-            isCorrect: true,
-            explanation:
-              "Correct — this is explicitly listed in the chapter's Training Component, along with ball-location rounds, high/low and inside/outside pitch training, and variable-location batting practice."
-          },
-          {
-            orderIndex: 1,
-            answerText: "Practicing exclusively against one pitch location for an entire season to build a single grooved swing.",
-            isCorrect: false,
-            explanation:
-              "The chapter explicitly criticizes this approach — a hitter who only trains one repeated pattern only really works when the pitch happens to arrive in exactly that spot."
-          },
-          {
-            orderIndex: 2,
-            answerText: "Measuring a hitter's standing vertical jump height.",
-            isCorrect: false,
-            explanation:
-              "This is a general athletic test, not a bat-path or contact-location drill, and isn't part of this chapter's Training Component."
-          },
-          {
-            orderIndex: 3,
-            answerText: "Timing how long a hitter can hold a static batting stance without moving.",
-            isCorrect: false,
-            explanation:
-              "This isn't a drill described in this chapter, and static stillness contradicts the program's broader emphasis on the athletic position staying dynamic (Chapter 2)."
-          }
-        ]
       }
     ]
   },
@@ -1774,40 +1567,6 @@ export const AMERICAN_HITTING_CHAPTERS: AmericanHittingChapterContent[] = [
             isCorrect: false,
             explanation:
               "While umpire tendencies can matter in a real game, this isn't what the chapter identifies as the key second dimension of adjustability — that's pitch location and its late movement."
-          }
-        ]
-      },
-      {
-        orderIndex: 5,
-        questionText: "Which training method described in this chapter is specifically aimed at sharpening a hitter's ability to identify spin and shape early?",
-        answers: [
-          {
-            orderIndex: 0,
-            answerText: "Breaking-ball recognition drills",
-            isCorrect: true,
-            explanation:
-              "Correct — this is explicitly listed in the chapter's Training Component and is directly connected to identifying spin and shape early, building on the pitch-recognition skills from Chapter 3."
-          },
-          {
-            orderIndex: 1,
-            answerText: "Long-toss throwing programs",
-            isCorrect: false,
-            explanation:
-              "Long toss is a throwing/arm-care activity, not a hitting recognition drill, and isn't part of this chapter's Training Component."
-          },
-          {
-            orderIndex: 2,
-            answerText: "Static tee work at a single fixed location",
-            isCorrect: false,
-            explanation:
-              "A single fixed tee location involves no live-pitch recognition at all and wouldn't train spin/shape identification, which requires reading an actual moving pitch."
-          },
-          {
-            orderIndex: 3,
-            answerText: "Bunting practice against a pitching machine",
-            isCorrect: false,
-            explanation:
-              "Bunting isn't discussed in this chapter's Training Component, which focuses on fastball/changeup rounds, random sequences, breaking-ball recognition, two-strike adjustments, and competitive decision-making."
           }
         ]
       }
@@ -2038,40 +1797,6 @@ export const AMERICAN_HITTING_CHAPTERS: AmericanHittingChapterContent[] = [
             isCorrect: false,
             explanation:
               "Equipment decisions aren't part of this comparison — it's focused on the hitter's developed skills and understanding across the program's Five Pillars."
-          }
-        ]
-      },
-      {
-        orderIndex: 5,
-        questionText: "What is the stated Program Goal of the Athletic Hitting Development program, according to this final chapter?",
-        answers: [
-          {
-            orderIndex: 0,
-            answerText: "To develop hitters who understand themselves and can take greater ownership of their development.",
-            isCorrect: true,
-            explanation:
-              "Correct — this is the Program Goal stated directly in the chapter, tying together the whole point of building self-evaluation and self-coaching skills across all eight chapters."
-          },
-          {
-            orderIndex: 1,
-            answerText: "To give every hitter an identical, standardized swing by the end of the program.",
-            isCorrect: false,
-            explanation:
-              "This directly contradicts the program's philosophy, stated from Chapter 1 onward, that there is no single perfect swing every hitter should copy."
-          },
-          {
-            orderIndex: 2,
-            answerText: "To guarantee a college scholarship for every participant.",
-            isCorrect: false,
-            explanation:
-              "The chapter never makes this claim — the stated goal is about self-understanding and ownership of development, not a guaranteed outcome like a scholarship."
-          },
-          {
-            orderIndex: 3,
-            answerText: "To replace the need for any future coaching for the rest of a player's career.",
-            isCorrect: false,
-            explanation:
-              "The goal is for the hitter to understand themselves and take greater ownership — not to eliminate the value of future coaching, but to make the hitter a more informed, self-aware participant in it."
           }
         ]
       }

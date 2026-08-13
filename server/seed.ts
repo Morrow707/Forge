@@ -10,6 +10,8 @@ import {
   classLessons,
   classStructureSchema,
   skillProgramExercises,
+  classLessonQuizQuestions,
+  classLessonQuizAnswers,
 } from "@shared/schema";
 import { eq, isNull, and, asc } from "drizzle-orm";
 import { AMERICAN_HITTING_CHAPTERS } from "./seed-data/american-hitting-content";
@@ -3674,6 +3676,40 @@ async function main() {
       const chapter = AMERICAN_HITTING_CHAPTERS.find((c) => c.lessonNumber === lesson.lessonNumber);
       if (!chapter) continue;
       await db.update(classLessons).set({ content: chapter.content }).where(eq(classLessons.id, lesson.id));
+    }
+  }
+
+  // Keeps each lesson's quiz in sync with AMERICAN_HITTING_CHAPTERS on every
+  // deploy too -- quiz questions are otherwise only ever created once, at
+  // initial class creation, so a content edit (e.g. trimming question count)
+  // would never reach an already-created class. Safe to wipe and rebuild:
+  // deleting a question cascades its answers, and nothing else references
+  // quiz question/answer ids -- results are graded live, with only the
+  // pass/fail timestamp persisted on classLessonProgress.
+  if (americanHittingClassId != null) {
+    const lessons = await db.query.classLessons.findMany({
+      where: eq(classLessons.classId, americanHittingClassId),
+      orderBy: asc(classLessons.lessonNumber),
+    });
+    for (const lesson of lessons) {
+      const chapter = AMERICAN_HITTING_CHAPTERS.find((c) => c.lessonNumber === lesson.lessonNumber);
+      if (!chapter) continue;
+      await db.delete(classLessonQuizQuestions).where(eq(classLessonQuizQuestions.classLessonId, lesson.id));
+      for (const q of chapter.quizQuestions) {
+        const [question] = await db
+          .insert(classLessonQuizQuestions)
+          .values({ classLessonId: lesson.id, orderIndex: q.orderIndex, questionText: q.questionText })
+          .returning();
+        await db.insert(classLessonQuizAnswers).values(
+          q.answers.map((a) => ({
+            questionId: question.id,
+            orderIndex: a.orderIndex,
+            answerText: a.answerText,
+            isCorrect: a.isCorrect,
+            explanation: a.explanation,
+          })),
+        );
+      }
     }
   }
 
