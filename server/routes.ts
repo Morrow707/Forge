@@ -117,8 +117,9 @@ const uploadFormVideo = multer({
 // form-videos even though the upload mechanics are identical, keeping the
 // same "never share a query path or a bucket" isolation the rest of Skills
 // follows. A clip only ever lands here if the athlete explicitly taps
-// "save for coach" on the mechanics tracker's review screen (see
-// MechanicsTrackerDialog); every other capture never uploads video at all.
+// "save for coach" on the mechanics or sprint tracker's review screen (see
+// MechanicsTrackerDialog/SprintTrackerDialog); a session the athlete never
+// opts into never uploads video at all.
 const SKILL_VIDEOS_DIR = path.join(process.cwd(), "server", "uploads", "skill-videos");
 fs.mkdirSync(SKILL_VIDEOS_DIR, { recursive: true });
 
@@ -3836,7 +3837,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // consistency check.
     if (parsed.data.faults && parsed.data.faults.length > 0) {
       const coachId = await storage.getSkillAssignmentCoachId(parsed.data.skillAssignmentId);
-      if (coachId) {
+      // A Free Agent's self-assigned program (or a self-enrolled Class
+      // lesson) stores the athlete's own id as coachId -- see the comment on
+      // POST /api/athlete/my/skill-assignments. Nobody to notify in that
+      // case: notifyUser(coachId) would tell the athlete about themselves in
+      // the third person and link to /coach/analytics, a route their own
+      // role can't open.
+      if (coachId && coachId !== user.id) {
         const exerciseName =
           detail.exercises.find((e) => e.id === parsed.data.skillProgramExerciseId)?.name ?? "a drill";
         const body = parsed.data.faults.map((f) => f.label).join("; ");
@@ -3865,9 +3872,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Opt-in only -- the athlete explicitly taps "save clip for coach" on the
-  // mechanics tracker's review screen (see MechanicsTrackerDialog's privacy
-  // comment); every other capture never reaches this route at all. Returns
-  // the URL to attach as videoUrl on the skill-session-log POST above.
+  // mechanics or sprint tracker's review screen (see
+  // MechanicsTrackerDialog's privacy comment); a session that's never opted
+  // into never reaches this route at all. Returns the URL to attach as
+  // videoUrl on the skill-session-log POST above.
   app.post(
     "/api/athlete/skill-video",
     requireRole("athlete"),
