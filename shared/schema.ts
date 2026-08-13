@@ -12,6 +12,7 @@ import {
   json,
   index,
   real,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
@@ -1988,7 +1989,20 @@ export const classes = pgTable("classes", {
     .references(() => users.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   description: text("description"),
+  // Free text, same lightweight pattern as users.sport -- no fixed taxonomy
+  // to migrate every time a new kind of class shows up. Browse pages derive
+  // their filter chips from whatever categories actually exist rather than
+  // a hardcoded list.
+  category: text("category"),
   isForgeOfficial: boolean("is_forge_official").notNull().default(false),
+  // Optional -- an athlete can't enroll in this class until they've
+  // completed (see classEnrollments.completedAt) the referenced one. Self-
+  // referencing FK, nullable, ON DELETE SET NULL (removing the prerequisite
+  // class should just clear the chain, not cascade-delete classes that
+  // depend on it).
+  prerequisiteClassId: integer("prerequisite_class_id").references((): AnyPgColumn => classes.id, {
+    onDelete: "set null",
+  }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -2145,6 +2159,12 @@ export const classEnrollments = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     startDate: date("start_date").notNull(),
+    // Set once, the first time every lesson in the class satisfies its
+    // requirement (quizPassedAt for a quiz-bearing lesson, contentCompletedAt
+    // otherwise) -- see storage.checkAndMarkClassCompleted. Drives the
+    // class-level completion badge, distinct from the per-lesson bronze/gold
+    // quiz stars.
+    completedAt: timestamp("completed_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({
@@ -2188,6 +2208,14 @@ export const classLessonProgress = pgTable(
     // attempt (implies quizPassedAt). Drives the gold-vs-bronze star shown
     // on the lesson card -- bronze for quizPassedAt, gold for this.
     quizPerfectAt: timestamp("quiz_perfect_at"),
+    // Consecutive failed attempts since the last pass (or since starting).
+    // Reset to 0 on a pass. Crossing CLASS_QUIZ_STUCK_THRESHOLD fires a
+    // one-time "athlete is stuck" notification to their coach -- see
+    // coachNotifiedStuckAt below and submitClassLessonQuiz.
+    quizFailCount: integer("quiz_fail_count").notNull().default(0),
+    // Guards the stuck notification to fire once per lesson, not on every
+    // failed attempt past the threshold.
+    coachNotifiedStuckAt: timestamp("coach_notified_stuck_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({
@@ -2266,19 +2294,25 @@ export type ClassCoachSettings = typeof classCoachSettings.$inferSelect;
 export const classLessonContentPageSchema = z.object({
   title: z.string().trim().max(200).optional(),
   body: z.string().trim().min(1).max(10000),
-  // A reference link for further instruction on this page's topic -- a
-  // YouTube search-results URL, same convention as skillVideoSearchUrl in
-  // server/seed.ts (a specific hand-picked video ID can go dead or turn out
-  // wrong with no way to verify it from here; a search link is always valid
-  // and always relevant, and upgrades to a real embed the moment an admin
-  // edits it with one).
-  videoUrl: z.string().trim().url().max(500).nullable().optional(),
+  // A reference link for further instruction on this page's topic -- either
+  // a pasted YouTube search-results URL (same convention as
+  // skillVideoSearchUrl in server/seed.ts -- a specific hand-picked video ID
+  // can go dead or turn out wrong with no way to verify it from here) or a
+  // relative /uploads/lesson-videos/... path from a direct upload. Not
+  // `.url()`-validated for the same reason imageUrls below isn't -- a
+  // relative path is an expected case, not an edge case.
+  videoUrl: z.string().trim().min(1).max(500).nullable().optional(),
   // Original instructional diagrams, not stock photography (none licensed
   // for use here) -- a relative static asset path (e.g. "/lessons/x.svg")
   // or a full URL, shown as a small gallery under the page's body text.
   // Not `.url()`-validated since a relative path is the expected common
   // case, not an edge case.
   imageUrls: z.array(z.string().trim().min(1).max(500)).max(6).optional(),
+  // A downloadable worksheet/handout for this page -- a relative
+  // /uploads/lesson-attachments/... path from a direct upload, same
+  // reasoning as videoUrl above.
+  attachmentUrl: z.string().trim().min(1).max(500).nullable().optional(),
+  attachmentName: z.string().trim().max(200).nullable().optional(),
 });
 
 export const classLessonQuizAnswerInputSchema = z.object({
@@ -2328,6 +2362,8 @@ export const classLessonInputSchema = z.object({
 export const classStructureSchema = z.object({
   name: z.string().trim().min(1).max(200),
   description: z.string().trim().max(2000).nullable().optional(),
+  category: z.string().trim().max(60).nullable().optional(),
+  prerequisiteClassId: z.number().int().positive().nullable().optional(),
   lessons: z.array(classLessonInputSchema).default([]),
 });
 

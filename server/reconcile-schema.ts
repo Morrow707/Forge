@@ -951,6 +951,8 @@ CREATE TABLE IF NOT EXISTS "classes" (
   "is_forge_official" boolean NOT NULL DEFAULT false,
   "created_at" timestamp NOT NULL DEFAULT now()
 );
+ALTER TABLE "classes" ADD COLUMN IF NOT EXISTS "category" text;
+ALTER TABLE "classes" ADD COLUMN IF NOT EXISTS "prerequisite_class_id" integer REFERENCES "classes"("id") ON DELETE SET NULL;
 
 DO $$ BEGIN
   CREATE TYPE "class_unlock_rule" AS ENUM ('immediate', 'time_elapsed', 'sessions_logged', 'reps_logged', 'manual');
@@ -1009,6 +1011,7 @@ CREATE TABLE IF NOT EXISTS "class_enrollments" (
   "start_date" date NOT NULL,
   "created_at" timestamp NOT NULL DEFAULT now()
 );
+ALTER TABLE "class_enrollments" ADD COLUMN IF NOT EXISTS "completed_at" timestamp;
 CREATE INDEX IF NOT EXISTS "class_enrollments_athlete_idx" ON "class_enrollments" ("athlete_id");
 CREATE INDEX IF NOT EXISTS "class_enrollments_class_idx" ON "class_enrollments" ("class_id");
 
@@ -1026,6 +1029,8 @@ CREATE INDEX IF NOT EXISTS "class_lesson_progress_enrollment_idx" ON "class_less
 ALTER TABLE "class_lesson_progress" ADD COLUMN IF NOT EXISTS "content_completed_at" timestamp;
 ALTER TABLE "class_lesson_progress" ADD COLUMN IF NOT EXISTS "quiz_passed_at" timestamp;
 ALTER TABLE "class_lesson_progress" ADD COLUMN IF NOT EXISTS "quiz_perfect_at" timestamp;
+ALTER TABLE "class_lesson_progress" ADD COLUMN IF NOT EXISTS "quiz_fail_count" integer NOT NULL DEFAULT 0;
+ALTER TABLE "class_lesson_progress" ADD COLUMN IF NOT EXISTS "coach_notified_stuck_at" timestamp;
 
 CREATE TABLE IF NOT EXISTS "academy_tracks" (
   "id" serial PRIMARY KEY,

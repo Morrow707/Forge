@@ -153,6 +153,10 @@ const LEG_DRIVE_ASYMMETRY_FLAG_THRESHOLD = 15;
 // classroom passing grade, with unlimited retries making it forgiving
 // rather than punitive.
 const CLASS_QUIZ_PASS_THRESHOLD = 0.8;
+// Consecutive fails (with no pass in between) before the owning coach gets
+// a one-time "this athlete is stuck" nudge -- see quizFailCount/
+// coachNotifiedStuckAt on classLessonProgress.
+const CLASS_QUIZ_STUCK_THRESHOLD = 3;
 
 function jointLabelFor(jointKey: string): string {
   return GONIOMETER_JOINTS.find((j) => j.key === jointKey)?.label ?? jointKey;
@@ -4466,6 +4470,8 @@ ${athleteContext}
       coachId: cls.coachId,
       name: cls.name,
       description: cls.description,
+      category: cls.category,
+      prerequisiteClassId: cls.prerequisiteClassId,
       isForgeOfficial: cls.isForgeOfficial,
       lessons: cls.lessons.map((l) => {
         const day = l.skillProgram.weeks[0]?.days[0];
@@ -4497,6 +4503,8 @@ ${athleteContext}
           coachId,
           name: structure.name,
           description: structure.description ?? null,
+          category: structure.category ?? null,
+          prerequisiteClassId: structure.prerequisiteClassId ?? null,
           isForgeOfficial,
         })
         .returning();
@@ -4569,10 +4577,18 @@ ${athleteContext}
     await db.transaction(async (tx) => {
       const cls = await tx.query.classes.findFirst({ where: eq(classes.id, classId) });
       if (!cls) throw new Error("Class not found");
+      if (structure.prerequisiteClassId === classId) {
+        throw new Error("A class can't be its own prerequisite.");
+      }
 
       await tx
         .update(classes)
-        .set({ name: structure.name, description: structure.description ?? null })
+        .set({
+          name: structure.name,
+          description: structure.description ?? null,
+          category: structure.category ?? null,
+          prerequisiteClassId: structure.prerequisiteClassId ?? null,
+        })
         .where(eq(classes.id, classId));
 
       const existingLessons = await tx.query.classLessons.findMany({
@@ -4739,19 +4755,48 @@ ${athleteContext}
   // wellness -- nothing here runs on a schedule, it's brought up to date
   // whenever an athlete's progress is actually read.
 
-  async getVisibleClassesForFreeAgent() {
+  // athleteId is used only to resolve whether THIS athlete has already
+  // cleared each class's optional prerequisite -- the underlying catalog
+  // (every Forge-official class) is the same for everyone.
+  async getVisibleClassesForFreeAgent(athleteId: number) {
     const rows = await db.query.classes.findMany({
       where: eq(classes.isForgeOfficial, true),
       with: { lessons: true },
       orderBy: desc(classes.createdAt),
     });
+    const prereqIds = Array.from(
+      new Set(rows.map((c) => c.prerequisiteClassId).filter((id): id is number => id != null)),
+    );
+    const prereqClasses =
+      prereqIds.length > 0
+        ? await db.query.classes.findMany({ where: inArray(classes.id, prereqIds) })
+        : [];
+    const prereqNameById = new Map(prereqClasses.map((c) => [c.id, c.name]));
+    const completedPrereqIds = new Set(
+      (
+        await db.query.classEnrollments.findMany({
+          where: and(
+            eq(classEnrollments.athleteId, athleteId),
+            inArray(classEnrollments.classId, prereqIds.length > 0 ? prereqIds : [-1]),
+          ),
+          columns: { classId: true, completedAt: true },
+        })
+      )
+        .filter((e) => e.completedAt)
+        .map((e) => e.classId),
+    );
+
     return rows.map((c) => ({
       id: c.id,
       name: c.name,
       description: c.description,
+      category: c.category,
       lessonCount: c.lessons.length,
       isForgeOfficial: true as const,
       ownerLabel: "FORGE",
+      prerequisiteClassId: c.prerequisiteClassId,
+      prerequisiteName: c.prerequisiteClassId ? (prereqNameById.get(c.prerequisiteClassId) ?? null) : null,
+      prerequisiteSatisfied: c.prerequisiteClassId ? completedPrereqIds.has(c.prerequisiteClassId) : true,
     }));
   },
 
@@ -4778,6 +4823,7 @@ ${athleteContext}
         isForgeOfficial: enrollment.class.isForgeOfficial,
         lessonCount: enrollment.class.lessons.length,
         lessonsStarted: progressRows.filter((p) => p.skillAssignmentId).length,
+        completedAt: enrollment.completedAt,
       });
     }
     return results;
@@ -4787,6 +4833,25 @@ ${athleteContext}
     return db.query.classEnrollments.findFirst({
       where: and(eq(classEnrollments.athleteId, athleteId), eq(classEnrollments.classId, classId)),
     });
+  },
+
+  // Gates enrollment (not visibility -- see getVisibleClassesForFreeAgent's
+  // own note) on a class's optional prerequisiteClassId. Deliberately NOT
+  // called from inside enrollAthleteInClass itself, so
+  // grantFullClassAccessToAthlete (which calls that directly) keeps
+  // bypassing every gate at once, same as it already does for
+  // payment/content/quiz -- both real enroll routes call this explicitly
+  // before enrolling.
+  async isClassPrerequisiteSatisfied(
+    athleteId: number,
+    classId: number,
+  ): Promise<{ satisfied: boolean; prerequisiteName?: string }> {
+    const cls = await db.query.classes.findFirst({ where: eq(classes.id, classId) });
+    if (!cls?.prerequisiteClassId) return { satisfied: true };
+    const prereq = await db.query.classes.findFirst({ where: eq(classes.id, cls.prerequisiteClassId) });
+    if (!prereq) return { satisfied: true };
+    const prereqEnrollment = await this.getClassEnrollmentForAthlete(athleteId, cls.prerequisiteClassId);
+    return { satisfied: !!prereqEnrollment?.completedAt, prerequisiteName: prereq.name };
   },
 
   async enrollAthleteInClass(coachId: number, classId: number, athleteId: number, startDate: string) {
@@ -5195,6 +5260,7 @@ ${athleteContext}
       class: classSummary,
       enrolled: true as const,
       startDate: enrollment.startDate,
+      completedAt: enrollment.completedAt,
       lessons: result,
     };
   },
@@ -5278,6 +5344,61 @@ ${athleteContext}
         .set({ contentCompletedAt: new Date() })
         .where(eq(classLessonProgress.id, progress.id));
     }
+    // Covers the no-quiz lesson case -- a quiz-bearing lesson's completion
+    // is instead caught inside submitClassLessonQuiz, since finishing its
+    // quiz (not its content) is what satisfies it.
+    return this.checkAndMarkClassCompleted(enrollmentId);
+  },
+
+  // Sets classEnrollments.completedAt (once, first time only) the moment
+  // every lesson in the class satisfies its requirement -- quizPassedAt for
+  // a quiz-bearing lesson, contentCompletedAt otherwise. Called from both
+  // markClassLessonContentCompleted (the no-quiz path) and
+  // submitClassLessonQuiz (the quiz-pass path), since either can be the
+  // last thing standing between an athlete and finishing a class. Returns
+  // enough to notify the owning coach, same notifyCoach shape
+  // submitClassLessonQuiz already returns.
+  async checkAndMarkClassCompleted(enrollmentId: number) {
+    const enrollment = await db.query.classEnrollments.findFirst({
+      where: eq(classEnrollments.id, enrollmentId),
+      with: { athlete: true, class: true },
+    });
+    if (!enrollment || enrollment.completedAt) return { completedClass: false as const, notifyCoach: null };
+
+    const lessons = await db.query.classLessons.findMany({
+      where: eq(classLessons.classId, enrollment.classId),
+      columns: { id: true },
+    });
+    const lessonIds = lessons.map((l) => l.id);
+    const lessonIdsWithQuiz = await this.getClassLessonIdsWithQuiz(lessonIds);
+    const progressRows = await db.query.classLessonProgress.findMany({
+      where: eq(classLessonProgress.enrollmentId, enrollmentId),
+    });
+    const progressByLesson = new Map(progressRows.map((p) => [p.classLessonId, p]));
+
+    const completedClass = lessonIds.every((lId) => {
+      const p = progressByLesson.get(lId);
+      if (!p) return false;
+      return lessonIdsWithQuiz.has(lId) ? !!p.quizPassedAt : !!p.contentCompletedAt;
+    });
+    if (!completedClass) return { completedClass: false as const, notifyCoach: null };
+
+    await db
+      .update(classEnrollments)
+      .set({ completedAt: new Date() })
+      .where(eq(classEnrollments.id, enrollmentId));
+
+    const notifyCoach =
+      enrollment.coachId !== enrollment.athleteId
+        ? {
+            coachId: enrollment.coachId,
+            athleteId: enrollment.athleteId,
+            athleteName: enrollment.athlete.name,
+            classId: enrollment.classId,
+            className: enrollment.class.name,
+          }
+        : null;
+    return { completedClass: true as const, notifyCoach };
   },
 
   // Scores a quiz attempt and, on a pass, sets quizPassedAt (first pass
@@ -5322,19 +5443,85 @@ ${athleteContext}
     const passed = score >= CLASS_QUIZ_PASS_THRESHOLD;
     const perfect = correctCount === questions.length;
 
-    if (passed) {
-      const progress = await db.query.classLessonProgress.findFirst({
-        where: and(
-          eq(classLessonProgress.enrollmentId, enrollmentId),
-          eq(classLessonProgress.classLessonId, classLessonId),
-        ),
-      });
-      if (progress) {
-        const updates: Partial<typeof classLessonProgress.$inferInsert> = {};
+    // Surfaced to the route handler so it can decide whether to notify the
+    // owning coach -- kept out of this function so storage stays free of
+    // notify.ts (routes.ts is where every other class notification, e.g.
+    // notifyNewlyUnlockedLessons, already fires from). Both *Notify fields
+    // are null whenever there's nothing to tell a coach (no threshold
+    // crossed, or a Free Agent's self-enrollment has no real coach on the
+    // other end -- see classEnrollments.coachId).
+    let becameStuck = false;
+    let stuckNotify: {
+      coachId: number;
+      athleteName: string;
+      classId: number;
+      className: string;
+      lessonNumber: number;
+      lessonTitle: string;
+    } | null = null;
+    let completedClass = false;
+    let completedNotify: {
+      coachId: number;
+      athleteName: string;
+      classId: number;
+      className: string;
+    } | null = null;
+
+    const progress = await db.query.classLessonProgress.findFirst({
+      where: and(
+        eq(classLessonProgress.enrollmentId, enrollmentId),
+        eq(classLessonProgress.classLessonId, classLessonId),
+      ),
+    });
+    if (progress) {
+      const updates: Partial<typeof classLessonProgress.$inferInsert> = {};
+      if (passed) {
         if (!progress.quizPassedAt) updates.quizPassedAt = new Date();
         if (perfect && !progress.quizPerfectAt) updates.quizPerfectAt = new Date();
-        if (Object.keys(updates).length > 0) {
-          await db.update(classLessonProgress).set(updates).where(eq(classLessonProgress.id, progress.id));
+        if (progress.quizFailCount !== 0) updates.quizFailCount = 0;
+      } else {
+        const newFailCount = progress.quizFailCount + 1;
+        updates.quizFailCount = newFailCount;
+        if (newFailCount >= CLASS_QUIZ_STUCK_THRESHOLD && !progress.coachNotifiedStuckAt) {
+          updates.coachNotifiedStuckAt = new Date();
+          becameStuck = true;
+        }
+      }
+      if (Object.keys(updates).length > 0) {
+        await db.update(classLessonProgress).set(updates).where(eq(classLessonProgress.id, progress.id));
+      }
+
+      if (passed) {
+        const result = await this.checkAndMarkClassCompleted(enrollmentId);
+        completedClass = result.completedClass;
+        if (result.notifyCoach) {
+          completedNotify = {
+            coachId: result.notifyCoach.coachId,
+            athleteName: result.notifyCoach.athleteName,
+            classId: result.notifyCoach.classId,
+            className: result.notifyCoach.className,
+          };
+        }
+      }
+
+      if (becameStuck) {
+        const enrollment = await db.query.classEnrollments.findFirst({
+          where: eq(classEnrollments.id, enrollmentId),
+          with: { athlete: true, class: true },
+        });
+        const lesson = await db.query.classLessons.findFirst({ where: eq(classLessons.id, classLessonId) });
+        // A Free Agent's self-enrollment sets coachId === athleteId (see
+        // classEnrollments.coachId) -- nothing to tell a "coach" who is
+        // just the athlete themselves.
+        if (enrollment && lesson && enrollment.coachId !== enrollment.athleteId) {
+          stuckNotify = {
+            coachId: enrollment.coachId,
+            athleteName: enrollment.athlete.name,
+            classId: enrollment.classId,
+            className: enrollment.class.name,
+            lessonNumber: lesson.lessonNumber,
+            lessonTitle: lesson.title,
+          };
         }
       }
     }
@@ -5347,6 +5534,10 @@ ${athleteContext}
       perfect,
       passThreshold: CLASS_QUIZ_PASS_THRESHOLD,
       results,
+      becameStuck,
+      stuckNotify,
+      completedClass,
+      completedNotify,
     };
   },
 
@@ -5467,22 +5658,32 @@ ${athleteContext}
       with: { athlete: true },
       orderBy: desc(classEnrollments.createdAt),
     });
-    const lessons = await db.query.classLessons.findMany({
-      where: eq(classLessons.classId, classId),
-    });
+    // Reuses the athlete's own progress computation (unlock rules, this
+    // coach's pacing overrides, quiz results) instead of re-deriving a
+    // separate summary here -- one source of truth for "where is this
+    // athlete in this class," whether they're looking at it themselves or
+    // their coach is.
     const results = [];
     for (const enrollment of rows) {
-      await this.recomputeClassProgress(enrollment.id);
-      const progressRows = await db.query.classLessonProgress.findMany({
-        where: eq(classLessonProgress.enrollmentId, enrollment.id),
-      });
+      const progress = await this.getClassProgressForAthlete(enrollment.athleteId, classId);
+      const lessons = progress?.lessons ?? [];
       results.push({
         enrollmentId: enrollment.id,
         athleteId: enrollment.athleteId,
         athleteName: enrollment.athlete.name,
         startDate: enrollment.startDate,
-        lessonsStarted: progressRows.filter((p) => p.skillAssignmentId).length,
+        completedAt: enrollment.completedAt,
+        lessonsStarted: lessons.filter((l) => l.state === "active").length,
         lessonsTotal: lessons.length,
+        lessons: lessons.map((l) => ({
+          lessonId: l.id,
+          lessonNumber: l.lessonNumber,
+          title: l.title,
+          state: l.state,
+          contentCompletedAt: l.contentCompletedAt,
+          quizPassedAt: l.quizPassedAt,
+          quizPerfectAt: l.quizPerfectAt,
+        })),
       });
     }
     return results;
