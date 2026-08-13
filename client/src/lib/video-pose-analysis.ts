@@ -1,12 +1,17 @@
-// Runs the shared pose-tracking model over an already-recorded video file
-// (as opposed to a live camera stream) -- the skeleton-overlay half of the
-// video-analysis tool (see video-analysis-dialog.tsx). Every other user of
-// getPoseLandmarker() (bar-tracker-dialog, mechanics-tracker-dialog,
-// sprint-tracker-dialog) feeds it a live <video> element frame-by-frame via
+// Runs the pose-tracking model over an already-recorded video file (as
+// opposed to a live camera stream) -- the skeleton-overlay half of the
+// video-analysis tool (see video-analysis-dialog.tsx). Every live tracker
+// (bar-tracker-dialog, mechanics-tracker-dialog, sprint-tracker-dialog)
+// feeds getPoseLandmarker() a live <video> element frame-by-frame via
 // requestAnimationFrame; this instead seeks a detached, offscreen <video>
 // element through the whole clip once up front so the review screen can
-// scrub freely afterward without re-running detection on every frame.
-import { getPoseLandmarker, type PoseFrame } from "./pose-tracking";
+// scrub freely afterward without re-running detection on every frame. Uses
+// its own dedicated instance (getOfflinePoseLandmarker), never the shared
+// live one -- see that function's own comment for why: this pass has no
+// cancellation tied to its calling dialog's lifecycle, so an abandoned
+// analysis can keep running (and feeding whatever instance it holds) well
+// after the dialog that started it has closed.
+import { getOfflinePoseLandmarker, type PoseFrame } from "./pose-tracking";
 
 // Detection is the expensive part, not seeking -- capping the sample count
 // bounds worst-case analysis time for a longer clip (a full tracked set can
@@ -33,7 +38,7 @@ export async function analyzeVideoPose(
   videoUrl: string,
   onProgress?: (fraction: number) => void,
 ): Promise<PoseFrame[]> {
-  const landmarker = await getPoseLandmarker();
+  const landmarker = await getOfflinePoseLandmarker();
 
   const video = document.createElement("video");
   video.src = videoUrl;
@@ -52,10 +57,12 @@ export async function analyzeVideoPose(
 
   const interval = Math.max(MIN_INTERVAL_SEC, duration / MAX_SAMPLES);
   // Seeded from performance.now() (not 0) so these timestamps always land
-  // strictly after whatever the shared landmarker last saw from a live
-  // tracker earlier in this same page session -- detectForVideo throws if
-  // timestamps ever go backwards or repeat, and every live tracker feeds it
-  // raw performance.now() values, not clip-relative ones.
+  // strictly after whatever THIS SAME dedicated instance (see
+  // getOfflinePoseLandmarker's own comment -- deliberately not the shared
+  // live-tracker landmarker) last saw from an earlier analyzeVideoPose()
+  // call this page session -- detectForVideo throws if timestamps ever go
+  // backwards or repeat, and this instance is a lazy singleton reused
+  // across every video a coach analyzes, not a fresh one per call.
   const baseTimestampMs = performance.now();
 
   const frames: PoseFrame[] = [];

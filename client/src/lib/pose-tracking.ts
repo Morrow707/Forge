@@ -126,6 +126,41 @@ export function getRoiPoseLandmarker(): Promise<PoseLandmarker> {
   return roiLandmarkerPromise;
 }
 
+let offlineLandmarkerPromise: Promise<PoseLandmarker> | null = null;
+
+// A third, independent PoseLandmarker instance for video-pose-analysis.ts's
+// offline analyzeVideoPose() pass -- same "never share state with a live
+// tracker" reasoning as getRoiPoseLandmarker() above, for a different
+// cross-talk hazard this time: analyzeVideoPose() has no cancellation tied
+// to VideoAnalysisDialog's lifecycle, so closing that dialog before its
+// several-second analysis finishes leaves the pass running in the
+// background, still feeding whatever instance it holds. If that were the
+// SAME instance a live tracker's tick() loop started moments later is
+// feeding real performance.now() timestamps to, the two unsynchronized
+// sequences (live: real wall-clock time; offline: clip-relative time
+// seeded once at analysis start) can interleave out of order --
+// MediaPipe's VIDEO mode rejects any call whose timestamp doesn't strictly
+// exceed the last one it saw for that instance ("New timestamp is equal or
+// less than the last one", straight from the compiled graph runner), and
+// whichever side loses that race gets its call rejected. For a live
+// tracker's tick(), that's a thrown exception mid-frame -- which kills its
+// self-perpetuating requestAnimationFrame(tick) chain silently, with
+// nothing telling the athlete or coach tracking just froze. A dedicated
+// instance here removes the shared state entirely, same fix as the
+// ROI-refine pass above.
+export function getOfflinePoseLandmarker(): Promise<PoseLandmarker> {
+  if (!offlineLandmarkerPromise) {
+    offlineLandmarkerPromise = FilesetResolver.forVisionTasks(WASM_BASE_PATH).then((fileset) =>
+      PoseLandmarker.createFromOptions(fileset, {
+        baseOptions: { modelAssetPath: MODEL_URL, delegate: "GPU" },
+        runningMode: "VIDEO",
+        numPoses: 1,
+      }),
+    );
+  }
+  return offlineLandmarkerPromise;
+}
+
 function visible<T extends { visibility: number }>(lm: T | undefined): lm is T {
   return !!lm && lm.visibility >= MIN_VISIBILITY;
 }
