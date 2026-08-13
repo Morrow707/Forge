@@ -13,7 +13,7 @@
 // calling it every single frame, since knee/ankle angle doesn't change
 // fast enough at 30fps for that to matter and a full second inference
 // every frame risked doubling per-frame cost.
-import { PoseLandmarker, type NormalizedLandmark } from "@mediapipe/tasks-vision";
+import { PoseLandmarker, type Landmark, type NormalizedLandmark } from "@mediapipe/tasks-vision";
 import { POSE_LANDMARKS } from "./pose-tracking";
 
 const LOWER_BODY_INDICES = [
@@ -95,26 +95,40 @@ export function remapCropLandmark(
   };
 }
 
+export type RefinedLowerBody = { landmarks: NormalizedLandmark[]; worldLandmarks: Landmark[] };
+
 // Re-runs `landmarker` (expected to be pose-tracking.ts's
 // getRoiPoseLandmarker instance, never the main one -- see its own
 // comment) on a crop of `video` around the lower-body landmarks in
-// `landmarks`, and returns a COPY of `landmarks` with just the lower-body
-// indices replaced by the refined, remapped-back-to-full-frame values --
-// everything else (shoulders, wrists, etc.) is untouched. Returns the
-// original array unchanged if a crop can't be formed (too little of the
-// lower body confidently visible) or the second pass finds nobody in it.
+// `landmarks`, and returns COPIES of `landmarks`/`worldLandmarks` with just
+// the lower-body indices replaced by the refined values -- everything else
+// (shoulders, wrists, etc.) is untouched. The 2D `landmarks` values get
+// remapped from crop-space back to full-frame normalized coordinates; the
+// `worldLandmarks` values need no such remapping -- MediaPipe's world
+// landmarks are already hip-centered, real-world-metric coordinates, not
+// expressed relative to the input image's framing, so the crop-space
+// detection's world landmarks are directly comparable to the full-frame
+// pass's. This second detectForVideo call already computes both outputs;
+// only `.landmarks` used to be read here, silently discarding
+// `.worldLandmarks` even though computeRepDepths/computeLegDriveAsymmetry
+// (the two callers this feature was actually built for -- squat depth and
+// leg-drive asymmetry) read worldLandmarks exclusively, never the 2D
+// landmarks this used to patch alone. Returns the original arrays
+// unchanged if a crop can't be formed (too little of the lower body
+// confidently visible) or the second pass finds nobody in it.
 export function refineLowerBodyLandmarks(
   landmarker: PoseLandmarker,
   video: HTMLVideoElement,
   landmarks: NormalizedLandmark[],
+  worldLandmarks: Landmark[],
   timestamp: number,
-): NormalizedLandmark[] {
+): RefinedLowerBody {
   const box = computeLowerBodyBox(landmarks);
-  if (!box) return landmarks;
+  if (!box) return { landmarks, worldLandmarks };
 
   const videoWidth = video.videoWidth;
   const videoHeight = video.videoHeight;
-  if (!videoWidth || !videoHeight) return landmarks;
+  if (!videoWidth || !videoHeight) return { landmarks, worldLandmarks };
 
   const canvas = getScratchCanvas();
   // Upscaled beyond the crop's native pixel footprint -- this is exactly
@@ -123,7 +137,7 @@ export function refineLowerBodyLandmarks(
   canvas.width = CROP_CANVAS_SIZE;
   canvas.height = CROP_CANVAS_SIZE;
   const ctx = canvas.getContext("2d");
-  if (!ctx) return landmarks;
+  if (!ctx) return { landmarks, worldLandmarks };
 
   ctx.drawImage(
     video,
@@ -139,13 +153,20 @@ export function refineLowerBodyLandmarks(
 
   const result = landmarker.detectForVideo(canvas, timestamp);
   const refinedFrame = result.landmarks[0];
-  if (!refinedFrame) return landmarks;
+  const refinedWorldFrame = result.worldLandmarks[0];
+  if (!refinedFrame) return { landmarks, worldLandmarks };
 
-  const merged = landmarks.slice();
+  const mergedLandmarks = landmarks.slice();
+  const mergedWorldLandmarks = worldLandmarks.slice();
   for (const i of LOWER_BODY_INDICES) {
     const refined = refinedFrame[i];
-    if (!refined || refined.visibility < MIN_VISIBILITY) continue;
-    merged[i] = remapCropLandmark(refined, box);
+    if (refined && refined.visibility >= MIN_VISIBILITY) {
+      mergedLandmarks[i] = remapCropLandmark(refined, box);
+    }
+    const refinedWorld = refinedWorldFrame?.[i];
+    if (refinedWorld && refinedWorld.visibility >= MIN_VISIBILITY) {
+      mergedWorldLandmarks[i] = refinedWorld;
+    }
   }
-  return merged;
+  return { landmarks: mergedLandmarks, worldLandmarks: mergedWorldLandmarks };
 }

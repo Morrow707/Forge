@@ -1189,22 +1189,22 @@ export function BarTrackerDialog({
         } else {
           rejectionEventsRef.current.push(t);
         }
-        // Refines just the hip/knee/ankle landmarks in the SAVED frame
-        // history (what detectFormFaults/computeRepDepths/
-        // computeLegDriveAsymmetry read back at Stop) via a cropped
-        // second Pose pass -- see roi-refine.ts's own comment. Throttled
-        // rather than run every tick, and left off entirely whenever the
-        // optional second model hasn't loaded; the live skeleton overlay
-        // keeps using the plain full-frame landmarks regardless, so this
-        // never affects what's drawn on screen, only what gets analyzed
-        // after Stop.
+        // Refines just the hip/knee/ankle landmarks (both the 2D and the
+        // world-space arrays) in the SAVED frame history -- what
+        // detectFormFaults/computeRepDepths/computeLegDriveAsymmetry read
+        // back at Stop -- via a cropped second Pose pass -- see
+        // roi-refine.ts's own comment. Throttled rather than run every
+        // tick, and left off entirely whenever the optional second model
+        // hasn't loaded; the live skeleton overlay keeps using the plain
+        // full-frame landmarks regardless, so this never affects what's
+        // drawn on screen, only what gets analyzed after Stop.
         roiTickCounterRef.current += 1;
         const ROI_REFINE_INTERVAL = 3;
-        const savedLandmarks =
+        const { landmarks: savedLandmarks, worldLandmarks: savedWorldLandmarks } =
           roiLandmarkerRef.current && roiTickCounterRef.current % ROI_REFINE_INTERVAL === 0
-            ? refineLowerBodyLandmarks(roiLandmarkerRef.current, video, landmarks, now)
-            : landmarks;
-        framesRef.current.push({ t, landmarks: savedLandmarks, worldLandmarks });
+            ? refineLowerBodyLandmarks(roiLandmarkerRef.current, video, landmarks, worldLandmarks, now)
+            : { landmarks, worldLandmarks };
+        framesRef.current.push({ t, landmarks: savedLandmarks, worldLandmarks: savedWorldLandmarks });
 
         const wrists = deriveWristPoints(worldLandmarks);
         if (wrists.left) {
