@@ -246,6 +246,37 @@ function isJumpMetrics(r: RepMetrics | JumpSetMetrics): r is JumpSetMetrics {
   return "bestJumpHeightCm" in r;
 }
 
+// No real barbell/dumbbell/kettlebell path moves this fast -- even the most
+// explosive lift (a push press's concentric phase) tops out around 2-2.5
+// m/s. A frame-to-frame jump implying more than this is never the implement
+// actually moving that fast; it's the pose model (or an implement tracker)
+// briefly latching onto the wrong point for one frame -- often right as a
+// wrist reappears from an occlusion. MAX_PLAUSIBLE_IMPLEMENT_OFFSET_M and
+// MAX_PLAUSIBLE_GRIP_OFFSET_M below already catch a disagreement WITHIN one
+// frame (tracker vs. wrist); neither catches a frame that's internally
+// consistent but wildly far from the PREVIOUS frame, which is exactly what
+// inflates peak velocity, fabricates phantom reps (a single bad frame reads
+// as a whole extra zigzag to segmentPhases), and swings the live tilt/grip
+// readings that fuse off these same points. Closes that gap the same way
+// interpolateOcclusionGap already treats a dropped-then-recovered frame:
+// skip the bad point outright rather than letting it stand, and let the
+// next genuinely plausible frame become the new "last known good." Excludes
+// jump mode -- ankle speed at landing/takeoff can legitimately run past
+// this, the same reasoning interpolateOcclusionGap's own maxGapMs already
+// gives jump mode more headroom for.
+const MAX_PLAUSIBLE_VELOCITY_MPS = 4;
+
+function isPlausibleVelocity(
+  prev: { x: number; y: number; t: number } | null,
+  next: { x: number; y: number; t: number },
+): boolean {
+  if (!prev) return true;
+  const dtSec = (next.t - prev.t) / 1000;
+  if (dtSec <= 0) return true;
+  const distanceM = Math.hypot(next.x - prev.x, next.y - prev.y);
+  return distanceM / dtSec <= MAX_PLAUSIBLE_VELOCITY_MPS;
+}
+
 export function BarTrackerDialog({
   open,
   onOpenChange,
@@ -412,6 +443,13 @@ export function BarTrackerDialog({
   // gripWidthReadings so a genuine mid-set regrip surfaces as its own
   // fault (see FormFault's "grip_shift" code).
   const gripWidthReadingsRef = useRef<number[]>([]);
+  // Last ACCEPTED fusedLeft/fusedRight point (see isPlausibleVelocity's own
+  // comment), one per side -- fusedLeft/fusedRight are recomputed fresh
+  // every frame rather than accumulated into a persistent array the way
+  // traceRef is, so tracking "last known good" for the velocity-plausibility
+  // check needs its own dedicated ref pair instead of reading trace[-1].
+  const prevFusedLeftRef = useRef<{ x: number; y: number; t: number } | null>(null);
+  const prevFusedRightRef = useRef<{ x: number; y: number; t: number } | null>(null);
   // Midpoint of the same two fused grip points, one sample per frame --
   // a second, independently-tracked read on the bar's own vertical
   // position (two separate ImplementTracker locks, each fused against its
@@ -516,6 +554,8 @@ export function BarTrackerDialog({
     liveTiltHistoryRef.current = [];
     tiltReadingsRef.current = [];
     gripWidthReadingsRef.current = [];
+    prevFusedLeftRef.current = null;
+    prevFusedRightRef.current = null;
     sideVelocitySamplesRef.current = [];
     leftVelocitySamplesRef.current = [];
     rightVelocitySamplesRef.current = [];
@@ -850,6 +890,8 @@ export function BarTrackerDialog({
     liveTiltHistoryRef.current = [];
     tiltReadingsRef.current = [];
     gripWidthReadingsRef.current = [];
+    prevFusedLeftRef.current = null;
+    prevFusedRightRef.current = null;
     sideVelocitySamplesRef.current = [];
     leftVelocitySamplesRef.current = [];
     rightVelocitySamplesRef.current = [];
@@ -1122,10 +1164,20 @@ export function BarTrackerDialog({
         // make segmentPhases lose or merge whole reps around the gap. Jump
         // mode gets the most headroom (a landing can lose ankle tracking
         // for longer than any lift's bar/wrist ever does).
-        if (prev)
-          for (const gapPoint of interpolateOcclusionGap(prev, point, mode === "jump" ? 400 : 300))
-            trace.push(gapPoint);
-        trace.push(point);
+        // See MAX_PLAUSIBLE_VELOCITY_MPS's own comment -- a frame whose
+        // implied speed from the last accepted point is physically
+        // impossible gets skipped outright (not even gap-bridged toward)
+        // rather than standing as this frame's reading. `prev` on the next
+        // tick naturally falls back to the same last-good point since
+        // nothing was pushed this frame, no separate bookkeeping needed.
+        if (mode === "jump" || isPlausibleVelocity(prev, point)) {
+          if (prev)
+            for (const gapPoint of interpolateOcclusionGap(prev, point, mode === "jump" ? 400 : 300))
+              trace.push(gapPoint);
+          trace.push(point);
+        } else {
+          rejectionEventsRef.current.push(t);
+        }
         // Refines just the hip/knee/ankle landmarks in the SAVED frame
         // history (what detectFormFaults/computeRepDepths/
         // computeLegDriveAsymmetry read back at Stop) via a cropped
@@ -1152,10 +1204,12 @@ export function BarTrackerDialog({
             z: wrists.left.z,
           };
           const prevLeft = leftTraceRef.current[leftTraceRef.current.length - 1];
-          if (prevLeft)
-            for (const g of interpolateOcclusionGap(prevLeft, leftPoint, mode === "jump" ? 400 : 300))
-              leftTraceRef.current.push(g);
-          leftTraceRef.current.push(leftPoint);
+          if (mode === "jump" || isPlausibleVelocity(prevLeft ?? null, leftPoint)) {
+            if (prevLeft)
+              for (const g of interpolateOcclusionGap(prevLeft, leftPoint, mode === "jump" ? 400 : 300))
+                leftTraceRef.current.push(g);
+            leftTraceRef.current.push(leftPoint);
+          }
         }
         if (wrists.right) {
           const rightPoint = {
@@ -1165,10 +1219,12 @@ export function BarTrackerDialog({
             z: wrists.right.z,
           };
           const prevRight = rightTraceRef.current[rightTraceRef.current.length - 1];
-          if (prevRight)
-            for (const g of interpolateOcclusionGap(prevRight, rightPoint, mode === "jump" ? 400 : 300))
-              rightTraceRef.current.push(g);
-          rightTraceRef.current.push(rightPoint);
+          if (mode === "jump" || isPlausibleVelocity(prevRight ?? null, rightPoint)) {
+            if (prevRight)
+              for (const g of interpolateOcclusionGap(prevRight, rightPoint, mode === "jump" ? 400 : 300))
+                rightTraceRef.current.push(g);
+            rightTraceRef.current.push(rightPoint);
+          }
         }
 
         // Left/right implement tracking, purely to make bar tilt a real
@@ -1233,6 +1289,18 @@ export function BarTrackerDialog({
                       leftTotal,
                   }
                 : null;
+            // See MAX_PLAUSIBLE_VELOCITY_MPS's own comment -- this is the
+            // actual data path bar tilt/grip-width read from, so an
+            // implausible jump here is exactly what produced readings like
+            // "grip shifted 65cm" or "tilted 50 degrees": a single bad
+            // frame, uncaught because MAX_PLAUSIBLE_GRIP_OFFSET_M above only
+            // checks tracker-vs-wrist agreement WITHIN this frame, not this
+            // frame against the last one.
+            if (fusedLeft && !isPlausibleVelocity(prevFusedLeftRef.current, { ...fusedLeft, t })) {
+              rejectionEventsRef.current.push(t);
+              fusedLeft = null;
+            }
+            if (fusedLeft) prevFusedLeftRef.current = { x: fusedLeft.x, y: fusedLeft.y, t };
           }
 
           if (normalizedWrists.right) {
@@ -1273,6 +1341,12 @@ export function BarTrackerDialog({
                       rightTotal,
                   }
                 : null;
+            // See fusedLeft's own comment just above -- same fix, mirrored.
+            if (fusedRight && !isPlausibleVelocity(prevFusedRightRef.current, { ...fusedRight, t })) {
+              rejectionEventsRef.current.push(t);
+              fusedRight = null;
+            }
+            if (fusedRight) prevFusedRightRef.current = { x: fusedRight.x, y: fusedRight.y, t };
           }
         }
 
