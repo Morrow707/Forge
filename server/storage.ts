@@ -4347,6 +4347,18 @@ ${athleteContext}
     return row;
   },
 
+  // Which coach owns this skill assignment -- looked up only when a just-
+  // created session log actually has a fault worth notifying about (see the
+  // /api/athlete/skill-session-logs route), so the common no-fault path
+  // never pays for this extra query.
+  async getSkillAssignmentCoachId(skillAssignmentId: number): Promise<number | null> {
+    const assignment = await db.query.skillAssignments.findFirst({
+      where: eq(skillAssignments.id, skillAssignmentId),
+      columns: { coachId: true },
+    });
+    return assignment?.coachId ?? null;
+  },
+
   // Recent attempts at this specific drill, for the athlete recording it --
   // a lightweight "here's your history" list, not a full analytics view
   // (that's Skills Batch 6's job, kept separate from strength analytics).
@@ -9506,6 +9518,44 @@ ${catalog}`;
           isNotNull(skillSessionLogs.videoUrl),
         ),
       )
+      .orderBy(desc(skillSessionLogs.createdAt));
+  },
+
+  // Every session (video or not -- most never opt into saving a clip, see
+  // getSkillSessionsWithVideoForCoachAthlete's own comment) for a trends
+  // view: unlike that video-only list, this is the read the numbers
+  // sprint/mechanics tracking actually compute (splits/speed, hip-shoulder
+  // separation, weight transfer, rotation, sequencing) need to ever be
+  // visible again after the moment they were captured -- previously nothing
+  // read this data back out at all once a session was saved.
+  async getSkillSessionHistoryForCoachAthlete(coachId: number, athleteId: number) {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    return db
+      .select({
+        id: skillSessionLogs.id,
+        trackingLevel: skillSessionLogs.trackingLevel,
+        createdAt: skillSessionLogs.createdAt,
+        skillExerciseName: skillExercises.name,
+        elapsedSeconds: skillSessionLogs.elapsedSeconds,
+        distanceYards: skillSessionLogs.distanceYards,
+        cameraAngle: skillSessionLogs.cameraAngle,
+        faults: skillSessionLogs.faults,
+        hipShoulderSeparationDeg: skillSessionLogs.hipShoulderSeparationDeg,
+        weightTransferPct: skillSessionLogs.weightTransferPct,
+        hipRotationDeg: skillSessionLogs.hipRotationDeg,
+        armSlotDeg: skillSessionLogs.armSlotDeg,
+        armSlotLabel: skillSessionLogs.armSlotLabel,
+        wellSequenced: skillSessionLogs.wellSequenced,
+        videoUrl: skillSessionLogs.videoUrl,
+      })
+      .from(skillSessionLogs)
+      .innerJoin(
+        skillProgramExercises,
+        eq(skillSessionLogs.skillProgramExerciseId, skillProgramExercises.id),
+      )
+      .innerJoin(skillExercises, eq(skillProgramExercises.skillExerciseId, skillExercises.id))
+      .innerJoin(skillAssignments, eq(skillSessionLogs.skillAssignmentId, skillAssignments.id))
+      .where(and(eq(skillSessionLogs.athleteId, athleteId), inArray(skillAssignments.coachId, coachIds)))
       .orderBy(desc(skillSessionLogs.createdAt));
   },
 

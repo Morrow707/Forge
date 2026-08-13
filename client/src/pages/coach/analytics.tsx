@@ -39,6 +39,7 @@ import {
   Wand2,
 } from "lucide-react";
 import { VideoAnalysisDialog } from "@/components/video-analysis-dialog";
+import { SkillsTrendsPanel } from "@/components/skills-trends-panel";
 import {
   LineChart,
   Line,
@@ -634,6 +635,7 @@ export default function CoachAnalytics() {
         <TabsList className="mb-6">
           <TabsTrigger value="performance">Performance</TabsTrigger>
           <TabsTrigger value="videos">Videos</TabsTrigger>
+          <TabsTrigger value="skills">Skills</TabsTrigger>
           <TabsTrigger value="trends">Team Trends</TabsTrigger>
         </TabsList>
 
@@ -1683,11 +1685,64 @@ export default function CoachAnalytics() {
           />
         </TabsContent>
 
+        <TabsContent value="skills">
+          <SkillsTab
+            roster={roster}
+            athleteId={athleteId}
+            onAthleteChange={handleAthleteChange}
+            athleteSearch={athleteSearch}
+            onAthleteSearchChange={setAthleteSearch}
+          />
+        </TabsContent>
+
         <TabsContent value="trends">
           <TeamTrends />
         </TabsContent>
       </Tabs>
     </AppShell>
+  );
+}
+
+/** Wrapper around SkillsTrendsPanel that handles athlete selection and the
+ * empty states -- same split VideosTab uses (this file owns picking who,
+ * the imported panel owns what to show once someone's picked), so
+ * SkillsTrendsPanel itself stays reusable without knowing about the
+ * roster/search plumbing this page already lifts. */
+function SkillsTab({
+  roster,
+  athleteId,
+  onAthleteChange,
+  athleteSearch,
+  onAthleteSearchChange,
+}: {
+  roster: RosterEntry[];
+  athleteId: string;
+  onAthleteChange: (id: string) => void;
+  athleteSearch: string;
+  onAthleteSearchChange: (value: string) => void;
+}) {
+  const athleteName = roster.find((a) => String(a.id) === athleteId)?.name;
+  return (
+    <div className="space-y-4">
+      <AthletePickerField
+        roster={roster}
+        athleteId={athleteId}
+        onChange={onAthleteChange}
+        search={athleteSearch}
+        onSearchChange={onAthleteSearchChange}
+      />
+
+      {!athleteId ? (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
+            <Users className="h-10 w-10 text-muted-foreground" />
+            <p className="text-muted-foreground">Pick an athlete to see their Skills tracking history.</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <SkillsTrendsPanel athleteId={athleteId} athleteName={athleteName} />
+      )}
+    </div>
   );
 }
 

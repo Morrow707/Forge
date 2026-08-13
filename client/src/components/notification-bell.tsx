@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { apiRequest } from "@/lib/queryClient";
-import { Bell, MessageSquare, Video, Megaphone, MessagesSquare, Activity, GraduationCap } from "lucide-react";
+import { Bell, MessageSquare, Video, Megaphone, MessagesSquare, Activity, GraduationCap, Zap } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useLocation } from "wouter";
@@ -107,6 +107,8 @@ export function NotificationBell() {
                 <MessagesSquare className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
               ) : n.type === "leg_asymmetry" ? (
                 <Activity className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
+              ) : n.type === "skill_fault" ? (
+                <Zap className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
               ) : n.type === "class_lesson_unlocked" ? (
                 <GraduationCap className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
               ) : (

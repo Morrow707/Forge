@@ -2107,6 +2107,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
+  // Numbers counterpart to skill-sessions above -- EVERY session (video or
+  // not), with the actual sprint/mechanics metrics, for the analytics
+  // page's Skills tab. Until this existed, a captured session's numbers
+  // (splits/speed, hip-shoulder separation, weight transfer, rotation,
+  // sequencing) were computed, saved, and then never read back anywhere --
+  // only the raw clip (when one was opted into) was ever visible again.
+  app.get(
+    "/api/coach/roster/:athleteId/skill-session-history",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      const onRoster = await storage.getRosterAthleteForCoach(user.id, athleteId);
+      if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
+      const sessions = await storage.getSkillSessionHistoryForCoachAthlete(user.id, athleteId);
+      res.json(sessions);
+    },
+  );
+
   // Strength-side counterpart to skill-sessions above -- every per-set
   // form-check clip this athlete has recorded, across every exercise at
   // once. Feeds the analytics page's unified Videos tab; the two lists are
@@ -3806,6 +3825,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     );
     if (!detail) return res.status(404).json({ message: "Skill session not found" });
     const log = await storage.createSkillSessionLog(user.id, parsed.data);
+
+    // Same "flag it for the coach" treatment the strength side's leg-drive
+    // asymmetry check gets (see evaluateLegDriveAsymmetryFlags below) -- a
+    // captured session's faults are already a whole-capture aggregate read
+    // (detectSprintFaults/detectMechanicsFaults run against the full
+    // capture, not a single noisy frame), so each faulted session is its
+    // own notification-worthy event, the same per-submission granularity
+    // leg_asymmetry uses rather than needing its own multi-session
+    // consistency check.
+    if (parsed.data.faults && parsed.data.faults.length > 0) {
+      const coachId = await storage.getSkillAssignmentCoachId(parsed.data.skillAssignmentId);
+      if (coachId) {
+        const exerciseName =
+          detail.exercises.find((e) => e.id === parsed.data.skillProgramExerciseId)?.name ?? "a drill";
+        const body = parsed.data.faults.map((f) => f.label).join("; ");
+        await notifyUser(
+          coachId,
+          "skill_fault",
+          `${user.name} showed a mechanics flag on ${exerciseName}`,
+          body,
+          "/coach/analytics",
+        );
+      }
+    }
+
     res.status(201).json(log);
   });
 
