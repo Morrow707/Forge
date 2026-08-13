@@ -2036,10 +2036,95 @@ export const classLessons = pgTable(
     // Cents; null = free/included. Only read when the parent class is
     // isForgeOfficial (see the table comment above).
     priceCents: integer("price_cents"),
+    // Ordered click/tap-through reading pages shown before the drill list
+    // and end-of-chapter quiz -- the actual lesson lecture content, as
+    // opposed to `description`'s short teaser shown while still locked. See
+    // classLessonQuizQuestions for the quiz that follows this content.
+    content: json("content").$type<{ title?: string; body: string }[]>().notNull().default([]),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({
     classIdx: index("class_lessons_class_idx").on(table.classId),
+  }),
+);
+
+// One quiz per lesson, taken after its content pages -- unlike Coaches
+// Corner's ungraded self-check (academyQuizQuestions), this one gates
+// progress (see classLessonProgress.quizPassedAt), so answers are scored.
+export const classLessonQuizQuestions = pgTable(
+  "class_lesson_quiz_questions",
+  {
+    id: serial("id").primaryKey(),
+    classLessonId: integer("class_lesson_id")
+      .notNull()
+      .references(() => classLessons.id, { onDelete: "cascade" }),
+    orderIndex: integer("order_index").notNull().default(0),
+    questionText: text("question_text").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    lessonIdx: index("class_lesson_quiz_questions_lesson_idx").on(table.classLessonId),
+  }),
+);
+
+export const classLessonQuizAnswers = pgTable(
+  "class_lesson_quiz_answers",
+  {
+    id: serial("id").primaryKey(),
+    questionId: integer("question_id")
+      .notNull()
+      .references(() => classLessonQuizQuestions.id, { onDelete: "cascade" }),
+    orderIndex: integer("order_index").notNull().default(0),
+    answerText: text("answer_text").notNull(),
+    isCorrect: boolean("is_correct").notNull().default(false),
+    // Shown when this specific answer is expanded after submitting, correct
+    // or not -- same convention as academyQuizAnswers.explanation.
+    explanation: text("explanation").notNull(),
+  },
+  (table) => ({
+    questionIdx: index("class_lesson_quiz_answers_question_idx").on(table.questionId),
+  }),
+);
+
+// A coach's own pacing override for a Forge Class they've assigned to their
+// roster -- layered on top of (and, when present, replacing) the admin-
+// authored default in classLessons.unlockRule/unlockThreshold. Lets a coach
+// require real practice reps ("effort drip": the athlete must actually log
+// completed sessions of the previous lesson's drill day some number of
+// times, not just let a calendar day pass) alongside or instead of a
+// minimum wait ("time drip"), independent of whatever rule the admin who
+// authored the content originally picked. Scoped to (classId, coachId), not
+// per-lesson -- one pacing setting governs every lesson-to-lesson
+// transition in the class for that coach's roster. Never touches the
+// class/lesson content itself, so this stays editable by a coach even on an
+// isForgeOfficial class whose lessons are otherwise admin-only.
+export const classCoachSettings = pgTable(
+  "class_coach_settings",
+  {
+    id: serial("id").primaryKey(),
+    classId: integer("class_id")
+      .notNull()
+      .references(() => classes.id, { onDelete: "cascade" }),
+    coachId: integer("coach_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // Effort drip: minimum distinct logged sessions of a lesson's drill day
+    // required before the next lesson can unlock. Null = no repetition
+    // requirement from this override.
+    minSessionsRequired: integer("min_sessions_required"),
+    // Time drip: minimum whole days that must elapse after a lesson unlocks
+    // before the next one can. Combines with minSessionsRequired (both must
+    // clear) rather than either/or. Null = no minimum wait from this
+    // override.
+    minDaysElapsed: integer("min_days_elapsed"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    classCoachIdx: uniqueIndex("class_coach_settings_class_coach_idx").on(
+      table.classId,
+      table.coachId,
+    ),
   }),
 );
 
@@ -2090,6 +2175,15 @@ export const classLessonProgress = pgTable(
     // Coach/admin escape hatch -- force a lesson open regardless of what its
     // unlock rule says, independent of which rule type the lesson uses.
     manuallyUnlocked: boolean("manually_unlocked").notNull().default(false),
+    // Set once the athlete has clicked/tapped through every content page.
+    // Required (alongside quizPassedAt) before the "Add to Calendar" button
+    // that actually creates skillAssignmentId becomes clickable, for any
+    // lesson that has quiz questions -- see recomputeClassProgress.
+    contentCompletedAt: timestamp("content_completed_at"),
+    // Set the first time the athlete clears the pass threshold on this
+    // lesson's quiz. Unlimited retries; earlier failed attempts aren't
+    // persisted, only the eventual pass.
+    quizPassedAt: timestamp("quiz_passed_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({
@@ -2110,6 +2204,30 @@ export const classLessonsRelations = relations(classLessons, ({ one, many }) => 
     references: [skillPrograms.id],
   }),
   progress: many(classLessonProgress),
+  quizQuestions: many(classLessonQuizQuestions),
+}));
+
+export const classLessonQuizQuestionsRelations = relations(
+  classLessonQuizQuestions,
+  ({ one, many }) => ({
+    lesson: one(classLessons, {
+      fields: [classLessonQuizQuestions.classLessonId],
+      references: [classLessons.id],
+    }),
+    answers: many(classLessonQuizAnswers),
+  }),
+);
+
+export const classLessonQuizAnswersRelations = relations(classLessonQuizAnswers, ({ one }) => ({
+  question: one(classLessonQuizQuestions, {
+    fields: [classLessonQuizAnswers.questionId],
+    references: [classLessonQuizQuestions.id],
+  }),
+}));
+
+export const classCoachSettingsRelations = relations(classCoachSettings, ({ one }) => ({
+  class: one(classes, { fields: [classCoachSettings.classId], references: [classes.id] }),
+  coach: one(users, { fields: [classCoachSettings.coachId], references: [users.id] }),
 }));
 
 export const classEnrollmentsRelations = relations(classEnrollments, ({ one, many }) => ({
@@ -2137,6 +2255,31 @@ export type Class = typeof classes.$inferSelect;
 export type ClassLesson = typeof classLessons.$inferSelect;
 export type ClassEnrollment = typeof classEnrollments.$inferSelect;
 export type ClassLessonProgress = typeof classLessonProgress.$inferSelect;
+export type ClassLessonQuizQuestion = typeof classLessonQuizQuestions.$inferSelect;
+export type ClassLessonQuizAnswer = typeof classLessonQuizAnswers.$inferSelect;
+export type ClassCoachSettings = typeof classCoachSettings.$inferSelect;
+
+export const classLessonContentPageSchema = z.object({
+  title: z.string().trim().max(200).optional(),
+  body: z.string().trim().min(1).max(10000),
+});
+
+export const classLessonQuizAnswerInputSchema = z.object({
+  // Present when editing an existing answer; absent for a new one -- same
+  // in-place-update convention as classLessonInputSchema.id.
+  id: z.number().optional(),
+  orderIndex: z.number().int().default(0),
+  answerText: z.string().trim().min(1).max(500),
+  isCorrect: z.boolean().default(false),
+  explanation: z.string().trim().min(1).max(1000),
+});
+
+export const classLessonQuizQuestionInputSchema = z.object({
+  id: z.number().optional(),
+  orderIndex: z.number().int().default(0),
+  questionText: z.string().trim().min(1).max(1000),
+  answers: z.array(classLessonQuizAnswerInputSchema).min(2).max(8),
+});
 
 export const classLessonExerciseInputSchema = z.object({
   skillExerciseId: z.number(),
@@ -2161,6 +2304,8 @@ export const classLessonInputSchema = z.object({
   unlockThreshold: z.number().int().min(1).nullable().optional(),
   priceCents: z.number().int().min(0).nullable().optional(),
   exercises: z.array(classLessonExerciseInputSchema).default([]),
+  content: z.array(classLessonContentPageSchema).default([]),
+  quizQuestions: z.array(classLessonQuizQuestionInputSchema).default([]),
 });
 
 export const classStructureSchema = z.object({
@@ -2176,6 +2321,18 @@ export const enrollInClassSchema = z.object({
   classId: z.number(),
   startDate: z.string(),
 });
+
+// A coach's pacing override for a class -- see classCoachSettings' own
+// comment for why this is separate from (and coach-editable independent of)
+// the admin-authored lesson content. Both fields nullable; either or both
+// may be set, and either may be cleared back to null (falling back to the
+// lesson's own admin default) by omitting it here.
+export const classCoachSettingsInputSchema = z.object({
+  minSessionsRequired: z.number().int().min(1).max(365).nullable().optional(),
+  minDaysElapsed: z.number().int().min(1).max(365).nullable().optional(),
+});
+
+export type ClassCoachSettingsInput = z.infer<typeof classCoachSettingsInputSchema>;
 
 // ---------- Coaches Corner (admin-authored coach education, "Coaches
 // Corner") ----------

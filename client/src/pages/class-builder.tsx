@@ -31,6 +31,8 @@ import {
   Lock,
   UserPlus,
   GraduationCap,
+  BookOpen,
+  HelpCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { SkillExercise } from "@shared/schema";
@@ -50,6 +52,16 @@ type LocalExercise = {
   trackingLevel: SkillTrackingLevel;
 };
 
+type LocalContentPage = { key: string; title: string; body: string };
+type LocalQuizAnswer = {
+  key: string;
+  id?: number;
+  answerText: string;
+  isCorrect: boolean;
+  explanation: string;
+};
+type LocalQuizQuestion = { key: string; id?: number; questionText: string; answers: LocalQuizAnswer[] };
+
 type LocalLesson = {
   key: string;
   id?: number;
@@ -59,6 +71,8 @@ type LocalLesson = {
   unlockThreshold: string;
   priceDollars: string;
   exercises: LocalExercise[];
+  content: LocalContentPage[];
+  quizQuestions: LocalQuizQuestion[];
 };
 
 function uid() {
@@ -74,6 +88,16 @@ function makeLesson(n: number): LocalLesson {
     unlockThreshold: "3",
     priceDollars: "",
     exercises: [],
+    content: [],
+    quizQuestions: [],
+  };
+}
+
+function makeQuizQuestion(): LocalQuizQuestion {
+  return {
+    key: uid(),
+    questionText: "",
+    answers: [0, 1, 2, 3].map((i) => ({ key: uid(), answerText: "", isCorrect: i === 0, explanation: "" })),
   };
 }
 
@@ -98,6 +122,23 @@ function stateFromClass(cls: any) {
         restSeconds: pe.restSeconds != null ? String(pe.restSeconds) : "",
         notes: pe.notes ?? "",
         trackingLevel: (pe.trackingLevel ?? "none") as SkillTrackingLevel,
+      })),
+      content: ((l.content ?? []) as { title?: string; body: string }[]).map((p) => ({
+        key: uid(),
+        title: p.title ?? "",
+        body: p.body,
+      })),
+      quizQuestions: ((l.quizQuestions ?? []) as any[]).map((q) => ({
+        key: uid(),
+        id: q.id,
+        questionText: q.questionText,
+        answers: q.answers.map((a: any) => ({
+          key: uid(),
+          id: a.id,
+          answerText: a.answerText,
+          isCorrect: a.isCorrect,
+          explanation: a.explanation,
+        })),
       })),
     })),
   };
@@ -183,6 +224,26 @@ export function ClassBuilderPage({
     });
   }
 
+  // Every quiz question submitted needs a real, unambiguous answer key --
+  // caught here before the round trip rather than surfaced as a 400 from
+  // the server's own zod validation.
+  function findQuizValidationError(): string | null {
+    for (const l of lessons) {
+      for (const q of l.quizQuestions) {
+        if (!q.questionText.trim()) continue;
+        const answers = q.answers.filter((a) => a.answerText.trim());
+        if (answers.length < 2) return `"${l.title}": every quiz question needs at least 2 answers.`;
+        if (answers.filter((a) => a.isCorrect).length !== 1) {
+          return `"${l.title}": every quiz question needs exactly one correct answer marked.`;
+        }
+        if (answers.some((a) => !a.explanation.trim())) {
+          return `"${l.title}": every answer needs an explanation.`;
+        }
+      }
+    }
+    return null;
+  }
+
   const saveMutation = useMutation({
     mutationFn: async () => {
       const payload = {
@@ -211,6 +272,25 @@ export function ClassBuilderPage({
             notes: ex.notes || null,
             trackingLevel: ex.trackingLevel,
           })),
+          content: l.content
+            .filter((p) => p.body.trim())
+            .map((p) => ({ title: p.title.trim() || undefined, body: p.body })),
+          quizQuestions: l.quizQuestions
+            .filter((q) => q.questionText.trim())
+            .map((q, qi) => ({
+              id: q.id,
+              orderIndex: qi,
+              questionText: q.questionText,
+              answers: q.answers
+                .filter((a) => a.answerText.trim())
+                .map((a, ai) => ({
+                  id: a.id,
+                  orderIndex: ai,
+                  answerText: a.answerText,
+                  isCorrect: a.isCorrect,
+                  explanation: a.explanation,
+                })),
+            })),
         })),
       };
       const res = await apiRequest("PUT", `${apiBase}/classes/${classId}`, payload);
@@ -255,7 +335,14 @@ export function ClassBuilderPage({
           {editable && (
             <Button
               className="w-full sm:w-auto"
-              onClick={() => saveMutation.mutate()}
+              onClick={() => {
+                const error = findQuizValidationError();
+                if (error) {
+                  toast.error(error);
+                  return;
+                }
+                saveMutation.mutate();
+              }}
               disabled={saveMutation.isPending}
             >
               <Save className="h-4 w-4" />
@@ -276,6 +363,12 @@ export function ClassBuilderPage({
           )}
         </div>
       )}
+
+      {/* Pacing is a coach-owned setting, never content -- available even on
+          a Forge-official class the coach can't otherwise edit (see
+          getClassIfUsableByCoach vs. assertCoachOwnsClass in routes.ts), so
+          it lives outside the `editable`-gated fieldset below. */}
+      {showEnroll && <CoachPacingSettings apiBase={apiBase} classId={classId} />}
 
       <fieldset disabled={!editable} className="contents">
         <Card className="mb-6">
@@ -364,6 +457,109 @@ export function ClassBuilderPage({
         />
       )}
     </AppShell>
+  );
+}
+
+// A coach's own drip-pacing override for a class -- "effort drip" (real
+// logged reps) and/or "time drip" (minimum wait), replacing whatever
+// default the class's author set for every lesson-to-lesson transition on
+// this coach's roster. See classCoachSettings in shared/schema.ts.
+function CoachPacingSettings({ apiBase, classId }: { apiBase: string; classId: number }) {
+  const qc = useQueryClient();
+  const settingsKey = [`${apiBase}/classes`, classId, "coach-settings"];
+  const { data } = useQuery<{ minSessionsRequired: number | null; minDaysElapsed: number | null }>({
+    queryKey: settingsKey,
+    queryFn: () => getJson(`${apiBase}/classes/${classId}/coach-settings`),
+  });
+
+  const [sessionsEnabled, setSessionsEnabled] = useState(false);
+  const [sessions, setSessions] = useState("3");
+  const [daysEnabled, setDaysEnabled] = useState(false);
+  const [days, setDays] = useState("7");
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    if (data && !hydrated) {
+      setSessionsEnabled(data.minSessionsRequired != null);
+      setSessions(data.minSessionsRequired != null ? String(data.minSessionsRequired) : "3");
+      setDaysEnabled(data.minDaysElapsed != null);
+      setDays(data.minDaysElapsed != null ? String(data.minDaysElapsed) : "7");
+      setHydrated(true);
+    }
+  }, [data, hydrated]);
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      const payload = {
+        minSessionsRequired: sessionsEnabled ? Number(sessions) || 1 : null,
+        minDaysElapsed: daysEnabled ? Number(days) || 1 : null,
+      };
+      const res = await apiRequest("PUT", `${apiBase}/classes/${classId}/coach-settings`, payload);
+      return res.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: settingsKey });
+      toast.success("Pacing saved");
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Could not save pacing"),
+  });
+
+  if (!hydrated) {
+    return <Card className="mb-6"><CardContent className="h-16 animate-pulse p-5" /></Card>;
+  }
+
+  return (
+    <Card className="mb-6">
+      <CardContent className="space-y-3 p-5">
+        <div className="flex items-center gap-1.5">
+          <Timer className="h-4 w-4 text-muted-foreground" />
+          <p className="text-sm font-semibold">Your pacing for this class</p>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Overrides the class's own default unlock rule for your roster only -- combine a real
+          "effort drip" (logged reps) with a "time drip" (minimum wait), or leave both off to use
+          the class's own defaults.
+        </p>
+        <label className="flex flex-wrap items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={sessionsEnabled}
+            onChange={(e) => setSessionsEnabled(e.target.checked)}
+          />
+          Require at least
+          <Input
+            type="number"
+            min={1}
+            value={sessions}
+            onChange={(e) => setSessions(e.target.value)}
+            disabled={!sessionsEnabled}
+            className="h-8 w-20"
+          />
+          logged sessions of a lesson's drills before the next lesson unlocks
+        </label>
+        <label className="flex flex-wrap items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={daysEnabled}
+            onChange={(e) => setDaysEnabled(e.target.checked)}
+          />
+          Require at least
+          <Input
+            type="number"
+            min={1}
+            value={days}
+            onChange={(e) => setDays(e.target.value)}
+            disabled={!daysEnabled}
+            className="h-8 w-20"
+          />
+          days between lessons
+        </label>
+        <Button size="sm" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
+          <Save className="h-3.5 w-3.5" />
+          {saveMutation.isPending ? "Saving…" : "Save Pacing"}
+        </Button>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -584,8 +780,252 @@ function LessonCard({
           <Plus className="h-3.5 w-3.5" />
           Add Drill
         </Button>
+
+        <LessonContentAndQuiz lesson={lesson} onChange={onChange} />
       </CardContent>
     </Card>
+  );
+}
+
+// The click/tap-through reading pages an athlete works through before this
+// lesson's end-of-chapter quiz -- collapsed by default since most lessons
+// (any that aren't a Forge-authored curriculum chapter) never use this.
+function LessonContentAndQuiz({
+  lesson,
+  onChange,
+}: {
+  lesson: LocalLesson;
+  onChange: (updater: (lesson: LocalLesson) => LocalLesson) => void;
+}) {
+  const [open, setOpen] = useState(
+    () => lesson.content.length > 0 || lesson.quizQuestions.length > 0,
+  );
+
+  return (
+    <div className="rounded-md border border-border pt-1">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between px-3 py-2 text-left text-xs font-semibold text-muted-foreground hover:text-foreground"
+      >
+        <span className="flex items-center gap-1.5">
+          <BookOpen className="h-3.5 w-3.5" />
+          Lesson Content & Quiz
+          {(lesson.content.length > 0 || lesson.quizQuestions.length > 0) && (
+            <Badge variant="outline" className="ml-1 text-[10px]">
+              {lesson.content.length} page{lesson.content.length === 1 ? "" : "s"} ·{" "}
+              {lesson.quizQuestions.length} question{lesson.quizQuestions.length === 1 ? "" : "s"}
+            </Badge>
+          )}
+        </span>
+        {open ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+      </button>
+      {open && (
+        <div className="space-y-4 border-t border-border p-3">
+          <div className="space-y-2">
+            <Label className="flex items-center gap-1.5 text-xs">
+              <BookOpen className="h-3.5 w-3.5" />
+              Reading pages (click/tap through, in order)
+            </Label>
+            <ContentPagesEditor
+              pages={lesson.content}
+              onChange={(updater) => onChange((l) => ({ ...l, content: updater(l.content) }))}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label className="flex items-center gap-1.5 text-xs">
+              <HelpCircle className="h-3.5 w-3.5" />
+              End-of-chapter quiz
+            </Label>
+            <QuizEditor
+              questions={lesson.quizQuestions}
+              onChange={(updater) => onChange((l) => ({ ...l, quizQuestions: updater(l.quizQuestions) }))}
+            />
+          </div>
+          {lesson.quizQuestions.length > 0 && (
+            <p className="text-[11px] text-muted-foreground">
+              A lesson with a quiz doesn't auto-activate -- the athlete must read every page, pass the
+              quiz, then tap "Add to Calendar" themselves.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ContentPagesEditor({
+  pages,
+  onChange,
+}: {
+  pages: LocalContentPage[];
+  onChange: (updater: (pages: LocalContentPage[]) => LocalContentPage[]) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      {pages.map((page, i) => (
+        <div key={page.key} className="space-y-1.5 rounded-md border border-border p-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[10px] font-semibold uppercase text-muted-foreground">
+              Page {i + 1}
+            </span>
+            <button
+              type="button"
+              aria-label={`Remove page ${i + 1}`}
+              onClick={() => onChange((prev) => prev.filter((p) => p.key !== page.key))}
+              className="text-muted-foreground hover:text-destructive"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          <Input
+            value={page.title}
+            onChange={(e) => {
+              const val = e.target.value;
+              onChange((prev) => prev.map((p) => (p.key === page.key ? { ...p, title: val } : p)));
+            }}
+            placeholder="Page title (optional)"
+            className="h-8 text-sm"
+          />
+          <Textarea
+            value={page.body}
+            onChange={(e) => {
+              const val = e.target.value;
+              onChange((prev) => prev.map((p) => (p.key === page.key ? { ...p, body: val } : p)));
+            }}
+            rows={4}
+            placeholder="What the athlete reads on this page…"
+            className="text-sm"
+          />
+        </div>
+      ))}
+      <Button
+        type="button"
+        variant="secondary"
+        size="sm"
+        className="w-full"
+        onClick={() => onChange((prev) => [...prev, { key: uid(), title: "", body: "" }])}
+      >
+        <Plus className="h-3.5 w-3.5" />
+        Add Page
+      </Button>
+    </div>
+  );
+}
+
+function QuizEditor({
+  questions,
+  onChange,
+}: {
+  questions: LocalQuizQuestion[];
+  onChange: (updater: (questions: LocalQuizQuestion[]) => LocalQuizQuestion[]) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      {questions.map((q, qi) => (
+        <div key={q.key} className="space-y-2 rounded-md border border-border p-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[10px] font-semibold uppercase text-muted-foreground">
+              Question {qi + 1}
+            </span>
+            <button
+              type="button"
+              aria-label={`Remove question ${qi + 1}`}
+              onClick={() => onChange((prev) => prev.filter((x) => x.key !== q.key))}
+              className="text-muted-foreground hover:text-destructive"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          <Textarea
+            value={q.questionText}
+            onChange={(e) => {
+              const val = e.target.value;
+              onChange((prev) => prev.map((x) => (x.key === q.key ? { ...x, questionText: val } : x)));
+            }}
+            rows={2}
+            placeholder="Question text"
+            className="text-sm"
+          />
+          <div className="space-y-1.5">
+            {q.answers.map((a) => (
+              <div key={a.key} className="flex items-start gap-2 rounded border border-border/60 p-1.5">
+                <button
+                  type="button"
+                  aria-label="Mark this the correct answer"
+                  aria-pressed={a.isCorrect}
+                  onClick={() =>
+                    onChange((prev) =>
+                      prev.map((x) =>
+                        x.key === q.key
+                          ? { ...x, answers: x.answers.map((y) => ({ ...y, isCorrect: y.key === a.key })) }
+                          : x,
+                      ),
+                    )
+                  }
+                  className={cn(
+                    "mt-2 h-3.5 w-3.5 shrink-0 rounded-full border-2",
+                    a.isCorrect ? "border-teal-500 bg-teal-500" : "border-muted-foreground",
+                  )}
+                />
+                <div className="flex-1 space-y-1">
+                  <Input
+                    value={a.answerText}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      onChange((prev) =>
+                        prev.map((x) =>
+                          x.key === q.key
+                            ? {
+                                ...x,
+                                answers: x.answers.map((y) =>
+                                  y.key === a.key ? { ...y, answerText: val } : y,
+                                ),
+                              }
+                            : x,
+                        ),
+                      );
+                    }}
+                    placeholder="Answer choice"
+                    className="h-8 text-sm"
+                  />
+                  <Input
+                    value={a.explanation}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      onChange((prev) =>
+                        prev.map((x) =>
+                          x.key === q.key
+                            ? {
+                                ...x,
+                                answers: x.answers.map((y) =>
+                                  y.key === a.key ? { ...y, explanation: val } : y,
+                                ),
+                              }
+                            : x,
+                        ),
+                      );
+                    }}
+                    placeholder="Explanation shown after the athlete answers"
+                    className="h-8 text-xs"
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+      <Button
+        type="button"
+        variant="secondary"
+        size="sm"
+        className="w-full"
+        onClick={() => onChange((prev) => [...prev, makeQuizQuestion()])}
+      >
+        <Plus className="h-3.5 w-3.5" />
+        Add Question
+      </Button>
+    </div>
   );
 }
 

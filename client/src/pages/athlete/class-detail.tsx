@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useParams, useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
@@ -6,8 +7,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { ArrowLeft, Lock, CheckCircle2, PlayCircle } from "lucide-react";
+import { ArrowLeft, Lock, CheckCircle2, PlayCircle, BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ClassLessonReaderDialog } from "@/components/class-lesson-reader-dialog";
 
 type LessonProgress = {
   id: number;
@@ -15,9 +17,12 @@ type LessonProgress = {
   title: string;
   description: string | null;
   priceCents: number | null;
-  state: "active" | "locked_preview" | "locked";
+  hasQuiz: boolean;
+  state: "active" | "ready" | "locked_preview" | "locked";
   skillAssignmentId: number | null;
   purchasedAt: string | null;
+  contentCompletedAt: string | null;
+  quizPassedAt: string | null;
 };
 
 type ClassProgress = {
@@ -37,6 +42,9 @@ export default function AthleteClassDetail() {
     queryKey: [`/api/athlete/classes/${classId}/progress`],
     queryFn: () => getJson(`/api/athlete/classes/${classId}/progress`),
   });
+
+  const [readerLessonId, setReaderLessonId] = useState<number | null>(null);
+  const readerLesson = data?.lessons.find((l) => l.id === readerLessonId) ?? null;
 
   const purchaseMutation = useMutation({
     mutationFn: async (lessonId: number) => {
@@ -90,13 +98,15 @@ export default function AthleteClassDetail() {
                 <div
                   className={cn(
                     "flex h-9 w-9 shrink-0 items-center justify-center rounded-md",
-                    lesson.state === "active"
+                    lesson.state === "active" || lesson.state === "ready"
                       ? "bg-primary/15 text-primary"
                       : "bg-secondary text-muted-foreground",
                   )}
                 >
                   {lesson.state === "active" ? (
                     <PlayCircle className="h-5 w-5" />
+                  ) : lesson.state === "ready" ? (
+                    <BookOpen className="h-4 w-4" />
                   ) : (
                     <Lock className="h-4 w-4" />
                   )}
@@ -119,6 +129,16 @@ export default function AthleteClassDetail() {
                     On your calendar
                   </span>
                 )}
+                {lesson.state === "ready" && (
+                  <Button size="sm" onClick={() => setReaderLessonId(lesson.id)}>
+                    <BookOpen className="h-3.5 w-3.5" />
+                    {!lesson.contentCompletedAt
+                      ? "Start Lesson"
+                      : !lesson.quizPassedAt
+                        ? "Take Quiz"
+                        : "Add to Calendar"}
+                  </Button>
+                )}
                 {lesson.state === "locked_preview" && (
                   <Button
                     size="sm"
@@ -140,6 +160,15 @@ export default function AthleteClassDetail() {
           </Card>
         ))}
       </div>
+
+      {readerLesson && (
+        <ClassLessonReaderDialog
+          open={readerLessonId != null}
+          onOpenChange={(open) => !open && setReaderLessonId(null)}
+          classId={classId}
+          lesson={readerLesson}
+        />
+      )}
     </AppShell>
   );
 }
