@@ -54,6 +54,9 @@ import {
   classLessons,
   classEnrollments,
   classLessonProgress,
+  classLessonQuizQuestions,
+  classLessonQuizAnswers,
+  classCoachSettings,
   academyTracks,
   academyLessons,
   academyLessonCompletions,
@@ -96,6 +99,7 @@ import type {
   CreateFoodLogEntryInput,
   UpdateFoodLogEntryInput,
   ClassStructureInput,
+  ClassCoachSettingsInput,
   AcademyTrackStructureInput,
   AcademyQuizQuestionInput,
 } from "@shared/schema";
@@ -143,6 +147,12 @@ import {
 // limb-symmetry-index cutoff sports-science literature commonly treats as
 // injury-risk-relevant, not an arbitrary round number.
 const LEG_DRIVE_ASYMMETRY_FLAG_THRESHOLD = 15;
+
+// A Class lesson quiz gates real progress (unlike Coaches Corner's ungraded
+// self-check), so it needs an actual pass bar -- 80% mirrors a typical
+// classroom passing grade, with unlimited retries making it forgiving
+// rather than punitive.
+const CLASS_QUIZ_PASS_THRESHOLD = 0.8;
 
 function jointLabelFor(jointKey: string): string {
   return GONIOMETER_JOINTS.find((j) => j.key === jointKey)?.label ?? jointKey;
@@ -4418,7 +4428,7 @@ ${athleteContext}
   },
 
   // Full editable detail for the builder -- each lesson's drills read off
-  // its hidden skill program's single day.
+  // its hidden skill program's single day, plus its content pages and quiz.
   async getClassFull(classId: number) {
     const cls = await db.query.classes.findFirst({
       where: eq(classes.id, classId),
@@ -4442,6 +4452,10 @@ ${athleteContext}
                 },
               },
             },
+            quizQuestions: {
+              orderBy: asc(classLessonQuizQuestions.orderIndex),
+              with: { answers: { orderBy: asc(classLessonQuizAnswers.orderIndex) } },
+            },
           },
         },
       },
@@ -4463,6 +4477,8 @@ ${athleteContext}
           unlockRule: l.unlockRule,
           unlockThreshold: l.unlockThreshold,
           priceCents: l.priceCents,
+          content: l.content,
+          quizQuestions: l.quizQuestions,
           exercises: day?.exercises ?? [],
         };
       }),
@@ -4515,16 +4531,35 @@ ${athleteContext}
             trackingLevel: ex.trackingLevel ?? "none",
           });
         }
-        await tx.insert(classLessons).values({
-          classId: cls.id,
-          lessonNumber: lesson.lessonNumber,
-          title: lesson.title,
-          description: lesson.description ?? null,
-          skillProgramId: skillProgram.id,
-          unlockRule: isFirst ? "immediate" : lesson.unlockRule,
-          unlockThreshold: isFirst ? null : lesson.unlockThreshold ?? null,
-          priceCents: lesson.priceCents ?? null,
-        });
+        const [newLesson] = await tx
+          .insert(classLessons)
+          .values({
+            classId: cls.id,
+            lessonNumber: lesson.lessonNumber,
+            title: lesson.title,
+            description: lesson.description ?? null,
+            skillProgramId: skillProgram.id,
+            unlockRule: isFirst ? "immediate" : lesson.unlockRule,
+            unlockThreshold: isFirst ? null : lesson.unlockThreshold ?? null,
+            priceCents: lesson.priceCents ?? null,
+            content: lesson.content,
+          })
+          .returning();
+        for (const q of lesson.quizQuestions) {
+          const [question] = await tx
+            .insert(classLessonQuizQuestions)
+            .values({ classLessonId: newLesson.id, orderIndex: q.orderIndex, questionText: q.questionText })
+            .returning();
+          await tx.insert(classLessonQuizAnswers).values(
+            q.answers.map((a) => ({
+              questionId: question.id,
+              orderIndex: a.orderIndex,
+              answerText: a.answerText,
+              isCorrect: a.isCorrect,
+              explanation: a.explanation,
+            })),
+          );
+        }
       }
       return cls;
     });
@@ -4563,8 +4598,30 @@ ${athleteContext}
               unlockRule,
               unlockThreshold,
               priceCents: lesson.priceCents ?? null,
+              content: lesson.content,
             })
             .where(eq(classLessons.id, existing.id));
+
+          // Same wipe-and-rebuild approach as the drill day below --
+          // deleting the questions cascades their answers.
+          await tx
+            .delete(classLessonQuizQuestions)
+            .where(eq(classLessonQuizQuestions.classLessonId, existing.id));
+          for (const q of lesson.quizQuestions) {
+            const [question] = await tx
+              .insert(classLessonQuizQuestions)
+              .values({ classLessonId: existing.id, orderIndex: q.orderIndex, questionText: q.questionText })
+              .returning();
+            await tx.insert(classLessonQuizAnswers).values(
+              q.answers.map((a) => ({
+                questionId: question.id,
+                orderIndex: a.orderIndex,
+                answerText: a.answerText,
+                isCorrect: a.isCorrect,
+                explanation: a.explanation,
+              })),
+            );
+          }
 
           // Same "wipe and rebuild the day/exercise tree" approach
           // updateSkillProgramStructure uses -- preserves skillProgramId
@@ -4636,9 +4693,25 @@ ${athleteContext}
               unlockRule,
               unlockThreshold,
               priceCents: lesson.priceCents ?? null,
+              content: lesson.content,
             })
             .returning();
           keptIds.add(newLesson.id);
+          for (const q of lesson.quizQuestions) {
+            const [question] = await tx
+              .insert(classLessonQuizQuestions)
+              .values({ classLessonId: newLesson.id, orderIndex: q.orderIndex, questionText: q.questionText })
+              .returning();
+            await tx.insert(classLessonQuizAnswers).values(
+              q.answers.map((a) => ({
+                questionId: question.id,
+                orderIndex: a.orderIndex,
+                answerText: a.answerText,
+                isCorrect: a.isCorrect,
+                explanation: a.explanation,
+              })),
+            );
+          }
         }
       }
 
@@ -4733,11 +4806,39 @@ ${athleteContext}
     return this.enrollAthleteInClass(athleteId, classId, athleteId, startDate);
   },
 
+  // coachSettings, when passed, is that coach's pacing override for the
+  // class (see classCoachSettings' own comment) -- when either of its
+  // fields is set, it REPLACES the lesson's own admin-authored unlockRule
+  // entirely rather than combining with it, since the two express the same
+  // decision (when can the next lesson start) from two different owners.
   async isClassUnlockRuleSatisfied(
     lesson: typeof classLessons.$inferSelect,
     previousProgress: typeof classLessonProgress.$inferSelect,
+    coachSettings?: typeof classCoachSettings.$inferSelect | null,
   ): Promise<boolean> {
     if (!previousProgress.skillAssignmentId) return false;
+
+    if (coachSettings && (coachSettings.minDaysElapsed != null || coachSettings.minSessionsRequired != null)) {
+      if (coachSettings.minDaysElapsed != null) {
+        if (!previousProgress.unlockedAt) return false;
+        if (differenceInCalendarDays(new Date(), previousProgress.unlockedAt) < coachSettings.minDaysElapsed) {
+          return false;
+        }
+      }
+      if (coachSettings.minSessionsRequired != null) {
+        // Effort drip -- distinct logged capture-days of the previous
+        // lesson's drill day, same counting convention as sessions_logged
+        // below, just coach-set instead of admin-set.
+        const rows = await db
+          .select({ day: sql<string>`date_trunc('day', ${skillSessionLogs.createdAt})` })
+          .from(skillSessionLogs)
+          .where(eq(skillSessionLogs.skillAssignmentId, previousProgress.skillAssignmentId));
+        const distinctDays = new Set(rows.map((r) => r.day));
+        if (distinctDays.size < coachSettings.minSessionsRequired) return false;
+      }
+      return true;
+    }
+
     switch (lesson.unlockRule) {
       case "immediate":
         return true;
@@ -4777,12 +4878,29 @@ ${athleteContext}
     }
   },
 
+  // Every classLessonId (within the given set) that has at least one quiz
+  // question -- shared by recomputeClassProgress and getClassProgressForAthlete
+  // to decide whether a lesson auto-activates or waits for an explicit
+  // "Add to Calendar" click (see activateClassLesson).
+  async getClassLessonIdsWithQuiz(classLessonIds: number[]): Promise<Set<number>> {
+    if (classLessonIds.length === 0) return new Set();
+    const rows = await db
+      .selectDistinct({ classLessonId: classLessonQuizQuestions.classLessonId })
+      .from(classLessonQuizQuestions)
+      .where(inArray(classLessonQuizQuestions.classLessonId, classLessonIds));
+    return new Set(rows.map((r) => r.classLessonId));
+  },
+
   // Walks an enrollment's lessons in order; for each one still not started,
   // checks whether it's reachable (first lesson, manually overridden, or
   // the previous lesson's unlock rule is satisfied) and, if a payment gate
-  // applies, already paid for -- if both hold, activates it by creating its
-  // skillAssignment. Stops at the first lesson that isn't ready to start,
-  // since nothing later can be reachable before it.
+  // applies, already paid for. A lesson with no quiz then activates
+  // automatically by creating its skillAssignment, same as always -- one
+  // WITH a quiz instead just stops here and waits: it only activates once
+  // the athlete explicitly clicks "Add to Calendar" after finishing its
+  // content and passing its quiz (see activateClassLesson), so this loop
+  // must not walk past it either way. Stops at the first lesson that isn't
+  // ready to start, since nothing later can be reachable before it.
   // Returns every lesson that was newly activated during THIS call (not
   // ones already active from before) -- routes.ts uses this to notify the
   // athlete only at the real moment a lesson becomes available, whether
@@ -4810,6 +4928,10 @@ ${athleteContext}
       where: eq(classLessons.classId, enrollment.classId),
       orderBy: asc(classLessons.lessonNumber),
     });
+    const lessonsWithQuiz = await this.getClassLessonIdsWithQuiz(lessons.map((l) => l.id));
+    const coachSettings = await db.query.classCoachSettings.findFirst({
+      where: and(eq(classCoachSettings.classId, cls.id), eq(classCoachSettings.coachId, enrollment.coachId)),
+    });
 
     let previousProgress: typeof classLessonProgress.$inferSelect | null = null;
     for (const lesson of lessons) {
@@ -4835,11 +4957,17 @@ ${athleteContext}
       const reachable =
         progress.manuallyUnlocked ||
         lesson.lessonNumber === 1 ||
-        (previousProgress != null && (await this.isClassUnlockRuleSatisfied(lesson, previousProgress)));
+        (previousProgress != null &&
+          (await this.isClassUnlockRuleSatisfied(lesson, previousProgress, coachSettings)));
       if (!reachable) break;
 
       const paymentRequired = cls.isForgeOfficial && lesson.priceCents != null && lesson.priceCents > 0;
       if (paymentRequired && !progress.purchasedAt) break;
+
+      // Reachable and paid for, but this lesson has a quiz -- hold here
+      // rather than auto-activating; activateClassLesson is the only path
+      // that can set its skillAssignmentId from this point on.
+      if (lessonsWithQuiz.has(lesson.id)) break;
 
       const { created } = await this.createSkillAssignment(
         enrollment.coachId,
@@ -4870,6 +4998,10 @@ ${athleteContext}
   // priced, not-yet-purchased lesson -- title/description are always
   // included regardless of state (the syllabus-preview half of the
   // two-gate model), the actual drill list only for "active" lessons.
+  // "ready" is the new state for a reachable, paid-for lesson that HAS a
+  // quiz and hasn't been explicitly activated yet -- the athlete can read
+  // its content and take its quiz, but "Add to Calendar" (activateClassLesson)
+  // stays disabled until hasQuiz/contentCompletedAt/quizPassedAt all clear.
   async getClassProgressForAthlete(athleteId: number, classId: number) {
     const cls = await db.query.classes.findFirst({ where: eq(classes.id, classId) });
     if (!cls) return null;
@@ -4877,6 +5009,7 @@ ${athleteContext}
       where: eq(classLessons.classId, classId),
       orderBy: asc(classLessons.lessonNumber),
     });
+    const lessonsWithQuiz = await this.getClassLessonIdsWithQuiz(lessons.map((l) => l.id));
     const enrollment = await this.getClassEnrollmentForAthlete(athleteId, classId);
     const classSummary = {
       id: cls.id,
@@ -4895,9 +5028,12 @@ ${athleteContext}
           title: l.title,
           description: l.description,
           priceCents: l.priceCents,
+          hasQuiz: lessonsWithQuiz.has(l.id),
           state: "locked" as const,
           skillAssignmentId: null,
           purchasedAt: null,
+          contentCompletedAt: null,
+          quizPassedAt: null,
         })),
       };
     }
@@ -4907,6 +5043,9 @@ ${athleteContext}
       where: eq(classLessonProgress.enrollmentId, enrollment.id),
     });
     const progressByLesson = new Map(progressRows.map((p) => [p.classLessonId, p]));
+    const coachSettings = await db.query.classCoachSettings.findFirst({
+      where: and(eq(classCoachSettings.classId, cls.id), eq(classCoachSettings.coachId, enrollment.coachId)),
+    });
 
     const result: Array<{
       id: number;
@@ -4914,16 +5053,19 @@ ${athleteContext}
       title: string;
       description: string | null;
       priceCents: number | null;
-      state: "active" | "locked_preview" | "locked";
+      hasQuiz: boolean;
+      state: "active" | "ready" | "locked_preview" | "locked";
       skillAssignmentId: number | null;
       purchasedAt: Date | null;
+      contentCompletedAt: Date | null;
+      quizPassedAt: Date | null;
     }> = [];
     let previousProgress: typeof classLessonProgress.$inferSelect | null = null;
     let frontierPassed = false;
 
     for (const lesson of lessons) {
       const progress = progressByLesson.get(lesson.id) ?? null;
-      let state: "active" | "locked_preview" | "locked";
+      let state: "active" | "ready" | "locked_preview" | "locked";
 
       if (progress?.skillAssignmentId) {
         state = "active";
@@ -4934,9 +5076,22 @@ ${athleteContext}
         const reachable =
           lesson.lessonNumber === 1 ||
           !!progress?.manuallyUnlocked ||
-          (previousProgress != null && (await this.isClassUnlockRuleSatisfied(lesson, previousProgress)));
+          (previousProgress != null &&
+            (await this.isClassUnlockRuleSatisfied(lesson, previousProgress, coachSettings)));
         const paymentRequired = cls.isForgeOfficial && lesson.priceCents != null && lesson.priceCents > 0;
-        state = reachable && paymentRequired ? "locked_preview" : "locked";
+        if (!reachable) {
+          state = "locked";
+        } else if (paymentRequired && !progress?.purchasedAt) {
+          state = "locked_preview";
+        } else if (lessonsWithQuiz.has(lesson.id)) {
+          state = "ready";
+        } else {
+          // Reachable, paid for (or free), no quiz -- the
+          // recomputeClassProgress call above already auto-activated this
+          // lesson in that case, so it would have hit the "active" branch
+          // instead. Unreachable in practice; kept for type exhaustiveness.
+          state = "locked";
+        }
       }
 
       result.push({
@@ -4945,9 +5100,12 @@ ${athleteContext}
         title: lesson.title,
         description: lesson.description,
         priceCents: lesson.priceCents,
+        hasQuiz: lessonsWithQuiz.has(lesson.id),
         state,
         skillAssignmentId: progress?.skillAssignmentId ?? null,
         purchasedAt: progress?.purchasedAt ?? null,
+        contentCompletedAt: progress?.contentCompletedAt ?? null,
+        quizPassedAt: progress?.quizPassedAt ?? null,
       });
       previousProgress = progress;
     }
@@ -4993,6 +5151,225 @@ ${athleteContext}
       .set({ manuallyUnlocked: true })
       .where(eq(classLessonProgress.id, progress.id));
     return this.recomputeClassProgress(enrollmentId);
+  },
+
+  // Content + quiz for the athlete's reader UI -- answer options never
+  // include isCorrect/explanation here, only in submitClassLessonQuiz's
+  // response, so the client can't read the key off this endpoint.
+  async getClassLessonContent(classLessonId: number) {
+    const lesson = await db.query.classLessons.findFirst({
+      where: eq(classLessons.id, classLessonId),
+      with: {
+        quizQuestions: {
+          orderBy: asc(classLessonQuizQuestions.orderIndex),
+          with: { answers: { orderBy: asc(classLessonQuizAnswers.orderIndex) } },
+        },
+      },
+    });
+    if (!lesson) return null;
+    return {
+      id: lesson.id,
+      title: lesson.title,
+      content: lesson.content,
+      quizQuestions: lesson.quizQuestions.map((q) => ({
+        id: q.id,
+        orderIndex: q.orderIndex,
+        questionText: q.questionText,
+        answers: q.answers.map((a) => ({ id: a.id, orderIndex: a.orderIndex, answerText: a.answerText })),
+      })),
+    };
+  },
+
+  // The "clicked/tapped through every page" checkbox -- required (alongside
+  // quizPassedAt) before activateClassLesson will create the skillAssignment
+  // for a quiz-bearing lesson.
+  async markClassLessonContentCompleted(enrollmentId: number, classLessonId: number) {
+    const progress = await db.query.classLessonProgress.findFirst({
+      where: and(
+        eq(classLessonProgress.enrollmentId, enrollmentId),
+        eq(classLessonProgress.classLessonId, classLessonId),
+      ),
+    });
+    if (!progress) throw new Error("Lesson progress not found");
+    if (!progress.contentCompletedAt) {
+      await db
+        .update(classLessonProgress)
+        .set({ contentCompletedAt: new Date() })
+        .where(eq(classLessonProgress.id, progress.id));
+    }
+  },
+
+  // Scores a quiz attempt and, on a pass, sets quizPassedAt (first pass
+  // only -- retries after that don't move the timestamp). Unlike Coaches
+  // Corner's ungraded self-check, every attempt is scored since this gates
+  // real progress; failed attempts aren't persisted, so an athlete can
+  // retry freely.
+  async submitClassLessonQuiz(
+    enrollmentId: number,
+    classLessonId: number,
+    submittedAnswers: Array<{ questionId: number; answerId: number }>,
+  ) {
+    const questions = await db.query.classLessonQuizQuestions.findMany({
+      where: eq(classLessonQuizQuestions.classLessonId, classLessonId),
+      orderBy: asc(classLessonQuizQuestions.orderIndex),
+      with: { answers: { orderBy: asc(classLessonQuizAnswers.orderIndex) } },
+    });
+    if (questions.length === 0) throw new Error("This lesson has no quiz.");
+
+    const submittedByQuestion = new Map(submittedAnswers.map((a) => [a.questionId, a.answerId]));
+    let correctCount = 0;
+    const results = questions.map((q) => {
+      const submittedAnswerId = submittedByQuestion.get(q.id) ?? null;
+      const submitted = q.answers.find((a) => a.id === submittedAnswerId) ?? null;
+      const isCorrect = submitted?.isCorrect ?? false;
+      if (isCorrect) correctCount++;
+      return {
+        questionId: q.id,
+        questionText: q.questionText,
+        submittedAnswerId,
+        isCorrect,
+        answers: q.answers.map((a) => ({
+          id: a.id,
+          answerText: a.answerText,
+          isCorrect: a.isCorrect,
+          explanation: a.explanation,
+        })),
+      };
+    });
+
+    const score = correctCount / questions.length;
+    const passed = score >= CLASS_QUIZ_PASS_THRESHOLD;
+
+    if (passed) {
+      const progress = await db.query.classLessonProgress.findFirst({
+        where: and(
+          eq(classLessonProgress.enrollmentId, enrollmentId),
+          eq(classLessonProgress.classLessonId, classLessonId),
+        ),
+      });
+      if (progress && !progress.quizPassedAt) {
+        await db
+          .update(classLessonProgress)
+          .set({ quizPassedAt: new Date() })
+          .where(eq(classLessonProgress.id, progress.id));
+      }
+    }
+
+    return {
+      score,
+      correctCount,
+      totalQuestions: questions.length,
+      passed,
+      passThreshold: CLASS_QUIZ_PASS_THRESHOLD,
+      results,
+    };
+  },
+
+  // The explicit "Add to Calendar" click for a quiz-bearing lesson -- the
+  // only path (besides recomputeClassProgress's automatic activation for a
+  // quiz-less lesson) that can ever set skillAssignmentId for one. Re-checks
+  // every gate server-side rather than trusting the client's disabled-button
+  // state, since a stale or tampered client could otherwise skip ahead.
+  async activateClassLesson(enrollmentId: number, classLessonId: number) {
+    const enrollment = await db.query.classEnrollments.findFirst({
+      where: eq(classEnrollments.id, enrollmentId),
+    });
+    if (!enrollment) throw new Error("Enrollment not found");
+    const lesson = await db.query.classLessons.findFirst({ where: eq(classLessons.id, classLessonId) });
+    if (!lesson || lesson.classId !== enrollment.classId) throw new Error("Lesson not found");
+    const cls = await db.query.classes.findFirst({ where: eq(classes.id, enrollment.classId) });
+    if (!cls) throw new Error("Class not found");
+
+    const progress = await db.query.classLessonProgress.findFirst({
+      where: and(
+        eq(classLessonProgress.enrollmentId, enrollmentId),
+        eq(classLessonProgress.classLessonId, classLessonId),
+      ),
+    });
+    if (!progress) throw new Error("Lesson progress not found");
+    if (progress.skillAssignmentId) return this.recomputeClassProgress(enrollmentId);
+
+    const lessonsWithQuiz = await this.getClassLessonIdsWithQuiz([lesson.id]);
+    if (!lessonsWithQuiz.has(lesson.id)) {
+      throw new Error("This lesson activates automatically and doesn't need Add to Calendar.");
+    }
+    if (!progress.contentCompletedAt) throw new Error("Finish reading this lesson before adding it to your calendar.");
+    if (!progress.quizPassedAt) throw new Error("Pass this lesson's quiz before adding it to your calendar.");
+
+    const lessons = await db.query.classLessons.findMany({
+      where: eq(classLessons.classId, enrollment.classId),
+      orderBy: asc(classLessons.lessonNumber),
+    });
+    const idx = lessons.findIndex((l) => l.id === lesson.id);
+    const previousLesson = idx > 0 ? lessons[idx - 1] : null;
+    const previousProgress = previousLesson
+      ? (await db.query.classLessonProgress.findFirst({
+          where: and(
+            eq(classLessonProgress.enrollmentId, enrollmentId),
+            eq(classLessonProgress.classLessonId, previousLesson.id),
+          ),
+        })) ?? null
+      : null;
+    const coachSettings = await db.query.classCoachSettings.findFirst({
+      where: and(eq(classCoachSettings.classId, cls.id), eq(classCoachSettings.coachId, enrollment.coachId)),
+    });
+    const reachable =
+      progress.manuallyUnlocked ||
+      lesson.lessonNumber === 1 ||
+      (previousProgress != null &&
+        (await this.isClassUnlockRuleSatisfied(lesson, previousProgress, coachSettings)));
+    if (!reachable) throw new Error("This lesson isn't unlocked yet.");
+
+    const paymentRequired = cls.isForgeOfficial && lesson.priceCents != null && lesson.priceCents > 0;
+    if (paymentRequired && !progress.purchasedAt) throw new Error("Purchase this lesson before adding it to your calendar.");
+
+    const { created } = await this.createSkillAssignment(
+      enrollment.coachId,
+      lesson.skillProgramId,
+      [{ athleteId: enrollment.athleteId }],
+      formatISO(new Date(), { representation: "date" }),
+    );
+    await db
+      .update(classLessonProgress)
+      .set({ unlockedAt: new Date(), skillAssignmentId: created[0]?.id ?? null })
+      .where(eq(classLessonProgress.id, progress.id));
+
+    return this.recomputeClassProgress(enrollmentId);
+  },
+
+  // A coach's pacing override for a class they've assigned -- see
+  // classCoachSettings' own comment for why this is separate from (and
+  // editable independent of) the admin-authored lesson content.
+  async getClassCoachSettings(coachId: number, classId: number) {
+    return db.query.classCoachSettings.findFirst({
+      where: and(eq(classCoachSettings.classId, classId), eq(classCoachSettings.coachId, coachId)),
+    });
+  },
+
+  async upsertClassCoachSettings(coachId: number, classId: number, input: ClassCoachSettingsInput) {
+    const existing = await this.getClassCoachSettings(coachId, classId);
+    if (existing) {
+      const [updated] = await db
+        .update(classCoachSettings)
+        .set({
+          minSessionsRequired: input.minSessionsRequired ?? null,
+          minDaysElapsed: input.minDaysElapsed ?? null,
+          updatedAt: new Date(),
+        })
+        .where(eq(classCoachSettings.id, existing.id))
+        .returning();
+      return updated;
+    }
+    const [created] = await db
+      .insert(classCoachSettings)
+      .values({
+        classId,
+        coachId,
+        minSessionsRequired: input.minSessionsRequired ?? null,
+        minDaysElapsed: input.minDaysElapsed ?? null,
+      })
+      .returning();
+    return created;
   },
 
   // Coach-facing roster view for a Class's detail page -- who's enrolled

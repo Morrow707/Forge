@@ -64,6 +64,7 @@ import {
   createTeamGameDaySchema,
   classStructureSchema,
   enrollInClassSchema,
+  classCoachSettingsInputSchema,
   academyTrackStructureSchema,
 } from "@shared/schema";
 import { computeReadiness } from "@shared/wellness";
@@ -282,6 +283,21 @@ async function assertCoachOwnsClass(coachId: number, classId: number) {
   const coachIds = await storage.getEffectiveCoachIds(coachId);
   if (!coachIds.includes(cls.coachId)) return null;
   return cls;
+}
+
+// Shared gate for the athlete-facing lesson-reader routes -- only "ready"
+// (reachable, paid for, quiz not yet passed/activated) or "active" (already
+// on the calendar) lessons are actually readable; a "locked" or
+// "locked_preview" lessonId 404s exactly like it doesn't exist, so a client
+// can't jump ahead of the progression/payment gate by guessing a later
+// lesson's id.
+async function requireReadableClassLesson(userId: number, classId: number, lessonId: number) {
+  const enrollment = await storage.getClassEnrollmentForAthlete(userId, classId);
+  if (!enrollment) return null;
+  const progress = await storage.getClassProgressForAthlete(userId, classId);
+  const lesson = progress?.lessons.find((l) => l.id === lessonId);
+  if (!lesson || (lesson.state !== "ready" && lesson.state !== "active")) return null;
+  return enrollment;
 }
 
 // Fires exactly at the moment a lesson actually becomes available -- never
@@ -686,6 +702,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(progress);
     },
   );
+
+  // A coach's own pacing override for a class they've assigned to their
+  // roster -- "how many days between lessons" and "how many logged
+  // sessions of the drill work" a coach requires before the next lesson
+  // unlocks, layered on top of (and replacing) whatever default the class's
+  // author picked. Uses getClassIfUsableByCoach (not assertCoachOwnsClass),
+  // deliberately -- this must work on a Forge-official class a coach didn't
+  // author, since it's pacing, not content, and content stays admin-only.
+  app.get("/api/coach/classes/:id/coach-settings", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const usable = await storage.getClassIfUsableByCoach(user.id, id);
+    if (!usable) return res.status(404).json({ message: "Class not found" });
+    const settings = await storage.getClassCoachSettings(user.id, id);
+    res.json({
+      minSessionsRequired: settings?.minSessionsRequired ?? null,
+      minDaysElapsed: settings?.minDaysElapsed ?? null,
+    });
+  });
+
+  app.put("/api/coach/classes/:id/coach-settings", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const usable = await storage.getClassIfUsableByCoach(user.id, id);
+    if (!usable) return res.status(404).json({ message: "Class not found" });
+    const parsed = classCoachSettingsInputSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const settings = await storage.upsertClassCoachSettings(user.id, id, parsed.data);
+    res.json({
+      minSessionsRequired: settings.minSessionsRequired,
+      minDaysElapsed: settings.minDaysElapsed,
+    });
+  });
 
   // ---------------- Coach: Coaches Corner ----------------
   // Admin-authored coach education (program-design theory, Olympic lift
@@ -4606,6 +4657,84 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await notifyNewlyUnlockedLessons(newlyUnlocked);
       const progress = await storage.getClassProgressForAthlete(user.id, id);
       res.json(progress);
+    },
+  );
+
+  app.get(
+    "/api/athlete/classes/:id/lessons/:lessonId/content",
+    requireRole("athlete"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const id = Number(req.params.id);
+      const lessonId = Number(req.params.lessonId);
+      const enrollment = await requireReadableClassLesson(user.id, id, lessonId);
+      if (!enrollment) return res.status(404).json({ message: "Lesson not found" });
+      const content = await storage.getClassLessonContent(lessonId);
+      if (!content) return res.status(404).json({ message: "Lesson not found" });
+      res.json(content);
+    },
+  );
+
+  app.post(
+    "/api/athlete/classes/:id/lessons/:lessonId/content/complete",
+    requireRole("athlete"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const id = Number(req.params.id);
+      const lessonId = Number(req.params.lessonId);
+      const enrollment = await requireReadableClassLesson(user.id, id, lessonId);
+      if (!enrollment) return res.status(404).json({ message: "Lesson not found" });
+      await storage.markClassLessonContentCompleted(enrollment.id, lessonId);
+      const progress = await storage.getClassProgressForAthlete(user.id, id);
+      res.json(progress);
+    },
+  );
+
+  app.post(
+    "/api/athlete/classes/:id/lessons/:lessonId/quiz/submit",
+    requireRole("athlete"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const id = Number(req.params.id);
+      const lessonId = Number(req.params.lessonId);
+      const enrollment = await requireReadableClassLesson(user.id, id, lessonId);
+      if (!enrollment) return res.status(404).json({ message: "Lesson not found" });
+      const schema = z.object({
+        answers: z.array(z.object({ questionId: z.number(), answerId: z.number() })),
+      });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      try {
+        const result = await storage.submitClassLessonQuiz(enrollment.id, lessonId, parsed.data.answers);
+        res.json(result);
+      } catch (err) {
+        res.status(400).json({ message: err instanceof Error ? err.message : "Could not submit quiz" });
+      }
+    },
+  );
+
+  // "Add to Calendar" -- only ever clickable client-side once content and
+  // the quiz are both done, but re-verified fully server-side regardless
+  // (see activateClassLesson).
+  app.post(
+    "/api/athlete/classes/:id/lessons/:lessonId/activate",
+    requireRole("athlete"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const id = Number(req.params.id);
+      const lessonId = Number(req.params.lessonId);
+      const enrollment = await storage.getClassEnrollmentForAthlete(user.id, id);
+      if (!enrollment) return res.status(404).json({ message: "Not enrolled in this class" });
+      try {
+        const newlyUnlocked = await storage.activateClassLesson(enrollment.id, lessonId);
+        await notifyNewlyUnlockedLessons(newlyUnlocked);
+        const progress = await storage.getClassProgressForAthlete(user.id, id);
+        res.json(progress);
+      } catch (err) {
+        res.status(400).json({ message: err instanceof Error ? err.message : "Could not add this lesson to your calendar" });
+      }
     },
   );
 

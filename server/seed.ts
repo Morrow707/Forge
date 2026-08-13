@@ -2890,6 +2890,172 @@ async function main() {
         instructions:
           "Move the tee to different contact points (front hip, middle, deep) to feel how location changes the swing.",
       },
+      // Athletic position / movement prep (American Hitting Ch. 2)
+      {
+        name: "Athletic Stance Hold",
+        skillType: "Hitting",
+        equipment: "None",
+        instructions:
+          "Set up in an athletic hitting stance -- weight balanced over both feet, knees softly flexed, hands relaxed, eyes level -- and hold for 10-15 seconds, checking that balance stays centered rather than drifting onto the heels or toes.",
+      },
+      {
+        name: "Stance-to-Load Walkthrough",
+        skillType: "Hitting",
+        equipment: "Bat",
+        instructions:
+          "Walk through the move from a static stance into the load position in slow motion, feeling weight shift onto the back side without losing head position or upper-body posture.",
+      },
+      {
+        name: "Ground Force Hop-to-Stance Drill",
+        skillType: "Hitting",
+        equipment: "None",
+        instructions:
+          "Perform a small two-foot hop and stick the landing directly into an athletic hitting stance, training the body to feel the ground push back rather than sink passively into it.",
+      },
+      {
+        name: "Posture Line Drill",
+        skillType: "Hitting",
+        equipment: "Mirror or Phone Camera",
+        instructions:
+          "Set up in the stance and check that the spine angle from head through hips stays consistent from setup through the load, using video or a mirror for instant feedback.",
+      },
+      // Pitch recognition (American Hitting Ch. 3)
+      {
+        name: "Colored-Ball Recognition Drill",
+        skillType: "Hitting",
+        equipment: "Colored Training Balls, Tee or Toss",
+        instructions:
+          "Coach mixes different colored balls into toss or front-toss work and calls for the color after each swing, forcing the hitter to actually track and identify the ball instead of just reacting to motion.",
+      },
+      {
+        name: "Front Toss Recognition Drill",
+        skillType: "Hitting",
+        equipment: "Screen, Balls",
+        instructions:
+          "From a short front-toss distance, the coach mixes locations without warning; the hitter calls out \"in\" or \"away\" as the pitch is released, before deciding whether to swing.",
+      },
+      {
+        name: "Velocity Variation Round",
+        skillType: "Hitting",
+        equipment: "Machine or Coach Arm, Balls",
+        instructions:
+          "Coach or machine randomly changes speed between pitches within a round, training the hitter's eyes and rhythm to adjust to velocity changes rather than lock into one fixed tempo.",
+      },
+      {
+        name: "Take/Swing Decision Drill",
+        skillType: "Hitting",
+        equipment: "Balls, Screen",
+        instructions:
+          "Hitter loads on every pitch but only swings at balls in a defined zone, calling \"take\" out loud on pitches left alone to reinforce plate discipline under real timing pressure.",
+      },
+      {
+        name: "Ball/Strike Recognition Drill",
+        skillType: "Hitting",
+        equipment: "Balls, Screen or Machine",
+        instructions:
+          "Pitches are thrown at or near the edges of the zone; the hitter calls ball or strike before the pitch reaches the plate, training early recognition independent of swinging.",
+      },
+      // Timing, rhythm & swing tempo (American Hitting Ch. 4)
+      {
+        name: "Pause-and-Go Load Drill",
+        skillType: "Hitting",
+        equipment: "Bat, Tee or Toss",
+        instructions:
+          "Hitter pauses briefly at the top of the load before continuing into the swing, isolating the rhythm that connects the load to the launch.",
+      },
+      {
+        name: "Timing-Window Toss Drill",
+        skillType: "Hitting",
+        equipment: "Balls, Net",
+        instructions:
+          "Partner tosses on an irregular count instead of a fixed rhythm, so the hitter has to trigger their load off the toss itself rather than a memorized beat.",
+      },
+      {
+        name: "Rhythm-to-Launch Drill",
+        skillType: "Hitting",
+        equipment: "Bat",
+        instructions:
+          "Shadow-swing while counting the rhythm out loud through the load and into the swing to build a repeatable internal tempo.",
+      },
+      {
+        name: "Variable-Speed Batting Practice",
+        skillType: "Hitting",
+        equipment: "Machine or Coach Arm, Balls",
+        instructions:
+          "Round of batting practice where pitch speed changes every 2-3 pitches without announcement, forcing late timing adjustments instead of pre-set timing.",
+      },
+      {
+        name: "Two-Speed Front Toss Drill",
+        skillType: "Hitting",
+        equipment: "Screen, Balls",
+        instructions:
+          "Coach alternates a slow toss and a quick toss back to back so the hitter has to feel the difference in how early or late their load needs to start.",
+      },
+      // Creating power athletically (American Hitting Ch. 5)
+      {
+        name: "Rotational Med Ball Scoop Throw",
+        skillType: "Hitting",
+        equipment: "Medicine Ball",
+        instructions:
+          "From an athletic hitting stance, load and rotate to throw the medicine ball out in front like a swing, training hip-to-hand sequencing.",
+      },
+      {
+        name: "Standing Rotational Med Ball Throw",
+        skillType: "Hitting",
+        equipment: "Medicine Ball, Wall or Partner",
+        instructions:
+          "Facing a wall or partner, rotate the hips first and let the throw follow, emphasizing that the lower half initiates the movement before the hands and arms.",
+      },
+      {
+        name: "Resisted Rotation Drill",
+        skillType: "Hitting",
+        equipment: "Resistance Band, Anchor Point",
+        instructions:
+          "Anchor a band at hip height behind the hitter and swing against the resistance to train explosive hip rotation strength through the swing path.",
+      },
+      {
+        name: "Bat Speed Overload/Underload Rounds",
+        skillType: "Hitting",
+        equipment: "Weighted Bats, Standard Bat",
+        instructions:
+          "Alternate sets of swings between a heavier and lighter bat, then a standard bat, to train the nervous system to produce more bat speed through contrast.",
+      },
+      {
+        name: "Max-Intent Tee Rounds",
+        skillType: "Hitting",
+        equipment: "Tee, Balls",
+        instructions:
+          "Take a set number of swings off the tee at full, competitive effort, focusing on the fastest controlled bat speed rather than mechanics, then rest and repeat.",
+      },
+      // Adjustability & off-speed hitting (American Hitting Ch. 7)
+      {
+        name: "Fastball/Changeup Recognition Rounds",
+        skillType: "Hitting",
+        equipment: "Balls, Screen or Machine",
+        instructions:
+          "Coach mixes fastballs and changeups (same arm speed, different velocity) without pattern; hitter stays back and lets the ball travel before committing.",
+      },
+      {
+        name: "Random Pitch Sequence Drill",
+        skillType: "Hitting",
+        equipment: "Balls, Screen or Machine",
+        instructions:
+          "Coach throws random combinations of pitch types and locations in no set order across a round to simulate the unpredictability of a real at-bat.",
+      },
+      {
+        name: "Breaking Ball Recognition Drill",
+        skillType: "Hitting",
+        equipment: "Balls, Screen or Machine",
+        instructions:
+          "Coach mixes in pitches that break or change plane; the hitter tracks spin and trajectory out of the hand and calls \"breaking ball\" before deciding to swing.",
+      },
+      {
+        name: "Competitive At-Bat Simulation",
+        skillType: "Hitting",
+        equipment: "Balls, Screen or Machine",
+        instructions:
+          "Live simulated at-bats where the hitter reacts to an unknown sequence of pitch types thrown in random order, with each at-bat scored as a competitive result -- good decision, hit, or miss.",
+      },
       // Fielding
       {
         name: "Short Hop Fielding Drill",
