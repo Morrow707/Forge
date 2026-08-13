@@ -124,10 +124,15 @@ export default function AthleteClassDetail() {
 
               <div className="shrink-0 pl-12 sm:pl-0">
                 {lesson.state === "active" && (
-                  <span className="flex items-center gap-1.5 text-sm font-medium text-success">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-success hover:text-success"
+                    onClick={() => navigate("/athlete")}
+                  >
                     <CheckCircle2 className="h-4 w-4" />
                     On your calendar
-                  </span>
+                  </Button>
                 )}
                 {lesson.state === "ready" && (
                   <Button size="sm" onClick={() => setReaderLessonId(lesson.id)}>
