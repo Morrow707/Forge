@@ -85,6 +85,11 @@ export function ClassLessonReaderDialog({
   // progress refetch (triggered by that same success) lands.
   const [contentDone, setContentDone] = useState(!!lesson.contentCompletedAt);
   const [quizPassed, setQuizPassed] = useState(!!lesson.quizPassedAt);
+  // reviewMode's own local step, independent of contentDone/quizPassed --
+  // those are already true for an already-active lesson, so gating review
+  // mode's phase off them (the way the normal take-the-lesson flow does)
+  // would skip straight past both the reading pages AND the quiz.
+  const [reviewStep, setReviewStep] = useState<"reading" | "quiz">("reading");
 
   useEffect(() => {
     if (open) {
@@ -93,6 +98,7 @@ export function ClassLessonReaderDialog({
       setQuizResult(null);
       setContentDone(!!lesson.contentCompletedAt);
       setQuizPassed(!!lesson.quizPassedAt);
+      setReviewStep("reading");
     }
     // Only re-seed when the dialog opens (or for a different lesson) -- not
     // on every progress refetch while it's open, which would fight the
@@ -160,7 +166,7 @@ export function ClassLessonReaderDialog({
   });
 
   const phase: "reading" | "quiz" | "ready" = reviewMode
-    ? "reading"
+    ? reviewStep
     : !contentDone
       ? "reading"
       : !quizPassed
@@ -351,82 +357,122 @@ export function ClassLessonReaderDialog({
           )}
         </div>
 
-        <div className="flex shrink-0 items-center justify-between gap-2 border-t border-border p-4 sm:p-6">
-          {phase === "reading" && (
-            <>
-              <Button
-                variant="outline"
-                onClick={() => setPageIndex((i) => Math.max(0, i - 1))}
-                disabled={pageIndex === 0}
-              >
-                <ArrowLeft className="h-4 w-4" />
-                Back
-              </Button>
-              {pageIndex < pages.length - 1 ? (
-                <Button onClick={() => setPageIndex((i) => Math.min(pages.length - 1, i + 1))}>
-                  Next
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
-              ) : reviewMode ? (
-                <Button onClick={() => onOpenChange(false)}>Close</Button>
-              ) : (
+        <div className="flex shrink-0 flex-col gap-2 border-t border-border p-4 sm:p-6">
+          {phase === "reading" && pages.length > 0 && (
+            <div className="flex items-center justify-center gap-1.5">
+              {pages.map((p, i) => (
+                <span
+                  key={i}
+                  className={cn(
+                    "h-1.5 rounded-full transition-all",
+                    i === pageIndex ? "w-6 bg-primary" : "w-1.5 bg-border",
+                  )}
+                />
+              ))}
+            </div>
+          )}
+          <div className="flex items-center justify-between gap-2">
+            {phase === "reading" && (
+              <>
                 <Button
-                  onClick={() => completeContentMutation.mutate()}
-                  disabled={completeContentMutation.isPending}
+                  size="lg"
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => setPageIndex((i) => Math.max(0, i - 1))}
+                  disabled={pageIndex === 0}
                 >
-                  <BookOpen className="h-4 w-4" />
-                  {completeContentMutation.isPending ? "Saving…" : "Finish Reading"}
+                  <ArrowLeft className="h-5 w-5" />
+                  Back
                 </Button>
-              )}
-            </>
-          )}
+                {pageIndex < pages.length - 1 ? (
+                  <Button
+                    size="lg"
+                    className="flex-1"
+                    onClick={() => setPageIndex((i) => Math.min(pages.length - 1, i + 1))}
+                  >
+                    Next
+                    <ArrowRight className="h-5 w-5" />
+                  </Button>
+                ) : reviewMode ? (
+                  <Button
+                    size="lg"
+                    className="flex-1"
+                    onClick={() => (questions.length > 0 ? setReviewStep("quiz") : onOpenChange(false))}
+                  >
+                    {questions.length > 0 ? "View Quiz" : "Close"}
+                    {questions.length > 0 && <ArrowRight className="h-5 w-5" />}
+                  </Button>
+                ) : (
+                  <Button
+                    size="lg"
+                    className="flex-1"
+                    onClick={() => completeContentMutation.mutate()}
+                    disabled={completeContentMutation.isPending}
+                  >
+                    <BookOpen className="h-5 w-5" />
+                    {completeContentMutation.isPending ? "Saving…" : "Finish Reading"}
+                  </Button>
+                )}
+              </>
+            )}
 
-          {phase === "quiz" && !quizResult && (
-            <Button
-              className="ml-auto"
-              onClick={() => submitQuizMutation.mutate()}
-              disabled={!allAnswered || submitQuizMutation.isPending}
-            >
-              {submitQuizMutation.isPending ? "Submitting…" : "Submit Quiz"}
-            </Button>
-          )}
+            {phase === "quiz" && !quizResult && (
+              <Button
+                size="lg"
+                className="ml-auto"
+                onClick={() => submitQuizMutation.mutate()}
+                disabled={!allAnswered || submitQuizMutation.isPending}
+              >
+                {submitQuizMutation.isPending ? "Submitting…" : "Submit Quiz"}
+              </Button>
+            )}
 
-          {phase === "quiz" && quizResult && !quizResult.passed && (
-            <Button
-              className="ml-auto"
-              variant="secondary"
-              onClick={() => {
-                setSelectedAnswers({});
-                setQuizResult(null);
-              }}
-            >
-              Try Again
-            </Button>
-          )}
+            {phase === "quiz" && quizResult && !quizResult.passed && (
+              <Button
+                size="lg"
+                className="ml-auto"
+                variant="secondary"
+                onClick={() => {
+                  setSelectedAnswers({});
+                  setQuizResult(null);
+                }}
+              >
+                Try Again
+              </Button>
+            )}
 
-          {phase === "quiz" && quizResult && quizResult.passed && (
-            <Button
-              className="ml-auto"
-              onClick={() => {
-                setQuizPassed(true);
-                setQuizResult(null);
-              }}
-            >
-              Continue
-              <ArrowRight className="h-4 w-4" />
-            </Button>
-          )}
+            {phase === "quiz" && quizResult && quizResult.passed && reviewMode && (
+              <Button size="lg" className="ml-auto" onClick={() => onOpenChange(false)}>
+                Close
+              </Button>
+            )}
 
-          {phase === "ready" && (
-            <Button
-              className="ml-auto"
-              onClick={() => activateMutation.mutate()}
-              disabled={activateMutation.isPending}
-            >
-              <CalendarPlus className="h-4 w-4" />
-              {activateMutation.isPending ? "Adding…" : "Add to Calendar"}
-            </Button>
-          )}
+            {phase === "quiz" && quizResult && quizResult.passed && !reviewMode && (
+              <Button
+                size="lg"
+                className="ml-auto"
+                onClick={() => {
+                  setQuizPassed(true);
+                  setQuizResult(null);
+                }}
+              >
+                Continue
+                <ArrowRight className="h-5 w-5" />
+              </Button>
+            )}
+
+            {phase === "ready" && (
+              <Button
+                size="lg"
+                className="ml-auto"
+                onClick={() => activateMutation.mutate()}
+                disabled={activateMutation.isPending}
+              >
+                <CalendarPlus className="h-5 w-5" />
+                {activateMutation.isPending ? "Adding…" : "Add to Calendar"}
+              </Button>
+            )}
+          </div>
         </div>
       </DialogContent>
     </Dialog>
