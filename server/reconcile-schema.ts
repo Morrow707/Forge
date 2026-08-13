@@ -969,6 +969,37 @@ CREATE TABLE IF NOT EXISTS "class_lessons" (
   "created_at" timestamp NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS "class_lessons_class_idx" ON "class_lessons" ("class_id");
+ALTER TABLE "class_lessons" ADD COLUMN IF NOT EXISTS "content" json NOT NULL DEFAULT '[]';
+
+CREATE TABLE IF NOT EXISTS "class_lesson_quiz_questions" (
+  "id" serial PRIMARY KEY,
+  "class_lesson_id" integer NOT NULL REFERENCES "class_lessons"("id") ON DELETE CASCADE,
+  "order_index" integer NOT NULL DEFAULT 0,
+  "question_text" text NOT NULL,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "class_lesson_quiz_questions_lesson_idx" ON "class_lesson_quiz_questions" ("class_lesson_id");
+
+CREATE TABLE IF NOT EXISTS "class_lesson_quiz_answers" (
+  "id" serial PRIMARY KEY,
+  "question_id" integer NOT NULL REFERENCES "class_lesson_quiz_questions"("id") ON DELETE CASCADE,
+  "order_index" integer NOT NULL DEFAULT 0,
+  "answer_text" text NOT NULL,
+  "is_correct" boolean NOT NULL DEFAULT false,
+  "explanation" text NOT NULL
+);
+CREATE INDEX IF NOT EXISTS "class_lesson_quiz_answers_question_idx" ON "class_lesson_quiz_answers" ("question_id");
+
+CREATE TABLE IF NOT EXISTS "class_coach_settings" (
+  "id" serial PRIMARY KEY,
+  "class_id" integer NOT NULL REFERENCES "classes"("id") ON DELETE CASCADE,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "min_sessions_required" integer,
+  "min_days_elapsed" integer,
+  "created_at" timestamp NOT NULL DEFAULT now(),
+  "updated_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "class_coach_settings_class_coach_idx" ON "class_coach_settings" ("class_id", "coach_id");
 
 CREATE TABLE IF NOT EXISTS "class_enrollments" (
   "id" serial PRIMARY KEY,
@@ -992,6 +1023,8 @@ CREATE TABLE IF NOT EXISTS "class_lesson_progress" (
   "created_at" timestamp NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS "class_lesson_progress_enrollment_idx" ON "class_lesson_progress" ("enrollment_id");
+ALTER TABLE "class_lesson_progress" ADD COLUMN IF NOT EXISTS "content_completed_at" timestamp;
+ALTER TABLE "class_lesson_progress" ADD COLUMN IF NOT EXISTS "quiz_passed_at" timestamp;
 
 CREATE TABLE IF NOT EXISTS "academy_tracks" (
   "id" serial PRIMARY KEY,
