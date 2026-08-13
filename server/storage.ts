@@ -4806,6 +4806,68 @@ ${athleteContext}
     return this.enrollAthleteInClass(athleteId, classId, athleteId, startDate);
   },
 
+  // Admin/ops escape hatch -- enrolls (if not already) and fully activates
+  // every lesson in a class for one athlete in one shot, bypassing every
+  // gate (payment, content-read, quiz-pass, progression) at once. Not
+  // exposed through any athlete-facing route; used to comp a demo/VIP
+  // account full access. Idempotent -- a lesson that's already active
+  // (skillAssignmentId set) is left untouched.
+  async grantFullClassAccessToAthlete(athleteId: number, classId: number) {
+    const cls = await db.query.classes.findFirst({ where: eq(classes.id, classId) });
+    if (!cls) throw new Error("Class not found");
+
+    let enrollment = await this.getClassEnrollmentForAthlete(athleteId, classId);
+    if (!enrollment) {
+      const result = await this.enrollAthleteInClass(
+        athleteId,
+        classId,
+        athleteId,
+        formatISO(new Date(), { representation: "date" }),
+      );
+      enrollment = result.enrollment;
+    }
+
+    const lessons = await db.query.classLessons.findMany({
+      where: eq(classLessons.classId, classId),
+      orderBy: asc(classLessons.lessonNumber),
+    });
+
+    for (const lesson of lessons) {
+      let progress = await db.query.classLessonProgress.findFirst({
+        where: and(
+          eq(classLessonProgress.enrollmentId, enrollment.id),
+          eq(classLessonProgress.classLessonId, lesson.id),
+        ),
+      });
+      if (!progress) {
+        const [created] = await db
+          .insert(classLessonProgress)
+          .values({ enrollmentId: enrollment.id, classLessonId: lesson.id })
+          .returning();
+        progress = created;
+      }
+      if (progress.skillAssignmentId) continue;
+
+      const { created } = await this.createSkillAssignment(
+        enrollment.coachId,
+        lesson.skillProgramId,
+        [{ athleteId: enrollment.athleteId }],
+        formatISO(new Date(), { representation: "date" }),
+      );
+      await db
+        .update(classLessonProgress)
+        .set({
+          unlockedAt: new Date(),
+          purchasedAt: new Date(),
+          contentCompletedAt: new Date(),
+          quizPassedAt: new Date(),
+          manuallyUnlocked: true,
+          skillAssignmentId: created[0]?.id ?? null,
+        })
+        .where(eq(classLessonProgress.id, progress.id));
+    }
+  },
+
   // coachSettings, when passed, is that coach's pacing override for the
   // class (see classCoachSettings' own comment) -- when either of its
   // fields is set, it REPLACES the lesson's own admin-authored unlockRule

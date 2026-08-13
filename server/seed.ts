@@ -3503,12 +3503,14 @@ async function main() {
   // a coach who wants to additionally force real practice reps or a
   // minimum wait between chapters can layer that on with their own
   // classCoachSettings pacing override without touching this content.
+  let americanHittingClassId: number | undefined;
   {
     const classOwner = scott ?? demoAdmin;
     const AMERICAN_HITTING_CLASS_NAME = "American Hitting: Athletic Hitting Development Program";
     const existingClass = await db.query.classes.findFirst({
       where: and(eq(classes.name, AMERICAN_HITTING_CLASS_NAME), eq(classes.coachId, classOwner.id)),
     });
+    americanHittingClassId = existingClass?.id;
     if (!existingClass) {
       const allSkills = await storage.getAllSkillExercises();
       const skillIdByName = new Map(allSkills.map((s) => [s.name, s.id]));
@@ -3591,9 +3593,20 @@ async function main() {
         })),
       });
 
-      await storage.createClassWithStructure(classOwner.id, structure, true);
+      const created = await storage.createClassWithStructure(classOwner.id, structure, true);
+      americanHittingClassId = created.id;
       console.log(`Seeded "${AMERICAN_HITTING_CLASS_NAME}" class.`);
     }
+  }
+
+  // Demo Free Agent gets full, ungated access to the American Hitting
+  // class -- every lesson active on their calendar, no payment/content/
+  // quiz gate in the way, so the class is fully explorable without having
+  // to click/read/quiz through all 8 chapters first. Idempotent (see
+  // grantFullClassAccessToAthlete) -- re-running this seed never resets an
+  // athlete's real progress, it just tops up anything not yet active.
+  if (americanHittingClassId != null) {
+    await storage.grantFullClassAccessToAthlete(freeAgent.id, americanHittingClassId);
   }
 
   // Coaches Corner: admin-authored coach education, seeded once and matched
