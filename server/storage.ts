@@ -116,6 +116,7 @@ import { ALL_TROPHY_DEFINITIONS } from "@shared/achievements";
 import { FAULT_CORRECTIVE_KEYWORDS } from "@shared/fault-correctives";
 import { resolveSkillFaultThresholds, type SkillFaultThresholds } from "@shared/skill-fault-thresholds";
 import { askClaude, askClaudeStructured, askClaudeWithTools, askClaudeVision, askClaudeVisionStructured, aiEnabled, fastModel, type SystemPrompt } from "./ai";
+import { deleteUploadedFile, statUploadedFile } from "./uploaded-files";
 import { eq, and, inArray, asc, desc, lt, lte, gte, gt, isNull, isNotNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { diffLines } from "diff";
@@ -1307,6 +1308,22 @@ async function buildPlatformTrends() {
     acwrDistribution,
   };
 }
+
+// One row shape for the admin video-management page, regardless of which
+// of the three underlying tables (workoutSetEntries/skillSessionLogs/
+// workoutComments -- see getAdminVideos' own comment) it actually came
+// from. "source" + "id" together are the only thing deleteAdminVideo needs
+// to find and clear the right row again.
+type AdminVideoRow = {
+  source: "set" | "skill" | "comment";
+  id: number;
+  videoUrl: string;
+  secondaryUrl: string | null;
+  athleteName: string;
+  label: string;
+  date: string;
+  sizeBytes: number;
+};
 
 export const storage = {
   // ---------- Users ----------
@@ -8690,7 +8707,17 @@ ${catalog}`;
   async submitWorkoutLog(athleteId: number, input: SubmitWorkoutLogInput) {
     const athlete = await db.query.users.findFirst({ where: eq(users.id, athleteId) });
     const weightUnit = athlete?.preferredWeightUnit ?? "lbs";
-    return db.transaction(async (tx) => {
+    // This whole save is a delete-then-reinsert of every set entry (see the
+    // workoutLogEntries delete below, cascading to workoutSetEntries) --
+    // fine for the DB rows themselves, but a video's on-disk FILE has no
+    // such cascade to clean it up. Without this, tapping "Remove" on a
+    // video (or Retake, which clears then re-records) would drop the DB
+    // pointer while the actual file sat on disk forever, orphaned -- the
+    // exact bug that let every removed video keep eating disk space.
+    // Captured before the delete so it can be diffed against whatever the
+    // client still sent back once the new rows are in.
+    let priorVideoUrls = new Set<string>();
+    const log = await db.transaction(async (tx) => {
       let log = await tx.query.workoutLogs.findFirst({
         where: and(
           eq(workoutLogs.assignmentId, input.assignmentId),
@@ -8700,6 +8727,13 @@ ${catalog}`;
       });
 
       if (log) {
+        const priorRows = await tx
+          .select({ url: workoutSetEntries.formCheckVideoUrl })
+          .from(workoutSetEntries)
+          .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
+          .where(eq(workoutLogEntries.workoutLogId, log.id));
+        priorVideoUrls = new Set(priorRows.map((r) => r.url).filter((u): u is string => !!u));
+
         [log] = await tx
           .update(workoutLogs)
           .set({
@@ -8779,6 +8813,20 @@ ${catalog}`;
 
       return log;
     });
+
+    // Outside the transaction (a filesystem delete isn't transactional, and
+    // shouldn't be able to roll back a successful DB commit) -- any prior
+    // video URL that isn't still referenced by what was just saved is
+    // orphaned: removed, retaken, or its whole set deleted. See
+    // priorVideoUrls' own comment above.
+    const newVideoUrls = new Set(
+      input.entries.flatMap((e) => e.sets.map((s) => s.formCheckVideoUrl).filter((u): u is string => !!u)),
+    );
+    for (const url of priorVideoUrls) {
+      if (!newVideoUrls.has(url)) await deleteUploadedFile(url);
+    }
+
+    return log;
   },
 
   // Scans a just-submitted log's sets for a genuine (not single-rep-noise)
@@ -9459,6 +9507,231 @@ ${catalog}`;
         ),
       )
       .orderBy(desc(skillSessionLogs.createdAt));
+  },
+
+  // Every user-uploaded video/image on the platform in one flat list, for
+  // the admin storage-management page -- three otherwise-unrelated tables
+  // (workoutSetEntries' per-set form-check clips, skillSessionLogs'
+  // sprint/mechanics clips + coach annotations, workoutComments' attached
+  // video/image), each queried with the same programExercise-vs-corrective
+  // split getFormCheckVideosForCoachAthlete above already uses, then shaped
+  // into one common row type so the page can list, sort, and delete across
+  // all three without knowing which table a given video actually lives in.
+  // Deliberately excludes exercises.videoUrl/skillExercises.videoUrl --
+  // those are coach-curated reference/demo clips, not per-session
+  // recordings, and aren't what fills up disk over time the way a new
+  // upload per set/session does.
+  async getAdminVideos(): Promise<AdminVideoRow[]> {
+    const setSelection = {
+      id: workoutSetEntries.id,
+      date: workoutLogs.date,
+      setNumber: workoutSetEntries.setNumber,
+      videoUrl: workoutSetEntries.formCheckVideoUrl,
+      athleteName: users.name,
+    };
+    const [setPeRows, setCorrectiveRows, skillRows, commentRows] = await Promise.all([
+      db
+        .select({ ...setSelection, exerciseName: exercises.name })
+        .from(workoutSetEntries)
+        .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
+        .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
+        .innerJoin(users, eq(workoutLogs.athleteId, users.id))
+        .innerJoin(programExercises, eq(workoutLogEntries.programExerciseId, programExercises.id))
+        .innerJoin(exercises, eq(programExercises.exerciseId, exercises.id))
+        .where(isNotNull(workoutSetEntries.formCheckVideoUrl)),
+      db
+        .select({ ...setSelection, exerciseName: exercises.name })
+        .from(workoutSetEntries)
+        .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
+        .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
+        .innerJoin(users, eq(workoutLogs.athleteId, users.id))
+        .innerJoin(assignmentCorrectives, eq(workoutLogEntries.correctiveId, assignmentCorrectives.id))
+        .innerJoin(exercises, eq(assignmentCorrectives.exerciseId, exercises.id))
+        .where(isNotNull(workoutSetEntries.formCheckVideoUrl)),
+      db
+        .select({
+          id: skillSessionLogs.id,
+          date: skillSessionLogs.createdAt,
+          videoUrl: skillSessionLogs.videoUrl,
+          coachAnnotationUrl: skillSessionLogs.coachAnnotationUrl,
+          athleteName: users.name,
+          exerciseName: skillExercises.name,
+        })
+        .from(skillSessionLogs)
+        .innerJoin(users, eq(skillSessionLogs.athleteId, users.id))
+        .innerJoin(skillProgramExercises, eq(skillSessionLogs.skillProgramExerciseId, skillProgramExercises.id))
+        .innerJoin(skillExercises, eq(skillProgramExercises.skillExerciseId, skillExercises.id))
+        .where(isNotNull(skillSessionLogs.videoUrl)),
+      db
+        .select({
+          id: workoutComments.id,
+          date: workoutComments.date,
+          createdAt: workoutComments.createdAt,
+          videoUrl: workoutComments.videoUrl,
+          imageUrl: workoutComments.imageUrl,
+          athleteName: users.name,
+        })
+        .from(workoutComments)
+        .innerJoin(assignments, eq(workoutComments.assignmentId, assignments.id))
+        .innerJoin(users, eq(assignments.athleteId, users.id))
+        .where(isNotNull(workoutComments.videoUrl)),
+    ]);
+
+    const rows: Omit<AdminVideoRow, "sizeBytes">[] = [
+      ...setPeRows.map((r) => ({
+        source: "set" as const,
+        id: r.id,
+        videoUrl: r.videoUrl!,
+        secondaryUrl: null,
+        athleteName: r.athleteName,
+        label: `${r.exerciseName} — Set ${r.setNumber}`,
+        date: r.date,
+      })),
+      ...setCorrectiveRows.map((r) => ({
+        source: "set" as const,
+        id: r.id,
+        videoUrl: r.videoUrl!,
+        secondaryUrl: null,
+        athleteName: r.athleteName,
+        label: `${r.exerciseName} — Set ${r.setNumber}`,
+        date: r.date,
+      })),
+      ...skillRows.map((r) => ({
+        source: "skill" as const,
+        id: r.id,
+        videoUrl: r.videoUrl!,
+        secondaryUrl: r.coachAnnotationUrl,
+        athleteName: r.athleteName,
+        label: r.exerciseName,
+        date: r.date.toISOString(),
+      })),
+      ...commentRows.map((r) => ({
+        source: "comment" as const,
+        id: r.id,
+        videoUrl: r.videoUrl!,
+        secondaryUrl: r.imageUrl,
+        athleteName: r.athleteName,
+        label: "Comment attachment",
+        date: r.date ?? r.createdAt.toISOString(),
+      })),
+    ];
+
+    const withSizes = await Promise.all(
+      rows.map(async (r) => ({ ...r, sizeBytes: (await statUploadedFile(r.videoUrl)) ?? 0 })),
+    );
+
+    return withSizes.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+  },
+
+  // Clears one video's DB reference and deletes its file(s) from disk --
+  // never deletes the row itself, since a workout set/skill session/comment
+  // carries real logged data (weight, reps, velocity, session metrics,
+  // comment text) well beyond just the video. A skill session's
+  // coachAnnotationUrl (a markup drawn ON that video's paused frame) and a
+  // comment's imageUrl are cleared and deleted alongside their video for
+  // the same reason -- neither means anything once its source video is
+  // gone. Returns false if there's nothing left to delete -- either the row
+  // itself is gone (bad id) or its video reference is already null (a
+  // repeat delete of the same id). Checking the reference rather than just
+  // row existence matters here: the row survives every delete (see above),
+  // so "row exists" alone can't tell a genuine delete apart from a no-op
+  // repeat.
+  async deleteAdminVideo(source: AdminVideoRow["source"], id: number): Promise<boolean> {
+    if (source === "set") {
+      const [row] = await db
+        .select({ videoUrl: workoutSetEntries.formCheckVideoUrl })
+        .from(workoutSetEntries)
+        .where(eq(workoutSetEntries.id, id));
+      if (!row?.videoUrl) return false;
+      await deleteUploadedFile(row.videoUrl);
+      await db
+        .update(workoutSetEntries)
+        .set({ formCheckVideoUrl: null, formCheckFlag: null })
+        .where(eq(workoutSetEntries.id, id));
+      return true;
+    }
+    if (source === "skill") {
+      const [row] = await db
+        .select({ videoUrl: skillSessionLogs.videoUrl, coachAnnotationUrl: skillSessionLogs.coachAnnotationUrl })
+        .from(skillSessionLogs)
+        .where(eq(skillSessionLogs.id, id));
+      if (!row?.videoUrl) return false;
+      await Promise.all([deleteUploadedFile(row.videoUrl), deleteUploadedFile(row.coachAnnotationUrl)]);
+      await db
+        .update(skillSessionLogs)
+        .set({ videoUrl: null, coachAnnotationUrl: null })
+        .where(eq(skillSessionLogs.id, id));
+      return true;
+    }
+    const [row] = await db
+      .select({ videoUrl: workoutComments.videoUrl, imageUrl: workoutComments.imageUrl })
+      .from(workoutComments)
+      .where(eq(workoutComments.id, id));
+    if (!row?.videoUrl) return false;
+    await Promise.all([deleteUploadedFile(row.videoUrl), deleteUploadedFile(row.imageUrl)]);
+    await db
+      .update(workoutComments)
+      .set({ videoUrl: null, imageUrl: null })
+      .where(eq(workoutComments.id, id));
+    return true;
+  },
+
+  // Same per-source cleanup as deleteAdminVideo above, applied in bulk to
+  // everything older than a cutoff -- the "clean up anything old" sibling
+  // to deleting one at a time. Ages workoutComments off createdAt rather
+  // than its own nullable, inconsistently-formatted free-text `date` field,
+  // since createdAt is always present and reliably comparable. Returns how
+  // many rows were cleared.
+  async bulkDeleteAdminVideosOlderThan(cutoff: Date): Promise<number> {
+    const cutoffDateStr = cutoff.toISOString().slice(0, 10);
+
+    const [setRows, skillRows, commentRows] = await Promise.all([
+      db
+        .select({ id: workoutSetEntries.id, videoUrl: workoutSetEntries.formCheckVideoUrl })
+        .from(workoutSetEntries)
+        .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
+        .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
+        .where(and(isNotNull(workoutSetEntries.formCheckVideoUrl), lt(workoutLogs.date, cutoffDateStr))),
+      db
+        .select({
+          id: skillSessionLogs.id,
+          videoUrl: skillSessionLogs.videoUrl,
+          coachAnnotationUrl: skillSessionLogs.coachAnnotationUrl,
+        })
+        .from(skillSessionLogs)
+        .where(and(isNotNull(skillSessionLogs.videoUrl), lt(skillSessionLogs.createdAt, cutoff))),
+      db
+        .select({ id: workoutComments.id, videoUrl: workoutComments.videoUrl, imageUrl: workoutComments.imageUrl })
+        .from(workoutComments)
+        .where(and(isNotNull(workoutComments.videoUrl), lt(workoutComments.createdAt, cutoff))),
+    ]);
+
+    await Promise.all([
+      ...setRows.map((r) => deleteUploadedFile(r.videoUrl)),
+      ...skillRows.flatMap((r) => [deleteUploadedFile(r.videoUrl), deleteUploadedFile(r.coachAnnotationUrl)]),
+      ...commentRows.flatMap((r) => [deleteUploadedFile(r.videoUrl), deleteUploadedFile(r.imageUrl)]),
+    ]);
+
+    if (setRows.length) {
+      await db
+        .update(workoutSetEntries)
+        .set({ formCheckVideoUrl: null, formCheckFlag: null })
+        .where(inArray(workoutSetEntries.id, setRows.map((r) => r.id)));
+    }
+    if (skillRows.length) {
+      await db
+        .update(skillSessionLogs)
+        .set({ videoUrl: null, coachAnnotationUrl: null })
+        .where(inArray(skillSessionLogs.id, skillRows.map((r) => r.id)));
+    }
+    if (commentRows.length) {
+      await db
+        .update(workoutComments)
+        .set({ videoUrl: null, imageUrl: null })
+        .where(inArray(workoutComments.id, commentRows.map((r) => r.id)));
+    }
+
+    return setRows.length + skillRows.length + commentRows.length;
   },
 
   // Ownership check mirrors the read above -- a coach can only annotate a

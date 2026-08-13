@@ -25,6 +25,7 @@ import {
   ChevronDown,
   GraduationCap,
   BookOpen,
+  HardDrive,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -106,6 +107,7 @@ const adminNav: NavItem[] = [
   { href: "/admin/ai-knowledge", label: "Teach AI", icon: Sparkles },
   { href: "/admin/nutrition-knowledge", label: "Teach Nutrition AI", icon: Apple },
   { href: "/admin/platform-trends", label: "Platform Trends", icon: BarChart3 },
+  { href: "/admin/videos", label: "Video Storage", icon: HardDrive },
 ];
 
 export function AppShell({

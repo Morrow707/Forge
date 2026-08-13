@@ -1178,6 +1178,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(trends);
   });
 
+  // Storage-management page: every user-uploaded video currently on disk,
+  // for an admin to review and prune -- see server/uploaded-files.ts and
+  // storage.getAdminVideos' own comment for why this exists (Render's web
+  // service disk is a fixed size, and nothing else in the app ever deletes
+  // a video's underlying file on its own).
+  app.get("/api/admin/videos", requireRole("admin"), async (_req, res) => {
+    const videos = await storage.getAdminVideos();
+    res.json(videos);
+  });
+
+  app.delete("/api/admin/videos/:source/:id", requireRole("admin"), async (req, res) => {
+    const source = req.params.source;
+    if (source !== "set" && source !== "skill" && source !== "comment") {
+      return res.status(400).json({ message: "Invalid video source" });
+    }
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) return res.status(400).json({ message: "Invalid video id" });
+    const deleted = await storage.deleteAdminVideo(source, id);
+    if (!deleted) return res.status(404).json({ message: "Video not found" });
+    res.json({ success: true });
+  });
+
+  app.post("/api/admin/videos/bulk-delete", requireRole("admin"), async (req, res) => {
+    const days = Number(req.body?.olderThanDays);
+    if (!Number.isFinite(days) || days < 1) {
+      return res.status(400).json({ message: "olderThanDays must be a positive number" });
+    }
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - days);
+    const count = await storage.bulkDeleteAdminVideosOlderThan(cutoff);
+    res.json({ count });
+  });
+
   // Self-assignment: coachId and athleteId are both the admin's own id.
   // Deliberately bypasses the coach roster-membership check that guards
   // /api/coach/assignments -- an admin is never on their own roster, so
