@@ -56,7 +56,7 @@ export const POSE_LANDMARKS = {
   RIGHT_FOOT_INDEX: 32,
 } as const;
 
-const MIN_VISIBILITY = 0.5;
+export const MIN_VISIBILITY = 0.5;
 
 // Stricter than MIN_VISIBILITY above -- used only by isFullBodyInFrame's
 // "is anyone actually here" gate, not by anything mid-tracking. Getting

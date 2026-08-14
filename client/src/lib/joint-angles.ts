@@ -3,7 +3,7 @@
 // skeleton-linked angle tool exposes: tap near a joint, see its angle,
 // and it re-measures every frame as the skeleton moves with the athlete.
 import type { Landmark, NormalizedLandmark } from "@mediapipe/tasks-vision";
-import { POSE_LANDMARKS, worldAngleAtVertex } from "./pose-tracking";
+import { MIN_VISIBILITY, POSE_LANDMARKS, worldAngleAtVertex } from "./pose-tracking";
 
 export type MeasurableJoint = {
   key: string;
@@ -66,7 +66,6 @@ export const MEASURABLE_JOINTS: MeasurableJoint[] = [
   },
 ];
 
-const MIN_VISIBILITY = 0.5;
 // Generous hit radius in normalized (0-1) space -- a fingertip on a phone
 // screen covers a much bigger fraction of the frame than a mouse pointer, so
 // this needs to be forgiving rather than pixel-precise.

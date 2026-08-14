@@ -14,7 +14,7 @@
 // fast enough at 30fps for that to matter and a full second inference
 // every frame risked doubling per-frame cost.
 import { PoseLandmarker, type Landmark, type NormalizedLandmark } from "@mediapipe/tasks-vision";
-import { POSE_LANDMARKS } from "./pose-tracking";
+import { MIN_VISIBILITY, POSE_LANDMARKS } from "./pose-tracking";
 
 const LOWER_BODY_INDICES = [
   POSE_LANDMARKS.LEFT_HIP,
@@ -28,7 +28,6 @@ const LOWER_BODY_INDICES = [
   POSE_LANDMARKS.LEFT_FOOT_INDEX,
   POSE_LANDMARKS.RIGHT_FOOT_INDEX,
 ];
-const MIN_VISIBILITY = 0.5;
 
 // Padding around the raw lower-body bounding box, as a fraction of its own
 // size -- generous enough that a rep's natural motion between this

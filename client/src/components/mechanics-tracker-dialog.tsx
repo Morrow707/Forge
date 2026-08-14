@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { apiRequest, getJson } from "@/lib/queryClient";
-import { getPoseLandmarker } from "@/lib/pose-tracking";
+import { getPoseLandmarker, isPlausibleHumanFrame, MIN_VISIBILITY } from "@/lib/pose-tracking";
 import { lockCameraExposure } from "@/lib/camera-exposure";
 import {
   analyzeMechanics,
@@ -34,7 +34,6 @@ import { recordedVideoType, videoFilenameForBlob } from "@/lib/video-recording";
 type Step = "warning" | "capture" | "review";
 
 const SKELETON_COLOR = "#2dd4bf";
-const MIN_VISIBILITY = 0.5;
 
 function drawSkeleton(ctx: CanvasRenderingContext2D, landmarks: NormalizedLandmark[], width: number, height: number) {
   ctx.strokeStyle = SKELETON_COLOR;
@@ -221,8 +220,14 @@ export function MechanicsTrackerDialog({
     const ctx = canvas.getContext("2d");
     const now = performance.now();
     const detection = landmarker.detectForVideo(video, now);
-    const landmarks = detection.landmarks[0] ?? null;
-    const worldLandmarks = detection.worldLandmarks[0] ?? null;
+    // Rejects a confident-looking detection on something that isn't
+    // actually a person (a box, a rack, a shadow) -- same torso-presence
+    // gate bar-tracker-dialog.tsx's live tick loop uses, applied here since
+    // this dialog runs its own independent detectForVideo loop rather than
+    // sharing that one.
+    const rawLandmarks = detection.landmarks[0] ?? null;
+    const landmarks = rawLandmarks && isPlausibleHumanFrame(rawLandmarks) ? rawLandmarks : null;
+    const worldLandmarks = landmarks ? (detection.worldLandmarks[0] ?? null) : null;
 
     if (ctx) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);

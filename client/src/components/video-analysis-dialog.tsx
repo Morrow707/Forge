@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { PoseLandmarker, type NormalizedLandmark } from "@mediapipe/tasks-vision";
-import { angleAtVertex, type PoseFrame } from "@/lib/pose-tracking";
+import { angleAtVertex, MIN_VISIBILITY, type PoseFrame } from "@/lib/pose-tracking";
 import { analyzeVideoPose } from "@/lib/video-pose-analysis";
 import { MEASURABLE_JOINTS, findNearestJoint, measureJoint } from "@/lib/joint-angles";
 import {
@@ -34,7 +34,6 @@ const SKELETON_COLOR = "#2dd4bf";
 const ANGLE_COLOR = "#fbbf24";
 const RULER_COLOR = "#38bdf8";
 const DRAW_COLORS = ["#fbbf24", "#f65b23", "#38bdf8", "#ffffff"];
-const MIN_VISIBILITY = 0.5;
 // 2x added alongside the existing slow-mo options -- those cover "study
 // this moment frame by frame," but a longer clip also needs a fast way to
 // scan past the parts that don't matter, which nothing here offered before.
