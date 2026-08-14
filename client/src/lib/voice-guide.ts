@@ -88,7 +88,14 @@ export function createContinuousRecognizer(
       if (event.error === "not-allowed" || event.error === "service-not-allowed") {
         stopped = true;
         onError("Microphone access was denied.");
+        return;
       }
+      // Anything else (mic disconnected, recognition service unreachable,
+      // etc) previously fell through here unreported -- onend's restart
+      // would keep silently retrying forever with no way for the caller to
+      // tell the athlete voice commands stopped working. Still let it
+      // retry (these can be transient), but always surface it.
+      onError("Voice recognition hit a problem and is retrying.");
     };
     r.onend = () => {
       if (!stopped) attach();
