@@ -1,4 +1,5 @@
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { toast } from "sonner";
 
 // Lets the athlete workout page keep working -- viewing and logging -- in a
 // gym with no signal, the single most common complaint about apps like
@@ -43,6 +44,11 @@ export type PendingLog = {
   url: string;
   payload: unknown;
   queuedAt: string;
+  // Bumped on every failed sync attempt (network failure or a server
+  // rejection alike) -- see flushPendingLogs' own comment for why this
+  // exists and why it's never a reason to drop the entry outright.
+  failureCount?: number;
+  notifiedStale?: boolean;
 };
 
 function readQueue(): PendingLog[] {
@@ -118,6 +124,8 @@ export function takePendingLog(dayKey: string): PendingLog | null {
   return entry;
 }
 
+const STALE_FAILURE_THRESHOLD = 5;
+
 async function flushPendingLogs() {
   const pending = readQueue();
   if (pending.length === 0) return;
@@ -131,8 +139,33 @@ async function flushPendingLogs() {
       writeQueue(readQueue().filter((p) => p.id !== entry.id));
       syncedAny = true;
     } catch {
-      // Still offline, or the server rejected it -- leave it queued and
-      // try again on the next flush rather than losing the athlete's data.
+      // Still offline, or the server rejected it -- leave it queued and try
+      // again on the next flush rather than losing the athlete's data (an
+      // outright drop here risks discarding a real set over what might just
+      // be an expired session that gets renewed, or a brief server outage).
+      // But retrying forever in total silence has its own failure mode: if
+      // the rejection turns out to be permanent (the program day it
+      // targeted got deleted, say), the athlete never finds out their
+      // offline-logged set never actually made it to the server. Re-read
+      // fresh rather than trust the loop's own snapshot -- the owning page
+      // may have claimed and taken this exact entry while this request was
+      // in flight.
+      const queue = readQueue();
+      const current = queue.find((p) => p.id === entry.id);
+      if (!current) continue;
+      const failureCount = (current.failureCount ?? 0) + 1;
+      const shouldNotify = failureCount === STALE_FAILURE_THRESHOLD && !current.notifiedStale;
+      writeQueue(
+        queue.map((p) =>
+          p.id === entry.id ? { ...p, failureCount, notifiedStale: p.notifiedStale || shouldNotify } : p,
+        ),
+      );
+      if (shouldNotify) {
+        toast.error(
+          "A workout log saved while you were offline still hasn't synced -- check that day and re-enter it if it's missing.",
+          { duration: 15000 },
+        );
+      }
     }
   }
   if (syncedAny) {

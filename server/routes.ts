@@ -869,6 +869,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!parsed.success) {
         return res.status(400).json({ message: parsed.error.issues[0]?.message });
       }
+      // getClassEnrollmentForAthlete only checks (athleteId, classId) -- a
+      // shared Forge-official class can have athletes enrolled by many
+      // different coaches, so without this roster check any coach could
+      // force-unlock a lesson for (and read the full class progress of) an
+      // athlete who isn't theirs, same as /enroll above already guards for.
+      const roster = await storage.getRosterForCoach(user.id);
+      if (!roster.some((a) => a.id === parsed.data.athleteId)) {
+        return res.status(400).json({ message: "Athlete not on your roster" });
+      }
       const enrollment = await storage.getClassEnrollmentForAthlete(parsed.data.athleteId, id);
       if (!enrollment) return res.status(404).json({ message: "Athlete not enrolled" });
       const newlyUnlocked = await storage.manuallyUnlockLesson(enrollment.id, lessonId);
@@ -2758,6 +2767,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    // addAthleteToTeam does no validation of its own -- without this, any
+    // coach could add an arbitrary user id (another coach's athlete, a Free
+    // Agent) to their team, and every team view from then on (roster list,
+    // challenges progress, microcycle plan) leaks that athlete's real name
+    // and training data to a coach who was never actually assigned to them.
+    const roster = await storage.getRosterForCoach(user.id);
+    if (!roster.some((a) => a.id === parsed.data.athleteId)) {
+      return res.status(400).json({ message: "Athlete not on your roster" });
     }
     const member = await storage.addAthleteToTeam(teamId, parsed.data.athleteId);
     res.status(201).json(member);
