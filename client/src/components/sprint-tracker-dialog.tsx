@@ -218,6 +218,7 @@ export function SprintTrackerDialog({
     // between frames either way, but a higher frame rate still means less
     // real screen-x distance the reference point can cover between two
     // samples, which tightens that interpolation for a fast sprint.
+    let cancelled = false;
     navigator.mediaDevices
       .getUserMedia({
         video: {
@@ -228,6 +229,15 @@ export function SprintTrackerDialog({
         },
       })
       .then((stream) => {
+        // The athlete can back out to "warning"/"review" (or close the
+        // dialog) before this permission prompt resolves -- without this
+        // guard, a late-arriving stream would still get attached and left
+        // running, orphaned, with nothing left to ever stop it until the
+        // dialog's next step change or close.
+        if (cancelled) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
         streamRef.current = stream;
         if (videoRef.current) videoRef.current.srcObject = stream;
         // Best-effort, Chrome/Android-only -- see lockCameraExposure's own
@@ -239,6 +249,7 @@ export function SprintTrackerDialog({
       .catch(() => setCameraError("Camera access denied or unavailable."));
     rafRef.current = requestAnimationFrame(tick);
     return () => {
+      cancelled = true;
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       stopCamera();
     };

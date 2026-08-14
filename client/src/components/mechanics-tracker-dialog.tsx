@@ -92,6 +92,10 @@ export function MechanicsTrackerDialog({
   const reviewVideoRef = useRef<HTMLVideoElement>(null);
   const reviewCanvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  function stopCamera() {
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+  }
   const rafRef = useRef<number | null>(null);
   const poseLandmarkerRef = useRef<PoseLandmarker | null>(null);
   const lastVideoTimeRef = useRef(-1);
@@ -155,20 +159,29 @@ export function MechanicsTrackerDialog({
       });
 
     return () => {
-      streamRef.current?.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
+      stopCamera();
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   useEffect(() => {
-    if (!open || step !== "capture") return;
+    if (!open || step !== "capture") {
+      // Leaving the capture step (most commonly: finishing a recording and
+      // landing on "review") previously fell through here with no cleanup
+      // of its own -- unlike sprint-tracker-dialog.tsx's equivalent effect,
+      // this one never stopped the camera on the way out, so the athlete's
+      // camera stayed live and recording for as long as they stayed on the
+      // review screen, until the whole dialog closed.
+      stopCamera();
+      return;
+    }
     // ideal, not exact -- see bar-tracker-dialog.tsx's own comment on this
     // same constraint shape. A bat swing or throw is the fastest motion
     // this app tracks, so peakAngularVelocityTime's sequencing precision
     // (hip vs. shoulder vs. arm peak timing) benefits from 60fps more here
     // than almost anywhere else in the camera tracker.
+    let cancelled = false;
     navigator.mediaDevices
       .getUserMedia({
         video: {
@@ -179,6 +192,14 @@ export function MechanicsTrackerDialog({
         },
       })
       .then((stream) => {
+        // The athlete can leave "capture" (or close the dialog) before this
+        // permission prompt resolves -- without this guard, a late-arriving
+        // stream would still get attached and left running, orphaned, with
+        // nothing left to ever stop it until the dialog fully closes.
+        if (cancelled) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
         streamRef.current = stream;
         if (videoRef.current) videoRef.current.srcObject = stream;
         // Best-effort, Chrome/Android-only -- see lockCameraExposure's own
@@ -191,7 +212,9 @@ export function MechanicsTrackerDialog({
       .catch(() => setCameraError("Camera access denied or unavailable."));
     rafRef.current = requestAnimationFrame(tick);
     return () => {
+      cancelled = true;
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      stopCamera();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, step]);

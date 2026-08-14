@@ -156,6 +156,7 @@ export function FormVideoRecorderDialog({
     // rate (it's a plain saved clip for a coach to watch back later, not a
     // tracked set), but a smoother capture still makes a fast movement less
     // of a blur when scrubbing the review, for the same reasons.
+    let cancelled = false;
     navigator.mediaDevices
       .getUserMedia({
         video: {
@@ -166,6 +167,15 @@ export function FormVideoRecorderDialog({
         },
       })
       .then((stream) => {
+        // The athlete can switch to Upload mode (or close the dialog)
+        // before this permission prompt resolves -- without this guard, a
+        // late-arriving stream would still get attached and left running,
+        // orphaned, with nothing left to ever stop it until the next mode
+        // switch or dialog close.
+        if (cancelled) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
         streamRef.current = stream;
         if (videoRef.current) videoRef.current.srcObject = stream;
         // Best-effort, Chrome/Android-only -- see lockCameraExposure's own
@@ -175,7 +185,10 @@ export function FormVideoRecorderDialog({
         if (videoTrack) void lockCameraExposure(videoTrack);
       })
       .catch(() => setCameraError("Camera access denied or unavailable."));
-    return stopCamera;
+    return () => {
+      cancelled = true;
+      stopCamera();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, mode, step]);
 
