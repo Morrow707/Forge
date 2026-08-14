@@ -343,7 +343,15 @@ export function FoodScannerDialog({
 
   const logPhotoItemsMutation = useMutation({
     mutationFn: async () => {
-      for (const item of photoItems) {
+      // A snapshot, not a live read of photoItems -- items are logged one
+      // POST at a time, and if one partway through fails (a network blip
+      // is the realistic case, not a bad request), everything before it
+      // already reached the server. Removing each item from state as its
+      // own POST succeeds means a retry of "Log N Items" only re-sends
+      // what's actually still unlogged, instead of re-posting (and
+      // duplicating) whatever already made it through before the failure.
+      const itemsToLog = photoItems;
+      for (const item of itemsToLog) {
         await apiRequest("POST", "/api/athlete/food-log", {
           date,
           description: item.description,
@@ -365,11 +373,13 @@ export function FoodScannerDialog({
           source: "photo",
           barcode: null,
         });
+        setPhotoItems((items) => items.filter((it) => it !== item));
       }
+      return itemsToLog.length;
     },
-    onSuccess: () => {
+    onSuccess: (loggedCount) => {
       qc.invalidateQueries({ queryKey: ["/api/athlete/food-log"] });
-      toast.success(photoItems.length > 1 ? `Logged ${photoItems.length} items` : "Logged");
+      toast.success(loggedCount > 1 ? `Logged ${loggedCount} items` : "Logged");
       onOpenChange(false);
     },
     onError: () => toast.error("Couldn't log one or more of those items -- try again"),
