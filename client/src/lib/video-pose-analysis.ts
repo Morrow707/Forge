@@ -11,7 +11,7 @@
 // cancellation tied to its calling dialog's lifecycle, so an abandoned
 // analysis can keep running (and feeding whatever instance it holds) well
 // after the dialog that started it has closed.
-import { getOfflinePoseLandmarker, type PoseFrame } from "./pose-tracking";
+import { getOfflinePoseLandmarker, isPlausibleHumanFrame, type PoseFrame } from "./pose-tracking";
 
 // Detection is the expensive part, not seeking -- capping the sample count
 // bounds worst-case analysis time for a longer clip (a full tracked set can
@@ -19,6 +19,11 @@ import { getOfflinePoseLandmarker, type PoseFrame } from "./pose-tracking";
 // resolution, which review doesn't need much of anyway.
 const MAX_SAMPLES = 180;
 const MIN_INTERVAL_SEC = 1 / 15;
+
+// The actual last timestamp fed to getOfflinePoseLandmarker()'s shared
+// singleton, tracked across calls -- see analyzeVideoPose's own comment on
+// why seeding purely from performance.now() isn't a real guarantee.
+let lastOfflineTimestampMs = 0;
 
 function waitForSeek(video: HTMLVideoElement): Promise<void> {
   return new Promise((resolve) => {
@@ -56,14 +61,20 @@ export async function analyzeVideoPose(
   if (!Number.isFinite(duration) || duration <= 0) return [];
 
   const interval = Math.max(MIN_INTERVAL_SEC, duration / MAX_SAMPLES);
-  // Seeded from performance.now() (not 0) so these timestamps always land
-  // strictly after whatever THIS SAME dedicated instance (see
-  // getOfflinePoseLandmarker's own comment -- deliberately not the shared
-  // live-tracker landmarker) last saw from an earlier analyzeVideoPose()
-  // call this page session -- detectForVideo throws if timestamps ever go
-  // backwards or repeat, and this instance is a lazy singleton reused
-  // across every video a coach analyzes, not a fresh one per call.
-  const baseTimestampMs = performance.now();
+  // Floored against lastOfflineTimestampMs + 1, not just performance.now() --
+  // this dedicated instance (see getOfflinePoseLandmarker's own comment --
+  // deliberately not the shared live-tracker landmarker) is a lazy singleton
+  // reused across every video a coach analyzes, not a fresh one per call, and
+  // detectForVideo throws if a timestamp ever goes backwards or repeats.
+  // performance.now() alone isn't a real guarantee of that: it only proves
+  // this call started later in wall-clock time than the previous one did,
+  // not that this call's *starting* timestamp is past whatever synthetic
+  // offset (up to the PREVIOUS video's own duration * 1000) the previous
+  // call last fed the instance -- seeking+inference on a short clip can
+  // easily finish in less real time than the clip's own duration, so two
+  // videos analyzed back-to-back could otherwise start the second call's
+  // timestamps behind the first call's last one.
+  const baseTimestampMs = Math.max(performance.now(), lastOfflineTimestampMs + 1);
 
   const frames: PoseFrame[] = [];
   for (let t = 0; t <= duration; t += interval) {
@@ -71,9 +82,12 @@ export async function analyzeVideoPose(
     await waitForSeek(video);
     const timestampMs = Math.round(baseTimestampMs + t * 1000);
     const detection = landmarker.detectForVideo(video, timestampMs);
+    lastOfflineTimestampMs = timestampMs;
     const landmarks = detection.landmarks[0];
     const worldLandmarks = detection.worldLandmarks[0];
-    if (landmarks && worldLandmarks) frames.push({ t, landmarks, worldLandmarks });
+    if (landmarks && worldLandmarks && isPlausibleHumanFrame(landmarks)) {
+      frames.push({ t, landmarks, worldLandmarks });
+    }
     onProgress?.(Math.min(1, t / duration));
   }
   onProgress?.(1);
