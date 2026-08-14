@@ -1,4 +1,20 @@
 import "dotenv/config";
+// Express 4's router never awaits (or attaches a .catch to) an async route
+// handler's returned promise -- a rejection inside one (a dropped DB
+// connection, any unguarded throw) becomes an unhandled promise rejection
+// instead of ever reaching the error-handling middleware below. The
+// visible symptom is a connection that just resets with no response body
+// at all, which the client can't parse as JSON and falls back to a generic
+// "X failed" toast with no real error message -- indistinguishable from a
+// wrong password or a genuine validation failure even though the real
+// cause was a server-side crash. This patches Express's router so every
+// async handler's rejection is automatically forwarded to next(err), the
+// same fix applied by hand to the login handler after it hit exactly this
+// failure mode -- importing it here (before any route is registered)
+// covers every route in the app, not just the ones that have already
+// broken this way once. Side-effect-only import: it patches Express's
+// prototype and has to run before app.get/post/etc. are ever called.
+import "express-async-errors";
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
