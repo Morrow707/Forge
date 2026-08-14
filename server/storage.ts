@@ -2998,7 +2998,7 @@ Write a short (2-4 sentence) plain-language weekly training summary for this ath
   async getOrCreateAthleteDigest(
     athleteId: number,
   ): Promise<{ digest: (typeof athleteDigests.$inferSelect) | null; isNew: boolean }> {
-    const weekStart = formatISO(startOfWeek(new Date(), { weekStartsOn: 1 }), {
+    const weekStart = formatISO(startOfWeek(new Date(), { weekStartsOn: 0 }), {
       representation: "date",
     });
     const existing = await this.getAthleteDigest(athleteId, weekStart);
@@ -3292,7 +3292,7 @@ Write a short (3-5 sentence) plain-language weekly summary for the coach, highli
   async getOrCreateCoachDigest(
     coachId: number,
   ): Promise<{ digest: (typeof coachDigests.$inferSelect) | null; isNew: boolean }> {
-    const weekStart = formatISO(startOfWeek(new Date(), { weekStartsOn: 1 }), {
+    const weekStart = formatISO(startOfWeek(new Date(), { weekStartsOn: 0 }), {
       representation: "date",
     });
     const existing = await this.getCoachDigest(coachId, weekStart);
