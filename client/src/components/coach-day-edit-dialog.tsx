@@ -681,8 +681,25 @@ export function CoachDayEditDialog({
                       </div>
                       <Button
                         size="sm"
-                        disabled={copyTargets.size === 0 || copyCorrectivesMutation.isPending}
-                        onClick={() => copyCorrectivesMutation.mutate(Array.from(copyTargets))}
+                        disabled={
+                          copyTargets.size === 0 ||
+                          copyCorrectivesMutation.isPending ||
+                          saveCorrectivesMutation.isPending
+                        }
+                        onClick={async () => {
+                          // The copy endpoint duplicates whatever's already
+                          // PERSISTED for this day, not anything from the
+                          // request body -- without saving first, copying
+                          // right after adding/editing a corrective here
+                          // would silently propagate the OLD list to the
+                          // target days instead of what's actually on screen.
+                          try {
+                            await saveCorrectivesMutation.mutateAsync(correctives);
+                          } catch {
+                            return;
+                          }
+                          copyCorrectivesMutation.mutate(Array.from(copyTargets));
+                        }}
                       >
                         Copy to {copyTargets.size || ""} day{copyTargets.size === 1 ? "" : "s"}
                       </Button>
@@ -838,7 +855,19 @@ export function CoachDayEditDialog({
                 Cancel
               </Button>
               <Button
-                onClick={() => saveMutation.mutate({ title, isRestDay, exercises })}
+                onClick={() => {
+                  saveMutation.mutate({ title, isRestDay, exercises });
+                  // Correctives persist through their own PUT (see "Save
+                  // Correctives" below), but read as one form with
+                  // everything above -- without this, a coach who edits
+                  // both sections and taps the one Save button they can
+                  // see would have their corrective edits silently
+                  // discarded, since saveMutation's own onSuccess closes
+                  // the whole dialog right after.
+                  if (assignmentId != null && correctivesData?.correctivesEnabled) {
+                    saveCorrectivesMutation.mutate(correctives);
+                  }
+                }}
                 disabled={!data || saveMutation.isPending}
               >
                 {saveMutation.isPending ? "Saving…" : "Save Changes"}
