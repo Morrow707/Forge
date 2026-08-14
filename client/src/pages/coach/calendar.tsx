@@ -48,9 +48,13 @@ export default function CoachCalendar() {
   // whatever day the calendar happens to default to -- without this, the
   // notification landed on "today," which usually has nothing to do with
   // the day the athlete actually commented on (e.g. backfilling a past
-  // date) and looked like a broken link. Runs once on mount; the params
-  // aren't needed again after the dialog's open, so there's no need to keep
-  // watching them.
+  // date) and looked like a broken link. NotificationBell navigates here
+  // with wouter's client-side navigate(), which doesn't remount this
+  // component when the coach is already on /coach/calendar -- an effect
+  // that only ran on mount would silently do nothing for every notification
+  // click after the first. Depending on `search` instead, and clearing the
+  // params from the URL once consumed, re-arms it for the next click (even
+  // one linking to the exact same day) instead of relying on a fresh mount.
   const search = useSearch();
   useEffect(() => {
     const params = new URLSearchParams(search);
@@ -64,11 +68,9 @@ export default function CoachCalendar() {
         athleteId: Number(notifAthleteId),
         athleteName: params.get("athleteName") ?? "",
       });
+      setLocation("/coach/calendar", { replace: true });
     }
-    // Only ever read on first mount -- the dialog owns its own open/close
-    // state from here.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [search, setLocation]);
 
   const { data: entries = [], isLoading } = useQuery<CalendarEntry[]>({
     queryKey: ["/api/coach/calendar", range.start, range.end, athleteId],
