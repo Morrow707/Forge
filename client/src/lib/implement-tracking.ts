@@ -30,9 +30,8 @@
 // own visibility score every frame, so both have a real, continuous say in
 // the final tracked point rather than one silently overriding the other.
 import type { Landmark, NormalizedLandmark } from "@mediapipe/tasks-vision";
-import { POSE_LANDMARKS } from "./pose-tracking";
+import { MIN_VISIBILITY, POSE_LANDMARKS } from "./pose-tracking";
 
-const MIN_VISIBILITY = 0.5;
 function visible(lm: { visibility: number } | undefined): boolean {
   return !!lm && lm.visibility >= MIN_VISIBILITY;
 }
