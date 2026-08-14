@@ -1142,6 +1142,22 @@ export const workoutSetEntries = pgTable("workout_set_entries", {
   // comparison. Not applicable to unilateral exercises (single-leg squats,
   // lunges), which load one leg at a time rather than both at once.
   legDriveAsymmetry: json("leg_drive_asymmetry"),
+  // Per-rep left/right arm-drive comparison for a bilateral shared-bar
+  // press/pull (see bar-tracking.ts's computeArmDriveAsymmetry) -- the arm
+  // equivalent of legDriveAsymmetry above, built from the two independent
+  // implement trackers bar-tracker-dialog.tsx already runs for tilt/grip
+  // width rather than a joint angle (a press/pull has no knee to measure
+  // drive rate from). Null unless the equipment used a shared bar and the
+  // movement was a bilateral Push/Pull with enough clean data on both sides.
+  armDriveAsymmetry: json("arm_drive_asymmetry"),
+  // Per-rep tracking-confidence score (see bar-tracking.ts's
+  // computeRepTrustScores) -- folds position-fusion confidence,
+  // tracker-disagreement rejections, and the whole set's movement-mismatch/
+  // camera-alignment status into one number/label per rep, so a coach
+  // reviewing this set later can tell which reps' numbers to actually
+  // believe instead of only ever seeing that context live, in the tracker
+  // dialog, at the moment the set was captured.
+  trustScores: json("trust_scores"),
 });
 
 // A two-way thread on a specific day of a specific assignment -- an athlete
@@ -3372,6 +3388,26 @@ export const legDriveAsymmetryEntrySchema = z.object({
   dominantSide: z.enum(["left", "right"]),
 });
 
+// Same shape as legDriveAsymmetryEntrySchema above, but velocity (m/s)
+// instead of angular drive rate -- see bar-tracking.ts's
+// computeArmDriveAsymmetry for why a press/pull's two arms are compared by
+// speed rather than a joint angle.
+export const armDriveAsymmetryEntrySchema = z.object({
+  repNumber: z.number(),
+  leftVelocityMps: z.number(),
+  rightVelocityMps: z.number(),
+  asymmetryPercent: z.number(),
+  dominantSide: z.enum(["left", "right"]),
+});
+
+// See bar-tracking.ts's computeRepTrustScores.
+export const repTrustScoreSchema = z.object({
+  repNumber: z.number(),
+  score: z.number(),
+  label: z.enum(["high", "medium", "low"]),
+  notes: z.array(z.string()),
+});
+
 // One entry per detected jump within a "jump" tracking-mode set -- see
 // jump-tracking.ts's summarizeJumpSet for how these are derived from the
 // ankle-height trace. Distinct from repBreakdownEntrySchema above since a
@@ -3406,6 +3442,8 @@ export const setLogInputSchema = z.object({
   repBreakdown: z.array(repBreakdownEntrySchema).optional().nullable(),
   armPathTrace: armPathTraceSchema.optional().nullable(),
   legDriveAsymmetry: z.array(legDriveAsymmetryEntrySchema).optional().nullable(),
+  armDriveAsymmetry: z.array(armDriveAsymmetryEntrySchema).optional().nullable(),
+  trustScores: z.array(repTrustScoreSchema).optional().nullable(),
   peakPowerWatts: z.number().optional().nullable(),
   meanPowerWatts: z.number().optional().nullable(),
   eccentricMeanVelocityMps: z.number().optional().nullable(),

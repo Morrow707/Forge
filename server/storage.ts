@@ -9742,6 +9742,8 @@ ${catalog}`;
               reactiveStrengthIndex: s.reactiveStrengthIndex ?? null,
               jumpBreakdown: s.jumpBreakdown ?? null,
               legDriveAsymmetry: s.legDriveAsymmetry ?? null,
+              armDriveAsymmetry: s.armDriveAsymmetry ?? null,
+              trustScores: s.trustScores ?? null,
             })),
           );
         }
@@ -9965,6 +9967,8 @@ ${catalog}`;
         reactiveStrengthIndex: workoutSetEntries.reactiveStrengthIndex,
         jumpBreakdown: workoutSetEntries.jumpBreakdown,
         legDriveAsymmetry: workoutSetEntries.legDriveAsymmetry,
+        armDriveAsymmetry: workoutSetEntries.armDriveAsymmetry,
+        trustScores: workoutSetEntries.trustScores,
       })
       .from(workoutSetEntries)
       .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
@@ -10013,6 +10017,8 @@ ${catalog}`;
         reactiveStrengthIndex: workoutSetEntries.reactiveStrengthIndex,
         jumpBreakdown: workoutSetEntries.jumpBreakdown,
         legDriveAsymmetry: workoutSetEntries.legDriveAsymmetry,
+        armDriveAsymmetry: workoutSetEntries.armDriveAsymmetry,
+        trustScores: workoutSetEntries.trustScores,
       })
       .from(workoutSetEntries)
       .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))

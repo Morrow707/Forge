@@ -247,6 +247,21 @@ type LegDriveAsymmetryEntry = {
   dominantSide: "left" | "right";
 };
 
+type ArmDriveAsymmetryEntry = {
+  repNumber: number;
+  leftVelocityMps: number;
+  rightVelocityMps: number;
+  asymmetryPercent: number;
+  dominantSide: "left" | "right";
+};
+
+type RepTrustScore = {
+  repNumber: number;
+  score: number;
+  label: "high" | "medium" | "low";
+  notes: string[];
+};
+
 type SetMetrics = {
   peakVelocityMps: number | null;
   meanVelocityMps: number | null;
@@ -279,6 +294,13 @@ type SetMetrics = {
   // -- see pose-tracking.ts's computeLegDriveAsymmetry. Null unless the
   // exercise's movementType/laterality made a same-rep comparison valid.
   legDriveAsymmetry: LegDriveAsymmetryEntry[] | null;
+  // Same idea, arms instead of legs -- see bar-tracking.ts's
+  // computeArmDriveAsymmetry. Null unless the equipment/movementType made a
+  // same-rep left/right arm comparison valid.
+  armDriveAsymmetry: ArmDriveAsymmetryEntry[] | null;
+  // Per-rep tracking-confidence score -- see bar-tracking.ts's
+  // computeRepTrustScores.
+  trustScores: RepTrustScore[] | null;
 };
 
 type LogEntry = {
@@ -408,6 +430,8 @@ function buildItem(
       reactiveStrengthIndex: existingSet?.reactiveStrengthIndex ?? null,
       jumpBreakdown: existingSet?.jumpBreakdown ?? null,
       legDriveAsymmetry: existingSet?.legDriveAsymmetry ?? null,
+      armDriveAsymmetry: existingSet?.armDriveAsymmetry ?? null,
+      trustScores: existingSet?.trustScores ?? null,
     };
   });
   const materials = materialsFrom(prescribed.exercise);
@@ -817,6 +841,8 @@ export function WorkoutPage({
           reactiveStrengthIndex: s.reactiveStrengthIndex,
           jumpBreakdown: s.jumpBreakdown,
           legDriveAsymmetry: s.legDriveAsymmetry,
+          armDriveAsymmetry: s.armDriveAsymmetry,
+          trustScores: s.trustScores,
         })),
       })),
     };
@@ -1096,6 +1122,8 @@ export function WorkoutPage({
               reactiveStrengthIndex: null,
               jumpBreakdown: null,
               legDriveAsymmetry: null,
+              armDriveAsymmetry: null,
+              trustScores: null,
             },
           ],
         };
@@ -2254,6 +2282,8 @@ function ExerciseLogContent({
                       romCm: metrics.romCm,
                       velocityLossPercent: metrics.velocityLossPercent,
                       legDriveAsymmetry: metrics.legDriveAsymmetry ?? null,
+                      armDriveAsymmetry: metrics.armDriveAsymmetry ?? null,
+                      trustScores: metrics.trustScores ?? null,
                       ...videoPatch,
                     },
                     { immediate: true },
