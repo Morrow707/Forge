@@ -252,6 +252,16 @@ export function VideoAnalysisDialog({
   }
   lastOpenRef.current = open;
 
+  // toggleSkeleton is async and calls redraw() again after an await -- a
+  // plain `redraw` reference inside that continuation would still be the
+  // closure captured when toggleSkeleton was invoked (the render BEFORE
+  // setShowSkeleton took effect), so it would redraw with the stale,
+  // pre-toggle showSkeleton value -- exactly backwards from what the
+  // toggle just did. redrawRef always points at the latest render's
+  // redraw, kept current below, so a delayed call always sees current
+  // state instead of whatever was true when the toggle was first tapped.
+  const redrawRef = useRef<() => void>(() => {});
+
   function redraw() {
     const video = videoRef.current;
     const canvas = canvasRef.current;
@@ -325,6 +335,7 @@ export function VideoAnalysisDialog({
     for (const stroke of strokesRef.current) drawStroke(ctx, stroke.points, stroke.color);
     if (currentStrokeRef.current) drawStroke(ctx, currentStrokeRef.current, drawColor);
   }
+  redrawRef.current = redraw;
 
   // A genuine frame change (scrubbing, or starting playback) invalidates
   // every frame-anchored annotation -- a freehand circle drawn around a
@@ -345,12 +356,12 @@ export function VideoAnalysisDialog({
   async function toggleSkeleton() {
     if (showSkeleton) {
       setShowSkeleton(false);
-      requestAnimationFrame(redraw);
+      requestAnimationFrame(() => redrawRef.current());
       return;
     }
     setShowSkeleton(true);
     if (analyzedUrlRef.current === videoUrl) {
-      requestAnimationFrame(redraw);
+      requestAnimationFrame(() => redrawRef.current());
       return;
     }
     setAnalyzing(true);
@@ -369,7 +380,7 @@ export function VideoAnalysisDialog({
       setShowSkeleton(false);
     } finally {
       setAnalyzing(false);
-      requestAnimationFrame(redraw);
+      requestAnimationFrame(() => redrawRef.current());
     }
   }
 
