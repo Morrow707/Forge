@@ -40,7 +40,14 @@ function formatDuration(ms: number) {
 export function CaraTimer() {
   const qc = useQueryClient();
   const [now, setNow] = useState(() => Date.now());
-  const [promptDismissedForSession, setPromptDismissedForSession] = useState<number | null>(null);
+  // Keyed on the server's lastActivityAt value (not the session id) so a
+  // dismissal only suppresses the prompt until the NEXT genuinely new idle
+  // episode -- lastActivityAt itself advances on every real activity signal
+  // (confirming here, or the server bumping it on any non-completion save
+  // while a session is open), so once it does, this dismissal no longer
+  // matches and a later idle stretch in the same still-open session
+  // correctly re-prompts instead of staying silently suppressed for good.
+  const [promptDismissedForActivity, setPromptDismissedForActivity] = useState<string | null>(null);
 
   const { data } = useQuery<CaraStatus>({
     queryKey: ["/api/athlete/cara/status"],
@@ -77,7 +84,8 @@ export function CaraTimer() {
   const lastActivityAt = new Date(data.open.lastActivityAt).getTime();
   const idleMs = now - lastActivityAt;
   const showIdlePrompt =
-    idleMs >= data.idlePromptMinutes * 60_000 && promptDismissedForSession !== data.open.id;
+    idleMs >= data.idlePromptMinutes * 60_000 &&
+    promptDismissedForActivity !== data.open.lastActivityAt;
 
   return (
     <>
@@ -104,7 +112,7 @@ export function CaraTimer() {
               variant="outline"
               onClick={() => {
                 stopMutation.mutate();
-                setPromptDismissedForSession(null);
+                setPromptDismissedForActivity(null);
               }}
               disabled={stopMutation.isPending}
             >
@@ -113,7 +121,7 @@ export function CaraTimer() {
             <Button
               onClick={() => {
                 confirmActiveMutation.mutate();
-                setPromptDismissedForSession(data.open!.id);
+                setPromptDismissedForActivity(data.open!.lastActivityAt);
               }}
               disabled={confirmActiveMutation.isPending}
             >
