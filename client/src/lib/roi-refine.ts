@@ -122,6 +122,17 @@ export function refineLowerBodyLandmarks(
   landmarks: NormalizedLandmark[],
   worldLandmarks: Landmark[],
   timestamp: number,
+  // Same real-world scale correction already applied to `worldLandmarks`
+  // (see bar-tracker-dialog.tsx's own comment on scaleCorrectionRef) --
+  // this crop-space re-detection is a SEPARATE detectForVideo call with no
+  // idea that correction exists, so its own raw output needs the identical
+  // multiplier applied before merging or the lower-body points (knee/hip/
+  // ankle -- exactly the ones squat depth, jump height, and leg-drive
+  // asymmetry read) would silently revert to MediaPipe's uncorrected scale
+  // while the rest of the skeleton stays corrected. Null/undefined is a
+  // no-op, matching "no correction available" everywhere else this factor
+  // is threaded through.
+  scaleCorrection?: number | null,
 ): RefinedLowerBody {
   const box = computeLowerBodyBox(landmarks);
   if (!box) return { landmarks, worldLandmarks };
@@ -165,7 +176,15 @@ export function refineLowerBodyLandmarks(
     }
     const refinedWorld = refinedWorldFrame?.[i];
     if (refinedWorld && refinedWorld.visibility >= MIN_VISIBILITY) {
-      mergedWorldLandmarks[i] = refinedWorld;
+      mergedWorldLandmarks[i] =
+        scaleCorrection != null
+          ? {
+              ...refinedWorld,
+              x: refinedWorld.x * scaleCorrection,
+              y: refinedWorld.y * scaleCorrection,
+              z: refinedWorld.z * scaleCorrection,
+            }
+          : refinedWorld;
     }
   }
   return { landmarks: mergedLandmarks, worldLandmarks: mergedWorldLandmarks };
