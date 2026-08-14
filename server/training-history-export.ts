@@ -13,8 +13,16 @@ export interface TrainingHistoryRow {
   notes: string | null;
 }
 
+// Exercise names and notes are free text an athlete typed themselves, and
+// this CSV is routinely opened in Excel/Sheets by their coach -- a cell
+// value starting with =, +, -, or @ gets interpreted as a formula there
+// (the well-known "CSV injection" class), so a malicious or compromised
+// athlete account could otherwise run arbitrary formulas on whoever opens
+// the export. Prefixing with a leading apostrophe forces spreadsheet apps
+// to treat it as plain text; it doesn't affect any other CSV consumer.
 function csvField(value: string | number | null | undefined) {
-  const str = value == null ? "" : String(value);
+  let str = value == null ? "" : String(value);
+  if (/^[=+\-@]/.test(str)) str = `'${str}`;
   return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
 }
 
