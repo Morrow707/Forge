@@ -691,6 +691,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(list);
   });
 
+  // Registered before the /:id route below so this literal path wins --
+  // Express matches routes in registration order, and :id would otherwise
+  // swallow "analytics" as an (invalid, NaN) id. Same pattern as the
+  // admin analytics route.
+  app.get("/api/coach/classes/analytics", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const analytics = await storage.getCoachClassAnalytics(user.id);
+    res.json(analytics);
+  });
+
   app.get("/api/coach/classes/:id", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     const id = Number(req.params.id);
@@ -729,12 +739,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(updated);
   });
 
+  // Quick publish/unpublish from the class list card -- same effect as
+  // flipping the toggle in the builder and saving, without needing the
+  // full lesson structure payload.
+  app.patch("/api/coach/classes/:id/publish", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const owned = await assertCoachOwnsClass(user.id, id);
+    if (!owned) return res.status(404).json({ message: "Class not found" });
+    const schema = z.object({ isDraft: z.boolean() });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const updated = await storage.setClassDraftState(id, parsed.data.isDraft);
+    if (!updated) return res.status(404).json({ message: "Class not found" });
+    res.json(updated);
+  });
+
   app.delete("/api/coach/classes/:id", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     const id = Number(req.params.id);
     const owned = await assertCoachOwnsClass(user.id, id);
     if (!owned) return res.status(404).json({ message: "Class not found" });
-    await storage.deleteClass(id);
+    const result = await storage.deleteClass(id);
+    if (!result.deleted) {
+      return res.status(409).json({
+        message: `Can't delete -- ${result.enrolledCount} athlete${result.enrolledCount === 1 ? "" : "s"} enrolled. Unpublish it instead if you don't want new signups.`,
+      });
+    }
     res.status(204).end();
   });
 
@@ -772,6 +805,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         parsed.data.lessonId,
       );
       if (!result) return res.status(404).json({ message: "Enrollment or lesson not found" });
+      if (result.notifyAthlete) {
+        const n = result.notifyAthlete;
+        await notifyUser(
+          n.athleteId,
+          "class_progress_reset",
+          "Progress reset",
+          n.lessonNumber != null
+            ? `Your coach reset Lesson ${n.lessonNumber} (${n.lessonTitle}) in ${n.className} -- give it another read and pass the quiz again.`
+            : `Your coach reset your progress in ${n.className} -- give it another read and pass through it again.`,
+          `/athlete/classes/${id}`,
+        );
+      }
       const roster = await storage.getClassRosterForCoach(user.id, id);
       res.json(roster);
     },
@@ -1220,11 +1265,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(updated);
   });
 
+  app.patch("/api/admin/classes/:id/publish", requireRole("admin"), async (req, res) => {
+    const id = Number(req.params.id);
+    const owned = await assertAdminOwnsForgeClass(id);
+    if (!owned) return res.status(404).json({ message: "Class not found" });
+    const schema = z.object({ isDraft: z.boolean() });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const updated = await storage.setClassDraftState(id, parsed.data.isDraft);
+    if (!updated) return res.status(404).json({ message: "Class not found" });
+    res.json(updated);
+  });
+
   app.delete("/api/admin/classes/:id", requireRole("admin"), async (req, res) => {
     const id = Number(req.params.id);
     const owned = await assertAdminOwnsForgeClass(id);
     if (!owned) return res.status(404).json({ message: "Class not found" });
-    await storage.deleteClass(id);
+    const result = await storage.deleteClass(id);
+    if (!result.deleted) {
+      return res.status(409).json({
+        message: `Can't delete -- ${result.enrolledCount} athlete${result.enrolledCount === 1 ? "" : "s"} enrolled. Unpublish it instead if you don't want new signups.`,
+      });
+    }
     res.status(204).end();
   });
 

@@ -4759,12 +4759,42 @@ ${athleteContext}
     });
   },
 
-  async deleteClass(classId: number) {
+  // Quick publish/unpublish toggle that doesn't require the full lesson
+  // structure payload updateClassStructure needs -- lets the class list's
+  // card flip this without opening the builder.
+  async setClassDraftState(classId: number, isDraft: boolean) {
+    const [updated] = await db
+      .update(classes)
+      .set({ isDraft })
+      .where(eq(classes.id, classId))
+      .returning();
+    return updated ?? null;
+  },
+
+  // Refuses to delete a class with any enrollments at all, paid or free,
+  // completed or in progress. classEnrollments.classId cascades on class
+  // delete, and this function itself deletes each lesson's underlying
+  // skillProgram -- which cascades to skillAssignments (an enrolled
+  // athlete's actual calendar drills) and from there to skillSessionLogs
+  // (their real logged training/video history). Silently destroying that
+  // for a paid, no-refunds class would be catastrophic, so the caller has
+  // to get every enrollment out first (there is no unenroll path -- the
+  // class stays enrolled forever, same "no refunds" policy) or just
+  // unpublish it (isDraft) instead of deleting.
+  async deleteClass(classId: number): Promise<{ deleted: boolean; enrolledCount: number }> {
+    const [{ count: enrolledCount }] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(classEnrollments)
+      .where(eq(classEnrollments.classId, classId));
+    if (enrolledCount > 0) {
+      return { deleted: false, enrolledCount };
+    }
     const lessons = await db.query.classLessons.findMany({ where: eq(classLessons.classId, classId) });
     await db.delete(classes).where(eq(classes.id, classId));
     for (const lesson of lessons) {
       await db.delete(skillPrograms).where(eq(skillPrograms.id, lesson.skillProgramId));
     }
+    return { deleted: true, enrolledCount: 0 };
   },
 
   // ---------- Class enrollment + lazily-recomputed lesson progress ----------
@@ -5726,6 +5756,8 @@ ${athleteContext}
       ),
     });
     if (!enrollment) return null;
+    const cls = await db.query.classes.findFirst({ where: eq(classes.id, classId) });
+    if (!cls) return null;
     const lessons = await db.query.classLessons.findMany({
       where: eq(classLessons.classId, classId),
     });
@@ -5756,7 +5788,23 @@ ${athleteContext}
         .where(eq(classEnrollments.id, enrollment.id));
     }
     await this.recomputeClassProgress(enrollment.id);
-    return { enrollmentId: enrollment.id };
+    // notifyAthlete is null only for the Free Agent self-enrollment case
+    // (coachId === athleteId) -- unreachable in practice here since this
+    // route is coach-only and a Free Agent isn't on anyone's roster to
+    // reset, but kept consistent with checkAndMarkClassCompleted's same
+    // "don't notify yourself" guard.
+    return {
+      enrollmentId: enrollment.id,
+      notifyAthlete:
+        enrollment.coachId === athleteId
+          ? null
+          : {
+              athleteId,
+              className: cls.name,
+              lessonNumber: lessonId != null ? (targetLessons[0]?.lessonNumber ?? null) : null,
+              lessonTitle: lessonId != null ? (targetLessons[0]?.title ?? null) : null,
+            },
+    };
   },
 
   // Admin's platform-wide view across EVERY class (Forge-official and
@@ -5828,6 +5876,77 @@ ${athleteContext}
       totalEnrollments: allEnrollments.length,
       totalCompletions: allEnrollments.filter((e) => e.completedAt).length,
       classes: classRows,
+    };
+  },
+
+  // A coach's own version of getAdminClassAnalytics -- same per-lesson
+  // funnel shape, but scoped two ways an admin's isn't: only classes this
+  // coach (or their staff) has actually enrolled someone into (their own
+  // classes, or a Forge class they've assigned), and only counting THEIR
+  // enrollments within a shared Forge class, never every coach's on the
+  // platform.
+  async getCoachClassAnalytics(coachId: number) {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    const myEnrollments = await db.query.classEnrollments.findMany({
+      where: inArray(classEnrollments.coachId, coachIds),
+    });
+    if (myEnrollments.length === 0) {
+      return { totalClasses: 0, totalEnrollments: 0, totalCompletions: 0, classes: [] };
+    }
+    const classIds = Array.from(new Set(myEnrollments.map((e) => e.classId)));
+    const classRows = await db.query.classes.findMany({
+      where: inArray(classes.id, classIds),
+      with: { lessons: { orderBy: asc(classLessons.lessonNumber) }, coach: true },
+    });
+    const enrollmentIds = myEnrollments.map((e) => e.id);
+    const progressRows = await db.query.classLessonProgress.findMany({
+      where: inArray(classLessonProgress.enrollmentId, enrollmentIds),
+    });
+    const progressByEnrollment = new Map<number, typeof progressRows>();
+    for (const p of progressRows) {
+      const list = progressByEnrollment.get(p.enrollmentId) ?? [];
+      list.push(p);
+      progressByEnrollment.set(p.enrollmentId, list);
+    }
+    const enrollmentsByClass = new Map<number, typeof myEnrollments>();
+    for (const e of myEnrollments) {
+      const list = enrollmentsByClass.get(e.classId) ?? [];
+      list.push(e);
+      enrollmentsByClass.set(e.classId, list);
+    }
+
+    const classSummaries = classRows.map((cls) => {
+      const enrollments = enrollmentsByClass.get(cls.id) ?? [];
+      const enrolledCount = enrollments.length;
+      const completedCount = enrollments.filter((e) => e.completedAt).length;
+      const lessons = cls.lessons.map((lesson) => {
+        let started = 0;
+        let passed = 0;
+        for (const e of enrollments) {
+          const progressForEnrollment = progressByEnrollment.get(e.id) ?? [];
+          const p = progressForEnrollment.find((row) => row.classLessonId === lesson.id);
+          if (p?.contentCompletedAt) started++;
+          if (p?.quizPassedAt) passed++;
+        }
+        return { lessonNumber: lesson.lessonNumber, title: lesson.title, started, passed };
+      });
+      return {
+        id: cls.id,
+        name: cls.name,
+        isForgeOfficial: cls.coach.role === "admin",
+        lessonCount: cls.lessons.length,
+        enrolledCount,
+        completedCount,
+        completionRate: enrolledCount > 0 ? completedCount / enrolledCount : 0,
+        lessons,
+      };
+    });
+
+    return {
+      totalClasses: classRows.length,
+      totalEnrollments: myEnrollments.length,
+      totalCompletions: myEnrollments.filter((e) => e.completedAt).length,
+      classes: classSummaries,
     };
   },
 
