@@ -64,6 +64,7 @@ import {
   academyQuizAnswers,
   aiKnowledgeMessages,
   aiKnowledge,
+  legalAgreement,
   nutritionKnowledgeMessages,
   nutritionKnowledge,
   foodLogEntries,
@@ -7975,6 +7976,27 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
   async getAiKnowledgeGuidelines(): Promise<string> {
     const [row] = await db.select().from(aiKnowledge).where(eq(aiKnowledge.id, 1));
     return row?.guidelines.trim() || "";
+  },
+
+  // The clickwrap agreement's current text -- public (read by the signup
+  // page before an account exists to authenticate as), so this deliberately
+  // never returns anything else about the row. Falls back to a placeholder
+  // rather than an empty string on a fresh install that hasn't seeded the
+  // singleton row yet, so signup never silently shows a blank agreement box.
+  async getLegalAgreement(): Promise<string> {
+    const [row] = await db.select().from(legalAgreement).where(eq(legalAgreement.id, 1));
+    return row?.content.trim() || "No agreement has been configured yet.";
+  },
+
+  async updateLegalAgreement(content: string): Promise<string> {
+    await db
+      .insert(legalAgreement)
+      .values({ id: 1, content, updatedAt: new Date() })
+      .onConflictDoUpdate({
+        target: legalAgreement.id,
+        set: { content, updatedAt: new Date() },
+      });
+    return content;
   },
 
   async getAiKnowledgeChat(): Promise<{ guidelines: string; messages: AiKnowledgeMessage[] }> {

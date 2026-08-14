@@ -11,6 +11,7 @@ type SignupPayload = {
   role: "coach" | "athlete";
   coachCode?: string;
   phone?: string;
+  agreedToTerms: true;
 };
 
 type LoginPayload = { email: string; password: string };

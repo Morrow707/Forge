@@ -27,6 +27,7 @@ import {
   BookOpen,
   HardDrive,
   TrendingUp,
+  FileText,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -110,6 +111,7 @@ const adminNav: NavItem[] = [
   { href: "/admin/nutrition-knowledge", label: "Teach Nutrition AI", icon: Apple },
   { href: "/admin/platform-trends", label: "Platform Trends", icon: BarChart3 },
   { href: "/admin/videos", label: "Video Storage", icon: HardDrive },
+  { href: "/admin/legal-agreement", label: "Legal Agreement", icon: FileText },
 ];
 
 export function AppShell({

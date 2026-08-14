@@ -1,10 +1,12 @@
 import { useRef, useState, type FormEvent } from "react";
 import { Link, Redirect } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import {
   Dialog,
@@ -42,6 +44,16 @@ export default function SignupPage() {
   // instead of it only ever coming up later as a surprise 402 on some AI
   // feature.
   const [welcomeDismissed, setWelcomeDismissed] = useState(false);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
+
+  // Public, unauthenticated -- has to be, since there's no account yet to
+  // authenticate as. Shown inline (not behind a "view terms" link most
+  // people would never click) so the checkbox below actually means someone
+  // saw this, not just that they trust there's something reasonable behind
+  // a link.
+  const { data: agreement } = useQuery<{ content: string }>({
+    queryKey: ["/api/legal-agreement"],
+  });
 
   if (!isLoading && user) {
     if (isFreeAgentAttemptRef.current && !welcomeDismissed) {
@@ -56,6 +68,7 @@ export default function SignupPage() {
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    if (!agreedToTerms) return;
     isFreeAgentAttemptRef.current = role === "athlete" && !coachCode.trim();
     signupMutation.mutate({
       name,
@@ -64,6 +77,7 @@ export default function SignupPage() {
       role,
       coachCode: role === "athlete" ? coachCode || undefined : undefined,
       phone: phone.trim() || undefined,
+      agreedToTerms: true,
     });
   }
 
@@ -177,11 +191,25 @@ export default function SignupPage() {
                   </p>
                 </div>
               )}
+              <div className="space-y-2">
+                <Label>Terms</Label>
+                <div className="max-h-32 overflow-y-auto whitespace-pre-line rounded-md border border-border bg-surface p-3 text-xs text-muted-foreground">
+                  {agreement?.content ?? "Loading…"}
+                </div>
+                <label className="flex items-start gap-2 text-sm">
+                  <Checkbox
+                    checked={agreedToTerms}
+                    onCheckedChange={(c) => setAgreedToTerms(c === true)}
+                    className="mt-0.5"
+                  />
+                  I've read and agree to the terms above.
+                </label>
+              </div>
               <Button
                 type="submit"
                 size="lg"
                 className="w-full"
-                disabled={signupMutation.isPending}
+                disabled={signupMutation.isPending || !agreedToTerms}
               >
                 {signupMutation.isPending ? "Creating account…" : "Create Account"}
               </Button>
