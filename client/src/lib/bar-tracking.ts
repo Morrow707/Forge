@@ -298,6 +298,18 @@ function computeSpeeds(points: TrackedPoint[], positions: number[]): number[] {
 // that actually reaches this robust peak, not necessarily the single
 // highest raw sample -- that sample may be exactly the outlier the trim
 // excluded.
+//
+// No loaded barbell squat/deadlift/press/row/curl in this feature's target
+// population reaches anywhere near this in real concentric bar speed --
+// published VBT data tops out around 1.5-2.2 m/s even for deliberately fast
+// empty-bar/speed work. A reading above this is categorically a tracking
+// artifact (a smoothing-window edge effect at the very start of a trace, a
+// misdetected wrist for one frame), not a real rep -- excluded from both the
+// peak and mean calculations below the same way an implausible single-frame
+// POSITION jump is already rejected in bar-tracker-dialog.tsx, rather than
+// being averaged in or reported as the set's peak effort.
+const MAX_PLAUSIBLE_LIFT_VELOCITY_MPS = 3;
+
 function robustPeakSpeed(
   speedsMps: number[],
   startIdx: number,
@@ -306,10 +318,34 @@ function robustPeakSpeed(
   const samples: { v: number; idx: number }[] = [];
   for (let i = startIdx; i <= endIdx; i++) samples.push({ v: speedsMps[i], idx: i });
   if (samples.length === 0) return { peak: 0, peakIdx: startIdx };
-  const sorted = [...samples].sort((a, b) => a.v - b.v);
+  // Filtered out BEFORE the percentile trim runs -- the 95th-percentile trim
+  // alone assumes only a handful of frames are bad, which doesn't hold when a
+  // contiguous smoothing-window edge effect corrupts several consecutive
+  // frames near the start of a trace (worst exactly where robustPeakSpeed's
+  // own moving-average edge-effect note above applies hardest). Falls back
+  // to every sample only if the whole phase is somehow above the ceiling --
+  // an even worse case this ceiling can't rescue, but reporting SOMETHING
+  // consistent with the rest of this function's "never just report zero"
+  // stance beats silently zeroing out a whole rep.
+  const plausible = samples.filter((s) => s.v <= MAX_PLAUSIBLE_LIFT_VELOCITY_MPS);
+  const pool = plausible.length > 0 ? plausible : samples;
+  const sorted = [...pool].sort((a, b) => a.v - b.v);
   const peak = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))].v;
-  const peakIdx = samples.find((s) => s.v >= peak)?.idx ?? startIdx;
+  const peakIdx = pool.find((s) => s.v >= peak)?.idx ?? startIdx;
   return { peak, peakIdx };
+}
+
+// Same outlier-exclusion reasoning as robustPeakSpeed's own comment -- a
+// single physically-impossible frame shouldn't get to drag a phase's MEAN
+// speed off just because it wasn't extreme enough to be the reported peak.
+// Shared by summarizeTrackedSet's phaseStats and velocityForWindow below so
+// both mean calculations get the same protection robustPeakSpeed already
+// gives peak.
+function plausibleMean(speeds: number[]): number {
+  if (speeds.length === 0) return 0;
+  const plausible = speeds.filter((v) => v <= MAX_PLAUSIBLE_LIFT_VELOCITY_MPS);
+  const pool = plausible.length > 0 ? plausible : speeds;
+  return pool.reduce((a, b) => a + b, 0) / pool.length;
 }
 
 // Splits a continuous vertical-position trace into alternating up/down
@@ -455,7 +491,7 @@ export function summarizeTrackedSet(
   const phaseStats = phases.map((phase) => {
     const slice = speedsMps.slice(phase.startIdx, phase.endIdx + 1);
     const duration = (rawPoints[phase.endIdx].t - rawPoints[phase.startIdx].t) / 1000;
-    const mean = slice.length ? slice.reduce((a, b) => a + b, 0) / slice.length : 0;
+    const mean = plausibleMean(slice);
     // peak/peakIdx (index within the whole trace, used to report how long
     // it took to reach peak velocity, a standard VBT metric) come from
     // robustPeakSpeed rather than a raw max -- see its own comment above.
@@ -499,9 +535,14 @@ export function summarizeTrackedSet(
     const curveStride = Math.max(1, Math.floor((phase.endIdx - phase.startIdx) / 20));
     const velocityCurve: { positionCm: number; velocityMps: number }[] = [];
     for (let idx = phase.startIdx; idx <= phase.endIdx; idx += curveStride) {
+      // Clamped, not excluded -- the sticking-point chart needs one point
+      // per sampled position to stay continuous, so an implausible single
+      // frame here is capped at the ceiling rather than dropped, same
+      // "never report a physically impossible number" stance as
+      // MAX_PLAUSIBLE_LIFT_VELOCITY_MPS's other two call sites above.
       velocityCurve.push({
         positionCm: Math.round((rawPoints[idx].y - rawPoints[phase.startIdx].y) * -1000) / 10,
-        velocityMps: Math.round(speedsMps[idx] * 100) / 100,
+        velocityMps: Math.round(Math.min(speedsMps[idx], MAX_PLAUSIBLE_LIFT_VELOCITY_MPS) * 100) / 100,
       });
     }
     // The phase right before this one always alternates direction by
@@ -677,7 +718,7 @@ function velocityForWindow(
   if (startIdx === -1 || endIdx === -1 || endIdx - startIdx < 3) return null;
   const { peak } = robustPeakSpeed(speeds, startIdx, endIdx);
   const windowSpeeds = speeds.slice(startIdx, endIdx + 1);
-  const mean = windowSpeeds.reduce((a, b) => a + b, 0) / windowSpeeds.length;
+  const mean = plausibleMean(windowSpeeds);
   const confidence = confidences.slice(startIdx, endIdx + 1).reduce((a, c) => a + c, 0) / windowSpeeds.length;
   return { peak, mean, confidence };
 }
