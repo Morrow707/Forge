@@ -132,10 +132,24 @@ export function setupAuth(app: Express) {
           .status(401)
           .json({ message: info?.message || "Invalid email or password" });
       }
+      // req.login()'s callback isn't promise-aware -- it invokes this
+      // function and ignores whatever it returns, so an unhandled `await`
+      // rejection in here (a dropped DB connection, a transient query
+      // failure) never reaches Express's error middleware. Without this
+      // try/catch, that failure mode is a response that's never sent at
+      // all: the client gets a connection reset with no JSON body, which
+      // apiRequest's res.json() can't parse, falling back to an empty
+      // res.statusText (blank over HTTP/2) and finally to the generic
+      // "Login failed" toast -- indistinguishable from a wrong password,
+      // even though the credentials were correct.
       req.login(user, async (err2) => {
         if (err2) return next(err2);
-        await storage.touchUserActivity(user.id);
-        res.json(toPublicUser(user));
+        try {
+          await storage.touchUserActivity(user.id);
+          res.json(toPublicUser(user));
+        } catch (err3) {
+          next(err3);
+        }
       });
     })(req, res, next);
   });
