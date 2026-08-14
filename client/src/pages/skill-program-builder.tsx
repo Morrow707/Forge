@@ -227,7 +227,28 @@ export function SkillProgramBuilderPage({
               Back
             </Button>
             {showAssign && (
-              <Button variant="secondary" onClick={() => setAssignOpen(true)}>
+              <Button
+                variant="secondary"
+                disabled={saveMutation.isPending}
+                onClick={async () => {
+                  // AssignSkillProgramDialog's submit only sends programId to
+                  // the server, which assigns whatever the program currently
+                  // looks like IN THE DATABASE -- not whatever's on screen.
+                  // Without saving first, assigning right after editing
+                  // (a totally natural order, since the two buttons sit side
+                  // by side) would silently hand the athlete a stale or even
+                  // empty program while the coach's screen shows the days
+                  // they just built.
+                  if (editable) {
+                    try {
+                      await saveMutation.mutateAsync();
+                    } catch {
+                      return;
+                    }
+                  }
+                  setAssignOpen(true);
+                }}
+              >
                 <Send className="h-4 w-4" />
                 Assign Program
               </Button>
