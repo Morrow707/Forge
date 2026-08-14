@@ -57,6 +57,8 @@ import {
   worldVerticalSign,
   isFullBodyInFrame,
   isPlausibleHumanFrame,
+  computeHeightScaleCorrection,
+  scaleWorldLandmarks,
   assessCameraAlignment,
   usesSharedBarEquipment,
   LOWER_BODY_MOVEMENT_TYPES,
@@ -465,6 +467,20 @@ export function BarTrackerDialog({
   // PLAUSIBLE_GRIP_WIDTH_RANGE_M (see its own comment near
   // MAX_PLAUSIBLE_VELOCITY_MPS above) are ever pushed here.
   const gripWidthReadingsRef = useRef<number[]>([]);
+  // Candidate height-scale-correction readings (see computeHeightScaleCorrection's
+  // own comment), collected every readiness-check frame while the athlete
+  // stands fully visible during setup -- startTracking() takes the median of
+  // whatever accumulated here and locks it into scaleCorrectionRef for the
+  // upcoming set. Median, not the single latest reading, so one noisy frame
+  // right before Start can't set a bad correction for the whole set.
+  const heightCorrectionSamplesRef = useRef<number[]>([]);
+  // The correction actually applied this set -- null means "no correction,"
+  // either because heightIn isn't on file, no plausible reading was ever
+  // sampled, or every sampled reading fell outside the plausible band. Every
+  // consumer of worldLandmarks during tracking reads the SAME scaled copy
+  // (see the main tick's own comment), so this is the one place the
+  // correction needs to be threaded through.
+  const scaleCorrectionRef = useRef<number | null>(null);
   // Last ACCEPTED fusedLeft/fusedRight point (see isPlausibleVelocity's own
   // comment), one per side -- fusedLeft/fusedRight are recomputed fresh
   // every frame rather than accumulated into a persistent array the way
@@ -576,6 +592,8 @@ export function BarTrackerDialog({
     liveTiltHistoryRef.current = [];
     tiltReadingsRef.current = [];
     gripWidthReadingsRef.current = [];
+    heightCorrectionSamplesRef.current = [];
+    scaleCorrectionRef.current = null;
     prevFusedLeftRef.current = null;
     prevFusedRightRef.current = null;
     sideVelocitySamplesRef.current = [];
@@ -830,6 +848,14 @@ export function BarTrackerDialog({
     if (stepRef.current !== "setup") return;
 
     const bodyIn = !!landmarks && isFullBodyInFrame(landmarks);
+    // Sampled only while the athlete is confirmed standing fully visible --
+    // see computeHeightScaleCorrection's own comment. Collected continuously
+    // through the whole readiness hold rather than just once, so
+    // startTracking()'s median isn't riding on a single frame.
+    if (bodyIn && worldLandmarks) {
+      const candidate = computeHeightScaleCorrection(worldLandmarks, verticalSignRef.current, heightIn);
+      if (candidate != null) heightCorrectionSamplesRef.current.push(candidate);
+    }
     const alignment = worldLandmarks ? assessCameraAlignment(worldLandmarks) : null;
     // Kept for computeRepTrustScores at Stop -- see lastAlignmentReasonRef's
     // own comment. Only written here (setup step), never during tracking,
@@ -929,6 +955,13 @@ export function BarTrackerDialog({
     liveTiltHistoryRef.current = [];
     tiltReadingsRef.current = [];
     gripWidthReadingsRef.current = [];
+    // Locked in from whatever readiness-check samples accumulated during
+    // setup -- see heightCorrectionSamplesRef's own comment. Needs at least
+    // a handful of samples (not just one or two) before it's trusted enough
+    // to correct a whole set's worth of numbers.
+    scaleCorrectionRef.current =
+      heightCorrectionSamplesRef.current.length >= 5 ? medianOf(heightCorrectionSamplesRef.current) : null;
+    heightCorrectionSamplesRef.current = [];
     prevFusedLeftRef.current = null;
     prevFusedRightRef.current = null;
     sideVelocitySamplesRef.current = [];
@@ -1000,7 +1033,18 @@ export function BarTrackerDialog({
     // not visible" below) rather than trusted just because it's non-null.
     const rawLandmarks = detection.landmarks[0] ?? null;
     const landmarks = rawLandmarks && isPlausibleHumanFrame(rawLandmarks) ? rawLandmarks : null;
-    const worldLandmarks = landmarks ? (detection.worldLandmarks[0] ?? null) : null;
+    // Scaled once here, right off detectForVideo, so every downstream
+    // consumer within this tick (bar-point derivation, tilt, grip width,
+    // joint angles, jump ankle point -- all still just read `worldLandmarks`
+    // by name below) automatically inherits the correction with nothing
+    // else in this function needing to change. No-op (identical values)
+    // when scaleCorrectionRef.current is null -- see its own comment for
+    // when that happens.
+    const rawWorldLandmarks = landmarks ? (detection.worldLandmarks[0] ?? null) : null;
+    const worldLandmarks =
+      rawWorldLandmarks && scaleCorrectionRef.current != null
+        ? scaleWorldLandmarks(rawWorldLandmarks, scaleCorrectionRef.current)
+        : rawWorldLandmarks;
     setPoseVisible(!!landmarks);
 
     // Smoothed copies purely for what's drawn or read out live (skeleton,
@@ -1236,7 +1280,14 @@ export function BarTrackerDialog({
         const ROI_REFINE_INTERVAL = 3;
         const { landmarks: savedLandmarks, worldLandmarks: savedWorldLandmarks } =
           roiLandmarkerRef.current && roiTickCounterRef.current % ROI_REFINE_INTERVAL === 0
-            ? refineLowerBodyLandmarks(roiLandmarkerRef.current, video, landmarks, worldLandmarks, now)
+            ? refineLowerBodyLandmarks(
+                roiLandmarkerRef.current,
+                video,
+                landmarks,
+                worldLandmarks,
+                now,
+                scaleCorrectionRef.current,
+              )
             : { landmarks, worldLandmarks };
         framesRef.current.push({ t, landmarks: savedLandmarks, worldLandmarks: savedWorldLandmarks });
 

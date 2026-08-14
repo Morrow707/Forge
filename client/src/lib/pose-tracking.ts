@@ -401,6 +401,82 @@ export function tiltDegreesFromPoints(
   return 0;
 }
 
+// ---------- Automatic real-world scale calibration ----------
+// MediaPipe's worldLandmarks claim to be real-world meters, but they're
+// actually scaled by the model's own LEARNED, population-average body-
+// proportion prior -- not measured against anything in the actual scene.
+// That's the root cause behind velocity/distance numbers drifting off in
+// either direction (too fast for one athlete's setup, too slow for
+// another's): the model's "average adult" assumption is never exactly
+// right for a specific person. The athlete's real height is already on
+// file and isn't subject to that ambiguity at all -- comparing MediaPipe's
+// own implied height (read off the same landmarks, at the exact moment
+// isFullBodyInFrame already confirms they're standing fully visible before
+// a set starts) against their real height gives a direct correction ratio,
+// with no new sensor, permission, or interruption to the athlete.
+
+// Nose-to-ankle span understates true standing height by roughly the
+// nose-to-crown distance -- average adult anthropometric data puts that
+// around 11-12cm. This is an approximation, not a per-athlete measurement,
+// but the correction this feeds is itself just a nudge toward this
+// specific athlete's proportions (see MAX/MIN_PLAUSIBLE_SCALE_CORRECTION
+// below) -- it doesn't need to be exact, just close enough to meaningfully
+// improve on trusting the population-average guess outright.
+const NOSE_TO_CROWN_M = 0.12;
+
+// MediaPipe's implied standing height, in meters, from the same landmarks
+// already being read every frame -- null whenever nose or either ankle
+// isn't confidently visible (mid-squat depth, an ankle out of frame),
+// which is exactly why this is only ever sampled during the readiness
+// check's "standing fully visible" moment, not during tracking itself.
+export function computeImpliedStandingHeightM(
+  worldLandmarks: Landmark[],
+  verticalSign: 1 | -1,
+): number | null {
+  const nose = worldLandmarks[POSE_LANDMARKS.NOSE];
+  const lAnkle = worldLandmarks[POSE_LANDMARKS.LEFT_ANKLE];
+  const rAnkle = worldLandmarks[POSE_LANDMARKS.RIGHT_ANKLE];
+  if (!visible(nose) || !visible(lAnkle) || !visible(rAnkle)) return null;
+  const ankleY = (lAnkle.y + rAnkle.y) / 2;
+  const span = verticalSign * (ankleY - nose.y);
+  if (span <= 0) return null;
+  return span + NOSE_TO_CROWN_M;
+}
+
+// A correction outside this band is more likely a noisy or off-angle
+// reading than a genuine 15%+ miss on MediaPipe's own body-proportion
+// model -- in that case the caller skips correction for this session
+// entirely (falls back to exactly today's uncorrected behavior) rather
+// than risk applying a bad multiplier with false confidence. Same "don't
+// trust a number that looks wrong just because a formula produced it"
+// stance as every other plausibility gate added this round.
+const MIN_PLAUSIBLE_SCALE_CORRECTION = 0.85;
+const MAX_PLAUSIBLE_SCALE_CORRECTION = 1.15;
+
+export function computeHeightScaleCorrection(
+  worldLandmarks: Landmark[],
+  verticalSign: 1 | -1,
+  athleteHeightIn: number | null | undefined,
+): number | null {
+  if (!athleteHeightIn || athleteHeightIn <= 0) return null;
+  const impliedHeightM = computeImpliedStandingHeightM(worldLandmarks, verticalSign);
+  if (impliedHeightM == null) return null;
+  const trueHeightM = athleteHeightIn * 0.0254;
+  const factor = trueHeightM / impliedHeightM;
+  if (factor < MIN_PLAUSIBLE_SCALE_CORRECTION || factor > MAX_PLAUSIBLE_SCALE_CORRECTION) return null;
+  return factor;
+}
+
+// Applied once per frame to the raw worldLandmarks the moment they come
+// back from detectForVideo -- every downstream consumer (bar-point
+// derivation, tilt, grip width, joint angles, jump ankle point) already
+// reads worldLandmarks as its source of truth, so scaling here is the one
+// place a correction needs to happen for it to propagate through the
+// entire existing pipeline with no other call site touched.
+export function scaleWorldLandmarks(worldLandmarks: Landmark[], factor: number): Landmark[] {
+  return worldLandmarks.map((lm) => ({ ...lm, x: lm.x * factor, y: lm.y * factor, z: lm.z * factor }));
+}
+
 // Enough coverage from head to ankle that the wrist/ankle point the tracker
 // actually follows is reliably readable through a full rep -- deliberately
 // not every one of the 33 landmarks (a foot slightly out of frame shouldn't
