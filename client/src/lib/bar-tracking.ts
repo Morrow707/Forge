@@ -271,6 +271,79 @@ export function movingAverage(values: number[], window: number, weights?: number
   return out;
 }
 
+// Kalman-filtered alternative to movingAverage for the primary saved-trace
+// position signal. A moving average has no model of the bar's own motion --
+// every sample in its window is just averaged together, blind to how much
+// time actually separates them (a real problem across an occlusion gap,
+// where framesForDuration's fixed frame-count window spans a much longer,
+// unevenly-spaced stretch of wall-clock time than it does through a clean
+// run of frames). A constant-velocity Kalman filter instead predicts
+// forward from the bar's last known position+velocity using each frame's
+// actual dt, then blends that prediction against the new measurement --
+// weighted by how much this exact frame is trusted (same confidence input
+// movingAverage's weights arg takes), rather than every frame in a window
+// counting equally regardless of how good a reading it actually was.
+// Forward-pass only (not a two-pass RTS smoother) -- still applied as a
+// full post-hoc pass over the whole captured trace, same as
+// movingAverage, just processed in time order.
+export function kalmanSmooth(values: number[], times: number[], weights?: number[]): number[] {
+  if (values.length === 0) return [];
+  const out: number[] = new Array(values.length);
+  let pos = values[0];
+  let vel = 0;
+  // Covariance for state [pos, vel] -- starts wide (the first sample is a
+  // guess with no velocity information yet) and converges within a few
+  // frames once real measurements start arriving.
+  let pPos = 1;
+  let pPosVel = 0;
+  let pVel = 1;
+  out[0] = pos;
+
+  // How much the bar's velocity is allowed to drift per second ((m/s)^2 per
+  // second) -- loose enough that a rep's real direction change (the top/
+  // bottom of a rep) isn't lagged out by the model insisting on constant
+  // velocity, tight enough that frame-to-frame position jitter still gets
+  // smoothed away. Same qualitative trade-off TARGET_SMOOTHING_MS's window
+  // duration makes for movingAverage, just expressed as an acceleration
+  // variance instead of a window size.
+  const processNoise = 4;
+  // Position measurement noise (m^2) at full confidence -- roughly a 2cm
+  // standard deviation, in line with typical pose-landmark position noise
+  // in world-space meters. Scaled up (never down) as confidence drops, so a
+  // barely-trusted frame pulls the filtered position only a little rather
+  // than snapping to a misdetection the way an unweighted measurement
+  // update would.
+  const baseMeasurementNoise = 0.0004;
+
+  for (let i = 1; i < values.length; i++) {
+    const dt = Math.max((times[i] - times[i - 1]) / 1000, 1e-3);
+
+    // Predict: F = [[1, dt], [0, 1]], process noise from a discretized
+    // white-noise-acceleration model.
+    pos += vel * dt;
+    const q = processNoise;
+    const predPPos = pPos + 2 * dt * pPosVel + dt * dt * pVel + (q * dt ** 3) / 3;
+    const predPPosVel = pPosVel + dt * pVel + (q * dt * dt) / 2;
+    const predPVel = pVel + q * dt;
+
+    // Update: measurement is position only (H = [1, 0]).
+    const confidence = weights ? Math.max(weights[i], 0.001) : 1;
+    const measurementNoise = baseMeasurementNoise / confidence;
+    const innovation = values[i] - pos;
+    const s = predPPos + measurementNoise;
+    const k0 = predPPos / s;
+    const k1 = predPPosVel / s;
+    pos += k0 * innovation;
+    vel += k1 * innovation;
+    pPos = (1 - k0) * predPPos;
+    pPosVel = (1 - k0) * predPPosVel;
+    pVel = predPVel - k1 * predPPosVel;
+
+    out[i] = pos;
+  }
+  return out;
+}
+
 // Central-difference speed (pixels/second, always positive) from a smoothed
 // vertical-position trace.
 function computeSpeeds(points: TrackedPoint[], positions: number[]): number[] {
@@ -477,9 +550,9 @@ export function summarizeTrackedSet(
   if (rawPoints.length < 6) return null;
   const minRepAmplitudeCm = heightScaledAmplitudeCm(BASE_MIN_REP_AMPLITUDE_CM, heightIn);
 
-  const ySmoothed = movingAverage(
+  const ySmoothed = kalmanSmooth(
     rawPoints.map((p) => p.y),
-    framesForDuration(rawPoints, TARGET_SMOOTHING_MS),
+    rawPoints.map((p) => p.t),
     rawPoints.map((p) => p.confidence ?? 1),
   );
   const speedsMps = computeSpeeds(rawPoints, ySmoothed);
