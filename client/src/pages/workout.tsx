@@ -39,6 +39,9 @@ import {
   loadDayCache,
   queueLog,
   hasPendingLog,
+  claimDayKeyForFlush,
+  releaseDayKeyForFlush,
+  takePendingLog,
 } from "@/lib/offline-queue";
 import {
   ArrowLeft,
@@ -857,19 +860,20 @@ export function WorkoutPage({
 
   const submitMutation = useMutation({
     mutationFn: async ({
-      completed,
-      itemsSnapshot,
+      payload,
       silent,
     }: {
-      completed: boolean;
-      itemsSnapshot?: ItemState[];
+      // Already built by the caller (queueSave, or a recovered offline
+      // entry replayed as-is) rather than an itemsSnapshot -- see
+      // queueRawSave's own comment for why the queue operates at this
+      // level instead of taking itemsSnapshot/completed directly.
+      payload: ReturnType<typeof buildLogPayload>;
       // Autosaves shouldn't toast on every keystroke-adjacent save or steal
       // focus with a loading state -- only the explicit "Mark Workout
       // Complete" tap does, since that's a real state transition worth
       // confirming, not just a background save.
       silent?: boolean;
     }) => {
-      const payload = buildLogPayload(itemsSnapshot ?? items, completed);
       try {
         const res = await apiRequest("POST", `${apiBase}/log`, payload);
         return { synced: true as const, data: await res.json(), silent };
@@ -878,11 +882,11 @@ export function WorkoutPage({
         // an error same as always -- only a genuine network failure gets
         // queued for automatic retry.
         if (err instanceof ApiError) throw err;
-        queueLog(dayKey, payload);
+        queueLog(dayKey, `${apiBase}/log`, payload);
         return { synced: false as const, data: null, silent };
       }
     },
-    onSuccess: ({ synced, silent, data }, { completed }) => {
+    onSuccess: ({ synced, silent, data }, { payload }) => {
       consecutiveAutosaveFailuresRef.current = 0;
       // The offline banner needs to reflect reality regardless of which
       // save path triggered it -- only the toast and the query refetch
@@ -894,7 +898,7 @@ export function WorkoutPage({
       qc.invalidateQueries({ queryKey: [`${apiBase}/calendar`] });
       qc.invalidateQueries({ queryKey: [`${apiBase}/day`] });
       if (synced) {
-        toast.success(completed ? "Workout marked complete" : "Progress saved");
+        toast.success(payload.completed ? "Workout marked complete" : "Progress saved");
         qc.invalidateQueries({ queryKey: ["/api/athlete/trophies"] });
         for (const trophy of data?.newlyUnlockedTrophies ?? []) {
           toast.success(`🏆 New trophy: ${trophy.label}`, {
@@ -952,11 +956,11 @@ export function WorkoutPage({
   // the order they were queued, so there's never a second in-flight
   // response that could land out of turn.
   const saveInFlightRef = useRef(false);
-  const pendingSaveRef = useRef<{ completed: boolean; itemsSnapshot: ItemState[]; silent: boolean } | null>(
+  const pendingSaveRef = useRef<{ payload: ReturnType<typeof buildLogPayload>; silent: boolean } | null>(
     null,
   );
 
-  function runQueuedSave(args: { completed: boolean; itemsSnapshot: ItemState[]; silent: boolean }) {
+  function runQueuedSave(args: { payload: ReturnType<typeof buildLogPayload>; silent: boolean }) {
     saveInFlightRef.current = true;
     submitMutation.mutate(args, {
       onSettled: () => {
@@ -970,18 +974,48 @@ export function WorkoutPage({
     });
   }
 
-  // Only the most recently queued snapshot ever needs to actually reach the
-  // server -- it already reflects every earlier one's edits, since they're
-  // all just consecutive updates to the same `items` array -- so a save
-  // requested while one's in flight replaces whatever was queued rather
-  // than piling up a backlog of stale in-between snapshots to send later.
-  function queueSave(args: { completed: boolean; itemsSnapshot: ItemState[]; silent: boolean }) {
+  // Operates on an already-built payload rather than itemsSnapshot/completed
+  // directly, so a recovered offline-queued entry (see the pending-log
+  // recovery effect below) can be replayed through this SAME serialized
+  // queue -- not just this page's own edits. Only the most recently queued
+  // payload ever needs to actually reach the server -- a save requested
+  // while one's in flight replaces whatever was queued rather than piling
+  // up a backlog of stale in-between snapshots to send later.
+  function queueRawSave(args: { payload: ReturnType<typeof buildLogPayload>; silent: boolean }) {
     if (saveInFlightRef.current) {
       pendingSaveRef.current = args;
       return;
     }
     runQueuedSave(args);
   }
+
+  function queueSave(args: { completed: boolean; itemsSnapshot: ItemState[]; silent: boolean }) {
+    queueRawSave({ payload: buildLogPayload(args.itemsSnapshot, args.completed), silent: args.silent });
+  }
+
+  // Claims this day for as long as it's the one open here, and resolves any
+  // offline-queued save for it through the SAME serialized queue above
+  // (rather than the generic background flush in offline-queue.ts, which
+  // has no idea this page's queue exists and would otherwise be able to
+  // POST a stale queued snapshot concurrently with -- and possibly after --
+  // a fresher save already in flight here). Runs once now, in case a prior
+  // session left something queued for this exact day, and again on every
+  // reconnect, in case a save failed and got queued earlier in THIS
+  // session. See claimDayKeyForFlush/takePendingLog's own comments.
+  useEffect(() => {
+    claimDayKeyForFlush(dayKey);
+    function resolveOwnPendingLog() {
+      const entry = takePendingLog(dayKey);
+      if (entry) queueRawSave({ payload: entry.payload as ReturnType<typeof buildLogPayload>, silent: true });
+    }
+    resolveOwnPendingLog();
+    window.addEventListener("online", resolveOwnPendingLog);
+    return () => {
+      releaseDayKeyForFlush(dayKey);
+      window.removeEventListener("online", resolveOwnPendingLog);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dayKey]);
 
   // Debounced background save on any field edit -- weight, reps, RPE, notes,
   // camera-tracked metrics, all of it. Takes the just-computed items array
@@ -1023,10 +1057,33 @@ export function WorkoutPage({
   // reads itemsRef.current for the freshest snapshot at the moment it fires.
   useEffect(() => {
     function flush() {
-      if (typeof navigator.sendBeacon !== "function") return;
       const payload = buildLogPayload(itemsRef.current, dayCompletedRef.current);
-      const blob = new Blob([JSON.stringify(payload)], { type: "application/json" });
-      navigator.sendBeacon(`${apiBase}/log`, blob);
+      const body = JSON.stringify(payload);
+      if (typeof navigator.sendBeacon === "function") {
+        const blob = new Blob([body], { type: "application/json" });
+        if (navigator.sendBeacon(`${apiBase}/log`, blob)) return;
+        // Declined -- most likely the browser's own per-beacon size quota
+        // (commonly ~64KB), plausibly exceeded by a day with several
+        // camera-tracked sets' full path/rep-breakdown JSON already saved
+        // alongside whatever just changed. Fall through to the fetch
+        // fallback below rather than losing the save silently.
+      }
+      // fetch with keepalive survives the page tearing down the same way
+      // sendBeacon does, and is the standard fallback for a browser with no
+      // sendBeacon support at all, or one that declined this specific
+      // payload -- though in some browsers keepalive requests share the
+      // exact same total-quota pool sendBeacon draws from, so this is a
+      // real second attempt, not a guaranteed one for a payload that's
+      // already large enough to hit that shared limit. Fire-and-forget:
+      // there's nothing left to do with a rejection once the page is
+      // already tearing down.
+      fetch(`${apiBase}/log`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+        credentials: "include",
+        keepalive: true,
+      }).catch(() => {});
     }
     function handleVisibilityChange() {
       if (document.visibilityState === "hidden") flush();
