@@ -1,4 +1,5 @@
 import { TESTING_METRICS } from "@shared/testing-metrics";
+import { escapeHtml } from "./email";
 
 type RosterAthlete = {
   name: string;
@@ -32,7 +33,7 @@ export function buildProgressReportEmail(
     .slice(0, 5)
     .map(
       (pr) =>
-        `<tr><td style="padding:4px 12px 4px 0;color:#555;">${pr.exerciseName}</td><td style="padding:4px 0;font-weight:600;">${pr.weight} ${pr.unit} x ${pr.reps}</td></tr>`,
+        `<tr><td style="padding:4px 12px 4px 0;color:#555;">${escapeHtml(pr.exerciseName)}</td><td style="padding:4px 0;font-weight:600;">${pr.weight} ${pr.unit} x ${escapeHtml(pr.reps)}</td></tr>`,
     )
     .join("");
 
@@ -40,7 +41,7 @@ export function buildProgressReportEmail(
     .slice(0, 10)
     .map(
       (l) =>
-        `<tr><td style="padding:4px 12px 4px 0;color:#555;">${l.exerciseName}</td><td style="padding:4px 0;">${l.weight} ${l.unit} x ${l.reps}</td></tr>`,
+        `<tr><td style="padding:4px 12px 4px 0;color:#555;">${escapeHtml(l.exerciseName)}</td><td style="padding:4px 0;">${l.weight} ${l.unit} x ${escapeHtml(l.reps)}</td></tr>`,
     )
     .join("");
 
@@ -51,7 +52,7 @@ export function buildProgressReportEmail(
       </div>
       <div style="padding:24px;">
         <h1 style="font-size:20px;margin:0 0 4px;">Your Progress Report</h1>
-        <p style="color:#555;margin:0 0 20px;">From ${coachName}${athlete.sport ? ` &middot; ${athlete.sport}` : ""}${athlete.position ? ` &middot; ${athlete.position}` : ""}</p>
+        <p style="color:#555;margin:0 0 20px;">From ${escapeHtml(coachName)}${athlete.sport ? ` &middot; ${escapeHtml(athlete.sport)}` : ""}${athlete.position ? ` &middot; ${escapeHtml(athlete.position)}` : ""}</p>
 
         <table style="width:100%;border-collapse:collapse;margin-bottom:20px;">
           <tr>

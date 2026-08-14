@@ -1,14 +1,16 @@
 // Same plain-inline-style-HTML approach as progress-report.ts's own comment
 // explains -- no external CSS/images, so it renders consistently across mail
 // clients.
+import { escapeHtml } from "./email";
+
 export function buildWelcomeEmail(user: { name: string; role: "coach" | "athlete" | "admin" }, coachName: string | null) {
-  const firstName = user.name.split(" ")[0] || user.name;
+  const firstName = escapeHtml(user.name.split(" ")[0] || user.name);
 
   const body =
     user.role === "coach"
       ? `<p style="margin:0 0 16px;">Start by building out your <strong>exercise bank</strong>, then put together a program and assign it to your roster -- athletes' calendars stay in sync automatically with whatever you schedule.</p>`
       : coachName
-        ? `<p style="margin:0 0 16px;">You're connected with <strong>${coachName}</strong>. Whatever they assign will show up on your calendar automatically -- no extra setup needed on your end.</p>`
+        ? `<p style="margin:0 0 16px;">You're connected with <strong>${escapeHtml(coachName)}</strong>. Whatever they assign will show up on your calendar automatically -- no extra setup needed on your end.</p>`
         : `<p style="margin:0 0 16px;">You're training on your own for now, with full access to Forge's AI program builder to put together your own plan. If you join a coach later using their invite code, everything you've logged stays right where it is.</p>`;
 
   return `

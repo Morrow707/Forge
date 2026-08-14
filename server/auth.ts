@@ -166,7 +166,17 @@ export function setupAuth(app: Express) {
       const user = await storage.getUserByEmail(parsed.data.email);
       if (user) {
         const resetToken = await storage.createPasswordResetToken(user.id);
-        const resetLink = `${req.protocol}://${req.get("host")}/reset-password?token=${resetToken}`;
+        // req.protocol/req.get("host") come straight from the request's own
+        // Host header, which a caller can set to anything -- an attacker
+        // could POST here with Host: evil.com and a victim's email, and the
+        // REAL reset token would get emailed to the victim inside a link
+        // pointing at evil.com (classic Host-header password-reset
+        // poisoning). RENDER_EXTERNAL_URL is set by the platform itself,
+        // not derived from anything a client sends, so it's what production
+        // always uses; the request-derived fallback only still applies
+        // locally, where there's no attacker-facing Host header to spoof.
+        const origin = process.env.RENDER_EXTERNAL_URL ?? `${req.protocol}://${req.get("host")}`;
+        const resetLink = `${origin}/reset-password?token=${resetToken}`;
         await sendEmail({
           to: user.email,
           subject: "Reset your Forge password",
