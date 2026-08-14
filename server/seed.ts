@@ -5267,6 +5267,25 @@ async function main() {
     }
   }
 
+  // Placeholder clickwrap agreement -- only seeded if the singleton row
+  // doesn't already have real content, so an admin's own edit (via
+  // PUT /api/admin/legal-agreement) is never clobbered by a later
+  // redeploy re-running this script. Generic, honest starter language, not
+  // a substitute for actual legal review -- flagged as such inline so
+  // nobody mistakes it for a reviewed document.
+  const existingAgreement = await storage.getLegalAgreement();
+  if (existingAgreement === "No agreement has been configured yet.") {
+    await storage.updateLegalAgreement(
+      `PLACEHOLDER -- replace with your own reviewed terms before relying on this.
+
+By creating an account, you agree to use Forge to support, not replace, sound judgment about your own or your athletes' training and health. Forge's tracking, analytics, and AI-generated suggestions are informational aids for coaches and athletes; they are never a substitute for professional medical, athletic training, or coaching judgment, and nothing in the app should be treated as medical advice.
+
+You're responsible for the accuracy of what you or your athletes log, and for stopping any exercise that causes pain or feels unsafe. Coaches are responsible for appropriately supervising and modifying training for their own athletes.
+
+Forge stores the training, health-status, and performance data you provide in order to run the features you use (programming, analytics, camera-based tracking, nutrition logging). Don't enter anyone else's personal information without their permission to do so.`,
+    );
+  }
+
   console.log("Seed complete.");
   console.log("Coach login: coach@forge.app / coach123");
   console.log("Athlete login: athlete@forge.app / athlete123");

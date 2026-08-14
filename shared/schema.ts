@@ -235,6 +235,15 @@ export const users = pgTable(
     // back to their most recent workout_logs date so a genuinely active
     // athlete isn't misflagged just because this column is new.
     lastActivityAt: timestamp("last_activity_at"),
+    // Clickwrap consent record -- null for every account created before
+    // this existed (there's nothing to backfill it with) and for accounts
+    // an admin creates directly rather than through public signup. A
+    // snapshot of the EXACT text shown at the moment of signup, not a
+    // pointer to legalAgreement's current row -- the admin can edit that
+    // row later, and this must keep reading as what this specific user
+    // actually agreed to regardless of any later edit.
+    agreedToTermsAt: timestamp("agreed_to_terms_at"),
+    agreedToTermsText: text("agreed_to_terms_text"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({
@@ -2635,6 +2644,23 @@ export const sendAiKnowledgeChatMessageSchema = z.object({
 
 export type SendAiKnowledgeChatMessageInput = z.infer<typeof sendAiKnowledgeChatMessageSchema>;
 
+// Singleton row (always id 1), same pattern as aiKnowledge above -- the
+// current clickwrap agreement text every new coach/athlete must accept to
+// sign up. Admin-editable, publicly readable (has to be, since it's shown
+// on the signup page before an account exists to authenticate as). Editing
+// this never touches any existing user's own agreedToTermsText snapshot on
+// their user row -- only future signups see the new text.
+export const legalAgreement = pgTable("legal_agreement", {
+  id: integer("id").primaryKey(),
+  content: text("content").notNull().default(""),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const updateLegalAgreementSchema = z.object({
+  content: z.string().trim().min(1).max(20000),
+});
+export type UpdateLegalAgreementInput = z.infer<typeof updateLegalAgreementSchema>;
+
 export const applyKnowledgeProposalSchema = z.object({
   guidelines: z.string().trim().min(1).max(20000),
 });
@@ -3015,6 +3041,9 @@ export const signupSchema = z.object({
   role: z.enum(["coach", "athlete"]),
   coachCode: z.string().optional(),
   phone: z.string().trim().max(20).optional(),
+  agreedToTerms: z.literal(true, {
+    errorMap: () => ({ message: "You must agree to the terms to create an account" }),
+  }),
 });
 
 export const loginSchema = z.object({
@@ -3537,7 +3566,10 @@ export type ResolveSubmissionInput = z.infer<typeof resolveSubmissionSchema>;
 // healthStatus is coach-only -- deliberately excluded here so it never rides
 // along in an athlete's own login/signup/me response. Coach-facing roster
 // endpoints attach it explicitly (see getRosterForCoach).
-export type PublicUser = Omit<User, "passwordHash" | "healthStatus">;
+export type PublicUser = Omit<
+  User,
+  "passwordHash" | "healthStatus" | "agreedToTermsText"
+>;
 
 export const updateHealthStatusSchema = z.object({
   healthStatus: z.enum(["healthy", "hurt"]),

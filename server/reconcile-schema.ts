@@ -1096,6 +1096,15 @@ CREATE TABLE IF NOT EXISTS "injury_history" (
   "created_at" timestamp NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS "injury_history_athlete_idx" ON "injury_history" ("athlete_id", "occurred_on");
+
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "agreed_to_terms_at" timestamp;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "agreed_to_terms_text" text;
+
+CREATE TABLE IF NOT EXISTS "legal_agreement" (
+  "id" integer PRIMARY KEY,
+  "content" text NOT NULL DEFAULT '',
+  "updated_at" timestamp NOT NULL DEFAULT now()
+);
 `;
 
 async function main() {

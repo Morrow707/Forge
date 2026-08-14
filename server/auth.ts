@@ -19,7 +19,11 @@ import {
 const PgStore = connectPgSimple(session);
 
 function toPublicUser(user: any): PublicUser {
-  const { passwordHash, healthStatus, ...rest } = user;
+  // agreedToTermsText is a full snapshot of whatever the agreement said at
+  // signup -- potentially long, and not something any client-side UI reads,
+  // so it's stripped here the same way passwordHash/healthStatus already
+  // are rather than round-tripping on every /api/auth/me call forever.
+  const { passwordHash, healthStatus, agreedToTermsText, ...rest } = user;
   return rest;
 }
 
@@ -93,6 +97,14 @@ export function setupAuth(app: Express) {
         }
       }
 
+      // Snapshotting the server's own current agreement text here (not
+      // whatever the client might have sent) is what makes this a real
+      // clickwrap record rather than just a checked box -- signupSchema
+      // already rejects the request outright if agreedToTerms isn't
+      // exactly true, so reaching this point means they saw and accepted
+      // exactly this text.
+      const agreedToTermsText = await storage.getLegalAgreement();
+
       const passwordHash = await hashPassword(password);
       const user = await storage.createUser({
         email,
@@ -100,6 +112,8 @@ export function setupAuth(app: Express) {
         name,
         role,
         phone: phone || null,
+        agreedToTermsAt: new Date(),
+        agreedToTermsText,
       });
 
       if (coach) {

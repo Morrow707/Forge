@@ -51,6 +51,7 @@ import {
   sendSkillProgramChatMessageSchema,
   sendAiKnowledgeChatMessageSchema,
   applyKnowledgeProposalSchema,
+  updateLegalAgreementSchema,
   substituteExerciseSchema,
   formFaultSchema,
   updateNutritionTargetsSchema,
@@ -433,6 +434,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // failure.
   app.use("/uploads", (_req, res) => {
     res.status(404).json({ message: "File not found" });
+  });
+
+  // Deliberately unauthenticated -- the signup page has to show this before
+  // an account exists to log in with. See storage.getLegalAgreement for the
+  // fallback text on a fresh install that hasn't configured this yet.
+  app.get("/api/legal-agreement", async (_req, res) => {
+    const content = await storage.getLegalAgreement();
+    res.json({ content });
   });
 
   // ---------------- Public calendar subscribe feed ----------------
@@ -1685,6 +1694,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!parsed.success) return res.status(400).json({ message: "Invalid guidelines" });
     const result = await storage.applyAiKnowledgeProposal(user.id, parsed.data.guidelines);
     res.status(201).json(result);
+  });
+
+  // The clickwrap agreement every new coach/athlete accepts at signup (see
+  // GET /api/legal-agreement above and signupSchema's agreedToTerms field).
+  // A direct edit, not a propose-then-review chat flow like ai-knowledge
+  // above -- this is a plain legal document an admin writes/pastes
+  // themselves, not something an AI drafts. Never touches any existing
+  // user's own agreedToTermsText snapshot -- only future signups see the
+  // new text.
+  app.put("/api/admin/legal-agreement", requireRole("admin"), async (req, res) => {
+    const parsed = updateLegalAgreementSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const content = await storage.updateLegalAgreement(parsed.data.content);
+    res.json({ content });
   });
 
   // Same admin-teaching pattern, for the nutrition education AI
