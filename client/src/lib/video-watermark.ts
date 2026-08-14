@@ -47,7 +47,13 @@ export async function watermarkVideo(
   return new Promise((resolve, reject) => {
     const src = document.createElement("video");
     src.src = sourceUrl;
-    src.muted = false;
+    // Muted so this doesn't suddenly play the clip's audio out loud while
+    // it re-encodes in the background -- captureStream's audio track below
+    // isn't affected by the element's own mute state (the same technique
+    // trimClip in form-video-recorder-dialog.tsx already relies on), and an
+    // unmuted <video> is exactly what browser autoplay-blocking is most
+    // likely to reject play() for.
+    src.muted = true;
     src.playsInline = true;
 
     src.addEventListener(
@@ -122,7 +128,15 @@ export async function watermarkVideo(
           .then(() => {
             rafId = requestAnimationFrame(drawFrame);
           })
-          .catch(() => reject(new Error("Could not play that video to add a watermark.")));
+          .catch(() => {
+            // play() can reject (autoplay blocked, decode error, etc) after
+            // the recorder above has already started -- without stopping it
+            // here, it's left recording indefinitely in the background with
+            // nothing left able to reach it, since "ended" will never fire
+            // on a video that never played.
+            finish();
+            reject(new Error("Could not play that video to add a watermark."));
+          });
         src.addEventListener("ended", finish, { once: true });
       },
       { once: true },
