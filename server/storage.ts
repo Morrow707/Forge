@@ -9643,6 +9643,18 @@ ${catalog}`;
   },
 
   async submitWorkoutLog(athleteId: number, input: SubmitWorkoutLogInput) {
+    // The existing-log lookup below finds a row purely by
+    // (assignmentId, programDayId, date), with no athleteId in that WHERE --
+    // without this upfront check, any authenticated athlete could submit a
+    // log carrying a DIFFERENT athlete's assignmentId and this function would
+    // happily find, then delete-and-reinsert, that other athlete's real
+    // logged sets. assignmentId/programDayId are plain sequential integers,
+    // easily enumerable, so this isn't a theoretical gap. Reuses the exact
+    // ownership check getAssignmentForAthlete already does elsewhere.
+    const assignment = await db.query.assignments.findFirst({
+      where: and(eq(assignments.id, input.assignmentId), eq(assignments.athleteId, athleteId)),
+    });
+    if (!assignment) return null;
     const athlete = await db.query.users.findFirst({ where: eq(users.id, athleteId) });
     const weightUnit = athlete?.preferredWeightUnit ?? "lbs";
     // This whole save is a delete-then-reinsert of every set entry (see the

@@ -1456,6 +1456,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
     const log = await storage.submitWorkoutLog(user.id, parsed.data);
+    if (!log) return res.status(404).json({ message: "Assignment not found" });
     res.status(200).json(log);
   });
 
@@ -3167,6 +3168,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
     const log = await storage.submitWorkoutLog(user.id, parsed.data);
+    if (!log) return res.status(404).json({ message: "Assignment not found" });
     res.status(200).json(log);
   });
 
@@ -4243,6 +4245,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
     const log = await storage.submitWorkoutLog(user.id, parsed.data);
+    if (!log) return res.status(404).json({ message: "Assignment not found" });
     const legDriveFlag = await storage.evaluateLegDriveAsymmetryFlags(
       parsed.data.assignmentId,
       parsed.data.entries,
