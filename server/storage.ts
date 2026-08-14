@@ -9322,13 +9322,20 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
     const day = await db.query.skillProgramDays.findFirst({
       where: eq(skillProgramDays.id, skillProgramDayId),
       with: {
+        week: true,
         exercises: {
           orderBy: asc(skillProgramExercises.orderIndex),
           with: { skillExercise: true },
         },
       },
     });
-    if (!day) return undefined;
+    // skillProgramDayId is a plain sequential integer, global across every
+    // coach's every skill program -- without this check, an athlete's own
+    // real skillAssignmentId (verified above) plus any guessed/incremented
+    // day id would splice their own program name onto a completely
+    // different coach's drill content (names, sets/reps, video URLs), the
+    // same enumerable-id gap submitWorkoutLog was fixed for.
+    if (!day || day.week.programId !== assignment.program.id) return undefined;
 
     return {
       programName: assignment.program.name,
@@ -9373,7 +9380,13 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
         week: true,
       },
     });
-    if (!day) return undefined;
+    // programDayId is a plain sequential integer, global across every
+    // coach's every program -- without this check, an athlete's own real
+    // assignmentId (verified above) plus any guessed/incremented day id
+    // would splice their own program name onto a completely different
+    // coach's exercise prescriptions, the same enumerable-id gap
+    // submitWorkoutLog was fixed for.
+    if (!day || day.week.programId !== assignment.program.id) return undefined;
 
     const correctives = assignment.correctivesEnabled
       ? await this.getCorrectivesForAssignmentDay(assignmentId, programDayId)
@@ -9490,6 +9503,7 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
     const fail = (error: string) => ({ error });
     const assignment = await db.query.assignments.findFirst({
       where: and(eq(assignments.id, assignmentId), eq(assignments.athleteId, athleteId)),
+      with: { program: true },
     });
     if (!assignment) return fail("Couldn't find that workout anymore.");
 
@@ -9503,9 +9517,17 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
 
     const day = await db.query.programDays.findFirst({
       where: eq(programDays.id, programDayId),
-      with: { exercises: { orderBy: asc(programExercises.orderIndex), with: { exercise: true } } },
+      with: {
+        week: true,
+        exercises: { orderBy: asc(programExercises.orderIndex), with: { exercise: true } },
+      },
     });
-    if (!day) return fail("Couldn't find that workout anymore.");
+    // See getWorkoutDayDetail's own comment -- same enumerable-id gap,
+    // same fix: confirm this day actually belongs to the athlete's own
+    // assigned program before generating (and returning) anything from it.
+    if (!day || day.week.programId !== assignment.program.id) {
+      return fail("Couldn't find that workout anymore.");
+    }
 
     // Re-derive against whatever's currently shown (an already-swapped slot
     // uses its substitute here, not the original), so regenerating never
