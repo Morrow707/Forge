@@ -8,11 +8,10 @@
 // in memory. A downloaded clip ends up with both layers baked in (trail +
 // badges from here, the Forge mark from watermarking), with neither pass
 // needing to know about the other.
-import { POSE_LANDMARKS, type PoseFrame } from "./pose-tracking";
+import { MIN_VISIBILITY, POSE_LANDMARKS, type PoseFrame } from "./pose-tracking";
 import { recordedVideoType } from "./video-recording";
 
 const TRAIL_COLOR = "#f97316";
-const MIN_VISIBILITY = 0.5;
 const WRIST_INDICES = [POSE_LANDMARKS.LEFT_WRIST, POSE_LANDMARKS.RIGHT_WRIST];
 const ANKLE_INDICES = [POSE_LANDMARKS.LEFT_ANKLE, POSE_LANDMARKS.RIGHT_ANKLE];
 

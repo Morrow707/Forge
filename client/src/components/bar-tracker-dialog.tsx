@@ -62,6 +62,7 @@ import {
   assessCameraAlignment,
   usesSharedBarEquipment,
   LOWER_BODY_MOVEMENT_TYPES,
+  MIN_VISIBILITY,
   POSE_LANDMARKS,
   type PoseFrame,
   type MovementGuess,
@@ -92,7 +93,6 @@ import { apiRequest } from "@/lib/queryClient";
 
 type Step = "setup" | "tracking" | "review";
 
-const MIN_VISIBILITY = 0.5;
 const SKELETON_COLOR = "#4ade80";
 const TRAIL_COLOR = "#f97316";
 const TRAIL_MAX_POINTS = 90;
@@ -958,9 +958,19 @@ export function BarTrackerDialog({
     // Locked in from whatever readiness-check samples accumulated during
     // setup -- see heightCorrectionSamplesRef's own comment. Needs at least
     // a handful of samples (not just one or two) before it's trusted enough
-    // to correct a whole set's worth of numbers.
-    scaleCorrectionRef.current =
-      heightCorrectionSamplesRef.current.length >= 5 ? medianOf(heightCorrectionSamplesRef.current) : null;
+    // to correct a whole set's worth of numbers. Only OVERWRITES the
+    // existing correction when fresh samples cleared that bar -- retry()
+    // jumps straight from "review" back to "tracking" without ever
+    // revisiting "setup" (the only step evaluateAutoStartReadiness/
+    // previewTick run in, so the only place this buffer gets refilled), so
+    // without this guard every retried set would silently fall back to
+    // scaleCorrectionRef.current = null on a technicality of the UI flow,
+    // not because the correction actually stopped being valid -- the
+    // athlete hasn't moved between Stop and Retry, so the previous set's
+    // correction is still the best estimate available.
+    if (heightCorrectionSamplesRef.current.length >= 5) {
+      scaleCorrectionRef.current = medianOf(heightCorrectionSamplesRef.current);
+    }
     heightCorrectionSamplesRef.current = [];
     prevFusedLeftRef.current = null;
     prevFusedRightRef.current = null;
