@@ -294,69 +294,80 @@ export function ClassBuilderPage({
     return null;
   }
 
+  function buildPayload() {
+    return {
+      name,
+      description,
+      category: category.trim() || null,
+      prerequisiteClassId,
+      isDraft,
+      lessons: lessons.map((l, i) => ({
+        id: l.id,
+        lessonNumber: i + 1,
+        title: l.title,
+        description: l.description || null,
+        unlockRule: l.unlockRule,
+        unlockThreshold:
+          l.unlockRule === "immediate" || l.unlockRule === "manual"
+            ? null
+            : Number(l.unlockThreshold) || 1,
+        priceCents:
+          showPricing && l.priceDollars.trim()
+            ? Math.round(parseFloat(l.priceDollars) * 100)
+            : null,
+        exercises: l.exercises.map((ex, i2) => ({
+          skillExerciseId: ex.skillExerciseId,
+          orderIndex: i2,
+          sets: Number(ex.sets) || 1,
+          reps: ex.reps || "10",
+          restSeconds: ex.restSeconds ? Number(ex.restSeconds) : null,
+          notes: ex.notes || null,
+          trackingLevel: ex.trackingLevel,
+        })),
+        content: l.content
+          .filter((p) => p.body.trim())
+          .map((p) => ({
+            title: p.title.trim() || undefined,
+            body: p.body,
+            videoUrl: p.videoUrl.trim() || undefined,
+            imageUrls: p.imageUrlsText
+              .split("\n")
+              .map((s) => s.trim())
+              .filter(Boolean),
+            attachmentUrl: p.attachmentUrl.trim() || undefined,
+            attachmentName: p.attachmentName.trim() || undefined,
+          })),
+        quizQuestions: l.quizQuestions
+          .filter((q) => q.questionText.trim())
+          .map((q, qi) => ({
+            id: q.id,
+            orderIndex: qi,
+            questionText: q.questionText,
+            answers: q.answers
+              .filter((a) => a.answerText.trim())
+              .map((a, ai) => ({
+                id: a.id,
+                orderIndex: ai,
+                answerText: a.answerText,
+                isCorrect: a.isCorrect,
+                explanation: a.explanation,
+              })),
+          })),
+      })),
+    };
+  }
+
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const payload = {
-        name,
-        description,
-        category: category.trim() || null,
-        prerequisiteClassId,
-        isDraft,
-        lessons: lessons.map((l, i) => ({
-          id: l.id,
-          lessonNumber: i + 1,
-          title: l.title,
-          description: l.description || null,
-          unlockRule: l.unlockRule,
-          unlockThreshold:
-            l.unlockRule === "immediate" || l.unlockRule === "manual"
-              ? null
-              : Number(l.unlockThreshold) || 1,
-          priceCents:
-            showPricing && l.priceDollars.trim()
-              ? Math.round(parseFloat(l.priceDollars) * 100)
-              : null,
-          exercises: l.exercises.map((ex, i2) => ({
-            skillExerciseId: ex.skillExerciseId,
-            orderIndex: i2,
-            sets: Number(ex.sets) || 1,
-            reps: ex.reps || "10",
-            restSeconds: ex.restSeconds ? Number(ex.restSeconds) : null,
-            notes: ex.notes || null,
-            trackingLevel: ex.trackingLevel,
-          })),
-          content: l.content
-            .filter((p) => p.body.trim())
-            .map((p) => ({
-              title: p.title.trim() || undefined,
-              body: p.body,
-              videoUrl: p.videoUrl.trim() || undefined,
-              imageUrls: p.imageUrlsText
-                .split("\n")
-                .map((s) => s.trim())
-                .filter(Boolean),
-              attachmentUrl: p.attachmentUrl.trim() || undefined,
-              attachmentName: p.attachmentName.trim() || undefined,
-            })),
-          quizQuestions: l.quizQuestions
-            .filter((q) => q.questionText.trim())
-            .map((q, qi) => ({
-              id: q.id,
-              orderIndex: qi,
-              questionText: q.questionText,
-              answers: q.answers
-                .filter((a) => a.answerText.trim())
-                .map((a, ai) => ({
-                  id: a.id,
-                  orderIndex: ai,
-                  answerText: a.answerText,
-                  isCorrect: a.isCorrect,
-                  explanation: a.explanation,
-                })),
-            })),
-        })),
-      };
+      const payload = buildPayload();
       const res = await apiRequest("PUT", `${apiBase}/classes/${classId}`, payload);
+      // Recorded from exactly what was sent, not recomputed after the
+      // onSuccess hydration below -- the server can assign fresh ids to
+      // newly-added lessons/questions/answers, so a payload rebuilt from
+      // the post-hydration state would legitimately differ from what's on
+      // the server and immediately look "unsaved" again to the autosave
+      // effect below.
+      lastSavedRef.current = JSON.stringify(payload);
       return res.json();
     },
     onSuccess: (updated) => {
@@ -365,10 +376,103 @@ export function ClassBuilderPage({
       setName(state.name);
       setDescription(state.description);
       setLessons(state.lessons);
+      setAutosaveState("idle");
       toast.success("Class saved");
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not save class"),
   });
+
+  // Everything above lives purely in local state until this PUT succeeds --
+  // a page/tab that closes, crashes, or gets navigated away from before the
+  // admin explicitly hits Save Class would otherwise lose every edit since
+  // the last manual save, even though uploaded photos/video/attachments
+  // (see ContentPageRow's own upload mutations) already made it to the
+  // server as files. Debounced autosave a few seconds after the last edit
+  // handles the common case; the pagehide/visibilitychange flush below is
+  // the safety net for "closed before the debounce timer fired."
+  const lastSavedRef = useRef<string | null>(null);
+  const [autosaveState, setAutosaveState] = useState<"idle" | "pending" | "saving" | "error">(
+    "idle",
+  );
+  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const payloadRef = useRef(buildPayload());
+  payloadRef.current = buildPayload();
+  // The pagehide/visibilitychange effect below only ever runs its setup
+  // once (right after hydration, since [hydrated, editable] rarely change
+  // again) -- a bare `findQuizValidationError` reference inside it would
+  // stay pinned to THAT render's lessons forever, so the safety-net flush
+  // would keep validating against the class as it looked right after
+  // loading, not the admin's actual current edits. Kept fresh every
+  // render instead, same fix as redrawRef elsewhere in this app.
+  const findQuizValidationErrorRef = useRef(findQuizValidationError);
+  findQuizValidationErrorRef.current = findQuizValidationError;
+
+  useEffect(() => {
+    if (!hydrated || !editable) return;
+    if (lastSavedRef.current === null) {
+      // First run after hydration -- this is the freshly-loaded server
+      // state, not an edit, so it's the autosave baseline, not something
+      // to immediately re-save.
+      lastSavedRef.current = JSON.stringify(payloadRef.current);
+      return;
+    }
+    const serialized = JSON.stringify(payloadRef.current);
+    if (serialized === lastSavedRef.current) return;
+    setAutosaveState("pending");
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    autosaveTimerRef.current = setTimeout(async () => {
+      // Same atomic-whole-payload rule the manual Save Class button
+      // enforces -- silently skipped (no error toast) rather than sent,
+      // since a quiz question is routinely mid-typed and "incomplete" for
+      // long stretches of normal editing; the timer just retries on the
+      // next real edit instead of nagging on every keystroke.
+      if (findQuizValidationErrorRef.current()) return;
+      setAutosaveState("saving");
+      try {
+        const res = await apiRequest("PUT", `${apiBase}/classes/${classId}`, payloadRef.current);
+        await res.json();
+        lastSavedRef.current = JSON.stringify(payloadRef.current);
+        setAutosaveState("idle");
+      } catch {
+        setAutosaveState("error");
+      }
+    }, 3000);
+    return () => {
+      if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, editable, name, description, category, prerequisiteClassId, isDraft, lessons]);
+
+  // Last-resort flush for "closed/backgrounded before the debounce timer
+  // fired" -- sendBeacon can't do PUT, so this is a keepalive fetch
+  // instead (same fallback shape as workout.tsx's own tab-close save).
+  // Best-effort: nothing here can surface a failure to the admin, since
+  // the page is already going away.
+  useEffect(() => {
+    if (!hydrated || !editable) return;
+    function flush() {
+      const serialized = JSON.stringify(payloadRef.current);
+      if (serialized === lastSavedRef.current) return;
+      if (findQuizValidationErrorRef.current()) return;
+      fetch(`${apiBase}/classes/${classId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: serialized,
+        credentials: "include",
+        keepalive: true,
+      }).catch(() => {});
+    }
+    function onVisibilityChange() {
+      if (document.visibilityState === "hidden") flush();
+    }
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("pagehide", flush);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("pagehide", flush);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, editable]);
 
   if (isLoading || !hydrated) {
     return (
@@ -396,21 +500,34 @@ export function ClassBuilderPage({
             )}
           </div>
           {editable && (
-            <Button
-              className="w-full sm:w-auto"
-              onClick={() => {
-                const error = findQuizValidationError();
-                if (error) {
-                  toast.error(error);
-                  return;
-                }
-                saveMutation.mutate();
-              }}
-              disabled={saveMutation.isPending}
-            >
-              <Save className="h-4 w-4" />
-              {saveMutation.isPending ? "Saving…" : "Save Class"}
-            </Button>
+            <div className="flex items-center gap-2">
+              {!saveMutation.isPending && (
+                <span className="text-xs text-muted-foreground">
+                  {autosaveState === "saving"
+                    ? "Autosaving…"
+                    : autosaveState === "pending"
+                      ? "Unsaved changes"
+                      : autosaveState === "error"
+                        ? "Autosave failed -- click Save Class"
+                        : "All changes saved"}
+                </span>
+              )}
+              <Button
+                className="w-full sm:w-auto"
+                onClick={() => {
+                  const error = findQuizValidationError();
+                  if (error) {
+                    toast.error(error);
+                    return;
+                  }
+                  saveMutation.mutate();
+                }}
+                disabled={saveMutation.isPending}
+              >
+                <Save className="h-4 w-4" />
+                {saveMutation.isPending ? "Saving…" : "Save Class"}
+              </Button>
+            </div>
           )}
         </div>
       }
