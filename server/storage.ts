@@ -2147,8 +2147,10 @@ export const storage = {
     return row;
   },
 
-  async deleteGoniometerReading(id: number) {
-    await db.delete(goniometerReadings).where(eq(goniometerReadings.id, id));
+  async deleteGoniometerReading(athleteId: number, id: number) {
+    await db
+      .delete(goniometerReadings)
+      .where(and(eq(goniometerReadings.id, id), eq(goniometerReadings.athleteId, athleteId)));
   },
 
   async getGoniometerHistoryForAthlete(athleteId: number) {
