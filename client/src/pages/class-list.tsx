@@ -19,7 +19,7 @@ import { EnrollInClassDialog } from "@/components/enroll-in-class-dialog";
 import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { Plus, GraduationCap, Trash2, Users, ListOrdered, UserPlus, Search } from "lucide-react";
+import { Plus, GraduationCap, Trash2, Users, ListOrdered, UserPlus, Search, Eye, EyeOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type ClassSummary = {
@@ -117,6 +117,18 @@ export function ClassListPage({
       toast.success("Class deleted");
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not delete class"),
+  });
+
+  const publishMutation = useMutation({
+    mutationFn: async ({ id, isDraft }: { id: number; isDraft: boolean }) => {
+      const res = await apiRequest("PATCH", `${apiBase}/classes/${id}/publish`, { isDraft });
+      return res.json();
+    },
+    onSuccess: (_data, { isDraft }) => {
+      qc.invalidateQueries({ queryKey: [`${apiBase}/classes`] });
+      toast.success(isDraft ? "Unpublished -- hidden from browse and enrollment" : "Published");
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Could not update publish state"),
   });
 
   return (
@@ -230,18 +242,38 @@ export function ClassListPage({
                     {c.enrolledAthleteCount}
                   </span>
                   {c.editable !== false && (
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      aria-label={`Delete ${c.name}`}
-                      onClick={() => {
-                        if (confirm(`Delete "${c.name}"? This cannot be undone.`)) {
-                          deleteMutation.mutate(c.id);
-                        }
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
+                    <div className="flex items-center">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        aria-label={c.isDraft ? `Publish ${c.name}` : `Unpublish ${c.name}`}
+                        title={c.isDraft ? "Publish -- make visible for browse/enroll" : "Unpublish -- hide from new browse/enroll"}
+                        disabled={publishMutation.isPending}
+                        onClick={() => publishMutation.mutate({ id: c.id, isDraft: !c.isDraft })}
+                      >
+                        {c.isDraft ? (
+                          <Eye className="h-4 w-4 text-primary" />
+                        ) : (
+                          <EyeOff className="h-4 w-4 text-muted-foreground" />
+                        )}
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        aria-label={`Delete ${c.name}`}
+                        onClick={() => {
+                          const confirmText =
+                            c.enrolledAthleteCount > 0
+                              ? `"${c.name}" has ${c.enrolledAthleteCount} enrolled athlete${c.enrolledAthleteCount === 1 ? "" : "s"} -- the server will refuse this delete to protect their progress. Unpublish it instead if you don't want new signups. Try anyway?`
+                              : `Delete "${c.name}"? This cannot be undone.`;
+                          if (confirm(confirmText)) {
+                            deleteMutation.mutate(c.id);
+                          }
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
                   )}
                 </div>
                 {showEnroll && (

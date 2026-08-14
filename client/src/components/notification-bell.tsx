@@ -13,6 +13,7 @@ import {
   Zap,
   Trophy,
   HelpCircle,
+  RotateCcw,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -126,6 +127,8 @@ export function NotificationBell() {
                 <Trophy className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400" />
               ) : n.type === "class_quiz_stuck" ? (
                 <HelpCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
+              ) : n.type === "class_progress_reset" ? (
+                <RotateCcw className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
               ) : (
                 <MessageSquare className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
               )}
