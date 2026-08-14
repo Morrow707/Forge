@@ -18,6 +18,7 @@ import {
   computeRepTrustScores,
   buildPathTrace,
   interpolateOcclusionGap,
+  heightScaledAmplitudeCm,
   type TrackedPoint,
   type RepMetrics,
   type VelocitySample,
@@ -55,6 +56,7 @@ import {
   guessMovementPattern,
   worldVerticalSign,
   isFullBodyInFrame,
+  isPlausibleHumanFrame,
   assessCameraAlignment,
   usesSharedBarEquipment,
   LOWER_BODY_MOVEMENT_TYPES,
@@ -267,6 +269,23 @@ function isJumpMetrics(r: RepMetrics | JumpSetMetrics): r is JumpSetMetrics {
 // gives jump mode more headroom for.
 const MAX_PLAUSIBLE_VELOCITY_MPS = 4;
 
+// A real two-handed grip on a barbell -- narrowest close-grip bench,
+// widest wide-grip squat/deadlift -- always lands in here for an adult. A
+// single-frame reading outside it means one side's fused grip point is
+// wrong (a misdetected wrist briefly latching onto something else), not
+// that the athlete actually regripped the bar mid-rep -- excluded before it
+// can enter gripWidthReadingsRef and inflate detectFormFaults's percentile
+// spread into a multi-decimeter "grip shift" that never happened.
+const PLAUSIBLE_GRIP_WIDTH_RANGE_M: [number, number] = [0.15, 0.7];
+
+// See the live jump counter's own comment, further down, for why jump mode
+// needs a materially larger reversal size than lift mode's flat 4cm --
+// summarizeJumpSet's real per-jump floor (BASE_MIN_FLIGHT_AMPLITUDE_CM) is
+// 15cm; this stays a bit under that so the live count still responds
+// promptly to a genuine jump despite having none of that function's
+// settle/apex checks.
+const LIVE_JUMP_REVERSAL_CM = 10;
+
 function isPlausibleVelocity(
   prev: { x: number; y: number; t: number } | null,
   next: { x: number; y: number; t: number },
@@ -442,7 +461,9 @@ export function BarTrackerDialog({
   // Lateral separation between the same two fused grip points, one
   // reading per frame -- passed to detectFormFaults at Stop as
   // gripWidthReadings so a genuine mid-set regrip surfaces as its own
-  // fault (see FormFault's "grip_shift" code).
+  // fault (see FormFault's "grip_shift" code). Only readings within
+  // PLAUSIBLE_GRIP_WIDTH_RANGE_M (see its own comment near
+  // MAX_PLAUSIBLE_VELOCITY_MPS above) are ever pushed here.
   const gripWidthReadingsRef = useRef<number[]>([]);
   // Last ACCEPTED fusedLeft/fusedRight point (see isPlausibleVelocity's own
   // comment), one per side -- fusedLeft/fusedRight are recomputed fresh
@@ -768,8 +789,15 @@ export function BarTrackerDialog({
       ctx.clearRect(0, 0, overlay.width, overlay.height);
       const now = performance.now();
       const detection = landmarker.detectForVideo(video, now);
-      const landmarks = detection.landmarks[0] ?? null;
-      const worldLandmarks = detection.worldLandmarks[0] ?? null;
+      // isPlausibleHumanFrame rejects a low-confidence "person" MediaPipe
+      // occasionally reports on a strongly rectangular, loosely humanoid
+      // object in frame (a plyo box's stacked edges, a rack's hanging
+      // straps -- see its own comment) -- without this, that false
+      // detection gets drawn as a skeleton right here in the setup preview,
+      // before tracking has even started.
+      const rawLandmarks = detection.landmarks[0] ?? null;
+      const landmarks = rawLandmarks && isPlausibleHumanFrame(rawLandmarks) ? rawLandmarks : null;
+      const worldLandmarks = landmarks ? (detection.worldLandmarks[0] ?? null) : null;
       if (landmarks) {
         // Smoothed purely for the on-screen preview -- see one-euro-filter.ts.
         drawSkeleton(ctx, displaySmootherRef.current.smooth(landmarks, now), overlay.width, overlay.height);
@@ -965,8 +993,14 @@ export function BarTrackerDialog({
 
     const now = performance.now();
     const detection = landmarker.detectForVideo(video, now);
-    const landmarks = detection.landmarks[0] ?? null;
-    const worldLandmarks = detection.worldLandmarks[0] ?? null;
+    // See isPlausibleHumanFrame's own comment (and its use in the setup
+    // preview tick above) -- the same false-positive-on-an-object risk
+    // applies for every frame of an already-running set, not just once at
+    // auto-start, so this frame's detection is discarded (reads as "body
+    // not visible" below) rather than trusted just because it's non-null.
+    const rawLandmarks = detection.landmarks[0] ?? null;
+    const landmarks = rawLandmarks && isPlausibleHumanFrame(rawLandmarks) ? rawLandmarks : null;
+    const worldLandmarks = landmarks ? (detection.worldLandmarks[0] ?? null) : null;
     setPoseVisible(!!landmarks);
 
     // Smoothed copies purely for what's drawn or read out live (skeleton,
@@ -1378,7 +1412,10 @@ export function BarTrackerDialog({
         // separation instead of angle, tracked for the whole set so a
         // mid-set regrip can be caught (see FormFault's "grip_shift" code).
         if (fusedLeft && fusedRight) {
-          gripWidthReadingsRef.current.push(Math.abs(fusedRight.x - fusedLeft.x));
+          const gripWidthM = Math.abs(fusedRight.x - fusedLeft.x);
+          if (gripWidthM >= PLAUSIBLE_GRIP_WIDTH_RANGE_M[0] && gripWidthM <= PLAUSIBLE_GRIP_WIDTH_RANGE_M[1]) {
+            gripWidthReadingsRef.current.push(gripWidthM);
+          }
           // A third measurement from the same two points -- this time their
           // own midpoint's vertical position, a second independent read on
           // the bar's own height alongside the primary trace's wrist+bar
@@ -1401,19 +1438,33 @@ export function BarTrackerDialog({
           });
         }
 
-        // Cheap live rep counter: count direction reversals bigger than
-        // ~4cm, same idea as segmentPhases but incremental for the live
-        // display -- the real, precise segmentation runs once on the full
-        // trace at Stop. Display only -- this used to also auto-stop
+        // Cheap live rep counter: count direction reversals bigger than a
+        // threshold, same idea as segmentPhases but incremental for the
+        // live display -- the real, precise segmentation runs once on the
+        // full trace at Stop. Display only -- this used to also auto-stop
         // tracking once it reached targetReps, but that cheap heuristic
         // can misfire (noise counted as a rep, or a mistimed/failed rep
         // never registering), silently ending the capture and the camera
         // recording well before the set was actually done. Recording now
         // only ever ends when the athlete taps Stop themselves.
+        //
+        // Jump mode gets its own, much larger threshold rather than
+        // reusing the lift-mode one: an ordinary walking step lifts an
+        // ankle only 3-6cm, comfortably clearing the 4cm lift-mode
+        // reversal size, so counting every jump-mode step as a "jump"
+        // while the athlete simply repositions between reps was the direct
+        // cause of the live count overshooting the target (8/5, 9/5) while
+        // no jump was happening. LIVE_JUMP_REVERSAL_CM sits a little under
+        // summarizeJumpSet's own real per-jump floor (also height-scaled
+        // the same way) rather than matching it exactly -- this counter
+        // has none of the batch analysis's settle/apex checks, so it needs
+        // a bit of headroom to still register a genuine jump promptly.
+        const reversalThresholdM =
+          mode === "jump" ? heightScaledAmplitudeCm(LIVE_JUMP_REVERSAL_CM, heightIn) / 100 : 0.04;
         if (trace.length > 4) {
           const window5 = trace.slice(-5).map((p) => p.y);
           const delta = window5[window5.length - 1] - window5[0];
-          if (Math.abs(delta) > 0.04) {
+          if (Math.abs(delta) > reversalThresholdM) {
             const dir = delta > 0 ? 1 : -1;
             if (lastRepDirRef.current !== dir) {
               if (dir === -1) {

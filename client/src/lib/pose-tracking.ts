@@ -324,6 +324,20 @@ export function worldVerticalSign(worldLandmarks: Landmark[]): 1 | -1 | null {
 // generously under a full-width squat/deadlift grip, for an average adult.
 const MIN_BAR_GRIP_SEPARATION_M = 0.15;
 
+// A controlled barbell rep -- squat, deadlift, press, row -- never has the
+// bar tilted this far off horizontal while still being lifted; well past
+// this and the plates would already be scraping the floor or the bar would
+// be visibly rolling out of the grip. atan(dy/dx) is extremely sensitive
+// once dx is small (exactly the regime MIN_BAR_GRIP_SEPARATION_M's floor
+// only partially guards against -- a modest few cm of dy jitter on a dx
+// just above that floor is enough to swing the angle past 50 degrees), so a
+// reading beyond this ceiling is categorically a tracking artifact (a
+// misdetected wrist for one frame, hands read as nearly stacked from a
+// camera angle) rather than a real tilt -- rejected the same way an
+// implausible velocity reading is now excluded in bar-tracking.ts, instead
+// of being reported as the set's "worst tilt."
+const MAX_PLAUSIBLE_BAR_TILT_DEG = 30;
+
 // Signed tilt of the wrist-to-wrist LINE from horizontal, in degrees -- 0 is
 // level, positive means the right hand is lower than the left. This is the
 // same idea as an oriented bounding box around the bar (its rotation angle
@@ -380,6 +394,7 @@ export function tiltDegreesFromPoints(
   const dy = right.y - left.y;
   if (Math.abs(dx) < MIN_BAR_GRIP_SEPARATION_M) return null;
   const magnitude = Math.abs((Math.atan(dy / dx) * 180) / Math.PI);
+  if (magnitude > MAX_PLAUSIBLE_BAR_TILT_DEG) return null;
   const correctedDy = verticalSign * dy;
   if (correctedDy > 0) return magnitude;
   if (correctedDy < 0) return -magnitude;
@@ -410,6 +425,35 @@ const FULL_BODY_CHECKPOINTS = [
 // watch the preview or tap anything.
 export function isFullBodyInFrame(landmarks: NormalizedLandmark[]): boolean {
   return FULL_BODY_CHECKPOINTS.every((i) => {
+    const lm = landmarks[i];
+    return !!lm && lm.visibility >= PRESENCE_MIN_VISIBILITY;
+  });
+}
+
+// Same PRESENCE_MIN_VISIBILITY bar as isFullBodyInFrame, but over the torso
+// only (nose, shoulders, hips) rather than all 9 of its checkpoints --
+// ankles/knees legitimately drop below MIN_VISIBILITY mid-rep (the bottom
+// of a squat, a jump's flight), so holding every DURING-tracking frame to
+// isFullBodyInFrame's full standard would reject good frames along with bad
+// ones. The torso essentially never does for any framing this feature
+// supports, so it's the right bar for an ongoing "is this still actually a
+// person" check. Unlike isFullBodyInFrame (used once, to gate auto-start),
+// this runs every tracked frame: MediaPipe's pose model can occasionally
+// return a low-confidence "person" on a strongly rectangular, loosely
+// humanoid object -- a plyo box's stacked edges, a rack's hanging straps --
+// and isFullBodyInFrame's own comment already names this exact failure mode
+// for the one-time auto-start check; nothing before this caught it for
+// every frame afterward, which is how a false detection on a box mid-set
+// could get drawn as a skeleton and folded into the tracked trace.
+const TORSO_PRESENCE_CHECKPOINTS = [
+  POSE_LANDMARKS.NOSE,
+  POSE_LANDMARKS.LEFT_SHOULDER,
+  POSE_LANDMARKS.RIGHT_SHOULDER,
+  POSE_LANDMARKS.LEFT_HIP,
+  POSE_LANDMARKS.RIGHT_HIP,
+];
+export function isPlausibleHumanFrame(landmarks: NormalizedLandmark[]): boolean {
+  return TORSO_PRESENCE_CHECKPOINTS.every((i) => {
     const lm = landmarks[i];
     return !!lm && lm.visibility >= PRESENCE_MIN_VISIBILITY;
   });
