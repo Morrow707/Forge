@@ -2117,7 +2117,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const athleteId = Number(req.params.athleteId);
       const onRoster = await storage.getRosterAthleteForCoach(user.id, athleteId);
       if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
-      await storage.deleteGoniometerReading(Number(req.params.readingId));
+      await storage.deleteGoniometerReading(athleteId, Number(req.params.readingId));
       res.status(204).end();
     },
   );
