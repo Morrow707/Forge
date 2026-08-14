@@ -62,14 +62,14 @@ const VIEW_LABEL: Record<CalendarViewMode, string> = {
 function rangeFor(mode: CalendarViewMode, cursor: Date) {
   if (mode === "month") {
     return {
-      start: startOfWeek(startOfMonth(cursor), { weekStartsOn: 1 }),
-      end: endOfWeek(endOfMonth(cursor), { weekStartsOn: 1 }),
+      start: startOfWeek(startOfMonth(cursor), { weekStartsOn: 0 }),
+      end: endOfWeek(endOfMonth(cursor), { weekStartsOn: 0 }),
     };
   }
   if (mode === "week") {
     return {
-      start: startOfWeek(cursor, { weekStartsOn: 1 }),
-      end: endOfWeek(cursor, { weekStartsOn: 1 }),
+      start: startOfWeek(cursor, { weekStartsOn: 0 }),
+      end: endOfWeek(cursor, { weekStartsOn: 0 }),
     };
   }
   if (mode === "single-day") {
@@ -432,7 +432,7 @@ function MonthGrid({
   return (
     <div>
       <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-semibold uppercase text-muted-foreground sm:gap-2 sm:text-xs">
-        {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
+        {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
           <div key={d} className="py-1">
             {d}
           </div>

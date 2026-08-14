@@ -606,7 +606,7 @@ export default function CoachAnalytics() {
   );
   const faultWeekBuckets = new Map<string, { total: number; counts: Record<string, number> }>();
   for (const p of trackedPoints) {
-    const weekKey = format(startOfWeek(parseISO(p.date), { weekStartsOn: 1 }), "yyyy-MM-dd");
+    const weekKey = format(startOfWeek(parseISO(p.date), { weekStartsOn: 0 }), "yyyy-MM-dd");
     const bucket = faultWeekBuckets.get(weekKey) ?? { total: 0, counts: {} };
     bucket.total += 1;
     for (const f of p.formFaults ?? []) {
