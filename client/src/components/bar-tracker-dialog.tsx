@@ -677,7 +677,17 @@ export function BarTrackerDialog({
         });
     }
 
+    // The dialog can close (or this effect can otherwise tear down) before
+    // an in-flight getUserMedia() call resolves -- without this guard, a
+    // late-arriving stream from acquireCamera() would still get attached
+    // and left running via attachStream, orphaned, with nothing left to
+    // ever stop it since this effect's own cleanup already ran.
+    let stopped = false;
     const attachStream = (stream: MediaStream) => {
+      if (stopped) {
+        stream.getTracks().forEach((t) => t.stop());
+        return;
+      }
       streamRef.current = stream;
       if (videoRef.current) videoRef.current.srcObject = stream;
       // Soft (ideal) constraints below don't guarantee 60fps -- the device
@@ -759,6 +769,7 @@ export function BarTrackerDialog({
     window.addEventListener("deviceorientation", handleOrientation);
 
     return () => {
+      stopped = true;
       window.removeEventListener("deviceorientation", handleOrientation);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       streamRef.current?.getTracks().forEach((t) => t.stop());
