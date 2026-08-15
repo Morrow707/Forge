@@ -241,6 +241,18 @@ async function requireFreeAgent(req: any, res: any, next: any) {
   next();
 }
 
+// TestFlight-phase-only bypass -- flips every paywall below open for every
+// account, not just the specific comped demo accounts below, so real
+// testers get the full app instead of hitting an artificial paywall with no
+// way to actually pay through it yet. Nothing else about the paywalls
+// changes: every entitlement check, route, and UI locked-state stays
+// exactly what it'll be once real billing exists -- this is the one flag to
+// flip back (unset PAYWALLS_DISABLED, or set it to anything other than
+// "true") when it's time to actually enforce paywalls again. Defaults to
+// enforced (false) so forgetting to set the env var never accidentally
+// unlocks a live paid product.
+const testingUnlockAllPaywalls = process.env.PAYWALLS_DISABLED === "true";
+
 // Strength and Skills are two totally separate paid upgrades for a Free
 // Agent -- paying for one never unlocks the other. Keep this a plain union
 // (not a DB enum) since it's purely a route-gating concept, not stored data.
@@ -267,6 +279,7 @@ async function hasAthletePaidForAiAccess(
   email: string,
   entitlement: AiEntitlement,
 ): Promise<boolean> {
+  if (testingUnlockAllPaywalls) return true;
   return COMPED_FREE_AGENT_ENTITLEMENTS[email]?.has(entitlement) ?? false;
 }
 
@@ -313,6 +326,7 @@ const COMPED_COACHES_CORNER_COACHES = new Set(["coach@forge.app"]);
 // this function once real billing exists -- every route below reads
 // through it, never a role check of its own.
 function hasCoachesCornerAccess(user: { role: string; email: string }) {
+  if (testingUnlockAllPaywalls) return true;
   return user.role === "admin" || COMPED_COACHES_CORNER_COACHES.has(user.email);
 }
 
@@ -1044,7 +1058,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // No real billing exists yet (see hasCoachesCornerAccess) -- this always
   // 402s so the client's paywall UX has a real endpoint to hit, the same
   // "Payments aren't live yet" stub shape as the Class lesson-purchase route.
+  // (In practice this route is unreachable during the testingUnlockAllPaywalls
+  // window -- the client only ever shows an "Unlock" button when
+  // hasCoachesCornerAccess said no, and that already returns true for
+  // everyone in that window -- but it's gated the same way anyway so every
+  // 402 in the app answers to the one flag, not most of them.)
   app.post("/api/coach/academy/unlock", requireRole("coach"), async (_req, res) => {
+    if (testingUnlockAllPaywalls) return res.status(204).end();
     res.status(402).json({ message: "Coaches Corner isn't open for purchase yet." });
   });
 
@@ -4949,7 +4969,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = currentUser(req);
       const id = Number(req.params.id);
       const lessonId = Number(req.params.lessonId);
-      if (user.email !== COMPED_FREE_AGENT_LESSON_BUYER) {
+      if (!testingUnlockAllPaywalls && user.email !== COMPED_FREE_AGENT_LESSON_BUYER) {
         return res.status(402).json({
           message: "Lesson purchases aren't live yet -- payments are coming soon.",
           freeAgentPaywall: true,
