@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { apiRequest, getJson } from "@/lib/queryClient";
 import { getPoseLandmarker, isPlausibleHumanFrame, MIN_VISIBILITY } from "@/lib/pose-tracking";
 import { lockCameraExposure } from "@/lib/camera-exposure";
+import { ensureCameraPermission, onAppForeground } from "@/lib/native-camera";
 import {
   analyzeMechanics,
   detectMechanicsFaults,
@@ -182,37 +183,58 @@ export function MechanicsTrackerDialog({
     // (hip vs. shoulder vs. arm peak timing) benefits from 60fps more here
     // than almost anywhere else in the camera tracker.
     let cancelled = false;
-    navigator.mediaDevices
-      .getUserMedia({
-        video: {
-          facingMode: { ideal: "environment" },
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          frameRate: { ideal: 60, min: 30 },
-        },
-      })
-      .then((stream) => {
-        // The athlete can leave "capture" (or close the dialog) before this
-        // permission prompt resolves -- without this guard, a late-arriving
-        // stream would still get attached and left running, orphaned, with
-        // nothing left to ever stop it until the dialog fully closes.
-        if (cancelled) {
-          stream.getTracks().forEach((t) => t.stop());
+    const acquireCamera = () => {
+      ensureCameraPermission().then((granted) => {
+        if (cancelled) return;
+        if (!granted) {
+          setCameraError("Camera access denied -- enable it for Forge in Settings.");
           return;
         }
-        streamRef.current = stream;
-        if (videoRef.current) videoRef.current.srcObject = stream;
-        // Best-effort, Chrome/Android-only -- see lockCameraExposure's own
-        // comment. A bat swing or throw is the fastest motion this app
-        // tracks, so it's also the motion a longer auto-exposure shutter
-        // blurs hardest.
-        const videoTrack = stream.getVideoTracks()[0];
-        if (videoTrack) void lockCameraExposure(videoTrack);
-      })
-      .catch(() => setCameraError("Camera access denied or unavailable."));
+        navigator.mediaDevices
+          .getUserMedia({
+            video: {
+              facingMode: { ideal: "environment" },
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+              frameRate: { ideal: 60, min: 30 },
+            },
+          })
+          .then((stream) => {
+            // The athlete can leave "capture" (or close the dialog) before this
+            // permission prompt resolves -- without this guard, a late-arriving
+            // stream would still get attached and left running, orphaned, with
+            // nothing left to ever stop it until the dialog fully closes.
+            if (cancelled) {
+              stream.getTracks().forEach((t) => t.stop());
+              return;
+            }
+            setCameraError(null);
+            streamRef.current = stream;
+            if (videoRef.current) videoRef.current.srcObject = stream;
+            // Best-effort, Chrome/Android-only -- see lockCameraExposure's own
+            // comment. A bat swing or throw is the fastest motion this app
+            // tracks, so it's also the motion a longer auto-exposure shutter
+            // blurs hardest.
+            const videoTrack = stream.getVideoTracks()[0];
+            if (videoTrack) void lockCameraExposure(videoTrack);
+          })
+          .catch(() => setCameraError("Camera access denied or unavailable."));
+      });
+    };
+    acquireCamera();
     rafRef.current = requestAnimationFrame(tick);
+
+    // See bar-tracker-dialog.tsx's own comment on onAppForeground.
+    const unsubscribeForeground = onAppForeground(() => {
+      const stillLive = streamRef.current?.getVideoTracks().some((t) => t.readyState === "live");
+      if (stillLive) return;
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+      acquireCamera();
+    });
     return () => {
       cancelled = true;
+      unsubscribeForeground();
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       stopCamera();
     };

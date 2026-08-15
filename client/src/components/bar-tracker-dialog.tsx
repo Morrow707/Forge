@@ -25,6 +25,7 @@ import {
   type FirstPhaseHint,
 } from "@/lib/bar-tracking";
 import { lockCameraExposure } from "@/lib/camera-exposure";
+import { ensureCameraPermission, onAppForeground } from "@/lib/native-camera";
 import {
   recordConfirmedAppearance,
   getRememberedAppearance,
@@ -734,13 +735,20 @@ export function BarTrackerDialog({
       },
     };
     const acquireCamera = () => {
-      navigator.mediaDevices
-        .getUserMedia(videoOnlyConstraints)
-        .then((stream) => {
-          setCameraError(null);
-          attachStream(stream);
-        })
-        .catch(() => setCameraError("Camera access denied or unavailable."));
+      ensureCameraPermission().then((granted) => {
+        if (stopped) return;
+        if (!granted) {
+          setCameraError("Camera access denied -- enable it for Forge in Settings.");
+          return;
+        }
+        navigator.mediaDevices
+          .getUserMedia(videoOnlyConstraints)
+          .then((stream) => {
+            setCameraError(null);
+            attachStream(stream);
+          })
+          .catch(() => setCameraError("Camera access denied or unavailable."));
+      });
     };
     acquireCamera();
 
@@ -750,18 +758,19 @@ export function BarTrackerDialog({
     // home screen leaves the athlete staring at a dead, frozen/black
     // <video> with no way back into tracking short of force-quitting the
     // app. Stop whatever's left of the old stream and grab a fresh one the
-    // moment the tab is visible again -- previewTick/tick already poll
+    // moment the app is foregrounded again -- previewTick/tick already poll
     // until the video has real dimensions, so a freshly attached stream
-    // picks the preview/tracking loop back up on its own.
-    const handleVisibilityChange = () => {
-      if (document.visibilityState !== "visible") return;
+    // picks the preview/tracking loop back up on its own. onAppForeground
+    // uses the native appStateChange signal inside Capacitor (more
+    // reliable than visibilitychange there) and visibilitychange itself on
+    // web/PWA.
+    const unsubscribeForeground = onAppForeground(() => {
       const stillLive = streamRef.current?.getVideoTracks().some((t) => t.readyState === "live");
       if (stillLive) return;
       streamRef.current?.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
       acquireCamera();
-    };
-    document.addEventListener("visibilitychange", handleVisibilityChange);
+    });
 
     const handleOrientation = (e: DeviceOrientationEvent) => {
       if (e.beta != null) setTilt(Math.round(e.beta) - 90);
@@ -771,7 +780,7 @@ export function BarTrackerDialog({
     return () => {
       stopped = true;
       window.removeEventListener("deviceorientation", handleOrientation);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      unsubscribeForeground();
       streamRef.current?.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
       if (rafRef.current) cancelAnimationFrame(rafRef.current);

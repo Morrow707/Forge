@@ -1,0 +1,69 @@
+import { Capacitor } from "@capacitor/core";
+import { Camera } from "@capacitor/camera";
+import { App } from "@capacitor/app";
+
+export const isNativePlatform = () => Capacitor.isNativePlatform();
+
+/**
+ * On native iOS/Android, a bare getUserMedia() call inside WKWebView /
+ * Chrome-for-Android is the wrong place to trigger the FIRST camera
+ * permission prompt -- it's unreliable about actually surfacing the
+ * system dialog, and if it silently rejects with NotAllowedError there's
+ * no OS-level "ask again" affordance the way there is for a permission
+ * requested through a real native plugin. Routing the first request
+ * through @capacitor/camera (backed by NSCameraUsageDescription on iOS
+ * and the CAMERA manifest entry on Android -- see ios/App/App/Info.plist
+ * and android/app/src/main/AndroidManifest.xml) gets the real system
+ * prompt every time, and getUserMedia then succeeds immediately against
+ * the permission it already granted. No-op on web, where getUserMedia
+ * handles its own prompt correctly on its own.
+ */
+export async function ensureCameraPermission(): Promise<boolean> {
+  if (!isNativePlatform()) return true;
+  try {
+    const status = await Camera.checkPermissions();
+    if (status.camera === "granted" || status.camera === "limited") return true;
+    if (status.camera === "denied") return false;
+    const result = await Camera.requestPermissions({ permissions: ["camera"] });
+    return result.camera === "granted" || result.camera === "limited";
+  } catch {
+    // Plugin unavailable for some reason -- don't block camera-tracking
+    // entirely on this pre-check, let getUserMedia make its own attempt.
+    return true;
+  }
+}
+
+/**
+ * Unified "the app just came back to the foreground" signal for camera
+ * streams to reacquire themselves against. The Page Visibility API
+ * (`visibilitychange`) is what the PWA has always used and still works
+ * fine in a mobile browser tab, but inside Capacitor's native shell it's
+ * unreliable -- WKWebView can leave `document.visibilityState` stuck at
+ * "visible" through an app-switcher backgrounding that iOS itself used
+ * to suspend the camera hardware, so a stream already killed by the OS
+ * never gets detected as dead and the tracker is left staring at a
+ * frozen frame. @capacitor/app's `appStateChange` is the actual
+ * OS-level signal on native and is used there instead; the web/PWA path
+ * is untouched.
+ */
+export function onAppForeground(callback: () => void): () => void {
+  if (isNativePlatform()) {
+    let handle: { remove: () => void } | undefined;
+    let cancelled = false;
+    App.addListener("appStateChange", ({ isActive }) => {
+      if (isActive) callback();
+    }).then((h) => {
+      if (cancelled) h.remove();
+      else handle = h;
+    });
+    return () => {
+      cancelled = true;
+      handle?.remove();
+    };
+  }
+  const handler = () => {
+    if (document.visibilityState === "visible") callback();
+  };
+  document.addEventListener("visibilitychange", handler);
+  return () => document.removeEventListener("visibilitychange", handler);
+}

@@ -1,0 +1,23 @@
+default_platform(:android)
+
+# Unlike the iOS lane, this one is entirely optional -- see
+# .github/workflows/android-release.yml, which only calls this lane when a
+# GOOGLE_PLAY_JSON_KEY secret exists. Everything up through a signed,
+# installable AAB/APK happens in the workflow itself with plain Gradle and
+# needs no Google Play Developer account at all; this lane is the one extra
+# step that does need one, for pushing straight to the Play Console's
+# internal testing track instead of downloading the AAB and uploading it
+# by hand.
+platform :android do
+  desc "Upload the already-built release AAB to the Play Console's internal testing track"
+  lane :internal do
+    upload_to_play_store(
+      track: "internal",
+      aab: ENV.fetch("ANDROID_RELEASE_AAB_PATH"),
+      skip_upload_apk: true,
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+    )
+  end
+end
