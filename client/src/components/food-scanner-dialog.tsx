@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { apiRequest, getJson, ApiError } from "@/lib/queryClient";
 import { BarcodeScanner } from "@/lib/barcode-scanner";
+import { ensureCameraPermission, onAppForeground } from "@/lib/native-camera";
 import { capturePhotoFromVideo, downscalePhotoFile, type CapturedPhoto } from "@/lib/photo-capture";
 import { toast } from "sonner";
 import { Camera, Search, Pencil, Loader2, Plus, ImagePlus, Upload, X } from "lucide-react";
@@ -148,8 +149,15 @@ export function FoodScannerDialog({
       return;
     }
     let cancelled = false;
-    (async () => {
+    const acquireCamera = async () => {
       try {
+        const granted = await ensureCameraPermission();
+        if (cancelled) return;
+        if (!granted) {
+          setCameraError("Camera access denied -- enable it for Forge in Settings.");
+          setPhotoError("Camera access denied -- enable it for Forge in Settings, or upload a photo instead.");
+          return;
+        }
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: "environment" },
         });
@@ -157,6 +165,7 @@ export function FoodScannerDialog({
           stream.getTracks().forEach((t) => t.stop());
           return;
         }
+        setCameraError(null);
         sharedStreamRef.current = stream;
         setCameraStream(stream);
       } catch {
@@ -165,9 +174,21 @@ export function FoodScannerDialog({
           setPhotoError("Couldn't access the camera -- check permissions, or upload a photo instead.");
         }
       }
-    })();
+    };
+    acquireCamera();
+
+    // See bar-tracker-dialog.tsx's own comment on onAppForeground.
+    const unsubscribeForeground = onAppForeground(() => {
+      const stillLive = sharedStreamRef.current?.getVideoTracks().some((t) => t.readyState === "live");
+      if (stillLive) return;
+      sharedStreamRef.current?.getTracks().forEach((t) => t.stop());
+      sharedStreamRef.current = null;
+      setCameraStream(null);
+      acquireCamera();
+    });
     return () => {
       cancelled = true;
+      unsubscribeForeground();
       sharedStreamRef.current?.getTracks().forEach((t) => t.stop());
       sharedStreamRef.current = null;
     };

@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { recordedVideoType, videoFilenameForBlob } from "@/lib/video-recording";
 import { lockCameraExposure } from "@/lib/camera-exposure";
+import { ensureCameraPermission, onAppForeground } from "@/lib/native-camera";
 
 const MAX_SECONDS = 10;
 
@@ -157,36 +158,57 @@ export function FormVideoRecorderDialog({
     // tracked set), but a smoother capture still makes a fast movement less
     // of a blur when scrubbing the review, for the same reasons.
     let cancelled = false;
-    navigator.mediaDevices
-      .getUserMedia({
-        video: {
-          facingMode: { ideal: "environment" },
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          frameRate: { ideal: 60, min: 30 },
-        },
-      })
-      .then((stream) => {
-        // The athlete can switch to Upload mode (or close the dialog)
-        // before this permission prompt resolves -- without this guard, a
-        // late-arriving stream would still get attached and left running,
-        // orphaned, with nothing left to ever stop it until the next mode
-        // switch or dialog close.
-        if (cancelled) {
-          stream.getTracks().forEach((t) => t.stop());
+    const acquireCamera = () => {
+      ensureCameraPermission().then((granted) => {
+        if (cancelled) return;
+        if (!granted) {
+          setCameraError("Camera access denied -- enable it for Forge in Settings.");
           return;
         }
-        streamRef.current = stream;
-        if (videoRef.current) videoRef.current.srcObject = stream;
-        // Best-effort, Chrome/Android-only -- see lockCameraExposure's own
-        // comment. Same "less blur on a fast movement" reasoning as the
-        // frameRate constraint above.
-        const videoTrack = stream.getVideoTracks()[0];
-        if (videoTrack) void lockCameraExposure(videoTrack);
-      })
-      .catch(() => setCameraError("Camera access denied or unavailable."));
+        navigator.mediaDevices
+          .getUserMedia({
+            video: {
+              facingMode: { ideal: "environment" },
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+              frameRate: { ideal: 60, min: 30 },
+            },
+          })
+          .then((stream) => {
+            // The athlete can switch to Upload mode (or close the dialog)
+            // before this permission prompt resolves -- without this guard, a
+            // late-arriving stream would still get attached and left running,
+            // orphaned, with nothing left to ever stop it until the next mode
+            // switch or dialog close.
+            if (cancelled) {
+              stream.getTracks().forEach((t) => t.stop());
+              return;
+            }
+            setCameraError(null);
+            streamRef.current = stream;
+            if (videoRef.current) videoRef.current.srcObject = stream;
+            // Best-effort, Chrome/Android-only -- see lockCameraExposure's own
+            // comment. Same "less blur on a fast movement" reasoning as the
+            // frameRate constraint above.
+            const videoTrack = stream.getVideoTracks()[0];
+            if (videoTrack) void lockCameraExposure(videoTrack);
+          })
+          .catch(() => setCameraError("Camera access denied or unavailable."));
+      });
+    };
+    acquireCamera();
+
+    // See bar-tracker-dialog.tsx's own comment on onAppForeground.
+    const unsubscribeForeground = onAppForeground(() => {
+      const stillLive = streamRef.current?.getVideoTracks().some((t) => t.readyState === "live");
+      if (stillLive) return;
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+      acquireCamera();
+    });
     return () => {
       cancelled = true;
+      unsubscribeForeground();
       stopCamera();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
