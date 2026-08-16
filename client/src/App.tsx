@@ -1,9 +1,9 @@
 import { Switch, Route, Redirect, useLocation } from "wouter";
-import { QueryClientProvider } from "@tanstack/react-query";
+import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { Toaster } from "sonner";
 import { lazy, Suspense, useEffect, type ComponentType } from "react";
 import { Capacitor } from "@capacitor/core";
-import { queryClient } from "@/lib/queryClient";
+import { queryClient, persistOptions } from "@/lib/queryClient";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { BiometricLockGate } from "@/components/biometric-lock-gate";
 
@@ -19,6 +19,7 @@ import AdminLoginPage from "@/pages/admin-login";
 import SignupPage from "@/pages/signup";
 import ForgotPasswordPage from "@/pages/forgot-password";
 import ResetPasswordPage from "@/pages/reset-password";
+import LegalPage from "@/pages/legal";
 import NotFound from "@/pages/not-found";
 const ArPreviewTestPage = lazy(() => import("@/pages/dev/ar-preview-test"));
 
@@ -156,6 +157,7 @@ function Router() {
         <Route path="/signup" component={SignupPage} />
         <Route path="/forgot-password" component={ForgotPasswordPage} />
         <Route path="/reset-password" component={ResetPasswordPage} />
+        <Route path="/legal" component={LegalPage} />
         <Route path="/dev/ar-preview-test" component={ArPreviewTestPage} />
         <Route path="/coach">
           <ProtectedRoute role="coach" component={CoachDashboard} />
@@ -327,13 +329,13 @@ function Router() {
 
 export default function App() {
   return (
-    <QueryClientProvider client={queryClient}>
+    <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
       <AuthProvider>
         <BiometricLockGate>
           <Router />
           <Toaster theme="dark" position="top-right" richColors />
         </BiometricLockGate>
       </AuthProvider>
-    </QueryClientProvider>
+    </PersistQueryClientProvider>
   );
 }

@@ -67,3 +67,37 @@ export function onAppForeground(callback: () => void): () => void {
   document.addEventListener("visibilitychange", handler);
   return () => document.removeEventListener("visibilitychange", handler);
 }
+
+/**
+ * The background half of onAppForeground's pair -- every camera-tracking
+ * dialog already reacquires a fresh stream reactively once the OS gets
+ * around to suspending the old one, but that leaves a gap between the
+ * athlete backgrounding the app and iOS actually killing the camera:
+ * the hardware (and the recording indicator) stays live, any in-progress
+ * rAF tracking loop keeps burning CPU, and an active MediaRecorder keeps
+ * writing frames nobody will ever see instead of finalizing cleanly.
+ * Callers should release/stop all of that themselves the moment this
+ * fires rather than wait for the OS, then let their existing
+ * onAppForeground handler reacquire on return exactly as it does today.
+ */
+export function onAppBackground(callback: () => void): () => void {
+  if (isNativePlatform()) {
+    let handle: { remove: () => void } | undefined;
+    let cancelled = false;
+    App.addListener("appStateChange", ({ isActive }) => {
+      if (!isActive) callback();
+    }).then((h) => {
+      if (cancelled) h.remove();
+      else handle = h;
+    });
+    return () => {
+      cancelled = true;
+      handle?.remove();
+    };
+  }
+  const handler = () => {
+    if (document.visibilityState === "hidden") callback();
+  };
+  document.addEventListener("visibilitychange", handler);
+  return () => document.removeEventListener("visibilitychange", handler);
+}

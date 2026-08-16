@@ -25,7 +25,7 @@ import {
   type FirstPhaseHint,
 } from "@/lib/bar-tracking";
 import { lockCameraExposure } from "@/lib/camera-exposure";
-import { ensureCameraPermission, onAppForeground } from "@/lib/native-camera";
+import { ensureCameraPermission, onAppForeground, onAppBackground } from "@/lib/native-camera";
 import {
   recordConfirmedAppearance,
   getRememberedAppearance,
@@ -773,6 +773,25 @@ export function BarTrackerDialog({
       acquireCamera();
     });
 
+    // The reactive foreground reacquisition above works whenever iOS gets
+    // around to suspending the old stream, but proactively releasing the
+    // camera the moment the app backgrounds -- rather than waiting on the
+    // OS's own timing -- turns off the recording indicator immediately and
+    // stops a mid-set MediaRecorder from writing frames nobody will see
+    // instead of finalizing cleanly. rAF itself already stops firing once
+    // backgrounded without any help; this is only about the camera hardware
+    // and the recorder. Deliberately doesn't touch tracking/rep state or
+    // call stopTracking() -- backgrounding mid-set should pause, not end it.
+    const unsubscribeBackground = onAppBackground(() => {
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+      if (mediaRecorderRef.current?.state === "recording") mediaRecorderRef.current.stop();
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    });
+
     const handleOrientation = (e: DeviceOrientationEvent) => {
       if (e.beta != null) setTilt(Math.round(e.beta) - 90);
     };
@@ -782,6 +801,7 @@ export function BarTrackerDialog({
       stopped = true;
       window.removeEventListener("deviceorientation", handleOrientation);
       unsubscribeForeground();
+      unsubscribeBackground();
       streamRef.current?.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
       if (rafRef.current) cancelAnimationFrame(rafRef.current);

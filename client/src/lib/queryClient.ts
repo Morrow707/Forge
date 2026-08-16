@@ -1,4 +1,5 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
 
 export class ApiError extends Error {
   status: number;
@@ -106,3 +107,29 @@ export const queryClient = new QueryClient({
     },
   },
 });
+
+// Native-app twin of the day-cache/pending-log persistence offline-queue.ts
+// already does for the workout page specifically -- this covers everything
+// else React Query fetches (calendar, programs, exercise bank, roster, class
+// content...) so reopening the app offline, or on a slow connection, paints
+// the last-known screen immediately instead of a loading spinner or blank
+// state, with a real fetch still kicked off underneath per each query's own
+// staleTime. localStorage (not IndexedDB) is enough here: query results are
+// JSON metadata, not the media itself, so the volume is small.
+export const persister = createSyncStoragePersister({
+  storage: window.localStorage,
+  key: "forge-query-cache",
+});
+
+export const persistOptions = {
+  persister,
+  // Beyond this, cached data is more likely to actively mislead (a
+  // schedule/roster/program from yesterday shown as if current) than help --
+  // better to fall back to a loading state and fetch fresh.
+  maxAge: 24 * 60 * 60 * 1000,
+  // Bump this string on any change to what a cached query's data actually
+  // looks like -- restoring an old shape into new code is a worse bug than
+  // just refetching, and this is the one signal that forces that instead of
+  // silently trying to use it.
+  buster: "v1",
+};

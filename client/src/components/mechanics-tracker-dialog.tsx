@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 import { apiRequest, getJson } from "@/lib/queryClient";
 import { getPoseLandmarker, isPlausibleHumanFrame, MIN_VISIBILITY } from "@/lib/pose-tracking";
 import { lockCameraExposure } from "@/lib/camera-exposure";
-import { ensureCameraPermission, onAppForeground } from "@/lib/native-camera";
+import { ensureCameraPermission, onAppForeground, onAppBackground } from "@/lib/native-camera";
 import {
   analyzeMechanics,
   detectMechanicsFaults,
@@ -232,9 +232,19 @@ export function MechanicsTrackerDialog({
       streamRef.current = null;
       acquireCamera();
     });
+    // See bar-tracker-dialog.tsx's own comment on onAppBackground.
+    const unsubscribeBackground = onAppBackground(() => {
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+      if (recorderRef.current?.state === "recording") recorderRef.current.stop();
+      stopCamera();
+    });
     return () => {
       cancelled = true;
       unsubscribeForeground();
+      unsubscribeBackground();
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       stopCamera();
     };

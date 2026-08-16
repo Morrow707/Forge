@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 import { apiRequest, getJson } from "@/lib/queryClient";
 import { getPoseLandmarker, isPlausibleHumanFrame, MIN_VISIBILITY, POSE_LANDMARKS, type PoseFrame } from "@/lib/pose-tracking";
 import { lockCameraExposure } from "@/lib/camera-exposure";
-import { ensureCameraPermission, onAppForeground } from "@/lib/native-camera";
+import { ensureCameraPermission, onAppForeground, onAppBackground } from "@/lib/native-camera";
 import {
   deriveSprintReferencePoint,
   detectSprintCrossings,
@@ -271,9 +271,22 @@ export function SprintTrackerDialog({
       streamRef.current = null;
       acquireCamera();
     });
+    // See bar-tracker-dialog.tsx's own comment on onAppBackground -- release
+    // the camera/recorder/rAF loop immediately on backgrounding rather than
+    // waiting on the OS. Doesn't touch capture state, so a backgrounded
+    // capture just resumes once onAppForeground above reacquires.
+    const unsubscribeBackground = onAppBackground(() => {
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+      if (recorderRef.current?.state === "recording") recorderRef.current.stop();
+      stopCamera();
+    });
     return () => {
       cancelled = true;
       unsubscribeForeground();
+      unsubscribeBackground();
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       stopCamera();
     };

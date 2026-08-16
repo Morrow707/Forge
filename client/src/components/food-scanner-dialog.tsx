@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { apiRequest, getJson, ApiError } from "@/lib/queryClient";
 import { BarcodeScanner } from "@/lib/barcode-scanner";
-import { ensureCameraPermission, onAppForeground } from "@/lib/native-camera";
+import { ensureCameraPermission, onAppForeground, onAppBackground } from "@/lib/native-camera";
 import { capturePhotoFromVideo, downscalePhotoFile, type CapturedPhoto } from "@/lib/photo-capture";
 import { toast } from "sonner";
 import { Camera, Search, Pencil, Loader2, Plus, ImagePlus, Upload, X } from "lucide-react";
@@ -186,9 +186,16 @@ export function FoodScannerDialog({
       setCameraStream(null);
       acquireCamera();
     });
+    // See bar-tracker-dialog.tsx's own comment on onAppBackground.
+    const unsubscribeBackground = onAppBackground(() => {
+      sharedStreamRef.current?.getTracks().forEach((t) => t.stop());
+      sharedStreamRef.current = null;
+      setCameraStream(null);
+    });
     return () => {
       cancelled = true;
       unsubscribeForeground();
+      unsubscribeBackground();
       sharedStreamRef.current?.getTracks().forEach((t) => t.stop());
       sharedStreamRef.current = null;
     };

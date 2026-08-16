@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { recordedVideoType, videoFilenameForBlob } from "@/lib/video-recording";
 import { lockCameraExposure } from "@/lib/camera-exposure";
-import { ensureCameraPermission, onAppForeground } from "@/lib/native-camera";
+import { ensureCameraPermission, onAppForeground, onAppBackground } from "@/lib/native-camera";
 
 const MAX_SECONDS = 10;
 
@@ -206,9 +206,15 @@ export function FormVideoRecorderDialog({
       streamRef.current = null;
       acquireCamera();
     });
+    // See bar-tracker-dialog.tsx's own comment on onAppBackground.
+    const unsubscribeBackground = onAppBackground(() => {
+      if (recorderRef.current?.state === "recording") recorderRef.current.stop();
+      stopCamera();
+    });
     return () => {
       cancelled = true;
       unsubscribeForeground();
+      unsubscribeBackground();
       stopCamera();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
