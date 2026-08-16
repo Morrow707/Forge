@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { getJson } from "@/lib/queryClient";
+import { externalLinkClick } from "@/lib/open-external";
 import { Copy, CalendarDays, CalendarPlus } from "lucide-react";
 import { toast } from "sonner";
 
@@ -64,7 +65,7 @@ export function CalendarLinkDialog({
               </a>
             </Button>
             <Button type="button" variant="outline" className="w-full" asChild>
-              <a href={googleUrl} target="_blank" rel="noopener noreferrer">
+              <a href={googleUrl} target="_blank" rel="noopener noreferrer" onClick={externalLinkClick(googleUrl)}>
                 <CalendarDays className="h-4 w-4" />
                 Add to Google Calendar
               </a>

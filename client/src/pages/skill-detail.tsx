@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { externalLinkClick } from "@/lib/open-external";
 import { useParams, useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
@@ -160,6 +161,7 @@ export function SkillDetailPage({ apiBase, routeBase }: { apiBase: string; route
             href={form.videoUrl}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={externalLinkClick(form.videoUrl)}
             className="flex items-center justify-center gap-2 rounded-lg border border-dashed border-border py-6 text-sm font-semibold text-muted-foreground transition-colors hover:border-teal-500/50 hover:text-teal-400"
           >
             <Youtube className="h-5 w-5" />

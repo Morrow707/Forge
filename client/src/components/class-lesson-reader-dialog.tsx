@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { externalLinkClick } from "@/lib/open-external";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -275,6 +276,7 @@ export function ClassLessonReaderDialog({
                         href={pages[pageIndex].videoUrl!}
                         target="_blank"
                         rel="noopener noreferrer"
+                        onClick={externalLinkClick(pages[pageIndex].videoUrl!)}
                         className="flex items-center gap-2 rounded-md border border-primary/30 bg-primary/5 p-3 text-sm font-medium text-primary hover:bg-primary/10"
                       >
                         <PlayCircle className="h-5 w-5 shrink-0" />
@@ -286,6 +288,7 @@ export function ClassLessonReaderDialog({
                       href={pages[pageIndex].attachmentUrl!}
                       target="_blank"
                       rel="noopener noreferrer"
+                      onClick={externalLinkClick(pages[pageIndex].attachmentUrl!)}
                       className="flex items-center gap-2 rounded-md border border-border bg-surface-elevated p-3 text-sm font-medium hover:bg-secondary"
                     >
                       <FileDown className="h-5 w-5 shrink-0 text-primary" />
