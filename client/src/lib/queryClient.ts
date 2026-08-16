@@ -1,4 +1,4 @@
-import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { QueryCache, QueryClient, QueryFunction } from "@tanstack/react-query";
 import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
 import { Capacitor } from "@capacitor/core";
 
@@ -26,6 +26,30 @@ export function resolveApiUrl(url: string): string {
   if (!Capacitor.isNativePlatform()) return url;
   if (/^[a-z][a-z0-9+.-]*:\/\//i.test(url)) return url;
   return `${NATIVE_API_BASE_URL}${url}`;
+}
+
+// Fallback auth for native: iOS's WKWebView drops the cross-origin session
+// cookie (Apple ITP treats the real backend as third-party relative to
+// capacitor://localhost), so login/signup also hand back a signed bearer
+// token (see server/auth.ts) that's replayed as an Authorization header on
+// every subsequent native request instead. No-op on web, which never gets a
+// token in the first place and keeps using the cookie exactly as before.
+const NATIVE_TOKEN_KEY = "forge-native-token";
+
+export function getNativeToken(): string | null {
+  if (!Capacitor.isNativePlatform()) return null;
+  return window.localStorage.getItem(NATIVE_TOKEN_KEY);
+}
+
+export function setNativeToken(token: string | null | undefined): void {
+  if (!Capacitor.isNativePlatform()) return;
+  if (token) window.localStorage.setItem(NATIVE_TOKEN_KEY, token);
+  else window.localStorage.removeItem(NATIVE_TOKEN_KEY);
+}
+
+function authHeaders(): Record<string, string> {
+  const token = getNativeToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
 export class ApiError extends Error {
@@ -62,7 +86,10 @@ export async function apiRequest(
   try {
     res = await fetch(resolveApiUrl(url), {
       method,
-      headers: body && !isFormData ? { "Content-Type": "application/json" } : {},
+      headers: {
+        ...(body && !isFormData ? { "Content-Type": "application/json" } : {}),
+        ...authHeaders(),
+      },
       body: isFormData ? (body as FormData) : body ? JSON.stringify(body) : undefined,
       credentials: "include",
     });
@@ -94,7 +121,7 @@ export const getQueryFn: <T>(options?: {
     const url = queryKey.join("/") as string;
     let res: Response;
     try {
-      res = await fetch(resolveApiUrl(url), { credentials: "include" });
+      res = await fetch(resolveApiUrl(url), { credentials: "include", headers: authHeaders() });
     } catch (err) {
       const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
       throw new Error(`Request failed (GET ${url}): ${detail}`);
@@ -117,7 +144,25 @@ export const getQueryFn: <T>(options?: {
 // the default queryFn broke that: callers destructuring `data: x = []` only
 // get the default for `undefined`, not `null`, so a raced 401 crashed
 // downstream code that assumed an array.
+// Safety net for native specifically: if a query still fails after the
+// token-auth fix above, data ?? [] fallbacks throughout the app render that
+// identically to genuinely empty data -- there's no console to check on an
+// iPhone-only device, so surface the FIRST such failure directly rather than
+// let it hide silently again. Fires at most once per app launch, and skips
+// auth/me's own 401 (the normal, expected "not logged in yet" case).
+let hasAlertedQueryFailure = false;
+function alertOnFirstQueryFailure(error: unknown, queryKey: readonly unknown[]) {
+  if (!Capacitor.isNativePlatform() || hasAlertedQueryFailure) return;
+  if (queryKey[0] === "/api/auth/me") return;
+  hasAlertedQueryFailure = true;
+  const detail = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+  window.alert(`Data request failed\n${JSON.stringify(queryKey)}\n${detail}`);
+}
+
 export const queryClient = new QueryClient({
+  queryCache: new QueryCache({
+    onError: (error, query) => alertOnFirstQueryFailure(error, query.queryKey),
+  }),
   defaultOptions: {
     queries: {
       queryFn: getQueryFn(),

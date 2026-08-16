@@ -1,6 +1,6 @@
 import { createContext, useContext, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiRequest, ApiError, getQueryFn } from "@/lib/queryClient";
+import { apiRequest, ApiError, getQueryFn, setNativeToken } from "@/lib/queryClient";
 import { toast } from "sonner";
 import type { PublicUser } from "@shared/schema";
 
@@ -31,9 +31,10 @@ function useLoginMutation() {
   return useMutation({
     mutationFn: async (payload: LoginPayload) => {
       const res = await apiRequest("POST", "/api/auth/login", payload);
-      return (await res.json()) as PublicUser;
+      return (await res.json()) as PublicUser & { nativeToken?: string };
     },
-    onSuccess: (user) => {
+    onSuccess: ({ nativeToken, ...user }) => {
+      setNativeToken(nativeToken);
       qc.setQueryData(["/api/auth/me"], user);
     },
     onError: (err: ApiError) => {
@@ -47,9 +48,10 @@ function useSignupMutation() {
   return useMutation({
     mutationFn: async (payload: SignupPayload) => {
       const res = await apiRequest("POST", "/api/auth/signup", payload);
-      return (await res.json()) as PublicUser;
+      return (await res.json()) as PublicUser & { nativeToken?: string };
     },
-    onSuccess: (user) => {
+    onSuccess: ({ nativeToken, ...user }) => {
+      setNativeToken(nativeToken);
       qc.setQueryData(["/api/auth/me"], user);
     },
     onError: (err: ApiError) => {
@@ -65,6 +67,7 @@ function useLogoutMutation() {
       await apiRequest("POST", "/api/auth/logout");
     },
     onSuccess: () => {
+      setNativeToken(null);
       qc.setQueryData(["/api/auth/me"], null);
       qc.clear();
     },

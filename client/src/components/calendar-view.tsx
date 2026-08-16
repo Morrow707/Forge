@@ -596,7 +596,7 @@ function DayAgendaRow({
                             : "bg-primary/15 text-primary",
                   )}
                 >
-                  {entryIcon(e, "h-4.5 w-4.5")}
+                  {entryIcon(e, "h-[18px] w-[18px]")}
                 </div>
                 <div>
                   {e.athleteName && <p className="text-xs text-muted-foreground">{e.athleteName}</p>}

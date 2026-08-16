@@ -140,6 +140,7 @@ export default function SignupPage() {
                 <Label htmlFor="name">Full name</Label>
                 <Input
                   id="name"
+                  autoComplete="name"
                   required
                   value={name}
                   onChange={(e) => setName(e.target.value)}

@@ -1,7 +1,7 @@
 import { Capacitor } from "@capacitor/core";
 import { Filesystem, Directory } from "@capacitor/filesystem";
 import { Share } from "@capacitor/share";
-import { resolveApiUrl } from "@/lib/queryClient";
+import { resolveApiUrl, getNativeToken } from "@/lib/queryClient";
 
 function blobToBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -65,10 +65,15 @@ export async function shareOrDownloadBlob(blob: Blob, filename: string, shareTit
   URL.revokeObjectURL(objectUrl);
 }
 
-/** Fetches a same-origin URL (auth cookie goes along automatically) and
- * shares/downloads the resulting blob -- see shareOrDownloadBlob above. */
+/** Fetches a same-origin URL (auth cookie goes along automatically, plus the
+ * native bearer token on native -- see queryClient.ts) and shares/downloads
+ * the resulting blob -- see shareOrDownloadBlob above. */
 export async function shareOrDownloadFile(url: string, filename: string, shareTitle?: string) {
-  const res = await fetch(resolveApiUrl(url), { credentials: "include" });
+  const token = getNativeToken();
+  const res = await fetch(resolveApiUrl(url), {
+    credentials: "include",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
   if (!res.ok) throw new Error("Couldn't generate that file");
   const blob = await res.blob();
   await shareOrDownloadBlob(blob, filename, shareTitle);

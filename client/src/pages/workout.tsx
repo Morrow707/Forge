@@ -13,7 +13,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { apiRequest, ApiError, resolveApiUrl } from "@/lib/queryClient";
+import { apiRequest, ApiError, resolveApiUrl, getNativeToken } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { groupConsecutiveBySupersetGroup, colorForLabel } from "@/lib/supersets";
 import { ExerciseVideoThumb } from "@/components/exercise-video";
@@ -1105,9 +1105,13 @@ export function WorkoutPage({
       // already large enough to hit that shared limit. Fire-and-forget:
       // there's nothing left to do with a rejection once the page is
       // already tearing down.
+      const token = getNativeToken();
       fetch(resolveApiUrl(`${apiBase}/log`), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body,
         credentials: "include",
         keepalive: true,
