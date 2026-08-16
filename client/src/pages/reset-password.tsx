@@ -66,7 +66,7 @@ export default function ResetPasswordPage() {
                 </Button>
               </div>
             ) : (
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <form onSubmit={handleSubmit} noValidate className="space-y-4">
                 <div className="space-y-1.5">
                   <Label htmlFor="password">New password</Label>
                   <PasswordInput
