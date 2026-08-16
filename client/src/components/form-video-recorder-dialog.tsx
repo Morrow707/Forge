@@ -11,12 +11,14 @@ import {
   X,
   FolderOpen,
   Scissors,
+  Ruler,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { recordedVideoType, videoFilenameForBlob } from "@/lib/video-recording";
 import { lockCameraExposure } from "@/lib/camera-exposure";
 import { ensureCameraPermission, onAppForeground, onAppBackground } from "@/lib/native-camera";
+import { isArMeasureSupported, measureWithAR } from "@/lib/ar-measure";
 
 // Live recording has no fixed duration -- a set is as long as it takes
 // (a slow tempo squat or a higher-rep set both run well past what a fixed
@@ -119,6 +121,31 @@ export function FormVideoRecorderDialog({
   const [sourceDuration, setSourceDuration] = useState(0);
   const [trimStart, setTrimStart] = useState(0);
   const [trimming, setTrimming] = useState(false);
+
+  // LiDAR-only (see ar-measure.ts) -- most devices this runs on won't have
+  // it, so this starts false and only flips on after the async capability
+  // check resolves, rather than showing a button that's about to disappear.
+  const [arMeasureSupported, setArMeasureSupported] = useState(false);
+  const [measuring, setMeasuring] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    isArMeasureSupported().then(setArMeasureSupported);
+  }, [open]);
+
+  async function handleMeasure() {
+    setMeasuring(true);
+    try {
+      const result = await measureWithAR();
+      if (result) {
+        toast.success(`Measured: ${result.feet}' ${result.inches.toFixed(1)}" (${result.meters.toFixed(2)} m)`);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "AR measurement failed.");
+    } finally {
+      setMeasuring(false);
+    }
+  }
 
   function stopCamera() {
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -462,6 +489,12 @@ export function FormVideoRecorderDialog({
               <Button size="lg" onClick={startRecording} disabled={!!cameraError}>
                 <Circle className="h-4 w-4 fill-current" />
                 Start Recording
+              </Button>
+            )}
+            {mode === "record" && step === "capture" && !recording && arMeasureSupported && (
+              <Button size="lg" variant="outline" onClick={handleMeasure} disabled={measuring}>
+                <Ruler className="h-4 w-4" />
+                {measuring ? "Measuring…" : "Measure"}
               </Button>
             )}
             {mode === "record" && step === "capture" && recording && (
