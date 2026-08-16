@@ -37,15 +37,6 @@ function useLoginMutation() {
       qc.setQueryData(["/api/auth/me"], user);
     },
     onError: (err: ApiError) => {
-      // TEMPORARY diagnostic: a raw window.alert() bypasses sonner's toast
-      // queue/rendering entirely and can't be missed, unlike the toast
-      // below -- narrowing down a login failure on native iOS whose message
-      // hasn't changed across multiple otherwise-different app builds,
-      // which means something isn't taking effect the way it looks like it
-      // should. Remove once that's root-caused.
-      alert(
-        `name: ${err?.name}\nmessage: ${err?.message}\nstack: ${err?.stack || "(none)"}`,
-      );
       toast.error(err.message || "Login failed");
     },
   });

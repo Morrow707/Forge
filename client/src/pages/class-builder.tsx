@@ -18,7 +18,7 @@ import {
 import { SkillPickerDialog } from "@/components/skill-picker-dialog";
 import { EnrollInClassDialog } from "@/components/enroll-in-class-dialog";
 import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
-import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
+import { apiRequest, ApiError, getJson, resolveApiUrl } from "@/lib/queryClient";
 import { toast } from "sonner";
 import {
   Plus,
@@ -454,7 +454,7 @@ export function ClassBuilderPage({
       const serialized = JSON.stringify(payloadRef.current);
       if (serialized === lastSavedRef.current) return;
       if (findQuizValidationErrorRef.current()) return;
-      fetch(`${apiBase}/classes/${classId}`, {
+      fetch(resolveApiUrl(`${apiBase}/classes/${classId}`), {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: serialized,

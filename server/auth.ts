@@ -71,6 +71,17 @@ export function setupAuth(app: Express) {
         maxAge: 30 * 24 * 60 * 60 * 1000,
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
+        // The native app's WKWebView/WebView origin (capacitor://localhost,
+        // https://localhost) is never the same origin as this server, so
+        // every request it makes is cross-site -- the default "lax" cookie
+        // wouldn't be attached to those at all, which is exactly what was
+        // silently breaking login there (a cross-origin fetch back with no
+        // session cookie set, since the server never got the one from an
+        // earlier request either). "none" requires secure:true, which is
+        // already the case in production; left as "lax" in dev, where
+        // secure is off and "none" would just make browsers drop the
+        // cookie entirely instead of relaxing anything.
+        sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
       },
     }),
   );
