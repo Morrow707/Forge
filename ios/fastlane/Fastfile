@@ -32,7 +32,14 @@ platform :ios do
 
     install_provisioning_profile(path: ENV.fetch("IOS_PROVISIONING_PROFILE_PATH"))
 
-    bundle_id = ENV["IOS_BUNDLE_ID"] || "com.foreperformancesystems.forge"
+    # Plain `||` is wrong here -- GitHub Actions sets an env var to an empty
+    # string (not "unset") whenever a workflow references an optional repo
+    # variable that was never configured, and Ruby's `||` only falls back
+    # on nil/false, not "". Without this, an unset IOS_BUNDLE_ID silently
+    # set PRODUCT_BUNDLE_IDENTIFIER to "", which is exactly what produced
+    # "Bundle identifier is missing" at archive time.
+    env_bundle_id = ENV["IOS_BUNDLE_ID"]
+    bundle_id = (env_bundle_id.nil? || env_bundle_id.empty?) ? "com.foreperformancesystems.forge" : env_bundle_id
     profile_name = ENV.fetch("IOS_PROVISIONING_PROFILE_NAME")
 
     update_code_signing_settings(
