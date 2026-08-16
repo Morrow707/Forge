@@ -19,6 +19,7 @@ import {
   buildPathTrace,
   interpolateOcclusionGap,
   heightScaledAmplitudeCm,
+  estimateLiveRepVelocityMps,
   type TrackedPoint,
   type RepMetrics,
   type VelocitySample,
@@ -377,6 +378,10 @@ export function BarTrackerDialog({
   const startTimeRef = useRef<number>(0);
   const lastRepDirRef = useRef<1 | -1 | 0>(0);
   const repCountRef = useRef(0);
+  // trace index of the last rep boundary this live velocity cue spoke
+  // from -- see estimateLiveRepVelocityMps's own comment for why this
+  // reads a cheap live segment instead of the precise batch pipeline.
+  const lastRepVelocityBoundaryIdxRef = useRef(0);
   // Throttles the live movement-mismatch check (see liveMismatchHint) --
   // guessMovementPattern rescans the whole frame history each call, so this
   // runs it every MISMATCH_CHECK_INTERVAL ticks rather than every frame.
@@ -968,6 +973,7 @@ export function BarTrackerDialog({
     lastRepDirRef.current = 0;
     lastVideoTimeRef.current = -1;
     repCountRef.current = 0;
+    lastRepVelocityBoundaryIdxRef.current = 0;
     setRepCount(0);
     mismatchTickCounterRef.current = 0;
     setLiveMismatchHint(null);
@@ -1551,7 +1557,23 @@ export function BarTrackerDialog({
               if (dir === -1) {
                 repCountRef.current += 1;
                 setRepCount(repCountRef.current);
-                if (voiceEnabledRef.current) speak(String(repCountRef.current));
+                // Live velocity cue -- reads the trace since the last rep
+                // boundary rather than "just this transition," so the
+                // segment spans a full rep cycle (one up, one down) and the
+                // robust peak within it lands on the concentric peak
+                // without needing to know which half is which -- concentric
+                // is reliably the faster half for the compound lifts this
+                // targets (same reasoning summarizeTrackedSet's own
+                // concentric/eccentric split above uses). Jump mode's trace
+                // is ankle position, not bar speed, so it's excluded here.
+                let spoken = String(repCountRef.current);
+                if (mode !== "jump") {
+                  const segment = trace.slice(lastRepVelocityBoundaryIdxRef.current);
+                  const liveVelocity = estimateLiveRepVelocityMps(segment);
+                  if (liveVelocity != null) spoken += `, ${liveVelocity.toFixed(1)}`;
+                }
+                lastRepVelocityBoundaryIdxRef.current = trace.length - 1;
+                if (voiceEnabledRef.current) speak(spoken);
               }
               lastRepDirRef.current = dir;
             }
@@ -1904,7 +1926,7 @@ export function BarTrackerDialog({
               <Checkbox checked={voiceEnabled} onCheckedChange={(c) => toggleVoice(c === true)} />
               <span className="flex items-center gap-1.5">
                 {voiceEnabled ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
-                Voice rep counts &amp; end-of-set cues (off by default)
+                Voice rep counts, live bar speed &amp; end-of-set cues (off by default)
               </span>
             </label>
           </div>
