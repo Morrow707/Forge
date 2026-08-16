@@ -55,7 +55,11 @@ platform :ios do
     )
 
     build_app(
-      workspace: "App/App.xcworkspace",
+      # No .xcworkspace -- this project uses Swift Package Manager for
+      # plugin integration (see ios/App/CapApp-SPM), not CocoaPods, so
+      # there's never a generated workspace wrapping the project the way
+      # `pod install` would have produced.
+      project: "App/App.xcodeproj",
       scheme: "App",
       export_method: "app-store",
       export_options: {
