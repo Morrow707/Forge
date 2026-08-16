@@ -17,6 +17,7 @@ import "dotenv/config";
 import "express-async-errors";
 import express, { type Request, Response, NextFunction } from "express";
 import helmet from "helmet";
+import cors from "cors";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 
@@ -26,13 +27,34 @@ const app = express();
 // clips, external lesson video links) and registers its own service
 // worker (client/src/sw.ts) for push + offline; a default-on CSP or COEP
 // would need to be hand-tuned against every one of those before it's safe
-// to ship, which isn't something to guess at blind. Everything else here
-// (nosniff, frameguard, HSTS, referrer policy, etc.) is a pure hardening
-// default with no behavior change for a same-origin app like this one.
+// to ship, which isn't something to guess at blind. crossOriginResourcePolicy
+// is also off -- helmet's "same-origin" default is a separate browser-level
+// block from CORS above, and WebKit (the native app's WKWebView) is known
+// to enforce it independently, which would silently defeat the CORS
+// allowlist above for exactly the requests it exists to permit. Everything
+// else here (nosniff, frameguard, HSTS, referrer policy, etc.) is a pure
+// hardening default with no behavior change for a same-origin request.
 app.use(
   helmet({
     contentSecurityPolicy: false,
     crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: false,
+  }),
+);
+// The web deployment is same-origin with itself, so it's never subject to
+// CORS at all -- this exists purely for the native iOS/Android app, whose
+// WKWebView/WebView serves the bundled UI from capacitor://localhost or
+// https://localhost (Capacitor's own fixed default origins, never
+// user-controlled) rather than this server's own origin, making every one
+// of its API calls cross-origin. `credentials: true` is required to accept
+// the session cookie those requests carry (see cookie.sameSite below,
+// which is the other half of making that same cookie flow work
+// cross-origin in the first place).
+const NATIVE_APP_ORIGINS = ["capacitor://localhost", "https://localhost"];
+app.use(
+  cors({
+    origin: NATIVE_APP_ORIGINS,
+    credentials: true,
   }),
 );
 // Raised from Express's 100kb default -- the AI form-check route accepts a

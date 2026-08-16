@@ -1,5 +1,32 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
+import { Capacitor } from "@capacitor/core";
+
+// The web deployment serves the frontend and backend from the same origin,
+// so a relative "/api/..." path resolves correctly there on its own. A
+// native build has no such origin: the WKWebView/WebView loads the bundled
+// app shell from capacitor://localhost (iOS) or https://localhost
+// (Android), never the real server, so the exact same relative path
+// silently resolves against that local origin instead -- fetch still
+// "succeeds" against Capacitor's own scheme handler, just against the
+// wrong thing, and the caller ends up trying to JSON-parse whatever that
+// handler returned. This was the actual cause of every "The string did not
+// match the expected pattern." failure on native, not anything
+// form/validation-related -- see login.tsx's noValidate comment, which
+// was chasing the wrong theory before this was found.
+const NATIVE_API_BASE_URL = "https://forge-ebhd.onrender.com";
+
+/** Resolves a same-origin-relative path ("/api/...", "/uploads/...") to an
+ * absolute URL on native platforms; passes web/already-absolute URLs
+ * through untouched. Every fetch()/sendBeacon() call against this app's own
+ * backend -- not just the ones routed through apiRequest/getQueryFn below --
+ * needs to go through this, including the keepalive tab-close saves in
+ * workout.tsx/class-builder.tsx and share-file.ts's export fetch. */
+export function resolveApiUrl(url: string): string {
+  if (!Capacitor.isNativePlatform()) return url;
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(url)) return url;
+  return `${NATIVE_API_BASE_URL}${url}`;
+}
 
 export class ApiError extends Error {
   status: number;
@@ -33,7 +60,7 @@ export async function apiRequest(
   const isFormData = body instanceof FormData;
   let res: Response;
   try {
-    res = await fetch(url, {
+    res = await fetch(resolveApiUrl(url), {
       method,
       headers: body && !isFormData ? { "Content-Type": "application/json" } : {},
       body: isFormData ? (body as FormData) : body ? JSON.stringify(body) : undefined,
@@ -41,10 +68,7 @@ export async function apiRequest(
     });
   } catch (err) {
     // Surfacing the raw fetch()-level failure (name + message + which
-    // request) instead of letting it bubble up as-is -- on native iOS a
-    // failed fetch throws a bare TypeError with WebKit's generic message
-    // ("The string did not match the expected pattern."), which gives no
-    // hint of *what* about the request WebKit rejected.
+    // request) instead of letting it bubble up as-is.
     const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
     throw new Error(`Request failed (${method} ${url}): ${detail}`);
   }
@@ -70,7 +94,7 @@ export const getQueryFn: <T>(options?: {
     const url = queryKey.join("/") as string;
     let res: Response;
     try {
-      res = await fetch(url, { credentials: "include" });
+      res = await fetch(resolveApiUrl(url), { credentials: "include" });
     } catch (err) {
       const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
       throw new Error(`Request failed (GET ${url}): ${detail}`);

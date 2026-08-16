@@ -13,7 +13,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { apiRequest, ApiError } from "@/lib/queryClient";
+import { apiRequest, ApiError, resolveApiUrl } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { groupConsecutiveBySupersetGroup, colorForLabel } from "@/lib/supersets";
 import { ExerciseVideoThumb } from "@/components/exercise-video";
@@ -1089,7 +1089,7 @@ export function WorkoutPage({
       const body = JSON.stringify(payload);
       if (typeof navigator.sendBeacon === "function") {
         const blob = new Blob([body], { type: "application/json" });
-        if (navigator.sendBeacon(`${apiBase}/log`, blob)) return;
+        if (navigator.sendBeacon(resolveApiUrl(`${apiBase}/log`), blob)) return;
         // Declined -- most likely the browser's own per-beacon size quota
         // (commonly ~64KB), plausibly exceeded by a day with several
         // camera-tracked sets' full path/rep-breakdown JSON already saved
@@ -1105,7 +1105,7 @@ export function WorkoutPage({
       // already large enough to hit that shared limit. Fire-and-forget:
       // there's nothing left to do with a rejection once the page is
       // already tearing down.
-      fetch(`${apiBase}/log`, {
+      fetch(resolveApiUrl(`${apiBase}/log`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body,
