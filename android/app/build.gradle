@@ -13,10 +13,10 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace = "com.forgefitness.app"
+    namespace = "com.foreperformancesystems.forge"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.forgefitness.app"
+        applicationId "com.foreperformancesystems.forge"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

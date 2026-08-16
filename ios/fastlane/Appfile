@@ -3,7 +3,7 @@
 # nothing in this repo hardcodes an Apple account, team, or bundle id, so
 # the same Fastfile works before those secrets exist (it'll just fail at
 # the signing step) and after, with no code change in between.
-app_identifier(ENV["IOS_BUNDLE_ID"] || "com.forgefitness.app")
+app_identifier(ENV["IOS_BUNDLE_ID"] || "com.foreperformancesystems.forge")
 apple_id(ENV["APPLE_ID"]) if ENV["APPLE_ID"]
 team_id(ENV["APPLE_TEAM_ID"]) if ENV["APPLE_TEAM_ID"]
 itc_team_id(ENV["APP_STORE_CONNECT_TEAM_ID"]) if ENV["APP_STORE_CONNECT_TEAM_ID"]

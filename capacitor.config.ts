@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
-  appId: "com.forgefitness.app",
+  appId: "com.foreperformancesystems.forge",
   appName: "Forge",
   webDir: "dist/public",
   // Local dev convenience: point the native shell at the Vite dev server
