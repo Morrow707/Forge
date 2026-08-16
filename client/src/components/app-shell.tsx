@@ -186,7 +186,13 @@ export function AppShell({
         fitScreen && "flex flex-col md:h-screen md:overflow-hidden",
       )}
     >
-      <div className="sticky top-0 z-30 shrink-0 border-b border-border bg-surface">
+      {/* paddingTop here (not on the inner row) so the surface color itself
+          extends up under the iPhone notch/Dynamic Island instead of leaving
+          a gap -- only the content below needs pushing down, not the bar. */}
+      <div
+        className="sticky top-0 z-30 shrink-0 border-b border-border bg-surface"
+        style={{ paddingTop: "env(safe-area-inset-top)" }}
+      >
         <div className="flex items-center justify-between gap-3 px-4 py-3 md:px-8">
           <div className="flex items-center gap-2">
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">

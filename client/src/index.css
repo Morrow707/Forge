@@ -55,6 +55,11 @@
 
 html {
   color-scheme: dark;
+  /* Without this, WKWebView's native rubber-band bounce on overscroll can
+     reveal a gap above/below fixed-position bars (app header, active-workout
+     bottom nav) since those don't move with the bounce the way normal
+     scrolled content does. No effect on desktop/Android. */
+  overscroll-behavior-y: none;
 }
 
 body {

@@ -203,7 +203,10 @@ export function HandsFreeMode({ items, unit, onUpdateSet, onClose }: HandsFreeMo
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-background">
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
+      <div
+        className="flex items-center justify-between border-b border-border px-4 py-3"
+        style={{ paddingTop: "calc(0.75rem + env(safe-area-inset-top))" }}
+      >
         <span className="flex items-center gap-1.5 text-sm font-bold uppercase tracking-wide text-primary">
           <Volume2 className="h-4 w-4" />
           Hands-Free Mode
