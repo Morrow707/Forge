@@ -129,7 +129,7 @@ export default function SignupPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} noValidate className="space-y-4">
               <div className="space-y-1.5">
                 <Label htmlFor="name">Full name</Label>
                 <Input

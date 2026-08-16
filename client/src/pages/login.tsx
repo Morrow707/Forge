@@ -45,7 +45,13 @@ export default function LoginPage() {
             <CardDescription>Welcome back. Enter your credentials to continue.</CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
+            {/* noValidate: WKWebView's native HTML5 constraint-validation UI
+                (e.g. a type="email" field it considers malformed) can block
+                the submit event before handleSubmit's preventDefault ever
+                runs and surface its own ugly WebKit error text inline
+                instead of a popover -- same risk on every auth form here,
+                so submission is always handled entirely by JS/React state. */}
+            <form onSubmit={handleSubmit} noValidate className="space-y-4">
               <div className="space-y-1.5">
                 <Label htmlFor="email">Email</Label>
                 <Input
