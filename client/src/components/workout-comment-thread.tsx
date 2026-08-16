@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { externalLinkClick } from "@/lib/open-external";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -128,7 +129,13 @@ export function WorkoutCommentThread({
               </div>
               <p className="mt-0.5 whitespace-pre-wrap text-muted-foreground">{c.body}</p>
               {c.imageUrl && (
-                <a href={c.imageUrl} target="_blank" rel="noreferrer" className="mt-1 block">
+                <a
+                  href={c.imageUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={externalLinkClick(c.imageUrl)}
+                  className="mt-1 block"
+                >
                   <img
                     src={c.imageUrl}
                     alt="Coach annotation"
@@ -142,6 +149,7 @@ export function WorkoutCommentThread({
                     href={c.videoUrl}
                     target="_blank"
                     rel="noreferrer"
+                    onClick={externalLinkClick(c.videoUrl)}
                     className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
                   >
                     <Video className="h-3 w-3" /> Watch video

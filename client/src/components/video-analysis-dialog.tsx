@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { shareOrDownloadBlob } from "@/lib/share-file";
 import { Dialog, DialogContent, DialogTitle, DialogClose } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -526,13 +527,8 @@ export function VideoAnalysisDialog({
     ctx.drawImage(overlay, 0, 0, out.width, out.height);
     out.toBlob((blob) => {
       if (!blob) return;
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
       const namePart = (title ?? "frame").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
-      a.href = url;
-      a.download = `${namePart}-${Math.round(video.currentTime * 100)}.png`;
-      a.click();
-      URL.revokeObjectURL(url);
+      void shareOrDownloadBlob(blob, `${namePart}-${Math.round(video.currentTime * 100)}.png`);
     }, "image/png");
   }
 

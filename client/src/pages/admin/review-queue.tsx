@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { externalLinkClick } from "@/lib/open-external";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { AppShell } from "@/components/app-shell";
@@ -60,6 +61,7 @@ function ExerciseSummaryLine({ exercise }: { exercise: ExerciseSummary }) {
           href={exercise.videoUrl}
           target="_blank"
           rel="noopener noreferrer"
+          onClick={externalLinkClick(exercise.videoUrl)}
           className="mt-1 inline-flex items-center gap-1 text-xs text-primary hover:underline"
         >
           <Youtube className="h-3 w-3" />
@@ -149,6 +151,7 @@ export default function AdminReviewQueue() {
                       href={s.exercise.videoUrl}
                       target="_blank"
                       rel="noopener noreferrer"
+                      onClick={externalLinkClick(s.exercise.videoUrl)}
                       className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
                     >
                       <Youtube className="h-3 w-3" />
