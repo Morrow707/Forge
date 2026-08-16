@@ -338,13 +338,15 @@ export function VideoAnalysisDialog({
   }
   redrawRef.current = redraw;
 
-  // Rotating the phone (or any other viewport resize) moves and resizes the
-  // video's own centered+contained box -- without this, the canvas stays
-  // sized/positioned for wherever that box was before the rotation until
-  // some unrelated state change happens to trigger another redraw. The rAF
-  // delay lets WebKit finish its own orientation-change layout pass first;
-  // reading offsetLeft/clientWidth at the exact moment resize/
-  // orientationchange fires can catch the video's box mid-transition.
+  // Any viewport resize moves and resizes the video's own centered+contained
+  // box -- without this, the canvas stays sized/positioned for wherever that
+  // box was before the resize until some unrelated state change happens to
+  // trigger another redraw. The app is portrait-locked (see Info.plist's own
+  // comment on why device rotation isn't in play here), but this still
+  // matters for iPad's upside-down portrait and any other resize cause. The
+  // rAF delay lets WebKit finish its own layout pass first; reading
+  // offsetLeft/clientWidth at the exact moment resize/orientationchange
+  // fires can catch the video's box mid-transition.
   useEffect(() => {
     if (!open) return;
     function handleResize() {
@@ -570,10 +572,7 @@ export function VideoAnalysisDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       {/* Full-screen (matching form-video-recorder-dialog.tsx's own pattern)
           rather than a centered card -- gives the video the whole viewport
-          to work with instead of a fraction of it, and means rotating the
-          phone actually gains something: the video area is real estate that
-          grows/shrinks with the viewport, not a fixed-width box that stays
-          the same size regardless of orientation. safe-area insets on the
+          to work with instead of a fraction of it. safe-area insets on the
           header/footer keep the close button and playback controls clear of
           the notch/home indicator the same way the rest of the native app
           already accounts for them. */}
@@ -610,6 +609,14 @@ export function VideoAnalysisDialog({
               <div className="flex h-full w-full items-center justify-center">
                 <video
                   ref={videoRef}
+                  // Save Snapshot below draws this element onto a canvas --
+                  // same cross-origin WebGL/canvas taint issue and same fix
+                  // as video-pose-analysis.ts's offscreen analysis video
+                  // (see its own comment): without this, tapping Save
+                  // Snapshot throws the same "operation is insecure" error
+                  // this element was otherwise silently exempt from since
+                  // plain playback alone doesn't touch canvas/WebGL.
+                  crossOrigin="anonymous"
                   src={resolveApiUrl(videoUrl)}
                   playsInline
                   className="block h-auto max-h-full w-auto max-w-full"

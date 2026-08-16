@@ -14,12 +14,20 @@ const CREDENTIAL_DOMAIN = "forge-ebhd.onrender.com";
  * Capacitor/Cordova-style app -- so this deterministic call is what stands
  * in for that prompt. No-op on web (the plugin rejects there as
  * unimplemented; native-only gate here avoids that reject reaching a
- * caller that doesn't expect it). Best-effort: the user canceling the OS
- * save-password sheet isn't an error worth surfacing, and neither is a
- * failure here worth blocking or retrying around the login flow that
- * already succeeded before this runs.
+ * caller that doesn't expect it).
+ *
+ * Rejects (rather than silently swallowing) a failure -- this has been
+ * reported as still not saving on-device after the Associated Domains
+ * entitlement/AASA setup that should make SecAddSharedWebCredential work,
+ * and a bare .catch(() => {}) here was making that undiagnosable: iOS never
+ * shows anything for this failing (there's no visible "couldn't save"
+ * moment the way there is for a network error), so the caller surfacing
+ * this (see use-auth.tsx) is the only way to actually see what
+ * SecAddSharedWebCredential is rejecting with. Otherwise still best-effort:
+ * never blocks or retries around the login flow that already succeeded
+ * before this runs, just reports.
  */
-export function savePasswordToKeychain(username: string, password: string) {
+export async function savePasswordToKeychain(username: string, password: string): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
-  PasswordAutofill.savePassword({ domain: CREDENTIAL_DOMAIN, username, password }).catch(() => {});
+  await PasswordAutofill.savePassword({ domain: CREDENTIAL_DOMAIN, username, password });
 }

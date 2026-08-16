@@ -48,6 +48,16 @@ export async function analyzeVideoPose(
   const landmarker = await getOfflinePoseLandmarker();
 
   const video = document.createElement("video");
+  // crossOrigin must be set before src -- landmarker.detectForVideo() feeds
+  // this element into MediaPipe's WebGL pipeline as a texture, and WebKit
+  // throws a SecurityError ("The operation is insecure") uploading a texture
+  // from a cross-origin element that wasn't explicitly loaded with CORS. On
+  // native this element's src IS cross-origin (capacitor://localhost's own
+  // WebView loading a real https://forge-ebhd.onrender.com video, see
+  // resolveApiUrl's own comment below) -- "anonymous" (no cookies) is enough
+  // since /uploads is served unauthenticated, and the server's CORS
+  // allowlist already covers capacitor://localhost (see server/index.ts).
+  video.crossOrigin = "anonymous";
   // Callers pass the server-relative path as stored (formCheckVideoUrl,
   // etc.) -- on native that has to be resolved against the real backend
   // rather than the bundled capacitor://localhost origin the WebView

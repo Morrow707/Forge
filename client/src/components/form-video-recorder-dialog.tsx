@@ -2,18 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ApiError, uploadWithProgress } from "@/lib/queryClient";
-import {
-  Circle,
-  Square,
-  RotateCcw,
-  Upload,
-  AlertTriangle,
-  X,
-  FolderOpen,
-  Scissors,
-  Ruler,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Circle, Square, RotateCcw, Upload, AlertTriangle, X, Ruler } from "lucide-react";
 import { toast } from "sonner";
 import { recordedVideoType, videoFilenameForBlob } from "@/lib/video-recording";
 import { lockCameraExposure } from "@/lib/camera-exposure";
@@ -27,67 +16,12 @@ import { isArMeasureSupported, measureWithAR } from "@/lib/ar-measure";
 // growing unbounded in memory (MediaRecorder buffers the whole clip in
 // memory until stop() is called), never something a real set should hit.
 const RECORDING_SAFETY_CAP_SECONDS = 180;
-// Separate, much shorter cap for the *upload* flow -- picking an existing
-// video from the library is a different case from live recording (the
-// picked file could be an entire practice session), so this still trims it
-// down to a short, focused clip the way it always has.
-const TRIM_WINDOW_SECONDS = 10;
 
-type Mode = "record" | "upload";
-type Step = "capture" | "trim" | "preview" | "uploading";
+type Step = "capture" | "preview" | "uploading";
 
-// Re-encodes a [start, end] window of a source video into a fresh clip by
-// playing it into a captureStream() + MediaRecorder -- there's no server-side
-// video toolchain here, so this is what lets an athlete upload a longer clip
-// and only keep the TRIM_WINDOW_SECONDS window they scrubbed to. Requires
-// HTMLVideoElement.captureStream, which every mainstream mobile/desktop
-// browser has supported for several years.
-async function trimClip(sourceUrl: string, start: number, end: number): Promise<Blob> {
-  return new Promise((resolve, reject) => {
-    const src = document.createElement("video");
-    src.src = sourceUrl;
-    src.muted = true;
-    src.playsInline = true;
-
-    const capture = (src as any).captureStream ?? (src as any).mozCaptureStream;
-    if (!capture) {
-      reject(new Error(`This browser can't trim video -- pick a clip ${TRIM_WINDOW_SECONDS}s or shorter.`));
-      return;
-    }
-
-    src.addEventListener("loadedmetadata", () => {
-      src.currentTime = start;
-    });
-    src.addEventListener(
-      "seeked",
-      () => {
-        const stream: MediaStream = capture.call(src);
-        const mimeType = MediaRecorder.isTypeSupported("video/webm") ? "video/webm" : undefined;
-        const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
-        const chunks: Blob[] = [];
-        recorder.ondataavailable = (e) => {
-          if (e.data.size > 0) chunks.push(e.data);
-        };
-        recorder.onstop = () => resolve(new Blob(chunks, { type: recordedVideoType(recorder, mimeType) }));
-        recorder.onerror = () => reject(new Error("Trim failed -- try again."));
-        recorder.start();
-        src.play().catch(() => {});
-        window.setTimeout(
-          () => {
-            src.pause();
-            recorder.stop();
-          },
-          Math.max(200, (end - start) * 1000),
-        );
-      },
-      { once: true },
-    );
-    src.addEventListener("error", () => reject(new Error("Could not load that video file.")));
-  });
-}
-
-// Full-screen video capture: record on-device or upload an existing clip,
-// trimmed to 10 seconds max. Nothing is uploaded to the server until the
+// Full-screen video capture: record on-device only -- no picking an
+// existing clip from the library, an athlete's form-check video is always
+// filmed fresh in the moment. Nothing is uploaded to the server until the
 // athlete explicitly taps Save -- a discarded or abandoned clip never
 // leaves the browser.
 export function FormVideoRecorderDialog({
@@ -100,14 +34,11 @@ export function FormVideoRecorderDialog({
   onSaved: (url: string) => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const scrubVideoRef = useRef<HTMLVideoElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<number | null>(null);
 
-  const [mode, setMode] = useState<Mode>("record");
   const [step, setStep] = useState<Step>("capture");
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
@@ -115,12 +46,6 @@ export function FormVideoRecorderDialog({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [blob, setBlob] = useState<Blob | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
-
-  // Upload + trim state
-  const [sourceUrl, setSourceUrl] = useState<string | null>(null);
-  const [sourceDuration, setSourceDuration] = useState(0);
-  const [trimStart, setTrimStart] = useState(0);
-  const [trimming, setTrimming] = useState(false);
 
   // LiDAR-only (see ar-measure.ts) -- most devices this runs on won't have
   // it, so this starts false and only flips on after the async capability
@@ -160,16 +85,11 @@ export function FormVideoRecorderDialog({
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(null);
     setBlob(null);
-    if (sourceUrl) URL.revokeObjectURL(sourceUrl);
-    setSourceUrl(null);
-    setSourceDuration(0);
-    setTrimStart(0);
     chunksRef.current = [];
   }
 
   useEffect(() => {
     if (!open) return;
-    setMode("record");
     resetAll();
     return () => {
       stopCamera();
@@ -179,7 +99,7 @@ export function FormVideoRecorderDialog({
   }, [open]);
 
   useEffect(() => {
-    if (!open || mode !== "record" || step !== "capture") {
+    if (!open || step !== "capture") {
       stopCamera();
       return;
     }
@@ -191,11 +111,14 @@ export function FormVideoRecorderDialog({
     // losing its own audio track costs less than muting music on every
     // single recording.
     //
-    // ideal, not exact -- see bar-tracker-dialog.tsx's own comment on this
-    // same constraint shape. This recorder has no live math riding on frame
-    // rate (it's a plain saved clip for a coach to watch back later, not a
-    // tracked set), but a smoother capture still makes a fast movement less
-    // of a blur when scrubbing the review, for the same reasons.
+    // Recorded in portrait -- the athlete is filming themselves standing in
+    // front of the phone, virtually always held upright, and requesting a
+    // landscape-shaped ideal here (as this used to) meant the encoded clip's
+    // own intrinsic dimensions didn't match how it was actually framed,
+    // which is what caused the video to render squished/sideways in some
+    // playback contexts downstream (see video-analysis-dialog.tsx and
+    // set-video-review.tsx). ideal, not exact -- see bar-tracker-dialog.tsx's
+    // own comment on this same constraint shape.
     let cancelled = false;
     const acquireCamera = () => {
       ensureCameraPermission().then((granted) => {
@@ -208,17 +131,16 @@ export function FormVideoRecorderDialog({
           .getUserMedia({
             video: {
               facingMode: { ideal: "environment" },
-              width: { ideal: 1280 },
-              height: { ideal: 720 },
+              width: { ideal: 720 },
+              height: { ideal: 1280 },
               frameRate: { ideal: 60, min: 30 },
             },
           })
           .then((stream) => {
-            // The athlete can switch to Upload mode (or close the dialog)
-            // before this permission prompt resolves -- without this guard, a
-            // late-arriving stream would still get attached and left running,
-            // orphaned, with nothing left to ever stop it until the next mode
-            // switch or dialog close.
+            // The athlete can close the dialog before this permission prompt
+            // resolves -- without this guard, a late-arriving stream would
+            // still get attached and left running, orphaned, with nothing
+            // left to ever stop it until the next dialog close.
             if (cancelled) {
               stream.getTracks().forEach((t) => t.stop());
               return;
@@ -257,13 +179,7 @@ export function FormVideoRecorderDialog({
       stopCamera();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, mode, step]);
-
-  function switchMode(next: Mode) {
-    if (next === mode) return;
-    resetAll();
-    setMode(next);
-  }
+  }, [open, step]);
 
   function startRecording() {
     const stream = streamRef.current;
@@ -298,46 +214,6 @@ export function FormVideoRecorderDialog({
     setRecording(false);
   }
 
-  function handleFileChosen(file: File) {
-    const url = URL.createObjectURL(file);
-    const probe = document.createElement("video");
-    probe.preload = "metadata";
-    probe.src = url;
-    probe.onloadedmetadata = () => {
-      const duration = probe.duration;
-      if (duration <= TRIM_WINDOW_SECONDS) {
-        setBlob(file);
-        setPreviewUrl(url);
-        setStep("preview");
-      } else {
-        setSourceUrl(url);
-        setSourceDuration(duration);
-        setTrimStart(0);
-        setStep("trim");
-      }
-    };
-    probe.onerror = () => {
-      toast.error("Could not read that video file.");
-      URL.revokeObjectURL(url);
-    };
-  }
-
-  async function confirmTrim() {
-    if (!sourceUrl) return;
-    setTrimming(true);
-    try {
-      const end = Math.min(trimStart + TRIM_WINDOW_SECONDS, sourceDuration);
-      const trimmed = await trimClip(sourceUrl, trimStart, end);
-      setBlob(trimmed);
-      setPreviewUrl(URL.createObjectURL(trimmed));
-      setStep("preview");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not trim that video.");
-    } finally {
-      setTrimming(false);
-    }
-  }
-
   function retake() {
     resetAll();
   }
@@ -358,8 +234,6 @@ export function FormVideoRecorderDialog({
     }
   }
 
-  const windowEnd = Math.min(trimStart + TRIM_WINDOW_SECONDS, sourceDuration);
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="inset-0 top-0 left-0 h-screen w-screen max-w-none max-h-none translate-x-0 translate-y-0 gap-0 rounded-none border-0 bg-black p-0 overflow-hidden [&>button]:hidden">
@@ -368,45 +242,8 @@ export function FormVideoRecorderDialog({
           <div className="relative flex-1 bg-black">
             {step === "preview" && previewUrl ? (
               <video src={previewUrl} controls playsInline className="h-full w-full object-contain" />
-            ) : step === "trim" && sourceUrl ? (
-              <video
-                ref={scrubVideoRef}
-                src={sourceUrl}
-                playsInline
-                muted
-                className="h-full w-full object-contain"
-              />
-            ) : mode === "record" ? (
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                className="h-full w-full object-contain"
-              />
             ) : (
-              <div className="flex h-full flex-col items-center justify-center gap-4 px-6 text-center">
-                <FolderOpen className="h-12 w-12 text-white/60" />
-                <p className="max-w-xs text-sm text-white/70">
-                  Choose a video from your device. Anything over {TRIM_WINDOW_SECONDS}s gets trimmed down
-                  before it's saved.
-                </p>
-                <Button onClick={() => fileInputRef.current?.click()}>
-                  <Upload className="h-4 w-4" />
-                  Choose Video
-                </Button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="video/*"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) handleFileChosen(file);
-                    e.target.value = "";
-                  }}
-                />
-              </div>
+              <video ref={videoRef} autoPlay playsInline muted className="h-full w-full object-contain" />
             )}
 
             {/* See-through overlay controls float on top of the video itself
@@ -424,60 +261,17 @@ export function FormVideoRecorderDialog({
               <X className="h-5 w-5" />
             </button>
 
-            {step === "capture" && (
-              <div className="absolute left-3 top-[max(0.75rem,env(safe-area-inset-top))] flex gap-1 rounded-full bg-black/50 p-1 backdrop-blur-sm">
-                {(["record", "upload"] as Mode[]).map((m) => (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => switchMode(m)}
-                    className={cn(
-                      "rounded-full px-3 py-1.5 text-xs font-bold uppercase tracking-wide transition-colors",
-                      mode === m ? "bg-white text-black" : "text-white/80 hover:text-white",
-                    )}
-                  >
-                    {m === "record" ? "Record" : "Upload"}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {mode === "record" && step === "capture" && recording && (
+            {step === "capture" && recording && (
               <div className="absolute left-1/2 top-[max(0.75rem,env(safe-area-inset-top))] flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5 text-sm font-bold text-white backdrop-blur-sm">
                 <Circle className="h-2.5 w-2.5 animate-pulse fill-destructive text-destructive" />
                 {elapsed}s
               </div>
             )}
 
-            {cameraError && mode === "record" && step === "capture" && (
+            {cameraError && step === "capture" && (
               <div className="absolute inset-x-4 top-[calc(max(0.75rem,env(safe-area-inset-top))_+_3.25rem)] flex items-center gap-2 rounded-md bg-destructive/90 px-3 py-2 text-sm text-white backdrop-blur-sm">
                 <AlertTriangle className="h-4 w-4 shrink-0" />
                 {cameraError}
-              </div>
-            )}
-
-            {step === "trim" && (
-              <div className="absolute inset-x-3 bottom-3 space-y-2 rounded-lg bg-black/60 p-3 backdrop-blur-sm">
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-white/80">
-                  <Scissors className="h-3.5 w-3.5" />
-                  {sourceDuration.toFixed(1)}s clip — drag to pick your {TRIM_WINDOW_SECONDS}s
-                </div>
-                <input
-                  type="range"
-                  min={0}
-                  max={Math.max(0, sourceDuration - TRIM_WINDOW_SECONDS)}
-                  step={0.1}
-                  value={trimStart}
-                  onChange={(e) => {
-                    const value = Number(e.target.value);
-                    setTrimStart(value);
-                    if (scrubVideoRef.current) scrubVideoRef.current.currentTime = value;
-                  }}
-                  className="w-full accent-primary"
-                />
-                <p className="text-xs text-white/70">
-                  {trimStart.toFixed(1)}s – {windowEnd.toFixed(1)}s
-                </p>
               </div>
             )}
           </div>
@@ -485,41 +279,29 @@ export function FormVideoRecorderDialog({
           {/* Bottom action bar -- still see-through so the frame behind it
               stays visible, unlike a solid dialog footer. */}
           <div className="flex shrink-0 flex-wrap items-center justify-center gap-2 bg-black/70 px-3 py-4 backdrop-blur-sm">
-            {mode === "record" && step === "capture" && !recording && (
+            {step === "capture" && !recording && (
               <Button size="lg" onClick={startRecording} disabled={!!cameraError}>
                 <Circle className="h-4 w-4 fill-current" />
                 Start Recording
               </Button>
             )}
-            {mode === "record" && step === "capture" && !recording && arMeasureSupported && (
+            {step === "capture" && !recording && arMeasureSupported && (
               <Button size="lg" variant="outline" onClick={handleMeasure} disabled={measuring}>
                 <Ruler className="h-4 w-4" />
                 {measuring ? "Measuring…" : "Measure"}
               </Button>
             )}
-            {mode === "record" && step === "capture" && recording && (
+            {step === "capture" && recording && (
               <Button size="lg" variant="secondary" onClick={stopRecording}>
                 <Square className="h-4 w-4" />
                 Stop
               </Button>
             )}
-            {step === "trim" && (
-              <>
-                <Button variant="outline" onClick={retake}>
-                  <RotateCcw className="h-4 w-4" />
-                  New Video
-                </Button>
-                <Button onClick={confirmTrim} disabled={trimming}>
-                  <Scissors className="h-4 w-4" />
-                  {trimming ? "Trimming…" : "Use This Clip"}
-                </Button>
-              </>
-            )}
             {step === "preview" && (
               <>
                 <Button variant="outline" onClick={retake}>
                   <RotateCcw className="h-4 w-4" />
-                  {mode === "record" ? "Retake" : "New Video"}
+                  Retake
                 </Button>
                 <Button onClick={save}>
                   <Upload className="h-4 w-4" />

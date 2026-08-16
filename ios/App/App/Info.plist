@@ -51,18 +51,21 @@
 	<array>
 		<string>armv7</string>
 	</array>
+	<!-- Portrait-only. Landscape was briefly supported so the video-analysis
+	     screen could be viewed rotated, but iOS's own rotation transition
+	     between the two proved unreliable on-device (a stuck-sideways
+	     dialog with no way to rotate back, and a squished layout right
+	     after starting playback) -- every screen in this app is designed
+	     for portrait, and none of it depends on landscape actually working,
+	     so removing it outright is a real fix, not a workaround. -->
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 		<string>UIInterfaceOrientationPortraitUpsideDown</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
