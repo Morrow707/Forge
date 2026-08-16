@@ -1618,7 +1618,10 @@ export function WorkoutPage({
       </div>
 
       {viewMode === "logging" && pages.length > 0 && (
-        <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-surface">
+        <div
+          className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-surface"
+          style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+        >
           <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3 sm:px-8">
             <button
               type="button"
