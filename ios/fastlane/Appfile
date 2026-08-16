@@ -3,7 +3,20 @@
 # nothing in this repo hardcodes an Apple account, team, or bundle id, so
 # the same Fastfile works before those secrets exist (it'll just fail at
 # the signing step) and after, with no code change in between.
-app_identifier(ENV["IOS_BUNDLE_ID"] || "com.foreperformancesystems.forge")
-apple_id(ENV["APPLE_ID"]) if ENV["APPLE_ID"]
-team_id(ENV["APPLE_TEAM_ID"]) if ENV["APPLE_TEAM_ID"]
-itc_team_id(ENV["APP_STORE_CONNECT_TEAM_ID"]) if ENV["APP_STORE_CONNECT_TEAM_ID"]
+#
+# `if ENV["X"]` / `ENV["X"] || default` both look right but are wrong for
+# any of these that the workflow references via `${{ vars.X }}` or
+# `${{ secrets.X }}` -- GitHub Actions sets the env var to an empty string
+# (not "unset") when the underlying variable/secret was never configured,
+# and Ruby's `||`/truthiness only treats nil/false as falsy, not "". An
+# empty string sailed right through both checks below and got set as a
+# real value, which is exactly what broke the bundle identifier.
+def env_or(key, default = nil)
+  val = ENV[key]
+  (val.nil? || val.empty?) ? default : val
+end
+
+app_identifier(env_or("IOS_BUNDLE_ID", "com.foreperformancesystems.forge"))
+apple_id(env_or("APPLE_ID")) if env_or("APPLE_ID")
+team_id(env_or("APPLE_TEAM_ID")) if env_or("APPLE_TEAM_ID")
+itc_team_id(env_or("APP_STORE_CONNECT_TEAM_ID")) if env_or("APP_STORE_CONNECT_TEAM_ID")
