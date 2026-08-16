@@ -103,6 +103,48 @@ export async function apiRequest(
   return res;
 }
 
+/** Like apiRequest for a FormData POST, but reports upload progress via
+ * onProgress(fraction) -- fetch() has no way to observe request-body
+ * upload progress (streaming request bodies still isn't reliably
+ * supported across target browsers/WebKit), only XMLHttpRequest's
+ * upload.onprogress does, so this is a separate path rather than a
+ * fetch()-based trick. Used by upload flows whose payload (a video clip)
+ * is large enough on a slow connection that a bare "Saving..." with no
+ * percentage reads as hung. */
+export function uploadWithProgress(
+  url: string,
+  formData: FormData,
+  onProgress?: (fraction: number) => void,
+): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", resolveApiUrl(url));
+    xhr.withCredentials = true;
+    const token = getNativeToken();
+    if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total);
+    };
+    xhr.onload = () => {
+      let data: any = null;
+      try {
+        data = xhr.responseText ? JSON.parse(xhr.responseText) : null;
+      } catch {
+        // Matches throwIfResNotOk's own "ignore body parse failure" --
+        // an empty/non-JSON body on a non-2xx response just falls back
+        // to statusText below.
+      }
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(data);
+      } else {
+        reject(new ApiError(xhr.status, data?.message || xhr.statusText || "Upload failed"));
+      }
+    };
+    xhr.onerror = () => reject(new Error(`Request failed (POST ${url}): network error`));
+    xhr.send(formData);
+  });
+}
+
 // Shorthand for the "GET a URL, parse JSON" queryFn every manually-keyed
 // query in the app was copy-pasting inline -- use this instead of writing
 // out `async () => { const res = await apiRequest("GET", url); return

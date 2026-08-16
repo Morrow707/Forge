@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { resolveApiUrl } from "@/lib/queryClient";
 import { RotateCcw, Trash2, ThumbsUp, ThumbsDown, Wand2 } from "lucide-react";
 import { VideoAnalysisDialog } from "@/components/video-analysis-dialog";
 
@@ -79,7 +80,7 @@ export function SetVideoPreviewDialog({
         <DialogHeader>
           <DialogTitle>Set {setNumber} — Form Check</DialogTitle>
         </DialogHeader>
-        <video src={videoUrl} controls playsInline className="w-full rounded-md bg-black" />
+        <video src={resolveApiUrl(videoUrl)} controls playsInline className="w-full rounded-md bg-black" />
         <Button variant="outline" onClick={() => setAnalyzing(true)}>
           <Wand2 className="h-4 w-4" />
           Analysis Tools
@@ -194,7 +195,7 @@ export function SetVideoCompareDialog({
             </Badge>
           )}
         </div>
-        <video src={video.videoUrl} controls playsInline className="w-full rounded-md bg-black" />
+        <video src={resolveApiUrl(video.videoUrl)} controls playsInline className="w-full rounded-md bg-black" />
         <Button size="sm" variant="outline" className="w-full" onClick={onAnalyze}>
           <Wand2 className="h-3.5 w-3.5" />
           Analysis Tools

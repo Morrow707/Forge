@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { shareOrDownloadBlob } from "@/lib/share-file";
+import { resolveApiUrl } from "@/lib/queryClient";
 import { Dialog, DialogContent, DialogTitle, DialogClose } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -596,7 +597,7 @@ export function VideoAnalysisDialog({
               <div className="relative w-full">
                 <video
                   ref={videoRef}
-                  src={videoUrl}
+                  src={resolveApiUrl(videoUrl)}
                   playsInline
                   className="block w-full"
                   onLoadedMetadata={() => {

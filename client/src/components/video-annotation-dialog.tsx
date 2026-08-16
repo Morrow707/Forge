@@ -8,7 +8,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { apiRequest, ApiError } from "@/lib/queryClient";
+import { apiRequest, ApiError, resolveApiUrl } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Pencil, Undo2, Trash2, Video } from "lucide-react";
@@ -193,7 +193,7 @@ export function VideoAnnotationDialog({
           <div className="space-y-3">
             <video
               ref={videoRef}
-              src={videoUrl}
+              src={resolveApiUrl(videoUrl)}
               controls
               className="w-full rounded-md bg-black"
             />

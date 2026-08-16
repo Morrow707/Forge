@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { externalLinkClick } from "@/lib/open-external";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiRequest, ApiError } from "@/lib/queryClient";
+import { apiRequest, ApiError, resolveApiUrl } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -137,7 +137,7 @@ export function WorkoutCommentThread({
                   className="mt-1 block"
                 >
                   <img
-                    src={c.imageUrl}
+                    src={resolveApiUrl(c.imageUrl)}
                     alt="Coach annotation"
                     className="max-h-48 rounded-md border border-border"
                   />

@@ -12,6 +12,7 @@
 // analysis can keep running (and feeding whatever instance it holds) well
 // after the dialog that started it has closed.
 import { getOfflinePoseLandmarker, isPlausibleHumanFrame, type PoseFrame } from "./pose-tracking";
+import { resolveApiUrl } from "./queryClient";
 
 // Detection is the expensive part, not seeking -- capping the sample count
 // bounds worst-case analysis time for a longer clip (a full tracked set can
@@ -46,7 +47,12 @@ export async function analyzeVideoPose(
   const landmarker = await getOfflinePoseLandmarker();
 
   const video = document.createElement("video");
-  video.src = videoUrl;
+  // Callers pass the server-relative path as stored (formCheckVideoUrl,
+  // etc.) -- on native that has to be resolved against the real backend
+  // rather than the bundled capacitor://localhost origin the WebView
+  // otherwise resolves it against, same as every fetch() call against this
+  // app's own backend already does (see resolveApiUrl's own comment).
+  video.src = resolveApiUrl(videoUrl);
   video.muted = true;
   video.playsInline = true;
 

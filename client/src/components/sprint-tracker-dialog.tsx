@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
-import { apiRequest, getJson } from "@/lib/queryClient";
+import { apiRequest, getJson, resolveApiUrl } from "@/lib/queryClient";
 import { getPoseLandmarker, isPlausibleHumanFrame, MIN_VISIBILITY, POSE_LANDMARKS, type PoseFrame } from "@/lib/pose-tracking";
 import { lockCameraExposure } from "@/lib/camera-exposure";
 import { ensureCameraPermission, onAppForeground, onAppBackground } from "@/lib/native-camera";
@@ -632,7 +632,7 @@ export function SprintTrackerDialog({
                 <div className="relative overflow-hidden rounded-md bg-black">
                   <video
                     ref={reviewVideoRef}
-                    src={videoUrl}
+                    src={resolveApiUrl(videoUrl)}
                     playsInline
                     controls
                     className="w-full"

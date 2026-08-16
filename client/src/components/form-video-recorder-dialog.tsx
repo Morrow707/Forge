@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { apiRequest, ApiError } from "@/lib/queryClient";
+import { ApiError, uploadWithProgress } from "@/lib/queryClient";
 import {
   Circle,
   Square,
@@ -101,6 +101,7 @@ export function FormVideoRecorderDialog({
   const [elapsed, setElapsed] = useState(0);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [blob, setBlob] = useState<Blob | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   // Upload + trim state
   const [sourceUrl, setSourceUrl] = useState<string | null>(null);
@@ -306,11 +307,11 @@ export function FormVideoRecorderDialog({
   async function save() {
     if (!blob) return;
     setStep("uploading");
+    setUploadProgress(0);
     try {
       const formData = new FormData();
       formData.append("video", blob, videoFilenameForBlob(blob, "form-check"));
-      const res = await apiRequest("POST", "/api/athlete/form-video", formData);
-      const { url } = await res.json();
+      const { url } = await uploadWithProgress("/api/athlete/form-video", formData, setUploadProgress);
       onSaved(url);
       onOpenChange(false);
     } catch (err) {
@@ -481,7 +482,7 @@ export function FormVideoRecorderDialog({
             {step === "uploading" && (
               <Button disabled>
                 <Upload className="h-4 w-4 animate-pulse" />
-                Saving…
+                Saving… {Math.round(uploadProgress * 100)}%
               </Button>
             )}
           </div>

@@ -10,7 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
-import { apiRequest, getJson } from "@/lib/queryClient";
+import { apiRequest, getJson, resolveApiUrl } from "@/lib/queryClient";
 import { getPoseLandmarker, isPlausibleHumanFrame, MIN_VISIBILITY } from "@/lib/pose-tracking";
 import { lockCameraExposure } from "@/lib/camera-exposure";
 import { ensureCameraPermission, onAppForeground, onAppBackground } from "@/lib/native-camera";
@@ -511,7 +511,7 @@ export function MechanicsTrackerDialog({
             <div className="relative overflow-hidden rounded-md bg-black">
               <video
                 ref={reviewVideoRef}
-                src={videoUrl}
+                src={resolveApiUrl(videoUrl)}
                 playsInline
                 controls
                 className="w-full"
