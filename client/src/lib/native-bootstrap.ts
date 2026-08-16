@@ -1,6 +1,7 @@
 import { Capacitor } from "@capacitor/core";
 import { StatusBar, Style } from "@capacitor/status-bar";
 import { SplashScreen } from "@capacitor/splash-screen";
+import { initNativePush } from "@/lib/native-push";
 
 /**
  * Native-only startup: matches the status bar to the app's own dark theme
@@ -13,6 +14,7 @@ import { SplashScreen } from "@capacitor/splash-screen";
  */
 export async function bootstrapNativeShell(): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
+  initNativePush();
   try {
     await StatusBar.setStyle({ style: Style.Dark });
     await StatusBar.setBackgroundColor({ color: "#0B0B0F" });

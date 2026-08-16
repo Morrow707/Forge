@@ -21,6 +21,12 @@ import {
   subscribeToPush,
   unsubscribeFromPush,
 } from "@/lib/push";
+import {
+  isNativePushSupported,
+  getNativePushPermissionGranted,
+  subscribeToNativePush,
+  unsubscribeFromNativePush,
+} from "@/lib/native-push";
 
 export function NotificationSettingsDialog({
   user,
@@ -40,13 +46,20 @@ export function NotificationSettingsDialog({
   // state rather than the server.
   const [pushSubscribed, setPushSubscribed] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
+  // isPushSupported() only ever detects the browser's Web Push APIs, which
+  // don't exist inside the native WKWebView -- isNativePushSupported()
+  // covers the app there instead, so this checkbox stays visible on both
+  // rather than silently disappearing on native.
+  const pushSupported = isPushSupported() || isNativePushSupported();
 
   useEffect(() => {
     if (open) {
       setPhone(user.phone ?? "");
       setNotifyEmail(user.notifyEmail);
       setNotifySms(user.notifySms);
-      if (isPushSupported()) {
+      if (isNativePushSupported()) {
+        getNativePushPermissionGranted().then(setPushSubscribed);
+      } else if (isPushSupported()) {
         getCurrentPushSubscription().then((sub) => setPushSubscribed(!!sub));
       }
     }
@@ -56,10 +69,10 @@ export function NotificationSettingsDialog({
     setPushBusy(true);
     try {
       if (next) {
-        await subscribeToPush();
+        await (isNativePushSupported() ? subscribeToNativePush() : subscribeToPush());
         toast.success("Push notifications enabled on this device");
       } else {
-        await unsubscribeFromPush();
+        await (isNativePushSupported() ? unsubscribeFromNativePush() : unsubscribeFromPush());
         toast.success("Push notifications turned off on this device");
       }
       setPushSubscribed(next);
@@ -99,7 +112,7 @@ export function NotificationSettingsDialog({
             : "You'll only ever hear about your coach's reply or an emergency team announcement -- never program completions or routine team board activity."}
         </p>
         <div className="space-y-4">
-          {isPushSupported() && (
+          {pushSupported && (
             <label className="flex items-start gap-2.5 text-sm">
               <Checkbox
                 checked={pushSubscribed}

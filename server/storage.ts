@@ -30,6 +30,7 @@ import {
   workoutComments,
   exerciseSubmissions,
   exerciseReports,
+  apnsDeviceTokens,
   notifications,
   passwordResetTokens,
   pushSubscriptions,
@@ -8840,6 +8841,29 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
   async getPushSubscriptionsForUser(userId: number) {
     return db.query.pushSubscriptions.findMany({
       where: eq(pushSubscriptions.userId, userId),
+    });
+  },
+
+  // ---------- APNs device tokens (native app twin of Push subscriptions above) ----------
+  async saveApnsToken(userId: number, deviceToken: string) {
+    const existing = await db.query.apnsDeviceTokens.findFirst({
+      where: eq(apnsDeviceTokens.deviceToken, deviceToken),
+    });
+    if (existing) return existing;
+    const [row] = await db
+      .insert(apnsDeviceTokens)
+      .values({ userId, deviceToken })
+      .returning();
+    return row;
+  },
+
+  async removeApnsToken(deviceToken: string) {
+    await db.delete(apnsDeviceTokens).where(eq(apnsDeviceTokens.deviceToken, deviceToken));
+  },
+
+  async getApnsTokensForUser(userId: number) {
+    return db.query.apnsDeviceTokens.findMany({
+      where: eq(apnsDeviceTokens.userId, userId),
     });
   },
 

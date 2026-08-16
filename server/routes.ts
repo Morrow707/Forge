@@ -7,6 +7,7 @@ import { setupAuth, requireAuth, requireRole } from "./auth";
 import { storage } from "./storage";
 import { buildIcsFeed } from "./ics";
 import { getVapidPublicKey } from "./push";
+import { apnsEnabled } from "./apns";
 import { scheduleRestOverPush, cancelRestOverPush } from "./rest-timer-push";
 import { sendEmail } from "./email";
 import { buildProgressReportEmail } from "./progress-report";
@@ -33,6 +34,7 @@ import {
   updateNotificationPrefsSchema,
   updateHealthStatusSchema,
   pushSubscribeSchema,
+  apnsSubscribeSchema,
   createWorkoutCommentSchema,
   createExerciseReportSchema,
   resolveSubmissionSchema,
@@ -5145,6 +5147,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
     await storage.removePushSubscription(parsed.data.endpoint);
+    res.status(204).end();
+  });
+
+  // Native (APNs) twin of the two routes above -- same shape, a device
+  // token instead of a Web Push subscription. apnsEnabled mirrors
+  // getVapidPublicKey()'s already-established "tell the client up front so
+  // it doesn't bother registering" pattern.
+  app.get("/api/push/apns-enabled", requireAuth, async (req, res) => {
+    res.json({ enabled: apnsEnabled });
+  });
+
+  app.post("/api/push/subscribe-apns", requireAuth, async (req, res) => {
+    const user = currentUser(req);
+    const parsed = apnsSubscribeSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    await storage.saveApnsToken(user.id, parsed.data.deviceToken);
+    res.status(204).end();
+  });
+
+  app.post("/api/push/unsubscribe-apns", requireAuth, async (req, res) => {
+    const schema = z.object({ deviceToken: z.string().min(1) });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    await storage.removeApnsToken(parsed.data.deviceToken);
     res.status(204).end();
   });
 
