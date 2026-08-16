@@ -1,6 +1,7 @@
 import { createContext, useContext, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest, ApiError, getQueryFn, setNativeToken } from "@/lib/queryClient";
+import { savePasswordToKeychain } from "@/lib/native-auth";
 import { toast } from "sonner";
 import type { PublicUser } from "@shared/schema";
 
@@ -33,9 +34,10 @@ function useLoginMutation() {
       const res = await apiRequest("POST", "/api/auth/login", payload);
       return (await res.json()) as PublicUser & { nativeToken?: string };
     },
-    onSuccess: ({ nativeToken, ...user }) => {
+    onSuccess: ({ nativeToken, ...user }, variables) => {
       setNativeToken(nativeToken);
       qc.setQueryData(["/api/auth/me"], user);
+      savePasswordToKeychain(variables.email, variables.password);
     },
     onError: (err: ApiError) => {
       toast.error(err.message || "Login failed");
@@ -50,9 +52,10 @@ function useSignupMutation() {
       const res = await apiRequest("POST", "/api/auth/signup", payload);
       return (await res.json()) as PublicUser & { nativeToken?: string };
     },
-    onSuccess: ({ nativeToken, ...user }) => {
+    onSuccess: ({ nativeToken, ...user }, variables) => {
       setNativeToken(nativeToken);
       qc.setQueryData(["/api/auth/me"], user);
+      savePasswordToKeychain(variables.email, variables.password);
     },
     onError: (err: ApiError) => {
       toast.error(err.message || "Signup failed");

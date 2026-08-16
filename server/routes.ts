@@ -437,6 +437,24 @@ async function notifyNewlyUnlockedLessons(
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
   app.use(attachNativeTokenAuth);
+
+  // Apple's Shared Web Credentials verification -- fetched by iOS itself
+  // (not the app) over HTTPS on install/first launch, cached on-device, and
+  // never re-fetched from inside a request the app makes, so this has to be
+  // a real unauthenticated GET at exactly this path with no redirect. Lists
+  // the native app under "webcredentials" so PasswordAutofill.savePassword
+  // (see client/src/lib/native-auth.ts) is allowed to write into this
+  // domain's iCloud Keychain entry -- see ios/App/App/App.entitlements for
+  // the matching Associated Domains capability. No file extension is
+  // intentional; that's the filename Apple's fetcher looks for.
+  app.get("/.well-known/apple-app-site-association", (_req, res) => {
+    res.type("application/json").json({
+      webcredentials: {
+        apps: ["425KPX8WHN.com.foreperformancesystems.forge"],
+      },
+    });
+  });
+
   app.use("/uploads", express.static(path.join(process.cwd(), "server", "uploads")));
   // express.static calls next() rather than responding when a file isn't
   // found, so a missing upload (a video whose row survived some past
