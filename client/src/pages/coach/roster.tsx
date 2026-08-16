@@ -99,6 +99,7 @@ export default function CoachRoster() {
 
   const [rosterSearch, setRosterSearch] = useState("");
   const [healthFilter, setHealthFilter] = useState<"all" | HealthStatus>("all");
+  const [activeTab, setActiveTab] = useState<"roster" | "teams" | "compliance">("roster");
 
   const healthyCount = roster.filter((a) => (a.healthStatus ?? "healthy") === "healthy").length;
   const hurtCount = roster.filter((a) => a.healthStatus === "hurt").length;
@@ -169,28 +170,73 @@ export default function CoachRoster() {
   }
 
   return (
-    <AppShell
-      title="Roster & Teams"
-      actions={
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => setAddFreeAgentOpen(true)}>
-            <UserPlus className="h-4 w-4" />
-            Add Free Agent
-          </Button>
-          <Button onClick={() => openAssignFor([])}>
-            <Send className="h-4 w-4" />
-            Assign Program
-          </Button>
-        </div>
-      }
-    >
-      <Tabs defaultValue="roster">
-        <TabsList>
-          <TabsTrigger value="roster">Roster ({roster.length})</TabsTrigger>
-          <TabsTrigger value="teams">Teams ({teams.length})</TabsTrigger>
-          <TabsTrigger value="compliance">Compliance</TabsTrigger>
-        </TabsList>
-
+    <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
+      <AppShell
+        title="Roster & Teams"
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" onClick={() => setAddFreeAgentOpen(true)}>
+              <UserPlus className="h-3.5 w-3.5" />
+              Add Free Agent
+            </Button>
+            <Button size="sm" onClick={() => openAssignFor([])}>
+              <Send className="h-3.5 w-3.5" />
+              Assign Program
+            </Button>
+          </div>
+        }
+        subheader={
+          <div className="flex flex-wrap items-center gap-2">
+            <TabsList>
+              <TabsTrigger value="roster">Roster ({roster.length})</TabsTrigger>
+              <TabsTrigger value="teams">Teams ({teams.length})</TabsTrigger>
+              <TabsTrigger value="compliance">Compliance</TabsTrigger>
+            </TabsList>
+            {activeTab === "roster" && roster.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setHealthFilter("all")}
+                  className={cn(
+                    "rounded-full border px-2 py-0.5 text-xs font-medium transition-colors",
+                    healthFilter === "all"
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  All ({roster.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHealthFilter("healthy")}
+                  className={cn(
+                    "flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium transition-colors",
+                    healthFilter === "healthy"
+                      ? "border-success bg-success/10 text-success"
+                      : "border-border text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  <HeartPulse className="h-3 w-3" />
+                  Healthy ({healthyCount})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHealthFilter("hurt")}
+                  className={cn(
+                    "flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium transition-colors",
+                    healthFilter === "hurt"
+                      ? "border-destructive bg-destructive/10 text-destructive"
+                      : "border-border text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  <HeartCrack className="h-3 w-3" />
+                  Hurt ({hurtCount})
+                </button>
+              </div>
+            )}
+          </div>
+        }
+      >
         <TabsContent value="roster">
           {roster.length === 0 ? (
             <Card>
@@ -203,46 +249,6 @@ export default function CoachRoster() {
             </Card>
           ) : (
             <>
-              <div className="mb-4 flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setHealthFilter("all")}
-                  className={cn(
-                    "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
-                    healthFilter === "all"
-                      ? "border-primary bg-primary/10 text-primary"
-                      : "border-border text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  All ({roster.length})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setHealthFilter("healthy")}
-                  className={cn(
-                    "flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
-                    healthFilter === "healthy"
-                      ? "border-success bg-success/10 text-success"
-                      : "border-border text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  <HeartPulse className="h-3.5 w-3.5" />
-                  Healthy ({healthyCount})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setHealthFilter("hurt")}
-                  className={cn(
-                    "flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
-                    healthFilter === "hurt"
-                      ? "border-destructive bg-destructive/10 text-destructive"
-                      : "border-border text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  <HeartCrack className="h-3.5 w-3.5" />
-                  Hurt ({hurtCount})
-                </button>
-              </div>
               <div className="relative mb-4 max-w-sm">
                 <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
@@ -448,7 +454,6 @@ export default function CoachRoster() {
         <TabsContent value="compliance">
           <CaraCompliancePanel roster={roster} />
         </TabsContent>
-      </Tabs>
 
       <Dialog open={teamDialogOpen} onOpenChange={setTeamDialogOpen}>
         <DialogContent>
@@ -529,7 +534,8 @@ export default function CoachRoster() {
         programs={programs}
         initialAthleteIds={assignAthleteIds}
       />
-    </AppShell>
+      </AppShell>
+    </Tabs>
   );
 }
 

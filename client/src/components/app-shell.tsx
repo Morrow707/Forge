@@ -197,9 +197,7 @@ export function AppShell({
       >
         <div className="flex items-center justify-between gap-3 px-4 py-3 md:px-8">
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
-              <ForgeMark className="h-[18px] w-[18px]" />
-            </div>
+            <ForgeMark className="h-8 w-8 shrink-0 rounded-md" />
             <span className="font-display text-xl font-extrabold uppercase tracking-wider">
               Forge
             </span>

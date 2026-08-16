@@ -19,9 +19,7 @@ export default function LegalPage() {
     <div className="min-h-screen bg-background px-4 py-10">
       <div className="mx-auto max-w-2xl">
         <Link href="/" className="mb-8 flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
-            <ForgeMark className="h-[18px] w-[18px]" />
-          </div>
+          <ForgeMark className="h-8 w-8 rounded-md" />
           <span className="font-display font-bold uppercase tracking-wide text-foreground">
             Forge
           </span>

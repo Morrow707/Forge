@@ -128,9 +128,7 @@ export default function LandingPage() {
       <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 md:px-8">
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
-              <ForgeMark className="h-[18px] w-[18px]" />
-            </div>
+            <ForgeMark className="h-8 w-8 rounded-md" />
             <span className="font-display text-xl font-extrabold uppercase tracking-wider">
               Forge
             </span>
@@ -403,9 +401,7 @@ export default function LandingPage() {
       <section className="relative isolate overflow-hidden px-4 py-24 text-center md:px-8">
         <GlowBlob className="left-1/2 top-0 h-96 w-96 -translate-x-1/2" />
         <div className="relative mx-auto max-w-2xl">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-            <ForgeMark className="h-8 w-8" />
-          </div>
+          <ForgeMark className="mx-auto h-14 w-14 rounded-xl" />
           <h2 className="mt-6 font-display text-4xl font-extrabold uppercase tracking-wide md:text-5xl">
             Ready to forge better athletes?
           </h2>
@@ -432,9 +428,7 @@ export default function LandingPage() {
       <footer className="border-t border-border px-4 py-10 md:px-8">
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 text-sm text-muted-foreground sm:flex-row">
           <div className="flex items-center gap-2">
-            <div className="flex h-6 w-6 items-center justify-center rounded bg-primary text-primary-foreground">
-              <ForgeMark className="h-3.5 w-3.5" />
-            </div>
+            <ForgeMark className="h-6 w-6 rounded" />
             <span className="font-display font-bold uppercase tracking-wide text-foreground">
               Forge
             </span>
