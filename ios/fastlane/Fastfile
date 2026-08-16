@@ -32,7 +32,7 @@ platform :ios do
 
     install_provisioning_profile(path: ENV.fetch("IOS_PROVISIONING_PROFILE_PATH"))
 
-    bundle_id = ENV["IOS_BUNDLE_ID"] || "com.forgefitness.app"
+    bundle_id = ENV["IOS_BUNDLE_ID"] || "com.foreperformancesystems.forge"
     profile_name = ENV.fetch("IOS_PROVISIONING_PROFILE_NAME")
 
     update_code_signing_settings(

@@ -120,7 +120,7 @@ jobs:
           set -euo pipefail
           echo "${{ secrets.GOOGLE_PLAY_JSON_KEY }}" > "$GOOGLE_PLAY_JSON_KEY_PATH"
           gem install fastlane -N
-          bundle_id="${ANDROID_PACKAGE_NAME:-com.forgefitness.app}"
+          bundle_id="${ANDROID_PACKAGE_NAME:-com.foreperformancesystems.forge}"
           ANDROID_PACKAGE_NAME="$bundle_id" fastlane internal
 
       - name: Clean up signing assets
