@@ -15,6 +15,7 @@ import { BarcodeScanner } from "@/lib/barcode-scanner";
 import {
   ensureCameraPermission,
   onAppForeground,
+  onAppBackground,
   isTorchAvailable,
   toggleTorch,
   disableTorch,
@@ -206,9 +207,16 @@ export function FoodScannerDialog({
       setCameraStream(null);
       acquireCamera();
     });
+    // See bar-tracker-dialog.tsx's own comment on onAppBackground.
+    const unsubscribeBackground = onAppBackground(() => {
+      sharedStreamRef.current?.getTracks().forEach((t) => t.stop());
+      sharedStreamRef.current = null;
+      setCameraStream(null);
+    });
     return () => {
       cancelled = true;
       unsubscribeForeground();
+      unsubscribeBackground();
       sharedStreamRef.current?.getTracks().forEach((t) => t.stop());
       sharedStreamRef.current = null;
     };
