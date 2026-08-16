@@ -1,4 +1,5 @@
 import { sendPushToUser } from "./push";
+import { storage } from "./storage";
 
 // A client-side rest countdown runs on the page's own JS timers, which
 // mobile browsers throttle or fully suspend once the tab is backgrounded or
@@ -18,12 +19,14 @@ const pending = new Map<number, ReturnType<typeof setTimeout>>();
  * stack two notifications for the same athlete. */
 export function scheduleRestOverPush(athleteId: number, seconds: number, url?: string) {
   cancelRestOverPush(athleteId);
-  const timeout = setTimeout(() => {
+  const timeout = setTimeout(async () => {
     pending.delete(athleteId);
+    const badge = await storage.getUnreadNotificationCount(athleteId);
     sendPushToUser(athleteId, {
       title: "Rest Over",
       body: "Time to get back to it",
       url: url || "/",
+      badge,
     });
   }, seconds * 1000);
   pending.set(athleteId, timeout);

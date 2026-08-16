@@ -74,5 +74,7 @@
 	<string>Forge can save form-check videos and shareable PR cards to your Photos library when you choose to download them.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Forge uses Face ID to unlock the app if you enable the optional lock screen in Notification Settings.</string>
 </dict>
 </plist>

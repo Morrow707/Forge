@@ -29,7 +29,7 @@ export function getVapidPublicKey() {
 // 404) is removed so it's not retried forever.
 export async function sendPushToUser(
   userId: number,
-  payload: { title: string; body: string; url?: string },
+  payload: { title: string; body: string; url?: string; badge?: number },
 ) {
   await Promise.all([sendWebPushToUser(userId, payload), sendApnsToUser(userId, payload)]);
 }
