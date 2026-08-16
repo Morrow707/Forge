@@ -66,9 +66,16 @@ jobs:
       - name: Sync Capacitor iOS platform
         run: npx cap sync ios
 
-      - name: Install CocoaPods dependencies
+      # Capacitor 7+ integrates plugins via Swift Package Manager
+      # (ios/App/CapApp-SPM), not CocoaPods -- there's no Podfile in this
+      # project by design, and xcodebuild resolves SPM dependencies on its
+      # own. Pre-resolving here just moves that network-dependent step
+      # earlier and out of build_app's own timeout, and fails the job
+      # clearly if package resolution itself is the problem rather than
+      # letting a resolution failure look like a build failure.
+      - name: Resolve Swift Package dependencies
         working-directory: ios/App
-        run: pod install --repo-update
+        run: xcodebuild -resolvePackageDependencies -project App.xcodeproj
 
       - name: Decode signing assets
         env:
