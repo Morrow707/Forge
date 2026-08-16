@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { PoseLandmarker, type NormalizedLandmark } from "@mediapipe/tasks-vision";
 import { angleAtVertex, MIN_VISIBILITY, type PoseFrame } from "@/lib/pose-tracking";
 import { analyzeVideoPose } from "@/lib/video-pose-analysis";
+import { resolveVideoDuration } from "@/lib/video-recording";
 import { MEASURABLE_JOINTS, findNearestJoint, measureJoint } from "@/lib/joint-angles";
 import {
   X,
@@ -614,7 +615,11 @@ export function VideoAnalysisDialog({
                   className="block h-auto max-h-full w-auto max-w-full"
                   onLoadedMetadata={() => {
                     const v = videoRef.current;
-                    if (v) setDuration(v.duration);
+                    // See resolveVideoDuration's own comment -- a
+                    // MediaRecorder-produced clip reads back Infinity here
+                    // otherwise, which fmtTime then displays as a
+                    // stuck-looking "0:00" total duration.
+                    if (v) resolveVideoDuration(v).then(setDuration);
                     redraw();
                   }}
                   onTimeUpdate={() => {
@@ -770,40 +775,48 @@ export function VideoAnalysisDialog({
         </div>
 
         {!loadError && (
-        <div className="flex shrink-0 items-center gap-2 border-t border-white/10 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3">
-          <Button size="icon" variant="ghost" onClick={togglePlay} className="h-8 w-8 shrink-0">
-            {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-          </Button>
-          <Button size="icon" variant="ghost" onClick={() => stepFrame(-1)} className="h-8 w-8 shrink-0">
-            <StepBack className="h-4 w-4" />
-          </Button>
-          <Button size="icon" variant="ghost" onClick={() => stepFrame(1)} className="h-8 w-8 shrink-0">
-            <StepForward className="h-4 w-4" />
-          </Button>
-          <input
-            type="range"
-            min={0}
-            max={duration || 0}
-            step={0.01}
-            value={currentTime}
-            onChange={(e) => {
-              const t = Number(e.target.value);
-              if (videoRef.current) videoRef.current.currentTime = t;
-              setCurrentTime(t);
-            }}
-            className="flex-1 accent-primary"
-          />
-          <span className="w-20 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
-            {fmtTime(currentTime)} / {fmtTime(duration)}
-          </span>
-          <div className="flex shrink-0 gap-1">
+        <div className="shrink-0 space-y-1.5 border-t border-white/10 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3">
+          {/* Two rows, not one -- three icon buttons + a scrubber + a time
+              label + five speed buttons all on one line doesn't fit a
+              portrait phone's width (that's what was clipping "0.25x" off
+              the right edge). Transport controls get their own line; speed
+              selection gets its own line below, so neither one can push the
+              other off-screen regardless of how narrow the viewport is. */}
+          <div className="flex items-center gap-2">
+            <Button size="icon" variant="ghost" onClick={togglePlay} className="h-8 w-8 shrink-0">
+              {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+            </Button>
+            <Button size="icon" variant="ghost" onClick={() => stepFrame(-1)} className="h-8 w-8 shrink-0">
+              <StepBack className="h-4 w-4" />
+            </Button>
+            <Button size="icon" variant="ghost" onClick={() => stepFrame(1)} className="h-8 w-8 shrink-0">
+              <StepForward className="h-4 w-4" />
+            </Button>
+            <input
+              type="range"
+              min={0}
+              max={duration || 0}
+              step={0.01}
+              value={currentTime}
+              onChange={(e) => {
+                const t = Number(e.target.value);
+                if (videoRef.current) videoRef.current.currentTime = t;
+                setCurrentTime(t);
+              }}
+              className="flex-1 accent-primary"
+            />
+            <span className="w-20 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+              {fmtTime(currentTime)} / {fmtTime(duration)}
+            </span>
+          </div>
+          <div className="flex justify-center gap-1">
             {SPEEDS.map((s) => (
               <button
                 key={s}
                 type="button"
                 onClick={() => changeSpeed(s)}
                 className={cn(
-                  "rounded px-1.5 py-1 text-xs font-semibold",
+                  "rounded px-2 py-1 text-xs font-semibold",
                   speed === s ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
                 )}
               >

@@ -13,6 +13,7 @@
 // after the dialog that started it has closed.
 import { getOfflinePoseLandmarker, isPlausibleHumanFrame, type PoseFrame } from "./pose-tracking";
 import { resolveApiUrl } from "./queryClient";
+import { resolveVideoDuration } from "./video-recording";
 
 // Detection is the expensive part, not seeking -- capping the sample count
 // bounds worst-case analysis time for a longer clip (a full tracked set can
@@ -63,7 +64,7 @@ export async function analyzeVideoPose(
     });
   });
 
-  const duration = video.duration;
+  const duration = await resolveVideoDuration(video);
   if (!Number.isFinite(duration) || duration <= 0) return [];
 
   const interval = Math.max(MIN_INTERVAL_SEC, duration / MAX_SAMPLES);

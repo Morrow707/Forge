@@ -372,18 +372,22 @@ export function FormVideoRecorderDialog({
             )}
 
             {/* See-through overlay controls float on top of the video itself
-                instead of living in an opaque footer bar below it. */}
+                instead of living in an opaque footer bar below it. Pinned
+                below env(safe-area-inset-top) (not a flat top-3) since a
+                full-bleed layout puts these right where the notch/Dynamic
+                Island otherwise sits -- the same fix applied to the other
+                full-screen video dialogs. */}
             <button
               type="button"
               aria-label="Close"
               onClick={() => onOpenChange(false)}
-              className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-colors hover:bg-black/70"
+              className="absolute right-3 top-[max(0.75rem,env(safe-area-inset-top))] flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-colors hover:bg-black/70"
             >
               <X className="h-5 w-5" />
             </button>
 
             {step === "capture" && (
-              <div className="absolute left-3 top-3 flex gap-1 rounded-full bg-black/50 p-1 backdrop-blur-sm">
+              <div className="absolute left-3 top-[max(0.75rem,env(safe-area-inset-top))] flex gap-1 rounded-full bg-black/50 p-1 backdrop-blur-sm">
                 {(["record", "upload"] as Mode[]).map((m) => (
                   <button
                     key={m}
@@ -401,14 +405,14 @@ export function FormVideoRecorderDialog({
             )}
 
             {mode === "record" && step === "capture" && recording && (
-              <div className="absolute left-1/2 top-3 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5 text-sm font-bold text-white backdrop-blur-sm">
+              <div className="absolute left-1/2 top-[max(0.75rem,env(safe-area-inset-top))] flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5 text-sm font-bold text-white backdrop-blur-sm">
                 <Circle className="h-2.5 w-2.5 animate-pulse fill-destructive text-destructive" />
                 {elapsed}s / {MAX_SECONDS}s
               </div>
             )}
 
             {cameraError && mode === "record" && step === "capture" && (
-              <div className="absolute inset-x-4 top-16 flex items-center gap-2 rounded-md bg-destructive/90 px-3 py-2 text-sm text-white backdrop-blur-sm">
+              <div className="absolute inset-x-4 top-[calc(max(0.75rem,env(safe-area-inset-top))_+_3.25rem)] flex items-center gap-2 rounded-md bg-destructive/90 px-3 py-2 text-sm text-white backdrop-blur-sm">
                 <AlertTriangle className="h-4 w-4 shrink-0" />
                 {cameraError}
               </div>
