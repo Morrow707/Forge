@@ -37,6 +37,7 @@ import { ImplementTracker } from "@/lib/implement-tracking";
 import { getHandLandmarker, refineGripPoint } from "@/lib/hand-tracking";
 import { PoseSmoother } from "@/lib/one-euro-filter";
 import { playSuccessChime } from "@/lib/audio-cues";
+import { hapticLight } from "@/lib/haptics";
 import { recordedVideoType, videoFilenameForBlob } from "@/lib/video-recording";
 import { burnTrackingOverlay, type OverlayRepMarker } from "@/lib/video-overlay";
 import { refineLowerBodyLandmarks } from "@/lib/roi-refine";
@@ -1551,6 +1552,7 @@ export function BarTrackerDialog({
               if (dir === -1) {
                 repCountRef.current += 1;
                 setRepCount(repCountRef.current);
+                hapticLight();
                 if (voiceEnabledRef.current) speak(String(repCountRef.current));
               }
               lastRepDirRef.current = dir;

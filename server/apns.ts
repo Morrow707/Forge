@@ -58,14 +58,18 @@ const DEAD_TOKEN_STATUSES = new Set([400, 410]);
 
 function sendOne(
   deviceToken: string,
-  payload: { title: string; body: string; url?: string },
+  payload: { title: string; body: string; url?: string; badge?: number },
 ): Promise<{ ok: boolean; shouldRemove: boolean }> {
   return new Promise((resolve) => {
     const client = http2.connect("https://api.push.apple.com");
     client.on("error", () => resolve({ ok: false, shouldRemove: false }));
 
     const body = JSON.stringify({
-      aps: { alert: { title: payload.title, body: payload.body }, sound: "default" },
+      aps: {
+        alert: { title: payload.title, body: payload.body },
+        sound: "default",
+        ...(payload.badge !== undefined ? { badge: payload.badge } : {}),
+      },
       url: payload.url || "/",
     });
 
@@ -99,7 +103,7 @@ function sendOne(
 
 export async function sendApnsToUser(
   userId: number,
-  payload: { title: string; body: string; url?: string },
+  payload: { title: string; body: string; url?: string; badge?: number },
 ) {
   if (!apnsEnabled) return;
   const tokens = await storage.getApnsTokensForUser(userId);

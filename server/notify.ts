@@ -26,7 +26,11 @@ export async function notifyUser(
   }: { bypassEmailPref?: boolean; skipEmail?: boolean } = {},
 ) {
   await storage.createNotification(userId, type, title, body, link);
-  await sendPushToUser(userId, { title, body, url: link });
+  // Counted after creating this notification, so the badge iOS shows on the
+  // app icon always reflects what the notification/inbox screen will show
+  // once opened, not what it was a moment ago.
+  const badge = await storage.getUnreadNotificationCount(userId);
+  await sendPushToUser(userId, { title, body, url: link, badge });
 
   const user = await storage.getUser(userId);
   if (!skipEmail && user && (user.notifyEmail || bypassEmailPref)) {

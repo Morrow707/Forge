@@ -5,6 +5,7 @@ import { lazy, Suspense, useEffect, type ComponentType } from "react";
 import { Capacitor } from "@capacitor/core";
 import { queryClient } from "@/lib/queryClient";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
+import { BiometricLockGate } from "@/components/biometric-lock-gate";
 
 // Auth pages are small and needed on the very first, unauthenticated
 // request, so they stay in the main bundle rather than costing an extra
@@ -328,8 +329,10 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <Router />
-        <Toaster theme="dark" position="top-right" richColors />
+        <BiometricLockGate>
+          <Router />
+          <Toaster theme="dark" position="top-right" richColors />
+        </BiometricLockGate>
       </AuthProvider>
     </QueryClientProvider>
   );

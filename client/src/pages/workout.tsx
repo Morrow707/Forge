@@ -31,6 +31,7 @@ import { useDistanceUnit, formatDistanceCm } from "@/lib/distance-unit";
 import { DistanceUnitToggle } from "@/components/distance-unit-toggle";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
+import { hapticLight, hapticSuccess } from "@/lib/haptics";
 import { renderWorkoutShareCard } from "@/lib/share-card";
 import { shareOrDownloadBlob } from "@/lib/share-file";
 import {
@@ -898,6 +899,7 @@ export function WorkoutPage({
       qc.invalidateQueries({ queryKey: [`${apiBase}/calendar`] });
       qc.invalidateQueries({ queryKey: [`${apiBase}/day`] });
       if (synced) {
+        hapticLight();
         toast.success(payload.completed ? "Workout marked complete" : "Progress saved");
         qc.invalidateQueries({ queryKey: ["/api/athlete/trophies"] });
         for (const trophy of data?.newlyUnlockedTrophies ?? []) {
@@ -934,6 +936,32 @@ export function WorkoutPage({
   const itemsRef = useRef(items);
   useEffect(() => {
     itemsRef.current = items;
+  }, [items]);
+
+  // Fires a haptic exactly once per set the moment it newly qualifies as a
+  // PR, rather than on every render isPR happens to be true (which would
+  // just replay the buzz continuously while the crown icon stays visible).
+  // Keyed by item+set number, not by a version/edit counter, so re-entering
+  // the same PR value twice in a row (e.g. undo then redo) doesn't refire.
+  const notifiedPrKeysRef = useRef(new Set<string>());
+  useEffect(() => {
+    for (const item of items) {
+      const earlierSetsThisSession: { reps: string; weight: string }[] = [];
+      for (const set of item.sets) {
+        const complete = isSetComplete(item, set);
+        const isPR =
+          complete &&
+          isRepCountPR(item.setHistory, set.reps, item.weightMode, set.weight, earlierSetsThisSession);
+        const key = `${item.key}-${set.setNumber}`;
+        if (isPR && !notifiedPrKeysRef.current.has(key)) {
+          notifiedPrKeysRef.current.add(key);
+          hapticSuccess();
+        } else if (!isPR) {
+          notifiedPrKeysRef.current.delete(key);
+        }
+        earlierSetsThisSession.push(set);
+      }
+    }
   }, [items]);
 
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);

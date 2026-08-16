@@ -25,6 +25,20 @@ const config: CapacitorConfig = {
     allowMixedContent: false,
   },
   plugins: {
+    Badge: {
+      // The badge exists to say "you have unread things" -- once the
+      // athlete/coach has actually opened the app, that's no longer
+      // true, so it should always reset on resume rather than linger
+      // until the next unrelated push happens to overwrite it.
+      autoClear: true,
+    },
+    Keyboard: {
+      // "native" lets iOS handle it the way every native app does (the
+      // focused input's own scroll view shifts to stay above the
+      // keyboard) instead of resizing the whole WKWebView, which fights
+      // with fixed-position headers/footers throughout the app.
+      resize: "native",
+    },
     PushNotifications: {
       // Otherwise a push that arrives while the app is already open and
       // foregrounded shows nothing at all -- iOS suppresses foreground

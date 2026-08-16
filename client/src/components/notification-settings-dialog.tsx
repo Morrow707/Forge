@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { Mail, MessageCircle, Bell } from "lucide-react";
+import { Mail, MessageCircle, Bell, ScanFace } from "lucide-react";
 import type { PublicUser } from "@shared/schema";
 import {
   isPushSupported,
@@ -27,6 +27,12 @@ import {
   subscribeToNativePush,
   unsubscribeFromNativePush,
 } from "@/lib/native-push";
+import {
+  isBiometricLockSupported,
+  isBiometricLockEnabled,
+  setBiometricLockEnabled,
+  checkBiometryAvailable,
+} from "@/lib/biometric-lock";
 
 export function NotificationSettingsDialog({
   user,
@@ -51,6 +57,11 @@ export function NotificationSettingsDialog({
   // covers the app there instead, so this checkbox stays visible on both
   // rather than silently disappearing on native.
   const pushSupported = isPushSupported() || isNativePushSupported();
+  // Same per-device (not per-account) shape as push above -- a lock
+  // screen is a property of this phone, not something to sync across the
+  // athlete/coach's other devices.
+  const [bioLockAvailable, setBioLockAvailable] = useState(false);
+  const [bioLockEnabled, setBioLockEnabled] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -62,8 +73,18 @@ export function NotificationSettingsDialog({
       } else if (isPushSupported()) {
         getCurrentPushSubscription().then((sub) => setPushSubscribed(!!sub));
       }
+      if (isBiometricLockSupported()) {
+        checkBiometryAvailable().then(setBioLockAvailable);
+        setBioLockEnabled(isBiometricLockEnabled());
+      }
     }
   }, [open, user]);
+
+  function toggleBiometricLock(next: boolean) {
+    setBiometricLockEnabled(next);
+    setBioLockEnabled(next);
+    toast.success(next ? "Face ID/Touch ID lock enabled" : "Lock screen turned off");
+  }
 
   async function togglePush(next: boolean) {
     setPushBusy(true);
@@ -125,6 +146,23 @@ export function NotificationSettingsDialog({
                 </span>
                 <span className="text-xs text-muted-foreground">
                   Sent to this device/browser only -- enable on each one you want alerts on.
+                </span>
+              </span>
+            </label>
+          )}
+          {bioLockAvailable && (
+            <label className="flex items-start gap-2.5 text-sm">
+              <Checkbox
+                checked={bioLockEnabled}
+                onCheckedChange={(checked) => toggleBiometricLock(checked === true)}
+              />
+              <span>
+                <span className="flex items-center gap-1.5 font-semibold">
+                  <ScanFace className="h-3.5 w-3.5" /> Require Face ID / Touch ID
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  Lock the app on this device until you authenticate -- on top of
+                  staying signed in, not instead of it.
                 </span>
               </span>
             </label>
