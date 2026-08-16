@@ -14,7 +14,12 @@ jobs:
     # macOS is the only runner image with Xcode -- this is the one piece of
     # the whole pipeline that has to run on Apple's own OS, which is
     # exactly why this job lives in CI instead of needing a local Mac.
-    runs-on: macos-15
+    #
+    # Deliberately "latest" rather than a pinned version (macos-15 shipped
+    # Xcode 16.4 / iOS 18.5 SDK) -- Apple now rejects App Store uploads not
+    # built with the iOS 26 SDK (Xcode 26+), and a pinned runner label never
+    # gets its Xcode bumped, so it'll only get further out of date over time.
+    runs-on: macos-latest
     timeout-minutes: 60
     steps:
       - name: Check required secrets are configured
