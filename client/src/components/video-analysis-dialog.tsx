@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { shareOrDownloadBlob } from "@/lib/share-file";
 import { resolveApiUrl } from "@/lib/queryClient";
 import { Dialog, DialogContent, DialogTitle, DialogClose } from "@/components/ui/dialog";
@@ -41,11 +41,6 @@ const DRAW_COLORS = ["#fbbf24", "#f65b23", "#38bdf8", "#ffffff"];
 // scan past the parts that don't matter, which nothing here offered before.
 const SPEEDS = [0.1, 0.25, 0.5, 1, 2];
 const FRAME_STEP_SEC = 1 / 30;
-// Caps how tall the video/canvas area is allowed to render, as a fraction of
-// viewport height -- see the intrinsicSize comment below for why this
-// exists (a portrait phone clip at full dialog width can otherwise come out
-// taller than the whole dialog).
-const MAX_VIDEO_VH = 55;
 
 function fmtTime(sec: number): string {
   if (!Number.isFinite(sec)) return "0:00";
@@ -204,15 +199,6 @@ export function VideoAnalysisDialog({
   // anything's wrong, which is exactly the "00:00, nothing plays" dead
   // end this exists to replace with an actual explanation.
   const [loadError, setLoadError] = useState(false);
-  // Width/height of the video's own encoded frame -- used to cap how wide
-  // (and therefore how tall) a portrait phone recording is allowed to
-  // render. A vertical clip at full dialog width can come out taller than
-  // the whole dialog, pushing the transport bar and tool panels below the
-  // fold; capping width here (not object-fit/letterboxing) keeps the video
-  // filling its box edge-to-edge with no letterbox bars, so the canvas
-  // overlay -- sized to that same box every redraw -- never has to account
-  // for a mismatch between the box and the visible video content.
-  const [intrinsicSize, setIntrinsicSize] = useState<{ w: number; h: number } | null>(null);
 
   function resetForNewVideo() {
     poseFramesRef.current = [];
@@ -239,7 +225,6 @@ export function VideoAnalysisDialog({
     setCurrentTime(0);
     setPlaying(false);
     setSpeed(1);
-    setIntrinsicSize(null);
     setLoadError(false);
   }
 
@@ -270,6 +255,19 @@ export function VideoAnalysisDialog({
     if (!video || !canvas || video.clientWidth === 0) return;
     canvas.width = video.clientWidth;
     canvas.height = video.clientHeight;
+    // The video is centered (not stretched) within its flex container and
+    // sizes itself from its own aspect ratio -- its rendered box moves and
+    // resizes on every rotation/resize, and offsetLeft/Top/Width/Height
+    // read wherever that box actually landed just now, so the canvas
+    // (sharing the same offsetParent) tracks it exactly instead of the
+    // canvas's own width/height staying stale relative to a video that's
+    // since resized out from under it -- same alignment guarantee the CSS
+    // inset-0 trick gave when the video used to fill its wrapper exactly,
+    // just recomputed here since a centered+contained box doesn't.
+    canvas.style.width = `${video.clientWidth}px`;
+    canvas.style.height = `${video.clientHeight}px`;
+    canvas.style.left = `${video.offsetLeft}px`;
+    canvas.style.top = `${video.offsetTop}px`;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -338,6 +336,26 @@ export function VideoAnalysisDialog({
     if (currentStrokeRef.current) drawStroke(ctx, currentStrokeRef.current, drawColor);
   }
   redrawRef.current = redraw;
+
+  // Rotating the phone (or any other viewport resize) moves and resizes the
+  // video's own centered+contained box -- without this, the canvas stays
+  // sized/positioned for wherever that box was before the rotation until
+  // some unrelated state change happens to trigger another redraw. The rAF
+  // delay lets WebKit finish its own orientation-change layout pass first;
+  // reading offsetLeft/clientWidth at the exact moment resize/
+  // orientationchange fires can catch the video's box mid-transition.
+  useEffect(() => {
+    if (!open) return;
+    function handleResize() {
+      requestAnimationFrame(() => redrawRef.current());
+    }
+    window.addEventListener("resize", handleResize);
+    window.addEventListener("orientationchange", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      window.removeEventListener("orientationchange", handleResize);
+    };
+  }, [open]);
 
   // A genuine frame change (scrubbing, or starting playback) invalidates
   // every frame-anchored annotation -- a freehand circle drawn around a
@@ -549,63 +567,54 @@ export function VideoAnalysisDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      {/* Anchored near the top rather than the base dialog's default vertical
-          centering -- tool panels below the video change height as a coach
-          switches tools or places points, and a centered dialog re-centers
-          itself (shifting the whole video/canvas) every time that height
-          changes. Mid-interaction (e.g. a ruler measurement's second tap),
-          that shift can move the canvas out from under a still-in-flight
-          pointer sequence, landing the next event outside the dialog and
-          triggering Radix's outside-click dismissal. Pinning the top edge
-          keeps the video's on-screen position stable regardless of what the
-          panels below it are doing. */}
-      <DialogContent className="max-w-5xl w-[95vw] top-8 translate-y-0 gap-3 p-0" hideClose>
-        <div className="flex items-center justify-between px-4 pt-4">
-          <DialogTitle className="text-sm">{title ?? "Video Analysis"}</DialogTitle>
-          <DialogClose className="rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring">
-            <X className="h-4 w-4" />
+      {/* Full-screen (matching form-video-recorder-dialog.tsx's own pattern)
+          rather than a centered card -- gives the video the whole viewport
+          to work with instead of a fraction of it, and means rotating the
+          phone actually gains something: the video area is real estate that
+          grows/shrinks with the viewport, not a fixed-width box that stays
+          the same size regardless of orientation. safe-area insets on the
+          header/footer keep the close button and playback controls clear of
+          the notch/home indicator the same way the rest of the native app
+          already accounts for them. */}
+      <DialogContent
+        className="inset-0 top-0 left-0 flex h-screen w-screen max-w-none max-h-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 bg-black p-0 [&>button]:hidden"
+        hideClose
+      >
+        <div className="flex shrink-0 items-center justify-between px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
+          <DialogTitle className="text-sm text-white">{title ?? "Video Analysis"}</DialogTitle>
+          <DialogClose className="rounded-sm text-white/70 ring-offset-background transition-colors hover:text-white focus:outline-none focus:ring-2 focus:ring-ring">
+            <X className="h-5 w-5" />
             <span className="sr-only">Close</span>
           </DialogClose>
         </div>
 
-        <div className="px-4">
-        <div
-          className="relative mx-auto flex min-h-[280px] items-center justify-center overflow-hidden rounded-md bg-black"
-          style={
-            intrinsicSize
-              ? { maxWidth: `min(100%, calc(${MAX_VIDEO_VH}vh * ${intrinsicSize.w / intrinsicSize.h}))` }
-              : undefined
-          }
-        >
-          {/* This inner wrapper (not the outer flex container) is what
-              inset-0/h-full/w-full on the canvas actually measures against --
-              it auto-sizes to the video's own natural box regardless of the
-              outer container's min-height, so the canvas's CSS display size
-              always matches the bitmap size redraw() sets from
-              video.clientWidth/Height. Sizing the canvas off the taller
-              outer box instead would stretch the drawing buffer to fill
-              space the video doesn't actually occupy, throwing the skeleton
-              overlay out of alignment exactly like the videoWidth/clientWidth
-              mismatch fixed elsewhere this session. */}
+        <div className="relative min-h-0 flex-1 overflow-hidden bg-black">
           {loadError ? (
-            <div className="flex flex-col items-center gap-2 px-6 py-10 text-center text-sm text-white/70">
+            <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center text-sm text-white/70">
               <VideoOff className="h-8 w-8" />
               This video couldn't be loaded — it may not have finished uploading, or the file is missing.
             </div>
           ) : (
             <>
-              <div className="relative w-full">
+              {/* Centers the video and lets it size itself from its own
+                  aspect ratio (never stretched, never letterboxed) -- unlike
+                  the fixed-vh-cap this replaced, this reflows correctly on
+                  every rotation with no JS recalculation needed. The canvas
+                  is a sibling, not nested inside this wrapper, because its
+                  own position/size is now synced to the video's actual
+                  rendered box directly in redraw() (see its own comment) --
+                  a centered, intrinsically-sized box can't be targeted with
+                  a plain CSS inset-0 the way a wrapper that always exactly
+                  matched its child could. */}
+              <div className="flex h-full w-full items-center justify-center">
                 <video
                   ref={videoRef}
                   src={resolveApiUrl(videoUrl)}
                   playsInline
-                  className="block w-full"
+                  className="block h-auto max-h-full w-auto max-w-full"
                   onLoadedMetadata={() => {
                     const v = videoRef.current;
-                    if (v) {
-                      setDuration(v.duration);
-                      if (v.videoWidth && v.videoHeight) setIntrinsicSize({ w: v.videoWidth, h: v.videoHeight });
-                    }
+                    if (v) setDuration(v.duration);
                     redraw();
                   }}
                   onTimeUpdate={() => {
@@ -621,14 +630,14 @@ export function VideoAnalysisDialog({
                   onPause={() => setPlaying(false)}
                   onError={() => setLoadError(true)}
                 />
-                <canvas
-                  ref={canvasRef}
-                  onPointerDown={handlePointerDown}
-                  onPointerMove={handlePointerMove}
-                  onPointerUp={handlePointerUp}
-                  className={cn("absolute inset-0 h-full w-full", activeTool !== "none" ? "touch-none" : "pointer-events-none")}
-                />
               </div>
+              <canvas
+                ref={canvasRef}
+                onPointerDown={handlePointerDown}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
+                className={cn("absolute", activeTool !== "none" ? "touch-none" : "pointer-events-none")}
+              />
 
               <div className="absolute right-2 top-2 flex flex-col gap-1.5">
                 <RailButton icon={PersonStanding} active={showSkeleton} label="Skeleton" onClick={toggleSkeleton} />
@@ -653,9 +662,8 @@ export function VideoAnalysisDialog({
             </div>
           )}
         </div>
-        </div>
 
-        <div className="space-y-2 px-4">
+        <div className="shrink-0 space-y-2 bg-black px-4 py-2">
           {analyzeMessage && <p className="text-xs text-amber-400">{analyzeMessage}</p>}
 
           {activeTool === "draw" && (
@@ -762,7 +770,7 @@ export function VideoAnalysisDialog({
         </div>
 
         {!loadError && (
-        <div className="flex items-center gap-2 border-t border-border px-4 py-3">
+        <div className="flex shrink-0 items-center gap-2 border-t border-white/10 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3">
           <Button size="icon" variant="ghost" onClick={togglePlay} className="h-8 w-8 shrink-0">
             {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
           </Button>

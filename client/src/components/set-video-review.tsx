@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogClose, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { resolveApiUrl } from "@/lib/queryClient";
-import { RotateCcw, Trash2, ThumbsUp, ThumbsDown, Wand2 } from "lucide-react";
+import { RotateCcw, Trash2, ThumbsUp, ThumbsDown, Wand2, X } from "lucide-react";
 import { VideoAnalysisDialog } from "@/components/video-analysis-dialog";
 
 export type FlaggedSetVideo = {
@@ -76,41 +76,65 @@ export function SetVideoPreviewDialog({
   const [analyzing, setAnalyzing] = useState(false);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Set {setNumber} — Form Check</DialogTitle>
-        </DialogHeader>
-        <video src={resolveApiUrl(videoUrl)} controls playsInline className="w-full rounded-md bg-black" />
-        <Button variant="outline" onClick={() => setAnalyzing(true)}>
-          <Wand2 className="h-4 w-4" />
-          Analysis Tools
-        </Button>
-        <div className="flex items-center justify-center gap-2">
-          <FlagButton
-            active={flag === "best"}
-            onClick={() => onFlag(flag === "best" ? null : "best")}
-            icon={ThumbsUp}
-            label="Best Set"
-            activeClass="border-success bg-success/15 text-success"
-          />
-          <FlagButton
-            active={flag === "worst"}
-            onClick={() => onFlag(flag === "worst" ? null : "worst")}
-            icon={ThumbsDown}
-            label="Worst Set"
-            activeClass="border-destructive bg-destructive/15 text-destructive"
+      {/* Full-screen (same pattern as VideoAnalysisDialog/
+          form-video-recorder-dialog.tsx) -- besides giving the video more
+          room, this fixes the native <video controls> bar's own top row
+          (fullscreen/AirPlay/volume icons) rendering right under the
+          notch/Dynamic Island: those icons sit near the video element's own
+          top edge, so a small centered card with little top margin put that
+          edge close enough to the cutout to collide with it. The safe-area
+          padding below pushes the video's top edge safely clear of it. */}
+      <DialogContent
+        className="inset-0 top-0 left-0 flex h-screen w-screen max-w-none max-h-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 bg-black p-0 [&>button]:hidden"
+        hideClose
+      >
+        <div className="flex shrink-0 items-center justify-between px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
+          <DialogTitle className="text-sm text-white">Set {setNumber} — Form Check</DialogTitle>
+          <DialogClose className="rounded-sm text-white/70 transition-colors hover:text-white focus:outline-none focus:ring-2 focus:ring-ring">
+            <X className="h-5 w-5" />
+            <span className="sr-only">Close</span>
+          </DialogClose>
+        </div>
+        <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-black">
+          <video
+            src={resolveApiUrl(videoUrl)}
+            controls
+            playsInline
+            className="h-full max-h-full w-full max-w-full object-contain"
           />
         </div>
-        <DialogFooter className="sm:justify-between">
-          <Button variant="ghost" className="text-destructive hover:text-destructive" onClick={onRemove}>
-            <Trash2 className="h-4 w-4" />
-            Remove
+        <div className="shrink-0 space-y-3 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3">
+          <Button variant="outline" className="w-full" onClick={() => setAnalyzing(true)}>
+            <Wand2 className="h-4 w-4" />
+            Analysis Tools
           </Button>
-          <Button variant="outline" onClick={onRetake}>
-            <RotateCcw className="h-4 w-4" />
-            Retake
-          </Button>
-        </DialogFooter>
+          <div className="flex items-center justify-center gap-2">
+            <FlagButton
+              active={flag === "best"}
+              onClick={() => onFlag(flag === "best" ? null : "best")}
+              icon={ThumbsUp}
+              label="Best Set"
+              activeClass="border-success bg-success/15 text-success"
+            />
+            <FlagButton
+              active={flag === "worst"}
+              onClick={() => onFlag(flag === "worst" ? null : "worst")}
+              icon={ThumbsDown}
+              label="Worst Set"
+              activeClass="border-destructive bg-destructive/15 text-destructive"
+            />
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <Button variant="ghost" className="text-destructive hover:text-destructive" onClick={onRemove}>
+              <Trash2 className="h-4 w-4" />
+              Remove
+            </Button>
+            <Button variant="outline" onClick={onRetake}>
+              <RotateCcw className="h-4 w-4" />
+              Retake
+            </Button>
+          </div>
+        </div>
       </DialogContent>
       <VideoAnalysisDialog
         open={analyzing}
