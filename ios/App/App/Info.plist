@@ -72,5 +72,7 @@
 	<string>Forge lets you attach photos from your library for food logging and lesson content uploads.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Forge can save form-check videos and shareable PR cards to your Photos library when you choose to download them.</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 </dict>
 </plist>
