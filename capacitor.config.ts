@@ -25,6 +25,12 @@ const config: CapacitorConfig = {
     allowMixedContent: false,
   },
   plugins: {
+    PushNotifications: {
+      // Otherwise a push that arrives while the app is already open and
+      // foregrounded shows nothing at all -- iOS suppresses foreground
+      // banners by default unless the app explicitly opts in.
+      presentationOptions: ["badge", "sound", "banner", "list"],
+    },
     SplashScreen: {
       // Held up until native-bootstrap.ts explicitly calls hide() once
       // React has actually mounted -- the plugin's own default timer would

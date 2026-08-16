@@ -40,6 +40,25 @@ services:
         sync: false
       - key: VAPID_SUBJECT
         value: mailto:support@forge.app
+      # APNs (native iOS push) auth key -- native-app twin of the VAPID
+      # keypair above, same "unset = silently no-ops" behavior. Generate in
+      # Apple Developer Portal under Certificates, Identifiers & Profiles ->
+      # Keys -> new key -> check "Apple Push Notifications service (APNs)".
+      # APNS_KEY_ID is the 10-char Key ID shown after creation; APNS_TEAM_ID
+      # is the Apple Developer Team ID (same one Fastlane already uses --
+      # see APPLE_TEAM_ID in .github/workflows/ios-testflight.yml);
+      # APNS_PRIVATE_KEY is the full contents of the downloaded AuthKey_*.p8
+      # file, pasted as-is (PEM with real newlines is fine, Render's env var
+      # editor preserves them). The App ID's Push Notifications capability
+      # must also be enabled before any of this works -- see App.entitlements.
+      - key: APNS_TEAM_ID
+        sync: false
+      - key: APNS_KEY_ID
+        sync: false
+      - key: APNS_PRIVATE_KEY
+        sync: false
+      - key: APNS_BUNDLE_ID
+        value: com.foreperformancesystems.forge
       # Resend API key for coach-driven progress report emails -- sign up at
       # resend.com (free tier), create an API key, and paste it in. Sending
       # silently no-ops until this is set. RESEND_FROM_EMAIL defaults to

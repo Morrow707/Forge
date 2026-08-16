@@ -1,5 +1,6 @@
 import webpush from "web-push";
 import { storage } from "./storage";
+import { sendApnsToUser } from "./apns";
 
 const publicKey = process.env.VAPID_PUBLIC_KEY;
 const privateKey = process.env.VAPID_PRIVATE_KEY;
@@ -21,10 +22,19 @@ export function getVapidPublicKey() {
   return publicKey ?? null;
 }
 
-// Sends to every device the user has enabled push on; a subscription the
-// push service reports as gone (410 Gone / 404) is removed so it's not
-// retried forever.
+// Sends to every device the user has enabled push on -- both the browser
+// (Web Push) and the native app (APNs), fanned out in parallel so callers
+// don't need to know or care which transport(s) actually apply to this
+// user. A subscription/token the push service reports as gone (410 Gone /
+// 404) is removed so it's not retried forever.
 export async function sendPushToUser(
+  userId: number,
+  payload: { title: string; body: string; url?: string },
+) {
+  await Promise.all([sendWebPushToUser(userId, payload), sendApnsToUser(userId, payload)]);
+}
+
+async function sendWebPushToUser(
   userId: number,
   payload: { title: string; body: string; url?: string },
 ) {

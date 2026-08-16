@@ -1259,6 +1259,28 @@ export const pushSubscriptions = pgTable(
   }),
 );
 
+// Native-app twin of pushSubscriptions above -- one row per device a user
+// has registered for APNs push (the native iOS/Android app, not a browser
+// tab). deviceToken is Apple's opaque per-install token, unique per device
+// (unlike endpoint above, which is unique per browser subscription but
+// doesn't need a DB-level unique constraint since dedup happens in
+// storage). Removed the same way: APNs reports a dead token via a
+// 400/410 response, same signal web-push gives for a stale endpoint.
+export const apnsDeviceTokens = pgTable(
+  "apns_device_tokens",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    deviceToken: text("device_token").notNull().unique(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    userIdx: index("apns_device_tokens_user_idx").on(table.userId),
+  }),
+);
+
 // Single-use, expiring password reset tokens. Only the SHA-256 hash of the
 // token is stored -- same reasoning as password hashing -- so a database
 // leak alone can't be used to reset anyone's password.
@@ -3584,6 +3606,11 @@ export const pushSubscribeSchema = z.object({
   }),
 });
 export type PushSubscribeInput = z.infer<typeof pushSubscribeSchema>;
+
+export const apnsSubscribeSchema = z.object({
+  deviceToken: z.string().min(1),
+});
+export type ApnsSubscribeInput = z.infer<typeof apnsSubscribeSchema>;
 
 export const createTeamPostSchema = z.object({
   body: z.string().trim().min(1).max(2000),
