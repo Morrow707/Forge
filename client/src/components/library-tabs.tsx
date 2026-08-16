@@ -34,18 +34,18 @@ export function LibraryTabs({
 
   const tabClass = (isActive: boolean, activeColorClass = "bg-primary text-primary-foreground") =>
     cn(
-      "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors",
+      "flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold transition-colors",
       isActive ? activeColorClass : "text-muted-foreground hover:bg-surface-elevated hover:text-foreground",
     );
 
   return (
     <div className="flex flex-wrap gap-1">
       <button type="button" onClick={() => navigate(programsHref)} className={tabClass(active === "programs")}>
-        <ListChecks className="h-4 w-4" />
+        <ListChecks className="h-3.5 w-3.5" />
         Programs
       </button>
       <button type="button" onClick={() => navigate(exercisesHref)} className={tabClass(active === "exercises")}>
-        <Dumbbell className="h-4 w-4" />
+        <Dumbbell className="h-3.5 w-3.5" />
         Exercise Bank
       </button>
       <button
@@ -53,7 +53,7 @@ export function LibraryTabs({
         onClick={() => navigate(skillProgramsHref)}
         className={tabClass(active === "skill-programs", "bg-teal-500 text-white")}
       >
-        <ClipboardList className="h-4 w-4" />
+        <ClipboardList className="h-3.5 w-3.5" />
         Skill Programs
       </button>
       <button
@@ -61,7 +61,7 @@ export function LibraryTabs({
         onClick={() => navigate(skillBankHref)}
         className={tabClass(active === "skill-bank", "bg-teal-500 text-white")}
       >
-        <Target className="h-4 w-4" />
+        <Target className="h-3.5 w-3.5" />
         Skill Bank
       </button>
       {classesHref && (
@@ -70,7 +70,7 @@ export function LibraryTabs({
           onClick={() => navigate(classesHref)}
           className={tabClass(active === "classes", "bg-teal-500 text-white")}
         >
-          <GraduationCap className="h-4 w-4" />
+          <GraduationCap className="h-3.5 w-3.5" />
           Classes
         </button>
       )}
