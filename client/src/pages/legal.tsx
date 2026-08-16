@@ -20,7 +20,7 @@ export default function LegalPage() {
       <div className="mx-auto max-w-2xl">
         <Link href="/" className="mb-8 flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
-            <ForgeMark className="h-4.5 w-4.5" />
+            <ForgeMark className="h-[18px] w-[18px]" />
           </div>
           <span className="font-display font-bold uppercase tracking-wide text-foreground">
             Forge

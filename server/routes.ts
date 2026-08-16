@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import path from "path";
 import fs from "fs";
 import multer from "multer";
-import { setupAuth, requireAuth, requireRole } from "./auth";
+import { setupAuth, requireAuth, requireRole, attachNativeTokenAuth } from "./auth";
 import { storage } from "./storage";
 import { buildIcsFeed } from "./ics";
 import { getVapidPublicKey } from "./push";
@@ -436,6 +436,7 @@ async function notifyNewlyUnlockedLessons(
 
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
+  app.use(attachNativeTokenAuth);
   app.use("/uploads", express.static(path.join(process.cwd(), "server", "uploads")));
   // express.static calls next() rather than responding when a file isn't
   // found, so a missing upload (a video whose row survived some past

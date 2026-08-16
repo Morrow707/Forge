@@ -3,6 +3,7 @@ import { Strategy as LocalStrategy } from "passport-local";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import rateLimit from "express-rate-limit";
+import crypto from "crypto";
 import type { Express, RequestHandler } from "express";
 import { storage } from "./storage";
 import { hashPassword, comparePasswords } from "./auth-utils";
@@ -58,6 +59,73 @@ function toPublicUser(user: any): PublicUser {
   const { passwordHash, healthStatus, agreedToTermsText, ...rest } = user;
   return rest;
 }
+
+// Bearer-token fallback for the native app, alongside (not instead of) the
+// cookie session above. iOS's WKWebView is subject to Apple's Intelligent
+// Tracking Prevention, which silently drops a cross-origin Set-Cookie from a
+// fetch() response -- forge-ebhd.onrender.com is "third-party" relative to
+// the app's own capacitor://localhost origin, so the session cookie set by
+// login never actually gets stored, and every request after it is
+// unauthenticated. Login itself still appeared to work because its response
+// body is used directly (see use-auth.tsx's setQueryData), never round-
+// tripping through a second request -- but every GET after that (programs,
+// classes, roster, calendar...) silently 401's, and the UI's `data ?? []`
+// fallbacks render that identically to genuinely empty data. A signed,
+// stateless token sent back as an ordinary response body field and replayed
+// as an Authorization header sidesteps cookies (and ITP) entirely; it needs
+// no server-side storage/revocation list since it's no more sensitive than
+// the session cookie it stands in for, and it's silently ignored by the web
+// client, which keeps using the cookie exactly as before.
+const NATIVE_TOKEN_SECRET = process.env.SESSION_SECRET || "forge-dev-secret";
+const NATIVE_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // matches the cookie session's own maxAge
+
+function signNativeToken(userId: number): string {
+  const expiresAt = Date.now() + NATIVE_TOKEN_TTL_MS;
+  const payload = `${userId}.${expiresAt}`;
+  const sig = crypto.createHmac("sha256", NATIVE_TOKEN_SECRET).update(payload).digest("hex");
+  return `${payload}.${sig}`;
+}
+
+function verifyNativeToken(token: string): number | null {
+  const parts = token.split(".");
+  if (parts.length !== 3) return null;
+  const [userIdStr, expiresAtStr, sig] = parts;
+  const expected = crypto
+    .createHmac("sha256", NATIVE_TOKEN_SECRET)
+    .update(`${userIdStr}.${expiresAtStr}`)
+    .digest("hex");
+  const sigBuf = Buffer.from(sig, "hex");
+  const expectedBuf = Buffer.from(expected, "hex");
+  if (sigBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(sigBuf, expectedBuf)) {
+    return null;
+  }
+  const expiresAt = Number(expiresAtStr);
+  if (!Number.isFinite(expiresAt) || expiresAt < Date.now()) return null;
+  const userId = Number(userIdStr);
+  return Number.isInteger(userId) ? userId : null;
+}
+
+// Registered once, right after setupAuth(app) in routes.ts, before any
+// route. Only kicks in when the cookie session didn't already authenticate
+// the request -- on web that's always the case (no token is ever sent), so
+// this is a pure no-op there. req.user is set directly rather than via
+// req.login(), since req.isAuthenticated() (which requireAuth/requireRole
+// below both gate on) just checks `!!req.user` -- no session write, no
+// cookie, nothing left behind for a request that's over in one round trip.
+export const attachNativeTokenAuth: RequestHandler = async (req, res, next) => {
+  if (req.isAuthenticated()) return next();
+  const header = req.headers.authorization;
+  if (!header?.startsWith("Bearer ")) return next();
+  const userId = verifyNativeToken(header.slice(7));
+  if (userId === null) return next();
+  try {
+    const user = await storage.getUser(userId);
+    if (user) (req as any).user = user;
+    next();
+  } catch (err) {
+    next(err);
+  }
+};
 
 export function setupAuth(app: Express) {
   app.set("trust proxy", 1);
@@ -174,7 +242,7 @@ export function setupAuth(app: Express) {
           subject: "Welcome to Forge",
           html: buildWelcomeEmail(user, coach?.name ?? null),
         });
-        res.status(201).json(toPublicUser(user));
+        res.status(201).json({ ...toPublicUser(user), nativeToken: signNativeToken(user.id) });
       });
     } catch (err) {
       next(err);
@@ -203,7 +271,7 @@ export function setupAuth(app: Express) {
         if (err2) return next(err2);
         try {
           await storage.touchUserActivity(user.id);
-          res.json(toPublicUser(user));
+          res.json({ ...toPublicUser(user), nativeToken: signNativeToken(user.id) });
         } catch (err3) {
           next(err3);
         }

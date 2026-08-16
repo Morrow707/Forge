@@ -198,7 +198,7 @@ export function AppShell({
         <div className="flex items-center justify-between gap-3 px-4 py-3 md:px-8">
           <div className="flex items-center gap-2">
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
-              <ForgeMark className="h-4.5 w-4.5" />
+              <ForgeMark className="h-[18px] w-[18px]" />
             </div>
             <span className="font-display text-xl font-extrabold uppercase tracking-wider">
               Forge
@@ -479,20 +479,24 @@ export function AppShell({
             </div>
           </div>
         )}
-      </div>
 
-      <div className={cn("flex w-full flex-col", fitScreen ? "flex-1 md:min-h-0" : "flex-1")}>
-        <header className="shrink-0 flex flex-col gap-2 border-b border-border bg-background/95 px-4 py-4 backdrop-blur sm:flex-row sm:items-center sm:justify-between md:px-8">
+        {/* Title + subheader (e.g. the Library tab switcher) live inside the
+            same sticky wrapper as the brand/nav bar above, not the scrolling
+            content div below -- previously they scrolled away with the page
+            on mobile (no persistent desktop nav row to keep them company
+            there), which read as "the tabs disappear when I scroll." */}
+        <header className="flex flex-col gap-2 border-t border-border bg-background/95 px-4 py-4 backdrop-blur sm:flex-row sm:items-center sm:justify-between md:px-8">
           <h1 className="font-display text-2xl font-bold uppercase tracking-wide md:text-3xl">
             {title}
           </h1>
           <div className="flex min-w-0 items-center gap-2 overflow-x-auto sm:justify-end">{actions}</div>
         </header>
         {subheader && (
-          <div className="shrink-0 border-b border-border bg-background px-4 py-2 md:px-8">
-            {subheader}
-          </div>
+          <div className="border-t border-border bg-background px-4 py-2 md:px-8">{subheader}</div>
         )}
+      </div>
+
+      <div className={cn("flex w-full flex-col", fitScreen ? "flex-1 md:min-h-0" : "flex-1")}>
         <main
           className={cn(
             fitScreen
