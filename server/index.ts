@@ -16,10 +16,25 @@ import "dotenv/config";
 // prototype and has to run before app.get/post/etc. are ever called.
 import "express-async-errors";
 import express, { type Request, Response, NextFunction } from "express";
+import helmet from "helmet";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 
 const app = express();
+// contentSecurityPolicy and crossOriginEmbedderPolicy are both off --
+// this app already serves cross-origin video/image sources (uploaded
+// clips, external lesson video links) and registers its own service
+// worker (client/src/sw.ts) for push + offline; a default-on CSP or COEP
+// would need to be hand-tuned against every one of those before it's safe
+// to ship, which isn't something to guess at blind. Everything else here
+// (nosniff, frameguard, HSTS, referrer policy, etc.) is a pure hardening
+// default with no behavior change for a same-origin app like this one.
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false,
+  }),
+);
 // Raised from Express's 100kb default -- the AI form-check route accepts a
 // handful of base64-encoded JPEG frames per request, which clears 100kb
 // easily even resized down.

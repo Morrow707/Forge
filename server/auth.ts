@@ -2,6 +2,7 @@ import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
+import rateLimit from "express-rate-limit";
 import type { Express, RequestHandler } from "express";
 import { storage } from "./storage";
 import { hashPassword, comparePasswords } from "./auth-utils";
@@ -17,6 +18,37 @@ import {
 } from "@shared/schema";
 
 const PgStore = connectPgSimple(session);
+
+// Keyed by IP (express-rate-limit's default) rather than by the submitted
+// email -- an attacker can supply any email in the body, but not spoof
+// their own connecting IP, which is what actually bounds a credential-
+// stuffing or brute-force script. A real person mistyping a password a
+// few times never comes close to these limits.
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 15,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many login attempts. Please try again in a few minutes." },
+});
+const signupLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many accounts created from this network. Please try again later." },
+});
+// request-password-reset already replies identically whether or not the
+// email exists (see the route below), which defends enumeration by
+// response content -- this defends the other angle, an attacker hammering
+// the endpoint to flood a real victim's inbox with reset emails.
+const passwordResetLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 8,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many reset requests. Please try again later." },
+});
 
 function toPublicUser(user: any): PublicUser {
   // agreedToTermsText is a full snapshot of whatever the agreement said at
@@ -72,7 +104,7 @@ export function setupAuth(app: Express) {
     }
   });
 
-  app.post("/api/auth/signup", async (req, res, next) => {
+  app.post("/api/auth/signup", signupLimiter, async (req, res, next) => {
     try {
       const parsed = signupSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -138,7 +170,7 @@ export function setupAuth(app: Express) {
     }
   });
 
-  app.post("/api/auth/login", (req, res, next) => {
+  app.post("/api/auth/login", loginLimiter, (req, res, next) => {
     passport.authenticate("local", (err: any, user: any, info: any) => {
       if (err) return next(err);
       if (!user) {
@@ -185,7 +217,7 @@ export function setupAuth(app: Express) {
   // is registered, and never reflects the token or any other tell back to
   // the caller -- otherwise this endpoint would let anyone check which
   // emails have accounts just by watching which responses differ.
-  app.post("/api/auth/request-password-reset", async (req, res, next) => {
+  app.post("/api/auth/request-password-reset", passwordResetLimiter, async (req, res, next) => {
     try {
       const parsed = requestPasswordResetSchema.safeParse(req.body);
       if (!parsed.success) {
