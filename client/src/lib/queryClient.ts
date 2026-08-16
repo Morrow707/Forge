@@ -30,12 +30,23 @@ export async function apiRequest(
   // it just serializes an empty object, and the browser needs to set its
   // own multipart Content-Type (with boundary) rather than the JSON one.
   const isFormData = body instanceof FormData;
-  const res = await fetch(url, {
-    method,
-    headers: body && !isFormData ? { "Content-Type": "application/json" } : {},
-    body: isFormData ? (body as FormData) : body ? JSON.stringify(body) : undefined,
-    credentials: "include",
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method,
+      headers: body && !isFormData ? { "Content-Type": "application/json" } : {},
+      body: isFormData ? (body as FormData) : body ? JSON.stringify(body) : undefined,
+      credentials: "include",
+    });
+  } catch (err) {
+    // Surfacing the raw fetch()-level failure (name + message + which
+    // request) instead of letting it bubble up as-is -- on native iOS a
+    // failed fetch throws a bare TypeError with WebKit's generic message
+    // ("The string did not match the expected pattern."), which gives no
+    // hint of *what* about the request WebKit rejected.
+    const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+    throw new Error(`Request failed (${method} ${url}): ${detail}`);
+  }
   await throwIfResNotOk(res);
   return res;
 }
@@ -55,9 +66,14 @@ export const getQueryFn: <T>(options?: {
 }) => QueryFunction<T> =
   (options = {}) =>
   async ({ queryKey }) => {
-    const res = await fetch(queryKey.join("/") as string, {
-      credentials: "include",
-    });
+    const url = queryKey.join("/") as string;
+    let res: Response;
+    try {
+      res = await fetch(url, { credentials: "include" });
+    } catch (err) {
+      const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+      throw new Error(`Request failed (GET ${url}): ${detail}`);
+    }
 
     if (options.on401 === "returnNull" && res.status === 401) {
       return null as any;
