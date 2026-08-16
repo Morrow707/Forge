@@ -2,6 +2,7 @@ import { Switch, Route, Redirect, useLocation } from "wouter";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
 import { lazy, Suspense, useEffect, type ComponentType } from "react";
+import { Capacitor } from "@capacitor/core";
 import { queryClient } from "@/lib/queryClient";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
 
@@ -111,8 +112,13 @@ function HomeRedirect() {
   // Logged-out visitors land on the marketing page instead of being bounced
   // straight to the login form -- "/" is the front door now, not just a
   // redirect stub. Anyone already signed in still goes straight to their
-  // own dashboard, same as before.
-  if (!user) return <LandingPage />;
+  // own dashboard, same as before. The native app has no use for the
+  // marketing pitch (you already installed it) and no App Store review
+  // wants a marketing page as the app's entry point, so it skips straight
+  // to login there.
+  if (!user) {
+    return Capacitor.isNativePlatform() ? <Redirect to="/login" /> : <LandingPage />;
+  }
   return <Redirect to={homeFor(user.role)} />;
 }
 
