@@ -19,6 +19,7 @@ import SignupPage from "@/pages/signup";
 import ForgotPasswordPage from "@/pages/forgot-password";
 import ResetPasswordPage from "@/pages/reset-password";
 import NotFound from "@/pages/not-found";
+const ArPreviewTestPage = lazy(() => import("@/pages/dev/ar-preview-test"));
 
 const CoachDashboard = lazy(() => import("@/pages/coach/dashboard"));
 const CoachExercises = lazy(() => import("@/pages/coach/exercises"));
@@ -154,6 +155,7 @@ function Router() {
         <Route path="/signup" component={SignupPage} />
         <Route path="/forgot-password" component={ForgotPasswordPage} />
         <Route path="/reset-password" component={ResetPasswordPage} />
+        <Route path="/dev/ar-preview-test" component={ArPreviewTestPage} />
         <Route path="/coach">
           <ProtectedRoute role="coach" component={CoachDashboard} />
         </Route>

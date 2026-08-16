@@ -1,5 +1,6 @@
 import { type ReactNode, useState } from "react";
 import { Link, useLocation } from "wouter";
+import { Capacitor } from "@capacitor/core";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { getJson } from "@/lib/queryClient";
@@ -28,6 +29,7 @@ import {
   HardDrive,
   TrendingUp,
   FileText,
+  Camera,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -336,6 +338,17 @@ export function AppShell({
                       <UserPlus className="h-4 w-4" />
                       Coaching staff
                     </button>
+                  )}
+                  {Capacitor.getPlatform() === "ios" && (
+                    <Link
+                      href="/dev/ar-preview-test"
+                      role="menuitem"
+                      onClick={() => setAccountMenuOpen(false)}
+                      className="flex w-full items-center gap-2 border-t border-border px-4 py-2.5 text-left text-sm font-medium text-muted-foreground hover:bg-surface-elevated"
+                    >
+                      <Camera className="h-4 w-4" />
+                      ARKit preview test
+                    </Link>
                   )}
                   <button
                     type="button"
