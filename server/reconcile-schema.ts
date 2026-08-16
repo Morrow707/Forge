@@ -614,6 +614,8 @@ ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "ground_contact_secon
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "reactive_strength_index" real;
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "jump_breakdown" json;
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "leg_drive_asymmetry" json;
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "arm_drive_asymmetry" json;
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "trust_scores" json;
 
 CREATE TABLE IF NOT EXISTS "workout_comments" (
   "id" serial PRIMARY KEY,
