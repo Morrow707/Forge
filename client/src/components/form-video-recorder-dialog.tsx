@@ -18,7 +18,18 @@ import { recordedVideoType, videoFilenameForBlob } from "@/lib/video-recording";
 import { lockCameraExposure } from "@/lib/camera-exposure";
 import { ensureCameraPermission, onAppForeground, onAppBackground } from "@/lib/native-camera";
 
-const MAX_SECONDS = 10;
+// Live recording has no fixed duration -- a set is as long as it takes
+// (a slow tempo squat or a higher-rep set both run well past what a fixed
+// countdown assumed), so this is a generous safety ceiling only, not a
+// target: purely to stop an accidentally-left-running recording from
+// growing unbounded in memory (MediaRecorder buffers the whole clip in
+// memory until stop() is called), never something a real set should hit.
+const RECORDING_SAFETY_CAP_SECONDS = 180;
+// Separate, much shorter cap for the *upload* flow -- picking an existing
+// video from the library is a different case from live recording (the
+// picked file could be an entire practice session), so this still trims it
+// down to a short, focused clip the way it always has.
+const TRIM_WINDOW_SECONDS = 10;
 
 type Mode = "record" | "upload";
 type Step = "capture" | "trim" | "preview" | "uploading";
@@ -26,7 +37,7 @@ type Step = "capture" | "trim" | "preview" | "uploading";
 // Re-encodes a [start, end] window of a source video into a fresh clip by
 // playing it into a captureStream() + MediaRecorder -- there's no server-side
 // video toolchain here, so this is what lets an athlete upload a longer clip
-// and only keep the 10-second window they scrubbed to. Requires
+// and only keep the TRIM_WINDOW_SECONDS window they scrubbed to. Requires
 // HTMLVideoElement.captureStream, which every mainstream mobile/desktop
 // browser has supported for several years.
 async function trimClip(sourceUrl: string, start: number, end: number): Promise<Blob> {
@@ -38,7 +49,7 @@ async function trimClip(sourceUrl: string, start: number, end: number): Promise<
 
     const capture = (src as any).captureStream ?? (src as any).mozCaptureStream;
     if (!capture) {
-      reject(new Error("This browser can't trim video -- pick a clip 10s or shorter."));
+      reject(new Error(`This browser can't trim video -- pick a clip ${TRIM_WINDOW_SECONDS}s or shorter.`));
       return;
     }
 
@@ -248,7 +259,7 @@ export function FormVideoRecorderDialog({
     setElapsed(0);
     timerRef.current = window.setInterval(() => {
       setElapsed((s) => {
-        if (s + 1 >= MAX_SECONDS) stopRecording();
+        if (s + 1 >= RECORDING_SAFETY_CAP_SECONDS) stopRecording();
         return s + 1;
       });
     }, 1000);
@@ -267,7 +278,7 @@ export function FormVideoRecorderDialog({
     probe.src = url;
     probe.onloadedmetadata = () => {
       const duration = probe.duration;
-      if (duration <= MAX_SECONDS) {
+      if (duration <= TRIM_WINDOW_SECONDS) {
         setBlob(file);
         setPreviewUrl(url);
         setStep("preview");
@@ -288,7 +299,7 @@ export function FormVideoRecorderDialog({
     if (!sourceUrl) return;
     setTrimming(true);
     try {
-      const end = Math.min(trimStart + MAX_SECONDS, sourceDuration);
+      const end = Math.min(trimStart + TRIM_WINDOW_SECONDS, sourceDuration);
       const trimmed = await trimClip(sourceUrl, trimStart, end);
       setBlob(trimmed);
       setPreviewUrl(URL.createObjectURL(trimmed));
@@ -320,7 +331,7 @@ export function FormVideoRecorderDialog({
     }
   }
 
-  const windowEnd = Math.min(trimStart + MAX_SECONDS, sourceDuration);
+  const windowEnd = Math.min(trimStart + TRIM_WINDOW_SECONDS, sourceDuration);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -350,7 +361,7 @@ export function FormVideoRecorderDialog({
               <div className="flex h-full flex-col items-center justify-center gap-4 px-6 text-center">
                 <FolderOpen className="h-12 w-12 text-white/60" />
                 <p className="max-w-xs text-sm text-white/70">
-                  Choose a video from your device. Anything over {MAX_SECONDS}s gets trimmed down
+                  Choose a video from your device. Anything over {TRIM_WINDOW_SECONDS}s gets trimmed down
                   before it's saved.
                 </p>
                 <Button onClick={() => fileInputRef.current?.click()}>
@@ -407,7 +418,7 @@ export function FormVideoRecorderDialog({
             {mode === "record" && step === "capture" && recording && (
               <div className="absolute left-1/2 top-[max(0.75rem,env(safe-area-inset-top))] flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5 text-sm font-bold text-white backdrop-blur-sm">
                 <Circle className="h-2.5 w-2.5 animate-pulse fill-destructive text-destructive" />
-                {elapsed}s / {MAX_SECONDS}s
+                {elapsed}s
               </div>
             )}
 
@@ -422,12 +433,12 @@ export function FormVideoRecorderDialog({
               <div className="absolute inset-x-3 bottom-3 space-y-2 rounded-lg bg-black/60 p-3 backdrop-blur-sm">
                 <div className="flex items-center gap-1.5 text-xs font-semibold text-white/80">
                   <Scissors className="h-3.5 w-3.5" />
-                  {sourceDuration.toFixed(1)}s clip — drag to pick your {MAX_SECONDS}s
+                  {sourceDuration.toFixed(1)}s clip — drag to pick your {TRIM_WINDOW_SECONDS}s
                 </div>
                 <input
                   type="range"
                   min={0}
-                  max={Math.max(0, sourceDuration - MAX_SECONDS)}
+                  max={Math.max(0, sourceDuration - TRIM_WINDOW_SECONDS)}
                   step={0.1}
                   value={trimStart}
                   onChange={(e) => {
