@@ -485,11 +485,11 @@ export function AppShell({
             content div below -- previously they scrolled away with the page
             on mobile (no persistent desktop nav row to keep them company
             there), which read as "the tabs disappear when I scroll." */}
-        <header className="flex flex-col gap-2 border-t border-border bg-background/95 px-4 py-4 backdrop-blur sm:flex-row sm:items-center sm:justify-between md:px-8">
-          <h1 className="font-display text-2xl font-bold uppercase tracking-wide md:text-3xl">
+        <header className="flex items-center justify-between gap-3 border-t border-border bg-background/95 px-4 py-3 backdrop-blur md:px-8 md:py-4">
+          <h1 className="truncate font-display text-xl font-bold uppercase tracking-wide md:text-3xl">
             {title}
           </h1>
-          <div className="flex min-w-0 items-center gap-2 overflow-x-auto sm:justify-end">{actions}</div>
+          <div className="flex min-w-0 shrink-0 items-center gap-2 overflow-x-auto">{actions}</div>
         </header>
         {subheader && (
           <div className="border-t border-border bg-background px-4 py-2 md:px-8">{subheader}</div>

@@ -285,15 +285,16 @@ export function ProgramListPage({
       actions={
         <>
           {showAiAssist && (
-            <Button variant="outline" onClick={() => setAiDialogOpen(true)}>
-              <Sparkles className="h-4 w-4" />
+            <Button size="sm" variant="outline" onClick={() => setAiDialogOpen(true)}>
+              <Sparkles className="h-3.5 w-3.5" />
               AI Assist
             </Button>
           )}
           <Button
+            size="sm"
             onClick={() => (aiFirstCreate ? setQuestionnaireOpen(true) : setDialogOpen(true))}
           >
-            <Plus className="h-4 w-4" />
+            <Plus className="h-3.5 w-3.5" />
             New Program
           </Button>
         </>
