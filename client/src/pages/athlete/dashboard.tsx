@@ -10,6 +10,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { CalendarView, type CalendarEntry } from "@/components/calendar-view";
 import { CalendarLinkDialog } from "@/components/calendar-link-dialog";
 import { SkillDayViewDialog } from "@/components/skill-day-view-dialog";
+import { NutritionQuickSummary } from "@/components/nutrition-quick-summary";
+import { TeamChatQuickSummary } from "@/components/team-chat-quick-summary";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { CalendarDays, UserPlus } from "lucide-react";
@@ -59,8 +61,20 @@ export default function AthleteDashboard() {
     >
       <PendingCoachRequests />
 
+      {/* Quick view: today's nutrition and (for a coached athlete -- a Free
+          Agent has no team, see app-shell.tsx's own nav filtering) the
+          latest team chat, both just a summary with a link through to their
+          full page. The calendar below still defaults to the 3-day agenda
+          rather than the month grid so "what's actually happening the next
+          couple days" is visible without switching views. */}
+      <div className="mb-6 grid gap-4 sm:grid-cols-2">
+        <NutritionQuickSummary />
+        {!coachesLoading && coaches.length > 0 && <TeamChatQuickSummary />}
+      </div>
+
       <CalendarView
         entries={entries}
+        initialView="day"
         onRangeChange={(start, end) => setRange({ start, end })}
         onEntryClick={(e) =>
           e.kind === "skill"
