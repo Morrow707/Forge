@@ -8,6 +8,8 @@ import {
   startArPreview,
   stopArPreview,
   updateArPreviewRect,
+  startArRecording,
+  stopArRecording,
   onBodyTracking,
   framingHint,
   type BodyTrackingFrame,
@@ -15,7 +17,7 @@ import {
 import { arJointsToWorldLandmarks } from "@/lib/ar-body-landmarks";
 import { deriveBarPoint, worldAngleAtVertex, POSE_LANDMARKS } from "@/lib/pose-tracking";
 import { ArMotionReplayViewer, type MotionReplayFrame } from "@/components/ar-motion-replay-viewer";
-import { Circle, Square } from "lucide-react";
+import { Circle, Square, Video } from "lucide-react";
 
 // Temporary verification page for the ARKit body-tracking swap (see
 // ArCameraPreviewPlugin.swift) -- not linked from any real nav, only from
@@ -55,6 +57,43 @@ export default function ArPreviewTestPage() {
   const [recordedCount, setRecordedCount] = useState(0);
   const [replayFrames, setReplayFrames] = useState<MotionReplayFrame[] | null>(null);
   const [replayOpen, setReplayOpen] = useState(false);
+
+  // Real video-clip test for the new native ARKit recording capability (see
+  // ArCameraPreviewPlugin.swift's startRecording/appendVideoFrame) --
+  // completely separate from the joint-buffer "Record" button above, which
+  // never touches actual video. This is the only way to confirm, on a real
+  // device, that the clip plays back right-side-up (not sideways/upside-
+  // down -- the rotation transform's sign is unverified) before any
+  // production tracker dialog gets converted to depend on it.
+  const [clipRecording, setClipRecording] = useState(false);
+  const [clipSaving, setClipSaving] = useState(false);
+  const [clipUrl, setClipUrl] = useState<string | null>(null);
+  const [clipError, setClipError] = useState<string | null>(null);
+
+  async function toggleClipRecording() {
+    if (clipRecording) {
+      setClipSaving(true);
+      try {
+        const blob = await stopArRecording();
+        if (clipUrl) URL.revokeObjectURL(clipUrl);
+        setClipUrl(URL.createObjectURL(blob));
+        setClipError(null);
+      } catch (err) {
+        setClipError(err instanceof Error ? err.message : "Recording failed");
+      } finally {
+        setClipRecording(false);
+        setClipSaving(false);
+      }
+      return;
+    }
+    setClipError(null);
+    try {
+      await startArRecording();
+      setClipRecording(true);
+    } catch (err) {
+      setClipError(err instanceof Error ? err.message : "Could not start recording");
+    }
+  }
 
   useEffect(() => {
     if (!isArPreviewPlatform()) {
@@ -151,6 +190,10 @@ export default function ArPreviewTestPage() {
       setFrame(null);
       recordingRef.current = false;
       setRecording(false);
+      // native stop() itself cancels any in-progress clip writer -- just
+      // resync this page's own state to match.
+      setClipRecording(false);
+      setClipSaving(false);
     }
   }
 
@@ -271,6 +314,26 @@ export default function ArPreviewTestPage() {
             >
               View 3D Replay ({bufferRef.current.length})
             </Button>
+          </div>
+        )}
+        {running && (
+          <Button
+            className="w-full"
+            variant={clipRecording ? "secondary" : "outline"}
+            onClick={toggleClipRecording}
+            disabled={clipSaving}
+          >
+            {clipRecording ? <Square className="h-4 w-4" /> : <Video className="h-4 w-4" />}
+            {clipSaving ? "Saving clip…" : clipRecording ? "Stop Video Clip" : "Record Video Clip (real MP4)"}
+          </Button>
+        )}
+        {clipError && <p className="text-sm text-destructive">{clipError}</p>}
+        {clipUrl && (
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground">
+              Native ARKit clip -- check it's right-side-up, not sideways or upside-down:
+            </p>
+            <video src={clipUrl} controls playsInline className="w-full rounded-md" />
           </div>
         )}
       </div>
