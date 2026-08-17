@@ -121,6 +121,13 @@ export type MechanicsResult = {
   hipRotationDeg: number | null;
   sequencing: SequencingResult;
   armSlot: ArmSlot | null;
+  // "throw" mode only -- peak real-world speed of the throwing-side wrist
+  // (whichever one travels further, same detection armSlot already uses)
+  // across the whole capture. Not the thrown object's own exit velocity --
+  // there's no ball/implement detection here (see the module comment) --
+  // but wrist speed at release is an established, reasonable proxy for it,
+  // and needs nothing beyond body joints this tracker already has.
+  peakWristSpeedMps: number | null;
 };
 
 export function analyzeMechanics(
@@ -162,6 +169,7 @@ export function analyzeMechanics(
 
   let armPeakTimeMs: number | null = null;
   let armSlot: ArmSlot | null = null;
+  let peakWristSpeedMps: number | null = null;
   if (mode === "throw") {
     // The throwing arm is whichever wrist travels the most during the
     // capture -- the glove-side arm barely moves by comparison, so this
@@ -181,6 +189,21 @@ export function analyzeMechanics(
     const throwingSide = leftPath >= rightPath ? "left" : "right";
     const shoulderIdx = throwingSide === "left" ? POSE_LANDMARKS.LEFT_SHOULDER : POSE_LANDMARKS.RIGHT_SHOULDER;
     const elbowIdx = throwingSide === "left" ? POSE_LANDMARKS.LEFT_ELBOW : POSE_LANDMARKS.RIGHT_ELBOW;
+    const wristIdx = throwingSide === "left" ? POSE_LANDMARKS.LEFT_WRIST : POSE_LANDMARKS.RIGHT_WRIST;
+
+    // Frame-to-frame speed of the throwing wrist, real-world m/s -- same
+    // "95th percentile, not a raw max" protection hipShoulderSeparationDeg
+    // above uses, since a single noisy frame (a brief tracking jitter)
+    // would otherwise spike a max reading the same way it would there.
+    const wristSpeeds: number[] = [];
+    for (let i = 1; i < frames.length; i++) {
+      const a = frames[i - 1].worldLandmarks[wristIdx];
+      const b = frames[i].worldLandmarks[wristIdx];
+      const dtSeconds = (frames[i].t - frames[i - 1].t) / 1000;
+      if (!a || !b || dtSeconds <= 0) continue;
+      wristSpeeds.push(Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z) / dtSeconds);
+    }
+    peakWristSpeedMps = wristSpeeds.length > 0 ? Math.round(percentile(wristSpeeds, 0.95) * 100) / 100 : null;
 
     const armAnglesRaw = frames.map((f) => {
       const shoulder = f.worldLandmarks[shoulderIdx];
@@ -254,6 +277,7 @@ export function analyzeMechanics(
       wellSequenced,
     },
     armSlot,
+    peakWristSpeedMps,
   };
 }
 

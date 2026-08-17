@@ -415,6 +415,7 @@ export function MechanicsTrackerDialog({
         armSlotDeg: result.armSlot?.angleDeg ?? null,
         armSlotLabel: result.armSlot?.label ?? null,
         wellSequenced: result.sequencing.wellSequenced,
+        peakWristSpeedMps: result.peakWristSpeedMps,
         videoUrl: uploadedVideoUrl,
       });
       toast.success(mode === "throw" ? "Throw saved" : "Swing saved");
@@ -560,6 +561,15 @@ export function MechanicsTrackerDialog({
                 <div>
                   <p className="text-xl font-bold capitalize">{result.armSlot.label}</p>
                   <p className="text-xs text-muted-foreground">Arm slot ({result.armSlot.angleDeg}°)</p>
+                </div>
+              )}
+              {result.peakWristSpeedMps != null && (
+                <div>
+                  <p className="text-xl font-bold">{result.peakWristSpeedMps} m/s</p>
+                  <p className="text-xs text-muted-foreground">
+                    Peak wrist speed
+                    <span className="block text-[10px] normal-case">(proxy for release velocity)</span>
+                  </p>
                 </div>
               )}
               <div>

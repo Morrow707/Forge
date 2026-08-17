@@ -4362,6 +4362,7 @@ ${athleteContext}
         armSlotDeg: input.armSlotDeg ?? null,
         armSlotLabel: input.armSlotLabel ?? null,
         wellSequenced: input.wellSequenced ?? null,
+        peakWristSpeedMps: input.peakWristSpeedMps ?? null,
         videoUrl: input.videoUrl ?? null,
       })
       .returning();
@@ -10745,6 +10746,7 @@ ${catalog}`;
         armSlotDeg: skillSessionLogs.armSlotDeg,
         armSlotLabel: skillSessionLogs.armSlotLabel,
         wellSequenced: skillSessionLogs.wellSequenced,
+        peakWristSpeedMps: skillSessionLogs.peakWristSpeedMps,
         videoUrl: skillSessionLogs.videoUrl,
       })
       .from(skillSessionLogs)

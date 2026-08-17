@@ -40,21 +40,28 @@ type SkillSessionRow = {
   armSlotDeg: number | null;
   armSlotLabel: string | null;
   wellSequenced: boolean | null;
+  peakWristSpeedMps: number | null;
   videoUrl: string | null;
 };
 
-type MechanicsMetric = "hipShoulderSeparationDeg" | "weightTransferPct" | "hipRotationDeg";
+type MechanicsMetric =
+  | "hipShoulderSeparationDeg"
+  | "weightTransferPct"
+  | "hipRotationDeg"
+  | "peakWristSpeedMps";
 
 const MECHANICS_METRIC_LABEL: Record<MechanicsMetric, string> = {
   hipShoulderSeparationDeg: "Hip-Shoulder Separation",
   weightTransferPct: "Weight Transfer",
   hipRotationDeg: "Hip Rotation",
+  peakWristSpeedMps: "Peak Wrist Speed",
 };
 
 const MECHANICS_METRIC_UNIT: Record<MechanicsMetric, string> = {
   hipShoulderSeparationDeg: "°",
   weightTransferPct: "%",
   hipRotationDeg: "°",
+  peakWristSpeedMps: "m/s",
 };
 
 function fmtSpeed(elapsedSeconds: number | null, distanceYards: number | null): string {
@@ -144,6 +151,7 @@ export function SkillsTrendsPanel({ athleteId, athleteName }: { athleteId: strin
             MECHANICS_METRIC_LABEL.hipShoulderSeparationDeg,
             MECHANICS_METRIC_LABEL.weightTransferPct,
             MECHANICS_METRIC_LABEL.hipRotationDeg,
+            MECHANICS_METRIC_LABEL.peakWristSpeedMps,
           ]}
           value={MECHANICS_METRIC_LABEL[mechanicsMetric]}
           onChange={(label) => {

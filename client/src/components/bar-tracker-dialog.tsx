@@ -2241,7 +2241,7 @@ export function BarTrackerDialog({
                         videoToUpload = await burnTrackingOverlay(
                           recordedBlobRef.current,
                           framesRef.current,
-                          mode,
+                          mode === "jump" ? ANKLE_INDICES : WRIST_INDICES,
                           repMarkers,
                           setOverlayProgress,
                         );

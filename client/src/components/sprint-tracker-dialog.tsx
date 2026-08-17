@@ -32,11 +32,15 @@ import { toast } from "sonner";
 import { AlertTriangle, Play, Square, RotateCcw, Check, Timer, Trophy, Eye, EyeOff } from "lucide-react";
 import { SuggestedCorrective } from "@/components/suggested-corrective";
 import { recordedVideoType, videoFilenameForBlob } from "@/lib/video-recording";
+import { burnTrackingOverlay, type OverlayRepMarker } from "@/lib/video-overlay";
 
 type Step = "warning" | "calibrate" | "capture" | "review";
 
 const SKELETON_COLOR = "#2dd4bf";
 const CHECKPOINT_COLOR = "#facc15";
+// The same hip-midpoint point deriveSprintReferencePoint tracks live -- see
+// its own comment for why hips over wrist/ankle.
+const HIP_INDICES = [POSE_LANDMARKS.LEFT_HIP, POSE_LANDMARKS.RIGHT_HIP];
 
 function drawSkeleton(ctx: CanvasRenderingContext2D, landmarks: NormalizedLandmark[], width: number, height: number) {
   ctx.strokeStyle = SKELETON_COLOR;
@@ -471,12 +475,38 @@ export function SprintTrackerDialog({
       // device.
       let uploadedVideoUrl: string | null = null;
       if (saveClipForCoach && recordedBlobRef.current) {
+        // Same trail-and-badge burn bar-tracker-dialog.tsx's saved clips
+        // already get -- see burnTrackingOverlay's own comment on why
+        // trailIndices is just whatever point the caller wants traced (the
+        // hip midpoint here, matching deriveSprintReferencePoint's live
+        // tracking) rather than something this module has to know about
+        // sprint mode specifically. Cosmetic only -- any failure falls back
+        // to the plain recorded clip, same as bar-tracker-dialog.tsx's own
+        // fallback.
+        let videoToUpload: Blob = recordedBlobRef.current;
+        if (framesRef.current.length > 0) {
+          try {
+            let elapsedMs = 0;
+            const checkpointMarkers: OverlayRepMarker[] = result.splits.map((split) => {
+              elapsedMs += split.elapsedSeconds * 1000;
+              const isFinish = split.toCheckpoint === checkpointsRef.current.length - 1;
+              return {
+                startMs: elapsedMs,
+                label: `${isFinish ? "FINISH" : `CP ${split.toCheckpoint}`} · ${(elapsedMs / 1000).toFixed(2)}s`,
+              };
+            });
+            videoToUpload = await burnTrackingOverlay(
+              recordedBlobRef.current,
+              framesRef.current,
+              HIP_INDICES,
+              checkpointMarkers,
+            );
+          } catch {
+            videoToUpload = recordedBlobRef.current;
+          }
+        }
         const formData = new FormData();
-        formData.append(
-          "video",
-          recordedBlobRef.current,
-          videoFilenameForBlob(recordedBlobRef.current, "skill-clip"),
-        );
+        formData.append("video", videoToUpload, videoFilenameForBlob(videoToUpload, "skill-clip"));
         const uploadRes = await apiRequest("POST", "/api/athlete/skill-video", formData);
         uploadedVideoUrl = (await uploadRes.json()).url;
       }

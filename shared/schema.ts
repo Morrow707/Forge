@@ -760,6 +760,9 @@ export const skillSessionLogs = pgTable(
     armSlotDeg: real("arm_slot_deg"),
     armSlotLabel: text("arm_slot_label"),
     wellSequenced: boolean("well_sequenced"),
+    // "throw" mode only -- see MechanicsResult.peakWristSpeedMps's own
+    // comment in mechanics-tracking.ts.
+    peakWristSpeedMps: real("peak_wrist_speed_mps"),
     // Both optional opt-ins, not part of a normal capture -- the athlete
     // must explicitly choose to keep the clip (see the privacy comment on
     // MechanicsTrackerDialog; a capture is ephemeral by default) before
@@ -3446,6 +3449,10 @@ export const createSkillSessionLogSchema = z.object({
   armSlotDeg: z.number().min(0).max(90).optional().nullable(),
   armSlotLabel: z.enum(["overhand", "three-quarter", "sidearm"]).optional().nullable(),
   wellSequenced: z.boolean().optional().nullable(),
+  // "throw" mode only -- see MechanicsResult.peakWristSpeedMps's own
+  // comment for why this is a proxy (wrist speed, not the thrown object's
+  // own exit velocity -- there's no ball/implement detection here).
+  peakWristSpeedMps: z.number().min(0).max(60).optional().nullable(),
   // Opt-in only -- set when the athlete explicitly chooses "Save clip for
   // coach" after a capture (see MechanicsTrackerDialog); absent otherwise.
   videoUrl: z.string().trim().max(500).optional().nullable(),

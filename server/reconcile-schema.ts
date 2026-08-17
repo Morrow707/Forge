@@ -1133,6 +1133,8 @@ CREATE TABLE IF NOT EXISTS "skill_day_comments" (
   "created_at" timestamp NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS "skill_day_comments_assignment_day_idx" ON "skill_day_comments" ("skill_assignment_id", "skill_program_day_id");
+
+ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "peak_wrist_speed_mps" real;
 `;
 
 async function main() {
