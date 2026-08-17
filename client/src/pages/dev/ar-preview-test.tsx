@@ -14,6 +14,8 @@ import {
 } from "@/lib/native-ar-preview";
 import { arJointsToWorldLandmarks } from "@/lib/ar-body-landmarks";
 import { deriveBarPoint, worldAngleAtVertex, POSE_LANDMARKS } from "@/lib/pose-tracking";
+import { ArMotionReplayViewer, type MotionReplayFrame } from "@/components/ar-motion-replay-viewer";
+import { Circle, Square } from "lucide-react";
 
 // Temporary verification page for the ARKit body-tracking swap (see
 // ArCameraPreviewPlugin.swift) -- not linked from any real nav, only from
@@ -42,6 +44,17 @@ export default function ArPreviewTestPage() {
   // through bar-tracking.ts's actual rep-detection/fusion pipeline instead
   // of a raw instantaneous delta like this.
   const prevBarPointRef = useRef<{ x: number; y: number; z: number; t: number } | null>(null);
+
+  // 3D motion replay -- buffered in a ref, not state, so an in-progress
+  // recording doesn't re-render this whole page on every ~33ms frame. Only
+  // synced to state (recordedCount) for the UI's own frame counter, and
+  // handed to the viewer as a real array once recording stops.
+  const recordingRef = useRef(false);
+  const bufferRef = useRef<MotionReplayFrame[]>([]);
+  const [recording, setRecording] = useState(false);
+  const [recordedCount, setRecordedCount] = useState(0);
+  const [replayFrames, setReplayFrames] = useState<MotionReplayFrame[] | null>(null);
+  const [replayOpen, setReplayOpen] = useState(false);
 
   useEffect(() => {
     if (!isArPreviewPlatform()) {
@@ -87,6 +100,11 @@ export default function ArPreviewTestPage() {
     }
     const landmarks = arJointsToWorldLandmarks(frame.joints);
 
+    if (recordingRef.current) {
+      bufferRef.current.push({ t: frame.timestamp / 1000, landmarks });
+      setRecordedCount(bufferRef.current.length);
+    }
+
     const hip = landmarks[POSE_LANDMARKS.LEFT_HIP];
     const knee = landmarks[POSE_LANDMARKS.LEFT_KNEE];
     const ankle = landmarks[POSE_LANDMARKS.LEFT_ANKLE];
@@ -131,7 +149,26 @@ export default function ArPreviewTestPage() {
     } finally {
       setRunning(false);
       setFrame(null);
+      recordingRef.current = false;
+      setRecording(false);
     }
+  }
+
+  function toggleRecording() {
+    if (recordingRef.current) {
+      recordingRef.current = false;
+      setRecording(false);
+      return;
+    }
+    bufferRef.current = [];
+    setRecordedCount(0);
+    recordingRef.current = true;
+    setRecording(true);
+  }
+
+  function openReplay() {
+    setReplayFrames([...bufferRef.current]);
+    setReplayOpen(true);
   }
 
   return (
@@ -207,14 +244,38 @@ export default function ArPreviewTestPage() {
         <p className="px-4 py-2 text-sm text-destructive">{error}</p>
       )}
 
-      <div className="flex gap-3 border-t border-border p-4">
-        <Button className="flex-1" onClick={handleStart} disabled={!supported || running}>
-          Start
-        </Button>
-        <Button className="flex-1" variant="outline" onClick={handleStop} disabled={!running}>
-          Stop
-        </Button>
+      <div className="space-y-2 border-t border-border p-4">
+        <div className="flex gap-3">
+          <Button className="flex-1" onClick={handleStart} disabled={!supported || running}>
+            Start
+          </Button>
+          <Button className="flex-1" variant="outline" onClick={handleStop} disabled={!running}>
+            Stop
+          </Button>
+        </div>
+        {running && (
+          <div className="flex gap-3">
+            <Button
+              className="flex-1"
+              variant={recording ? "secondary" : "outline"}
+              onClick={toggleRecording}
+            >
+              {recording ? <Square className="h-4 w-4" /> : <Circle className="h-4 w-4 fill-current" />}
+              {recording ? `Stop Recording (${recordedCount})` : "Record"}
+            </Button>
+            <Button
+              className="flex-1"
+              variant="outline"
+              onClick={openReplay}
+              disabled={recording || bufferRef.current.length === 0}
+            >
+              View 3D Replay ({bufferRef.current.length})
+            </Button>
+          </div>
+        )}
       </div>
+
+      <ArMotionReplayViewer open={replayOpen} onOpenChange={setReplayOpen} frames={replayFrames ?? []} />
     </div>
   );
 }
