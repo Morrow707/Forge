@@ -21,6 +21,8 @@ import { RestTimerControl, type RestTimerHandle } from "@/components/rest-timer"
 import { useWakeLock } from "@/hooks/use-wake-lock";
 import { WorkoutCommentThread } from "@/components/workout-comment-thread";
 import { BarTrackerDialog } from "@/components/bar-tracker-dialog";
+import { ArJumpTrackerDialog } from "@/components/ar-jump-tracker-dialog";
+import { isArPreviewPlatform } from "@/lib/native-ar-preview";
 import { FormVideoRecorderDialog } from "@/components/form-video-recorder-dialog";
 import { SetVideoPreviewDialog, SetVideoCompareDialog } from "@/components/set-video-review";
 import { extractVideoFrames } from "@/lib/video-frames";
@@ -2321,6 +2323,82 @@ function ExerciseLogContent({
             item.materials.usesWeight && !Number.isNaN(trackedWeight)
               ? toKg(trackedWeight, unit)
               : undefined;
+
+          function handleTrackerCapture(metrics: RepMetrics | JumpSetMetrics, videoUrl?: string) {
+            if (trackingSet == null) return;
+            const videoPatch = videoUrl ? { formCheckVideoUrl: videoUrl } : {};
+            if ("bestJumpHeightCm" in metrics) {
+              onUpdateSet(
+                trackingSet,
+                {
+                  jumpHeightCm: metrics.bestJumpHeightCm,
+                  jumpDistanceCm: metrics.bestHorizontalDistanceCm,
+                  groundContactSeconds: metrics.avgGroundContactSeconds,
+                  reactiveStrengthIndex: metrics.reactiveStrengthIndex,
+                  jumpBreakdown: metrics.repBreakdown,
+                  barPathTrace: metrics.pathTrace,
+                  formFaults: metrics.formFaults,
+                  ...videoPatch,
+                },
+                // A tracked capture is expensive to redo -- save it the
+                // instant it lands rather than risk losing it to a
+                // force-close inside the normal autosave debounce window.
+                { immediate: true },
+              );
+            } else {
+              onUpdateSet(
+                trackingSet,
+                {
+                  peakVelocityMps: metrics.peakVelocityMps,
+                  meanVelocityMps: metrics.meanVelocityMps,
+                  concentricSeconds: metrics.concentricSeconds,
+                  eccentricSeconds: metrics.eccentricSeconds,
+                  barPathDeviationCm: metrics.barPathDeviationCm,
+                  barPathTrace: metrics.barPathTrace,
+                  formFaults: metrics.formFaults,
+                  repBreakdown: metrics.repBreakdown,
+                  armPathTrace: metrics.armPathTrace ?? null,
+                  peakPowerWatts: metrics.peakPowerWatts,
+                  meanPowerWatts: metrics.meanPowerWatts,
+                  eccentricMeanVelocityMps: metrics.eccentricMeanVelocityMps,
+                  romCm: metrics.romCm,
+                  velocityLossPercent: metrics.velocityLossPercent,
+                  legDriveAsymmetry: metrics.legDriveAsymmetry ?? null,
+                  armDriveAsymmetry: metrics.armDriveAsymmetry ?? null,
+                  trustScores: metrics.trustScores ?? null,
+                  ...videoPatch,
+                },
+                { immediate: true },
+              );
+            }
+            // Same downstream handling FormVideoRecorderDialog's onSaved
+            // does below -- a merged capture's video is just as much a
+            // real form-check clip as a standalone one.
+            if (videoUrl) {
+              if (videoCheckMode === "ai") aiFormCheckMutation.mutate({ setNumber: trackingSet, videoUrl });
+              else postFormVideoMutation.mutate({ setNumber: trackingSet, videoUrl });
+            }
+          }
+
+          // Jump mode is the first tracker mode moved off MediaPipe onto
+          // native ARKit -- see ar-jump-tracker-dialog.tsx's own comment for
+          // why jump specifically (no implement to follow, unlike bar_path/
+          // full, which still need implement tracking ported to Swift
+          // first). Every other mode, and jump mode on anything that isn't
+          // native iOS, keeps using the existing MediaPipe-based dialog
+          // unchanged.
+          if (isArPreviewPlatform() && item.trackingLevel === "jump") {
+            return (
+              <ArJumpTrackerDialog
+                open={trackingSet !== null}
+                onOpenChange={(open) => !open && setTrackingSet(null)}
+                heightIn={user?.heightIn}
+                recordVideo={mergedTracking}
+                onCapture={handleTrackerCapture}
+              />
+            );
+          }
+
           return (
             <BarTrackerDialog
               open={trackingSet !== null}
@@ -2334,61 +2412,7 @@ function ExerciseLogContent({
               targetReps={parseTargetReps(item.prescribedReps)}
               loadKg={loadKg}
               recordVideo={mergedTracking}
-              onCapture={(metrics: RepMetrics | JumpSetMetrics, videoUrl?: string) => {
-                if (trackingSet == null) return;
-                const videoPatch = videoUrl ? { formCheckVideoUrl: videoUrl } : {};
-                if ("bestJumpHeightCm" in metrics) {
-                  onUpdateSet(
-                    trackingSet,
-                    {
-                      jumpHeightCm: metrics.bestJumpHeightCm,
-                      jumpDistanceCm: metrics.bestHorizontalDistanceCm,
-                      groundContactSeconds: metrics.avgGroundContactSeconds,
-                      reactiveStrengthIndex: metrics.reactiveStrengthIndex,
-                      jumpBreakdown: metrics.repBreakdown,
-                      barPathTrace: metrics.pathTrace,
-                      formFaults: metrics.formFaults,
-                      ...videoPatch,
-                    },
-                    // A tracked capture is expensive to redo -- save it the
-                    // instant it lands rather than risk losing it to a
-                    // force-close inside the normal autosave debounce window.
-                    { immediate: true },
-                  );
-                } else {
-                  onUpdateSet(
-                    trackingSet,
-                    {
-                      peakVelocityMps: metrics.peakVelocityMps,
-                      meanVelocityMps: metrics.meanVelocityMps,
-                      concentricSeconds: metrics.concentricSeconds,
-                      eccentricSeconds: metrics.eccentricSeconds,
-                      barPathDeviationCm: metrics.barPathDeviationCm,
-                      barPathTrace: metrics.barPathTrace,
-                      formFaults: metrics.formFaults,
-                      repBreakdown: metrics.repBreakdown,
-                      armPathTrace: metrics.armPathTrace ?? null,
-                      peakPowerWatts: metrics.peakPowerWatts,
-                      meanPowerWatts: metrics.meanPowerWatts,
-                      eccentricMeanVelocityMps: metrics.eccentricMeanVelocityMps,
-                      romCm: metrics.romCm,
-                      velocityLossPercent: metrics.velocityLossPercent,
-                      legDriveAsymmetry: metrics.legDriveAsymmetry ?? null,
-                      armDriveAsymmetry: metrics.armDriveAsymmetry ?? null,
-                      trustScores: metrics.trustScores ?? null,
-                      ...videoPatch,
-                    },
-                    { immediate: true },
-                  );
-                }
-                // Same downstream handling FormVideoRecorderDialog's onSaved
-                // does below -- a merged capture's video is just as much a
-                // real form-check clip as a standalone one.
-                if (videoUrl) {
-                  if (videoCheckMode === "ai") aiFormCheckMutation.mutate({ setNumber: trackingSet, videoUrl });
-                  else postFormVideoMutation.mutate({ setNumber: trackingSet, videoUrl });
-                }
-              }}
+              onCapture={handleTrackerCapture}
             />
           );
         })()}
