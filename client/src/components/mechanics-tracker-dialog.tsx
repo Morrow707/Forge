@@ -177,11 +177,11 @@ export function MechanicsTrackerDialog({
       stopCamera();
       return;
     }
-    // ideal, not exact -- see bar-tracker-dialog.tsx's own comment on this
-    // same constraint shape. A bat swing or throw is the fastest motion
-    // this app tracks, so peakAngularVelocityTime's sequencing precision
-    // (hip vs. shoulder vs. arm peak timing) benefits from 60fps more here
-    // than almost anywhere else in the camera tracker.
+    // ideal, not exact, and portrait (720x1280) -- see bar-tracker-dialog.tsx's
+    // own comment on both. A bat swing or throw is the fastest motion this
+    // app tracks, so peakAngularVelocityTime's sequencing precision (hip vs.
+    // shoulder vs. arm peak timing) benefits from 60fps more here than
+    // almost anywhere else in the camera tracker.
     let cancelled = false;
     const acquireCamera = () => {
       ensureCameraPermission().then((granted) => {
@@ -194,8 +194,8 @@ export function MechanicsTrackerDialog({
           .getUserMedia({
             video: {
               facingMode: { ideal: "environment" },
-              width: { ideal: 1280 },
-              height: { ideal: 720 },
+              width: { ideal: 720 },
+              height: { ideal: 1280 },
               frameRate: { ideal: 60, min: 30 },
             },
           })

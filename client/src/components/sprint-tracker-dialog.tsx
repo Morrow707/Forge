@@ -214,8 +214,10 @@ export function SprintTrackerDialog({
       stopCamera();
       return;
     }
-    // ideal, not exact -- see bar-tracker-dialog.tsx's own comment on this
-    // same constraint shape. Checkpoint-crossing time is interpolated
+    // ideal, not exact, and portrait (720x1280) -- see bar-tracker-dialog.tsx's
+    // own comment on both (the portrait rear-camera dimension mismatch this
+    // avoids is the same one tick()'s own comment below already works
+    // around for the overlay). Checkpoint-crossing time is interpolated
     // between frames either way, but a higher frame rate still means less
     // real screen-x distance the reference point can cover between two
     // samples, which tightens that interpolation for a fast sprint.
@@ -231,8 +233,8 @@ export function SprintTrackerDialog({
           .getUserMedia({
             video: {
               facingMode: { ideal: "environment" },
-              width: { ideal: 1280 },
-              height: { ideal: 720 },
+              width: { ideal: 720 },
+              height: { ideal: 1280 },
               frameRate: { ideal: 60, min: 30 },
             },
           })

@@ -731,12 +731,19 @@ export function BarTrackerDialog({
     // MediaPipe's landmark model and leaves the bandwidth headroom to
     // actually land 60fps, which is what velocity/flight-time precision on
     // a fast rep or jump actually benefits from. `min: 30` keeps a floor
-    // under only-mildly-capable hardware without insisting on 60.
+    // under only-mildly-capable hardware without insisting on 60. Portrait
+    // (720x1280, not 1280x720) since the athlete is virtually always
+    // filming themselves standing in front of a portrait-held phone --
+    // requesting a landscape-shaped ideal here meant the recorded
+    // formCheckVideoUrl clip's own intrinsic dimensions didn't match how it
+    // was actually framed, which is what caused a saved clip to render
+    // squished/sideways in some playback contexts downstream (see
+    // form-video-recorder-dialog.tsx's own comment on this same fix).
     const videoOnlyConstraints = {
       video: {
         facingMode: { ideal: "environment" as const },
-        width: { ideal: 1280 },
-        height: { ideal: 720 },
+        width: { ideal: 720 },
+        height: { ideal: 1280 },
         frameRate: { ideal: 60, min: 30 },
       },
     };
