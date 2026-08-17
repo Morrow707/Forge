@@ -10,7 +10,13 @@ export type BodyTrackingJoint = { name: string; x: number; y: number; z: number 
 
 export type BodyTrackingFrame =
   | { tracked: false }
-  | { tracked: true; timestamp: number; estimatedScaleFactor: number; joints: BodyTrackingJoint[] };
+  | {
+      tracked: true;
+      timestamp: number;
+      estimatedScaleFactor: number;
+      distanceMeters: number;
+      joints: BodyTrackingJoint[];
+    };
 
 interface ArCameraPreviewPlugin {
   isSupported(): Promise<{ supported: boolean }>;
@@ -55,6 +61,18 @@ export async function stopArPreview(): Promise<void> {
 
 export async function updateArPreviewRect(rect: PreviewRect): Promise<void> {
   await ArCameraPreview.updateRect(rect);
+}
+
+// Rough, uncalibrated thresholds for "can this distance actually produce
+// usable full-body tracking" -- not measured against a real device, just a
+// reasonable starting guess (a typical phone's field of view needs the
+// athlete a few feet back to fit head-to-feet in frame, but too far starts
+// losing joint precision). Meant to be tightened once real device testing
+// shows what range actually tracks well.
+export function framingHint(distanceMeters: number): "too close" | "too far" | "good" {
+  if (distanceMeters < 1.5) return "too close";
+  if (distanceMeters > 4.5) return "too far";
+  return "good";
 }
 
 // Subscribes to the raw per-frame body-tracking joints emitted while the AR

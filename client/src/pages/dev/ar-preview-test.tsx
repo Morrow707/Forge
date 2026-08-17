@@ -9,8 +9,11 @@ import {
   stopArPreview,
   updateArPreviewRect,
   onBodyTracking,
+  framingHint,
   type BodyTrackingFrame,
 } from "@/lib/native-ar-preview";
+import { arJointsToWorldLandmarks } from "@/lib/ar-body-landmarks";
+import { deriveBarPoint, worldAngleAtVertex, POSE_LANDMARKS } from "@/lib/pose-tracking";
 
 // Temporary verification page for the ARKit body-tracking swap (see
 // ArCameraPreviewPlugin.swift) -- not linked from any real nav, only from
@@ -32,6 +35,13 @@ export default function ArPreviewTestPage() {
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [frame, setFrame] = useState<BodyTrackingFrame | null>(null);
+  const [kneeAngleDeg, setKneeAngleDeg] = useState<number | null>(null);
+  const [wristSpeedMps, setWristSpeedMps] = useState<number | null>(null);
+  // Previous frame's bar point + its own timestamp, purely for this page's
+  // live speed readout -- a real tracked-set implementation would run this
+  // through bar-tracking.ts's actual rep-detection/fusion pipeline instead
+  // of a raw instantaneous delta like this.
+  const prevBarPointRef = useRef<{ x: number; y: number; z: number; t: number } | null>(null);
 
   useEffect(() => {
     if (!isArPreviewPlatform()) {
@@ -62,6 +72,45 @@ export default function ArPreviewTestPage() {
     if (!running) return;
     return onBodyTracking(setFrame);
   }, [running]);
+
+  // Runs pose-tracking.ts's own angle/bar-point math (unmodified) against
+  // the ARKit joints via the ar-body-landmarks.ts bridge -- this is the
+  // actual end-to-end proof that the bridge's joint-name guesses and Y-flip
+  // (see that file's own comment) produce something a real athlete's body
+  // would plausibly move like, not just that the joint dump prints numbers.
+  useEffect(() => {
+    if (!frame || !frame.tracked) {
+      setKneeAngleDeg(null);
+      setWristSpeedMps(null);
+      prevBarPointRef.current = null;
+      return;
+    }
+    const landmarks = arJointsToWorldLandmarks(frame.joints);
+
+    const hip = landmarks[POSE_LANDMARKS.LEFT_HIP];
+    const knee = landmarks[POSE_LANDMARKS.LEFT_KNEE];
+    const ankle = landmarks[POSE_LANDMARKS.LEFT_ANKLE];
+    if (hip.visibility && knee.visibility && ankle.visibility) {
+      setKneeAngleDeg(worldAngleAtVertex(hip, knee, ankle));
+    } else {
+      setKneeAngleDeg(null);
+    }
+
+    const barPoint = deriveBarPoint(landmarks);
+    const t = frame.timestamp / 1000;
+    if (barPoint) {
+      const prev = prevBarPointRef.current;
+      if (prev && t > prev.t) {
+        const dt = t - prev.t;
+        const speed = Math.hypot(barPoint.x - prev.x, barPoint.y - prev.y, barPoint.z - prev.z) / dt;
+        setWristSpeedMps(speed);
+      }
+      prevBarPointRef.current = { x: barPoint.x, y: barPoint.y, z: barPoint.z, t };
+    } else {
+      setWristSpeedMps(null);
+      prevBarPointRef.current = null;
+    }
+  }, [frame]);
 
   async function handleStart() {
     const rect = containerRef.current?.getBoundingClientRect();
@@ -126,7 +175,22 @@ export default function ArPreviewTestPage() {
             ) : (
               <>
                 <p className="mb-1 text-white/70">
-                  {frame.joints.length} joints · scale {frame.estimatedScaleFactor.toFixed(3)}
+                  {frame.joints.length} joints · scale {frame.estimatedScaleFactor.toFixed(3)} ·{" "}
+                  {frame.distanceMeters.toFixed(2)}m from camera
+                  {framingHint(frame.distanceMeters) !== "good" && (
+                    <span className="text-amber-400">
+                      {" "}
+                      ({framingHint(frame.distanceMeters) === "too close" ? "step back" : "come closer"})
+                    </span>
+                  )}
+                </p>
+                {/* Computed off pose-tracking.ts's real math via the
+                    ar-body-landmarks.ts bridge, not hand-rolled here --
+                    null until the bridge's guessed joint names actually
+                    match what ARKit reports below. */}
+                <p className="mb-1 text-teal-300">
+                  knee angle: {kneeAngleDeg == null ? "—" : `${kneeAngleDeg.toFixed(0)}°`} · wrist speed:{" "}
+                  {wristSpeedMps == null ? "—" : `${wristSpeedMps.toFixed(2)} m/s`}
                 </p>
                 {frame.joints.map((j) => (
                   <div key={j.name}>

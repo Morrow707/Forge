@@ -159,10 +159,20 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
             ])
         }
 
+        // Straight-line distance from the camera to the body's root joint --
+        // both transforms are in the same world space, so this is just the
+        // distance between their translation components. Lets the JS side
+        // warn "step back" / "come closer" before a set even starts instead
+        // of only finding out tracking was unreliable after the fact.
+        let cameraPosition = frame.camera.transform.columns.3
+        let rootPosition = rootTransform.columns.3
+        let distanceMeters = Double(simd_distance(cameraPosition, rootPosition))
+
         notifyListeners("bodyTracking", data: [
             "tracked": true,
             "timestamp": frame.timestamp * 1000,
             "estimatedScaleFactor": Double(bodyAnchor.estimatedScaleFactor),
+            "distanceMeters": distanceMeters,
             "joints": joints,
         ])
     }
