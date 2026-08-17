@@ -16,7 +16,7 @@ import {
   type BodyTrackingFrame,
 } from "@/lib/native-ar-preview";
 import { arJointsToWorldLandmarks } from "@/lib/ar-body-landmarks";
-import { deriveJumpPoint } from "@/lib/pose-tracking";
+import { deriveJumpPoint, detectFormFaults, type PoseFrame } from "@/lib/pose-tracking";
 import { summarizeJumpSet, type JumpSetMetrics } from "@/lib/jump-tracking";
 import type { TrackedPoint } from "@/lib/bar-tracking";
 import { videoFilenameForBlob } from "@/lib/video-recording";
@@ -39,24 +39,27 @@ import { videoFilenameForBlob } from "@/lib/video-recording";
  * for it or draw it; it's just part of what the native camera view shows
  * whenever a body is tracked.
  *
- * Also deliberately no form-fault detection (unlike the MediaPipe jump
- * mode in bar-tracker-dialog.tsx) -- detectFormFaults' valgus check
- * specifically needs 2D normalized-image-space landmarks (knee/ankle
- * width as a fraction of frame width), which this bridge doesn't produce
- * -- only real-world 3D joints. Passing world-space data into a
- * screen-space check would silently produce a wrong reading rather than
- * an honest gap, so formFaults stays empty here until that projection
- * exists. */
+ * Form-fault detection (landing valgus, forward lean) runs the same
+ * detectFormFaults used by the MediaPipe jump mode in bar-tracker-dialog.tsx
+ * -- its valgus check now compares real-world 3D knee/ankle distances
+ * instead of 2D image-space x, so it works directly off this bridge's
+ * world-only joints (and, as a side effect, no longer assumes a face-on
+ * camera angle the way the old image-space version did). See
+ * detectFormFaults' own comment in pose-tracking.ts. */
 export function ArJumpTrackerDialog({
   open,
   onOpenChange,
   heightIn,
+  movementType,
+  equipment,
   recordVideo,
   onCapture,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   heightIn?: number | null;
+  movementType?: string | null;
+  equipment?: string | null;
   recordVideo?: boolean;
   onCapture: (metrics: JumpSetMetrics, videoUrl?: string) => void;
 }) {
@@ -70,6 +73,11 @@ export function ArJumpTrackerDialog({
   const [saving, setSaving] = useState(false);
 
   const traceRef = useRef<TrackedPoint[]>([]);
+  // Full per-frame world landmarks for the set, in the same PoseFrame shape
+  // detectFormFaults already consumes -- landmarks (2D image-space) stays
+  // empty since detectFormFaults' checks are all world-space now and this
+  // bridge never produces 2D data; see the file comment above.
+  const framesRef = useRef<PoseFrame[]>([]);
   const trackingRef = useRef(false);
 
   useEffect(() => {
@@ -80,6 +88,7 @@ export function ArJumpTrackerDialog({
     setRecordedReps(0);
     setLastJumpCm(null);
     traceRef.current = [];
+    framesRef.current = [];
     trackingRef.current = false;
     isArBodyTrackingSupported().then(setSupported);
   }, [open]);
@@ -115,6 +124,7 @@ export function ArJumpTrackerDialog({
   useEffect(() => {
     if (!frame || !frame.tracked || !trackingRef.current) return;
     const landmarks = arJointsToWorldLandmarks(frame.joints);
+    framesRef.current.push({ t: frame.timestamp, landmarks: [], worldLandmarks: landmarks });
     const point = deriveJumpPoint(landmarks);
     if (!point) return;
     traceRef.current.push({ t: frame.timestamp, x: point.x, y: point.y, z: point.z });
@@ -130,6 +140,7 @@ export function ArJumpTrackerDialog({
 
   function startTracking() {
     traceRef.current = [];
+    framesRef.current = [];
     trackingRef.current = true;
     setRecordedReps(0);
     setLastJumpCm(null);
@@ -150,6 +161,9 @@ export function ArJumpTrackerDialog({
       toast.error("Couldn't get a clean read -- make sure your feet leave the ground clearly in frame.");
       return;
     }
+    // See the "jump" context branch in detectFormFaults -- landing valgus
+    // and forward lean still apply, shallow-depth/bar-path checks don't.
+    metrics.formFaults = detectFormFaults(framesRef.current, 0, "jump", movementType, equipment);
 
     if (!recordVideo) {
       onCapture(metrics);

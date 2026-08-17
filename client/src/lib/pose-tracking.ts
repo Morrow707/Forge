@@ -913,7 +913,6 @@ export function detectFormFaults(
   let currentVerticalSign: 1 | -1 = 1;
 
   for (const frame of frames) {
-    const lm = frame.landmarks;
     const worldLm = frame.worldLandmarks;
     const sign = worldVerticalSign(worldLm);
     if (sign != null) currentVerticalSign = sign;
@@ -923,19 +922,24 @@ export function detectFormFaults(
       if (tilt != null) tiltAngles.push(tilt);
     }
 
-    const lKnee = lm[POSE_LANDMARKS.LEFT_KNEE];
-    const rKnee = lm[POSE_LANDMARKS.RIGHT_KNEE];
-    const lAnkle = lm[POSE_LANDMARKS.LEFT_ANKLE];
-    const rAnkle = lm[POSE_LANDMARKS.RIGHT_ANKLE];
+    const lKnee3d = worldLm[POSE_LANDMARKS.LEFT_KNEE];
+    const rKnee3d = worldLm[POSE_LANDMARKS.RIGHT_KNEE];
+    const lAnkle3d = worldLm[POSE_LANDMARKS.LEFT_ANKLE];
+    const rAnkle3d = worldLm[POSE_LANDMARKS.RIGHT_ANKLE];
 
     kneeAngles.push(...frameKneeAngles(worldLm));
 
     // Valgus proxy: knee width vs. ankle width -- a healthy squat keeps
     // knees tracking roughly over the ankles, so this ratio stays near 1;
     // it drops well below 1 when the knees cave inward past the ankles.
-    if (visible(lKnee) && visible(rKnee) && visible(lAnkle) && visible(rAnkle)) {
-      const kneeWidth = Math.abs(lKnee.x - rKnee.x);
-      const ankleWidth = Math.abs(lAnkle.x - rAnkle.x);
+    // Real-world 3D distance (not image-space x) so this works off ARKit's
+    // world-only joints (no 2D landmarks to fall back on) and, as a bonus,
+    // stops implicitly assuming a face-on camera angle -- a 3D Euclidean
+    // width/width ratio is unaffected by the camera's viewing angle the way
+    // a single image-axis difference is.
+    if (visible(lKnee3d) && visible(rKnee3d) && visible(lAnkle3d) && visible(rAnkle3d)) {
+      const kneeWidth = Math.hypot(lKnee3d.x - rKnee3d.x, lKnee3d.y - rKnee3d.y, lKnee3d.z - rKnee3d.z);
+      const ankleWidth = Math.hypot(lAnkle3d.x - rAnkle3d.x, lAnkle3d.y - rAnkle3d.y, lAnkle3d.z - rAnkle3d.z);
       if (ankleWidth > 0.02) valgusRatios.push(kneeWidth / ankleWidth);
     }
 

@@ -2393,6 +2393,8 @@ function ExerciseLogContent({
                 open={trackingSet !== null}
                 onOpenChange={(open) => !open && setTrackingSet(null)}
                 heightIn={user?.heightIn}
+                movementType={item.movementType}
+                equipment={item.equipment}
                 recordVideo={mergedTracking}
                 onCapture={handleTrackerCapture}
               />
