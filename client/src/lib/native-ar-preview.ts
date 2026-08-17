@@ -1,5 +1,6 @@
 import { registerPlugin, type PluginListenerHandle } from "@capacitor/core";
 import { Capacitor } from "@capacitor/core";
+import { Filesystem } from "@capacitor/filesystem";
 
 // JS side of ios/App/App/ArCameraPreviewPlugin.swift -- see its own comment
 // for why this exists as a separate native camera view rather than feeding
@@ -23,6 +24,8 @@ interface ArCameraPreviewPlugin {
   start(rect: PreviewRect): Promise<void>;
   stop(): Promise<void>;
   updateRect(rect: PreviewRect): Promise<void>;
+  startRecording(): Promise<void>;
+  stopRecording(): Promise<{ path: string }>;
   addListener(
     eventName: "bodyTracking",
     listenerFunc: (frame: BodyTrackingFrame) => void,
@@ -61,6 +64,28 @@ export async function stopArPreview(): Promise<void> {
 
 export async function updateArPreviewRect(rect: PreviewRect): Promise<void> {
   await ArCameraPreview.updateRect(rect);
+}
+
+// There's no browser MediaStream to hand a MediaRecorder once this plugin
+// owns the camera (see ArCameraPreviewPlugin.swift's file-level comment),
+// so the clip itself is recorded natively -- see startRecording/
+// appendVideoFrame there. This just flips that on.
+export async function startArRecording(): Promise<void> {
+  await ArCameraPreview.startRecording();
+}
+
+// The native side only ever hands back a bare file path (see
+// ArCameraPreviewPlugin.swift's own comment on stopRecording) -- this reads
+// it off disk as a Blob, immediately ready to attach to a FormData upload
+// the same way every other recorded clip in the app already is (see
+// form-video-recorder-dialog.tsx's save()).
+export async function stopArRecording(): Promise<Blob> {
+  const { path } = await ArCameraPreview.stopRecording();
+  const { data } = await Filesystem.readFile({ path });
+  const binary = atob(data as string);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new Blob([bytes], { type: "video/mp4" });
 }
 
 // Rough, uncalibrated thresholds for "can this distance actually produce

@@ -1,6 +1,7 @@
 import Foundation
 import ARKit
 import SceneKit
+import AVFoundation
 import simd
 import Capacitor
 
@@ -30,7 +31,9 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
         CAPPluginMethod(name: "isSupported", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "start", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "stop", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "updateRect", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "updateRect", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "startRecording", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "stopRecording", returnType: CAPPluginReturnPromise)
     ]
 
     private var previewView: ARSCNView?
@@ -51,6 +54,14 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
     // it needs by name, not index, once that mapping is worked out from a
     // real device's actual joint list.
     private let jointNames = ARSkeletonDefinition.defaultBody3D.jointNames
+
+    // MARK: - Recording (see appendVideoFrame's own comment)
+    private var isRecording = false
+    private var recordingOutputURL: URL?
+    private var assetWriter: AVAssetWriter?
+    private var assetWriterInput: AVAssetWriterInput?
+    private var pixelBufferAdaptor: AVAssetWriterInputPixelBufferAdaptor?
+    private var recordingStartTime: TimeInterval?
 
     @objc func isSupported(_ call: CAPPluginCall) {
         call.resolve(["supported": ARBodyTrackingConfiguration.isSupported])
@@ -98,11 +109,129 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
 
     @objc func stop(_ call: CAPPluginCall) {
         DispatchQueue.main.async {
+            // A recording nobody explicitly stopped (dialog closed/backgrounded
+            // mid-capture) shouldn't leave a writer dangling -- cancelWriting
+            // discards whatever was written rather than trying to finalize a
+            // clip nothing asked for.
+            if self.isRecording {
+                self.isRecording = false
+                self.assetWriter?.cancelWriting()
+                self.assetWriter = nil
+                self.assetWriterInput = nil
+                self.pixelBufferAdaptor = nil
+                self.recordingOutputURL = nil
+            }
             self.previewView?.session.pause()
             self.previewView?.removeFromSuperview()
             self.previewView = nil
             call.resolve()
         }
+    }
+
+    // Video isn't recorded from a browser getUserMedia stream the way the
+    // MediaPipe-tracked dialogs do (there is no browser stream once this
+    // plugin owns the camera -- see the file-level comment) -- instead this
+    // writes ARFrame.capturedImage straight to an MP4 as ARSession delivers
+    // frames, via AVAssetWriter. startRecording only flips a flag; the
+    // writer itself is created lazily on the first frame that actually
+    // arrives afterward (see appendVideoFrame), since only then is the
+    // captured image's real pixel dimensions known.
+    @objc func startRecording(_ call: CAPPluginCall) {
+        guard !isRecording else {
+            call.reject("Already recording")
+            return
+        }
+        recordingOutputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("mp4")
+        recordingStartTime = nil
+        isRecording = true
+        call.resolve()
+    }
+
+    @objc func stopRecording(_ call: CAPPluginCall) {
+        guard isRecording else {
+            call.reject("Not recording")
+            return
+        }
+        isRecording = false
+        guard let writer = assetWriter, let outputURL = recordingOutputURL, writer.status == .writing else {
+            // No frames ever actually landed (e.g. stopped an instant after
+            // starting, before the next ARFrame arrived) -- nothing to
+            // finalize.
+            assetWriter = nil
+            assetWriterInput = nil
+            pixelBufferAdaptor = nil
+            recordingOutputURL = nil
+            call.reject("No frames were captured")
+            return
+        }
+        assetWriterInput?.markAsFinished()
+        writer.finishWriting { [weak self] in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                if writer.status == .completed {
+                    call.resolve(["path": outputURL.path])
+                } else {
+                    call.reject(writer.error?.localizedDescription ?? "Recording failed")
+                }
+                self.assetWriter = nil
+                self.assetWriterInput = nil
+                self.pixelBufferAdaptor = nil
+                self.recordingOutputURL = nil
+            }
+        }
+    }
+
+    // Runs on every ARFrame regardless of body-detection state or the
+    // joint-emission throttle in session(_:didUpdate:) below -- a capture
+    // with a moment of no body in frame (setting up, walking into position)
+    // shouldn't have a gap in the video. ARKit's captured image is always
+    // the sensor's native landscape orientation no matter how the phone is
+    // held; the app records portrait everywhere else, so this tags the
+    // output with a 90° rotation transform (metadata-level, not a re-encode)
+    // the same way AVCaptureConnection.videoOrientation = .portrait would
+    // for the equivalent getUserMedia-based capture.
+    private func appendVideoFrame(_ frame: ARFrame) {
+        guard isRecording, let outputURL = recordingOutputURL else { return }
+
+        if assetWriter == nil {
+            let resolution = frame.camera.imageResolution
+            guard let writer = try? AVAssetWriter(outputURL: outputURL, fileType: .mp4) else {
+                isRecording = false
+                recordingOutputURL = nil
+                return
+            }
+            let videoSettings: [String: Any] = [
+                AVVideoCodecKey: AVVideoCodecType.h264,
+                AVVideoWidthKey: Int(resolution.width),
+                AVVideoHeightKey: Int(resolution.height)
+            ]
+            let input = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings)
+            input.expectsMediaDataInRealTime = true
+            input.transform = CGAffineTransform(rotationAngle: .pi / 2)
+            let adaptor = AVAssetWriterInputPixelBufferAdaptor(
+                assetWriterInput: input,
+                sourcePixelBufferAttributes: [
+                    kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarFullRange
+                ]
+            )
+            guard writer.canAdd(input) else { return }
+            writer.add(input)
+            writer.startWriting()
+            writer.startSession(atSourceTime: .zero)
+            assetWriter = writer
+            assetWriterInput = input
+            pixelBufferAdaptor = adaptor
+            recordingStartTime = frame.timestamp
+        }
+
+        guard let writer = assetWriter, writer.status == .writing,
+              let input = assetWriterInput, input.isReadyForMoreMediaData,
+              let adaptor = pixelBufferAdaptor,
+              let startTime = recordingStartTime else { return }
+        let presentationTime = CMTime(seconds: frame.timestamp - startTime, preferredTimescale: 600)
+        adaptor.append(frame.capturedImage, withPresentationTime: presentationTime)
     }
 
     @objc func updateRect(_ call: CAPPluginCall) {
@@ -130,6 +259,8 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
     // space) gives each joint's position in the same world coordinate
     // space ARKit reports everything else in, in meters.
     public func session(_ session: ARSession, didUpdate frame: ARFrame) {
+        appendVideoFrame(frame)
+
         let bodyAnchor = frame.anchors.compactMap { $0 as? ARBodyAnchor }.first
 
         guard let bodyAnchor = bodyAnchor else {
