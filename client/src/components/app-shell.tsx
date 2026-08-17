@@ -38,6 +38,7 @@ import { EditMyProfileDialog } from "@/components/edit-my-profile-dialog";
 import { NotificationBell } from "@/components/notification-bell";
 import { NotificationSettingsDialog } from "@/components/notification-settings-dialog";
 import { CoachingStaffDialog } from "@/components/coaching-staff-dialog";
+import { NonIosTrackingNotice } from "@/components/non-ios-tracking-warning";
 
 type NavItem = {
   href: string;
@@ -522,6 +523,7 @@ export function AppShell({
       {user?.role === "coach" && (
         <CoachingStaffDialog open={coachingStaffOpen} onOpenChange={setCoachingStaffOpen} />
       )}
+      <NonIosTrackingNotice />
     </div>
   );
 }

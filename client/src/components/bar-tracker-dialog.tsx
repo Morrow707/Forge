@@ -771,18 +771,32 @@ export function BarTrackerDialog({
     // home screen leaves the athlete staring at a dead, frozen/black
     // <video> with no way back into tracking short of force-quitting the
     // app. Stop whatever's left of the old stream and grab a fresh one the
-    // moment the app is foregrounded again -- previewTick/tick already poll
-    // until the video has real dimensions, so a freshly attached stream
-    // picks the preview/tracking loop back up on its own. onAppForeground
-    // uses the native appStateChange signal inside Capacitor (more
-    // reliable than visibilitychange there) and visibilitychange itself on
-    // web/PWA.
+    // moment the app is foregrounded again -- previewTick/tick poll until
+    // the video has real dimensions, so a freshly attached stream is
+    // enough on its own once the loop itself is running again (see the
+    // explicit restart below; reacquiring the stream alone doesn't do
+    // that). onAppForeground uses the native appStateChange signal inside
+    // Capacitor (more reliable than visibilitychange there) and
+    // visibilitychange itself on web/PWA.
     const unsubscribeForeground = onAppForeground(() => {
       const stillLive = streamRef.current?.getVideoTracks().some((t) => t.readyState === "live");
-      if (stillLive) return;
-      streamRef.current?.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
-      acquireCamera();
+      if (!stillLive) {
+        streamRef.current?.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+        acquireCamera();
+      }
+      // onAppBackground below always cancels the rAF loop outright,
+      // independent of whether iOS actually tore down the stream above --
+      // reacquiring the camera alone doesn't restart previewTick/tick, so
+      // without this the athlete would come back to a live-looking preview
+      // that never tracks another rep again until they close and reopen
+      // the dialog. Whichever loop was driving the current step is the one
+      // to resume -- previewTick during setup/calibration, tick once a set
+      // is actually being tracked.
+      if (!rafRef.current) {
+        if (stepRef.current === "tracking") rafRef.current = requestAnimationFrame(tick);
+        else if (stepRef.current === "setup") rafRef.current = requestAnimationFrame(previewTick);
+      }
     });
 
     // The reactive foreground reacquisition above works whenever iOS gets

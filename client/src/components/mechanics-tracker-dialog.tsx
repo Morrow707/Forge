@@ -224,13 +224,17 @@ export function MechanicsTrackerDialog({
     acquireCamera();
     rafRef.current = requestAnimationFrame(tick);
 
-    // See bar-tracker-dialog.tsx's own comment on onAppForeground.
+    // See bar-tracker-dialog.tsx's own comment on onAppForeground -- and its
+    // sprint-tracker-dialog.tsx comment on why this also has to restart the
+    // rAF loop itself, not just the camera stream.
     const unsubscribeForeground = onAppForeground(() => {
       const stillLive = streamRef.current?.getVideoTracks().some((t) => t.readyState === "live");
-      if (stillLive) return;
-      streamRef.current?.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
-      acquireCamera();
+      if (!stillLive) {
+        streamRef.current?.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+        acquireCamera();
+      }
+      if (!rafRef.current) rafRef.current = requestAnimationFrame(tick);
     });
     // See bar-tracker-dialog.tsx's own comment on onAppBackground.
     const unsubscribeBackground = onAppBackground(() => {

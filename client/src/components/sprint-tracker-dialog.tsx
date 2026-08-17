@@ -265,13 +265,19 @@ export function SprintTrackerDialog({
 
     // See bar-tracker-dialog.tsx's own comment on onAppForeground -- same
     // reacquire-on-return fix, scoped to whichever camera-active step is
-    // live when the app was backgrounded.
+    // live when the app was backgrounded. onAppBackground below always
+    // cancels the rAF loop outright, independent of whether iOS actually
+    // tore down the stream -- without restarting it here too, the athlete
+    // would come back to a live-looking preview that never tracks another
+    // crossing again until they close and reopen the dialog.
     const unsubscribeForeground = onAppForeground(() => {
       const stillLive = streamRef.current?.getVideoTracks().some((t) => t.readyState === "live");
-      if (stillLive) return;
-      streamRef.current?.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
-      acquireCamera();
+      if (!stillLive) {
+        streamRef.current?.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+        acquireCamera();
+      }
+      if (!rafRef.current) rafRef.current = requestAnimationFrame(tick);
     });
     // See bar-tracker-dialog.tsx's own comment on onAppBackground -- release
     // the camera/recorder/rAF loop immediately on backgrounding rather than
