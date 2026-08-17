@@ -16,6 +16,12 @@ export type BodyTrackingFrame =
       timestamp: number;
       estimatedScaleFactor: number;
       distanceMeters: number;
+      // Hip root projected into normalized (0-1) on-screen space -- see
+      // ArCameraPreviewPlugin.swift's own comment on frame.camera.projectPoint.
+      // Only what sprint tracking's screen-space checkpoint-crossing model
+      // needs; the real-world 3D joints below are what everything else uses.
+      hipScreenX: number;
+      hipScreenY: number;
       joints: BodyTrackingJoint[];
     };
 

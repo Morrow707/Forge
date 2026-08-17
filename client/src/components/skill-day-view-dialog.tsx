@@ -13,6 +13,8 @@ import { externalLinkClick } from "@/lib/open-external";
 import { extractVideoFrames } from "@/lib/video-frames";
 import { Target, MoonStar, Timer, Activity, CheckCircle2, Film, Video, Sparkles } from "lucide-react";
 import { SprintTrackerDialog } from "@/components/sprint-tracker-dialog";
+import { ArSprintTrackerDialog } from "@/components/ar-sprint-tracker-dialog";
+import { isArPreviewPlatform } from "@/lib/native-ar-preview";
 import { MechanicsTrackerDialog } from "@/components/mechanics-tracker-dialog";
 import { FormVideoRecorderDialog } from "@/components/form-video-recorder-dialog";
 import { WorkoutCommentThread } from "@/components/workout-comment-thread";
@@ -322,7 +324,16 @@ export function SkillDayViewDialog({
         </DialogContent>
       </Dialog>
 
-      {sprintExercise && source.kind === "athlete" && (
+      {sprintExercise && source.kind === "athlete" && (isArPreviewPlatform() ? (
+        <ArSprintTrackerDialog
+          open={!!sprintExercise}
+          onOpenChange={(o) => !o && setSprintExercise(null)}
+          drillName={sprintExercise.name}
+          skillAssignmentId={source.skillAssignmentId}
+          skillProgramDayId={source.skillProgramDayId}
+          skillProgramExerciseId={sprintExercise.id}
+        />
+      ) : (
         <SprintTrackerDialog
           open={!!sprintExercise}
           onOpenChange={(o) => !o && setSprintExercise(null)}
@@ -331,7 +342,7 @@ export function SkillDayViewDialog({
           skillProgramDayId={source.skillProgramDayId}
           skillProgramExerciseId={sprintExercise.id}
         />
-      )}
+      ))}
 
       {mechanicsExercise && source.kind === "athlete" && (
         <MechanicsTrackerDialog

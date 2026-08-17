@@ -427,11 +427,33 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
         let rootPosition = rootTransform.columns.3
         let distanceMeters = Double(simd_distance(cameraPosition, rootPosition))
 
+        // Hip root projected into normalized (0-1) on-screen space -- the
+        // one piece sprint-tracking.ts's checkpoint-crossing model needs
+        // that world-space joints alone can't give it: a start/finish
+        // checkpoint is a screen position the coach taps, so the tracked
+        // reference point needs to be comparable in that same screen space,
+        // not real-world meters. projectPoint does the same 3D-to-2D
+        // projection SceneKit already does implicitly to render the
+        // skeleton on screen, just handed back as a point instead of drawn.
+        // .portrait matches this plugin's one fixed orientation (see
+        // appendVideoFrame's own rotation-transform comment -- there's no
+        // dynamic orientation handling anywhere else in this file either).
+        let viewportSize = previewView?.bounds.size ?? UIScreen.main.bounds.size
+        let hipScreen = frame.camera.projectPoint(
+            SIMD3<Float>(rootPosition.x, rootPosition.y, rootPosition.z),
+            orientation: .portrait,
+            viewportSize: viewportSize
+        )
+        let hipScreenX = viewportSize.width > 0 ? Double(hipScreen.x / viewportSize.width) : 0
+        let hipScreenY = viewportSize.height > 0 ? Double(hipScreen.y / viewportSize.height) : 0
+
         notifyListeners("bodyTracking", data: [
             "tracked": true,
             "timestamp": frame.timestamp * 1000,
             "estimatedScaleFactor": Double(bodyAnchor.estimatedScaleFactor),
             "distanceMeters": distanceMeters,
+            "hipScreenX": hipScreenX,
+            "hipScreenY": hipScreenY,
             "joints": joints,
         ])
     }
