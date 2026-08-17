@@ -21,6 +21,7 @@ export default function AthleteDashboard() {
   const [viewingSkill, setViewingSkill] = useState<{
     skillAssignmentId: number;
     skillProgramDayId: number;
+    date: string;
   } | null>(null);
 
   const { data: entries = [] } = useQuery<CalendarEntry[]>({
@@ -63,7 +64,11 @@ export default function AthleteDashboard() {
         onRangeChange={(start, end) => setRange({ start, end })}
         onEntryClick={(e) =>
           e.kind === "skill"
-            ? setViewingSkill({ skillAssignmentId: e.assignmentId, skillProgramDayId: e.programDayId })
+            ? setViewingSkill({
+                skillAssignmentId: e.assignmentId,
+                skillProgramDayId: e.programDayId,
+                date: e.date,
+              })
             : navigate(`/athlete/day/${e.assignmentId}/${e.programDayId}/${e.date}`)
         }
       />
@@ -121,6 +126,7 @@ export default function AthleteDashboard() {
             kind: "athlete",
             skillAssignmentId: viewingSkill.skillAssignmentId,
             skillProgramDayId: viewingSkill.skillProgramDayId,
+            date: viewingSkill.date,
           }}
         />
       )}

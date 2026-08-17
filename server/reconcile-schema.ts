@@ -1107,6 +1107,32 @@ CREATE TABLE IF NOT EXISTS "legal_agreement" (
   "content" text NOT NULL DEFAULT '',
   "updated_at" timestamp NOT NULL DEFAULT now()
 );
+
+ALTER TABLE "skill_programs" ADD COLUMN IF NOT EXISTS "ai_authored" boolean NOT NULL DEFAULT false;
+
+CREATE TABLE IF NOT EXISTS "skill_day_logs" (
+  "id" serial PRIMARY KEY,
+  "skill_assignment_id" integer NOT NULL REFERENCES "skill_assignments"("id") ON DELETE CASCADE,
+  "skill_program_day_id" integer NOT NULL REFERENCES "skill_program_days"("id") ON DELETE CASCADE,
+  "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "date" date NOT NULL,
+  "completed" boolean NOT NULL DEFAULT false,
+  "completed_at" timestamp
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "skill_day_log_day_instance_idx" ON "skill_day_logs" ("skill_assignment_id", "skill_program_day_id", "date");
+
+CREATE TABLE IF NOT EXISTS "skill_day_comments" (
+  "id" serial PRIMARY KEY,
+  "skill_assignment_id" integer NOT NULL REFERENCES "skill_assignments"("id") ON DELETE CASCADE,
+  "skill_program_day_id" integer NOT NULL REFERENCES "skill_program_days"("id") ON DELETE CASCADE,
+  "author_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "body" text NOT NULL,
+  "video_url" text,
+  "image_url" text,
+  "date" text,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "skill_day_comments_assignment_day_idx" ON "skill_day_comments" ("skill_assignment_id", "skill_program_day_id");
 `;
 
 async function main() {

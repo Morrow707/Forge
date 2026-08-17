@@ -1,26 +1,11 @@
-import { SkillBankPage } from "@/pages/skill-bank";
-import { FreeAgentGate } from "@/components/free-agent-gate";
-import { LibraryTabs } from "@/components/library-tabs";
+import { LibraryBankRemoved } from "@/components/library-bank-removed";
 
 export default function AthleteSkills() {
   return (
-    <FreeAgentGate title="Skill Library">
-      <SkillBankPage
-        apiBase="/api/athlete"
-        routeBase="/athlete/skills"
-        title="Skill Library"
-        emptyStateText="No skill drills match your filters."
-        showCreate={false}
-        libraryTabs={
-          <LibraryTabs
-            active="skill-bank"
-            programsHref="/athlete/programs"
-            exercisesHref="/athlete/exercises"
-            skillProgramsHref="/athlete/skill-programs"
-            skillBankHref="/athlete/skills"
-          />
-        }
-      />
-    </FreeAgentGate>
+    <LibraryBankRemoved
+      title="Skill Library"
+      redirectTo="/athlete/skill-programs"
+      redirectLabel="Go to My Skill Programs"
+    />
   );
 }

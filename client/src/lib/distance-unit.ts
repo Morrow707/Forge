@@ -11,8 +11,8 @@ const DISTANCE_UNIT_KEY = "forge:jump-distance-unit";
 const CM_PER_INCH = 2.54;
 
 export function loadDistanceUnitPref(): DistanceUnit {
-  if (typeof window === "undefined") return "cm";
-  return window.localStorage.getItem(DISTANCE_UNIT_KEY) === "in" ? "in" : "cm";
+  if (typeof window === "undefined") return "in";
+  return window.localStorage.getItem(DISTANCE_UNIT_KEY) === "cm" ? "cm" : "in";
 }
 
 function saveDistanceUnitPref(unit: DistanceUnit) {

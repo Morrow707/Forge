@@ -160,7 +160,10 @@ export function AppShell({
       : user?.role === "admin"
         ? adminNav
         : isFreeAgent
-          ? athleteNav
+          // A Free Agent has no team, so Team Board (a coach's roster-wide
+          // chat) has nobody on the other end -- same "would just 403/be
+          // empty" reasoning as the coached-athlete filter below.
+          ? athleteNav.filter((item) => item.href !== "/athlete/team-board")
           : athleteNav.filter((item) => item.href !== "/athlete/programs" && item.href !== "/athlete/chat");
 
   const teamBoardUnreadUrl =

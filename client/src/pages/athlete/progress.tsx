@@ -420,7 +420,7 @@ export default function AthleteProgress() {
                   }
                   addMetric.mutate();
                 }}
-                className="grid grid-cols-2 gap-3 sm:grid-cols-5 sm:items-end"
+                className="grid grid-cols-2 gap-3"
               >
                 <div className="space-y-1.5">
                   <Label htmlFor="metric-date">Date</Label>
@@ -471,7 +471,7 @@ export default function AthleteProgress() {
                     placeholder="15"
                   />
                 </div>
-                <Button type="submit" disabled={addMetric.isPending}>
+                <Button type="submit" disabled={addMetric.isPending} className="col-span-2 w-full">
                   Log Entry
                 </Button>
               </form>

@@ -36,6 +36,8 @@ import {
   pushSubscribeSchema,
   apnsSubscribeSchema,
   createWorkoutCommentSchema,
+  createSkillDayCommentSchema,
+  setSkillDayCompleteSchema,
   createExerciseReportSchema,
   resolveSubmissionSchema,
   coachAnalyticsQuerySchema,
@@ -3463,6 +3465,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
+  // Exact mirror of the two routes above, for a skill day instead of a
+  // strength program day -- see the schema comment on skillDayComments.
+  app.get(
+    "/api/coach/skill-assignments/:assignmentId/days/:skillProgramDayId/comments",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const assignmentId = Number(req.params.assignmentId);
+      const skillProgramDayId = Number(req.params.skillProgramDayId);
+      const owned = await storage.getSkillAssignmentForCoach(user.id, assignmentId);
+      if (!owned) return res.status(404).json({ message: "Skill assignment not found" });
+      const comments = await storage.getSkillDayComments(assignmentId, skillProgramDayId);
+      res.json(comments);
+    },
+  );
+
+  app.post(
+    "/api/coach/skill-assignments/:assignmentId/days/:skillProgramDayId/comments",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const assignmentId = Number(req.params.assignmentId);
+      const skillProgramDayId = Number(req.params.skillProgramDayId);
+      const owned = await storage.getSkillAssignmentForCoach(user.id, assignmentId);
+      if (!owned) return res.status(404).json({ message: "Skill assignment not found" });
+      const parsed = createSkillDayCommentSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      const comment = await storage.addSkillDayComment(assignmentId, skillProgramDayId, user.id, parsed.data);
+
+      const hasVideo = !!parsed.data.videoUrl || !!parsed.data.imageUrl;
+      const title = hasVideo ? "New video from your coach" : "New comment from your coach";
+      const body = `${user.name}: ${parsed.data.body}`;
+      await notifyUser(owned.athleteId, hasVideo ? "video" : "comment", title, body, "/athlete");
+
+      res.status(201).json(comment);
+    },
+  );
+
   // Coach draws on a paused frame of an athlete's video, client-side canvas
   // produces a PNG data URL, decoded and written to disk here -- the
   // resulting /uploads/annotations/... URL is then posted as imageUrl on a
@@ -4175,21 +4217,89 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(detail);
   });
 
-  // Read-only skill-day view -- the day's plan, not a workout page. Camera
-  // captures (sprint tracking below) are the only thing actually logged
-  // for a skill day so far.
+  // Skill-day view -- the day's plan, plus (when ?date= is given) that
+  // occurrence's completion state. date is optional since the coach-preview
+  // path through SkillDayViewDialog has none to give (it's previewing the
+  // program's structure, not one athlete's specific occurrence of it).
   app.get(
     "/api/athlete/skill-day/:skillAssignmentId/:skillProgramDayId",
     requireRole("athlete"),
     async (req, res) => {
       const user = currentUser(req);
+      const date = typeof req.query.date === "string" ? req.query.date : undefined;
       const detail = await storage.getSkillDayForAthlete(
         user.id,
         Number(req.params.skillAssignmentId),
         Number(req.params.skillProgramDayId),
+        date,
       );
       if (!detail) return res.status(404).json({ message: "Skill session not found" });
       res.json(detail);
+    },
+  );
+
+  app.post(
+    "/api/athlete/skill-day/:skillAssignmentId/:skillProgramDayId/complete",
+    requireRole("athlete"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const parsed = setSkillDayCompleteSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      const log = await storage.setSkillDayComplete(
+        user.id,
+        Number(req.params.skillAssignmentId),
+        Number(req.params.skillProgramDayId),
+        parsed.data.date,
+        parsed.data.completed,
+      );
+      if (!log) return res.status(404).json({ message: "Skill assignment not found" });
+      res.status(200).json(log);
+    },
+  );
+
+  app.get(
+    "/api/athlete/skill-assignments/:assignmentId/days/:skillProgramDayId/comments",
+    requireRole("athlete"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const assignmentId = Number(req.params.assignmentId);
+      const skillProgramDayId = Number(req.params.skillProgramDayId);
+      const owned = await storage.getSkillAssignmentForAthlete(user.id, assignmentId);
+      if (!owned) return res.status(404).json({ message: "Skill assignment not found" });
+      const comments = await storage.getSkillDayComments(assignmentId, skillProgramDayId);
+      res.json(comments);
+    },
+  );
+
+  app.post(
+    "/api/athlete/skill-assignments/:assignmentId/days/:skillProgramDayId/comments",
+    requireRole("athlete"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const assignmentId = Number(req.params.assignmentId);
+      const skillProgramDayId = Number(req.params.skillProgramDayId);
+      const owned = await storage.getSkillAssignmentForAthlete(user.id, assignmentId);
+      if (!owned) return res.status(404).json({ message: "Skill assignment not found" });
+      const parsed = createSkillDayCommentSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      const comment = await storage.addSkillDayComment(assignmentId, skillProgramDayId, user.id, parsed.data);
+
+      // Same "self-assigned has nobody to notify" guard as the sprint/
+      // mechanics fault notification below -- a Free Agent's own skill
+      // program (or self-enrolled Class lesson) stores their own id as
+      // coachId, so there's no real coach on the other end of this thread.
+      if (owned.coachId !== user.id) {
+        const hasVideo = !!parsed.data.videoUrl || !!parsed.data.imageUrl;
+        const title = hasVideo ? "New video from an athlete" : "New comment from an athlete";
+        const body = `${user.name}: ${parsed.data.body}`;
+        await notifyUser(owned.coachId, hasVideo ? "video" : "comment", title, body, "/coach/roster");
+      }
+
+      res.status(201).json(comment);
     },
   );
 
@@ -4865,6 +4975,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const parsed = sendSkillProgramChatMessageSchema.safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ message: "Invalid message" });
       const result = await storage.generateSkillProgramFromChat(id, user.id, parsed.data.content);
+      res.status(201).json(result);
+    },
+  );
+
+  // "Full function" AI skill form check -- exact mirror of the strength
+  // side's /api/athlete/programs/:id/form-check above (see
+  // storage.submitSkillFormCheck for why this is the one place the AI
+  // critiques technique with no human review step).
+  app.post(
+    "/api/athlete/skill-programs/:id/form-check",
+    requireRole("athlete"),
+    requireFreeAgent,
+    requirePaidAiAccess("skillsAi"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const id = Number(req.params.id);
+      const owned = await assertCoachOwnsSkillProgram(user.id, id);
+      if (!owned) return res.status(404).json({ message: "Skill program not found" });
+      const schema = z.object({
+        exerciseName: z.string().trim().min(1).max(200),
+        images: z
+          .array(
+            z.object({
+              mediaType: z.enum(["image/jpeg", "image/png"]),
+              data: z.string().min(1),
+            }),
+          )
+          .min(1)
+          .max(6),
+      });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      const result = await storage.submitSkillFormCheck(id, user.id, parsed.data.exerciseName, parsed.data.images);
+      if (!result) return res.status(400).json({ message: "This skill program isn't AI-authored yet" });
       res.status(201).json(result);
     },
   );

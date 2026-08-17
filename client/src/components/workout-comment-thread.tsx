@@ -25,15 +25,19 @@ type Comment = {
 
 /** A two-way thread on a specific day of a specific assignment -- flag a
  * rough set, attach a video link, get a reply -- without leaving the
- * workout. Used by both the athlete workout page and the coach's day-edit
- * dialog against the same underlying comments. */
+ * workout. Used by the athlete workout page, the coach's day-edit dialog,
+ * and (kind: "skill") the skill-day view against the parallel
+ * skillDayComments table -- same shape, same two routes, just a different
+ * URL prefix. */
 export function WorkoutCommentThread({
   role,
+  kind = "workout",
   assignmentId,
   programDayId,
   date,
 }: {
   role: "coach" | "athlete";
+  kind?: "workout" | "skill";
   assignmentId: number;
   programDayId: number;
   // The calendar date this thread is being viewed/posted from, when known
@@ -44,7 +48,8 @@ export function WorkoutCommentThread({
   date?: string;
 }) {
   const qc = useQueryClient();
-  const basePath = `/api/${role}/assignments/${assignmentId}/days/${programDayId}/comments`;
+  const pathSegment = kind === "skill" ? "skill-assignments" : "assignments";
+  const basePath = `/api/${role}/${pathSegment}/${assignmentId}/days/${programDayId}/comments`;
   const [body, setBody] = useState("");
   const [videoUrl, setVideoUrl] = useState("");
   const [showVideoField, setShowVideoField] = useState(false);

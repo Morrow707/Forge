@@ -634,6 +634,11 @@ export const skillPrograms = pgTable("skill_programs", {
   name: text("name").notNull(),
   description: text("description"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  // Exact mirror of programs.aiAuthored -- see its own comment. Gates the
+  // "full function" AI skill form-check the same way, for the same reason:
+  // only safe to let the AI critique technique unsupervised when it's
+  // already this skill program's author.
+  aiAuthored: boolean("ai_authored").notNull().default(false),
 });
 
 export const skillProgramWeeks = pgTable(
@@ -770,6 +775,68 @@ export const skillSessionLogs = pgTable(
   (table) => ({
     athleteIdx: index("skill_session_logs_athlete_idx").on(table.athleteId),
     assignmentIdx: index("skill_session_logs_assignment_idx").on(table.skillAssignmentId),
+  }),
+);
+
+// Day-level "I did this" marker for a skill day, exactly parallel to
+// workoutLogs on the strength side -- separate from skillSessionLogs (one
+// row per camera-tracked drill capture) since a skill day can include
+// untracked drills too, and a whole day needs one completion state
+// regardless of how many of its drills were actually camera-tracked.
+export const skillDayLogs = pgTable(
+  "skill_day_logs",
+  {
+    id: serial("id").primaryKey(),
+    skillAssignmentId: integer("skill_assignment_id")
+      .notNull()
+      .references(() => skillAssignments.id, { onDelete: "cascade" }),
+    skillProgramDayId: integer("skill_program_day_id")
+      .notNull()
+      .references(() => skillProgramDays.id, { onDelete: "cascade" }),
+    athleteId: integer("athlete_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    date: date("date").notNull(),
+    completed: boolean("completed").notNull().default(false),
+    completedAt: timestamp("completed_at"),
+  },
+  (table) => ({
+    dayInstanceIdx: uniqueIndex("skill_day_log_day_instance_idx").on(
+      table.skillAssignmentId,
+      table.skillProgramDayId,
+      table.date,
+    ),
+  }),
+);
+
+// A two-way thread on a specific day of a specific skill assignment --
+// exact mirror of workoutComments (see its own comment) for the skill side:
+// a question about a drill, an attached video, a coach's (or, for a Free
+// Agent's self-assigned day, the AI's) reply.
+export const skillDayComments = pgTable(
+  "skill_day_comments",
+  {
+    id: serial("id").primaryKey(),
+    skillAssignmentId: integer("skill_assignment_id")
+      .notNull()
+      .references(() => skillAssignments.id, { onDelete: "cascade" }),
+    skillProgramDayId: integer("skill_program_day_id")
+      .notNull()
+      .references(() => skillProgramDays.id, { onDelete: "cascade" }),
+    authorId: integer("author_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    body: text("body").notNull(),
+    videoUrl: text("video_url"),
+    imageUrl: text("image_url"),
+    date: text("date"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    assignmentDayIdx: index("skill_day_comments_assignment_day_idx").on(
+      table.skillAssignmentId,
+      table.skillProgramDayId,
+    ),
   }),
 );
 
@@ -2858,6 +2925,18 @@ export const skillSessionLogsRelations = relations(skillSessionLogs, ({ one }) =
   athlete: one(users, { fields: [skillSessionLogs.athleteId], references: [users.id] }),
 }));
 
+export const skillDayCommentsRelations = relations(skillDayComments, ({ one }) => ({
+  assignment: one(skillAssignments, {
+    fields: [skillDayComments.skillAssignmentId],
+    references: [skillAssignments.id],
+  }),
+  day: one(skillProgramDays, {
+    fields: [skillDayComments.skillProgramDayId],
+    references: [skillProgramDays.id],
+  }),
+  author: one(users, { fields: [skillDayComments.authorId], references: [users.id] }),
+}));
+
 export const exerciseSubmissionsRelations = relations(exerciseSubmissions, ({ one }) => ({
   exercise: one(exercises, {
     fields: [exerciseSubmissions.exerciseId],
@@ -3307,6 +3386,20 @@ export const createWorkoutCommentSchema = z.object({
   date: z.string().trim().max(20).optional().nullable(),
 });
 
+// Exact mirror of createWorkoutCommentSchema for the skill side -- see
+// skillDayComments.
+export const createSkillDayCommentSchema = z.object({
+  body: z.string().trim().min(1).max(2000),
+  videoUrl: z.string().trim().max(500).optional().nullable(),
+  imageUrl: z.string().trim().max(500).optional().nullable(),
+  date: z.string().trim().max(20).optional().nullable(),
+});
+
+export const setSkillDayCompleteSchema = z.object({
+  date: z.string().trim().min(1).max(20),
+  completed: z.boolean(),
+});
+
 export const createAnnotationSchema = z.object({
   dataUrl: z.string().startsWith("data:image/png;base64,"),
 });
@@ -3545,6 +3638,8 @@ export type SkillExercise = typeof skillExercises.$inferSelect;
 export type SkillProgram = typeof skillPrograms.$inferSelect;
 export type SkillAssignment = typeof skillAssignments.$inferSelect;
 export type SkillSessionLog = typeof skillSessionLogs.$inferSelect;
+export type SkillDayLog = typeof skillDayLogs.$inferSelect;
+export type SkillDayComment = typeof skillDayComments.$inferSelect;
 export type Program = typeof programs.$inferSelect;
 export type ProgramWeek = typeof programWeeks.$inferSelect;
 export type ProgramDay = typeof programDays.$inferSelect;
@@ -3582,6 +3677,8 @@ export type UpdatePreferencesInput = z.infer<typeof updatePreferencesSchema>;
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 export type UpdateNotificationPrefsInput = z.infer<typeof updateNotificationPrefsSchema>;
 export type CreateWorkoutCommentInput = z.infer<typeof createWorkoutCommentSchema>;
+export type CreateSkillDayCommentInput = z.infer<typeof createSkillDayCommentSchema>;
+export type SetSkillDayCompleteInput = z.infer<typeof setSkillDayCompleteSchema>;
 export type CreateExerciseReportInput = z.infer<typeof createExerciseReportSchema>;
 export type ResolveSubmissionInput = z.infer<typeof resolveSubmissionSchema>;
 

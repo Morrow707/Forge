@@ -16,6 +16,8 @@ import {
   skillProgramExercises,
   skillAssignments,
   skillSessionLogs,
+  skillDayLogs,
+  skillDayComments,
   programs,
   programBlocks,
   programWeeks,
@@ -87,6 +89,7 @@ import type {
   UpdateProfileInput,
   UpdateNotificationPrefsInput,
   CreateWorkoutCommentInput,
+  CreateSkillDayCommentInput,
   CreateExerciseReportInput,
   CreateBodyMetricInput,
   TestingMetric,
@@ -7139,6 +7142,9 @@ Respond to the user's latest message by calling ask_question or update_program.`
     };
 
     await this.updateSkillProgramStructure(skillProgramId, structure);
+    // Marks the program as AI-authored permanently -- see the schema
+    // comment on skillPrograms.aiAuthored for why this never gets cleared.
+    await db.update(skillPrograms).set({ aiAuthored: true }).where(eq(skillPrograms.id, skillProgramId));
 
     const [assistantMessage] = await db
       .insert(skillProgramChatMessages)
@@ -8396,6 +8402,15 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
     });
   },
 
+  // Exact mirror of getAssignmentForCoach for the skill side, used by the
+  // coach's skill-day comment routes.
+  async getSkillAssignmentForCoach(coachId: number, skillAssignmentId: number) {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    return db.query.skillAssignments.findFirst({
+      where: and(eq(skillAssignments.id, skillAssignmentId), inArray(skillAssignments.coachId, coachIds)),
+    });
+  },
+
   async updateAssignment(assignmentId: number, input: UpdateAssignmentInput) {
     const patch: { correctivesEnabled?: boolean; durationWeeks?: number } = {};
     if (input.correctivesEnabled !== undefined) patch.correctivesEnabled = input.correctivesEnabled;
@@ -8666,6 +8681,14 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
   async getAssignmentForAthlete(athleteId: number, assignmentId: number) {
     return db.query.assignments.findFirst({
       where: and(eq(assignments.id, assignmentId), eq(assignments.athleteId, athleteId)),
+    });
+  },
+
+  // Exact mirror of getAssignmentForAthlete for the skill side, used by the
+  // athlete's skill-day comment routes.
+  async getSkillAssignmentForAthlete(athleteId: number, skillAssignmentId: number) {
+    return db.query.skillAssignments.findFirst({
+      where: and(eq(skillAssignments.id, skillAssignmentId), eq(skillAssignments.athleteId, athleteId)),
     });
   },
 
@@ -9347,14 +9370,16 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
     return extractPerformanceHistory(logs, exerciseId);
   },
 
-  // Read-only skill-day view for an athlete's own calendar -- there's no
-  // logging/completion flow yet (that lands with the camera-tracking
-  // batches), so this is deliberately just "what's on the plan today,"
-  // scoped to an assignment that's actually theirs.
+  // Read-only skill-day view for an athlete's own calendar, scoped to an
+  // assignment that's actually theirs. date is optional (the coach-preview
+  // path through SkillDayViewDialog has none to give) -- when given, this
+  // also merges in that occurrence's completion log, the skill-side
+  // equivalent of workoutLogs on getWorkoutDayDetail.
   async getSkillDayForAthlete(
     athleteId: number,
     skillAssignmentId: number,
     skillProgramDayId: number,
+    date?: string,
   ) {
     const assignment = await db.query.skillAssignments.findFirst({
       where: and(
@@ -9383,10 +9408,29 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
     // same enumerable-id gap submitWorkoutLog was fixed for.
     if (!day || day.week.programId !== assignment.program.id) return undefined;
 
+    const log = date
+      ? await db.query.skillDayLogs.findFirst({
+          where: and(
+            eq(skillDayLogs.skillAssignmentId, skillAssignmentId),
+            eq(skillDayLogs.skillProgramDayId, skillProgramDayId),
+            eq(skillDayLogs.date, date),
+          ),
+        })
+      : undefined;
+
     return {
+      skillAssignmentId,
+      skillProgramId: assignment.program.id,
       programName: assignment.program.name,
+      programAiAuthored: assignment.program.aiAuthored,
+      // Same "no human coach behind this specific day" signal
+      // getWorkoutDayDetail's isSelfAssigned uses -- true for a Free
+      // Agent's self-assigned skill program (and a self-enrolled Class
+      // lesson), which both store the athlete's own id as coachId.
+      isSelfAssigned: assignment.coachId === athleteId,
       title: day.title,
       isRestDay: day.isRestDay,
+      completed: log?.completed ?? false,
       exercises: day.exercises.map((ex) => ({
         id: ex.id,
         name: ex.skillExercise.name,
@@ -9399,6 +9443,149 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
         trackingLevel: ex.trackingLevel,
       })),
     };
+  },
+
+  // Day-level "I did this" toggle for a skill day -- exact mirror of the
+  // completed/completedAt half of submitWorkoutLog, without the rest of
+  // that function's strength-specific set/rep/trophy/CARA machinery, since
+  // a skill day has no per-set numbers of its own to save (camera captures
+  // already save themselves, independently, via createSkillSessionLog).
+  async setSkillDayComplete(
+    athleteId: number,
+    skillAssignmentId: number,
+    skillProgramDayId: number,
+    date: string,
+    completed: boolean,
+  ) {
+    const assignment = await db.query.skillAssignments.findFirst({
+      where: and(
+        eq(skillAssignments.id, skillAssignmentId),
+        eq(skillAssignments.athleteId, athleteId),
+      ),
+    });
+    if (!assignment) return undefined;
+
+    const existing = await db.query.skillDayLogs.findFirst({
+      where: and(
+        eq(skillDayLogs.skillAssignmentId, skillAssignmentId),
+        eq(skillDayLogs.skillProgramDayId, skillProgramDayId),
+        eq(skillDayLogs.date, date),
+      ),
+    });
+    const completedAt = completed ? new Date() : null;
+    if (existing) {
+      const [row] = await db
+        .update(skillDayLogs)
+        .set({ completed, completedAt })
+        .where(eq(skillDayLogs.id, existing.id))
+        .returning();
+      return row;
+    }
+    const [row] = await db
+      .insert(skillDayLogs)
+      .values({ skillAssignmentId, skillProgramDayId, athleteId, date, completed, completedAt })
+      .returning();
+    return row;
+  },
+
+  // ---------- Skill day comments ----------
+  // Exact mirror of getWorkoutComments/addWorkoutComment for the skill side
+  // -- see skillDayComments' own schema comment.
+  async getSkillDayComments(skillAssignmentId: number, skillProgramDayId: number) {
+    const rows = await db.query.skillDayComments.findMany({
+      where: and(
+        eq(skillDayComments.skillAssignmentId, skillAssignmentId),
+        eq(skillDayComments.skillProgramDayId, skillProgramDayId),
+      ),
+      orderBy: asc(skillDayComments.createdAt),
+      with: { author: true },
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      body: r.body,
+      videoUrl: r.videoUrl,
+      imageUrl: r.imageUrl,
+      date: r.date,
+      createdAt: r.createdAt,
+      author: { id: r.author.id, name: r.author.name, role: r.author.role },
+    }));
+  },
+
+  async addSkillDayComment(
+    skillAssignmentId: number,
+    skillProgramDayId: number,
+    authorId: number,
+    input: CreateSkillDayCommentInput,
+  ) {
+    const [row] = await db
+      .insert(skillDayComments)
+      .values({
+        skillAssignmentId,
+        skillProgramDayId,
+        authorId,
+        body: input.body,
+        videoUrl: input.videoUrl || null,
+        imageUrl: input.imageUrl || null,
+        date: input.date || null,
+      })
+      .returning();
+    const author = await db.query.users.findFirst({ where: eq(users.id, authorId) });
+    return {
+      id: row.id,
+      body: row.body,
+      videoUrl: row.videoUrl,
+      imageUrl: row.imageUrl,
+      date: row.date,
+      createdAt: row.createdAt,
+      author: { id: author!.id, name: author!.name, role: author!.role },
+    };
+  },
+
+  // "Full function" AI skill form check -- exact mirror of submitFormCheck
+  // above (see its own comment for why this has no human review step),
+  // against a skill program's chat thread instead of a strength program's.
+  async submitSkillFormCheck(
+    skillProgramId: number,
+    authorId: number,
+    exerciseName: string,
+    images: { mediaType: "image/jpeg" | "image/png"; data: string }[],
+  ) {
+    const program = await this.getSkillProgramFull(skillProgramId);
+    if (!program || !program.aiAuthored) return null;
+
+    const [userMessage] = await db
+      .insert(skillProgramChatMessages)
+      .values({
+        skillProgramId,
+        authorId,
+        role: "user",
+        content: `[Form check requested: ${exerciseName}]`,
+      })
+      .returning();
+
+    const reply = async (text: string) => {
+      const [assistantMessage] = await db
+        .insert(skillProgramChatMessages)
+        .values({ skillProgramId, authorId, role: "assistant", content: text })
+        .returning();
+      return { userMessage, assistantMessage };
+    };
+
+    if (!aiEnabled || images.length === 0) {
+      return reply("AI isn't set up yet -- ask whoever manages this Forge instance to configure it.");
+    }
+
+    const athleteContext = await this.getAthleteAiContext(authorId);
+
+    const system = `You are a skills coach reviewing still frames captured from someone's own training video, sent directly to you for feedback with no other coach in the loop -- you are their only coach for this. Give a direct, specific, encouraging critique of their technique on "${exerciseName}": what looks solid, and 1-3 concrete cues to fix anything that doesn't. Base everything strictly on what's visible in the frames -- if the images don't show enough to say anything useful (bad angle, too blurry, wrong drill), say so plainly instead of guessing. You're also given their profile/analytics -- use height/build to judge proportions correctly, but some of that profile is coach-only analytics they don't see on their own dashboard, so never name those specific coach-only labels/numbers back to them directly. Keep it to 3-5 sentences, talk to them as "you", no preamble.`;
+
+    const userText = `Here are frames from a rep of ${exerciseName}. What do you see?\n\nAthlete profile and analytics:\n${athleteContext}`;
+
+    const text = await askClaudeVision(system, userText, images, { maxTokens: 600 });
+
+    return reply(
+      text?.trim() ?? "Couldn't get a read on that video -- try again with a clearer angle.",
+    );
   },
 
   async getWorkoutDayDetail(
