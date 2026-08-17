@@ -8,13 +8,22 @@ import {
   startArPreview,
   stopArPreview,
   updateArPreviewRect,
+  onBodyTracking,
+  type BodyTrackingFrame,
 } from "@/lib/native-ar-preview";
 
-// Temporary verification page for the ARKit body-tracking swap's first
-// slice (see ArCameraPreviewPlugin.swift) -- not linked from any real nav,
-// only from the account menu's native-only debug item. Proves the native
-// camera preview itself renders correctly positioned behind the WebView
-// before any tracking logic gets built on top of it. Delete once the real
+// Temporary verification page for the ARKit body-tracking swap (see
+// ArCameraPreviewPlugin.swift) -- not linked from any real nav, only from
+// the account menu's native-only debug item. Proves two things before any
+// real tracking UI gets built on top of them: the native camera preview
+// itself renders correctly positioned behind the WebView, and the emitted
+// per-frame joint data looks sane (a body gets detected, positions move
+// plausibly with it). The raw joint dump below is also the only way to
+// find out ARKit's *actual* joint name strings on a real device --
+// ARSkeletonDefinition doesn't expose them as named constants beyond a
+// handful (root/head/leftHand/rightHand/leftFoot/rightFoot), so mapping
+// specific joints (shoulders, elbows, knees) to the metrics math in
+// pose-tracking.ts needs this ground truth first. Delete once the real
 // bar-tracker integration lands and this has served its purpose.
 export default function ArPreviewTestPage() {
   const [, navigate] = useLocation();
@@ -22,6 +31,7 @@ export default function ArPreviewTestPage() {
   const [supported, setSupported] = useState<boolean | null>(null);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [frame, setFrame] = useState<BodyTrackingFrame | null>(null);
 
   useEffect(() => {
     if (!isArPreviewPlatform()) {
@@ -48,10 +58,16 @@ export default function ArPreviewTestPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    if (!running) return;
+    return onBodyTracking(setFrame);
+  }, [running]);
+
   async function handleStart() {
     const rect = containerRef.current?.getBoundingClientRect();
     if (!rect) return;
     setError(null);
+    setFrame(null);
     try {
       await startArPreview(rect);
       setRunning(true);
@@ -65,6 +81,7 @@ export default function ArPreviewTestPage() {
       await stopArPreview();
     } finally {
       setRunning(false);
+      setFrame(null);
     }
   }
 
@@ -88,12 +105,36 @@ export default function ArPreviewTestPage() {
 
       <div
         ref={containerRef}
-        className="relative flex-1"
+        className="relative flex-1 overflow-hidden"
         style={{ background: running ? "transparent" : undefined }}
       >
         {!running && (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
             Tap Start to show the native ARKit camera preview here
+          </div>
+        )}
+
+        {/* Raw joint dump, not a skeleton overlay -- the point of this page
+            is seeing exactly what ARKit reports (real joint name strings,
+            whether a body is actually detected, do the numbers move
+            plausibly) before building anything that assumes a specific
+            joint-name mapping is correct. */}
+        {running && (
+          <div className="absolute inset-x-2 top-2 max-h-[70%] overflow-y-auto rounded-md bg-black/70 p-2 font-mono text-[11px] text-white backdrop-blur-sm">
+            {!frame || !frame.tracked ? (
+              <p className="text-white/70">No body detected -- step back so your whole body is in frame.</p>
+            ) : (
+              <>
+                <p className="mb-1 text-white/70">
+                  {frame.joints.length} joints · scale {frame.estimatedScaleFactor.toFixed(3)}
+                </p>
+                {frame.joints.map((j) => (
+                  <div key={j.name}>
+                    {j.name}: {j.x.toFixed(2)}, {j.y.toFixed(2)}, {j.z.toFixed(2)}
+                  </div>
+                ))}
+              </>
+            )}
           </div>
         )}
       </div>
