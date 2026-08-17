@@ -23,9 +23,12 @@ import Capacitor
 // cylinders for bones, placed as real nodes at these same world positions
 // -- renders on top of the passthrough feed every frame, independent of
 // the ~30fps JS-emission throttle (see updateSkeletonVisual). Also running
-// in this same session, never rendered: plane detection and (on LiDAR
-// devices) scene reconstruction, purely for the tracking-accuracy benefit
-// -- see the comment on configuration.planeDetection in start() below.
+// in this same session, never rendered: plane detection, purely for the
+// tracking-accuracy benefit -- see the comment on configuration.planeDetection
+// in start() below. (Scene reconstruction/LiDAR mesh was tried alongside it
+// and reverted -- ARBodyTrackingConfiguration has no sceneReconstruction
+// member on this SDK, confirmed by two separate CI failures, not just
+// assumed from docs.)
 @objc(ArCameraPreviewPlugin)
 public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelegate {
     public let identifier = "ArCameraPreviewPlugin"
@@ -119,25 +122,19 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
             self.hadBody = false
             self.lastEmitTimestamp = 0
             let configuration = ARBodyTrackingConfiguration()
-            // Both run in the SAME session as body tracking -- Apple's own
-            // ARBodyTrackingConfiguration exposes planeDetection and
-            // sceneReconstruction directly, no separate ARSession needed
-            // (confirmed against Apple's docs, not assumed). Neither is ever
-            // rendered -- no grid, no mesh visualization -- this is purely
-            // for the accuracy benefit: a detected floor plane gives the
-            // tracker a stable real-world reference, and on a LiDAR device,
-            // scene reconstruction measurably reduces body-tracking jitter
-            // (Apple's own LiDAR body-tracking guidance), not just extra
-            // mesh data nothing here uses.
+            // Runs in the SAME session as body tracking -- no separate
+            // ARSession needed. Never rendered -- no grid, no mesh
+            // visualization -- this is purely for the accuracy benefit: a
+            // detected floor plane gives the tracker a stable real-world
+            // reference. NOT paired with sceneReconstruction (LiDAR mesh) --
+            // that was tried and reverted (CI caught it twice: unlike
+            // ARWorldTrackingConfiguration, ARBodyTrackingConfiguration has
+            // no sceneReconstruction member at all on this SDK, despite what
+            // its docs page seemed to say -- the compiler is the actual
+            // source of truth here, not the docs). LiDAR's accuracy benefit
+            // for body tracking, if any, isn't available through this
+            // configuration.
             configuration.planeDetection = [.horizontal]
-            // The capability check itself is only declared on
-            // ARWorldTrackingConfiguration (confirmed by CI -- ARKit doesn't
-            // expose it on ARBodyTrackingConfiguration despite both classes
-            // having their own sceneReconstruction property to assign to);
-            // same call ArMeasurePlugin already uses for its LiDAR check.
-            if ARWorldTrackingConfiguration.supportsSceneReconstruction(.mesh) {
-                configuration.sceneReconstruction = .mesh
-            }
             self.previewView?.session.delegate = self
             self.previewView?.session.run(configuration, options: [.resetTracking, .removeExistingAnchors])
             call.resolve()
