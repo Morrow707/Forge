@@ -32,11 +32,12 @@ import { videoFilenameForBlob } from "@/lib/video-recording";
  * world-space Landmark[], which ar-body-landmarks.ts bridges ARKit's real
  * joints into.
  *
- * Deliberately no skeleton overlay: ARKit's own native camera view already
- * shows the athlete live (see ArCameraPreviewPlugin's hole-punch), and
- * drawing a 2D overlay on top would need projecting these world-space
- * joints back through the camera's projection matrix -- real, unbuilt math
- * -- so this sticks to text hints instead, same as the dev preview page.
+ * The live skeleton (spheres at each joint, cylinders for bones) renders
+ * natively, drawn directly into ArCameraPreviewPlugin's own AR scene at
+ * ARKit's real world-space joint positions -- see
+ * updateSkeletonVisual/orientBone there. Nothing on this side has to ask
+ * for it or draw it; it's just part of what the native camera view shows
+ * whenever a body is tracked.
  *
  * Also deliberately no form-fault detection (unlike the MediaPipe jump
  * mode in bar-tracker-dialog.tsx) -- detectFormFaults' valgus check
