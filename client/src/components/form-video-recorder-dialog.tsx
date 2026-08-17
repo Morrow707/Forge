@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { ApiError, uploadWithProgress } from "@/lib/queryClient";
+import { apiRequest, ApiError, uploadWithProgress } from "@/lib/queryClient";
 import { Circle, Square, RotateCcw, Upload, AlertTriangle, X, Ruler } from "lucide-react";
 import { toast } from "sonner";
 import { recordedVideoType, videoFilenameForBlob } from "@/lib/video-recording";
@@ -63,7 +63,25 @@ export function FormVideoRecorderDialog({
     try {
       const result = await measureWithAR();
       if (result) {
-        toast.success(`Measured: ${result.feet}' ${result.inches.toFixed(1)}" (${result.meters.toFixed(2)} m)`);
+        // Not every AR measurement is the athlete's height -- this could
+        // just as easily be a rack upright or a plate -- so this offers
+        // saving it rather than assuming, same explicit-opt-in pattern
+        // sprint-tracker-dialog.tsx uses for its own "save to testing
+        // profile" action. user.heightIn already feeds real tracking math
+        // (see bar-tracker-dialog.tsx's heightScaledAmplitudeCm), so this
+        // isn't just a number sitting in a profile field -- it improves
+        // rep/jump-amplitude thresholds for every future tracked set.
+        const heightIn = Math.round(result.feet * 12 + result.inches);
+        toast.success(`Measured: ${result.feet}' ${result.inches.toFixed(1)}" (${result.meters.toFixed(2)} m)`, {
+          action: {
+            label: "Save as height",
+            onClick: () => {
+              apiRequest("PATCH", "/api/athlete/profile", { heightIn })
+                .then(() => toast.success("Height updated"))
+                .catch((err) => toast.error(err instanceof Error ? err.message : "Could not save height"));
+            },
+          },
+        });
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "AR measurement failed.");
