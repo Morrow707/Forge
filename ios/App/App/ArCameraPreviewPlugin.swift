@@ -130,7 +130,12 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
             // (Apple's own LiDAR body-tracking guidance), not just extra
             // mesh data nothing here uses.
             configuration.planeDetection = [.horizontal]
-            if ARBodyTrackingConfiguration.supportsSceneReconstruction(.mesh) {
+            // The capability check itself is only declared on
+            // ARWorldTrackingConfiguration (confirmed by CI -- ARKit doesn't
+            // expose it on ARBodyTrackingConfiguration despite both classes
+            // having their own sceneReconstruction property to assign to);
+            // same call ArMeasurePlugin already uses for its LiDAR check.
+            if ARWorldTrackingConfiguration.supportsSceneReconstruction(.mesh) {
                 configuration.sceneReconstruction = .mesh
             }
             self.previewView?.session.delegate = self
