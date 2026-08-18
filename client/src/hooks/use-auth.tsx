@@ -20,6 +20,11 @@ type LoginPayload = { email: string; password: string };
 type AuthContextValue = {
   user: PublicUser | null | undefined;
   isLoading: boolean;
+  // True once the auth check has failed and exhausted its retries without
+  // ever getting a real answer (network error, server unreachable) --
+  // distinct from user === null, which means the server actively said "no
+  // one is logged in." See AuthProvider's own comment on the query above.
+  isError: boolean;
   loginMutation: ReturnType<typeof useLoginMutation>;
   signupMutation: ReturnType<typeof useSignupMutation>;
   logoutMutation: ReturnType<typeof useLogoutMutation>;
@@ -94,9 +99,25 @@ function useLogoutMutation() {
 export function AuthProvider({ children }: { children: ReactNode }) {
   // The one query in the app that wants a 401 treated as valid data --
   // "no one is logged in" -- rather than an error (see queryClient.ts).
-  const { data: user, isLoading } = useQuery<PublicUser | null>({
+  // Retries against the global default (retry: false) specifically because
+  // this query runs right on app resume from background, exactly the
+  // moment a mobile OS's network interface is most likely to still be
+  // re-establishing itself -- a transient failure here used to look
+  // identical to "not logged in" to every caller (both collapsed to a
+  // falsy `user`), bouncing someone with a completely valid session back
+  // to the login form over a one-off network blip. isError is exposed
+  // below specifically so ProtectedRoute/HomeRedirect can tell "confirmed
+  // logged out" (user === null) apart from "couldn't check" (isError, user
+  // stays undefined) and stop short of a wrong redirect in the second case.
+  const {
+    data: user,
+    isLoading,
+    isError,
+  } = useQuery<PublicUser | null>({
     queryKey: ["/api/auth/me"],
     queryFn: getQueryFn({ on401: "returnNull" }),
+    retry: 3,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
   });
 
   const loginMutation = useLoginMutation();
@@ -105,7 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, isLoading, loginMutation, signupMutation, logoutMutation }}
+      value={{ user, isLoading, isError, loginMutation, signupMutation, logoutMutation }}
     >
       {children}
     </AuthContext.Provider>
