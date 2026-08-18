@@ -19,6 +19,7 @@
 		958DCC772DB07C7200EA8C65 /* ArCameraPreviewPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 958DCC762DB07C7200EA8C64 /* ArCameraPreviewPlugin.swift */; };
 		958DCC802DB07C7200EA8C70 /* ArMeasurePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 958DCC812DB07C7200EA8C71 /* ArMeasurePlugin.swift */; };
 		958DCC822DB07C7200EA8C72 /* ArMeasureViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 958DCC832DB07C7200EA8C73 /* ArMeasureViewController.swift */; };
+		C5B813CA0F854B468DD6C2CB /* ArImplementTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 618BCA781814AFB2E340B77C /* ArImplementTracker.swift */; };
 		D1F1F6E770C5EEAF7EE373A2 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = D18EFC9C75F5A71CBE1CDE92 /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
@@ -38,6 +39,7 @@
 		958DCC762DB07C7200EA8C64 /* ArCameraPreviewPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArCameraPreviewPlugin.swift; sourceTree = "<group>"; };
 		958DCC812DB07C7200EA8C71 /* ArMeasurePlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArMeasurePlugin.swift; sourceTree = "<group>"; };
 		958DCC832DB07C7200EA8C73 /* ArMeasureViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArMeasureViewController.swift; sourceTree = "<group>"; };
+		618BCA781814AFB2E340B77C /* ArImplementTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArImplementTracker.swift; sourceTree = "<group>"; };
 		D18EFC9C75F5A71CBE1CDE92 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -77,6 +79,7 @@
 				50379B222058CBB4000EE86E /* capacitor.config.json */,
 				504EC3071FED79650016851F /* AppDelegate.swift */,
 				958DCC762DB07C7200EA8C64 /* ArCameraPreviewPlugin.swift */,
+				618BCA781814AFB2E340B77C /* ArImplementTracker.swift */,
 				958DCC812DB07C7200EA8C71 /* ArMeasurePlugin.swift */,
 				958DCC832DB07C7200EA8C73 /* ArMeasureViewController.swift */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
@@ -177,6 +180,7 @@
 				958DCC772DB07C7200EA8C65 /* ArCameraPreviewPlugin.swift in Sources */,
 				958DCC802DB07C7200EA8C70 /* ArMeasurePlugin.swift in Sources */,
 				958DCC822DB07C7200EA8C72 /* ArMeasureViewController.swift in Sources */,
+				C5B813CA0F854B468DD6C2CB /* ArImplementTracker.swift in Sources */,
 				9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
