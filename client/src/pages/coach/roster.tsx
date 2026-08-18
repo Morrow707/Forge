@@ -19,6 +19,13 @@ import { AssignProgramDialog } from "@/components/assign-program-dialog";
 import { CaraCompliancePanel } from "@/components/cara-compliance-panel";
 import { TeamChallengesSection } from "@/components/team-challenges-panel";
 import { GameDaysSection } from "@/components/game-days-panel";
+import { TestingDayImportDialog } from "@/components/testing-day-import-dialog";
+import { WeighInImportDialog } from "@/components/weigh-in-import-dialog";
+import { NutritionSheetImportDialog } from "@/components/nutrition-sheet-import-dialog";
+import { InjuryIntakeImportDialog } from "@/components/injury-intake-import-dialog";
+import { TestingDataImportDialog } from "@/components/testing-data-import-dialog";
+import { PlayerIntakeImportDialog } from "@/components/player-intake-import-dialog";
+import { ProvisionalRosterPanel } from "@/components/provisional-roster-panel";
 import {
   HealthStatusToggle,
   WellnessBadge,
@@ -40,7 +47,45 @@ import {
   Copy,
   HeartPulse,
   HeartCrack,
+  Camera,
+  ClipboardList,
+  Scale,
+  Apple,
+  Stethoscope,
+  Gauge,
+  UserPlus2,
 } from "lucide-react";
+
+type PhotoImportKind = "testing-day" | "weigh-in" | "nutrition" | "injury" | "testing-data" | "player-intake";
+
+const PHOTO_IMPORT_OPTIONS: { kind: PhotoImportKind; label: string; description: string; icon: typeof Camera }[] = [
+  {
+    kind: "testing-day",
+    label: "Testing Day Results",
+    description: "40yd, vertical, broad jump, bench/squat/deadlift maxes",
+    icon: ClipboardList,
+  },
+  { kind: "weigh-in", label: "Weigh-In Sheet", description: "Team body weights, all at once", icon: Scale },
+  { kind: "nutrition", label: "Nutrition Sheet", description: "Macro/target sheet from a coach or RD", icon: Apple },
+  {
+    kind: "injury",
+    label: "Injury History Intake",
+    description: "Pre-participation physical / injury form",
+    icon: Stethoscope,
+  },
+  {
+    kind: "testing-data",
+    label: "OVR / Perch Printout",
+    description: "Velocity-based training device output",
+    icon: Gauge,
+  },
+  {
+    kind: "player-intake",
+    label: "Player Intake Sheet",
+    description: "New tryout/sign-up sheet -- creates claim codes",
+    icon: UserPlus2,
+  },
+];
 
 type RosterEntry = {
   id: number;
@@ -96,6 +141,12 @@ export default function CoachRoster() {
 
   const [addFreeAgentOpen, setAddFreeAgentOpen] = useState(false);
   const [freeAgentEmail, setFreeAgentEmail] = useState("");
+
+  // Which photo-import dialog is open, if any -- one launcher picker
+  // instead of six separate toolbar buttons. See PHOTO_IMPORT_OPTIONS
+  // below the component for the picker's own list.
+  const [photoImportPickerOpen, setPhotoImportPickerOpen] = useState(false);
+  const [activePhotoImport, setActivePhotoImport] = useState<PhotoImportKind | null>(null);
 
   const [rosterSearch, setRosterSearch] = useState("");
   const [healthFilter, setHealthFilter] = useState<"all" | HealthStatus>("all");
@@ -179,6 +230,10 @@ export default function CoachRoster() {
               <UserPlus className="h-3.5 w-3.5" />
               Add Free Agent
             </Button>
+            <Button size="sm" variant="outline" onClick={() => setPhotoImportPickerOpen(true)}>
+              <Camera className="h-3.5 w-3.5" />
+              Import Photo
+            </Button>
             <Button size="sm" onClick={() => openAssignFor([])}>
               <Send className="h-3.5 w-3.5" />
               Assign Program
@@ -238,6 +293,9 @@ export default function CoachRoster() {
         }
       >
         <TabsContent value="roster">
+          <div className="mb-4">
+            <ProvisionalRosterPanel />
+          </div>
           {roster.length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
@@ -533,6 +591,63 @@ export default function CoachRoster() {
         roster={roster}
         programs={programs}
         initialAthleteIds={assignAthleteIds}
+      />
+
+      <Dialog open={photoImportPickerOpen} onOpenChange={setPhotoImportPickerOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Import from Photo</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            {PHOTO_IMPORT_OPTIONS.map(({ kind, label, description, icon: Icon }) => (
+              <button
+                key={kind}
+                type="button"
+                onClick={() => {
+                  setPhotoImportPickerOpen(false);
+                  setActivePhotoImport(kind);
+                }}
+                className="flex w-full items-center gap-3 rounded-md border border-border p-3 text-left hover:border-primary"
+              >
+                <Icon className="h-5 w-5 shrink-0 text-primary" />
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">{label}</p>
+                  <p className="truncate text-xs text-muted-foreground">{description}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <TestingDayImportDialog
+        open={activePhotoImport === "testing-day"}
+        onOpenChange={(o) => setActivePhotoImport(o ? "testing-day" : null)}
+        roster={roster}
+      />
+      <WeighInImportDialog
+        open={activePhotoImport === "weigh-in"}
+        onOpenChange={(o) => setActivePhotoImport(o ? "weigh-in" : null)}
+        roster={roster}
+      />
+      <NutritionSheetImportDialog
+        open={activePhotoImport === "nutrition"}
+        onOpenChange={(o) => setActivePhotoImport(o ? "nutrition" : null)}
+        roster={roster}
+      />
+      <InjuryIntakeImportDialog
+        open={activePhotoImport === "injury"}
+        onOpenChange={(o) => setActivePhotoImport(o ? "injury" : null)}
+        roster={roster}
+      />
+      <TestingDataImportDialog
+        open={activePhotoImport === "testing-data"}
+        onOpenChange={(o) => setActivePhotoImport(o ? "testing-data" : null)}
+        roster={roster}
+      />
+      <PlayerIntakeImportDialog
+        open={activePhotoImport === "player-intake"}
+        onOpenChange={(o) => setActivePhotoImport(o ? "player-intake" : null)}
       />
       </AppShell>
     </Tabs>

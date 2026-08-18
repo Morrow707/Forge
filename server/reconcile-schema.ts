@@ -1122,6 +1122,71 @@ CREATE TABLE IF NOT EXISTS "legal_agreement" (
   "content" text NOT NULL DEFAULT '',
   "updated_at" timestamp NOT NULL DEFAULT now()
 );
+
+ALTER TABLE "skill_programs" ADD COLUMN IF NOT EXISTS "ai_authored" boolean NOT NULL DEFAULT false;
+
+CREATE TABLE IF NOT EXISTS "skill_day_logs" (
+  "id" serial PRIMARY KEY,
+  "skill_assignment_id" integer NOT NULL REFERENCES "skill_assignments"("id") ON DELETE CASCADE,
+  "skill_program_day_id" integer NOT NULL REFERENCES "skill_program_days"("id") ON DELETE CASCADE,
+  "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "date" date NOT NULL,
+  "completed" boolean NOT NULL DEFAULT false,
+  "completed_at" timestamp
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "skill_day_log_day_instance_idx" ON "skill_day_logs" ("skill_assignment_id", "skill_program_day_id", "date");
+
+CREATE TABLE IF NOT EXISTS "skill_day_comments" (
+  "id" serial PRIMARY KEY,
+  "skill_assignment_id" integer NOT NULL REFERENCES "skill_assignments"("id") ON DELETE CASCADE,
+  "skill_program_day_id" integer NOT NULL REFERENCES "skill_program_days"("id") ON DELETE CASCADE,
+  "author_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "body" text NOT NULL,
+  "video_url" text,
+  "image_url" text,
+  "date" text,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "skill_day_comments_assignment_day_idx" ON "skill_day_comments" ("skill_assignment_id", "skill_program_day_id");
+
+ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "peak_wrist_speed_mps" real;
+ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "stride_length_m" real;
+ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "elbow_extension_deg" real;
+ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "release_height_m" real;
+ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "set_point_pause_seconds" real;
+ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "knee_bend_depth_deg" real;
+
+CREATE TABLE IF NOT EXISTS "imported_testing_data" (
+  "id" serial PRIMARY KEY,
+  "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "imported_by_user_id" integer REFERENCES "users"("id") ON DELETE SET NULL,
+  "date" date NOT NULL,
+  "exercise_name" text NOT NULL,
+  "set_number" integer,
+  "load_lbs" real,
+  "velocity_mps" real,
+  "power_watts" real,
+  "source" text NOT NULL DEFAULT 'photo import',
+  "notes" text,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "imported_testing_data_athlete_idx" ON "imported_testing_data" ("athlete_id", "date");
+
+CREATE TABLE IF NOT EXISTS "provisional_athletes" (
+  "id" serial PRIMARY KEY,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "claim_code" text NOT NULL,
+  "name" text NOT NULL,
+  "height_in" integer,
+  "body_weight_lbs" real,
+  "age" integer,
+  "gender" gender,
+  "sport" text,
+  "position" text,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "provisional_athletes_claim_code_idx" ON "provisional_athletes" ("claim_code");
+CREATE INDEX IF NOT EXISTS "provisional_athletes_coach_idx" ON "provisional_athletes" ("coach_id");
 `;
 
 async function main() {

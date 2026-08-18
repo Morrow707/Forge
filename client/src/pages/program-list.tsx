@@ -36,7 +36,9 @@ import {
   Copy,
   Sparkles,
   CalendarPlus,
+  Camera,
 } from "lucide-react";
+import { ProgramPhotoImportDialog } from "@/components/program-photo-import-dialog";
 
 const NEW_PROGRAM_GOALS = [
   "Strength",
@@ -121,6 +123,7 @@ export function ProgramListPage({
   const [description, setDescription] = useState("");
   const [assignProgramId, setAssignProgramId] = useState<number | null>(null);
   const [aiDialogOpen, setAiDialogOpen] = useState(false);
+  const [photoImportOpen, setPhotoImportOpen] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
   // Only meaningful for the coach ("build for a roster athlete") case --
   // admin/Free Agent self-service always builds for themselves (see
@@ -288,6 +291,12 @@ export function ProgramListPage({
             <Button size="sm" variant="outline" onClick={() => setAiDialogOpen(true)}>
               <Sparkles className="h-3.5 w-3.5" />
               AI Assist
+            </Button>
+          )}
+          {showAiAssist && (
+            <Button size="sm" variant="outline" onClick={() => setPhotoImportOpen(true)}>
+              <Camera className="h-3.5 w-3.5" />
+              Import Photo
             </Button>
           )}
           <Button
@@ -651,6 +660,15 @@ export function ProgramListPage({
             </form>
           </DialogContent>
         </Dialog>
+      )}
+
+      {showAiAssist && (
+        <ProgramPhotoImportDialog
+          open={photoImportOpen}
+          onOpenChange={setPhotoImportOpen}
+          apiBase={apiBase}
+          routeBase={routeBase}
+        />
       )}
     </AppShell>
   );

@@ -1730,6 +1730,84 @@ export const submitInjurySchema = z.object({
 });
 export type SubmitInjuryInput = z.infer<typeof submitInjurySchema>;
 
+// A standalone row transcribed from a photographed velocity-based-training
+// printout (Perch, OVR, or similar bar-speed device output) -- deliberately
+// NOT wired into programExercises/workoutSetEntries the way a camera-tracked
+// set is. A printout has no assignment/programExercise to attach to (it was
+// captured outside the app entirely), and unlike a live tracked set, nobody
+// here can catch a bad transcription before it lands -- so this stays its
+// own reviewable log rather than silently feeding the same trend charts a
+// verified tracked set would. exerciseName is free text, not an exerciseId,
+// for the same reason: a coach reviewing the transcription is trusted to
+// fix a misread name, but auto-matching it into the real exercise bank
+// would let an OCR error quietly create garbage exercises.
+export const importedTestingData = pgTable(
+  "imported_testing_data",
+  {
+    id: serial("id").primaryKey(),
+    athleteId: integer("athlete_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    importedByUserId: integer("imported_by_user_id").references(() => users.id, { onDelete: "set null" }),
+    date: date("date").notNull(),
+    exerciseName: text("exercise_name").notNull(),
+    setNumber: integer("set_number"),
+    loadLbs: real("load_lbs"),
+    velocityMps: real("velocity_mps"),
+    powerWatts: real("power_watts"),
+    source: text("source").notNull().default("photo import"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    athleteIdx: index("imported_testing_data_athlete_idx").on(table.athleteId, table.date),
+  }),
+);
+export type ImportedTestingDataRow = typeof importedTestingData.$inferSelect;
+
+// A roster slot created from a photographed intake sheet before the athlete
+// it describes has ever signed themselves up -- there's no existing path
+// for a coach to create a live, login-capable account on someone else's
+// behalf (self-signup + a coachCode is the only way an athlete account gets
+// created today), so a mass tryout/intake day needs somewhere to hold
+// "we have this person's info, they haven't claimed it yet" state. A coach
+// hands the athlete their claimCode; POST /api/claim/:code/signup turns
+// this into a real users row (see claimProvisionalAthlete in storage.ts)
+// and the provisional row is deleted, not archived -- once claimed, the
+// real user row is the only copy of this person's data that should exist.
+export const provisionalAthletes = pgTable(
+  "provisional_athletes",
+  {
+    id: serial("id").primaryKey(),
+    coachId: integer("coach_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    claimCode: text("claim_code").notNull(),
+    name: text("name").notNull(),
+    heightIn: integer("height_in"),
+    bodyWeightLbs: real("body_weight_lbs"),
+    age: integer("age"),
+    gender: genderEnum("gender"),
+    sport: text("sport"),
+    position: text("position"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    claimCodeIdx: uniqueIndex("provisional_athletes_claim_code_idx").on(table.claimCode),
+    coachIdx: index("provisional_athletes_coach_idx").on(table.coachId),
+  }),
+);
+export type ProvisionalAthlete = typeof provisionalAthletes.$inferSelect;
+
+export const claimProvisionalAthleteSchema = z.object({
+  email: z.string().trim().email(),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+  agreedToTerms: z.literal(true, {
+    errorMap: () => ({ message: "You must agree to the terms to create an account" }),
+  }),
+});
+export type ClaimProvisionalAthleteInput = z.infer<typeof claimProvisionalAthleteSchema>;
+
 export const caraActivityTypeEnum = pgEnum("cara_activity_type", [
   "training", // auto-started the moment the day's readiness check-in is submitted
   "meeting",
