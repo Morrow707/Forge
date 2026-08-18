@@ -230,20 +230,22 @@ export function CaraCompliancePanel({ roster }: { roster: { id: number; name: st
               </select>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
+              <div className="min-w-0 space-y-1.5">
                 <Label>Start</Label>
                 <Input
                   type="datetime-local"
                   value={logStart}
                   onChange={(e) => setLogStart(e.target.value)}
+                  className="w-full min-w-0"
                 />
               </div>
-              <div className="space-y-1.5">
+              <div className="min-w-0 space-y-1.5">
                 <Label>End</Label>
                 <Input
                   type="datetime-local"
                   value={logEnd}
                   onChange={(e) => setLogEnd(e.target.value)}
+                  className="w-full min-w-0"
                 />
               </div>
             </div>
