@@ -100,7 +100,7 @@ export default function ArPreviewTestPage() {
       setSupported(false);
       return;
     }
-    isArBodyTrackingSupported().then(setSupported);
+    isArBodyTrackingSupported().then(({ supported }) => setSupported(supported));
   }, []);
 
   useEffect(() => {

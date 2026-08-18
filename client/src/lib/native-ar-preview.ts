@@ -71,13 +71,21 @@ export function isArPreviewPlatform(): boolean {
   return Capacitor.isNativePlatform() && Capacitor.getPlatform() === "ios";
 }
 
-export async function isArBodyTrackingSupported(): Promise<boolean> {
-  if (!isArPreviewPlatform()) return false;
+// error is populated only on the "the native call itself failed" path (a
+// plugin-bridge/dispatch problem), never on "ARKit genuinely isn't
+// supported" -- the two look identical to a user (both end up showing the
+// same unsupported banner), but only one of them has anything to report,
+// and distinguishing them from outside a Mac/Xcode console is otherwise
+// impossible. See the callers' own comment on why this gets shown in the
+// UI at all instead of just logged.
+export async function isArBodyTrackingSupported(): Promise<{ supported: boolean; error?: string }> {
+  if (!isArPreviewPlatform()) return { supported: false };
   try {
     const { supported } = await ArCameraPreview.isSupported();
-    return supported;
-  } catch {
-    return false;
+    return { supported };
+  } catch (err) {
+    const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+    return { supported: false, error: detail };
   }
 }
 

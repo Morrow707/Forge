@@ -72,6 +72,7 @@ export function ArJumpTrackerDialog({
   const containerRef = useRef<HTMLDivElement>(null);
   const [tracking, setTracking] = useState(false);
   const [supported, setSupported] = useState<boolean | null>(null);
+  const [supportError, setSupportError] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const [frame, setFrame] = useState<BodyTrackingFrame | null>(null);
   const [recordedReps, setRecordedReps] = useState(0);
@@ -96,7 +97,10 @@ export function ArJumpTrackerDialog({
     traceRef.current = [];
     framesRef.current = [];
     trackingRef.current = false;
-    isArBodyTrackingSupported().then(setSupported);
+    isArBodyTrackingSupported().then(({ supported: isSupported, error: supportErr }) => {
+      setSupported(isSupported);
+      setSupportError(supportErr);
+    });
   }, [open]);
 
   // One AR session per dialog open -- not tied to the tracking/setup
@@ -246,9 +250,14 @@ export function ArJumpTrackerDialog({
               </div>
             )}
             {supported === false && (
-              <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 flex items-center gap-2 rounded-md bg-destructive/90 px-3 py-2 text-sm text-white">
-                <AlertTriangle className="h-4 w-4 shrink-0" />
-                ARKit tracking isn't supported on this device.
+              <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 flex flex-col items-center gap-2 rounded-md bg-destructive/90 px-3 py-2 text-sm text-white">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 shrink-0" />
+                  ARKit tracking isn't supported on this device.
+                </div>
+                {supportError && (
+                  <p className="select-text break-all text-center text-xs opacity-90">{supportError}</p>
+                )}
               </div>
             )}
           </div>
