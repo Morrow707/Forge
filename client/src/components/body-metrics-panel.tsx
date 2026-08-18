@@ -91,7 +91,7 @@ export function BodyMetricsPanel({
           }
           addMetric.mutate();
         }}
-        className="grid grid-cols-2 gap-2"
+        className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:items-end"
       >
         <div className="min-w-0 space-y-1.5">
           <Label htmlFor="coach-metric-date">Date</Label>
@@ -129,7 +129,7 @@ export function BodyMetricsPanel({
             </SelectContent>
           </Select>
         </div>
-        <Button type="submit" disabled={addMetric.isPending} className="col-span-2 w-full">
+        <Button type="submit" disabled={addMetric.isPending} className="w-full">
           Log
         </Button>
       </form>

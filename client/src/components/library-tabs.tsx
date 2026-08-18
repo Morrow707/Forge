@@ -14,11 +14,7 @@ import { ListChecks, Dumbbell, ClipboardList, Target, GraduationCap } from "luci
  * hidden skill program), so it groups with them rather than with
  * Programs/Exercise Bank. `classesHref` is omitted on the athlete's Library
  * strip -- an athlete's Classes stays its own top-level nav tab (never
- * AI-gated, unlike the rest of Library), so no Classes button renders there.
- * `exercisesHref`/`skillBankHref` are omitted there too -- a Free Agent
- * trains off the AI program builder only, with no standalone bank to browse
- * on top of it (see library-bank-removed.tsx), so only Programs and Skill
- * Programs show up on that strip. */
+ * AI-gated, unlike the rest of Library), so no Classes button renders there. */
 export function LibraryTabs({
   active,
   programsHref,
@@ -29,9 +25,9 @@ export function LibraryTabs({
 }: {
   active: "programs" | "exercises" | "skill-programs" | "skill-bank" | "classes";
   programsHref: string;
-  exercisesHref?: string;
+  exercisesHref: string;
   skillProgramsHref: string;
-  skillBankHref?: string;
+  skillBankHref: string;
   classesHref?: string;
 }) {
   const [, navigate] = useLocation();
@@ -48,12 +44,10 @@ export function LibraryTabs({
         <ListChecks className="h-3.5 w-3.5" />
         Programs
       </button>
-      {exercisesHref && (
-        <button type="button" onClick={() => navigate(exercisesHref)} className={tabClass(active === "exercises")}>
-          <Dumbbell className="h-3.5 w-3.5" />
-          Exercise Bank
-        </button>
-      )}
+      <button type="button" onClick={() => navigate(exercisesHref)} className={tabClass(active === "exercises")}>
+        <Dumbbell className="h-3.5 w-3.5" />
+        Exercise Bank
+      </button>
       <button
         type="button"
         onClick={() => navigate(skillProgramsHref)}
@@ -62,16 +56,14 @@ export function LibraryTabs({
         <ClipboardList className="h-3.5 w-3.5" />
         Skill Programs
       </button>
-      {skillBankHref && (
-        <button
-          type="button"
-          onClick={() => navigate(skillBankHref)}
-          className={tabClass(active === "skill-bank", "bg-teal-500 text-white")}
-        >
-          <Target className="h-3.5 w-3.5" />
-          Skill Bank
-        </button>
-      )}
+      <button
+        type="button"
+        onClick={() => navigate(skillBankHref)}
+        className={tabClass(active === "skill-bank", "bg-teal-500 text-white")}
+      >
+        <Target className="h-3.5 w-3.5" />
+        Skill Bank
+      </button>
       {classesHref && (
         <button
           type="button"

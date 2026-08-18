@@ -660,6 +660,21 @@ CREATE TABLE IF NOT EXISTS "push_subscriptions" (
   "created_at" timestamp NOT NULL DEFAULT now()
 );
 
+-- Native-app twin of push_subscriptions above (APNs device tokens instead
+-- of a Web Push endpoint) -- added to shared/schema.ts when native push
+-- shipped, but never added here, so it never existed on the live database
+-- at all: every APNs subscribe/lookup hit "relation does not exist"
+-- instead of just returning empty. Same missing-reconcile-line class of
+-- bug as arm_drive_asymmetry/trust_scores below.
+CREATE TABLE IF NOT EXISTS "apns_device_tokens" (
+  "id" serial PRIMARY KEY,
+  "user_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "device_token" text NOT NULL,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "apns_device_tokens_device_token_idx" ON "apns_device_tokens" ("device_token");
+CREATE INDEX IF NOT EXISTS "apns_device_tokens_user_idx" ON "apns_device_tokens" ("user_id");
+
 CREATE TABLE IF NOT EXISTS "team_posts" (
   "id" serial PRIMARY KEY,
   "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,

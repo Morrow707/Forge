@@ -17,7 +17,9 @@ export default function AthleteSkillPrograms() {
           <LibraryTabs
             active="skill-programs"
             programsHref="/athlete/programs"
+            exercisesHref="/athlete/exercises"
             skillProgramsHref="/athlete/skill-programs"
+            skillBankHref="/athlete/skills"
           />
         }
       />
