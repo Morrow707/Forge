@@ -103,6 +103,17 @@ function videoExtensionForMimetype(mimetype: string): string | undefined {
   return VIDEO_EXTENSION_BY_MIME[mimetype.split(";")[0].trim().toLowerCase()];
 }
 
+// Shared by every photo-import analyze-photo route below (testing day,
+// weigh-in, nutrition sheet, injury intake, OVR/Perch printout, player
+// intake, program transcription) -- same base64-JSON shape
+// /api/athlete/food/analyze-photo already uses, capped at 4 (a few pages
+// of a roster sheet) instead of food's 2 since a sheet-of-many-rows import
+// is the whole point of these features.
+const photoImagesSchema = z
+  .array(z.object({ mediaType: z.enum(["image/jpeg", "image/png"]), data: z.string().min(1) }))
+  .min(1)
+  .max(4);
+
 const uploadFormVideo = multer({
   storage: multer.diskStorage({
     destination: UPLOADS_DIR,
@@ -1859,6 +1870,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(draft);
   });
 
+  // Photo counterpart to ai-draft above -- same "draft + note" shape, same
+  // client flow (create the real program from it, land in the builder to
+  // review), just transcribed verbatim from a photo instead of generated
+  // from a prompt. See generateProgramDraftFromPhoto's own comment for why
+  // this doesn't share ai-draft's exercise-catalog-enum constraint.
+  app.post("/api/coach/programs/photo-draft", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = z.object({ images: photoImagesSchema }).safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const draft = await storage.generateProgramDraftFromPhoto(user.id, parsed.data.images);
+    if (!draft) return res.status(422).json({ message: "Couldn't read that photo -- try a clearer shot." });
+    res.json(draft);
+  });
+
   app.put("/api/coach/programs/:id", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     const id = Number(req.params.id);
@@ -2246,6 +2273,252 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(204).end();
     },
   );
+
+  // ---------- Photo import (bulk roster intake from a photographed sheet) ----------
+  // Every pair below follows the same shape: analyze-photo returns rows for
+  // the coach to review and edit client-side (never writes anything by
+  // itself), apply commits exactly what the coach confirmed. apply always
+  // re-derives the caller's real roster server-side and drops any athleteId
+  // that isn't actually on it -- the client's row data is never trusted for
+  // authorization, only for content.
+
+  app.post("/api/coach/roster/testing-day/analyze-photo", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = z.object({ images: photoImagesSchema }).safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    const result = await storage.analyzeTestingDayPhoto(user.id, parsed.data.images);
+    if ("error" in result) return res.status(422).json({ message: result.error });
+    res.json(result);
+  });
+
+  app.post("/api/coach/roster/testing-day/apply", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const schema = z.object({
+      updates: z.array(
+        z.object({
+          athleteId: z.number(),
+          fortyYardDash: z.number().min(0).max(20).optional().nullable(),
+          verticalJumpIn: z.number().min(0).max(60).optional().nullable(),
+          broadJumpIn: z.number().min(0).max(200).optional().nullable(),
+          proAgilitySeconds: z.number().min(0).max(20).optional().nullable(),
+          benchMaxLbs: z.number().min(0).max(1500).optional().nullable(),
+          squatMaxLbs: z.number().min(0).max(1500).optional().nullable(),
+          deadliftMaxLbs: z.number().min(0).max(1500).optional().nullable(),
+        }),
+      ),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    const roster = await storage.getRosterForCoach(user.id);
+    const validIds = new Set(roster.map((a) => a.id));
+    let applied = 0;
+    for (const { athleteId, ...fields } of parsed.data.updates) {
+      if (!validIds.has(athleteId)) continue;
+      await storage.updateUserProfile(athleteId, fields);
+      applied++;
+    }
+    res.json({ applied });
+  });
+
+  app.post("/api/coach/roster/weigh-in/analyze-photo", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = z.object({ images: photoImagesSchema }).safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    const result = await storage.analyzeWeighInPhoto(user.id, parsed.data.images);
+    if ("error" in result) return res.status(422).json({ message: result.error });
+    res.json(result);
+  });
+
+  app.post("/api/coach/roster/weigh-in/apply", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const schema = z.object({
+      entries: z.array(
+        z.object({
+          athleteId: z.number(),
+          date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD"),
+          weight: z.number().positive().max(1500),
+          weightUnit: z.enum(["lbs", "kg"]),
+        }),
+      ),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    const roster = await storage.getRosterForCoach(user.id);
+    const validIds = new Set(roster.map((a) => a.id));
+    let applied = 0;
+    for (const { athleteId, ...entry } of parsed.data.entries) {
+      if (!validIds.has(athleteId)) continue;
+      await storage.createBodyMetric(athleteId, entry);
+      applied++;
+    }
+    res.json({ applied });
+  });
+
+  app.post("/api/coach/roster/nutrition/analyze-photo", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = z.object({ images: photoImagesSchema }).safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    const result = await storage.analyzeNutritionSheetPhoto(user.id, parsed.data.images);
+    if ("error" in result) return res.status(422).json({ message: result.error });
+    res.json(result);
+  });
+
+  app.post("/api/coach/roster/nutrition/apply", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const schema = z.object({
+      updates: z.array(
+        z.object({
+          athleteId: z.number(),
+          caloriesKcal: z.number().int().min(0).max(20000).optional().nullable(),
+          proteinG: z.number().min(0).max(1000).optional().nullable(),
+          carbsG: z.number().min(0).max(2000).optional().nullable(),
+          fatG: z.number().min(0).max(1000).optional().nullable(),
+          fiberG: z.number().min(0).max(300).optional().nullable(),
+          sodiumMg: z.number().min(0).max(20000).optional().nullable(),
+          notes: z.string().trim().max(1000).optional().nullable(),
+        }),
+      ),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    const roster = await storage.getRosterForCoach(user.id);
+    const validIds = new Set(roster.map((a) => a.id));
+    let applied = 0;
+    for (const { athleteId, ...fields } of parsed.data.updates) {
+      if (!validIds.has(athleteId)) continue;
+      await storage.upsertNutritionTargets(athleteId, user.id, fields);
+      applied++;
+    }
+    res.json({ applied });
+  });
+
+  app.post("/api/coach/roster/injury-intake/analyze-photo", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = z.object({ images: photoImagesSchema }).safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    const result = await storage.analyzeInjuryIntakePhoto(user.id, parsed.data.images);
+    if ("error" in result) return res.status(422).json({ message: result.error });
+    res.json(result);
+  });
+
+  app.post("/api/coach/roster/injury-intake/apply", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const schema = z.object({
+      entries: z.array(
+        z.object({
+          athleteId: z.number(),
+          bodyPart: z.string().trim().min(1).max(60),
+          occurredOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD"),
+          description: z.string().trim().max(500).optional().nullable(),
+        }),
+      ),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    const roster = await storage.getRosterForCoach(user.id);
+    const validIds = new Set(roster.map((a) => a.id));
+    let applied = 0;
+    for (const { athleteId, ...entry } of parsed.data.entries) {
+      if (!validIds.has(athleteId)) continue;
+      await storage.addInjuryHistoryEntry(athleteId, entry);
+      applied++;
+    }
+    res.json({ applied });
+  });
+
+  // OVR/Perch (velocity-based training device) printout/screen import --
+  // see importedTestingData's schema comment for why this lands as its own
+  // reviewable log instead of being wired into a program's tracked sets.
+  app.post("/api/coach/roster/testing-data-import/analyze-photo", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = z.object({ images: photoImagesSchema }).safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    const result = await storage.analyzeImportedTestingDataPhoto(user.id, parsed.data.images);
+    if ("error" in result) return res.status(422).json({ message: result.error });
+    res.json(result);
+  });
+
+  app.post("/api/coach/roster/testing-data-import/apply", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const schema = z.object({
+      rows: z.array(
+        z.object({
+          athleteId: z.number(),
+          date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD"),
+          exerciseName: z.string().trim().min(1).max(120),
+          setNumber: z.number().int().min(1).max(50).optional().nullable(),
+          loadLbs: z.number().min(0).max(2000).optional().nullable(),
+          velocityMps: z.number().min(0).max(10).optional().nullable(),
+          powerWatts: z.number().min(0).max(20000).optional().nullable(),
+        }),
+      ),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    const roster = await storage.getRosterForCoach(user.id);
+    const created = await storage.createImportedTestingDataRows(
+      roster.map((a) => a.id),
+      user.id,
+      parsed.data.rows,
+    );
+    res.status(201).json({ applied: created.length });
+  });
+
+  app.get(
+    "/api/coach/roster/:athleteId/testing-data-import",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const rows = await storage.getImportedTestingDataForAthlete(user.id, Number(req.params.athleteId));
+      if (rows === null) return res.status(404).json({ message: "Athlete not found" });
+      res.json(rows);
+    },
+  );
+
+  // Player inflow sheet -- see provisionalAthletes' schema comment for why
+  // this creates provisional slots instead of live accounts. No roster to
+  // match against (these are new people), so analyze-photo just returns
+  // raw candidates for the coach to review before any slot is created.
+  app.post("/api/coach/roster/player-intake/analyze-photo", requireRole("coach"), async (req, res) => {
+    const parsed = z.object({ images: photoImagesSchema }).safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    const result = await storage.analyzePlayerIntakePhoto(parsed.data.images);
+    if ("error" in result) return res.status(422).json({ message: result.error });
+    res.json(result);
+  });
+
+  app.post("/api/coach/roster/player-intake/apply", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const schema = z.object({
+      rows: z.array(
+        z.object({
+          name: z.string().trim().min(1).max(100),
+          heightIn: z.number().min(0).max(120).optional().nullable(),
+          bodyWeightLbs: z.number().min(0).max(1500).optional().nullable(),
+          age: z.number().int().min(0).max(120).optional().nullable(),
+          gender: z.enum(["male", "female", "non_binary", "prefer_not_to_say"]).optional().nullable(),
+          sport: z.string().trim().max(60).optional().nullable(),
+          position: z.string().trim().max(60).optional().nullable(),
+        }),
+      ),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    const created = await storage.createProvisionalAthletes(user.id, parsed.data.rows);
+    res.status(201).json(created);
+  });
+
+  app.get("/api/coach/roster/provisional", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const rows = await storage.getProvisionalAthletesForCoach(user.id);
+    res.json(rows);
+  });
+
+  app.delete("/api/coach/roster/provisional/:id", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    await storage.deleteProvisionalAthlete(user.id, Number(req.params.id));
+    res.status(204).end();
+  });
 
   // AI weakness-identification report -- analyzes whatever goniometer/
   // asymmetry/ACWR/wellness/testing data already exists for one roster

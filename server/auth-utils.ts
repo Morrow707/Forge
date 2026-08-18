@@ -43,3 +43,16 @@ export function generateCoachCode(): string {
   }
   return code;
 }
+
+// Same alphabet as generateCoachCode (no ambiguous 0/O/1/I), but longer --
+// a coach code just picks which coach to join, while this one hands out a
+// specific pre-filled identity, so it gets a little more entropy against
+// someone guessing their way into a teammate's provisional slot.
+export function generateClaimCode(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let code = "";
+  for (let i = 0; i < 8; i++) {
+    code += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return code;
+}

@@ -74,6 +74,8 @@ import {
   weaknessDeficitSchema,
   PERIODIZATION_PHASE_LABEL,
   NUTRITION_GOAL_LABEL,
+  importedTestingData,
+  provisionalAthletes,
   type InsertUser,
 } from "@shared/schema";
 import { classifyGoniometerReading, GONIOMETER_JOINTS } from "@shared/goniometer";
@@ -92,6 +94,7 @@ import type {
   CreateSkillDayCommentInput,
   CreateExerciseReportInput,
   CreateBodyMetricInput,
+  ClaimProvisionalAthleteInput,
   TestingMetric,
   InsertGoniometerReading,
   WeaknessDeficit,
@@ -126,7 +129,7 @@ import { FAULT_CORRECTIVE_KEYWORDS } from "@shared/fault-correctives";
 import { resolveSkillFaultThresholds, type SkillFaultThresholds } from "@shared/skill-fault-thresholds";
 import { askClaude, askClaudeStructured, askClaudeWithTools, askClaudeVision, askClaudeVisionStructured, aiEnabled, fastModel, type SystemPrompt } from "./ai";
 import { deleteUploadedFile, statUploadedFile } from "./uploaded-files";
-import { eq, and, inArray, asc, desc, lt, lte, gte, gt, isNull, isNotNull, sql } from "drizzle-orm";
+import { eq, and, inArray, asc, desc, lt, lte, gte, gt, isNull, isNotNull, sql, ilike } from "drizzle-orm";
 import { z } from "zod";
 import { diffLines } from "diff";
 import {
@@ -134,6 +137,8 @@ import {
   generateResetToken,
   hashResetToken,
   generateCalendarToken,
+  generateClaimCode,
+  hashPassword,
 } from "./auth-utils";
 import {
   addDays,
@@ -906,6 +911,118 @@ const mealPhotoItemSchema = z.object({
   magnesiumMg: z.number().min(0).max(2000).nullable().optional(),
   vitaminB12Mcg: z.number().min(0).max(500).nullable().optional(),
   zincMg: z.number().min(0).max(200).nullable().optional(),
+});
+
+// ---------- Photo import row schemas ----------
+// Every photo-import feature below (testing day, weigh-in, nutrition sheet,
+// injury intake, OVR/Perch printout, player intake) shares the same shape
+// of risk: Claude is transcribing a photo, not exercising judgment, so a
+// wrong read should fail loudly (row dropped / field left blank) rather
+// than silently coerce into some in-range default. Every numeric field
+// below is optional/nullable for exactly that reason -- a blank cell on the
+// sheet should come back blank, never a guessed number.
+const PHOTO_IMPORT_ATHLETE_MATCH_FIELDS = {
+  athleteId: z.number().int().optional().nullable(),
+  nameOnSheet: z.string().trim().min(1).max(120),
+};
+
+const testingDayRowSchema = z.object({
+  ...PHOTO_IMPORT_ATHLETE_MATCH_FIELDS,
+  fortyYardDash: z.number().min(0).max(20).optional().nullable(),
+  verticalJumpIn: z.number().min(0).max(60).optional().nullable(),
+  broadJumpIn: z.number().min(0).max(200).optional().nullable(),
+  proAgilitySeconds: z.number().min(0).max(20).optional().nullable(),
+  benchMaxLbs: z.number().min(0).max(1500).optional().nullable(),
+  squatMaxLbs: z.number().min(0).max(1500).optional().nullable(),
+  deadliftMaxLbs: z.number().min(0).max(1500).optional().nullable(),
+  note: z.string().trim().max(200).optional().nullable(),
+});
+
+const weighInRowSchema = z.object({
+  ...PHOTO_IMPORT_ATHLETE_MATCH_FIELDS,
+  weight: z.number().positive().max(1500),
+  weightUnit: z.enum(["lbs", "kg"]).optional().nullable(),
+});
+
+const nutritionSheetRowSchema = z.object({
+  ...PHOTO_IMPORT_ATHLETE_MATCH_FIELDS,
+  caloriesKcal: z.number().int().min(0).max(20000).optional().nullable(),
+  proteinG: z.number().min(0).max(1000).optional().nullable(),
+  carbsG: z.number().min(0).max(2000).optional().nullable(),
+  fatG: z.number().min(0).max(1000).optional().nullable(),
+  fiberG: z.number().min(0).max(300).optional().nullable(),
+  sodiumMg: z.number().min(0).max(20000).optional().nullable(),
+  notes: z.string().trim().max(500).optional().nullable(),
+});
+
+const injuryIntakeRowSchema = z.object({
+  ...PHOTO_IMPORT_ATHLETE_MATCH_FIELDS,
+  bodyPart: z.string().trim().min(1).max(60),
+  occurredOn: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD")
+    .optional()
+    .nullable(),
+  description: z.string().trim().max(500).optional().nullable(),
+  resolved: z.boolean().optional().nullable(),
+});
+
+// OVR/Perch (velocity-based training device) printout rows -- exerciseName
+// is deliberately free text, never matched against the real exercise bank
+// server-side, so an OCR misread can't quietly create a garbage exercise;
+// the coach fixes the name in the review table before anything saves.
+const importedTestingDataRowSchema = z.object({
+  ...PHOTO_IMPORT_ATHLETE_MATCH_FIELDS,
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD")
+    .optional()
+    .nullable(),
+  exerciseName: z.string().trim().min(1).max(120),
+  setNumber: z.number().int().min(1).max(50).optional().nullable(),
+  loadLbs: z.number().min(0).max(2000).optional().nullable(),
+  velocityMps: z.number().min(0).max(10).optional().nullable(),
+  powerWatts: z.number().min(0).max(20000).optional().nullable(),
+});
+
+const playerIntakeRowSchema = z.object({
+  name: z.string().trim().min(1).max(100),
+  heightIn: z.number().min(0).max(120).optional().nullable(),
+  bodyWeightLbs: z.number().min(0).max(1500).optional().nullable(),
+  age: z.number().int().min(0).max(120).optional().nullable(),
+  gender: z.enum(["male", "female", "non_binary", "prefer_not_to_say"]).optional().nullable(),
+  sport: z.string().trim().max(60).optional().nullable(),
+  position: z.string().trim().max(60).optional().nullable(),
+});
+
+// Verbatim program transcription -- deliberately NOT the same tool schema
+// as generateProgramDraft's AI-authored one below. That one constrains
+// exerciseId to an enum of the coach's existing catalog because it's
+// designing a program from scratch; this one asks for the exercise name as
+// written on the page, because the whole point is reproducing what's on
+// the paper, not letting the model substitute the nearest match from the
+// catalog. resolveOrCreateExerciseByName does the matching/creation
+// afterward, server-side, where it's auditable.
+const programPhotoExerciseSchema = z.object({
+  exerciseName: z.string().trim().min(1).max(120),
+  sets: z.number().int().min(1).max(50).optional().nullable(),
+  reps: z.string().trim().max(30).optional().nullable(),
+  weight: z.string().trim().max(30).optional().nullable(),
+  notes: z.string().trim().max(300).optional().nullable(),
+});
+const programPhotoDaySchema = z.object({
+  dayNumber: z.number().int().min(1).max(30).optional().nullable(),
+  title: z.string().trim().max(80).optional().nullable(),
+  exercises: z.array(programPhotoExerciseSchema).default([]),
+});
+const programPhotoWeekSchema = z.object({
+  weekNumber: z.number().int().min(1).max(52).optional().nullable(),
+  days: z.array(programPhotoDaySchema).default([]),
+});
+const programPhotoDraftSchema = z.object({
+  note: z.string().trim().max(500).optional().nullable(),
+  name: z.string().trim().max(120).optional().nullable(),
+  weeks: z.array(programPhotoWeekSchema).default([]),
 });
 
 const generateModifiedWorkoutSchema = z.object({
@@ -11862,5 +11979,633 @@ ${catalog}`;
 
   async getPlatformTrends() {
     return buildPlatformTrends();
+  },
+
+  // ---------- Photo import (bulk roster intake from a photographed sheet) ----------
+  // Every analyze* method below is transcription, not judgment: the system
+  // prompt always tells Claude to report exactly what's on the page and
+  // leave a field blank rather than guess, and every result gets zod-
+  // validated (photo import row schemas, above) before it's ever trusted.
+  // None of these write anything by themselves -- each returns rows for a
+  // coach to review, and only a separate, explicit apply step (the routes
+  // in routes.ts) commits anything, same "review before it's real" shape
+  // as analyzeMealPhoto already uses for a single item.
+
+  async analyzeTestingDayPhoto(
+    coachId: number,
+    images: { mediaType: "image/jpeg" | "image/png"; data: string }[],
+  ) {
+    if (!aiEnabled) {
+      return { error: "AI isn't set up yet -- ask whoever manages this Forge instance to configure it." };
+    }
+    const roster = await this.getRosterForCoach(coachId);
+    if (roster.length === 0) {
+      return { error: "Your roster is empty -- add athletes before importing a testing sheet." };
+    }
+    const rosterList = roster.map((a) => `${a.id}: ${a.name}`).join("\n");
+    const system =
+      "You are transcribing a photographed combine/testing-day results sheet for a strength coach. Read every row and report exactly the numbers written -- never estimate, round beyond what's shown, or fill in a blank cell. Match each row to the roster athlete it belongs to by name; only set athleteId when a name on the roster clearly matches, leave it out otherwise rather than guessing. 40-yard dash and pro-agility are seconds, vertical/broad jump are inches, bench/squat/deadlift are pounds -- if the sheet is unambiguously in different units (cm, kg), convert; otherwise report the raw number and flag the ambiguity in that row's note.";
+    const tool = {
+      name: "report_testing_day_results",
+      description: "Reports each athlete's row transcribed from the testing sheet photo.",
+      input_schema: {
+        type: "object",
+        properties: {
+          rows: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                athleteId: { type: "integer", enum: roster.map((a) => a.id) },
+                nameOnSheet: { type: "string", description: "The name exactly as written on the sheet" },
+                fortyYardDash: { type: "number" },
+                verticalJumpIn: { type: "number" },
+                broadJumpIn: { type: "number" },
+                proAgilitySeconds: { type: "number" },
+                benchMaxLbs: { type: "number" },
+                squatMaxLbs: { type: "number" },
+                deadliftMaxLbs: { type: "number" },
+                note: { type: "string" },
+              },
+              required: ["nameOnSheet"],
+            },
+          },
+        },
+        required: ["rows"],
+      },
+    };
+    const result = await askClaudeVisionStructured<{ rows: unknown[] }>(
+      system,
+      `Roster (id: name) to match against:\n${rosterList}\n\nTranscribe every row visible in the photo.`,
+      images,
+      tool,
+      { maxTokens: 2048 },
+    );
+    if (!result || !Array.isArray(result.rows)) {
+      return { error: "Couldn't read that photo -- try a clearer shot or enter it manually." };
+    }
+    const validIds = new Set(roster.map((a) => a.id));
+    const rows = result.rows
+      .map((r) => testingDayRowSchema.safeParse(r))
+      .filter((p) => p.success)
+      .map((p) => p.data)
+      .map((r) => ({ ...r, athleteId: r.athleteId != null && validIds.has(r.athleteId) ? r.athleteId : null }));
+    return { rows };
+  },
+
+  async analyzeWeighInPhoto(
+    coachId: number,
+    images: { mediaType: "image/jpeg" | "image/png"; data: string }[],
+  ) {
+    if (!aiEnabled) {
+      return { error: "AI isn't set up yet -- ask whoever manages this Forge instance to configure it." };
+    }
+    const roster = await this.getRosterForCoach(coachId);
+    if (roster.length === 0) {
+      return { error: "Your roster is empty -- add athletes before importing a weigh-in sheet." };
+    }
+    const rosterList = roster.map((a) => `${a.id}: ${a.name}`).join("\n");
+    const system =
+      "You are transcribing a photographed team weigh-in sheet for a strength coach -- one row per athlete, a name and a scale weight. Report exactly the number shown, never estimate or round beyond what's on the sheet. Match each row to the roster athlete it belongs to by name; only set athleteId when a name clearly matches, leave it out otherwise. Report weightUnit as lbs or kg based on what the sheet actually says (default lbs if genuinely unmarked).";
+    const tool = {
+      name: "report_weigh_in_results",
+      description: "Reports each athlete's weight transcribed from the sheet photo.",
+      input_schema: {
+        type: "object",
+        properties: {
+          rows: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                athleteId: { type: "integer", enum: roster.map((a) => a.id) },
+                nameOnSheet: { type: "string" },
+                weight: { type: "number" },
+                weightUnit: { type: "string", enum: ["lbs", "kg"] },
+              },
+              required: ["nameOnSheet", "weight"],
+            },
+          },
+        },
+        required: ["rows"],
+      },
+    };
+    const result = await askClaudeVisionStructured<{ rows: unknown[] }>(
+      system,
+      `Roster (id: name) to match against:\n${rosterList}\n\nTranscribe every row visible in the photo.`,
+      images,
+      tool,
+      { maxTokens: 2048 },
+    );
+    if (!result || !Array.isArray(result.rows)) {
+      return { error: "Couldn't read that photo -- try a clearer shot or enter it manually." };
+    }
+    const validIds = new Set(roster.map((a) => a.id));
+    const rows = result.rows
+      .map((r) => weighInRowSchema.safeParse(r))
+      .filter((p) => p.success)
+      .map((p) => p.data)
+      .map((r) => ({
+        ...r,
+        athleteId: r.athleteId != null && validIds.has(r.athleteId) ? r.athleteId : null,
+        weightUnit: r.weightUnit ?? "lbs",
+      }));
+    return { rows };
+  },
+
+  // Free Agent nutrition sheets don't have a roster to match against, so
+  // athleteId matching is optional here -- the coach picks the athlete
+  // manually in the review step when the sheet doesn't already name them,
+  // same as any row this comes back with no confident match.
+  async analyzeNutritionSheetPhoto(
+    coachId: number,
+    images: { mediaType: "image/jpeg" | "image/png"; data: string }[],
+  ) {
+    if (!aiEnabled) {
+      return { error: "AI isn't set up yet -- ask whoever manages this Forge instance to configure it." };
+    }
+    const roster = await this.getRosterForCoach(coachId);
+    const rosterList = roster.map((a) => `${a.id}: ${a.name}`).join("\n");
+    const system =
+      "You are transcribing a photographed nutrition target/macro sheet (from a coach, dietitian, or meal-plan printout) for a strength coach. Report exactly the numbers written -- never estimate a target that isn't shown. If the sheet names whose targets these are, match that name to the roster; otherwise leave athleteId out.";
+    const tool = {
+      name: "report_nutrition_targets",
+      description: "Reports each athlete's nutrition targets transcribed from the sheet photo.",
+      input_schema: {
+        type: "object",
+        properties: {
+          rows: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                athleteId: { type: "integer", enum: roster.map((a) => a.id) },
+                nameOnSheet: { type: "string" },
+                caloriesKcal: { type: "integer" },
+                proteinG: { type: "number" },
+                carbsG: { type: "number" },
+                fatG: { type: "number" },
+                fiberG: { type: "number" },
+                sodiumMg: { type: "number" },
+                notes: { type: "string" },
+              },
+              required: ["nameOnSheet"],
+            },
+          },
+        },
+        required: ["rows"],
+      },
+    };
+    const result = await askClaudeVisionStructured<{ rows: unknown[] }>(
+      system,
+      roster.length > 0
+        ? `Roster (id: name) to match against:\n${rosterList}\n\nTranscribe every row visible in the photo.`
+        : "Transcribe every row visible in the photo.",
+      images,
+      tool,
+      { maxTokens: 2048 },
+    );
+    if (!result || !Array.isArray(result.rows)) {
+      return { error: "Couldn't read that photo -- try a clearer shot or enter it manually." };
+    }
+    const validIds = new Set(roster.map((a) => a.id));
+    const rows = result.rows
+      .map((r) => nutritionSheetRowSchema.safeParse(r))
+      .filter((p) => p.success)
+      .map((p) => p.data)
+      .map((r) => ({ ...r, athleteId: r.athleteId != null && validIds.has(r.athleteId) ? r.athleteId : null }));
+    return { rows };
+  },
+
+  async analyzeInjuryIntakePhoto(
+    coachId: number,
+    images: { mediaType: "image/jpeg" | "image/png"; data: string }[],
+  ) {
+    if (!aiEnabled) {
+      return { error: "AI isn't set up yet -- ask whoever manages this Forge instance to configure it." };
+    }
+    const roster = await this.getRosterForCoach(coachId);
+    if (roster.length === 0) {
+      return { error: "Your roster is empty -- add athletes before importing an intake form." };
+    }
+    const rosterList = roster.map((a) => `${a.id}: ${a.name}`).join("\n");
+    const system =
+      "You are transcribing a photographed pre-participation physical / injury history intake form for a strength coach. This is medical information -- report exactly what's written, never infer a diagnosis or severity that isn't stated, and never fill in a date that isn't shown. Match each entry to the roster athlete it belongs to by name; only set athleteId when a name clearly matches. If the form doesn't give an exact date, leave occurredOn out rather than guessing one.";
+    const tool = {
+      name: "report_injury_intake",
+      description: "Reports each injury/condition entry transcribed from the intake form photo.",
+      input_schema: {
+        type: "object",
+        properties: {
+          rows: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                athleteId: { type: "integer", enum: roster.map((a) => a.id) },
+                nameOnSheet: { type: "string" },
+                bodyPart: { type: "string" },
+                occurredOn: { type: "string", description: "YYYY-MM-DD, only if an exact date is shown" },
+                description: { type: "string" },
+                resolved: { type: "boolean" },
+              },
+              required: ["nameOnSheet", "bodyPart"],
+            },
+          },
+        },
+        required: ["rows"],
+      },
+    };
+    const result = await askClaudeVisionStructured<{ rows: unknown[] }>(
+      system,
+      `Roster (id: name) to match against:\n${rosterList}\n\nTranscribe every entry visible in the photo.`,
+      images,
+      tool,
+      { maxTokens: 2048 },
+    );
+    if (!result || !Array.isArray(result.rows)) {
+      return { error: "Couldn't read that photo -- try a clearer shot or enter it manually." };
+    }
+    const validIds = new Set(roster.map((a) => a.id));
+    const rows = result.rows
+      .map((r) => injuryIntakeRowSchema.safeParse(r))
+      .filter((p) => p.success)
+      .map((p) => p.data)
+      .map((r) => ({ ...r, athleteId: r.athleteId != null && validIds.has(r.athleteId) ? r.athleteId : null }));
+    return { rows };
+  },
+
+  // OVR/Perch (or similar velocity-based training device) printout import --
+  // the highest-risk of these features (see shared/schema.ts's comment on
+  // importedTestingData): a dense numeric table, not a handful of labeled
+  // fields, so a bad read is easy to miss in review. exerciseName comes
+  // back as free text on purpose -- see importedTestingDataRowSchema.
+  async analyzeImportedTestingDataPhoto(
+    coachId: number,
+    images: { mediaType: "image/jpeg" | "image/png"; data: string }[],
+  ) {
+    if (!aiEnabled) {
+      return { error: "AI isn't set up yet -- ask whoever manages this Forge instance to configure it." };
+    }
+    const roster = await this.getRosterForCoach(coachId);
+    if (roster.length === 0) {
+      return { error: "Your roster is empty -- add athletes before importing testing data." };
+    }
+    const rosterList = roster.map((a) => `${a.id}: ${a.name}`).join("\n");
+    const system =
+      "You are transcribing a photographed velocity-based-training device printout or screen (e.g. Perch, OVR) for a strength coach -- a table of sets with load, bar/movement velocity, and/or power. Report exactly the numbers in each cell, never estimate a value that's cut off or illegible; omit that field for that row instead. Match each row/section to the roster athlete it belongs to by name; only set athleteId when a name clearly matches. Report the exercise name exactly as labeled on the device output, even if it doesn't match standard naming. Velocity is meters/second, power is watts, load is pounds -- convert only if the device output is unambiguously in different units, otherwise report the raw number.";
+    const tool = {
+      name: "report_testing_data",
+      description: "Reports each set transcribed from the device printout/screen photo.",
+      input_schema: {
+        type: "object",
+        properties: {
+          rows: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                athleteId: { type: "integer", enum: roster.map((a) => a.id) },
+                nameOnSheet: { type: "string" },
+                date: { type: "string", description: "YYYY-MM-DD, only if shown" },
+                exerciseName: { type: "string" },
+                setNumber: { type: "integer" },
+                loadLbs: { type: "number" },
+                velocityMps: { type: "number" },
+                powerWatts: { type: "number" },
+              },
+              required: ["nameOnSheet", "exerciseName"],
+            },
+          },
+        },
+        required: ["rows"],
+      },
+    };
+    const result = await askClaudeVisionStructured<{ rows: unknown[] }>(
+      system,
+      `Roster (id: name) to match against:\n${rosterList}\n\nTranscribe every row visible in the photo.`,
+      images,
+      tool,
+      { maxTokens: 4096 },
+    );
+    if (!result || !Array.isArray(result.rows)) {
+      return { error: "Couldn't read that photo -- try a clearer shot or enter it manually." };
+    }
+    const validIds = new Set(roster.map((a) => a.id));
+    const rows = result.rows
+      .map((r) => importedTestingDataRowSchema.safeParse(r))
+      .filter((p) => p.success)
+      .map((p) => p.data)
+      .map((r) => ({ ...r, athleteId: r.athleteId != null && validIds.has(r.athleteId) ? r.athleteId : null }));
+    return { rows };
+  },
+
+  async createImportedTestingDataRows(
+    athleteIds: number[],
+    importedByUserId: number,
+    rows: {
+      athleteId: number;
+      date: string;
+      exerciseName: string;
+      setNumber?: number | null;
+      loadLbs?: number | null;
+      velocityMps?: number | null;
+      powerWatts?: number | null;
+    }[],
+  ) {
+    const allowed = new Set(athleteIds);
+    const values = rows
+      .filter((r) => allowed.has(r.athleteId))
+      .map((r) => ({
+        athleteId: r.athleteId,
+        importedByUserId,
+        date: r.date,
+        exerciseName: r.exerciseName,
+        setNumber: r.setNumber ?? null,
+        loadLbs: r.loadLbs ?? null,
+        velocityMps: r.velocityMps ?? null,
+        powerWatts: r.powerWatts ?? null,
+      }));
+    if (values.length === 0) return [];
+    return db.insert(importedTestingData).values(values).returning();
+  },
+
+  async getImportedTestingDataForAthlete(coachId: number, athleteId: number) {
+    const athlete = await this.getRosterAthleteForCoach(coachId, athleteId);
+    if (!athlete) return null;
+    return db.query.importedTestingData.findMany({
+      where: eq(importedTestingData.athleteId, athleteId),
+      orderBy: desc(importedTestingData.date),
+    });
+  },
+
+  // No roster to match against -- these are brand new people, not existing
+  // athletes, so every row just comes back as a raw candidate for the coach
+  // to review before any provisional slot is created.
+  async analyzePlayerIntakePhoto(
+    images: { mediaType: "image/jpeg" | "image/png"; data: string }[],
+  ) {
+    if (!aiEnabled) {
+      return { error: "AI isn't set up yet -- ask whoever manages this Forge instance to configure it." };
+    }
+    const system =
+      "You are transcribing a photographed player intake/sign-up sheet (a mass tryout or team registration day) for a coach. Report exactly what's written for each person -- name, height, weight, age, gender, sport, position -- and leave a field out entirely if it's blank or illegible rather than guessing. Height in inches, weight in pounds unless the sheet unambiguously states cm/kg (then convert).";
+    const tool = {
+      name: "report_player_intake",
+      description: "Reports each person transcribed from the intake sheet photo.",
+      input_schema: {
+        type: "object",
+        properties: {
+          rows: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                name: { type: "string" },
+                heightIn: { type: "number" },
+                bodyWeightLbs: { type: "number" },
+                age: { type: "integer" },
+                gender: { type: "string", enum: ["male", "female", "non_binary", "prefer_not_to_say"] },
+                sport: { type: "string" },
+                position: { type: "string" },
+              },
+              required: ["name"],
+            },
+          },
+        },
+        required: ["rows"],
+      },
+    };
+    const result = await askClaudeVisionStructured<{ rows: unknown[] }>(
+      system,
+      "Transcribe every person visible on the intake sheet.",
+      images,
+      tool,
+      { maxTokens: 4096 },
+    );
+    if (!result || !Array.isArray(result.rows)) {
+      return { error: "Couldn't read that photo -- try a clearer shot or enter it manually." };
+    }
+    const rows = result.rows
+      .map((r) => playerIntakeRowSchema.safeParse(r))
+      .filter((p) => p.success)
+      .map((p) => p.data);
+    return { rows };
+  },
+
+  async createProvisionalAthletes(
+    coachId: number,
+    rows: {
+      name: string;
+      heightIn?: number | null;
+      bodyWeightLbs?: number | null;
+      age?: number | null;
+      gender?: "male" | "female" | "non_binary" | "prefer_not_to_say" | null;
+      sport?: string | null;
+      position?: string | null;
+    }[],
+  ) {
+    const created: (typeof provisionalAthletes.$inferSelect)[] = [];
+    for (const row of rows) {
+      let claimCode = generateClaimCode();
+      while (
+        await db.query.provisionalAthletes.findFirst({ where: eq(provisionalAthletes.claimCode, claimCode) })
+      ) {
+        claimCode = generateClaimCode();
+      }
+      const [inserted] = await db
+        .insert(provisionalAthletes)
+        .values({
+          coachId,
+          claimCode,
+          name: row.name,
+          heightIn: row.heightIn ?? null,
+          bodyWeightLbs: row.bodyWeightLbs ?? null,
+          age: row.age ?? null,
+          gender: row.gender ?? null,
+          sport: row.sport ?? null,
+          position: row.position ?? null,
+        })
+        .returning();
+      created.push(inserted);
+    }
+    return created;
+  },
+
+  async getProvisionalAthletesForCoach(coachId: number) {
+    return db.query.provisionalAthletes.findMany({
+      where: eq(provisionalAthletes.coachId, coachId),
+      orderBy: desc(provisionalAthletes.createdAt),
+    });
+  },
+
+  async deleteProvisionalAthlete(coachId: number, id: number) {
+    await db
+      .delete(provisionalAthletes)
+      .where(and(eq(provisionalAthletes.id, id), eq(provisionalAthletes.coachId, coachId)));
+  },
+
+  // Deliberately unauthenticated lookup -- the claim page needs to show
+  // "hi, is this you?" before the person claiming it has any account or
+  // session at all. Never exposes which coach this belongs to beyond what
+  // the claim flow needs.
+  async getProvisionalAthleteByClaimCode(claimCode: string) {
+    return db.query.provisionalAthletes.findFirst({
+      where: eq(provisionalAthletes.claimCode, claimCode),
+    });
+  },
+
+  // Turns a provisional slot into a real, login-capable account: creates
+  // the user (profile pre-filled from the sheet), links them to the coach
+  // who imported them exactly like a coachCode signup would, and removes
+  // the provisional row -- the real user row is the only copy of this
+  // person's data from this point on. Caller (server/auth.ts) still needs
+  // to req.login() the result the same way a normal signup does; this only
+  // handles the data side of claiming.
+  async claimProvisionalAthlete(
+    claimCode: string,
+    input: ClaimProvisionalAthleteInput,
+    agreedToTermsText: string,
+  ) {
+    const provisional = await this.getProvisionalAthleteByClaimCode(claimCode);
+    if (!provisional) return { error: "This claim link isn't valid -- ask your coach for a new one." as const };
+    const existing = await this.getUserByEmail(input.email);
+    if (existing) return { error: "That email is already in use." as const };
+    const passwordHash = await hashPassword(input.password);
+    const user = await this.createUser({
+      email: input.email,
+      passwordHash,
+      name: provisional.name,
+      role: "athlete",
+      age: provisional.age ?? undefined,
+      gender: provisional.gender ?? undefined,
+      heightIn: provisional.heightIn ?? undefined,
+      bodyWeightLbs: provisional.bodyWeightLbs ?? undefined,
+      sport: provisional.sport ?? undefined,
+      position: provisional.position ?? undefined,
+      agreedToTermsAt: new Date(),
+      agreedToTermsText,
+    });
+    await this.linkAthleteToCoach(provisional.coachId, user.id);
+    await this.deleteProvisionalAthlete(provisional.coachId, provisional.id);
+    return { user };
+  },
+
+  // Verbatim program transcription -- see programPhotoDraftSchema's own
+  // comment for why this uses a free-text exercise name plus
+  // resolveOrCreateExerciseByName instead of generateProgramDraft's
+  // enum-constrained catalog. Same return shape as generateProgramDraft
+  // (structure + note) on purpose: the client feeds this into the exact
+  // same "create the real program, land in the builder to review" flow.
+  async resolveOrCreateExerciseByName(coachId: number, name: string) {
+    const trimmed = name.trim();
+    const matches = await db.query.exercises.findMany({ where: ilike(exercises.name, trimmed) });
+    if (matches.length > 0) return matches.reduce((a, b) => (a.id < b.id ? a : b));
+    const [created] = await db.insert(exercises).values({ coachId, name: trimmed }).returning();
+    return created;
+  },
+
+  async generateProgramDraftFromPhoto(
+    coachId: number,
+    images: { mediaType: "image/jpeg" | "image/png"; data: string }[],
+  ): Promise<{ structure: ProgramStructureInput; note: string | null } | null> {
+    if (!aiEnabled) return null;
+    const system =
+      "You are transcribing a photographed workout program (printed, handwritten, or a screenshot) for a strength coach. Reproduce it verbatim -- the exercises, sets, reps, weights, day/week structure exactly as written. Never invent an exercise, set, or rep scheme that isn't shown, never apply programming judgment or 'improve' anything, and never omit something that IS shown just because it looks unusual. Use the exercise name exactly as written on the page, even if it's not standard terminology -- do not substitute a 'closest match' name yourself. If a value (sets, reps, weight) isn't given for an exercise, leave that field out rather than assuming a default. If the photo doesn't clearly show a workout program, return an empty weeks array.";
+    const tool = {
+      name: "report_program_transcription",
+      description: "Reports the workout program transcribed verbatim from the photo.",
+      input_schema: {
+        type: "object",
+        properties: {
+          note: {
+            type: "string",
+            description: "Optional. Only if something in the photo was illegible/ambiguous and you had to guess.",
+          },
+          name: { type: "string" },
+          weeks: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                weekNumber: { type: "integer" },
+                days: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      dayNumber: { type: "integer" },
+                      title: { type: "string" },
+                      exercises: {
+                        type: "array",
+                        items: {
+                          type: "object",
+                          properties: {
+                            exerciseName: { type: "string" },
+                            sets: { type: "integer" },
+                            reps: { type: "string" },
+                            weight: { type: "string" },
+                            notes: { type: "string" },
+                          },
+                          required: ["exerciseName"],
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        required: ["weeks"],
+      },
+    };
+    const rawDraft = await askClaudeVisionStructured<{ note?: string; name?: string; weeks: unknown[] }>(
+      system,
+      "Transcribe the workout program shown in the photo(s).",
+      images,
+      tool,
+      { maxTokens: 4096 },
+    );
+    const parsedDraft = programPhotoDraftSchema.safeParse(rawDraft);
+    if (!parsedDraft.success) return null;
+    const draft = parsedDraft.data;
+
+    const structure: ProgramStructureInput = {
+      name: draft.name?.trim() || "Imported Program",
+      description: null,
+      blocks: [],
+      weeks: [],
+    };
+    for (const [wi, w] of draft.weeks.entries()) {
+      const week: ProgramStructureInput["weeks"][number] = {
+        weekNumber: w.weekNumber ?? wi + 1,
+        name: null,
+        days: [],
+      };
+      for (const [di, d] of w.days.entries()) {
+        const day: (typeof week.days)[number] = {
+          dayNumber: d.dayNumber ?? di + 1,
+          title: d.title?.trim() || "Training Day",
+          isRestDay: false,
+          exercises: [],
+        };
+        for (const [ei, ex] of d.exercises.entries()) {
+          const resolved = await this.resolveOrCreateExerciseByName(coachId, ex.exerciseName);
+          day.exercises.push({
+            exerciseId: resolved.id,
+            orderIndex: ei,
+            sets: ex.sets ?? 3,
+            reps: ex.reps || "10",
+            weight: ex.weight || null,
+            notes: ex.notes || null,
+          });
+        }
+        week.days.push(day);
+      }
+      structure.weeks.push(week);
+    }
+
+    return { structure, note: draft.note?.trim() || null };
   },
 };

@@ -15,6 +15,7 @@ import {
   signupSchema,
   requestPasswordResetSchema,
   resetPasswordSchema,
+  claimProvisionalAthleteSchema,
   type PublicUser,
 } from "@shared/schema";
 
@@ -241,6 +242,49 @@ export function setupAuth(app: Express) {
           to: user.email,
           subject: "Welcome to Forge",
           html: buildWelcomeEmail(user, coach?.name ?? null),
+        });
+        res.status(201).json({ ...toPublicUser(user), nativeToken: signNativeToken(user.id) });
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // Deliberately unauthenticated -- whoever has the physical claim code (a
+  // coach handed it to them off a printed intake sheet) needs to see whose
+  // slot this is before they've ever logged in. Never reveals which coach
+  // imported them; the claim-signup step below links that automatically.
+  app.get("/api/claim/:code", async (req, res) => {
+    const provisional = await storage.getProvisionalAthleteByClaimCode(req.params.code);
+    if (!provisional) return res.status(404).json({ message: "This claim link isn't valid." });
+    const { name, sport, position } = provisional;
+    res.json({ name, sport, position });
+  });
+
+  // Finishes a player-inflow-sheet import (see provisionalAthletes' schema
+  // comment): turns a coach-created provisional slot into a real account.
+  // Same shape as /api/auth/signup below minus the coachCode step -- the
+  // coach link is already implied by which provisional row this claims.
+  app.post("/api/claim/:code/signup", signupLimiter, async (req, res, next) => {
+    try {
+      const parsed = claimProvisionalAthleteSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      const agreedToTermsText = await storage.getLegalAgreement();
+      const result = await storage.claimProvisionalAthlete(
+        String(req.params.code),
+        parsed.data,
+        agreedToTermsText,
+      );
+      if ("error" in result) return res.status(400).json({ message: result.error });
+      const { user } = result;
+      req.login(user, (err) => {
+        if (err) return next(err);
+        sendEmail({
+          to: user.email,
+          subject: "Welcome to Forge",
+          html: buildWelcomeEmail(user, null),
         });
         res.status(201).json({ ...toPublicUser(user), nativeToken: signNativeToken(user.id) });
       });
