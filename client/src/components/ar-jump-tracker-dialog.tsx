@@ -14,7 +14,6 @@ import {
   onBodyTracking,
   onSessionError,
   pollDiagnosticLog,
-  requestCameraPermission,
   setArCameraActive,
   framingHint,
   type BodyTrackingFrame,
@@ -180,22 +179,6 @@ export function ArJumpTrackerDialog({
     }
   }, [open]);
 
-  // Manual isolation test, same reasoning as the Request Camera Access
-  // button -- if the automatic effect above never logs anything but this
-  // direct tap does, the bug is in the effect's own lifecycle/timing, not
-  // in startArPreview/start() itself.
-  function manualStartCamera() {
-    const rect = containerRef.current?.getBoundingClientRect();
-    setDiagLog((log) => [...log, `JS: manual start tapped, rect=${rect ? "present" : "MISSING"}`]);
-    if (!rect) return;
-    setArCameraActive(true);
-    startArPreview(rect)
-      .then(() => setDiagLog((log) => [...log, "JS: manual startArPreview() resolved"]))
-      .catch((err) => {
-        const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
-        setDiagLog((log) => [...log, `JS: manual startArPreview() rejected: ${detail}`]);
-      });
-  }
 
   useEffect(() => {
     if (!open) return;
@@ -237,9 +220,14 @@ export function ArJumpTrackerDialog({
     setLastJumpCm(null);
     setTracking(true);
     if (recordVideo) {
-      startArRecording().catch(() => {
-        // Tracking itself doesn't depend on this -- a failed recording
-        // start just means no clip gets saved this set, not a lost capture.
+      // Tracking itself doesn't depend on this -- a failed recording start
+      // just means no clip gets saved this set, not a lost capture -- but
+      // silently swallowing it made a recording that never started look
+      // identical to any other failure once stopArRecording() downstream
+      // rejects with nothing to stop. Logged into the same diagnostic strip.
+      startArRecording().catch((err) => {
+        const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+        setDiagLog((log) => [...log, `JS: startArRecording() failed: ${detail}`]);
       });
     }
   }
@@ -269,8 +257,9 @@ export function ArJumpTrackerDialog({
           );
           onCapture(EMPTY_JUMP_METRICS, url);
           onOpenChange(false);
-        } catch {
-          toast.error("Couldn't get a clean read -- make sure your feet leave the ground clearly in frame.");
+        } catch (err) {
+          const detail = err instanceof ApiError ? err.message : err instanceof Error ? err.message : String(err);
+          toast.error(`Couldn't get a clean read, and the video didn't save either: ${detail}`);
         } finally {
           setSaving(false);
         }
@@ -351,31 +340,6 @@ export function ArJumpTrackerDialog({
                   {line}
                 </div>
               ))}
-              <button
-                type="button"
-                onClick={() => {
-                  setDiagLog((log) => [...log, "JS: tapped Request Camera Access"]);
-                  requestCameraPermission()
-                    .then((granted) => {
-                      setDiagLog((log) => [...log, `JS: requestCameraPermission resolved: ${granted}`]);
-                      setCameraPermission(granted ? "authorized" : "denied");
-                    })
-                    .catch((err) => {
-                      const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
-                      setDiagLog((log) => [...log, `JS: requestCameraPermission rejected: ${detail}`]);
-                    });
-                }}
-                className="mt-1 w-full rounded bg-primary px-2 py-1 text-center font-sans text-[10px] font-bold text-primary-foreground"
-              >
-                Request Camera Access
-              </button>
-              <button
-                type="button"
-                onClick={manualStartCamera}
-                className="mt-1 w-full rounded bg-secondary px-2 py-1 text-center font-sans text-[10px] font-bold text-secondary-foreground"
-              >
-                Start Camera Manually
-              </button>
             </div>
 
             {tracking && (

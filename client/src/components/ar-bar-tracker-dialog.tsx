@@ -15,7 +15,6 @@ import {
   onBodyTracking,
   onSessionError,
   pollDiagnosticLog,
-  requestCameraPermission,
   setArCameraActive,
   framingHint,
   type BodyTrackingFrame,
@@ -283,23 +282,6 @@ export function ArBarTrackerDialog({
     }
   }, [open]);
 
-  // Manual isolation test, same reasoning as the Request Camera Access
-  // button -- if the automatic effect above never logs anything but this
-  // direct tap does, the bug is in the effect's own lifecycle/timing, not
-  // in startArPreview/start() itself.
-  function manualStartCamera() {
-    const rect = containerRef.current?.getBoundingClientRect();
-    setDiagLog((log) => [...log, `JS: manual start tapped, rect=${rect ? "present" : "MISSING"}`]);
-    if (!rect) return;
-    setArCameraActive(true);
-    startArPreview(rect, true)
-      .then(() => setDiagLog((log) => [...log, "JS: manual startArPreview() resolved"]))
-      .catch((err) => {
-        const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
-        setDiagLog((log) => [...log, `JS: manual startArPreview() rejected: ${detail}`]);
-      });
-  }
-
   useEffect(() => {
     if (!open) return;
     return onBodyTracking(setFrame);
@@ -449,7 +431,15 @@ export function ArBarTrackerDialog({
     // session -- see resetImplementTracking's own comment.
     resetArImplementTracking().catch(() => {});
     if (recordVideo) {
-      startArRecording().catch(() => {});
+      // A failure here used to vanish completely -- stopArRecording()
+      // downstream would then have nothing to stop and reject with its own
+      // generic error, making a recording that never actually started look
+      // identical to any other failure. Logged into the same diagnostic
+      // strip so it's visible without needing to reproduce blind.
+      startArRecording().catch((err) => {
+        const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+        setDiagLog((log) => [...log, `JS: startArRecording() failed: ${detail}`]);
+      });
     }
   }
 
@@ -480,8 +470,19 @@ export function ArBarTrackerDialog({
           );
           onCapture(EMPTY_REP_METRICS, url);
           onOpenChange(false);
-        } catch {
-          toast.error("Couldn't get a clean read -- make sure the bar stays in frame throughout the set.");
+        } catch (err) {
+          // Surfacing the real reason, not the same generic read-failure
+          // message either way -- "No frames were captured" (native
+          // stopRecording's own rejection when Start/Stop happened too fast
+          // for a single ARFrame to land) reads completely differently from
+          // an upload failure, and silently collapsing both into one
+          // message is exactly what made a real video-save failure look
+          // identical to "nothing went wrong, there's just nothing to
+          // report."
+          const detail = err instanceof ApiError ? err.message : err instanceof Error ? err.message : String(err);
+          toast.error(
+            `Couldn't get a clean read, and the video didn't save either: ${detail}`,
+          );
         } finally {
           setSaving(false);
         }
@@ -601,31 +602,6 @@ export function ArBarTrackerDialog({
                   {line}
                 </div>
               ))}
-              <button
-                type="button"
-                onClick={() => {
-                  setDiagLog((log) => [...log, "JS: tapped Request Camera Access"]);
-                  requestCameraPermission()
-                    .then((granted) => {
-                      setDiagLog((log) => [...log, `JS: requestCameraPermission resolved: ${granted}`]);
-                      setCameraPermission(granted ? "authorized" : "denied");
-                    })
-                    .catch((err) => {
-                      const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
-                      setDiagLog((log) => [...log, `JS: requestCameraPermission rejected: ${detail}`]);
-                    });
-                }}
-                className="mt-1 w-full rounded bg-primary px-2 py-1 text-center font-sans text-[10px] font-bold text-primary-foreground"
-              >
-                Request Camera Access
-              </button>
-              <button
-                type="button"
-                onClick={manualStartCamera}
-                className="mt-1 w-full rounded bg-secondary px-2 py-1 text-center font-sans text-[10px] font-bold text-secondary-foreground"
-              >
-                Start Camera Manually
-              </button>
             </div>
 
             {tracking && (
