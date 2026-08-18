@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent } from "react";
+import { useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { Link, Redirect } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
@@ -19,6 +19,15 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { Dumbbell, ClipboardList, Sparkles, Check, Lock } from "lucide-react";
 import { ForgeMark } from "@/components/forge-mark";
+import { getJson, resolveApiUrl } from "@/lib/queryClient";
+import { hexToHslTriplet, contrastForegroundHsl } from "@/lib/color";
+
+type PublicBranding = {
+  teamName: string | null;
+  logoUrl: string | null;
+  primaryColor: string | null;
+  secondaryColor: string | null;
+};
 
 export default function SignupPage() {
   const { user, isLoading, signupMutation } = useAuth();
@@ -31,6 +40,28 @@ export default function SignupPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [coachCode, setCoachCode] = useState(prefilledCode.toUpperCase());
+  // A scanned/shared invite link carries whoever it belongs to's branding
+  // along with it -- see GET /api/public/branding/:code, the one
+  // unauthenticated branding lookup, since this page runs before login.
+  const { data: branding } = useQuery<PublicBranding>({
+    queryKey: ["/api/public/branding", prefilledCode],
+    queryFn: () => getJson(`/api/public/branding/${encodeURIComponent(prefilledCode)}`),
+    enabled: !!prefilledCode,
+    staleTime: 5 * 60_000,
+  });
+  const brandStyle = (() => {
+    if (!branding?.primaryColor) return undefined;
+    const triplet = hexToHslTriplet(branding.primaryColor);
+    if (!triplet) return undefined;
+    const fg = contrastForegroundHsl(branding.primaryColor);
+    return {
+      "--primary": triplet,
+      "--primary-foreground": fg,
+      "--ring": triplet,
+      "--accent": triplet,
+      "--accent-foreground": fg,
+    } as CSSProperties;
+  })();
   const [phone, setPhone] = useState("");
   // Whether the in-flight/just-submitted signup is a no-code athlete
   // signup -- set synchronously on submit (a ref, not state, so it's
@@ -87,15 +118,30 @@ export default function SignupPage() {
       style={{
         paddingTop: "max(env(safe-area-inset-top), 2.5rem)",
         paddingBottom: "max(env(safe-area-inset-bottom), 2.5rem)",
+        ...brandStyle,
       }}
     >
       <div className="w-full max-w-md">
         <div className="mb-8 flex flex-col items-center gap-3">
-          <ForgeMark className="h-14 w-14 rounded-xl" />
+          {branding?.logoUrl ? (
+            <img
+              src={resolveApiUrl(branding.logoUrl)}
+              alt={branding.teamName ?? "Team logo"}
+              className="h-14 w-14 rounded-xl object-contain"
+            />
+          ) : (
+            <ForgeMark className="h-14 w-14 rounded-xl" />
+          )}
           <h1 className="font-display text-4xl font-extrabold uppercase tracking-wider">
-            Forge
+            {branding?.teamName || "Forge"}
           </h1>
-          <p className="text-sm text-muted-foreground">Coach. Program. Perform.</p>
+          {branding?.teamName || branding?.logoUrl ? (
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Powered by Forge Performance
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">Coach. Program. Perform.</p>
+          )}
         </div>
 
         <Card>

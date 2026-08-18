@@ -2906,6 +2906,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // athlete reads their coach's, an admin (or a Free Agent with no coach
   // yet) gets the unbranded default. See getEffectiveBrandingForUser's own
   // comment in storage.ts for the full resolution.
+  // Unauthenticated on purpose -- backs the branded signup link/QR (see
+  // TeamInviteCard in coach/dashboard.tsx and signup.tsx), which by
+  // definition has to work before anyone's logged in. The invite code
+  // itself is already exposed pre-auth the same way (it's typed into the
+  // signup form), so this exposes nothing new -- only the cosmetic
+  // branding fields, never anything else about the coach account.
+  app.get("/api/public/branding/:code", async (req, res) => {
+    const branding = await storage.getCoachBrandingByCode(String(req.params.code));
+    res.json(
+      branding ?? { teamName: null, logoUrl: null, primaryColor: null, secondaryColor: null },
+    );
+  });
+
   app.get("/api/branding/me", requireAuth, async (req, res) => {
     const user = currentUser(req);
     const branding = await storage.getEffectiveBrandingForUser(user.id, user.role);

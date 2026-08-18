@@ -1642,6 +1642,21 @@ export const storage = {
     return resolveCoachFeatures(merged);
   },
 
+  // Public, unauthenticated lookup for the branded signup link/QR (see
+  // TeamInviteCard in coach/dashboard.tsx, and GET /api/public/branding/:code
+  // in routes.ts) -- resolves the same way POST /api/auth/signup already
+  // does (a coach's own personal code, falling back to a specific team's
+  // code), so the same code that gets someone onto the right roster also
+  // shows them the right branding on the way in. Only ever returns the
+  // cosmetic branding fields, never anything else about the coach account.
+  async getCoachBrandingByCode(code: string) {
+    const coach = await this.getUserByCoachCode(code);
+    if (coach) return this.getCoachBranding(coach.id);
+    const team = await this.getTeamByCode(code);
+    if (team) return this.getCoachBranding(team.coachId);
+    return null;
+  },
+
   // Single resolver for "what should this logged-in user's app look like" --
   // a coach (or staff coach) gets their own team's settings, an athlete
   // inherits their (first linked) coach's, and anyone else (admin, or a
