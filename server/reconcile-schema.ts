@@ -1135,6 +1135,11 @@ CREATE TABLE IF NOT EXISTS "skill_day_comments" (
 CREATE INDEX IF NOT EXISTS "skill_day_comments_assignment_day_idx" ON "skill_day_comments" ("skill_assignment_id", "skill_program_day_id");
 
 ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "peak_wrist_speed_mps" real;
+ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "stride_length_m" real;
+ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "elbow_extension_deg" real;
+ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "release_height_m" real;
+ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "set_point_pause_seconds" real;
+ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "knee_bend_depth_deg" real;
 `;
 
 async function main() {
