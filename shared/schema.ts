@@ -20,6 +20,8 @@ import { z } from "zod";
 import { BODY_PAIN_PARTS } from "./wellness";
 import type { SkillFaultThresholds } from "./skill-fault-thresholds";
 import { SKILL_FAULT_THRESHOLD_BOUNDS } from "./skill-fault-thresholds";
+import type { CoachFeature } from "./team-features";
+import { COACH_FEATURES } from "./team-features";
 
 // Owned and populated by connect-pg-simple at runtime, not by our own code --
 // declared here purely so drizzle-kit's live-diff sees it as an already-
@@ -244,6 +246,23 @@ export const users = pgTable(
     // actually agreed to regardless of any later edit.
     agreedToTermsAt: timestamp("agreed_to_terms_at"),
     agreedToTermsText: text("agreed_to_terms_text"),
+    // White-label team identity -- coach-only, meaningless on an athlete/
+    // admin row. Resolved through to the whole coaching staff (see
+    // getEffectiveCoachIds), so it always lives on the staff's primary
+    // coach account regardless of which staff member set it; an athlete
+    // sees their own coach's values via getEffectiveBrandingForUser, not
+    // their own row. logoUrl points at an uploaded file the same way
+    // lesson images do (see uploadLessonImage in routes.ts). Colors are
+    // hex strings ("#RRGGBB"), validated in updateCoachBrandingSchema
+    // below -- applied as CSS custom properties, not parsed further.
+    brandTeamName: text("brand_team_name"),
+    brandLogoUrl: text("brand_logo_url"),
+    brandPrimaryColor: text("brand_primary_color"),
+    brandSecondaryColor: text("brand_secondary_color"),
+    // Coach-only nav-visibility toggles -- see shared/team-features.ts for
+    // the field list and "missing means on" resolution. Same primary-coach
+    // resolution as the branding fields above.
+    enabledFeatures: json("enabled_features").$type<Partial<Record<CoachFeature, boolean>>>(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({
@@ -3675,6 +3694,30 @@ export const updateHealthStatusSchema = z.object({
   healthStatus: z.enum(["healthy", "hurt"]),
 });
 export type UpdateHealthStatusInput = z.infer<typeof updateHealthStatusSchema>;
+
+// Empty string clears a field back to unbranded (falls back to the default
+// Forge wordmark/colors) -- a coach who set a team name and wants to undo
+// it shouldn't have to know to send null specifically.
+const hexColor = z
+  .string()
+  .trim()
+  .regex(/^#[0-9a-fA-F]{6}$/, "Enter a color as #RRGGBB")
+  .or(z.literal(""));
+
+export const updateCoachBrandingSchema = z.object({
+  teamName: z.string().trim().max(60).optional(),
+  primaryColor: hexColor.optional(),
+  secondaryColor: hexColor.optional(),
+});
+export type UpdateCoachBrandingInput = z.infer<typeof updateCoachBrandingSchema>;
+
+export const updateCoachFeaturesSchema = z.object(
+  Object.fromEntries(COACH_FEATURES.map((key) => [key, z.boolean().optional()])) as Record<
+    CoachFeature,
+    z.ZodOptional<z.ZodBoolean>
+  >,
+);
+export type UpdateCoachFeaturesInput = z.infer<typeof updateCoachFeaturesSchema>;
 
 export const pushSubscribeSchema = z.object({
   endpoint: z.string().url(),
