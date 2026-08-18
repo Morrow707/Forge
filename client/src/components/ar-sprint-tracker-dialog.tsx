@@ -197,8 +197,14 @@ export function ArSprintTrackerDialog({
       void stopArPreview();
       return;
     }
+    // Unconditional the instant this effect fires for a real camera step --
+    // if this line never shows up either, the effect itself isn't running.
+    setDiagLog((log) => [...log, "JS: startArPreview effect firing"]);
     const rect = containerRef.current?.getBoundingClientRect();
-    if (!rect) return;
+    if (!rect) {
+      setDiagLog((log) => [...log, "JS: no containerRef rect, aborting"]);
+      return;
+    }
     let cancelled = false;
     setArCameraActive(true);
     // Logged entirely on the JS side, independent of the native
@@ -266,6 +272,23 @@ export function ArSprintTrackerDialog({
     if (crossing) finishCapture(crossing);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [frame]);
+
+  // Manual isolation test, same reasoning as the Request Camera Access
+  // button -- if the automatic effect above never logs anything but this
+  // direct tap does, the bug is in the effect's own lifecycle/timing, not
+  // in startArPreview/start() itself.
+  function manualStartCamera() {
+    const rect = containerRef.current?.getBoundingClientRect();
+    setDiagLog((log) => [...log, `JS: manual start tapped, rect=${rect ? "present" : "MISSING"}`]);
+    if (!rect) return;
+    setArCameraActive(true);
+    startArPreview(rect)
+      .then(() => setDiagLog((log) => [...log, "JS: manual startArPreview() resolved"]))
+      .catch((err) => {
+        const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+        setDiagLog((log) => [...log, `JS: manual startArPreview() rejected: ${detail}`]);
+      });
+  }
 
   function redrawCheckpointOverlay() {
     const canvas = overlayCanvasRef.current;
@@ -545,6 +568,13 @@ export function ArSprintTrackerDialog({
                   className="mt-1 w-full rounded bg-primary px-2 py-1 text-center font-sans text-[10px] font-bold text-primary-foreground"
                 >
                   Request Camera Access
+                </button>
+                <button
+                  type="button"
+                  onClick={manualStartCamera}
+                  className="mt-1 w-full rounded bg-secondary px-2 py-1 text-center font-sans text-[10px] font-bold text-secondary-foreground"
+                >
+                  Start Camera Manually
                 </button>
               </div>
 
