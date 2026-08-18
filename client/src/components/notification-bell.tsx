@@ -14,6 +14,7 @@ import {
   Trophy,
   HelpCircle,
   RotateCcw,
+  ShieldAlert,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -121,6 +122,8 @@ export function NotificationBell() {
                 <Activity className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
               ) : n.type === "skill_fault" ? (
                 <Zap className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
+              ) : n.type === "form_fault" ? (
+                <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
               ) : n.type === "class_lesson_unlocked" ? (
                 <GraduationCap className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
               ) : n.type === "class_completed" ? (

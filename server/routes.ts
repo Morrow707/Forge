@@ -4456,6 +4456,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         "/coach/analytics",
       );
     }
+    // Same treatment as skill-session faults (see POST
+    // /api/athlete/skill-session-logs) -- strength-side form faults
+    // previously only ever surfaced if a coach happened to open the set
+    // itself.
+    const formFaultFlag = await storage.evaluateFormFaultFlags(parsed.data.assignmentId, parsed.data.entries);
+    if (formFaultFlag) {
+      const body = formFaultFlag.flags.map((f) => `${f.exerciseName}: ${f.faultLabels.join("; ")}`).join(" · ");
+      await notifyUser(
+        formFaultFlag.coachId,
+        "form_fault",
+        `${user.name} had a form flag today`,
+        body,
+        "/coach/analytics",
+      );
+    }
     // Every save while a CARA training session is open is "still actively
     // training" evidence -- completion closes it outright, anything else
     // just resets the idle clock. Both are no-ops when there's no open

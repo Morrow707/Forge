@@ -74,6 +74,7 @@ import {
   Share2,
   Headphones,
   Copy,
+  ShieldAlert,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import type { PublicUser } from "@shared/schema";
@@ -2288,15 +2289,53 @@ function ExerciseLogContent({
                     ))}
                   </div>
                 )}
+                {/* Trust score is computed for every tracked set (see
+                    computeRepTrustScores) but was never surfaced anywhere --
+                    only worth showing when it's actually flagging something,
+                    same "don't nag about a clean set" restraint formFaults
+                    above already follows. Low beats medium for the summary
+                    line's wording (a single "shaky" rep still deserves the
+                    stronger phrasing even among otherwise-solid ones); the
+                    per-rep chips below carry the detail either way. */}
+                {set.trustScores && set.trustScores.some((t) => t.label !== "high") && (
+                  <div
+                    className="mt-1 flex items-center gap-1 pl-9 text-[9px] text-amber-500"
+                    title={set.trustScores
+                      .filter((t) => t.label !== "high")
+                      .map((t) => `Rep ${t.repNumber}: ${t.notes.join("; ")}`)
+                      .join(" · ")}
+                  >
+                    <ShieldAlert className="h-3 w-3 shrink-0" />
+                    <span>
+                      {set.trustScores.some((t) => t.label === "low")
+                        ? "Tracking was shaky on at least one rep -- take those numbers with a grain of salt"
+                        : "Tracking mostly solid, a couple reps less certain"}
+                    </span>
+                  </div>
+                )}
                 {set.repBreakdown && set.repBreakdown.length > 1 && (
                   <div className="mt-1 flex flex-wrap items-center gap-1 pl-9 text-[9px] text-muted-foreground">
                     <span className="font-semibold uppercase tracking-wide">Rep by rep</span>
-                    {set.repBreakdown.map((r) => (
-                      <span key={r.repNumber} className="rounded bg-secondary px-1.5 py-0.5">
-                        {item.trackingLevel === "full" ? `${r.peakVelocityMps} m/s` : `#${r.repNumber}`}
-                        {r.depthDeg != null ? ` · ${r.depthDeg}°` : ""}
-                      </span>
-                    ))}
+                    {set.repBreakdown.map((r) => {
+                      const trust = set.trustScores?.find((t) => t.repNumber === r.repNumber);
+                      return (
+                        <span
+                          key={r.repNumber}
+                          className={cn(
+                            "rounded px-1.5 py-0.5",
+                            trust?.label === "low"
+                              ? "bg-destructive/15 text-destructive"
+                              : trust?.label === "medium"
+                                ? "bg-amber-500/15 text-amber-600"
+                                : "bg-secondary",
+                          )}
+                          title={trust?.notes.join("; ")}
+                        >
+                          {item.trackingLevel === "full" ? `${r.peakVelocityMps} m/s` : `#${r.repNumber}`}
+                          {r.depthDeg != null ? ` · ${r.depthDeg}°` : ""}
+                        </span>
+                      );
+                    })}
                   </div>
                 )}
                 {set.jumpBreakdown && set.jumpBreakdown.length > 1 && (

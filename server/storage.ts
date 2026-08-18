@@ -10111,6 +10111,76 @@ ${catalog}`;
     return { coachId: assignment.coachId, flags };
   },
 
+  // Same "scan a just-submitted log, tell the coach if the athlete trains
+  // under one" pattern as evaluateLegDriveAsymmetryFlags above, for the
+  // strength-side form faults (valgus, forward lean, bar tilt, etc.)
+  // detectFormFaults already flags -- until now these only ever showed up
+  // if a coach happened to open the set itself. One flag per exercise,
+  // every distinct fault label seen across that exercise's sets today
+  // (not just the first/worst one -- unlike leg-drive asymmetry, which is
+  // one continuous percentage worth picking a single worst reading for,
+  // form faults are discrete and a coach benefits from seeing all of them,
+  // not just one). Read-only; the route layer owns the actual notifyUser
+  // call, same as every other notification in this codebase.
+  async evaluateFormFaultFlags(
+    assignmentId: number,
+    entries: SubmitWorkoutLogInput["entries"],
+  ) {
+    const assignment = await db.query.assignments.findFirst({
+      where: eq(assignments.id, assignmentId),
+    });
+    // Self-assigned (Free Agent / admin training themselves) has no coach to
+    // tell -- same gate evaluateLegDriveAsymmetryFlags uses.
+    if (!assignment || assignment.coachId === assignment.athleteId) return null;
+
+    const faultLabelsByExercise = new Map<
+      string,
+      { programExerciseId: number | null; correctiveId: number | null; labels: Set<string> }
+    >();
+
+    for (const entry of entries) {
+      for (const s of entry.sets) {
+        if (!s.formFaults || s.formFaults.length === 0) continue;
+        const key = entry.programExerciseId != null
+          ? `pe:${entry.programExerciseId}`
+          : `c:${entry.correctiveId}`;
+        let existing = faultLabelsByExercise.get(key);
+        if (!existing) {
+          existing = {
+            programExerciseId: entry.programExerciseId ?? null,
+            correctiveId: entry.correctiveId ?? null,
+            labels: new Set(),
+          };
+          faultLabelsByExercise.set(key, existing);
+        }
+        for (const f of s.formFaults) existing.labels.add(f.label);
+      }
+    }
+    if (faultLabelsByExercise.size === 0) return null;
+
+    const flags = await Promise.all(
+      Array.from(faultLabelsByExercise.values()).map(async (flag) => {
+        let exerciseName = "an exercise";
+        if (flag.programExerciseId != null) {
+          const pe = await db.query.programExercises.findFirst({
+            where: eq(programExercises.id, flag.programExerciseId),
+            with: { exercise: true },
+          });
+          if (pe) exerciseName = pe.exercise.name;
+        } else if (flag.correctiveId != null) {
+          const c = await db.query.assignmentCorrectives.findFirst({
+            where: eq(assignmentCorrectives.id, flag.correctiveId),
+            with: { exercise: true },
+          });
+          if (c) exerciseName = c.exercise.name;
+        }
+        return { exerciseName, faultLabels: Array.from(flag.labels) };
+      }),
+    );
+
+    return { coachId: assignment.coachId, flags };
+  },
+
   // Retroactive version of evaluateLegDriveAsymmetryFlags above -- that one
   // only ever looks at the single workout log just submitted (and fires a
   // notification); this scans an athlete's recent history for the same
