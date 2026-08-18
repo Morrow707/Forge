@@ -973,7 +973,19 @@ export function computeLandingAsymmetry(
 }
 
 export type FormFault = {
-  code: "shallow_depth" | "knee_valgus" | "forward_lean" | "bar_path_drift" | "bar_tilt" | "grip_shift";
+  code:
+    | "shallow_depth"
+    | "knee_valgus"
+    | "forward_lean"
+    | "bar_path_drift"
+    | "bar_tilt"
+    | "grip_shift"
+    | "pelvic_drop"
+    | "ankle_mobility_limit"
+    | "arm_fallout"
+    | "thoracic_extension_loss"
+    | "lockout_symmetry"
+    | "lockout_lean";
   label: string;
 };
 
@@ -1061,12 +1073,42 @@ export function detectFormFaults(
   const valgusRatios: number[] = [];
   const torsoAngles: number[] = [];
   const tiltAngles: number[] = precomputedTiltDegrees ? [...precomputedTiltDegrees] : [];
+  // Lateral hip-height difference vs. hip width, same math and same
+  // physical sign (Trendelenburg/pelvic drop) as sprint-tracking.ts's
+  // hip_drop fault, applied here to a squat/lunge's stance instead of a
+  // sprint stride. 3D (not x-only) since this file's own convention --
+  // knee_valgus above -- already established 3D Euclidean distances as the
+  // camera-angle-independent way to do a same-frame width/width ratio.
+  const hipDropRatios: number[] = [];
+  // Real-world (meters) heel-above-toe rise, same-frame and camera-angle-
+  // independent for the same reason as hipDropRatios above -- a classic
+  // ankle-dorsiflexion-restriction compensation (heel lifts off the ground
+  // to fake extra depth). One reading per visible foot per frame.
+  const heelRiseReadings: number[] = [];
+  // Torso lean restricted to frames where both wrists are overhead (see
+  // frameIsOverhead below) -- an overhead squat's lockout standard is
+  // stricter than a back squat's, and a press's lockout moment is the only
+  // part of the rep where "leaning off vertical" is even a meaningful
+  // question (mid-rack position naturally isn't upright the same way).
+  const lockoutTorsoAngles: number[] = [];
+  let overheadFrameCount = 0;
+  let trackedOverheadFrameCount = 0;
+  // Highest point (smallest vertical-sign-corrected y) each wrist reaches
+  // during the capture -- "top of rep" for a press's lockout. The two
+  // don't need to come from the same frame for a symmetry comparison to be
+  // meaningful (each side's own best height is what a coach means by
+  // "how high did that arm lock out"), same reasoning peakWristSpeedMps's
+  // sibling metrics in mechanics-tracking.ts use for per-side extremes.
+  let topLeftWristCorrectedY = Infinity;
+  let topRightWristCorrectedY = Infinity;
 
   // Best current reading of which way world-Y points "up" -- refined every
   // frame it can be (see worldVerticalSign), held from the last confident
   // frame otherwise, same pattern bar-tracker-dialog.tsx's verticalSignRef
-  // uses live. Only bar tilt's sign needs this; torso lean below is
-  // unsigned and doesn't care which way world-Y points.
+  // uses live. Bar tilt's sign needs this, and so does everything below
+  // that asks "is this point higher than that one" (overhead detection,
+  // heel rise, top-of-rep wrist height) -- torso lean is the one exception,
+  // unsigned and unaffected by which way world-Y points.
   let currentVerticalSign: 1 | -1 = 1;
 
   for (const frame of frames) {
@@ -1077,6 +1119,30 @@ export function detectFormFaults(
     if (usesSharedBar && !precomputedTiltDegrees) {
       const tilt = computeBarTiltDegrees(worldLm, currentVerticalSign);
       if (tilt != null) tiltAngles.push(tilt);
+    }
+
+    // "Overhead" for this frame: both wrists higher (smaller corrected y)
+    // than the nose -- a vertical-only comparison, so it needs no facing-
+    // direction assumption the way a forward/backward check would (see the
+    // module's own weightTransferPct comment on why that's avoided). Feeds
+    // arm_fallout (Squat) and gates lockout_lean/lockoutTorsoAngles (Press)
+    // below; top-of-rep wrist height feeds lockout_symmetry regardless of
+    // whether this specific frame reads as "overhead."
+    const nose3d = worldLm[POSE_LANDMARKS.NOSE];
+    const lWrist3d = worldLm[POSE_LANDMARKS.LEFT_WRIST];
+    const rWrist3d = worldLm[POSE_LANDMARKS.RIGHT_WRIST];
+    let frameIsOverhead = false;
+    if (visible(lWrist3d) && visible(rWrist3d)) {
+      const leftCorrectedY = currentVerticalSign * lWrist3d.y;
+      const rightCorrectedY = currentVerticalSign * rWrist3d.y;
+      topLeftWristCorrectedY = Math.min(topLeftWristCorrectedY, leftCorrectedY);
+      topRightWristCorrectedY = Math.min(topRightWristCorrectedY, rightCorrectedY);
+      if (visible(nose3d)) {
+        const noseCorrectedY = currentVerticalSign * nose3d.y;
+        frameIsOverhead = leftCorrectedY < noseCorrectedY && rightCorrectedY < noseCorrectedY;
+        trackedOverheadFrameCount++;
+        if (frameIsOverhead) overheadFrameCount++;
+      }
     }
 
     const lKnee3d = worldLm[POSE_LANDMARKS.LEFT_KNEE];
@@ -1116,8 +1182,31 @@ export function detectFormFaults(
       const dz = (lShoulder3d.z + rShoulder3d.z) / 2 - (lHip3d.z + rHip3d.z) / 2;
       const magnitude = Math.hypot(dx, dy, dz);
       if (magnitude > 0) {
-        torsoAngles.push((Math.acos(Math.min(1, Math.abs(dy) / magnitude)) * 180) / Math.PI);
+        const leanDeg = (Math.acos(Math.min(1, Math.abs(dy) / magnitude)) * 180) / Math.PI;
+        torsoAngles.push(leanDeg);
+        if (frameIsOverhead) lockoutTorsoAngles.push(leanDeg);
       }
+    }
+
+    // Pelvic drop (Trendelenburg sign): lateral hip-height difference vs.
+    // hip width -- see hipDropRatios' own comment above. Reuses the hip
+    // landmarks already fetched for torso lean just above.
+    if (visible(lHip3d) && visible(rHip3d)) {
+      const hipWidth = Math.hypot(lHip3d.x - rHip3d.x, lHip3d.y - rHip3d.y, lHip3d.z - rHip3d.z);
+      if (hipWidth > 0.05) hipDropRatios.push(Math.abs(lHip3d.y - rHip3d.y) / hipWidth);
+    }
+
+    // Heel rise: heel higher (smaller corrected y) than the same foot's
+    // toe -- see heelRiseReadings' own comment above.
+    const lHeel3d = worldLm[POSE_LANDMARKS.LEFT_HEEL];
+    const rHeel3d = worldLm[POSE_LANDMARKS.RIGHT_HEEL];
+    const lToe3d = worldLm[POSE_LANDMARKS.LEFT_FOOT_INDEX];
+    const rToe3d = worldLm[POSE_LANDMARKS.RIGHT_FOOT_INDEX];
+    if (visible(lHeel3d) && visible(lToe3d)) {
+      heelRiseReadings.push(currentVerticalSign * (lToe3d.y - lHeel3d.y));
+    }
+    if (visible(rHeel3d) && visible(rToe3d)) {
+      heelRiseReadings.push(currentVerticalSign * (rToe3d.y - rHeel3d.y));
     }
   }
 
@@ -1138,6 +1227,16 @@ export function detectFormFaults(
       ? LOWER_BODY_MOVEMENT_TYPES.has(movementType) && romSuggestsKneeDriven
       : romSuggestsKneeDriven;
 
+  // "Overhead" for the SET as a whole: most tracked frames had both wrists
+  // above the nose (see frameIsOverhead in the loop above) -- an overhead
+  // squat (arm_fallout, the stricter thoracic_extension_loss threshold
+  // below) or a standing overhead press (lockout_lean), as opposed to a
+  // back squat or a bench/horizontal press where this fraction should
+  // naturally stay low.
+  const overheadFraction =
+    trackedOverheadFrameCount > 0 ? overheadFrameCount / trackedOverheadFrameCount : 0;
+  const isOverheadSet = overheadFraction > 0.5;
+
   if (context === "lift" && isKneeDrivenMovement && minKneeAngle > 100) {
     faults.push({
       code: "shallow_depth",
@@ -1155,12 +1254,71 @@ export function detectFormFaults(
     }
   }
 
+  if (isKneeDrivenMovement && hipDropRatios.length) {
+    // 95th percentile, not a raw max -- same noise protection as valgus
+    // and every other worst-point-of-the-set check in this function.
+    const maxHipDropRatio = percentile(hipDropRatios, 0.95);
+    // Same cutoff as sprint-tracking.ts's DEFAULT_SKILL_FAULT_THRESHOLDS.
+    // hipDropRatioThreshold -- same physical sign (Trendelenburg), same
+    // reasonable default.
+    if (maxHipDropRatio > 0.12) {
+      faults.push({
+        code: "pelvic_drop",
+        label: "Hip dropped on one side during the rep -- work on single-leg glute strength",
+      });
+    }
+  }
+
+  if (context === "lift" && isKneeDrivenMovement && heelRiseReadings.length) {
+    const maxHeelRise = percentile(heelRiseReadings, 0.95);
+    // 3cm is a small but real, deliberately conservative heel-off-the-
+    // ground reading -- comfortably past ordinary per-frame landmark
+    // jitter (this is a same-frame, real-world-meters measurement, same
+    // reliability class as the knee/ankle width readings above), well
+    // under a heel actually coming up onto the toes.
+    if (maxHeelRise > 0.03) {
+      faults.push({
+        code: "ankle_mobility_limit",
+        label: "Heel lifted off the ground at depth -- likely limited ankle dorsiflexion",
+      });
+    }
+  }
+
   if (isKneeDrivenMovement && torsoAngles.length) {
     const maxTorsoAngle = percentile(torsoAngles, 0.95);
-    if (maxTorsoAngle > 45) {
+    // An overhead squat's lockout standard is stricter than a back squat's
+    // -- losing the overhead position needs a lower bar to flag, and the
+    // more specific coaching cue, than the generic forward_lean threshold
+    // below gives. The two are mutually exclusive per set, not stacked:
+    // an overhead squat that also clears the higher forward_lean bar isn't
+    // additionally flagged for it, the OHS-specific fault already covers
+    // the same underlying angle more precisely.
+    if (movementType === "Squat" && isOverheadSet) {
+      if (maxTorsoAngle > 30) {
+        faults.push({
+          code: "thoracic_extension_loss",
+          label: `Losing thoracic extension -- torso rounded ~${Math.round(maxTorsoAngle)}° from vertical, more than an overhead squat can afford`,
+        });
+      }
+    } else if (maxTorsoAngle > 45) {
       faults.push({
         code: "forward_lean",
         label: `Excessive forward lean (~${Math.round(maxTorsoAngle)}° from vertical) at the bottom`,
+      });
+    }
+  }
+
+  // Wrists drifted out of the overhead position at some point during a
+  // set that was mostly overhead -- the vertical-only definition of
+  // "overhead" above sidesteps needing a forward/backward facing-direction
+  // assumption (see weightTransferPct's own comment on why that's
+  // avoided), so this reads as "arms came down," not "arms moved forward."
+  if (movementType === "Squat" && isOverheadSet) {
+    const dropoutFraction = 1 - overheadFraction;
+    if (dropoutFraction > 0.15) {
+      faults.push({
+        code: "arm_fallout",
+        label: "Arms drifted down from overhead at some point during the squat",
       });
     }
   }
@@ -1204,6 +1362,43 @@ export function detectFormFaults(
       faults.push({
         code: "grip_shift",
         label: `Grip width shifted ~${Math.round((widest - narrowest) * 100)}cm during the set`,
+      });
+    }
+  }
+
+  // Top-of-rep wrist-height symmetry -- the non-barbell (dumbbell/kettlebell/
+  // bodyweight) equivalent of bar_tilt above, which only fires for a shared
+  // bar. Deliberately skipped when usesSharedBar: a barbell press's two
+  // hands can't lock out at different heights (they're on the same rigid
+  // bar), so bar_tilt already owns that signal there and this would just
+  // duplicate it under a different name.
+  if (
+    movementType === "Press" &&
+    !usesSharedBar &&
+    topLeftWristCorrectedY !== Infinity &&
+    topRightWristCorrectedY !== Infinity
+  ) {
+    const symmetryDiffM = Math.abs(topLeftWristCorrectedY - topRightWristCorrectedY);
+    if (symmetryDiffM > 0.06) {
+      const higherSide = topLeftWristCorrectedY < topRightWristCorrectedY ? "left" : "right";
+      faults.push({
+        code: "lockout_symmetry",
+        label: `One arm locked out ~${Math.round(symmetryDiffM * 100)}cm higher than the other (${higherSide})`,
+      });
+    }
+  }
+
+  // Torso lean restricted to the lockout moment itself (lockoutTorsoAngles
+  // only collects frames where both wrists were overhead) -- a standing
+  // overhead press's only meaningful "leaning off vertical" question,
+  // unlike a bench press where lying flat is the correct, neutral position
+  // (see guessMovementPattern's own comment on that same distinction).
+  if (movementType === "Press" && isOverheadSet && lockoutTorsoAngles.length) {
+    const maxLockoutLean = percentile(lockoutTorsoAngles, 0.95);
+    if (maxLockoutLean > 20) {
+      faults.push({
+        code: "lockout_lean",
+        label: `Leaning ~${Math.round(maxLockoutLean)}° off vertical at lockout -- check for an excessive arch or lean instead of a straight bar path overhead`,
       });
     }
   }

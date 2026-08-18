@@ -143,6 +143,12 @@ const FAULT_NAMES: Record<string, string> = {
   bar_path_drift: "Bar path drift",
   bar_tilt: "Bar tilt",
   grip_shift: "Grip shift",
+  pelvic_drop: "Pelvic drop",
+  ankle_mobility_limit: "Ankle mobility limit",
+  arm_fallout: "Arm fallout",
+  thoracic_extension_loss: "Thoracic extension loss",
+  lockout_symmetry: "Lockout symmetry",
+  lockout_lean: "Lockout lean",
 };
 type RecentSession = {
   date: string;

@@ -23,6 +23,7 @@ import {
   detectSprintCrossings,
   detectSprintFaults,
   checkpointsForShuttleTaps,
+  checkpointsForThreeConeTap,
   SPRINT_PRESETS,
   type SprintCameraAngle,
   type SprintPoint,
@@ -450,6 +451,9 @@ export function SprintTrackerDialog({
     if (preset.tapCount === 3) {
       return checkpointsForShuttleTaps([taps[0], taps[1], taps[2]]);
     }
+    if (preset.tapCount === 1) {
+      return checkpointsForThreeConeTap(taps[0]);
+    }
     const distanceNum = Number(distanceYards) || 0;
     if (distanceNum <= 0) return null;
     return [{ x: taps[0] }, { x: taps[1], segmentDistanceYards: distanceNum }];
@@ -677,6 +681,11 @@ export function SprintTrackerDialog({
                       Tap the video at <strong>center</strong>, then each <strong>cone</strong> in the order you'll
                       run to them ({checkpointCount}/3 marked).
                     </>
+                  ) : preset.tapCount === 1 ? (
+                    <>
+                      Tap the video where the <strong>start/finish line</strong> is -- the 3-cone starts and ends
+                      at the same spot ({checkpointCount}/1 marked).
+                    </>
                   ) : (
                     <>
                       Tap the video where the <strong>start line</strong> is, then where the{" "}
@@ -715,7 +724,13 @@ export function SprintTrackerDialog({
             {step === "capture" && (
               <>
                 <p className="text-sm text-teal-400">
-                  Recording -- run through {preset.tapCount === 3 ? "all three markers" : "both markers"} now.
+                  Recording -- run through{" "}
+                  {preset.tapCount === 3
+                    ? "all three markers"
+                    : preset.tapCount === 1
+                      ? "the full drill, finishing back through the marker"
+                      : "both markers"}{" "}
+                  now.
                 </p>
                 <DialogFooter>
                   <Button variant="outline" onClick={retry}>
@@ -765,7 +780,12 @@ export function SprintTrackerDialog({
               </div>
               <div>
                 <p className="text-2xl font-bold">{result.avgSpeedYardsPerSec.toFixed(1)}</p>
-                <p className="text-xs text-muted-foreground">Yards / sec</p>
+                <p className="text-xs text-muted-foreground">
+                  Yards / sec
+                  {preset.id === "3-cone" && (
+                    <span className="block text-[10px] normal-case">(approximate -- path isn't a straight line)</span>
+                  )}
+                </p>
               </div>
             </div>
 

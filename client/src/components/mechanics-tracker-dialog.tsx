@@ -423,6 +423,7 @@ export function MechanicsTrackerDialog({
         armSlotLabel: result.armSlot?.label ?? null,
         wellSequenced: result.sequencing.wellSequenced,
         peakWristSpeedMps: result.peakWristSpeedMps,
+        strideLengthM: result.strideLengthM,
         videoUrl: uploadedVideoUrl,
       });
       toast.success(mode === "throw" ? "Throw saved" : "Swing saved");
@@ -577,6 +578,12 @@ export function MechanicsTrackerDialog({
                     Peak wrist speed
                     <span className="block text-[10px] normal-case">(proxy for release velocity)</span>
                   </p>
+                </div>
+              )}
+              {result.strideLengthM != null && (
+                <div>
+                  <p className="text-xl font-bold">{result.strideLengthM} m</p>
+                  <p className="text-xs text-muted-foreground">Stride length</p>
                 </div>
               )}
               <div>

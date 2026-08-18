@@ -128,6 +128,16 @@ export type MechanicsResult = {
   // but wrist speed at release is an established, reasonable proxy for it,
   // and needs nothing beyond body joints this tracker already has.
   peakWristSpeedMps: number | null;
+  // Real-world ankle-to-ankle separation at its peak during the capture --
+  // the "stride out" moment in a throwing or hitting motion, in meters.
+  // Applies to both modes (a batter strides the same way a QB does).
+  // Meaningful as a same-frame measurement the same way
+  // hipShoulderSeparationDeg is (see the module comment): world landmarks
+  // are hip-centered per frame, so a same-frame ankle-to-ankle distance is
+  // real-world scale even though the hip center's own position across
+  // frames isn't. Ground-plane (x/z) only, not y, so a foot briefly higher
+  // off the ground mid-stride doesn't inflate the reading.
+  strideLengthM: number | null;
 };
 
 export function analyzeMechanics(
@@ -266,6 +276,19 @@ export function analyzeMechanics(
     }
   }
 
+  const ankleSeparations = frames
+    .map((f) => {
+      const left = f.worldLandmarks[POSE_LANDMARKS.LEFT_ANKLE];
+      const right = f.worldLandmarks[POSE_LANDMARKS.RIGHT_ANKLE];
+      if (!left || !right) return null;
+      return Math.hypot(left.x - right.x, left.z - right.z);
+    })
+    .filter((v): v is number => v != null);
+  // 95th percentile, not a raw max -- same noise protection as
+  // hipShoulderSeparationDeg above.
+  const strideLengthM =
+    ankleSeparations.length > 0 ? Math.round(percentile(ankleSeparations, 0.95) * 100) / 100 : null;
+
   return {
     hipShoulderSeparationDeg: hipShoulderSeparationDeg != null ? Math.round(hipShoulderSeparationDeg) : null,
     weightTransferPct,
@@ -278,6 +301,7 @@ export function analyzeMechanics(
     },
     armSlot,
     peakWristSpeedMps,
+    strideLengthM,
   };
 }
 
