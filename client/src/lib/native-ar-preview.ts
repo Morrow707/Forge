@@ -155,8 +155,21 @@ export async function isArBodyTrackingSupported(): Promise<{
 // ArImplementTracker for both hands (see its own file comment) -- leave it
 // off (the default) for any dialog with nothing held; only a bar-path/full
 // mode dialog needs it.
+// Every caller passes a live getBoundingClientRect() DOMRect straight
+// through, not a plain object -- DOMRect's x/y/width/height are getters
+// defined on DOMRectReadOnly.prototype, not the instance's own enumerable
+// properties, so `{...rect}` (the previous version of this function) or
+// JSON-serializing it directly silently drops all four and sends only
+// `{trackImplement}` across the bridge. Explicit property reads always
+// work regardless of where the getter lives, so this is the fix
+// regardless of exactly how much of that empty payload the bridge itself
+// tolerated silently.
+function plainRect(rect: PreviewRect): PreviewRect {
+  return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+}
+
 export async function startArPreview(rect: PreviewRect, trackImplement?: boolean): Promise<void> {
-  await ArCameraPreview.start({ ...rect, trackImplement });
+  await ArCameraPreview.start({ ...plainRect(rect), trackImplement });
 }
 
 export async function stopArPreview(): Promise<void> {
@@ -164,7 +177,7 @@ export async function stopArPreview(): Promise<void> {
 }
 
 export async function updateArPreviewRect(rect: PreviewRect): Promise<void> {
-  await ArCameraPreview.updateRect(rect);
+  await ArCameraPreview.updateRect(plainRect(rect));
 }
 
 // There's no browser MediaStream to hand a MediaRecorder once this plugin

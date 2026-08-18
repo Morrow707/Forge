@@ -134,9 +134,21 @@ export function ArJumpTrackerDialog({
     if (!rect) return;
     let cancelled = false;
     setArCameraActive(true);
-    startArPreview(rect).catch((err) => {
-      if (!cancelled) setError(err instanceof Error ? err.message : "Could not start camera");
-    });
+    // Logged entirely on the JS side, independent of the native
+    // logDiag/getDiagnosticLog buffer -- see the same block's own comment
+    // in ar-bar-tracker-dialog.tsx.
+    setDiagLog((log) => [...log, "JS: calling startArPreview()"]);
+    startArPreview(rect)
+      .then(() => {
+        if (!cancelled) setDiagLog((log) => [...log, "JS: startArPreview() resolved"]);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+          setDiagLog((log) => [...log, `JS: startArPreview() rejected: ${detail}`]);
+          setError(err instanceof Error ? err.message : "Could not start camera");
+        }
+      });
     function onResize() {
       const r = containerRef.current?.getBoundingClientRect();
       if (r) void updateArPreviewRect(r);
