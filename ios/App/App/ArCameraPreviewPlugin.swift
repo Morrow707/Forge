@@ -50,8 +50,20 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
         CAPPluginMethod(name: "updateRect", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "startRecording", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "stopRecording", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "resetImplementTracking", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "resetImplementTracking", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getDiagnosticLog", returnType: CAPPluginReturnPromise)
     ]
+
+    // Buffered, not just live-broadcast -- a "diagnosticLog" JS event fired
+    // and lost before native-ar-preview.ts's listener finished its own
+    // async registration (addListener is itself a bridge round-trip) would
+    // explain exactly what showed up on a real device: zero log lines, not
+    // even "start() called" (logDiag's own first call, at the very top of
+    // start() below). Polling this via getDiagnosticLog() instead of
+    // relying on the live event can't lose anything that way -- whatever's
+    // in here at poll time is everything logDiag has ever posted since the
+    // buffer was last cleared (see start()'s first line).
+    private var diagLogBuffer: [String] = []
 
     private var previewView: ARSCNView?
     // Throttles the "bodyTracking" JS event to ~30fps -- ARKit can deliver
@@ -136,10 +148,16 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
     // strip alone couldn't show that, since it only ever reflects one
     // snapshot taken when the dialog opens, not what happens after.
     private func logDiag(_ message: String) {
+        diagLogBuffer.append(message)
         notifyListeners("diagnosticLog", data: ["message": message])
     }
 
+    @objc func getDiagnosticLog(_ call: CAPPluginCall) {
+        call.resolve(["log": diagLogBuffer])
+    }
+
     @objc func start(_ call: CAPPluginCall) {
+        diagLogBuffer.removeAll()
         logDiag("start() called")
         guard ARBodyTrackingConfiguration.isSupported else {
             call.reject("ARBodyTrackingConfiguration is not supported on this device")

@@ -14,7 +14,7 @@ import {
   resetArImplementTracking,
   onBodyTracking,
   onSessionError,
-  onDiagnosticLog,
+  pollDiagnosticLog,
   setArCameraActive,
   framingHint,
   type BodyTrackingFrame,
@@ -96,6 +96,27 @@ function medianOf(values: number[]): number {
   const mid = Math.floor(sorted.length / 2);
   return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
 }
+
+// Attached to a saved video when summarizeTrackedSet couldn't produce a
+// trustworthy read -- all zero/empty rather than fabricated numbers, so
+// nothing downstream displays a fake velocity or rep count for a set the
+// tracker genuinely couldn't parse. See stopTracking's own comment on why
+// the video still gets saved and attached even here.
+const EMPTY_REP_METRICS: RepMetrics = {
+  peakVelocityMps: 0,
+  meanVelocityMps: 0,
+  concentricSeconds: 0,
+  eccentricSeconds: 0,
+  barPathDeviationCm: 0,
+  barPathTrace: [],
+  repBreakdown: [],
+  formFaults: [],
+  peakPowerWatts: null,
+  meanPowerWatts: null,
+  eccentricMeanVelocityMps: 0,
+  romCm: 0,
+  velocityLossPercent: null,
+};
 
 function isPlausibleVelocity(
   prev: { x: number; y: number; t: number } | null,
@@ -241,7 +262,7 @@ export function ArBarTrackerDialog({
 
   useEffect(() => {
     if (!open) return;
-    return onDiagnosticLog((message) => setDiagLog((log) => [...log, message].slice(-8)));
+    return pollDiagnosticLog(setDiagLog);
   }, [open]);
 
   useEffect(() => {
@@ -387,7 +408,36 @@ export function ArBarTrackerDialog({
     setTracking(false);
     const metrics = summarizeTrackedSet(traceRef.current, loadKg, heightIn);
     if (!metrics) {
-      toast.error("Couldn't get a clean read -- make sure the bar stays in frame throughout the set.");
+      // The rep-tracking read failing doesn't mean the recording itself
+      // failed -- the coach explicitly wants a video of every set (see the
+      // page's own "Your coach wants a video" banner), so a real clip
+      // still gets saved and attached to this set even with no trustworthy
+      // numbers to go with it, rather than thrown away just because the
+      // automatic read couldn't be trusted. Dialog only closes when a
+      // video actually got captured this way -- with nothing saved at all
+      // (no video required, or the upload itself failed), it stays open
+      // exactly like before so the athlete can just retry the set.
+      if (recordVideo) {
+        setSaving(true);
+        try {
+          const blob = await stopArRecording();
+          const formData = new FormData();
+          formData.append("video", blob, videoFilenameForBlob(blob, "form-check"));
+          const res = await apiRequest("POST", "/api/athlete/form-video", formData);
+          const { url } = await res.json();
+          toast.error(
+            "Couldn't get a clean read -- make sure the bar stays in frame throughout the set. (Video saved for your coach.)",
+          );
+          onCapture(EMPTY_REP_METRICS, url);
+          onOpenChange(false);
+        } catch {
+          toast.error("Couldn't get a clean read -- make sure the bar stays in frame throughout the set.");
+        } finally {
+          setSaving(false);
+        }
+      } else {
+        toast.error("Couldn't get a clean read -- make sure the bar stays in frame throughout the set.");
+      }
       return;
     }
     metrics.formFaults = detectFormFaults(

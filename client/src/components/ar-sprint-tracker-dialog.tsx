@@ -23,7 +23,7 @@ import {
   stopArRecording,
   onBodyTracking,
   onSessionError,
-  onDiagnosticLog,
+  pollDiagnosticLog,
   setArCameraActive,
   framingHint,
   type BodyTrackingFrame,
@@ -230,7 +230,7 @@ export function ArSprintTrackerDialog({
 
   useEffect(() => {
     if (!open) return;
-    return onDiagnosticLog((message) => setDiagLog((log) => [...log, message].slice(-8)));
+    return pollDiagnosticLog(setDiagLog);
   }, [open]);
 
   useEffect(() => {

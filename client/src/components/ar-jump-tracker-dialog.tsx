@@ -13,7 +13,7 @@ import {
   stopArRecording,
   onBodyTracking,
   onSessionError,
-  onDiagnosticLog,
+  pollDiagnosticLog,
   setArCameraActive,
   framingHint,
   type BodyTrackingFrame,
@@ -55,6 +55,21 @@ import { videoFilenameForBlob } from "@/lib/video-recording";
  * metrics.landingAsymmetry; not yet surfaced anywhere downstream (no
  * schema column, no UI badge) -- that's the next step once there's real
  * data to design the display around. */
+
+// Attached to a saved video when summarizeJumpSet couldn't produce a
+// trustworthy read -- see EMPTY_REP_METRICS's own comment in
+// ar-bar-tracker-dialog.tsx for why this is all zero/empty rather than
+// fabricated numbers.
+const EMPTY_JUMP_METRICS: JumpSetMetrics = {
+  bestJumpHeightCm: 0,
+  bestHorizontalDistanceCm: null,
+  avgGroundContactSeconds: null,
+  reactiveStrengthIndex: null,
+  repBreakdown: [],
+  pathTrace: [],
+  formFaults: [],
+};
+
 export function ArJumpTrackerDialog({
   open,
   onOpenChange,
@@ -147,7 +162,7 @@ export function ArJumpTrackerDialog({
 
   useEffect(() => {
     if (!open) return;
-    return onDiagnosticLog((message) => setDiagLog((log) => [...log, message].slice(-8)));
+    return pollDiagnosticLog(setDiagLog);
   }, [open]);
 
   useEffect(() => {
@@ -187,7 +202,34 @@ export function ArJumpTrackerDialog({
     setTracking(false);
     const metrics = summarizeJumpSet(traceRef.current, heightIn);
     if (!metrics) {
-      toast.error("Couldn't get a clean read -- make sure your feet leave the ground clearly in frame.");
+      // The rep-tracking read failing doesn't mean the recording itself
+      // failed -- see ar-bar-tracker-dialog.tsx's stopTracking for the full
+      // reasoning: a real clip still gets saved and attached even with no
+      // trustworthy numbers, rather than thrown away just because the
+      // automatic read couldn't be trusted. Dialog only closes when a video
+      // actually got captured this way; with nothing saved at all, it stays
+      // open exactly like before so the athlete can just retry the set.
+      if (recordVideo) {
+        setSaving(true);
+        try {
+          const blob = await stopArRecording();
+          const formData = new FormData();
+          formData.append("video", blob, videoFilenameForBlob(blob, "form-check"));
+          const res = await apiRequest("POST", "/api/athlete/form-video", formData);
+          const { url } = await res.json();
+          toast.error(
+            "Couldn't get a clean read -- make sure your feet leave the ground clearly in frame. (Video saved for your coach.)",
+          );
+          onCapture(EMPTY_JUMP_METRICS, url);
+          onOpenChange(false);
+        } catch {
+          toast.error("Couldn't get a clean read -- make sure your feet leave the ground clearly in frame.");
+        } finally {
+          setSaving(false);
+        }
+      } else {
+        toast.error("Couldn't get a clean read -- make sure your feet leave the ground clearly in frame.");
+      }
       return;
     }
     // See the "jump" context branch in detectFormFaults -- landing valgus

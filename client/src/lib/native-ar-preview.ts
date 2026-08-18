@@ -60,6 +60,7 @@ interface ArCameraPreviewPlugin {
   startRecording(): Promise<void>;
   stopRecording(): Promise<{ path: string }>;
   resetImplementTracking(): Promise<void>;
+  getDiagnosticLog(): Promise<{ log: string[] }>;
   addListener(
     eventName: "bodyTracking",
     listenerFunc: (frame: BodyTrackingFrame) => void,
@@ -67,10 +68,6 @@ interface ArCameraPreviewPlugin {
   addListener(
     eventName: "sessionError",
     listenerFunc: (error: { message: string }) => void,
-  ): Promise<PluginListenerHandle>;
-  addListener(
-    eventName: "diagnosticLog",
-    listenerFunc: (entry: { message: string }) => void,
   ): Promise<PluginListenerHandle>;
 }
 
@@ -96,24 +93,36 @@ export function setArCameraActive(active: boolean): void {
 }
 
 // A step-by-step execution trace off the native start() call (see
-// logDiag in ArCameraPreviewPlugin.swift) -- answers "does start() even
-// run to completion, and if not, exactly which line does it stop at"
-// directly on the phone screen, since that's the one thing a static
-// supported/permission snapshot (isArBodyTrackingSupported) can never
-// show: what happens AFTER the call is made, not just its return value.
-export function onDiagnosticLog(callback: (message: string) => void): () => void {
-  let handle: PluginListenerHandle | null = null;
+// logDiag/diagLogBuffer/getDiagnosticLog in ArCameraPreviewPlugin.swift) --
+// answers "does start() even run to completion, and if not, exactly which
+// line does it stop at" directly on the phone screen, since that's the one
+// thing a static supported/permission snapshot (isArBodyTrackingSupported)
+// can never show: what happens AFTER the call is made, not just its return
+// value. Polls the native buffer on an interval rather than a live event
+// listener -- a live "diagnosticLog" event fired before this JS side
+// finished its own async addListener registration (itself a bridge
+// round-trip) would be lost with nothing to show for it, which is exactly
+// what happened on a real device: zero lines, not even "start() called"
+// (logDiag's own first call, at the very top of start()). Polling the
+// buffer can't lose anything that way -- whatever's been posted since the
+// buffer was last cleared is there on every poll regardless of timing.
+export function pollDiagnosticLog(callback: (log: string[]) => void): () => void {
   let cancelled = false;
-  ArCameraPreview.addListener("diagnosticLog", (entry) => callback(entry.message)).then((h) => {
-    if (cancelled) {
-      h.remove();
-      return;
-    }
-    handle = h;
-  });
+  const interval = setInterval(() => {
+    if (cancelled) return;
+    ArCameraPreview.getDiagnosticLog()
+      .then(({ log }) => {
+        if (!cancelled) callback(log);
+      })
+      .catch(() => {
+        // Native call itself failing here just means nothing new to show --
+        // not worth surfacing as its own error on top of whatever the rest
+        // of the diagnostic strip already reports.
+      });
+  }, 400);
   return () => {
     cancelled = true;
-    handle?.remove();
+    clearInterval(interval);
   };
 }
 
