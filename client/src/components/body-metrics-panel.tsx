@@ -93,7 +93,7 @@ export function BodyMetricsPanel({
         }}
         className="grid grid-cols-2 gap-2"
       >
-        <div className="space-y-1.5">
+        <div className="min-w-0 space-y-1.5">
           <Label htmlFor="coach-metric-date">Date</Label>
           <Input
             id="coach-metric-date"
@@ -101,9 +101,10 @@ export function BodyMetricsPanel({
             value={date}
             onChange={(e) => setDate(e.target.value)}
             max={new Date().toISOString().slice(0, 10)}
+            className="w-full min-w-0"
           />
         </div>
-        <div className="space-y-1.5">
+        <div className="min-w-0 space-y-1.5">
           <Label htmlFor="coach-metric-weight">Weight</Label>
           <Input
             id="coach-metric-weight"
@@ -116,7 +117,7 @@ export function BodyMetricsPanel({
             placeholder="185"
           />
         </div>
-        <div className="space-y-1.5">
+        <div className="min-w-0 space-y-1.5">
           <Label htmlFor="coach-metric-unit">Unit</Label>
           <Select value={weightUnit} onValueChange={(v) => setWeightUnit(v as "lbs" | "kg")}>
             <SelectTrigger id="coach-metric-unit">
