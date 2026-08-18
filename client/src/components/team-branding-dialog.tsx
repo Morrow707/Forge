@@ -16,6 +16,7 @@ import { apiRequest, getJson, resolveApiUrl, ApiError } from "@/lib/queryClient"
 import { toast } from "sonner";
 import { ImagePlus, Trash2, Palette } from "lucide-react";
 import { COACH_FEATURE_FIELDS, type CoachFeature } from "@shared/team-features";
+import { contrastForegroundHsl } from "@/lib/color";
 
 const QUERY_KEY = ["/api/coach/branding"];
 
@@ -234,6 +235,54 @@ export function TeamBrandingDialog({
                     placeholder="#RRGGBB"
                     className="font-mono text-xs"
                   />
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Preview</Label>
+              <p className="text-xs text-muted-foreground">
+                Updates live as you type/pick, before you save -- this is exactly what shows in
+                the app header for you and your athletes.
+              </p>
+              <div className="overflow-hidden rounded-md border border-border">
+                <div
+                  className="flex items-center gap-2 bg-surface px-3 py-2.5"
+                  style={{ borderBottom: `3px solid ${secondaryColor || SWATCH_FALLBACK_SECONDARY}` }}
+                >
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-md">
+                    {data?.logoUrl ? (
+                      <img
+                        src={resolveApiUrl(data.logoUrl)}
+                        alt=""
+                        className="h-full w-full object-contain"
+                      />
+                    ) : (
+                      <ImagePlus className="h-5 w-5 text-muted-foreground" />
+                    )}
+                  </div>
+                  <div className="flex flex-col leading-none">
+                    <span className="font-display text-sm font-extrabold uppercase tracking-wider">
+                      {teamName || "Forge"}
+                    </span>
+                    {(teamName || data?.logoUrl) && (
+                      <span className="text-[8px] font-medium uppercase tracking-wide text-muted-foreground">
+                        Powered by Forge Performance
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 bg-background px-3 py-2.5">
+                  <span
+                    className="rounded-md px-3 py-1.5 text-xs font-semibold"
+                    style={{
+                      backgroundColor: primaryColor || SWATCH_FALLBACK_PRIMARY,
+                      color: `hsl(${contrastForegroundHsl(primaryColor || SWATCH_FALLBACK_PRIMARY)})`,
+                    }}
+                  >
+                    Active tab
+                  </span>
+                  <span className="text-xs text-muted-foreground">Your accent color</span>
                 </div>
               </div>
             </div>
