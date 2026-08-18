@@ -72,7 +72,6 @@ import {
   RefreshCw,
   GitCompare,
   Share2,
-  Headphones,
   Copy,
   ShieldAlert,
 } from "lucide-react";
@@ -84,7 +83,6 @@ import { ReadinessBanner } from "@/components/readiness-banner";
 import { ModifiedWorkoutBanner } from "@/components/modified-workout-banner";
 import { WellnessGate } from "@/components/wellness-gate";
 import { CaraTimer } from "@/components/cara-timer";
-import { HandsFreeMode } from "@/components/hands-free-mode";
 
 type ExerciseInfo = {
   id: number;
@@ -753,7 +751,6 @@ export function WorkoutPage({
   const [hydrated, setHydrated] = useState(false);
   const [pageIndex, setPageIndex] = useState(0);
   const [viewMode, setViewMode] = useState<"overview" | "logging">("overview");
-  const [handsFreeActive, setHandsFreeActive] = useState(false);
   const restTimerRef = useRef<RestTimerHandle>(null);
 
   // Keep the screen awake for the length of an active logging session --
@@ -1557,17 +1554,6 @@ export function WorkoutPage({
                   <ArrowLeft className="h-3.5 w-3.5" />
                   Back to full workout
                 </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    autosaveNow(items);
-                    setHandsFreeActive(true);
-                  }}
-                  className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
-                >
-                  <Headphones className="h-3.5 w-3.5" />
-                  Hands-Free
-                </button>
               </div>
               {currentPage.kind === "corrective" && (
                 <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-cyan-400">
@@ -1681,14 +1667,6 @@ export function WorkoutPage({
             </button>
           </div>
         </div>
-      )}
-      {handsFreeActive && (
-        <HandsFreeMode
-          items={items}
-          unit={unit}
-          onUpdateSet={(key, setNumber, patch) => updateSet(key, setNumber, patch, { immediate: true })}
-          onClose={() => setHandsFreeActive(false)}
-        />
       )}
       </AppShell>
     </>
