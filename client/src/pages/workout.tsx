@@ -22,6 +22,7 @@ import { useWakeLock } from "@/hooks/use-wake-lock";
 import { WorkoutCommentThread } from "@/components/workout-comment-thread";
 import { BarTrackerDialog } from "@/components/bar-tracker-dialog";
 import { ArJumpTrackerDialog } from "@/components/ar-jump-tracker-dialog";
+import { ArBarTrackerDialog } from "@/components/ar-bar-tracker-dialog";
 import { isArPreviewPlatform } from "@/lib/native-ar-preview";
 import { FormVideoRecorderDialog } from "@/components/form-video-recorder-dialog";
 import { SetVideoPreviewDialog, SetVideoCompareDialog } from "@/components/set-video-review";
@@ -2395,6 +2396,27 @@ function ExerciseLogContent({
                 heightIn={user?.heightIn}
                 movementType={item.movementType}
                 equipment={item.equipment}
+                recordVideo={mergedTracking}
+                onCapture={handleTrackerCapture}
+              />
+            );
+          }
+
+          // bar_path/full: needs a held implement tracked, unlike jump --
+          // see ArBarTrackerDialog's own file comment for what's ported vs
+          // deliberately still MediaPipe-only in this first pass.
+          if (isArPreviewPlatform() && (item.trackingLevel === "bar_path" || item.trackingLevel === "full")) {
+            return (
+              <ArBarTrackerDialog
+                open={trackingSet !== null}
+                onOpenChange={(open) => !open && setTrackingSet(null)}
+                mode={item.trackingLevel}
+                exerciseName={item.exerciseName}
+                movementType={item.movementType}
+                equipment={item.equipment}
+                heightIn={user?.heightIn}
+                targetReps={parseTargetReps(item.prescribedReps)}
+                loadKg={loadKg}
                 recordVideo={mergedTracking}
                 onCapture={handleTrackerCapture}
               />

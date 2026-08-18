@@ -9,6 +9,24 @@ import { Filesystem } from "@capacitor/filesystem";
 // composed from bodyAnchor.transform + skeleton.jointModelTransforms).
 export type BodyTrackingJoint = { name: string; x: number; y: number; z: number };
 
+// See ArImplementTracker.swift's own file comment for the algorithm --
+// world is the found pixel unprojected onto a plane at the tracked hand's
+// own depth (real meters, not a shoulder-width guess), confidence ramps up
+// over a few continuously-locked frames the same way jump/lift-mode
+// confidence already does, and color is a real RGB sample for
+// implement-appearance-memory.ts's existing corroboration feature. Missing
+// (not just null) on any frame the tracker has no lock to report --
+// ArCameraPreviewPlugin.swift omits the dictionary key entirely rather than
+// setting it to a JSON null, so check with `== null`/falsiness, not
+// `!== null`.
+export type ImplementTrackResult = {
+  x: number;
+  y: number;
+  z: number;
+  confidence: number;
+  color?: { r: number; g: number; b: number };
+};
+
 export type BodyTrackingFrame =
   | { tracked: false }
   | {
@@ -23,15 +41,22 @@ export type BodyTrackingFrame =
       hipScreenX: number;
       hipScreenY: number;
       joints: BodyTrackingJoint[];
+      // Only present when startArPreview was called with trackImplement:true
+      // (a bar-path/full mode dialog) -- see ArImplementTracker's own file
+      // comment. null/missing on a frame with no lock, same as the tracker
+      // itself returning null rather than a stale/guessed position.
+      leftImplement?: ImplementTrackResult | null;
+      rightImplement?: ImplementTrackResult | null;
     };
 
 interface ArCameraPreviewPlugin {
   isSupported(): Promise<{ supported: boolean }>;
-  start(rect: PreviewRect): Promise<void>;
+  start(options: PreviewRect & { trackImplement?: boolean }): Promise<void>;
   stop(): Promise<void>;
   updateRect(rect: PreviewRect): Promise<void>;
   startRecording(): Promise<void>;
   stopRecording(): Promise<{ path: string }>;
+  resetImplementTracking(): Promise<void>;
   addListener(
     eventName: "bodyTracking",
     listenerFunc: (frame: BodyTrackingFrame) => void,
@@ -59,9 +84,12 @@ export async function isArBodyTrackingSupported(): Promise<boolean> {
 // rect is the target DOM element's on-screen box in CSS points (not device
 // pixels -- UIKit views are sized in points, same unit getBoundingClientRect
 // already reports), so callers can pass an element's own
-// getBoundingClientRect() straight through.
-export async function startArPreview(rect: PreviewRect): Promise<void> {
-  await ArCameraPreview.start(rect);
+// getBoundingClientRect() straight through. trackImplement turns on
+// ArImplementTracker for both hands (see its own file comment) -- leave it
+// off (the default) for any dialog with nothing held; only a bar-path/full
+// mode dialog needs it.
+export async function startArPreview(rect: PreviewRect, trackImplement?: boolean): Promise<void> {
+  await ArCameraPreview.start({ ...rect, trackImplement });
 }
 
 export async function stopArPreview(): Promise<void> {
@@ -92,6 +120,15 @@ export async function stopArRecording(): Promise<Blob> {
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
   return new Blob([bytes], { type: "video/mp4" });
+}
+
+// Clears both hands' held locks -- called at the start of each new set
+// within one AR session (a bar-tracker dialog's own startTracking(), same
+// call site implement-tracking.ts's own ImplementTracker.reset() already
+// runs from), so a lock from the previous set's last rep can't carry into
+// the first frame of the next one.
+export async function resetArImplementTracking(): Promise<void> {
+  await ArCameraPreview.resetImplementTracking();
 }
 
 // Rough, uncalibrated thresholds for "can this distance actually produce

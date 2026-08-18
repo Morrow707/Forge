@@ -480,6 +480,7 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
                 leftImplementResult = leftImplementTracker.track(
                     frame: frame, wristImageX: Double(screen.x), wristImageY: Double(screen.y), wristWorld: leftWristWorld
                 )
+                leftImplementResult = plausibilityGated(leftImplementResult, against: leftWristWorld, tracker: leftImplementTracker)
             } else {
                 leftImplementTracker.rejectLock()
             }
@@ -490,6 +491,7 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
                 rightImplementResult = rightImplementTracker.track(
                     frame: frame, wristImageX: Double(screen.x), wristImageY: Double(screen.y), wristWorld: rightWristWorld
                 )
+                rightImplementResult = plausibilityGated(rightImplementResult, against: rightWristWorld, tracker: rightImplementTracker)
             } else {
                 rightImplementTracker.rejectLock()
             }
@@ -555,6 +557,30 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
             return pos
         }
         return nil
+    }
+
+    // No real implement plausibly sits this far from the hand holding it --
+    // same 0.35m ceiling and same reasoning as bar-tracker-dialog.tsx's own
+    // MAX_PLAUSIBLE_GRIP_OFFSET_M check, just moved to where the tracked
+    // result is actually produced instead of round-tripped through JS to
+    // apply it there. A found "implement" this far from the wrist is
+    // something else that happened to move nearby (a spotter's hand, a
+    // reflection) -- reject the lock so the NEXT frame reacquires clean
+    // rather than continuing to dead-reckon from a position just proven
+    // wrong.
+    private let maxPlausibleGripOffsetM: Float = 0.35
+
+    private func plausibilityGated(
+        _ result: ArImplementTracker.TrackResult?,
+        against wristWorld: SIMD3<Float>,
+        tracker: ArImplementTracker
+    ) -> ArImplementTracker.TrackResult? {
+        guard let result = result else { return nil }
+        guard simd_distance(result.world, wristWorld) <= maxPlausibleGripOffsetM else {
+            tracker.rejectLock()
+            return nil
+        }
+        return result
     }
 
     private func implementResultDict(_ result: ArImplementTracker.TrackResult?) -> [String: Any]? {
