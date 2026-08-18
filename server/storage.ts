@@ -2877,6 +2877,82 @@ Based on this athlete's actual rate of improvement, suggest a realistic target v
       }
     }
 
+    // Bar-speed trend from the athlete's most recent camera-tracked session
+    // -- a measured, same-day leading indicator of residual fatigue the
+    // wellness check-in alone can't surface (sleep/soreness/stress are all
+    // self-reported). Grouped per exercise since peak velocity isn't
+    // comparable across different lifts, using the same
+    // programExerciseId/correctiveId key pattern
+    // evaluateLegDriveAsymmetryFlags uses. Only reported when the most
+    // recent session's average is meaningfully below that exercise's own
+    // baseline from at least two earlier tracked sessions -- a few percent
+    // of day-to-day noise, or a single prior data point, isn't a signal
+    // worth mentioning.
+    const velByExercise = new Map<
+      string,
+      {
+        programExerciseId: number | null;
+        correctiveId: number | null;
+        samples: { date: string; peakVelocityMps: number }[];
+      }
+    >();
+    for (const log of recentLogs) {
+      for (const entry of log.entries) {
+        if (entry.programExerciseId == null && entry.correctiveId == null) continue;
+        const key = entry.programExerciseId != null ? `pe:${entry.programExerciseId}` : `c:${entry.correctiveId}`;
+        let bucket = velByExercise.get(key);
+        if (!bucket) {
+          bucket = {
+            programExerciseId: entry.programExerciseId ?? null,
+            correctiveId: entry.correctiveId ?? null,
+            samples: [],
+          };
+          velByExercise.set(key, bucket);
+        }
+        for (const s of entry.sets) {
+          if (s.peakVelocityMps != null) bucket.samples.push({ date: log.date, peakVelocityMps: s.peakVelocityMps });
+        }
+      }
+    }
+    let velocityTrendText = "no camera-tracked bar speed data yet";
+    const mostRecentTrackedDate = Array.from(velByExercise.values())
+      .flatMap((b) => b.samples.map((s) => s.date))
+      .sort()
+      .at(-1);
+    if (mostRecentTrackedDate) {
+      let worstDrop: { exerciseName: string; percentDown: number; recentAvg: number; baselineAvg: number } | null =
+        null;
+      for (const bucket of velByExercise.values()) {
+        const recent = bucket.samples.filter((s) => s.date === mostRecentTrackedDate);
+        const baseline = bucket.samples.filter((s) => s.date !== mostRecentTrackedDate);
+        const baselineDates = new Set(baseline.map((s) => s.date));
+        if (recent.length === 0 || baseline.length < 3 || baselineDates.size < 2) continue;
+        const recentAvg = recent.reduce((sum, s) => sum + s.peakVelocityMps, 0) / recent.length;
+        const baselineAvg = baseline.reduce((sum, s) => sum + s.peakVelocityMps, 0) / baseline.length;
+        const percentDown = Math.round(((baselineAvg - recentAvg) / baselineAvg) * 100);
+        if (percentDown >= 10 && (!worstDrop || percentDown > worstDrop.percentDown)) {
+          let exerciseName = "an exercise";
+          if (bucket.programExerciseId != null) {
+            const pe = await db.query.programExercises.findFirst({
+              where: eq(programExercises.id, bucket.programExerciseId),
+              with: { exercise: true },
+            });
+            if (pe) exerciseName = pe.exercise.name;
+          } else if (bucket.correctiveId != null) {
+            const c = await db.query.assignmentCorrectives.findFirst({
+              where: eq(assignmentCorrectives.id, bucket.correctiveId),
+              with: { exercise: true },
+            });
+            if (c) exerciseName = c.exercise.name;
+          }
+          worstDrop = { exerciseName, percentDown, recentAvg, baselineAvg };
+        }
+      }
+      velocityTrendText = worstDrop
+        ? `${worstDrop.exerciseName} peak bar speed in their last tracked session was ${worstDrop.percentDown}% below their recent typical (${worstDrop.recentAvg.toFixed(2)} vs ${worstDrop.baselineAvg.toFixed(2)} m/s) -- possible residual fatigue`
+        : "in line with their recent typical";
+    }
+
     const { score, level } = computeReadiness(wellness);
     const painNote =
       wellness.bodyPainMap.length > 0
@@ -2896,11 +2972,12 @@ Athlete readiness snapshot for today:
 - Most recent logged RPEs, newest first (out of 10, higher = harder effort): ${
       recentRpes.length > 0 ? recentRpes.join(", ") : "no recent RPE data logged"
     }
+- Bar speed trend from camera-tracked lifts (not shown to the athlete directly): ${velocityTrendText}
 
 Write ONE short note (1-2 sentences, plain language, talking directly to the athlete as "you") on how to approach today's training given their recovery state, recent training stress, and profile/analytics above (e.g. ease off if their training-load risk is elevated or they have a flagged joint/asymmetry). Be specific and direct, not generic filler. Do not mention or invent specific exercises, weights, or sets -- you were not given today's workout. If a body area was flagged as painful, acknowledge it and suggest they mention it to their coach rather than offering a medical workaround yourself. No preamble or sign-off, just the note itself.`;
 
     const text = await askClaude(
-      "You are a concise, expert strength and conditioning coach's assistant. You write short, direct, athlete-facing readiness notes grounded only in the data you're given -- never invent data, never give medical advice, never diagnose. If soreness or stress data suggests something concerning, tell the athlete to flag it with their coach rather than offering a workaround. Some of the athlete's profile is coach-only analytics (health status, joint ROM flags, leg-drive asymmetry, training-load/ACWR risk) they don't see on their own dashboard -- use it to shape the note's tone and advice, but never name those specific coach-only labels/numbers in the note itself (e.g. never write \"your ACWR is red\" or \"you're flagged as hurt\"); phrase any influence from it generally instead.",
+      "You are a concise, expert strength and conditioning coach's assistant. You write short, direct, athlete-facing readiness notes grounded only in the data you're given -- never invent data, never give medical advice, never diagnose. If soreness or stress data suggests something concerning, tell the athlete to flag it with their coach rather than offering a workaround. Some of the athlete's profile is coach-only analytics (health status, joint ROM flags, leg-drive asymmetry, training-load/ACWR risk, camera-tracked bar speed trend) they don't see on their own dashboard -- use it to shape the note's tone and advice, but never name those specific coach-only labels/numbers in the note itself (e.g. never write \"your ACWR is red\" or \"your bar speed dropped 22%\" or \"you're flagged as hurt\"); phrase any influence from it generally instead.",
       [{ role: "user", content: prompt }],
       { maxTokens: 350 },
     );
