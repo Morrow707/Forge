@@ -51,7 +51,8 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
         CAPPluginMethod(name: "startRecording", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "stopRecording", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "resetImplementTracking", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "getDiagnosticLog", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "getDiagnosticLog", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "requestCameraPermission", returnType: CAPPluginReturnPromise)
     ]
 
     // Buffered, not just live-broadcast -- a "diagnosticLog" JS event fired
@@ -137,6 +138,24 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
             "supported": ARBodyTrackingConfiguration.isSupported,
             "cameraPermission": status,
         ])
+    }
+
+    // A standalone, minimal isolation test -- does nothing but ask for
+    // camera access, completely bypassing start()/continueStart()'s
+    // ARSCNView setup, session configuration, and everything else that
+    // could theoretically hang or crash silently before ever reaching
+    // AVCaptureDevice.requestAccess. If this doesn't prompt either, the
+    // problem is at the plugin-dispatch/bridge level itself, not buried in
+    // start()'s own complexity -- logDiag calls on both sides of the
+    // request make that unambiguous either way.
+    @objc func requestCameraPermission(_ call: CAPPluginCall) {
+        logDiag("requestCameraPermission() called")
+        AVCaptureDevice.requestAccess(for: .video) { granted in
+            DispatchQueue.main.async {
+                self.logDiag("requestCameraPermission result: \(granted ? "granted" : "denied")")
+                call.resolve(["granted": granted])
+            }
+        }
     }
 
     // A step-by-step execution trace, not a single one-time snapshot --

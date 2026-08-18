@@ -61,6 +61,7 @@ interface ArCameraPreviewPlugin {
   stopRecording(): Promise<{ path: string }>;
   resetImplementTracking(): Promise<void>;
   getDiagnosticLog(): Promise<{ log: string[] }>;
+  requestCameraPermission(): Promise<{ granted: boolean }>;
   addListener(
     eventName: "bodyTracking",
     listenerFunc: (frame: BodyTrackingFrame) => void,
@@ -124,6 +125,16 @@ export function pollDiagnosticLog(callback: (log: string[]) => void): () => void
     cancelled = true;
     clearInterval(interval);
   };
+}
+
+// A standalone, minimal isolation test -- see requestCameraPermission's own
+// comment in ArCameraPreviewPlugin.swift. Does nothing but ask for camera
+// access, bypassing start()'s own ARSCNView/session setup entirely, so a
+// tap on this can prove (or rule out) that the plugin-dispatch/bridge path
+// itself works, independent of whatever start() is or isn't doing.
+export async function requestCameraPermission(): Promise<boolean> {
+  const { granted } = await ArCameraPreview.requestCameraPermission();
+  return granted;
 }
 
 // error is populated only on the "the native call itself failed" path (a

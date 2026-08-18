@@ -24,6 +24,7 @@ import {
   onBodyTracking,
   onSessionError,
   pollDiagnosticLog,
+  requestCameraPermission,
   setArCameraActive,
   framingHint,
   type BodyTrackingFrame,
@@ -527,6 +528,24 @@ export function ArSprintTrackerDialog({
                     {line}
                   </div>
                 ))}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDiagLog((log) => [...log, "JS: tapped Request Camera Access"]);
+                    requestCameraPermission()
+                      .then((granted) => {
+                        setDiagLog((log) => [...log, `JS: requestCameraPermission resolved: ${granted}`]);
+                        setCameraPermission(granted ? "authorized" : "denied");
+                      })
+                      .catch((err) => {
+                        const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+                        setDiagLog((log) => [...log, `JS: requestCameraPermission rejected: ${detail}`]);
+                      });
+                  }}
+                  className="mt-1 w-full rounded bg-primary px-2 py-1 text-center font-sans text-[10px] font-bold text-primary-foreground"
+                >
+                  Request Camera Access
+                </button>
               </div>
 
               <canvas
