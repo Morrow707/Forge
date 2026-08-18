@@ -25,6 +25,17 @@ services:
         value: production
       - key: SESSION_SECRET
         generateValue: true
+      # Master switch for every "no real billing yet" paywall stub in
+      # server/routes.ts (testingUnlockAllPaywalls) -- Free Agent AI access
+      # (strengthAi/skillsAi entitlements), Coaches Corner content, and Class
+      # lesson purchases. "true" comps everyone so no new coach or Free Agent
+      # signup hits a 402 during this pre-billing period; the underlying
+      # paywall functions (hasAthletePaidForAiAccess, hasCoachesCornerAccess,
+      # the lesson-purchase route) are untouched and start enforcing again
+      # the moment this is set back to "false" or removed -- see
+      # testingUnlockAllPaywalls's own comment for the exact routes it gates.
+      - key: PAYWALLS_DISABLED
+        value: "true"
       - key: DATABASE_URL
         fromDatabase:
           name: forge-db
