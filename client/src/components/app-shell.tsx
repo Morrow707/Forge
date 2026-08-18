@@ -1,9 +1,9 @@
-import { type ReactNode, useState } from "react";
+import { type ReactNode, type CSSProperties, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Capacitor } from "@capacitor/core";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
-import { getJson } from "@/lib/queryClient";
+import { getJson, resolveApiUrl } from "@/lib/queryClient";
 import {
   Dumbbell,
   Users,
@@ -30,6 +30,7 @@ import {
   TrendingUp,
   FileText,
   Camera,
+  Palette,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -38,7 +39,10 @@ import { EditMyProfileDialog } from "@/components/edit-my-profile-dialog";
 import { NotificationBell } from "@/components/notification-bell";
 import { NotificationSettingsDialog } from "@/components/notification-settings-dialog";
 import { CoachingStaffDialog } from "@/components/coaching-staff-dialog";
+import { TeamBrandingDialog } from "@/components/team-branding-dialog";
 import { NonIosTrackingNotice } from "@/components/non-ios-tracking-warning";
+import { hexToHslTriplet, contrastForegroundHsl } from "@/lib/color";
+import { COACH_FEATURE_FIELDS, type CoachFeature } from "@shared/team-features";
 
 type NavItem = {
   href: string;
@@ -140,7 +144,55 @@ export function AppShell({
   const [profileOpen, setProfileOpen] = useState(false);
   const [notifSettingsOpen, setNotifSettingsOpen] = useState(false);
   const [coachingStaffOpen, setCoachingStaffOpen] = useState(false);
+  const [teamBrandingOpen, setTeamBrandingOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+
+  // Resolved server-side: a coach's own team settings, or their athlete's
+  // coach's -- see getEffectiveBrandingForUser in storage.ts. Drives the
+  // header logo/name/colors below and which optional nav sections show.
+  const { data: branding } = useQuery<{
+    teamName: string | null;
+    logoUrl: string | null;
+    primaryColor: string | null;
+    secondaryColor: string | null;
+    features: Record<CoachFeature, boolean>;
+  }>({
+    queryKey: ["/api/branding/me"],
+    queryFn: () => getJson("/api/branding/me"),
+    enabled: !!user,
+    staleTime: 5 * 60_000,
+  });
+
+  // hsl(var(--primary)) etc. (see tailwind.config.ts) read these as CSS
+  // custom properties, so overriding them here on the shell's own root
+  // recolors every bg-primary/text-primary/border-ring use inside it --
+  // active nav tab, buttons, focus rings -- without touching each
+  // component individually. Only --primary/--ring/--accent (and their
+  // foregrounds) move; --secondary stays the app's own dark neutral
+  // surface color (see index.css) since a huge amount of unrelated chrome
+  // assumes that's always a dark gray, not a coach's second brand color.
+  const brandStyle = (() => {
+    if (!branding?.primaryColor) return undefined;
+    const triplet = hexToHslTriplet(branding.primaryColor);
+    if (!triplet) return undefined;
+    const fg = contrastForegroundHsl(branding.primaryColor);
+    return {
+      "--primary": triplet,
+      "--primary-foreground": fg,
+      "--ring": triplet,
+      "--accent": triplet,
+      "--accent-foreground": fg,
+    } as CSSProperties;
+  })();
+
+  const disabledNavHrefs = new Set<string>();
+  if (branding?.features) {
+    for (const field of COACH_FEATURE_FIELDS) {
+      if (branding.features[field.key] === false) {
+        for (const href of field.navHrefs) disabledNavHrefs.add(href);
+      }
+    }
+  }
 
   // Same query (and cache) the athlete dashboard's empty-state uses to
   // decide Free Agent status -- zero coaches linked. The "My Programs" and
@@ -155,7 +207,7 @@ export function AppShell({
   });
   const isFreeAgent = user?.role === "athlete" && !!coaches && coaches.length === 0;
 
-  const nav =
+  const nav = (
     user?.role === "coach"
       ? coachNav
       : user?.role === "admin"
@@ -165,7 +217,8 @@ export function AppShell({
           // chat) has nobody on the other end -- same "would just 403/be
           // empty" reasoning as the coached-athlete filter below.
           ? athleteNav.filter((item) => item.href !== "/athlete/team-board")
-          : athleteNav.filter((item) => item.href !== "/athlete/programs" && item.href !== "/athlete/chat");
+          : athleteNav.filter((item) => item.href !== "/athlete/programs" && item.href !== "/athlete/chat")
+  ).filter((item) => !disabledNavHrefs.has(item.href));
 
   const teamBoardUnreadUrl =
     user?.role === "coach"
@@ -191,20 +244,46 @@ export function AppShell({
         "min-h-screen bg-background",
         fitScreen && "flex flex-col md:h-screen md:overflow-hidden",
       )}
+      style={brandStyle}
     >
       {/* paddingTop here (not on the inner row) so the surface color itself
           extends up under the iPhone notch/Dynamic Island instead of leaving
           a gap -- only the content below needs pushing down, not the bar. */}
       <div
         className="sticky top-0 z-30 shrink-0 border-b border-border bg-surface"
-        style={{ paddingTop: "env(safe-area-inset-top)" }}
+        style={{
+          paddingTop: "env(safe-area-inset-top)",
+          // A coach's second brand color gets exactly this one bounded,
+          // cosmetic use -- nothing structural reads --secondary here, so
+          // there's no risk of it fighting the dark-neutral --secondary
+          // token the rest of the app's chrome assumes (see brandStyle's
+          // own comment above).
+          ...(branding?.secondaryColor
+            ? { borderBottomColor: branding.secondaryColor, borderBottomWidth: 3 }
+            : {}),
+        }}
       >
         <div className="flex items-center justify-between gap-3 px-4 py-3 md:px-8">
           <div className="flex items-center gap-2">
-            <ForgeMark className="h-8 w-8 shrink-0 rounded-md" />
-            <span className="font-display text-xl font-extrabold uppercase tracking-wider">
-              Forge
-            </span>
+            {branding?.logoUrl ? (
+              <img
+                src={resolveApiUrl(branding.logoUrl)}
+                alt={branding.teamName ?? "Team logo"}
+                className="h-8 w-8 shrink-0 rounded-md object-contain"
+              />
+            ) : (
+              <ForgeMark className="h-8 w-8 shrink-0 rounded-md" />
+            )}
+            <div className="flex flex-col leading-none">
+              <span className="font-display text-xl font-extrabold uppercase tracking-wider">
+                {branding?.teamName || "Forge"}
+              </span>
+              {(branding?.teamName || branding?.logoUrl) && (
+                <span className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Powered by Forge Performance
+                </span>
+              )}
+            </div>
           </div>
 
           {/* justify-start, not center -- when every item fits this looks
@@ -341,6 +420,20 @@ export function AppShell({
                       Coaching staff
                     </button>
                   )}
+                  {user?.role === "coach" && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setTeamBrandingOpen(true);
+                        setAccountMenuOpen(false);
+                      }}
+                      className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-foreground hover:bg-surface-elevated"
+                    >
+                      <Palette className="h-4 w-4" />
+                      Team branding
+                    </button>
+                  )}
                   {Capacitor.getPlatform() === "ios" && (
                     <Link
                       href="/dev/ar-preview-test"
@@ -469,6 +562,19 @@ export function AppShell({
                     Staff
                   </button>
                 )}
+                {user?.role === "coach" && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTeamBrandingOpen(true);
+                      setMobileNavOpen(false);
+                    }}
+                    className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground"
+                  >
+                    <Palette className="h-4 w-4" />
+                    Branding
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => logoutMutation.mutate()}
@@ -522,6 +628,9 @@ export function AppShell({
       )}
       {user?.role === "coach" && (
         <CoachingStaffDialog open={coachingStaffOpen} onOpenChange={setCoachingStaffOpen} />
+      )}
+      {user?.role === "coach" && (
+        <TeamBrandingDialog open={teamBrandingOpen} onOpenChange={setTeamBrandingOpen} />
       )}
       <NonIosTrackingNotice />
     </div>

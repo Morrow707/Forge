@@ -127,6 +127,7 @@ import { computeForceVelocityProfile, type LoadVelocityPoint } from "@shared/for
 import { ALL_TROPHY_DEFINITIONS } from "@shared/achievements";
 import { FAULT_CORRECTIVE_KEYWORDS } from "@shared/fault-correctives";
 import { resolveSkillFaultThresholds, type SkillFaultThresholds } from "@shared/skill-fault-thresholds";
+import { resolveCoachFeatures, type CoachFeature } from "@shared/team-features";
 import { askClaude, askClaudeStructured, askClaudeWithTools, askClaudeVision, askClaudeVisionStructured, aiEnabled, fastModel, type SystemPrompt } from "./ai";
 import { deleteUploadedFile, statUploadedFile } from "./uploaded-files";
 import { eq, and, inArray, asc, desc, lt, lte, gte, gt, isNull, isNotNull, sql, ilike } from "drizzle-orm";
@@ -1569,6 +1570,114 @@ export const storage = {
       where: eq(coachStaff.primaryCoachId, primaryId),
     });
     return Array.from(new Set([primaryId, ...staffRows.map((r) => r.staffCoachId)]));
+  },
+
+  // Same staff resolution as getEffectiveCoachIds, but just the primary id --
+  // team branding/feature-toggles are a whole-staff concept (a school's
+  // colors don't change depending on which assistant coach is logged in),
+  // so both read and write always go through the primary account's row
+  // regardless of which staff member is asking.
+  async getPrimaryCoachId(coachId: number): Promise<number> {
+    const asStaff = await db.query.coachStaff.findFirst({
+      where: eq(coachStaff.staffCoachId, coachId),
+    });
+    return asStaff?.primaryCoachId ?? coachId;
+  },
+
+  // ---------- Team branding + feature toggles (white-label) ----------
+
+  async getCoachBranding(coachId: number) {
+    const primaryId = await this.getPrimaryCoachId(coachId);
+    const coach = await db.query.users.findFirst({ where: eq(users.id, primaryId) });
+    return {
+      teamName: coach?.brandTeamName ?? null,
+      logoUrl: coach?.brandLogoUrl ?? null,
+      primaryColor: coach?.brandPrimaryColor ?? null,
+      secondaryColor: coach?.brandSecondaryColor ?? null,
+    };
+  },
+
+  async updateCoachBranding(
+    coachId: number,
+    values: { teamName?: string; primaryColor?: string; secondaryColor?: string },
+  ) {
+    const primaryId = await this.getPrimaryCoachId(coachId);
+    const patch: Record<string, string | null> = {};
+    // "" clears the field back to unbranded -- see updateCoachBrandingSchema's
+    // own comment in shared/schema.ts.
+    if (values.teamName !== undefined) patch.brandTeamName = values.teamName || null;
+    if (values.primaryColor !== undefined) patch.brandPrimaryColor = values.primaryColor || null;
+    if (values.secondaryColor !== undefined) patch.brandSecondaryColor = values.secondaryColor || null;
+    if (Object.keys(patch).length > 0) {
+      await db.update(users).set(patch).where(eq(users.id, primaryId));
+    }
+    return this.getCoachBranding(primaryId);
+  },
+
+  async updateCoachLogo(coachId: number, logoUrl: string | null) {
+    const primaryId = await this.getPrimaryCoachId(coachId);
+    const previous = await db.query.users.findFirst({ where: eq(users.id, primaryId) });
+    await db.update(users).set({ brandLogoUrl: logoUrl }).where(eq(users.id, primaryId));
+    // Old logo file becomes unreferenced the moment a new one (or null)
+    // replaces it -- same cleanup-on-replace reasoning as every other
+    // uploaded-file column in this file (see deleteUploadedFile's own
+    // callers), otherwise every re-upload leaks a file on disk forever.
+    if (previous?.brandLogoUrl && previous.brandLogoUrl !== logoUrl) {
+      await deleteUploadedFile(previous.brandLogoUrl);
+    }
+    return this.getCoachBranding(primaryId);
+  },
+
+  async getCoachFeatures(coachId: number): Promise<Record<CoachFeature, boolean>> {
+    const primaryId = await this.getPrimaryCoachId(coachId);
+    const coach = await db.query.users.findFirst({ where: eq(users.id, primaryId) });
+    return resolveCoachFeatures(coach?.enabledFeatures);
+  },
+
+  async updateCoachFeatures(
+    coachId: number,
+    values: Partial<Record<CoachFeature, boolean>>,
+  ): Promise<Record<CoachFeature, boolean>> {
+    const primaryId = await this.getPrimaryCoachId(coachId);
+    const coach = await db.query.users.findFirst({ where: eq(users.id, primaryId) });
+    const merged = { ...(coach?.enabledFeatures ?? {}), ...values };
+    await db.update(users).set({ enabledFeatures: merged }).where(eq(users.id, primaryId));
+    return resolveCoachFeatures(merged);
+  },
+
+  // Single resolver for "what should this logged-in user's app look like" --
+  // a coach (or staff coach) gets their own team's settings, an athlete
+  // inherits their (first linked) coach's, and anyone else (admin, or a
+  // Free Agent with no coach yet) gets the unbranded default. AppShell and
+  // the pre-login-adjacent surfaces call this through one endpoint
+  // (GET /api/branding/me) rather than each needing to know the
+  // coach/athlete branching themselves.
+  async getEffectiveBrandingForUser(userId: number, role: string) {
+    if (role === "coach") {
+      const [branding, features] = await Promise.all([
+        this.getCoachBranding(userId),
+        this.getCoachFeatures(userId),
+      ]);
+      return { ...branding, features };
+    }
+    if (role === "athlete") {
+      const coaches = await this.getCoachesForAthlete(userId);
+      const coachId = coaches[0]?.id;
+      if (coachId) {
+        const [branding, features] = await Promise.all([
+          this.getCoachBranding(coachId),
+          this.getCoachFeatures(coachId),
+        ]);
+        return { ...branding, features };
+      }
+    }
+    return {
+      teamName: null,
+      logoUrl: null,
+      primaryColor: null,
+      secondaryColor: null,
+      features: resolveCoachFeatures(null),
+    };
   },
 
   // Scoped to the whole staff (not just the exact coachId passed in) so an

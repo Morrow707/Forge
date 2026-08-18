@@ -71,6 +71,8 @@ import {
   enrollInClassSchema,
   classCoachSettingsInputSchema,
   academyTrackStructureSchema,
+  updateCoachBrandingSchema,
+  updateCoachFeaturesSchema,
 } from "@shared/schema";
 import { computeReadiness } from "@shared/wellness";
 import { z } from "zod";
@@ -229,6 +231,38 @@ const uploadLessonImage = multer({
   fileFilter: (_req, file, cb) => {
     if (!IMAGE_EXTENSION_BY_MIME[file.mimetype.split(";")[0].trim().toLowerCase()]) {
       return cb(new Error("Unsupported image format"));
+    }
+    cb(null, true);
+  },
+});
+
+// A coach/team's uploaded logo -- shown in the app header and, once
+// branded, in place of the Forge mark throughout that coach's own and
+// their athletes' views (see AppShell). SVG is excluded here (unlike lesson
+// images) since it's rendered directly in a fixed-size header slot rather
+// than a content page -- rasterized formats avoid an uploaded SVG carrying
+// unexpected embedded content into that spot.
+const TEAM_LOGO_EXTENSION_BY_MIME: Record<string, string> = {
+  "image/png": ".png",
+  "image/jpeg": ".jpg",
+  "image/webp": ".webp",
+};
+
+const TEAM_LOGOS_DIR = path.join(process.cwd(), "server", "uploads", "team-logos");
+fs.mkdirSync(TEAM_LOGOS_DIR, { recursive: true });
+
+const uploadTeamLogo = multer({
+  storage: multer.diskStorage({
+    destination: TEAM_LOGOS_DIR,
+    filename: (_req, file, cb) => {
+      const ext = TEAM_LOGO_EXTENSION_BY_MIME[file.mimetype.split(";")[0].trim().toLowerCase()];
+      cb(null, `${crypto.randomUUID()}${ext ?? ""}`);
+    },
+  }),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (!TEAM_LOGO_EXTENSION_BY_MIME[file.mimetype.split(";")[0].trim().toLowerCase()]) {
+      return cb(new Error("Unsupported image format -- use PNG, JPEG, or WebP"));
     }
     cb(null, true);
   },
@@ -2871,6 +2905,66 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const user = currentUser(req);
     const effective = await storage.resetSkillFaultThresholdsForCoach(user.id);
     res.json({ effective, isCustomized: false });
+  });
+
+  // ---------------- Team branding + feature toggles (white-label) ----------------
+
+  // Any logged-in role -- a coach reads their own team's settings, an
+  // athlete reads their coach's, an admin (or a Free Agent with no coach
+  // yet) gets the unbranded default. See getEffectiveBrandingForUser's own
+  // comment in storage.ts for the full resolution.
+  app.get("/api/branding/me", requireAuth, async (req, res) => {
+    const user = currentUser(req);
+    const branding = await storage.getEffectiveBrandingForUser(user.id, user.role);
+    res.json(branding);
+  });
+
+  app.get("/api/coach/branding", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const [branding, features] = await Promise.all([
+      storage.getCoachBranding(user.id),
+      storage.getCoachFeatures(user.id),
+    ]);
+    res.json({ ...branding, features });
+  });
+
+  app.put("/api/coach/branding", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = updateCoachBrandingSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const branding = await storage.updateCoachBranding(user.id, parsed.data);
+    res.json(branding);
+  });
+
+  app.post("/api/coach/branding/logo", requireRole("coach"), (req, res) => {
+    uploadTeamLogo.single("logo")(req, res, async (err: unknown) => {
+      if (err) {
+        const message = err instanceof Error ? err.message : "Upload failed";
+        return res.status(400).json({ message });
+      }
+      if (!req.file) return res.status(400).json({ message: "No image file provided" });
+      const user = currentUser(req);
+      const branding = await storage.updateCoachLogo(user.id, `/uploads/team-logos/${req.file.filename}`);
+      res.status(201).json(branding);
+    });
+  });
+
+  app.delete("/api/coach/branding/logo", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const branding = await storage.updateCoachLogo(user.id, null);
+    res.json(branding);
+  });
+
+  app.put("/api/coach/features", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = updateCoachFeaturesSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const effective = await storage.updateCoachFeatures(user.id, parsed.data);
+    res.json(effective);
   });
 
   app.get("/api/coach/cara/compliance", requireRole("coach"), async (req, res) => {

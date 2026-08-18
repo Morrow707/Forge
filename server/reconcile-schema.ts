@@ -1187,6 +1187,12 @@ CREATE TABLE IF NOT EXISTS "provisional_athletes" (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "provisional_athletes_claim_code_idx" ON "provisional_athletes" ("claim_code");
 CREATE INDEX IF NOT EXISTS "provisional_athletes_coach_idx" ON "provisional_athletes" ("coach_id");
+
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "brand_team_name" text;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "brand_logo_url" text;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "brand_primary_color" text;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "brand_secondary_color" text;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "enabled_features" json;
 `;
 
 async function main() {
