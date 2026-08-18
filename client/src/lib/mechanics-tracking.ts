@@ -21,7 +21,7 @@
 // single frame, or angles derived that way across frames, never absolute
 // position.
 import type { Landmark, NormalizedLandmark } from "@mediapipe/tasks-vision";
-import { POSE_LANDMARKS, percentile } from "./pose-tracking";
+import { POSE_LANDMARKS, percentile, worldAngleAtVertex, worldVerticalSign, frameKneeAngles } from "./pose-tracking";
 import {
   DEFAULT_SKILL_FAULT_THRESHOLDS,
   type SkillFaultThresholds,
@@ -138,6 +138,29 @@ export type MechanicsResult = {
   // frames isn't. Ground-plane (x/z) only, not y, so a foot briefly higher
   // off the ground mid-stride doesn't inflate the reading.
   strideLengthM: number | null;
+  // "throw" mode only -- the throwing-side elbow's own joint angle (180 =
+  // fully extended) at the release frame (same frame armSlot reads). A
+  // basketball jump shot's "elbow-to-wrist extension at the set point" is
+  // the same measurement as a QB's arm slot reuses this frame for, just a
+  // different joint.
+  elbowExtensionDeg: number | null;
+  // "throw" mode only -- throwing-side wrist height above the hip midpoint
+  // at the release frame, in meters. Relative to the hips, not the floor:
+  // world landmarks are hip-centered (see the module comment), so there's
+  // no absolute floor reference to report an off-the-ground height from,
+  // but "how far above the hips" is still a real, comparable-across-
+  // captures number for a jump shot's release point.
+  releaseHeightM: number | null;
+  // "throw" mode only -- longest low-speed dwell in the throwing wrist's
+  // motion before the release frame, in seconds. A basketball shot's "set
+  // point" pause before the explosive release into the shot; null when no
+  // such dwell is detectable (most throws/swings don't have one).
+  setPointPauseSeconds: number | null;
+  // Deepest (smallest) knee angle reached anywhere in the capture, both
+  // modes -- a jump shot's load depth before the jump, using the same
+  // joint-angle reasoning pose-tracking.ts's detectFormFaults already
+  // applies to a squat's depth.
+  kneeBendDepthDeg: number | null;
 };
 
 export function analyzeMechanics(
@@ -180,6 +203,9 @@ export function analyzeMechanics(
   let armPeakTimeMs: number | null = null;
   let armSlot: ArmSlot | null = null;
   let peakWristSpeedMps: number | null = null;
+  let elbowExtensionDeg: number | null = null;
+  let releaseHeightM: number | null = null;
+  let setPointPauseSeconds: number | null = null;
   if (mode === "throw") {
     // The throwing arm is whichever wrist travels the most during the
     // capture -- the glove-side arm barely moves by comparison, so this
@@ -205,14 +231,20 @@ export function analyzeMechanics(
     // "95th percentile, not a raw max" protection hipShoulderSeparationDeg
     // above uses, since a single noisy frame (a brief tracking jitter)
     // would otherwise spike a max reading the same way it would there.
-    const wristSpeeds: number[] = [];
+    // Timestamped (not a bare number array) so setPointPauseSeconds below
+    // can find WHEN the low-speed dwell happened, not just that one did.
+    const wristSpeedSamples: { t: number; speed: number }[] = [];
     for (let i = 1; i < frames.length; i++) {
       const a = frames[i - 1].worldLandmarks[wristIdx];
       const b = frames[i].worldLandmarks[wristIdx];
       const dtSeconds = (frames[i].t - frames[i - 1].t) / 1000;
       if (!a || !b || dtSeconds <= 0) continue;
-      wristSpeeds.push(Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z) / dtSeconds);
+      wristSpeedSamples.push({
+        t: (frames[i].t + frames[i - 1].t) / 2,
+        speed: Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z) / dtSeconds,
+      });
     }
+    const wristSpeeds = wristSpeedSamples.map((s) => s.speed);
     peakWristSpeedMps = wristSpeeds.length > 0 ? Math.round(percentile(wristSpeeds, 0.95) * 100) / 100 : null;
 
     const armAnglesRaw = frames.map((f) => {
@@ -243,8 +275,55 @@ export function analyzeMechanics(
           label: angleAtRelease >= 60 ? "overhand" : angleAtRelease >= 30 ? "three-quarter" : "sidearm",
         };
       }
+
+      // Elbow joint angle and wrist-above-hip height at the same release
+      // frame armSlot reads -- a jump shot's "elbow extension" and
+      // "release height" at the set point, sharing the frame-selection
+      // logic above rather than re-deriving a release moment twice.
+      const releaseFrame = frames[closestIdx];
+      const shoulder = releaseFrame.worldLandmarks[shoulderIdx];
+      const elbow = releaseFrame.worldLandmarks[elbowIdx];
+      const wrist = releaseFrame.worldLandmarks[wristIdx];
+      if (shoulder && elbow && wrist) {
+        elbowExtensionDeg = Math.round(worldAngleAtVertex(shoulder, elbow, wrist));
+      }
+      const lHip = releaseFrame.worldLandmarks[POSE_LANDMARKS.LEFT_HIP];
+      const rHip = releaseFrame.worldLandmarks[POSE_LANDMARKS.RIGHT_HIP];
+      const sign = worldVerticalSign(releaseFrame.worldLandmarks);
+      if (wrist && lHip && rHip && sign != null) {
+        const hipMidY = (lHip.y + rHip.y) / 2;
+        releaseHeightM = Math.round(sign * (hipMidY - wrist.y) * 100) / 100;
+      }
+
+      // "Set point" pause: the longest contiguous dwell, strictly before
+      // release, where wrist speed stays under a fifth of the eventual
+      // peak -- the near-stop in the shooting motion before the explosive
+      // push into release. Most throws/swings have no such dwell (a
+      // baseball throw is closer to one continuous acceleration), so this
+      // stays null far more often than not, which is the honest answer for
+      // those, not a forced zero.
+      if (wristSpeedSamples.length > 2 && peakWristSpeedMps != null) {
+        const pauseThreshold = peakWristSpeedMps * 0.2;
+        let bestRunSeconds = 0;
+        let runStartT: number | null = null;
+        for (const sample of wristSpeedSamples) {
+          if (sample.t >= armPeakTimeMs) break;
+          if (sample.speed <= pauseThreshold) {
+            if (runStartT == null) runStartT = sample.t;
+            bestRunSeconds = Math.max(bestRunSeconds, (sample.t - runStartT) / 1000);
+          } else {
+            runStartT = null;
+          }
+        }
+        setPointPauseSeconds = bestRunSeconds > 0.1 ? Math.round(bestRunSeconds * 100) / 100 : null;
+      }
     }
   }
+
+  const kneeAnglesAllFrames = frames.flatMap((f) => frameKneeAngles(f.worldLandmarks));
+  // 5th percentile, not a raw min -- same noise protection as everywhere
+  // else in this function (and detectFormFaults' own minKneeAngle).
+  const kneeBendDepthDeg = kneeAnglesAllFrames.length > 0 ? Math.round(percentile(kneeAnglesAllFrames, 0.05)) : null;
 
   const wellSequenced =
     hipPeakTimeMs0 != null &&
@@ -302,6 +381,10 @@ export function analyzeMechanics(
     armSlot,
     peakWristSpeedMps,
     strideLengthM,
+    elbowExtensionDeg,
+    releaseHeightM,
+    setPointPauseSeconds,
+    kneeBendDepthDeg,
   };
 }
 

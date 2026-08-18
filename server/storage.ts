@@ -4441,6 +4441,10 @@ ${athleteContext}
         wellSequenced: input.wellSequenced ?? null,
         peakWristSpeedMps: input.peakWristSpeedMps ?? null,
         strideLengthM: input.strideLengthM ?? null,
+        elbowExtensionDeg: input.elbowExtensionDeg ?? null,
+        releaseHeightM: input.releaseHeightM ?? null,
+        setPointPauseSeconds: input.setPointPauseSeconds ?? null,
+        kneeBendDepthDeg: input.kneeBendDepthDeg ?? null,
         videoUrl: input.videoUrl ?? null,
       })
       .returning();
@@ -10896,6 +10900,10 @@ ${catalog}`;
         wellSequenced: skillSessionLogs.wellSequenced,
         peakWristSpeedMps: skillSessionLogs.peakWristSpeedMps,
         strideLengthM: skillSessionLogs.strideLengthM,
+        elbowExtensionDeg: skillSessionLogs.elbowExtensionDeg,
+        releaseHeightM: skillSessionLogs.releaseHeightM,
+        setPointPauseSeconds: skillSessionLogs.setPointPauseSeconds,
+        kneeBendDepthDeg: skillSessionLogs.kneeBendDepthDeg,
         videoUrl: skillSessionLogs.videoUrl,
       })
       .from(skillSessionLogs)

@@ -76,6 +76,7 @@ export function MechanicsTrackerDialog({
   onOpenChange,
   drillName,
   mode,
+  actionLabel: actionLabelProp,
   skillAssignmentId,
   skillProgramDayId,
   skillProgramExerciseId,
@@ -84,6 +85,11 @@ export function MechanicsTrackerDialog({
   onOpenChange: (open: boolean) => void;
   drillName: string;
   mode: MechanicsMode;
+  // Overrides the default "Throw"/"Swing" button/toast wording -- a jump
+  // shot uses "throw" mode (same one-arm-extends-and-releases metrics) but
+  // shouldn't say "Throw saved" for a shot. Defaults to the mode-derived
+  // word for every caller that doesn't pass this.
+  actionLabel?: string;
   skillAssignmentId: number;
   skillProgramDayId: number;
   skillProgramExerciseId: number;
@@ -424,9 +430,13 @@ export function MechanicsTrackerDialog({
         wellSequenced: result.sequencing.wellSequenced,
         peakWristSpeedMps: result.peakWristSpeedMps,
         strideLengthM: result.strideLengthM,
+        elbowExtensionDeg: result.elbowExtensionDeg,
+        releaseHeightM: result.releaseHeightM,
+        setPointPauseSeconds: result.setPointPauseSeconds,
+        kneeBendDepthDeg: result.kneeBendDepthDeg,
         videoUrl: uploadedVideoUrl,
       });
-      toast.success(mode === "throw" ? "Throw saved" : "Swing saved");
+      toast.success(`${actionLabel} saved`);
       onOpenChange(false);
     } catch (err: any) {
       toast.error(err.message || "Could not save this session");
@@ -435,7 +445,7 @@ export function MechanicsTrackerDialog({
     }
   }
 
-  const actionLabel = mode === "throw" ? "Throw" : "Swing";
+  const actionLabel = actionLabelProp ?? (mode === "throw" ? "Throw" : "Swing");
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -584,6 +594,30 @@ export function MechanicsTrackerDialog({
                 <div>
                   <p className="text-xl font-bold">{result.strideLengthM} m</p>
                   <p className="text-xs text-muted-foreground">Stride length</p>
+                </div>
+              )}
+              {result.elbowExtensionDeg != null && (
+                <div>
+                  <p className="text-xl font-bold">{result.elbowExtensionDeg}°</p>
+                  <p className="text-xs text-muted-foreground">Elbow extension at release</p>
+                </div>
+              )}
+              {result.releaseHeightM != null && (
+                <div>
+                  <p className="text-xl font-bold">{result.releaseHeightM} m</p>
+                  <p className="text-xs text-muted-foreground">Release height above hips</p>
+                </div>
+              )}
+              {result.setPointPauseSeconds != null && (
+                <div>
+                  <p className="text-xl font-bold">{result.setPointPauseSeconds}s</p>
+                  <p className="text-xs text-muted-foreground">Set-point pause</p>
+                </div>
+              )}
+              {result.kneeBendDepthDeg != null && (
+                <div>
+                  <p className="text-xl font-bold">{result.kneeBendDepthDeg}°</p>
+                  <p className="text-xs text-muted-foreground">Knee-bend load depth</p>
                 </div>
               )}
               <div>

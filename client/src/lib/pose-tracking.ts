@@ -772,7 +772,10 @@ export function percentile(values: number[], p: number): number {
 // computeRepDepths (aggregates within one rep's time window). Takes world
 // landmarks, not image-space -- see worldAngleAtVertex's own comment for
 // why a knee's real inside angle needs the same fix torso lean/bar tilt got.
-function frameKneeAngles(worldLm: Landmark[]): number[] {
+// Exported so mechanics-tracking.ts can reuse it for a jump shot's
+// knee-bend load depth, the same generic joint-angle reasoning as
+// worldAngleAtVertex itself.
+export function frameKneeAngles(worldLm: Landmark[]): number[] {
   const angles: number[] = [];
   const lHip = worldLm[POSE_LANDMARKS.LEFT_HIP];
   const rHip = worldLm[POSE_LANDMARKS.RIGHT_HIP];

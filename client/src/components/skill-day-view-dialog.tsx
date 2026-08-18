@@ -43,12 +43,23 @@ type SkillDayInfo = {
   }[];
 };
 
-// Hitting is the only skillType that's a "swing" -- Throwing/Pitching are
-// throws (and get the arm-slot metric on top), everything else
-// (Fielding/Catching/Footwork) defaults to the generic rotational-movement
-// "swing" analysis since it's still a body-mechanics capture either way.
+// Hitting is the only skillType that's a "swing" -- Throwing/Pitching/
+// Shooting are throws (and get the arm-slot/release-point metrics on top --
+// a jump shot's release is the same one-arm-extends-and-releases motion a
+// throw is, just releasing into a shot instead of a pitch), everything
+// else (Fielding/Catching/Footwork) defaults to the generic rotational-
+// movement "swing" analysis since it's still a body-mechanics capture
+// either way.
 function mechanicsModeFor(skillType: string): MechanicsMode {
-  return skillType === "Throwing" || skillType === "Pitching" ? "throw" : "swing";
+  return skillType === "Throwing" || skillType === "Pitching" || skillType === "Shooting" ? "throw" : "swing";
+}
+
+// Button/toast wording for the same skillType -- "Shooting" shares Throwing/
+// Pitching's "throw" mode metrics but shouldn't say "Record Throw" for a
+// jump shot.
+function mechanicsActionLabelFor(skillType: string): string {
+  if (skillType === "Shooting") return "Shot";
+  return mechanicsModeFor(skillType) === "throw" ? "Throw" : "Swing";
 }
 
 /** Opened when a coach or athlete taps a teal skill entry on the calendar.
@@ -263,7 +274,7 @@ export function SkillDayViewDialog({
                           onClick={() => setMechanicsExercise(ex)}
                         >
                           <Activity className="h-3.5 w-3.5" />
-                          Record {mechanicsModeFor(ex.skillType) === "throw" ? "Throw" : "Swing"}
+                          Record {mechanicsActionLabelFor(ex.skillType)}
                         </Button>
                       )}
                       {(!ex.trackingLevel || ex.trackingLevel === "none") &&
@@ -350,6 +361,7 @@ export function SkillDayViewDialog({
           onOpenChange={(o) => !o && setMechanicsExercise(null)}
           drillName={mechanicsExercise.name}
           mode={mechanicsModeFor(mechanicsExercise.skillType)}
+          actionLabel={mechanicsActionLabelFor(mechanicsExercise.skillType)}
           skillAssignmentId={source.skillAssignmentId}
           skillProgramDayId={source.skillProgramDayId}
           skillProgramExerciseId={mechanicsExercise.id}

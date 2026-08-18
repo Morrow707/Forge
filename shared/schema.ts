@@ -766,6 +766,14 @@ export const skillSessionLogs = pgTable(
     // Both modes -- see MechanicsResult.strideLengthM's own comment in
     // mechanics-tracking.ts.
     strideLengthM: real("stride_length_m"),
+    // "throw" mode only -- see the matching MechanicsResult fields' own
+    // comments in mechanics-tracking.ts (a basketball jump shot's release
+    // point, sharing the "throw" mode arm-slot/peak-wrist-speed metrics).
+    elbowExtensionDeg: real("elbow_extension_deg"),
+    releaseHeightM: real("release_height_m"),
+    setPointPauseSeconds: real("set_point_pause_seconds"),
+    // Both modes -- see MechanicsResult.kneeBendDepthDeg's own comment.
+    kneeBendDepthDeg: real("knee_bend_depth_deg"),
     // Both optional opt-ins, not part of a normal capture -- the athlete
     // must explicitly choose to keep the clip (see the privacy comment on
     // MechanicsTrackerDialog; a capture is ephemeral by default) before
@@ -3458,6 +3466,13 @@ export const createSkillSessionLogSchema = z.object({
   peakWristSpeedMps: z.number().min(0).max(60).optional().nullable(),
   // Both modes -- see MechanicsResult.strideLengthM's own comment.
   strideLengthM: z.number().min(0).max(3).optional().nullable(),
+  // "throw" mode only -- see the matching MechanicsResult fields' own
+  // comments in mechanics-tracking.ts.
+  elbowExtensionDeg: z.number().min(0).max(180).optional().nullable(),
+  releaseHeightM: z.number().min(-1).max(2).optional().nullable(),
+  setPointPauseSeconds: z.number().min(0).max(10).optional().nullable(),
+  // Both modes -- see MechanicsResult.kneeBendDepthDeg's own comment.
+  kneeBendDepthDeg: z.number().min(0).max(180).optional().nullable(),
   // Opt-in only -- set when the athlete explicitly chooses "Save clip for
   // coach" after a capture (see MechanicsTrackerDialog); absent otherwise.
   videoUrl: z.string().trim().max(500).optional().nullable(),
