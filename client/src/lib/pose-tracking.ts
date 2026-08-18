@@ -535,6 +535,91 @@ export function isPlausibleHumanFrame(landmarks: NormalizedLandmark[]): boolean 
   });
 }
 
+// A hip-midpoint jump this large between one tracked frame and the next
+// isn't a real athlete moving fast -- even an explosive jump's hips cover
+// real ground more slowly, frame to frame at a typical tracking rate, than
+// this. It's the signature of a different failure: MediaPipe's PoseLandmarker
+// runs in single-subject mode (numPoses: 1, see getPoseLandmarker), which
+// only ever reports ONE person, but has no notion of "the same one as last
+// frame" -- a spotter stepping into frame, or a background lifter walking
+// past, can make its one detection jump onto them instead of continuing to
+// track the athlete. Untuned against real footage (this environment has no
+// camera to test against) -- treat as a starting point to revisit once
+// tried against a real gym-noise scene.
+const MAX_SUBJECT_JUMP_FRACTION = 0.3;
+
+// Companion check to isPlausibleHumanFrame, not a replacement -- that one
+// asks "is this a person at all," this one asks "is it plausibly the SAME
+// one as the last confidently-tracked frame." Hip midpoint specifically
+// because it's present and stable in every mode this file serves
+// (bar-tracker-dialog.tsx tracks wrists, sprint/mechanics track hips
+// directly) -- a mode-specific point like a single wrist would go
+// untracked, and therefore unusable for this check, on frames where only
+// the OTHER wrist happens to be visible. lastConfidentLandmarks is null
+// before the first confident frame of a set, which this passes
+// permissively (nothing to compare continuity against yet). Exported for
+// SubjectContinuityGate below, which is what callers actually use.
+export function isPlausibleSubjectContinuity(
+  landmarks: NormalizedLandmark[],
+  lastConfidentLandmarks: NormalizedLandmark[] | null,
+): boolean {
+  if (!lastConfidentLandmarks) return true;
+  const lHip = landmarks[POSE_LANDMARKS.LEFT_HIP];
+  const rHip = landmarks[POSE_LANDMARKS.RIGHT_HIP];
+  const prevLHip = lastConfidentLandmarks[POSE_LANDMARKS.LEFT_HIP];
+  const prevRHip = lastConfidentLandmarks[POSE_LANDMARKS.RIGHT_HIP];
+  if (!visible(lHip) || !visible(rHip) || !visible(prevLHip) || !visible(prevRHip)) return true;
+  const hipX = (lHip.x + rHip.x) / 2;
+  const hipY = (lHip.y + rHip.y) / 2;
+  const prevHipX = (prevLHip.x + prevRHip.x) / 2;
+  const prevHipY = (prevLHip.y + prevRHip.y) / 2;
+  return Math.hypot(hipX - prevHipX, hipY - prevHipY) <= MAX_SUBJECT_JUMP_FRACTION;
+}
+
+// A real person detected in frame, just implausibly far from where the
+// gate last confidently saw someone, for this many consecutive frames --
+// past this, the gate stops comparing against what's now a stale position
+// and lets the next confident frame re-lock fresh. Without this, a genuine
+// gap (the athlete steps out of frame and back in somewhere else, not a
+// different person replacing them) would leave the gate permanently
+// rejecting them, since nothing would ever again be "close enough" to a
+// position from before the gap.
+const CONTINUITY_RESET_STREAK = 20;
+
+// Stateful wrapper combining isPlausibleHumanFrame + isPlausibleSubjectContinuity
+// into the one call site every MediaPipe tracker dialog's tick loop already
+// makes -- same "instantiate once per dialog via useRef, call .reset() at
+// the same points PoseSmoother/ImplementTracker already get reset" pattern
+// this codebase already uses for exactly this kind of per-set tracking state.
+export class SubjectContinuityGate {
+  private lastConfident: NormalizedLandmark[] | null = null;
+  private rejectStreak = 0;
+
+  reset(): void {
+    this.lastConfident = null;
+    this.rejectStreak = 0;
+  }
+
+  // rawLandmarks straight off detection.landmarks[0] -- returns them back
+  // unchanged if trusted, null otherwise (same shape the old inline
+  // `rawLandmarks && isPlausibleHumanFrame(rawLandmarks) ? rawLandmarks :
+  // null` ternary already produced, so this is a drop-in replacement for it).
+  admit(rawLandmarks: NormalizedLandmark[] | null): NormalizedLandmark[] | null {
+    if (!rawLandmarks || !isPlausibleHumanFrame(rawLandmarks)) return null;
+    if (!isPlausibleSubjectContinuity(rawLandmarks, this.lastConfident)) {
+      this.rejectStreak += 1;
+      if (this.rejectStreak > CONTINUITY_RESET_STREAK) {
+        this.lastConfident = null;
+        this.rejectStreak = 0;
+      }
+      return null;
+    }
+    this.lastConfident = rawLandmarks;
+    this.rejectStreak = 0;
+    return rawLandmarks;
+  }
+}
+
 export type CameraAlignment = { aligned: boolean; reason: "ok" | "angled" | "axial" | "unknown" };
 
 // Whether the camera is roughly square to the athlete rather than shooting

@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { apiRequest, getJson, resolveApiUrl } from "@/lib/queryClient";
-import { getPoseLandmarker, isPlausibleHumanFrame, MIN_VISIBILITY } from "@/lib/pose-tracking";
+import { getPoseLandmarker, SubjectContinuityGate, MIN_VISIBILITY } from "@/lib/pose-tracking";
 import { lockCameraExposure } from "@/lib/camera-exposure";
 import { ensureCameraPermission, onAppForeground, onAppBackground } from "@/lib/native-camera";
 import {
@@ -99,6 +99,11 @@ export function MechanicsTrackerDialog({
   }
   const rafRef = useRef<number | null>(null);
   const poseLandmarkerRef = useRef<PoseLandmarker | null>(null);
+  // See SubjectContinuityGate's own comment -- rejects a detection that
+  // jumped implausibly far to plausibly still be the athlete being filmed
+  // (a teammate stepping into frame mid-swing would otherwise be able to
+  // hijack the tracked hip/shoulder angles).
+  const subjectGateRef = useRef(new SubjectContinuityGate());
   const lastVideoTimeRef = useRef(-1);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -147,6 +152,7 @@ export function MechanicsTrackerDialog({
     chunksRef.current = [];
     recordedBlobRef.current = null;
     lastVideoTimeRef.current = -1;
+    subjectGateRef.current.reset();
 
     setModelLoading(true);
     getPoseLandmarker()
@@ -280,12 +286,13 @@ export function MechanicsTrackerDialog({
     const now = performance.now();
     const detection = landmarker.detectForVideo(video, now);
     // Rejects a confident-looking detection on something that isn't
-    // actually a person (a box, a rack, a shadow) -- same torso-presence
-    // gate bar-tracker-dialog.tsx's live tick loop uses, applied here since
-    // this dialog runs its own independent detectForVideo loop rather than
-    // sharing that one.
+    // actually a person (a box, a rack, a shadow), and one that jumped
+    // implausibly far to plausibly still be the same athlete -- same
+    // SubjectContinuityGate bar-tracker-dialog.tsx's live tick loop uses,
+    // applied here since this dialog runs its own independent
+    // detectForVideo loop rather than sharing that one.
     const rawLandmarks = detection.landmarks[0] ?? null;
-    const landmarks = rawLandmarks && isPlausibleHumanFrame(rawLandmarks) ? rawLandmarks : null;
+    const landmarks = subjectGateRef.current.admit(rawLandmarks);
     const worldLandmarks = landmarks ? (detection.worldLandmarks[0] ?? null) : null;
 
     if (ctx) {

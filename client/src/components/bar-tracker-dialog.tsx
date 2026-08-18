@@ -59,7 +59,7 @@ import {
   guessMovementPattern,
   worldVerticalSign,
   isFullBodyInFrame,
-  isPlausibleHumanFrame,
+  SubjectContinuityGate,
   computeHeightScaleCorrection,
   scaleWorldLandmarks,
   assessCameraAlignment,
@@ -422,6 +422,11 @@ export function BarTrackerDialog({
   // (already used for the saved metrics) isn't a good fit for a live view.
   const displaySmootherRef = useRef(new PoseSmoother());
   const worldSmootherRef = useRef(new PoseSmoother());
+  // Shared across previewTick and tick -- continuity should carry straight
+  // through the setup-to-tracking transition, not reset at Start Set, since
+  // it's still the same athlete standing in the same spot. See
+  // SubjectContinuityGate's own comment.
+  const subjectGateRef = useRef(new SubjectContinuityGate());
   const lastDisplayYRef = useRef<number | null>(null);
   const lastDisplayTRef = useRef(0);
   // Automatic pre-flight readiness: how long the athlete has continuously
@@ -615,6 +620,7 @@ export function BarTrackerDialog({
     verticalSignRef.current = 1;
     displaySmootherRef.current.reset();
     worldSmootherRef.current.reset();
+    subjectGateRef.current.reset();
     implementTrackerRef.current.reset();
     leftImplementTrackerRef.current.reset();
     rightImplementTrackerRef.current.reset();
@@ -875,14 +881,16 @@ export function BarTrackerDialog({
       ctx.clearRect(0, 0, overlay.width, overlay.height);
       const now = performance.now();
       const detection = landmarker.detectForVideo(video, now);
-      // isPlausibleHumanFrame rejects a low-confidence "person" MediaPipe
+      // subjectGateRef rejects both a low-confidence "person" MediaPipe
       // occasionally reports on a strongly rectangular, loosely humanoid
       // object in frame (a plyo box's stacked edges, a rack's hanging
-      // straps -- see its own comment) -- without this, that false
+      // straps) and a detection that jumped implausibly far to plausibly
+      // still be the same athlete (a spotter, a background lifter) -- see
+      // SubjectContinuityGate's own comment. Without this, either false
       // detection gets drawn as a skeleton right here in the setup preview,
       // before tracking has even started.
       const rawLandmarks = detection.landmarks[0] ?? null;
-      const landmarks = rawLandmarks && isPlausibleHumanFrame(rawLandmarks) ? rawLandmarks : null;
+      const landmarks = subjectGateRef.current.admit(rawLandmarks);
       const worldLandmarks = landmarks ? (detection.worldLandmarks[0] ?? null) : null;
       if (landmarks) {
         // Smoothed purely for the on-screen preview -- see one-euro-filter.ts.
@@ -1105,13 +1113,13 @@ export function BarTrackerDialog({
 
     const now = performance.now();
     const detection = landmarker.detectForVideo(video, now);
-    // See isPlausibleHumanFrame's own comment (and its use in the setup
-    // preview tick above) -- the same false-positive-on-an-object risk
-    // applies for every frame of an already-running set, not just once at
-    // auto-start, so this frame's detection is discarded (reads as "body
+    // See subjectGateRef's own comment (and its use in the setup preview
+    // tick above) -- the same false-positive-on-an-object and wrong-subject
+    // risks apply for every frame of an already-running set, not just once
+    // at auto-start, so this frame's detection is discarded (reads as "body
     // not visible" below) rather than trusted just because it's non-null.
     const rawLandmarks = detection.landmarks[0] ?? null;
-    const landmarks = rawLandmarks && isPlausibleHumanFrame(rawLandmarks) ? rawLandmarks : null;
+    const landmarks = subjectGateRef.current.admit(rawLandmarks);
     // Scaled once here, right off detectForVideo, so every downstream
     // consumer within this tick (bar-point derivation, tilt, grip width,
     // joint angles, jump ankle point -- all still just read `worldLandmarks`

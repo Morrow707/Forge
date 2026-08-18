@@ -164,6 +164,25 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
             // for body tracking, if any, isn't available through this
             // configuration.
             configuration.planeDetection = [.horizontal]
+            // Explicit high-fps capture, not whatever Apple's default
+            // happens to be -- a fast movement (a bar's concentric drive, a
+            // sprint stride) motion-blurs measurably worse at a
+            // conservative default rate than at the fastest rate this
+            // device's body-tracking pipeline actually supports.
+            // supportedVideoFormats is declared on the ARConfiguration base
+            // class (unlike sceneReconstruction above, which genuinely
+            // isn't inherited -- see that comment), so every subclass,
+            // including ARBodyTrackingConfiguration, has a real list to
+            // pick from here. One thing this can't promise: ARKit's body-
+            // tracking joint UPDATES may still be throttled by the ML
+            // model's own inference rate regardless of capture format --
+            // this raises the ceiling capture can hit, it doesn't
+            // necessarily raise the joint data rate to match.
+            if let fastestFormat = ARBodyTrackingConfiguration.supportedVideoFormats.max(
+                by: { $0.framesPerSecond < $1.framesPerSecond }
+            ) {
+                configuration.videoFormat = fastestFormat
+            }
             self.previewView?.session.delegate = self
             self.previewView?.session.run(configuration, options: [.resetTracking, .removeExistingAnchors])
             call.resolve()
