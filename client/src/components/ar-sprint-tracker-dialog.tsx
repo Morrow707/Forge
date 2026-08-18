@@ -29,11 +29,16 @@ import { arJointsToWorldLandmarks } from "@/lib/ar-body-landmarks";
 import {
   detectSprintCrossings,
   detectSprintFaults,
+  checkpointsForShuttleTaps,
+  SPRINT_PRESETS,
   type SprintCameraAngle,
   type SprintPoint,
   type SprintResult,
   type SprintFault,
+  type SprintCheckpoint,
+  type SprintPreset,
 } from "@/lib/sprint-tracking";
+import { RadioChipGroup } from "@/components/filter-chip-group";
 import { DEFAULT_SKILL_FAULT_THRESHOLDS, type SkillFaultThresholds } from "@shared/skill-fault-thresholds";
 import type { NormalizedLandmark } from "@mediapipe/tasks-vision";
 import { toast } from "sonner";
@@ -131,6 +136,8 @@ export function ArSprintTrackerDialog({
   const [supported, setSupported] = useState<boolean | null>(null);
   const [frame, setFrame] = useState<BodyTrackingFrame | null>(null);
   const [checkpointCount, setCheckpointCount] = useState(0);
+  const [presetId, setPresetId] = useState("40yd");
+  const preset: SprintPreset = SPRINT_PRESETS.find((p) => p.id === presetId) ?? SPRINT_PRESETS[2];
   const [distanceYards, setDistanceYards] = useState("40");
   const [result, setResult] = useState<SprintResult | null>(null);
   const [faults, setFaults] = useState<SprintFault[]>([]);
@@ -156,6 +163,8 @@ export function ArSprintTrackerDialog({
     setSavedToProfile(false);
     checkpointsRef.current = [];
     setCheckpointCount(0);
+    setPresetId("40yd");
+    setDistanceYards("40");
     pointsRef.current = [];
     framesRef.current = [];
     if (videoUrl) URL.revokeObjectURL(videoUrl);
@@ -215,11 +224,8 @@ export function ArSprintTrackerDialog({
       worldLandmarks: arJointsToWorldLandmarks(frame.joints),
     });
 
-    const calibration = {
-      checkpoints: checkpointsRef.current.map((x) => ({ x })),
-      distanceYards: Number(distanceYards) || 0,
-    };
-    const crossing = detectSprintCrossings(pointsRef.current, calibration);
+    const checkpoints = buildCheckpoints();
+    const crossing = checkpoints ? detectSprintCrossings(pointsRef.current, { checkpoints }) : null;
     if (crossing) finishCapture(crossing);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [frame]);
@@ -239,7 +245,7 @@ export function ArSprintTrackerDialog({
   }
 
   function handleOverlayClick(e: React.MouseEvent<HTMLCanvasElement>) {
-    if (step !== "calibrate" || checkpointsRef.current.length >= 2) return;
+    if (step !== "calibrate" || checkpointsRef.current.length >= preset.tapCount) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const normalizedX = (e.clientX - rect.left) / rect.width;
     checkpointsRef.current = [...checkpointsRef.current, normalizedX];
@@ -249,6 +255,26 @@ export function ArSprintTrackerDialog({
   function resetCheckpoints() {
     checkpointsRef.current = [];
     setCheckpointCount(0);
+  }
+
+  function selectPreset(next: SprintPreset) {
+    setPresetId(next.id);
+    if (next.distanceYards != null) setDistanceYards(String(next.distanceYards));
+    resetCheckpoints();
+  }
+
+  // See sprint-tracker-dialog.tsx's own identical helper -- same reasoning,
+  // mirrored here since this dialog keeps its own checkpointsRef/preset
+  // state rather than sharing state across the two dialogs.
+  function buildCheckpoints(): SprintCheckpoint[] | null {
+    const taps = checkpointsRef.current;
+    if (taps.length < preset.tapCount) return null;
+    if (preset.tapCount === 3) {
+      return checkpointsForShuttleTaps([taps[0], taps[1], taps[2]]);
+    }
+    const distanceNum = Number(distanceYards) || 0;
+    if (distanceNum <= 0) return null;
+    return [{ x: taps[0] }, { x: taps[1], segmentDistanceYards: distanceNum }];
   }
 
   function startCapture() {
@@ -317,7 +343,10 @@ export function ArSprintTrackerDialog({
             let elapsedMs = 0;
             const checkpointMarkers: OverlayRepMarker[] = result.splits.map((split) => {
               elapsedMs += split.elapsedSeconds * 1000;
-              const isFinish = split.toCheckpoint === checkpointsRef.current.length - 1;
+              // See sprint-tracker-dialog.tsx's identical comment -- the
+              // FINISH is always the last split, not tied to the raw tap
+              // count (a 3-tap shuttle expands to 4 checkpoints).
+              const isFinish = split === result.splits[result.splits.length - 1];
               return {
                 startMs: elapsedMs,
                 label: `${isFinish ? "FINISH" : `CP ${split.toCheckpoint}`} · ${(elapsedMs / 1000).toFixed(2)}s`,
@@ -344,7 +373,7 @@ export function ArSprintTrackerDialog({
         skillProgramExerciseId,
         trackingLevel: "sprint",
         elapsedSeconds: result.totalElapsedSeconds,
-        distanceYards: Number(distanceYards) || null,
+        distanceYards: result.totalDistanceYards || null,
         cameraAngle,
         faults,
         videoUrl: uploadedVideoUrl,
@@ -358,8 +387,10 @@ export function ArSprintTrackerDialog({
     }
   };
 
-  const distanceNum = Number(distanceYards) || 0;
-  const looksLikeFortyYard = distanceNum >= 35 && distanceNum <= 45;
+  // A 5-10-5 shuttle's total (20yd across 3 legs) never lands in this
+  // range, so this naturally never offers to save a shuttle time as a
+  // 40-yard dash -- same reasoning as sprint-tracker-dialog.tsx's own.
+  const looksLikeFortyYard = (result?.totalDistanceYards ?? 0) >= 35 && (result?.totalDistanceYards ?? 0) <= 45;
 
   async function saveToTestingProfile() {
     if (!result) return;
@@ -455,7 +486,7 @@ export function ArSprintTrackerDialog({
 
               {step === "capture" && (
                 <div className="absolute left-1/2 top-[max(0.75rem,env(safe-area-inset-top))] flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5 text-sm font-bold text-teal-400 backdrop-blur-sm">
-                  Recording -- run through both markers now
+                  Recording -- run through {preset.tapCount === 3 ? "all three markers" : "both markers"} now
                 </div>
               )}
 
@@ -487,15 +518,36 @@ export function ArSprintTrackerDialog({
             <div className="flex shrink-0 flex-col gap-2 bg-black/70 px-3 py-4 backdrop-blur-sm">
               {step === "calibrate" && (
                 <>
+                  <RadioChipGroup
+                    label="Drill"
+                    options={SPRINT_PRESETS.map((p) => p.label)}
+                    value={preset.label}
+                    onChange={(label) => {
+                      const next = SPRINT_PRESETS.find((p) => p.label === label);
+                      if (next) selectPreset(next);
+                    }}
+                    className="text-white"
+                  />
                   <p className="text-center text-sm text-white">
-                    Tap the screen where the <strong>start line</strong> is, then where the{" "}
-                    <strong>finish line</strong> is ({checkpointCount}/2 marked).
+                    {preset.tapCount === 3 ? (
+                      <>
+                        Tap the screen at <strong>center</strong>, then each <strong>cone</strong> in run order (
+                        {checkpointCount}/3 marked).
+                      </>
+                    ) : (
+                      <>
+                        Tap the screen where the <strong>start line</strong> is, then where the{" "}
+                        <strong>finish line</strong> is ({checkpointCount}/2 marked).
+                      </>
+                    )}
                   </p>
                   <div className="flex items-end gap-2">
-                    <div className="flex-1 space-y-1.5">
-                      <Label className="text-white">Distance (yards)</Label>
-                      <Input type="number" value={distanceYards} onChange={(e) => setDistanceYards(e.target.value)} />
-                    </div>
+                    {preset.id === "custom" && (
+                      <div className="flex-1 space-y-1.5">
+                        <Label className="text-white">Distance (yards)</Label>
+                        <Input type="number" value={distanceYards} onChange={(e) => setDistanceYards(e.target.value)} />
+                      </div>
+                    )}
                     <Button variant="outline" onClick={resetCheckpoints} disabled={checkpointCount === 0}>
                       <RotateCcw className="h-4 w-4" />
                       Reset
@@ -503,7 +555,11 @@ export function ArSprintTrackerDialog({
                   </div>
                   <Button
                     size="lg"
-                    disabled={checkpointCount < 2 || (Number(distanceYards) || 0) <= 0 || !supported}
+                    disabled={
+                      checkpointCount < preset.tapCount ||
+                      (preset.tapCount === 2 && (Number(distanceYards) || 0) <= 0) ||
+                      !supported
+                    }
                     onClick={startCapture}
                   >
                     <Play className="h-4 w-4" />

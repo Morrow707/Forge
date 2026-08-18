@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { RadioChipGroup } from "@/components/filter-chip-group";
 import { cn } from "@/lib/utils";
 import { apiRequest, getJson, resolveApiUrl } from "@/lib/queryClient";
 import { getPoseLandmarker, isPlausibleHumanFrame, MIN_VISIBILITY, POSE_LANDMARKS, type PoseFrame } from "@/lib/pose-tracking";
@@ -21,10 +22,14 @@ import {
   deriveSprintReferencePoint,
   detectSprintCrossings,
   detectSprintFaults,
+  checkpointsForShuttleTaps,
+  SPRINT_PRESETS,
   type SprintCameraAngle,
   type SprintPoint,
   type SprintResult,
   type SprintFault,
+  type SprintCheckpoint,
+  type SprintPreset,
 } from "@/lib/sprint-tracking";
 import { DEFAULT_SKILL_FAULT_THRESHOLDS, type SkillFaultThresholds } from "@shared/skill-fault-thresholds";
 import { PoseLandmarker, type NormalizedLandmark } from "@mediapipe/tasks-vision";
@@ -130,6 +135,8 @@ export function SprintTrackerDialog({
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [modelLoading, setModelLoading] = useState(true);
   const [checkpointCount, setCheckpointCount] = useState(0);
+  const [presetId, setPresetId] = useState("40yd");
+  const preset: SprintPreset = SPRINT_PRESETS.find((p) => p.id === presetId) ?? SPRINT_PRESETS[2];
   const [distanceYards, setDistanceYards] = useState("40");
   const [result, setResult] = useState<SprintResult | null>(null);
   const [faults, setFaults] = useState<SprintFault[]>([]);
@@ -161,6 +168,8 @@ export function SprintTrackerDialog({
     setSavedToProfile(false);
     checkpointsRef.current = [];
     setCheckpointCount(0);
+    setPresetId("40yd");
+    setDistanceYards("40");
     pointsRef.current = [];
     framesRef.current = [];
     lastVideoTimeRef.current = -1;
@@ -350,8 +359,8 @@ export function SprintTrackerDialog({
         pointsRef.current.push({ t: now - captureStartRef.current, x: ref.x });
         framesRef.current.push({ t: now - captureStartRef.current, landmarks, worldLandmarks });
 
-        const calibration = { checkpoints: checkpointsRef.current.map((x) => ({ x })), distanceYards: Number(distanceYards) || 0 };
-        const crossing = detectSprintCrossings(pointsRef.current, calibration);
+        const checkpoints = buildCheckpoints();
+        const crossing = checkpoints ? detectSprintCrossings(pointsRef.current, { checkpoints }) : null;
         if (crossing) {
           finishCapture(crossing);
           return;
@@ -403,7 +412,7 @@ export function SprintTrackerDialog({
   }
 
   function handleCanvasClick(e: React.MouseEvent<HTMLCanvasElement>) {
-    if (step !== "calibrate" || checkpointsRef.current.length >= 2) return;
+    if (step !== "calibrate" || checkpointsRef.current.length >= preset.tapCount) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const normalizedX = (e.clientX - rect.left) / rect.width;
     checkpointsRef.current = [...checkpointsRef.current, normalizedX];
@@ -413,6 +422,30 @@ export function SprintTrackerDialog({
   function resetCheckpoints() {
     checkpointsRef.current = [];
     setCheckpointCount(0);
+  }
+
+  function selectPreset(next: SprintPreset) {
+    setPresetId(next.id);
+    if (next.distanceYards != null) setDistanceYards(String(next.distanceYards));
+    resetCheckpoints();
+  }
+
+  // Builds the checkpoint list detectSprintCrossings needs from whatever
+  // the athlete has physically tapped so far -- null until there are
+  // enough taps (and, for a 2-tap preset, a real distance) to mean
+  // anything. A 3-tap preset (5-10-5 shuttle) expands its 3 taps into the
+  // full 4-checkpoint calibration checkpointsForShuttleTaps builds; a
+  // 2-tap preset is just the two tapped points with the whole distance on
+  // the second.
+  function buildCheckpoints(): SprintCheckpoint[] | null {
+    const taps = checkpointsRef.current;
+    if (taps.length < preset.tapCount) return null;
+    if (preset.tapCount === 3) {
+      return checkpointsForShuttleTaps([taps[0], taps[1], taps[2]]);
+    }
+    const distanceNum = Number(distanceYards) || 0;
+    if (distanceNum <= 0) return null;
+    return [{ x: taps[0] }, { x: taps[1], segmentDistanceYards: distanceNum }];
   }
 
   function startCapture() {
@@ -489,7 +522,12 @@ export function SprintTrackerDialog({
             let elapsedMs = 0;
             const checkpointMarkers: OverlayRepMarker[] = result.splits.map((split) => {
               elapsedMs += split.elapsedSeconds * 1000;
-              const isFinish = split.toCheckpoint === checkpointsRef.current.length - 1;
+              // The FINISH is always the last split, regardless of how many
+              // checkpoints a preset's calibration expands to (a 3-tap
+              // shuttle's 4 checkpoints, or a 2-tap sprint's 2) -- comparing
+              // against the raw tap count here would mislabel a shuttle's
+              // middle crossing as the finish.
+              const isFinish = split === result.splits[result.splits.length - 1];
               return {
                 startMs: elapsedMs,
                 label: `${isFinish ? "FINISH" : `CP ${split.toCheckpoint}`} · ${(elapsedMs / 1000).toFixed(2)}s`,
@@ -516,7 +554,7 @@ export function SprintTrackerDialog({
         skillProgramExerciseId,
         trackingLevel: "sprint",
         elapsedSeconds: result.totalElapsedSeconds,
-        distanceYards: Number(distanceYards) || null,
+        distanceYards: result.totalDistanceYards || null,
         cameraAngle,
         faults,
         videoUrl: uploadedVideoUrl,
@@ -531,12 +569,10 @@ export function SprintTrackerDialog({
   };
 
   // Only offered for a straight-line sprint in the ballpark of the standard
-  // 40 -- a shuttle/pro-agility distance needs direction reversals this v1's
-  // two-checkpoint straight-line model doesn't support (see the calibration
-  // comment in sprint-tracking.ts), so this deliberately doesn't try to also
-  // guess at proAgilitySeconds from the same capture.
-  const distanceNum = Number(distanceYards) || 0;
-  const looksLikeFortyYard = distanceNum >= 35 && distanceNum <= 45;
+  // 40 -- a 5-10-5 shuttle's total (20yd across 3 legs) never lands in this
+  // range, so this naturally never offers to save a shuttle time as a
+  // 40-yard dash.
+  const looksLikeFortyYard = (result?.totalDistanceYards ?? 0) >= 35 && (result?.totalDistanceYards ?? 0) <= 45;
 
   async function saveToTestingProfile() {
     if (!result) return;
@@ -619,19 +655,39 @@ export function SprintTrackerDialog({
 
             {step === "calibrate" && (
               <>
+                <RadioChipGroup
+                  label="Drill"
+                  options={SPRINT_PRESETS.map((p) => p.label)}
+                  value={preset.label}
+                  onChange={(label) => {
+                    const next = SPRINT_PRESETS.find((p) => p.label === label);
+                    if (next) selectPreset(next);
+                  }}
+                />
                 <p className="text-sm text-muted-foreground">
-                  Tap the video where the <strong>start line</strong> is, then where the{" "}
-                  <strong>finish line</strong> is ({checkpointCount}/2 marked).
+                  {preset.tapCount === 3 ? (
+                    <>
+                      Tap the video at <strong>center</strong>, then each <strong>cone</strong> in the order you'll
+                      run to them ({checkpointCount}/3 marked).
+                    </>
+                  ) : (
+                    <>
+                      Tap the video where the <strong>start line</strong> is, then where the{" "}
+                      <strong>finish line</strong> is ({checkpointCount}/2 marked).
+                    </>
+                  )}
                 </p>
                 <div className="flex items-end gap-2">
-                  <div className="flex-1 space-y-1.5">
-                    <Label>Distance (yards)</Label>
-                    <Input
-                      type="number"
-                      value={distanceYards}
-                      onChange={(e) => setDistanceYards(e.target.value)}
-                    />
-                  </div>
+                  {preset.id === "custom" && (
+                    <div className="flex-1 space-y-1.5">
+                      <Label>Distance (yards)</Label>
+                      <Input
+                        type="number"
+                        value={distanceYards}
+                        onChange={(e) => setDistanceYards(e.target.value)}
+                      />
+                    </div>
+                  )}
                   <Button variant="outline" onClick={resetCheckpoints} disabled={checkpointCount === 0}>
                     <RotateCcw className="h-4 w-4" />
                     Reset marks
@@ -639,7 +695,7 @@ export function SprintTrackerDialog({
                 </div>
                 <DialogFooter>
                   <Button
-                    disabled={checkpointCount < 2 || (Number(distanceYards) || 0) <= 0}
+                    disabled={checkpointCount < preset.tapCount || (preset.tapCount === 2 && (Number(distanceYards) || 0) <= 0)}
                     onClick={startCapture}
                   >
                     <Play className="h-4 w-4" />
@@ -651,7 +707,9 @@ export function SprintTrackerDialog({
 
             {step === "capture" && (
               <>
-                <p className="text-sm text-teal-400">Recording -- run through both markers now.</p>
+                <p className="text-sm text-teal-400">
+                  Recording -- run through {preset.tapCount === 3 ? "all three markers" : "both markers"} now.
+                </p>
                 <DialogFooter>
                   <Button variant="outline" onClick={retry}>
                     <Square className="h-4 w-4" />
