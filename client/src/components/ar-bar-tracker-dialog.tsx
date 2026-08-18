@@ -143,6 +143,7 @@ export function ArBarTrackerDialog({
   const [tracking, setTracking] = useState(false);
   const [supported, setSupported] = useState<boolean | null>(null);
   const [supportError, setSupportError] = useState<string | undefined>(undefined);
+  const [cameraPermission, setCameraPermission] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const [frame, setFrame] = useState<BodyTrackingFrame | null>(null);
   const [recordedReps, setRecordedReps] = useState(0);
@@ -193,9 +194,10 @@ export function ArBarTrackerDialog({
     rejectionEventsRef.current = [];
     alignmentReasonRef.current = null;
     trackingRef.current = false;
-    isArBodyTrackingSupported().then(({ supported: isSupported, error: supportErr }) => {
+    isArBodyTrackingSupported().then(({ supported: isSupported, error: supportErr, cameraPermission: perm }) => {
       setSupported(isSupported);
       setSupportError(supportErr);
+      setCameraPermission(perm);
     });
   }, [open]);
 
@@ -478,6 +480,13 @@ export function ArBarTrackerDialog({
             >
               <X className="h-5 w-5" />
             </button>
+
+            {/* Permanent, always-on diagnostic readout -- see the same
+                strip's own comment in ar-jump-tracker-dialog.tsx. */}
+            <div className="absolute left-3 top-[max(0.75rem,env(safe-area-inset-top))] z-10 select-text rounded-md bg-black/50 px-2 py-1 font-mono text-[10px] text-white/80 backdrop-blur-sm">
+              supported={String(supported)} perm={cameraPermission ?? "?"} tracked=
+              {String(frame?.tracked ?? false)}
+            </div>
 
             {tracking && (
               <div className="absolute left-1/2 top-[max(0.75rem,env(safe-area-inset-top))] flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5 text-sm font-bold text-white backdrop-blur-sm">

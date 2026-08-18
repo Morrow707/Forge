@@ -106,8 +106,25 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
     private var pixelBufferAdaptor: AVAssetWriterInputPixelBufferAdaptor?
     private var recordingStartTime: TimeInterval?
 
+    // cameraPermission is real diagnostic data, not a guess -- reads
+    // AVCaptureDevice's own authorization status (the same TCC-backed value
+    // iOS uses to decide whether session.run() below will even be able to
+    // prompt) directly onto the phone screen (see the tracker dialogs'
+    // diagnostic strip), rather than inferring permission state indirectly
+    // from whether a prompt appeared.
     @objc func isSupported(_ call: CAPPluginCall) {
-        call.resolve(["supported": ARBodyTrackingConfiguration.isSupported])
+        let status: String
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized: status = "authorized"
+        case .denied: status = "denied"
+        case .restricted: status = "restricted"
+        case .notDetermined: status = "notDetermined"
+        @unknown default: status = "unknown"
+        }
+        call.resolve([
+            "supported": ARBodyTrackingConfiguration.isSupported,
+            "cameraPermission": status,
+        ])
     }
 
     @objc func start(_ call: CAPPluginCall) {
@@ -115,6 +132,28 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
             call.reject("ARBodyTrackingConfiguration is not supported on this device")
             return
         }
+        // Explicit request rather than relying on session.run() below to
+        // trigger the system permission prompt on its own -- requestAccess
+        // is Apple's documented, reliable way to guarantee that prompt
+        // actually fires the first time a call is made from this app;
+        // relying on ARSession's own internal handling left open exactly
+        // the failure mode this is fixing (session.run() failing silently
+        // -- see didFailWithError above -- with no confirmation the OS
+        // ever even asked). Calls back immediately with the cached answer
+        // on every call after the first real decision, so this never
+        // re-prompts once already granted or denied.
+        AVCaptureDevice.requestAccess(for: .video) { granted in
+            DispatchQueue.main.async {
+                guard granted else {
+                    call.reject("Camera access denied -- enable it in Settings > Forge > Camera")
+                    return
+                }
+                self.continueStart(call)
+            }
+        }
+    }
+
+    private func continueStart(_ call: CAPPluginCall) {
         DispatchQueue.main.async {
             guard let webView = self.bridge?.webView, let container = webView.superview else {
                 call.reject("Bridge WebView is not available")

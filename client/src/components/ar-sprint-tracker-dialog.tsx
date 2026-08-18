@@ -137,6 +137,7 @@ export function ArSprintTrackerDialog({
   const [error, setError] = useState<string | null>(null);
   const [supported, setSupported] = useState<boolean | null>(null);
   const [supportError, setSupportError] = useState<string | undefined>(undefined);
+  const [cameraPermission, setCameraPermission] = useState<string | undefined>(undefined);
   const [frame, setFrame] = useState<BodyTrackingFrame | null>(null);
   const [checkpointCount, setCheckpointCount] = useState(0);
   const [presetId, setPresetId] = useState("40yd");
@@ -174,9 +175,10 @@ export function ArSprintTrackerDialog({
     setVideoUrl(null);
     setSaveClipForCoach(false);
     recordedBlobRef.current = null;
-    isArBodyTrackingSupported().then(({ supported: isSupported, error: supportErr }) => {
+    isArBodyTrackingSupported().then(({ supported: isSupported, error: supportErr, cameraPermission: perm }) => {
       setSupported(isSupported);
       setSupportError(supportErr);
+      setCameraPermission(perm);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -492,6 +494,13 @@ export function ArSprintTrackerDialog({
               >
                 <X className="h-5 w-5" />
               </button>
+
+              {/* Permanent, always-on diagnostic readout -- see the same
+                  strip's own comment in ar-jump-tracker-dialog.tsx. */}
+              <div className="absolute left-3 top-[max(0.75rem,env(safe-area-inset-top))] z-10 select-text rounded-md bg-black/50 px-2 py-1 font-mono text-[10px] text-white/80 backdrop-blur-sm">
+                supported={String(supported)} perm={cameraPermission ?? "?"} tracked=
+                {String(frame?.tracked ?? false)}
+              </div>
 
               <canvas
                 ref={overlayCanvasRef}

@@ -50,7 +50,10 @@ export type BodyTrackingFrame =
     };
 
 interface ArCameraPreviewPlugin {
-  isSupported(): Promise<{ supported: boolean }>;
+  isSupported(): Promise<{
+    supported: boolean;
+    cameraPermission: "authorized" | "denied" | "restricted" | "notDetermined" | "unknown";
+  }>;
   start(options: PreviewRect & { trackImplement?: boolean }): Promise<void>;
   stop(): Promise<void>;
   updateRect(rect: PreviewRect): Promise<void>;
@@ -95,11 +98,15 @@ export function setArCameraActive(active: boolean): void {
 // and distinguishing them from outside a Mac/Xcode console is otherwise
 // impossible. See the callers' own comment on why this gets shown in the
 // UI at all instead of just logged.
-export async function isArBodyTrackingSupported(): Promise<{ supported: boolean; error?: string }> {
+export async function isArBodyTrackingSupported(): Promise<{
+  supported: boolean;
+  error?: string;
+  cameraPermission?: string;
+}> {
   if (!isArPreviewPlatform()) return { supported: false };
   try {
-    const { supported } = await ArCameraPreview.isSupported();
-    return { supported };
+    const { supported, cameraPermission } = await ArCameraPreview.isSupported();
+    return { supported, cameraPermission };
   } catch (err) {
     const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
     return { supported: false, error: detail };
