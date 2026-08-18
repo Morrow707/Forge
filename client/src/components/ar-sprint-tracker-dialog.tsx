@@ -248,7 +248,15 @@ export function ArSprintTrackerDialog({
 
   useEffect(() => {
     if (!open) return;
-    return pollDiagnosticLog(setDiagLog);
+    // A wholesale setDiagLog(nativeLog) here used to blow away every JS:-
+    // prefixed line the moment the first native poll landed (even an empty
+    // native buffer, if start() hadn't reached a single logDiag() call yet)
+    // -- keeping only the JS: lines and re-appending the native snapshot
+    // after them means neither side can erase the other, regardless of
+    // which one is ahead.
+    return pollDiagnosticLog((nativeLog) => {
+      setDiagLog((log) => [...log.filter((l) => l.startsWith("JS:")), ...nativeLog]);
+    });
   }, [open]);
 
   useEffect(() => {
