@@ -2414,6 +2414,7 @@ function ExerciseLogContent({
                 exerciseName={item.exerciseName}
                 movementType={item.movementType}
                 equipment={item.equipment}
+                laterality={item.laterality}
                 heightIn={user?.heightIn}
                 targetReps={parseTargetReps(item.prescribedReps)}
                 loadKg={loadKg}

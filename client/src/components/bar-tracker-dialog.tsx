@@ -121,8 +121,9 @@ function speak(text: string) {
 // Loose keyword match from the exercise name to the handful of patterns
 // guessMovementPattern can distinguish -- used only to flag an obvious
 // mismatch ("tracking Bench Press but this moved like a Squat"), not to
-// validate anything precisely.
-function expectedPatternFromName(name: string): MovementPattern | null {
+// validate anything precisely. Exported for ar-bar-tracker-dialog.tsx,
+// which needs the exact same mismatch check for computeRepTrustScores.
+export function expectedPatternFromName(name: string): MovementPattern | null {
   const n = name.toLowerCase();
   if (n.includes("deadlift")) return "deadlift";
   if (n.includes("squat")) return "squat";

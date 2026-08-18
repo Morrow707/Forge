@@ -24,9 +24,22 @@ import {
   worldVerticalSign,
   tiltDegreesFromPoints,
   usesSharedBarEquipment,
+  assessCameraAlignment,
+  guessMovementPattern,
+  computeLegDriveAsymmetry,
   type PoseFrame,
+  type CameraAlignment,
 } from "@/lib/pose-tracking";
-import { summarizeTrackedSet, type RepMetrics, type TrackedPoint } from "@/lib/bar-tracking";
+import {
+  summarizeTrackedSet,
+  interpolateOcclusionGap,
+  computeArmDriveAsymmetry,
+  computeRepTrustScores,
+  type RepMetrics,
+  type TrackedPoint,
+  type VelocitySample,
+} from "@/lib/bar-tracking";
+import { expectedPatternFromName } from "@/components/bar-tracker-dialog";
 import { videoFilenameForBlob } from "@/lib/video-recording";
 
 /** ARKit-native bar-path/full mode tracking -- the third and last tracker
@@ -50,19 +63,26 @@ import { videoFilenameForBlob } from "@/lib/video-recording";
  * weight from "trust the wrist" to "trust the tracked implement" as a lock
  * holds, same as the MediaPipe version.
  *
- * Deliberately NOT ported in this pass, to keep this reviewable rather than
- * a blind, unverifiable-on-device reimplementation of bar-tracker-dialog.tsx's
- * full accumulated sophistication -- MediaPipe-only for now:
- * - Hands-model grip-point refinement (refineGripPoint) -- no ARKit
- *   equivalent wired up.
- * - Occlusion-gap interpolation -- less load-bearing here since ARKit body
- *   tracking is generally more robust to brief occlusion than 2D pose
- *   estimation, but a real gap in coverage nonetheless.
- * - legDriveAsymmetry / armDriveAsymmetry / trustScores on RepMetrics --
- *   all caller-populated fields bar-tracker-dialog.tsx fills in; left null
- *   here. The core numbers (peak/mean velocity, path deviation, per-rep
- *   breakdown, power, ROM, velocity loss) all come from summarizeTrackedSet
- *   unmodified and are fully populated.
+ * Occlusion-gap interpolation, left/right leg- and arm-drive asymmetry, and
+ * per-rep trust scores are now ported too, reusing bar-tracking.ts's own
+ * functions unmodified against this dialog's own fused trace/frame history --
+ * same gating rules as bar-tracker-dialog.tsx (bilateral Squat only for leg
+ * drive, bilateral Push/Pull on a shared bar for arm drive).
+ *
+ * Still deliberately NOT ported, MediaPipe-only for now:
+ * - Hands-model grip-point refinement (refineGripPoint). MediaPipe Hands has
+ *   no ARKit equivalent wired up -- ARKit's own hand/wrist joint is already
+ *   a real 3D anchor, not a rough 2D estimate needing refinement the way
+ *   MediaPipe's is, so this is a smaller gap than it was for MediaPipe, not
+ *   an equivalent one just left undone.
+ *
+ * One honest, smaller gap inherited by porting guessMovementPattern
+ * (feeding trust-score mismatch detection) as-is: its wrist-vs-shoulder-
+ * height signal reads frame.landmarks (2D image-space), which this bridge
+ * never produces (see ar-body-landmarks.ts) -- knee-angle and torso-lean,
+ * both already world-space, still drive most of the guess, so this mainly
+ * costs some precision distinguishing overhead-press-shaped movement from
+ * everything else, not the guess entirely.
  */
 
 const MAX_PLAUSIBLE_GRIP_OFFSET_M = 0.35;
@@ -97,6 +117,7 @@ export function ArBarTrackerDialog({
   exerciseName,
   movementType,
   equipment,
+  laterality,
   heightIn,
   targetReps,
   loadKg,
@@ -109,6 +130,7 @@ export function ArBarTrackerDialog({
   exerciseName: string;
   movementType?: string | null;
   equipment?: string | null;
+  laterality?: string | null;
   heightIn?: number | null;
   targetReps?: number;
   loadKg?: number;
@@ -131,6 +153,20 @@ export function ArBarTrackerDialog({
   const verticalSignRef = useRef<1 | -1>(1);
   const prevFusedLeftRef = useRef<{ x: number; y: number; t: number } | null>(null);
   const prevFusedRightRef = useRef<{ x: number; y: number; t: number } | null>(null);
+  // Kept apart, same reasoning as bar-tracker-dialog.tsx's own
+  // leftVelocitySamplesRef -- computeArmDriveAsymmetry needs to compare
+  // left against right, not a pooled/averaged trace.
+  const leftVelocitySamplesRef = useRef<VelocitySample[]>([]);
+  const rightVelocitySamplesRef = useRef<VelocitySample[]>([]);
+  // Every timestamp where a fused reading got thrown out as implausible --
+  // feeds computeRepTrustScores at Stop the same way bar-tracker-dialog.tsx's
+  // rejectionEventsRef does.
+  const rejectionEventsRef = useRef<number[]>([]);
+  // Assessed once, right when Start Set is tapped (no separate setup/
+  // countdown step here to assess it during, unlike bar-tracker-dialog.tsx),
+  // and held for the whole set -- same "captured once, not recomputed
+  // mid-set" reasoning as bar-tracker-dialog.tsx's own lastAlignmentReasonRef.
+  const alignmentReasonRef = useRef<CameraAlignment["reason"] | null>(null);
   const trackingRef = useRef(false);
 
   const usesSharedBar = usesSharedBarEquipment(equipment);
@@ -149,6 +185,10 @@ export function ArBarTrackerDialog({
     verticalSignRef.current = 1;
     prevFusedLeftRef.current = null;
     prevFusedRightRef.current = null;
+    leftVelocitySamplesRef.current = [];
+    rightVelocitySamplesRef.current = [];
+    rejectionEventsRef.current = [];
+    alignmentReasonRef.current = null;
     trackingRef.current = false;
     isArBodyTrackingSupported().then(setSupported);
   }, [open]);
@@ -207,16 +247,18 @@ export function ArBarTrackerDialog({
       wristWorld: { x: number; y: number; z: number; visibility: number } | undefined,
       implement: ImplementTrackResult | null | undefined,
       prevRef: React.MutableRefObject<{ x: number; y: number; t: number } | null>,
-    ): { x: number; y: number } | null {
+      velocitySamplesRef: React.MutableRefObject<VelocitySample[]>,
+    ): { x: number; y: number; confidence: number } | null {
       if (!wristWorld || wristWorld.visibility <= 0) return null;
       const wristConf = 1;
       const barConf = implement ? implement.confidence : 0;
       const total = wristConf + barConf;
-      let fused: { x: number; y: number } | null =
+      let fused: { x: number; y: number; confidence: number } | null =
         total > 0
           ? {
               x: (wristConf * wristWorld.x + barConf * (implement ? implement.x : 0)) / total,
               y: (wristConf * wristWorld.y + barConf * (implement ? implement.y : 0)) / total,
+              confidence: Math.min(1, total / 2),
             }
           : null;
       // Same MAX_PLAUSIBLE_VELOCITY_MPS-style frame-to-frame check
@@ -225,14 +267,21 @@ export function ArBarTrackerDialog({
       // within one frame) can't, since that one has no notion of the
       // PREVIOUS frame's fused position.
       if (fused && !isPlausibleVelocity(prevRef.current, { ...fused, t })) {
+        rejectionEventsRef.current.push(t);
         fused = null;
       }
-      if (fused) prevRef.current = { x: fused.x, y: fused.y, t };
+      if (fused) {
+        prevRef.current = { x: fused.x, y: fused.y, t };
+        // Vertical-sign corrected, same as the combined trace below -- see
+        // bar-tracker-dialog.tsx's own leftVelocitySamplesRef push for why
+        // computeArmDriveAsymmetry needs this sign already applied, not raw.
+        velocitySamplesRef.current.push({ t, y: verticalSignRef.current * fused.y, confidence: fused.confidence });
+      }
       return fused;
     }
 
-    const fusedLeft = fuseSide(leftWristWorld, frame.leftImplement, prevFusedLeftRef);
-    const fusedRight = fuseSide(rightWristWorld, frame.rightImplement, prevFusedRightRef);
+    const fusedLeft = fuseSide(leftWristWorld, frame.leftImplement, prevFusedLeftRef, leftVelocitySamplesRef);
+    const fusedRight = fuseSide(rightWristWorld, frame.rightImplement, prevFusedRightRef, rightVelocitySamplesRef);
 
     if (usesSharedBar && fusedLeft && fusedRight) {
       const rawTilt = tiltDegreesFromPoints(fusedLeft, fusedRight, verticalSignRef.current);
@@ -251,10 +300,29 @@ export function ArBarTrackerDialog({
     // raw wrists.
     const combined =
       fusedLeft && fusedRight
-        ? { x: (fusedLeft.x + fusedRight.x) / 2, y: (fusedLeft.y + fusedRight.y) / 2 }
+        ? {
+            x: (fusedLeft.x + fusedRight.x) / 2,
+            y: (fusedLeft.y + fusedRight.y) / 2,
+            confidence: (fusedLeft.confidence + fusedRight.confidence) / 2,
+          }
         : (fusedLeft ?? fusedRight);
     if (combined) {
-      traceRef.current.push({ t: frame.timestamp, x: combined.x, y: combined.y, z: 0 });
+      // Vertical-sign corrected here (not on fusedLeft/fusedRight
+      // themselves, which tiltDegreesFromPoints above needs raw) -- same
+      // "larger = lower" convention detectFormFaults/summarizeTrackedSet
+      // assume everywhere else, matching bar-tracker-dialog.tsx's own
+      // primary-trace push.
+      const point = { t: frame.timestamp, x: combined.x, y: verticalSignRef.current * combined.y, z: 0, confidence: combined.confidence };
+      const prevPoint = traceRef.current[traceRef.current.length - 1];
+      if (prevPoint) {
+        // A brief implement/wrist dropout (a spotter's hand in the way, a
+        // frame where neither side fused) shouldn't read as one giant
+        // instantaneous jump -- same occlusion-gap fill bar-tracker-dialog.tsx's
+        // primary trace already gets, 300ms ceiling matching its "lift"
+        // (non-jump) mode.
+        for (const gapPoint of interpolateOcclusionGap(prevPoint, point, 300)) traceRef.current.push(gapPoint);
+      }
+      traceRef.current.push(point);
       const live = summarizeTrackedSet(traceRef.current, loadKg, heightIn);
       if (live) setRecordedReps(live.repBreakdown.length);
     }
@@ -268,6 +336,17 @@ export function ArBarTrackerDialog({
     liveTiltHistoryRef.current = [];
     prevFusedLeftRef.current = null;
     prevFusedRightRef.current = null;
+    leftVelocitySamplesRef.current = [];
+    rightVelocitySamplesRef.current = [];
+    rejectionEventsRef.current = [];
+    // Assessed right now, off whatever frame is currently tracked -- there's
+    // no separate setup/countdown step here to assess it earlier during
+    // (unlike bar-tracker-dialog.tsx's previewTick), so this is the closest
+    // available moment to "framing right before the set started." Held for
+    // the whole set, same as bar-tracker-dialog.tsx's lastAlignmentReasonRef.
+    alignmentReasonRef.current = frame?.tracked
+      ? assessCameraAlignment(arJointsToWorldLandmarks(frame.joints)).reason
+      : null;
     trackingRef.current = true;
     setRecordedReps(0);
     setLiveTiltDeg(null);
@@ -295,6 +374,55 @@ export function ArBarTrackerDialog({
       movementType,
       equipment,
       tiltReadingsRef.current,
+    );
+
+    // Same gating as bar-tracker-dialog.tsx: only a bilateral lower-body
+    // lift can compare left vs right leg drive at all.
+    if (movementType === "Squat" && laterality !== "unilateral") {
+      const legDrive = computeLegDriveAsymmetry(
+        framesRef.current,
+        metrics.repBreakdown.map((r) => ({ startT: r.startT, endT: r.endT })),
+      );
+      const validEntries = legDrive
+        .map((d, i) => (d ? { repNumber: metrics.repBreakdown[i].repNumber, ...d } : null))
+        .filter((d): d is NonNullable<typeof d> => d !== null);
+      metrics.legDriveAsymmetry = validEntries.length > 0 ? validEntries : null;
+    } else {
+      metrics.legDriveAsymmetry = null;
+    }
+
+    // Same gating as bar-tracker-dialog.tsx: only a bilateral press/pull on
+    // a shared bar compares arm to arm (a squat/hinge/lunge's bar is driven
+    // by the legs, not compared arm-to-arm).
+    if (usesSharedBar && laterality !== "unilateral" && (movementType === "Push" || movementType === "Pull")) {
+      const armDrive = computeArmDriveAsymmetry(
+        leftVelocitySamplesRef.current,
+        rightVelocitySamplesRef.current,
+        metrics.repBreakdown.map((r) => ({ startT: r.startT, endT: r.endT })),
+      );
+      const validArmEntries = armDrive
+        .map((d, i) => (d ? { repNumber: metrics.repBreakdown[i].repNumber, ...d } : null))
+        .filter((d): d is NonNullable<typeof d> => d !== null);
+      metrics.armDriveAsymmetry = validArmEntries.length > 0 ? validArmEntries : null;
+    } else {
+      metrics.armDriveAsymmetry = null;
+    }
+
+    // Same mismatch/trust-score computation as bar-tracker-dialog.tsx's own
+    // Stop handler -- see this file's header comment for the one honest gap
+    // in the movement-pattern guess itself (it's missing the wrist-vs-
+    // shoulder-height signal, which needs 2D image-space landmarks this
+    // bridge doesn't produce; knee-angle and torso-lean, both world-space,
+    // still drive most of the guess).
+    const guess = guessMovementPattern(framesRef.current, movementType);
+    const expectedPattern = expectedPatternFromName(exerciseName);
+    const patternMismatch = guess.pattern !== "unknown" && !!expectedPattern && guess.pattern !== expectedPattern;
+    metrics.trustScores = computeRepTrustScores(
+      metrics.repBreakdown.map((r) => ({ repNumber: r.repNumber, startT: r.startT, endT: r.endT })),
+      traceRef.current.map((p) => ({ t: p.t, confidence: p.confidence ?? 0.6 })),
+      rejectionEventsRef.current,
+      patternMismatch,
+      alignmentReasonRef.current,
     );
 
     if (!recordVideo) {
