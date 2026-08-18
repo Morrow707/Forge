@@ -29,6 +29,16 @@ import Capacitor
 // and reverted -- ARBodyTrackingConfiguration has no sceneReconstruction
 // member on this SDK, confirmed by two separate CI failures, not just
 // assumed from docs.)
+//
+// Implement (barbell/dumbbell/kettlebell) tracking -- start(trackImplement:
+// true) only, for a bar-path/full mode dialog -- runs ArImplementTracker
+// (see its own file comment) once per hand every frame, unthrottled same as
+// the skeleton visual, with only the JS-facing leftImplement/rightImplement
+// fields on "bodyTracking" gated by the emission throttle. Its search
+// window centers on each hand joint projected into capturedImage's own
+// pixel space (a DIFFERENT projection than hipScreenX/Y above -- that one
+// targets the portrait display; this one targets the raw landscape sensor
+// buffer capturedImage's bytes are laid out in).
 @objc(ArCameraPreviewPlugin)
 public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelegate {
     public let identifier = "ArCameraPreviewPlugin"
@@ -39,7 +49,8 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
         CAPPluginMethod(name: "stop", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "updateRect", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "startRecording", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "stopRecording", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "stopRecording", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "resetImplementTracking", returnType: CAPPluginReturnPromise)
     ]
 
     private var previewView: ARSCNView?
@@ -71,6 +82,21 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
     private var skeletonNode: SCNNode?
     private var jointNodes: [String: SCNNode] = [:]
     private var boneNodes: [Int: SCNNode] = [:]
+
+    // MARK: - Implement (barbell/dumbbell/kettlebell) tracking -- see
+    // ArImplementTracker's own file comment for the algorithm. Off by
+    // default (jump/sprint dialogs never set it) -- only a bar-path/full
+    // mode dialog passes trackImplement:true to start(), since motion-diff
+    // scanning capturedImage every frame is wasted work for a mode with
+    // nothing held. One instance per hand, exactly mirroring
+    // implement-tracking.ts's leftImplementTrackerRef/rightImplementTrackerRef
+    // -- a two-handed grip (barbell) needs both sides independently tracked
+    // for bar tilt to mean anything; a one-handed implement (dumbbell,
+    // kettlebell) just leaves the other side's result unused, same as the
+    // JS version.
+    private var trackImplement = false
+    private let leftImplementTracker = ArImplementTracker()
+    private let rightImplementTracker = ArImplementTracker()
 
     // MARK: - Recording (see appendVideoFrame's own comment)
     private var isRecording = false
@@ -121,6 +147,9 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
 
             self.hadBody = false
             self.lastEmitTimestamp = 0
+            self.trackImplement = call.getBool("trackImplement") ?? false
+            self.leftImplementTracker.reset()
+            self.rightImplementTracker.reset()
             let configuration = ARBodyTrackingConfiguration()
             // Runs in the SAME session as body tracking -- no separate
             // ARSession needed. Never rendered -- no grid, no mesh
@@ -164,8 +193,22 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
             self.skeletonNode = nil
             self.jointNodes.removeAll()
             self.boneNodes.removeAll()
+            self.trackImplement = false
+            self.leftImplementTracker.reset()
+            self.rightImplementTracker.reset()
             call.resolve()
         }
+    }
+
+    // Called at the start of each new tracked set (not each dialog open --
+    // one AR session/dialog open covers multiple sets) so a lock held from
+    // the previous set can't carry into the first frame of the next one.
+    // Mirrors implement-tracking.ts's own ImplementTracker.reset(), called
+    // the same way from bar-tracker-dialog.tsx's startTracking().
+    @objc func resetImplementTracking(_ call: CAPPluginCall) {
+        leftImplementTracker.reset()
+        rightImplementTracker.reset()
+        call.resolve()
     }
 
     // Video isn't recorded from a browser getUserMedia stream the way the
@@ -383,6 +426,16 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
 
         guard let bodyAnchor = bodyAnchor else {
             skeletonNode?.isHidden = true
+            // A body-tracking dropout can span an arbitrary gap (the
+            // athlete stepped out of frame, tracking got lost) -- a held
+            // implement lock, or even just the stale previous-frame luma
+            // buffer, isn't trustworthy to resume from once tracking picks
+            // back up. Full reset, not just rejectLock, clears that stale
+            // buffer too.
+            if trackImplement {
+                leftImplementTracker.reset()
+                rightImplementTracker.reset()
+            }
             if hadBody {
                 hadBody = false
                 notifyListeners("bodyTracking", data: ["tracked": false])
@@ -411,6 +464,36 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
             joints.append(["name": name, "x": Double(pos.x), "y": Double(pos.y), "z": Double(pos.z)])
         }
         updateSkeletonVisual(positions: positions)
+
+        // Runs every frame, unthrottled, same reasoning as the skeleton
+        // visual above -- ArImplementTracker's motion diff needs
+        // frame-to-frame continuity, and only the JS-facing result below
+        // (not the tracking itself) is throttled to emitIntervalSeconds.
+        var leftImplementResult: ArImplementTracker.TrackResult?
+        var rightImplementResult: ArImplementTracker.TrackResult?
+        if trackImplement {
+            let imageViewport = frame.camera.imageResolution
+            if let leftWristWorld = findJointPosition(positions, exact: "left_hand_joint", keyword: "left_hand") {
+                let screen = frame.camera.projectPoint(
+                    leftWristWorld, orientation: .landscapeRight, viewportSize: imageViewport
+                )
+                leftImplementResult = leftImplementTracker.track(
+                    frame: frame, wristImageX: Double(screen.x), wristImageY: Double(screen.y), wristWorld: leftWristWorld
+                )
+            } else {
+                leftImplementTracker.rejectLock()
+            }
+            if let rightWristWorld = findJointPosition(positions, exact: "right_hand_joint", keyword: "right_hand") {
+                let screen = frame.camera.projectPoint(
+                    rightWristWorld, orientation: .landscapeRight, viewportSize: imageViewport
+                )
+                rightImplementResult = rightImplementTracker.track(
+                    frame: frame, wristImageX: Double(screen.x), wristImageY: Double(screen.y), wristWorld: rightWristWorld
+                )
+            } else {
+                rightImplementTracker.rejectLock()
+            }
+        }
 
         if frame.timestamp - lastEmitTimestamp < emitIntervalSeconds { return }
         lastEmitTimestamp = frame.timestamp
@@ -444,7 +527,7 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
         let hipScreenX = viewportSize.width > 0 ? Double(hipScreen.x / viewportSize.width) : 0
         let hipScreenY = viewportSize.height > 0 ? Double(hipScreen.y / viewportSize.height) : 0
 
-        notifyListeners("bodyTracking", data: [
+        var data: [String: Any] = [
             "tracked": true,
             "timestamp": frame.timestamp * 1000,
             "estimatedScaleFactor": Double(bodyAnchor.estimatedScaleFactor),
@@ -452,6 +535,39 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
             "hipScreenX": hipScreenX,
             "hipScreenY": hipScreenY,
             "joints": joints,
-        ])
+        ]
+        if trackImplement {
+            data["leftImplement"] = implementResultDict(leftImplementResult)
+            data["rightImplement"] = implementResultDict(rightImplementResult)
+        }
+        notifyListeners("bodyTracking", data: data)
+    }
+
+    // Exact match first (ARKit's actual joint-name string, if this guess is
+    // right), substring keyword second -- same two-tier matching
+    // ar-body-landmarks.ts's findJoint already uses for these same guessed
+    // names, kept in sync deliberately: there should only be ONE guess
+    // about ARKit's hand-joint naming to verify against a real device, not
+    // a second, possibly-different one living here.
+    private func findJointPosition(_ positions: [String: SIMD3<Float>], exact: String, keyword: String) -> SIMD3<Float>? {
+        if let pos = positions[exact] { return pos }
+        for (name, pos) in positions where name.lowercased().contains(keyword) {
+            return pos
+        }
+        return nil
+    }
+
+    private func implementResultDict(_ result: ArImplementTracker.TrackResult?) -> [String: Any]? {
+        guard let result = result else { return nil }
+        var dict: [String: Any] = [
+            "x": Double(result.world.x),
+            "y": Double(result.world.y),
+            "z": Double(result.world.z),
+            "confidence": result.confidence,
+        ]
+        if let color = result.color {
+            dict["color"] = ["r": color.r, "g": color.g, "b": color.b]
+        }
+        return dict
     }
 }
