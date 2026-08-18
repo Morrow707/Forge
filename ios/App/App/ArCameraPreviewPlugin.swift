@@ -438,6 +438,22 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
     // bodyAnchor.transform (the root's own position/orientation in world
     // space) gives each joint's position in the same world coordinate
     // space ARKit reports everything else in, in meters.
+    // start() above resolves its call the instant session.run() is called,
+    // without waiting to see whether the session actually comes up --
+    // ARSession failures (camera permission denied, camera already claimed
+    // by something else, etc.) are only ever reported asynchronously
+    // through this delegate method, not through run()'s call site. Without
+    // this, that failure had nowhere to go: no JS error, no "not
+    // supported" banner either (isSupported() already returned true), just
+    // a black view that silently never receives a single didUpdate frame
+    // call. Forwarded as a dedicated "sessionError" event rather than
+    // folded into "bodyTracking" so the JS-side BodyTrackingFrame contract
+    // (tracked: true/false) doesn't have to grow a third shape -- see
+    // native-ar-preview.ts's onSessionError.
+    public func session(_ session: ARSession, didFailWithError error: Error) {
+        notifyListeners("sessionError", data: ["message": error.localizedDescription])
+    }
+
     public func session(_ session: ARSession, didUpdate frame: ARFrame) {
         appendVideoFrame(frame)
 

@@ -61,6 +61,10 @@ interface ArCameraPreviewPlugin {
     eventName: "bodyTracking",
     listenerFunc: (frame: BodyTrackingFrame) => void,
   ): Promise<PluginListenerHandle>;
+  addListener(
+    eventName: "sessionError",
+    listenerFunc: (error: { message: string }) => void,
+  ): Promise<PluginListenerHandle>;
 }
 
 type PreviewRect = { x: number; y: number; width: number; height: number };
@@ -163,6 +167,29 @@ export function onBodyTracking(callback: (frame: BodyTrackingFrame) => void): ()
   let handle: PluginListenerHandle | null = null;
   let cancelled = false;
   ArCameraPreview.addListener("bodyTracking", callback).then((h) => {
+    if (cancelled) {
+      h.remove();
+      return;
+    }
+    handle = h;
+  });
+  return () => {
+    cancelled = true;
+    handle?.remove();
+  };
+}
+
+// Fires when the native ARSession fails after start() already resolved
+// successfully -- see ArCameraPreviewPlugin.swift's own comment on
+// session(_:didFailWithError:) for why this had to become its own event
+// rather than a third BodyTrackingFrame shape. Every tracker dialog wires
+// this straight into the same red error banner startArPreview's own
+// rejection already shows, since both mean the same thing to a user: the
+// camera never came up.
+export function onSessionError(callback: (message: string) => void): () => void {
+  let handle: PluginListenerHandle | null = null;
+  let cancelled = false;
+  ArCameraPreview.addListener("sessionError", (err) => callback(err.message)).then((h) => {
     if (cancelled) {
       h.remove();
       return;

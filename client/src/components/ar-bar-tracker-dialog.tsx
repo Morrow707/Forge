@@ -13,6 +13,7 @@ import {
   stopArRecording,
   resetArImplementTracking,
   onBodyTracking,
+  onSessionError,
   framingHint,
   type BodyTrackingFrame,
   type ImplementTrackResult,
@@ -223,6 +224,11 @@ export function ArBarTrackerDialog({
   useEffect(() => {
     if (!open) return;
     return onBodyTracking(setFrame);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    return onSessionError(setError);
   }, [open]);
 
   useEffect(() => {

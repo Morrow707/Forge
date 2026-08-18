@@ -22,6 +22,7 @@ import {
   startArRecording,
   stopArRecording,
   onBodyTracking,
+  onSessionError,
   framingHint,
   type BodyTrackingFrame,
 } from "@/lib/native-ar-preview";
@@ -211,6 +212,11 @@ export function ArSprintTrackerDialog({
   useEffect(() => {
     if (!open) return;
     return onBodyTracking(setFrame);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    return onSessionError(setError);
   }, [open]);
 
   useEffect(() => {
