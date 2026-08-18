@@ -21,6 +21,7 @@
 		958DCC822DB07C7200EA8C72 /* ArMeasureViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 958DCC832DB07C7200EA8C73 /* ArMeasureViewController.swift */; };
 		C5B813CA0F854B468DD6C2CB /* ArImplementTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 618BCA781814AFB2E340B77C /* ArImplementTracker.swift */; };
 		D1F1F6E770C5EEAF7EE373A2 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = D18EFC9C75F5A71CBE1CDE92 /* PrivacyInfo.xcprivacy */; };
+		4D3875D14B7ECDFF4FC02731 /* ForgeBridgeViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0C916CC5DB6FD72D7964BB0 /* ForgeBridgeViewController.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -41,6 +42,7 @@
 		958DCC832DB07C7200EA8C73 /* ArMeasureViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArMeasureViewController.swift; sourceTree = "<group>"; };
 		618BCA781814AFB2E340B77C /* ArImplementTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArImplementTracker.swift; sourceTree = "<group>"; };
 		D18EFC9C75F5A71CBE1CDE92 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		F0C916CC5DB6FD72D7964BB0 /* ForgeBridgeViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForgeBridgeViewController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -78,6 +80,7 @@
 				9582B6822FE993A50072D4E8 /* SceneDelegate.swift */,
 				50379B222058CBB4000EE86E /* capacitor.config.json */,
 				504EC3071FED79650016851F /* AppDelegate.swift */,
+				F0C916CC5DB6FD72D7964BB0 /* ForgeBridgeViewController.swift */,
 				958DCC762DB07C7200EA8C64 /* ArCameraPreviewPlugin.swift */,
 				618BCA781814AFB2E340B77C /* ArImplementTracker.swift */,
 				958DCC812DB07C7200EA8C71 /* ArMeasurePlugin.swift */,
@@ -182,6 +185,7 @@
 				958DCC822DB07C7200EA8C72 /* ArMeasureViewController.swift in Sources */,
 				C5B813CA0F854B468DD6C2CB /* ArImplementTracker.swift in Sources */,
 				9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */,
+				4D3875D14B7ECDFF4FC02731 /* ForgeBridgeViewController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
