@@ -9,7 +9,6 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import {
   summarizeTrackedSet,
@@ -19,7 +18,6 @@ import {
   buildPathTrace,
   interpolateOcclusionGap,
   heightScaledAmplitudeCm,
-  estimateLiveRepVelocityMps,
   type TrackedPoint,
   type RepMetrics,
   type VelocitySample,
@@ -37,7 +35,6 @@ import { summarizeJumpSet, type JumpSetMetrics } from "@/lib/jump-tracking";
 import { ImplementTracker } from "@/lib/implement-tracking";
 import { getHandLandmarker, refineGripPoint } from "@/lib/hand-tracking";
 import { PoseSmoother } from "@/lib/one-euro-filter";
-import { playSuccessChime } from "@/lib/audio-cues";
 import { hapticLight } from "@/lib/haptics";
 import { recordedVideoType, videoFilenameForBlob } from "@/lib/video-recording";
 import { burnTrackingOverlay, type OverlayRepMarker } from "@/lib/video-overlay";
@@ -87,8 +84,6 @@ import {
   AlertTriangle,
   Sparkles,
   Info,
-  Volume2,
-  VolumeX,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis } from "recharts";
@@ -99,24 +94,6 @@ type Step = "setup" | "tracking" | "review";
 const SKELETON_COLOR = "#4ade80";
 const TRAIL_COLOR = "#f97316";
 const TRAIL_MAX_POINTS = 90;
-
-const VOICE_PREF_KEY = "forge:tracker-voice-cues";
-
-function loadVoicePref(): boolean {
-  if (typeof window === "undefined") return false;
-  return window.localStorage.getItem(VOICE_PREF_KEY) === "1";
-}
-
-// Purely a personal convenience during a set (some athletes like a spoken
-// rep count, others find it distracting), so this is a device-level
-// preference, not something synced or shown to a coach.
-function speak(text: string) {
-  if (typeof window === "undefined" || !window.speechSynthesis) return;
-  window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.rate = 1.1;
-  window.speechSynthesis.speak(utterance);
-}
 
 // Loose keyword match from the exercise name to the handful of patterns
 // guessMovementPattern can distinguish -- used only to flag an obvious
@@ -380,10 +357,6 @@ export function BarTrackerDialog({
   const startTimeRef = useRef<number>(0);
   const lastRepDirRef = useRef<1 | -1 | 0>(0);
   const repCountRef = useRef(0);
-  // trace index of the last rep boundary this live velocity cue spoke
-  // from -- see estimateLiveRepVelocityMps's own comment for why this
-  // reads a cheap live segment instead of the precise batch pipeline.
-  const lastRepVelocityBoundaryIdxRef = useRef(0);
   // Throttles the live movement-mismatch check (see liveMismatchHint) --
   // guessMovementPattern rescans the whole frame history each call, so this
   // runs it every MISMATCH_CHECK_INTERVAL ticks rather than every frame.
@@ -402,7 +375,6 @@ export function BarTrackerDialog({
   // Pose inference.
   const roiTickCounterRef = useRef(0);
   const lastVideoTimeRef = useRef(-1);
-  const voiceEnabledRef = useRef(loadVoicePref());
   // Which sign to multiply worldLandmarks' y by so "up" always means a
   // smaller value, matching the convention every formula in
   // bar-tracking.ts/jump-tracking.ts assumes -- see worldVerticalSign's own
@@ -566,7 +538,6 @@ export function BarTrackerDialog({
   const [implementDetected, setImplementDetected] = useState(false);
   const [result, setResult] = useState<RepMetrics | JumpSetMetrics | null>(null);
   const [movementGuess, setMovementGuess] = useState<MovementGuess | null>(null);
-  const [voiceEnabled, setVoiceEnabled] = useState(loadVoicePref);
   // "overlay" runs in real time (roughly the clip's own duration, since it
   // plays the recording through to draw each frame) BEFORE any network
   // activity starts -- a flat "Saving..." across both phases would read as
@@ -580,12 +551,6 @@ export function BarTrackerDialog({
   // below the same way detectFormFaults gates the saved bar_tilt/
   // bar_path_drift faults at Stop.
   const usesSharedBar = mode !== "jump" && usesSharedBarEquipment(equipment);
-
-  function toggleVoice(next: boolean) {
-    setVoiceEnabled(next);
-    voiceEnabledRef.current = next;
-    window.localStorage.setItem(VOICE_PREF_KEY, next ? "1" : "0");
-  }
 
   useEffect(() => {
     if (!open) return;
@@ -970,21 +935,13 @@ export function BarTrackerDialog({
   function beginAutoStart() {
     autoStartTriggeredRef.current = true;
     setAlignmentHint(null);
-    playSuccessChime();
     let n = 3;
     setCountdown(n);
-    // Always spoken, unlike every other speak() call in this component --
-    // the voice-cues preference below is for optional in-set flourishes
-    // (rep counts, a "set complete" line); this countdown is the only
-    // signal a solo athlete standing away from the phone gets that
-    // tracking is about to start, so it isn't optional the same way.
-    speak(String(n));
     const scheduleNext = () => {
       const id = window.setTimeout(() => {
         n -= 1;
         if (n > 0) {
           setCountdown(n);
-          speak(String(n));
           scheduleNext();
         } else {
           setCountdown(null);
@@ -1024,7 +981,6 @@ export function BarTrackerDialog({
     lastRepDirRef.current = 0;
     lastVideoTimeRef.current = -1;
     repCountRef.current = 0;
-    lastRepVelocityBoundaryIdxRef.current = 0;
     setRepCount(0);
     mismatchTickCounterRef.current = 0;
     setLiveMismatchHint(null);
@@ -1609,23 +1565,6 @@ export function BarTrackerDialog({
                 repCountRef.current += 1;
                 setRepCount(repCountRef.current);
                 hapticLight();
-                // Live velocity cue -- reads the trace since the last rep
-                // boundary rather than "just this transition," so the
-                // segment spans a full rep cycle (one up, one down) and the
-                // robust peak within it lands on the concentric peak
-                // without needing to know which half is which -- concentric
-                // is reliably the faster half for the compound lifts this
-                // targets (same reasoning summarizeTrackedSet's own
-                // concentric/eccentric split above uses). Jump mode's trace
-                // is ankle position, not bar speed, so it's excluded here.
-                let spoken = String(repCountRef.current);
-                if (mode !== "jump") {
-                  const segment = trace.slice(lastRepVelocityBoundaryIdxRef.current);
-                  const liveVelocity = estimateLiveRepVelocityMps(segment);
-                  if (liveVelocity != null) spoken += `, ${liveVelocity.toFixed(1)}`;
-                }
-                lastRepVelocityBoundaryIdxRef.current = trace.length - 1;
-                if (voiceEnabledRef.current) speak(spoken);
               }
               lastRepDirRef.current = dir;
             }
@@ -1678,9 +1617,6 @@ export function BarTrackerDialog({
       // squat-depth judgment and bar-path drift don't -- see the "jump"
       // context branch in detectFormFaults.
       jumpMetrics.formFaults = detectFormFaults(framesRef.current, 0, "jump", movementType, equipment);
-      if (voiceEnabledRef.current) {
-        speak(`Set complete. Best jump ${jumpMetrics.bestJumpHeightCm} centimeters.`);
-      }
       setResult(jumpMetrics);
       changeStep("review");
       return;
@@ -1808,11 +1744,6 @@ export function BarTrackerDialog({
       guessMismatch,
       lastAlignmentReasonRef.current,
     );
-
-    if (voiceEnabledRef.current) {
-      const count = metrics.formFaults.length;
-      speak(count > 0 ? `Set complete. ${count} form note${count > 1 ? "s" : ""}.` : "Set complete.");
-    }
 
     setResult(metrics);
     changeStep("review");
@@ -1974,13 +1905,6 @@ export function BarTrackerDialog({
                 Loading the pose-tracking model…
               </p>
             )}
-            <label className="flex items-center gap-2.5 text-sm">
-              <Checkbox checked={voiceEnabled} onCheckedChange={(c) => toggleVoice(c === true)} />
-              <span className="flex items-center gap-1.5">
-                {voiceEnabled ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
-                Voice rep counts, live bar speed &amp; end-of-set cues (off by default)
-              </span>
-            </label>
           </div>
         )}
 
