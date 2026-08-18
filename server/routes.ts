@@ -437,6 +437,19 @@ async function notifyNewlyUnlockedLessons(
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
   app.use(attachNativeTokenAuth);
+
+  // Lets iOS approve this domain for Keychain/AutoFill password saving.
+  // Without this, WKWebView's password-save prompt fails with OSStatus
+  // -25293 because Apple can't verify the app is allowed to claim the
+  // domain's credentials.
+  app.get("/.well-known/apple-app-site-association", (_req, res) => {
+    res.type("application/json").json({
+      webcredentials: {
+        apps: ["425KPX8WHN.com.foreperformancesystems.forge"],
+      },
+    });
+  });
+
   app.use("/uploads", express.static(path.join(process.cwd(), "server", "uploads")));
   // express.static calls next() rather than responding when a file isn't
   // found, so a missing upload (a video whose row survived some past
