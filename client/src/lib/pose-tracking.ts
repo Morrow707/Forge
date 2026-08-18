@@ -815,6 +815,78 @@ export function computeLegDriveAsymmetry(
   });
 }
 
+export type LandingAsymmetryEntry = {
+  // Which foot's ankle touched down first -- "even" when both land within
+  // MIN_TRUSTWORTHY_LANDING_OFFSET_MS of each other (not trustworthy as a
+  // real lead, just per-frame sampling noise).
+  leadingFoot: "left" | "right" | "even";
+  timingOffsetMs: number;
+};
+
+// Comfortably above one frame's worth of timing noise at a real-time
+// tracked frame rate -- a smaller gap than this isn't trustworthy as "one
+// foot actually landed first" rather than sampling jitter.
+const MIN_TRUSTWORTHY_LANDING_OFFSET_MS = 30;
+
+// Per-foot ground-contact timing around a jump's own detected landing
+// moment (JumpRep.landingT, itself measured off the COMBINED ankle
+// midpoint -- see jump-tracking.ts's takeoff/landing state machine) --
+// a direct read on whether the athlete favors one leg on landing, the
+// companion question to computeLegDriveAsymmetry's "which leg drives
+// harder" for the concentric phase of a squat. Touchdown for a single
+// ankle is that ankle's own local Y MAXIMUM within the window (world-Y
+// increases toward the ground, same convention this file's torso-lean/
+// bar-tilt math already uses -- see worldVerticalSign's own comment): the
+// foot descends until ground contact stops it, so the highest raw Y value
+// it reaches in the window is the moment it actually landed.
+//
+// Only genuinely trustworthy with real per-frame 3D ankle positions --
+// MediaPipe's are noisy enough at typical frame rates that a small timing
+// offset between two ankles is mostly sensor jitter, not a real lead.
+// ARKit's tracked joints make this a real signal for the first time (see
+// ArJumpTrackerDialog's own comment on where this gets wired in).
+export function computeLandingAsymmetry(
+  frames: PoseFrame[],
+  landings: { landingT: number }[],
+  // How far around landingT to search for each ankle's own local max --
+  // wide enough to catch a foot that touches down slightly before/after
+  // the combined trace's own detected landing moment, tight enough to stay
+  // within this landing, not spill into the next rep's.
+  windowMs = 250,
+): (LandingAsymmetryEntry | null)[] {
+  return landings.map(({ landingT }) => {
+    const windowFrames = frames.filter((f) => f.t >= landingT - windowMs && f.t <= landingT + windowMs);
+    if (windowFrames.length < 4) return null;
+
+    let leftMaxY = -Infinity;
+    let leftMaxT = 0;
+    let rightMaxY = -Infinity;
+    let rightMaxT = 0;
+    for (const frame of windowFrames) {
+      const left = frame.worldLandmarks[POSE_LANDMARKS.LEFT_ANKLE];
+      const right = frame.worldLandmarks[POSE_LANDMARKS.RIGHT_ANKLE];
+      if (visible(left) && left.y > leftMaxY) {
+        leftMaxY = left.y;
+        leftMaxT = frame.t;
+      }
+      if (visible(right) && right.y > rightMaxY) {
+        rightMaxY = right.y;
+        rightMaxT = frame.t;
+      }
+    }
+    if (leftMaxY === -Infinity || rightMaxY === -Infinity) return null;
+
+    const offsetMs = Math.round(rightMaxT - leftMaxT);
+    if (Math.abs(offsetMs) < MIN_TRUSTWORTHY_LANDING_OFFSET_MS) {
+      return { leadingFoot: "even", timingOffsetMs: 0 };
+    }
+    return {
+      leadingFoot: offsetMs > 0 ? "left" : "right",
+      timingOffsetMs: Math.abs(offsetMs),
+    };
+  });
+}
+
 export type FormFault = {
   code: "shallow_depth" | "knee_valgus" | "forward_lean" | "bar_path_drift" | "bar_tilt" | "grip_shift";
   label: string;

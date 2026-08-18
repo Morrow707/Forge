@@ -16,21 +16,19 @@ import {
   type BodyTrackingFrame,
 } from "@/lib/native-ar-preview";
 import { arJointsToWorldLandmarks } from "@/lib/ar-body-landmarks";
-import { deriveJumpPoint, detectFormFaults, type PoseFrame } from "@/lib/pose-tracking";
+import { deriveJumpPoint, detectFormFaults, computeLandingAsymmetry, type PoseFrame } from "@/lib/pose-tracking";
 import { summarizeJumpSet, type JumpSetMetrics } from "@/lib/jump-tracking";
 import type { TrackedPoint } from "@/lib/bar-tracking";
 import { videoFilenameForBlob } from "@/lib/video-recording";
 
 /** ARKit-native jump tracking (vertical/broad/box) -- the first tracker
- * mode converted off MediaPipe (see the task this shipped under). Jump
+ * mode converted off MediaPipe (jump, then sprint, then bar_path/full --
+ * see ArSprintTrackerDialog/ArBarTrackerDialog for the other two). Jump
  * mode was picked to go first specifically because it needs nothing but
- * body joints: no implement to follow (that still needs implement
- * tracking ported to Swift first -- see ArCameraPreviewPlugin.swift's own
- * TODO), so it's the one mode ready to move today. Reuses
- * jump-tracking.ts's summarizeJumpSet and pose-tracking.ts's
- * deriveJumpPoint completely unmodified -- both already just consume
- * world-space Landmark[], which ar-body-landmarks.ts bridges ARKit's real
- * joints into.
+ * body joints: no implement to follow. Reuses jump-tracking.ts's
+ * summarizeJumpSet and pose-tracking.ts's deriveJumpPoint completely
+ * unmodified -- both already just consume world-space Landmark[], which
+ * ar-body-landmarks.ts bridges ARKit's real joints into.
  *
  * The live skeleton (spheres at each joint, cylinders for bones) renders
  * natively, drawn directly into ArCameraPreviewPlugin's own AR scene at
@@ -45,7 +43,15 @@ import { videoFilenameForBlob } from "@/lib/video-recording";
  * instead of 2D image-space x, so it works directly off this bridge's
  * world-only joints (and, as a side effect, no longer assumes a face-on
  * camera angle the way the old image-space version did). See
- * detectFormFaults' own comment in pose-tracking.ts. */
+ * detectFormFaults' own comment in pose-tracking.ts.
+ *
+ * Landing-foot timing (computeLandingAsymmetry) also runs here and only
+ * here -- it needs real per-frame 3D ankle positions to trust a timing
+ * offset between feet as a real lead rather than sampling noise, which
+ * only ARKit's bridge provides. Computed and attached to
+ * metrics.landingAsymmetry; not yet surfaced anywhere downstream (no
+ * schema column, no UI badge) -- that's the next step once there's real
+ * data to design the display around. */
 export function ArJumpTrackerDialog({
   open,
   onOpenChange,
@@ -164,6 +170,14 @@ export function ArJumpTrackerDialog({
     // See the "jump" context branch in detectFormFaults -- landing valgus
     // and forward lean still apply, shallow-depth/bar-path checks don't.
     metrics.formFaults = detectFormFaults(framesRef.current, 0, "jump", movementType, equipment);
+    // Per-rep landing-foot timing -- see computeLandingAsymmetry's own
+    // comment for why this is only trustworthy with real per-frame 3D
+    // ankle positions (ARKit's, not MediaPipe's 2D-derived ones), so this
+    // is the first jump-tracking caller that ever populates it.
+    metrics.landingAsymmetry = computeLandingAsymmetry(
+      framesRef.current,
+      metrics.repBreakdown.map((rep) => ({ landingT: rep.landingT })),
+    );
 
     if (!recordVideo) {
       onCapture(metrics);
