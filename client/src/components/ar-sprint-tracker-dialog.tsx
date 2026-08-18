@@ -23,6 +23,7 @@ import {
   stopArRecording,
   onBodyTracking,
   onSessionError,
+  onDiagnosticLog,
   setArCameraActive,
   framingHint,
   type BodyTrackingFrame,
@@ -138,6 +139,7 @@ export function ArSprintTrackerDialog({
   const [supported, setSupported] = useState<boolean | null>(null);
   const [supportError, setSupportError] = useState<string | undefined>(undefined);
   const [cameraPermission, setCameraPermission] = useState<string | undefined>(undefined);
+  const [diagLog, setDiagLog] = useState<string[]>([]);
   const [frame, setFrame] = useState<BodyTrackingFrame | null>(null);
   const [checkpointCount, setCheckpointCount] = useState(0);
   const [presetId, setPresetId] = useState("40yd");
@@ -175,6 +177,7 @@ export function ArSprintTrackerDialog({
     setVideoUrl(null);
     setSaveClipForCoach(false);
     recordedBlobRef.current = null;
+    setDiagLog([]);
     isArBodyTrackingSupported().then(({ supported: isSupported, error: supportErr, cameraPermission: perm }) => {
       setSupported(isSupported);
       setSupportError(supportErr);
@@ -223,6 +226,11 @@ export function ArSprintTrackerDialog({
   useEffect(() => {
     if (!open) return;
     return onSessionError(setError);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    return onDiagnosticLog((message) => setDiagLog((log) => [...log, message].slice(-8)));
   }, [open]);
 
   useEffect(() => {
@@ -497,9 +505,16 @@ export function ArSprintTrackerDialog({
 
               {/* Permanent, always-on diagnostic readout -- see the same
                   strip's own comment in ar-jump-tracker-dialog.tsx. */}
-              <div className="absolute left-3 top-[max(0.75rem,env(safe-area-inset-top))] z-10 select-text rounded-md bg-black/50 px-2 py-1 font-mono text-[10px] text-white/80 backdrop-blur-sm">
-                supported={String(supported)} perm={cameraPermission ?? "?"} tracked=
-                {String(frame?.tracked ?? false)}
+              <div className="absolute left-3 right-16 top-[max(0.75rem,env(safe-area-inset-top))] z-10 select-text space-y-0.5 rounded-md bg-black/60 px-2 py-1.5 font-mono text-[9px] leading-tight text-white/80 backdrop-blur-sm">
+                <div>
+                  supported={String(supported)} perm={cameraPermission ?? "?"} tracked=
+                  {String(frame?.tracked ?? false)}
+                </div>
+                {diagLog.map((line, i) => (
+                  <div key={i} className="text-white/60">
+                    {line}
+                  </div>
+                ))}
               </div>
 
               <canvas

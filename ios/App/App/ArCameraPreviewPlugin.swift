@@ -127,11 +127,25 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
         ])
     }
 
+    // A step-by-step execution trace, not a single one-time snapshot --
+    // each call is one line appended to the on-screen diagnostic log (see
+    // the tracker dialogs' diagLog state / onDiagnosticLog in
+    // native-ar-preview.ts). Exists specifically to answer "does start()
+    // even run to completion, and if not, exactly which line does it stop
+    // at" without needing a Mac/Xcode console -- the isSupported()-based
+    // strip alone couldn't show that, since it only ever reflects one
+    // snapshot taken when the dialog opens, not what happens after.
+    private func logDiag(_ message: String) {
+        notifyListeners("diagnosticLog", data: ["message": message])
+    }
+
     @objc func start(_ call: CAPPluginCall) {
+        logDiag("start() called")
         guard ARBodyTrackingConfiguration.isSupported else {
             call.reject("ARBodyTrackingConfiguration is not supported on this device")
             return
         }
+        logDiag("requesting camera permission...")
         // Explicit request rather than relying on session.run() below to
         // trigger the system permission prompt on its own -- requestAccess
         // is Apple's documented, reliable way to guarantee that prompt
@@ -144,6 +158,7 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
         // re-prompts once already granted or denied.
         AVCaptureDevice.requestAccess(for: .video) { granted in
             DispatchQueue.main.async {
+                self.logDiag("permission result: \(granted ? "granted" : "denied")")
                 guard granted else {
                     call.reject("Camera access denied -- enable it in Settings > Forge > Camera")
                     return
@@ -155,16 +170,21 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
 
     private func continueStart(_ call: CAPPluginCall) {
         DispatchQueue.main.async {
+            self.logDiag("continueStart() running")
             guard let webView = self.bridge?.webView, let container = webView.superview else {
+                self.logDiag("FAILED: bridge webView/superview not available")
                 call.reject("Bridge WebView is not available")
                 return
             }
 
             let rect = self.rectFromCall(call)
+            self.logDiag("rect: \(rect)")
 
             if let existing = self.previewView {
+                self.logDiag("reusing existing ARSCNView")
                 existing.frame = rect
             } else {
+                self.logDiag("creating ARSCNView, inserting behind webView")
                 let scnView = ARSCNView(frame: rect)
                 scnView.autoenablesDefaultLighting = true
                 container.insertSubview(scnView, belowSubview: webView)
@@ -182,6 +202,7 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
                 webView.isOpaque = false
                 webView.backgroundColor = .clear
                 webView.scrollView.backgroundColor = .clear
+                self.logDiag("webView.isOpaque=\(webView.isOpaque)")
             }
 
             self.hadBody = false
@@ -223,7 +244,9 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
                 configuration.videoFormat = fastestFormat
             }
             self.previewView?.session.delegate = self
+            self.logDiag("calling session.run()")
             self.previewView?.session.run(configuration, options: [.resetTracking, .removeExistingAnchors])
+            self.logDiag("session.run() returned, resolving")
             call.resolve()
         }
     }

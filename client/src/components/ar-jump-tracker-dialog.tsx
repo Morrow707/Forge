@@ -13,6 +13,7 @@ import {
   stopArRecording,
   onBodyTracking,
   onSessionError,
+  onDiagnosticLog,
   setArCameraActive,
   framingHint,
   type BodyTrackingFrame,
@@ -76,6 +77,7 @@ export function ArJumpTrackerDialog({
   const [supported, setSupported] = useState<boolean | null>(null);
   const [supportError, setSupportError] = useState<string | undefined>(undefined);
   const [cameraPermission, setCameraPermission] = useState<string | undefined>(undefined);
+  const [diagLog, setDiagLog] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [frame, setFrame] = useState<BodyTrackingFrame | null>(null);
   const [recordedReps, setRecordedReps] = useState(0);
@@ -97,6 +99,7 @@ export function ArJumpTrackerDialog({
     setFrame(null);
     setRecordedReps(0);
     setLastJumpCm(null);
+    setDiagLog([]);
     traceRef.current = [];
     framesRef.current = [];
     trackingRef.current = false;
@@ -140,6 +143,11 @@ export function ArJumpTrackerDialog({
   useEffect(() => {
     if (!open) return;
     return onSessionError(setError);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    return onDiagnosticLog((message) => setDiagLog((log) => [...log, message].slice(-8)));
   }, [open]);
 
   useEffect(() => {
@@ -244,9 +252,16 @@ export function ArJumpTrackerDialog({
                 (supported/permission from isSupported(), tracked from the
                 live bodyTracking stream), not inferred from what happens to
                 render. */}
-            <div className="absolute left-3 top-[max(0.75rem,env(safe-area-inset-top))] z-10 select-text rounded-md bg-black/50 px-2 py-1 font-mono text-[10px] text-white/80 backdrop-blur-sm">
-              supported={String(supported)} perm={cameraPermission ?? "?"} tracked=
-              {String(frame?.tracked ?? false)}
+            <div className="absolute left-3 right-16 top-[max(0.75rem,env(safe-area-inset-top))] z-10 select-text space-y-0.5 rounded-md bg-black/60 px-2 py-1.5 font-mono text-[9px] leading-tight text-white/80 backdrop-blur-sm">
+              <div>
+                supported={String(supported)} perm={cameraPermission ?? "?"} tracked=
+                {String(frame?.tracked ?? false)}
+              </div>
+              {diagLog.map((line, i) => (
+                <div key={i} className="text-white/60">
+                  {line}
+                </div>
+              ))}
             </div>
 
             {tracking && (

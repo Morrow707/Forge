@@ -68,6 +68,10 @@ interface ArCameraPreviewPlugin {
     eventName: "sessionError",
     listenerFunc: (error: { message: string }) => void,
   ): Promise<PluginListenerHandle>;
+  addListener(
+    eventName: "diagnosticLog",
+    listenerFunc: (entry: { message: string }) => void,
+  ): Promise<PluginListenerHandle>;
 }
 
 type PreviewRect = { x: number; y: number; width: number; height: number };
@@ -89,6 +93,28 @@ export function isArPreviewPlatform(): boolean {
 // actually open.
 export function setArCameraActive(active: boolean): void {
   document.documentElement.classList.toggle("ar-camera-active", active);
+}
+
+// A step-by-step execution trace off the native start() call (see
+// logDiag in ArCameraPreviewPlugin.swift) -- answers "does start() even
+// run to completion, and if not, exactly which line does it stop at"
+// directly on the phone screen, since that's the one thing a static
+// supported/permission snapshot (isArBodyTrackingSupported) can never
+// show: what happens AFTER the call is made, not just its return value.
+export function onDiagnosticLog(callback: (message: string) => void): () => void {
+  let handle: PluginListenerHandle | null = null;
+  let cancelled = false;
+  ArCameraPreview.addListener("diagnosticLog", (entry) => callback(entry.message)).then((h) => {
+    if (cancelled) {
+      h.remove();
+      return;
+    }
+    handle = h;
+  });
+  return () => {
+    cancelled = true;
+    handle?.remove();
+  };
 }
 
 // error is populated only on the "the native call itself failed" path (a
