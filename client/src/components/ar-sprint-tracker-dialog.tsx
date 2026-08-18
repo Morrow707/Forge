@@ -23,6 +23,7 @@ import {
   stopArRecording,
   onBodyTracking,
   onSessionError,
+  setArCameraActive,
   framingHint,
   type BodyTrackingFrame,
 } from "@/lib/native-ar-preview";
@@ -186,12 +187,14 @@ export function ArSprintTrackerDialog({
   // down) since both need the same live view.
   useEffect(() => {
     if (!open || step === "warning" || step === "review") {
+      setArCameraActive(false);
       void stopArPreview();
       return;
     }
     const rect = containerRef.current?.getBoundingClientRect();
     if (!rect) return;
     let cancelled = false;
+    setArCameraActive(true);
     startArPreview(rect).catch((err) => {
       if (!cancelled) setError(err instanceof Error ? err.message : "Could not start camera");
     });
@@ -203,6 +206,7 @@ export function ArSprintTrackerDialog({
     window.addEventListener("resize", onResize);
     return () => {
       cancelled = true;
+      setArCameraActive(false);
       window.removeEventListener("resize", onResize);
       void stopArPreview();
     };

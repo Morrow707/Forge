@@ -75,6 +75,19 @@ export function isArPreviewPlatform(): boolean {
   return Capacitor.isNativePlatform() && Capacitor.getPlatform() === "ios";
 }
 
+// The camera container going transparent only reveals whatever's painted
+// BEHIND the dialog in this same page -- which, absent this, is this app's
+// own opaque background (body's, and AppShell's root div's), not
+// ArCameraPreviewPlugin's native view sitting behind the WKWebView. See
+// index.css's html.ar-camera-active rule, which this toggles -- every
+// tracker dialog calls this true right alongside startArPreview and false
+// in the same cleanup that calls stopArPreview, so the rest of the app
+// only ever loses its background for as long as a camera dialog is
+// actually open.
+export function setArCameraActive(active: boolean): void {
+  document.documentElement.classList.toggle("ar-camera-active", active);
+}
+
 // error is populated only on the "the native call itself failed" path (a
 // plugin-bridge/dispatch problem), never on "ARKit genuinely isn't
 // supported" -- the two look identical to a user (both end up showing the

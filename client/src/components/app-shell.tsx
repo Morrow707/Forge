@@ -241,7 +241,7 @@ export function AppShell({
   return (
     <div
       className={cn(
-        "min-h-screen bg-background",
+        "app-shell-root min-h-screen bg-background",
         fitScreen && "flex flex-col md:h-screen md:overflow-hidden",
       )}
       style={brandStyle}

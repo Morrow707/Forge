@@ -13,6 +13,7 @@ import {
   stopArRecording,
   onBodyTracking,
   onSessionError,
+  setArCameraActive,
   framingHint,
   type BodyTrackingFrame,
 } from "@/lib/native-ar-preview";
@@ -112,6 +113,7 @@ export function ArJumpTrackerDialog({
     const rect = containerRef.current?.getBoundingClientRect();
     if (!rect) return;
     let cancelled = false;
+    setArCameraActive(true);
     startArPreview(rect).catch((err) => {
       if (!cancelled) setError(err instanceof Error ? err.message : "Could not start camera");
     });
@@ -122,6 +124,7 @@ export function ArJumpTrackerDialog({
     window.addEventListener("resize", onResize);
     return () => {
       cancelled = true;
+      setArCameraActive(false);
       window.removeEventListener("resize", onResize);
       void stopArPreview();
     };

@@ -14,6 +14,7 @@ import {
   resetArImplementTracking,
   onBodyTracking,
   onSessionError,
+  setArCameraActive,
   framingHint,
   type BodyTrackingFrame,
   type ImplementTrackResult,
@@ -206,6 +207,7 @@ export function ArBarTrackerDialog({
     const rect = containerRef.current?.getBoundingClientRect();
     if (!rect) return;
     let cancelled = false;
+    setArCameraActive(true);
     startArPreview(rect, true).catch((err) => {
       if (!cancelled) setError(err instanceof Error ? err.message : "Could not start camera");
     });
@@ -216,6 +218,7 @@ export function ArBarTrackerDialog({
     window.addEventListener("resize", onResize);
     return () => {
       cancelled = true;
+      setArCameraActive(false);
       window.removeEventListener("resize", onResize);
       void stopArPreview();
     };
