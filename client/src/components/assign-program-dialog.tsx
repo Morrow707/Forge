@@ -302,7 +302,7 @@ export function AssignProgramDialog({
                                   return next;
                                 })
                               }
-                              className="h-7 w-36 text-xs"
+                              className="h-7 w-auto text-xs"
                             />
                             {changed && (
                               <button
