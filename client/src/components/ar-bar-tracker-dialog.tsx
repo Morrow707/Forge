@@ -486,7 +486,7 @@ export function ArBarTrackerDialog({
         for (const gapPoint of interpolateOcclusionGap(prevPoint, point, 300)) traceRef.current.push(gapPoint);
       }
       traceRef.current.push(point);
-      const live = summarizeTrackedSet(traceRef.current, loadKg, heightIn);
+      const live = summarizeTrackedSet(traceRef.current, loadKg, heightIn, undefined, rejectionEventsRef.current);
       if (live) setRecordedReps(live.repBreakdown.length);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -544,7 +544,7 @@ export function ArBarTrackerDialog({
   async function stopTracking() {
     trackingRef.current = false;
     setTracking(false);
-    const metrics = summarizeTrackedSet(traceRef.current, loadKg, heightIn);
+    const metrics = summarizeTrackedSet(traceRef.current, loadKg, heightIn, undefined, rejectionEventsRef.current);
     if (!metrics) {
       // The rep-tracking read failing doesn't mean the recording itself
       // failed -- the coach explicitly wants a video of every set (see the

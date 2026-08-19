@@ -1627,6 +1627,7 @@ export function BarTrackerDialog({
       loadKg,
       heightIn,
       inferFirstPhaseHint(movementType, exerciseName),
+      rejectionEventsRef.current,
     );
     if (!metrics) {
       toast.error("Couldn't get a clean read — try again with your whole body in frame.");

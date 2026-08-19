@@ -572,6 +572,12 @@ export function summarizeTrackedSet(
   loadKg?: number,
   heightIn?: number | null,
   firstPhaseHint?: FirstPhaseHint,
+  // Timestamps where a frame-to-frame reading got thrown out as physically
+  // implausible (see isPlausibleVelocity's callers) -- optional and
+  // additive so every existing caller keeps working unchanged with none of
+  // this filtering applied. See the phantomPhase comment below for what it
+  // actually gates.
+  rejectionEvents: number[] = [],
 ): RepMetrics | null {
   if (rawPoints.length < 6) return null;
   const minRepAmplitudeCm = heightScaledAmplitudeCm(BASE_MIN_REP_AMPLITUDE_CM, heightIn);
@@ -623,6 +629,43 @@ export function summarizeTrackedSet(
   const concentric = phaseStats.filter((_, i) => isConcentric[i]);
   const eccentric = phaseStats.filter((_, i) => !isConcentric[i]);
 
+  // segmentPhases counts ANY retrace past minAmplitude as a real rep
+  // boundary, with no way to tell "the athlete actually moved the bar back
+  // up 20cm+" apart from "tracking briefly lost the bar/wrist, jumped to a
+  // wrong position, and recovered" -- both cross the same threshold. The
+  // second case is exactly what isPlausibleVelocity's per-frame rejection
+  // (rejectionEvents) already exists to flag, but until now nothing fed
+  // that back into the count itself -- it only ever showed up afterward as
+  // a lower trust score on a rep that was already counted. That's the
+  // mechanism behind a set logging more reps than were actually performed:
+  // a lock-loss-and-recover blip mid-set can register as one or two extra
+  // phantom phases.
+  //
+  // Deliberately conservative about which phases this excludes -- an
+  // athlete's own logged workout history is worse off under-counted (a
+  // real rep silently vanishing with no explanation) than over-counted (a
+  // spurious one, at least flagged "shaky" today). Only a phase that's
+  // BOTH unusually short next to this same set's other reps AND directly
+  // overlaps a rejection event gets dropped; either signal alone isn't
+  // enough -- a genuinely fast rep with clean tracking has no rejection
+  // events near it, and a slower rep that happens to have one incidental
+  // rejection elsewhere in a long phase isn't anomalously short.
+  const concentricDurations = concentric.map((p) => p.duration).sort((a, b) => a - b);
+  const medianConcentricDuration =
+    concentricDurations.length > 0 ? concentricDurations[Math.floor(concentricDurations.length / 2)] : 0;
+  const PHANTOM_DURATION_RATIO = 0.4;
+  function isPhantomPhase(phase: (typeof phaseStats)[number]): boolean {
+    // Fewer than 3 concentric phases isn't enough of a sample to call
+    // anything "anomalously short" relative to the rest of the set with
+    // any confidence -- skip the filter entirely rather than risk a bad
+    // call on a single- or double-rep set.
+    if (concentric.length < 3 || medianConcentricDuration <= 0) return false;
+    if (phase.duration >= medianConcentricDuration * PHANTOM_DURATION_RATIO) return false;
+    const startT = rawPoints[phase.startIdx].t;
+    const endT = rawPoints[phase.endIdx].t;
+    return rejectionEvents.some((t) => t >= startT && t <= endT);
+  }
+
   // One entry per concentric phase, in chronological order -- rep 1, 2, 3...
   // Each rep's window starts at the beginning of the phase before it (the
   // bottom of the preceding eccentric, i.e. the bottom of the rep) so depth
@@ -630,6 +673,7 @@ export function summarizeTrackedSet(
   const repBreakdown: RepBreakdown[] = [];
   phaseStats.forEach((phase, i) => {
     if (!isConcentric[i]) return;
+    if (isPhantomPhase(phase)) return;
     const repStartIdx = i > 0 ? phaseStats[i - 1].startIdx : phase.startIdx;
     const curveStride = Math.max(1, Math.floor((phase.endIdx - phase.startIdx) / 20));
     const velocityCurve: { positionCm: number; velocityMps: number }[] = [];
