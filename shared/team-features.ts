@@ -8,7 +8,7 @@
 // feature independently, same "null means default" shape as
 // skillFaultThresholds -- an existing coach who's never touched this page
 // sees no change.
-export const COACH_FEATURES = ["nutrition", "analytics", "leaderboard", "teamBoard"] as const;
+export const COACH_FEATURES = ["nutrition", "analytics", "leaderboard", "teamBoard", "movementScreen"] as const;
 export type CoachFeature = (typeof COACH_FEATURES)[number];
 
 export const DEFAULT_COACH_FEATURES: Record<CoachFeature, boolean> = {
@@ -16,6 +16,7 @@ export const DEFAULT_COACH_FEATURES: Record<CoachFeature, boolean> = {
   analytics: true,
   leaderboard: true,
   teamBoard: true,
+  movementScreen: true,
 };
 
 export function resolveCoachFeatures(
@@ -57,5 +58,11 @@ export const COACH_FEATURE_FIELDS: {
     label: "Team Board",
     description: "The team announcement/chat board.",
     navHrefs: ["/coach/team-board", "/athlete/team-board"],
+  },
+  {
+    key: "movementScreen",
+    label: "Movement Screen",
+    description: "Functional-movement screening batteries, and the Movement Screen tab on each athlete's profile.",
+    navHrefs: ["/coach/movement-screens"],
   },
 ];

@@ -1294,6 +1294,102 @@ CREATE TABLE IF NOT EXISTS "ai_reflection_findings" (
   "created_at" timestamp NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS "ai_reflection_findings_category_idx" ON "ai_reflection_findings" ("category", "created_at");
+
+DO $$ BEGIN
+  CREATE TYPE "movement_screen_category" AS ENUM ('postural', 'balance', 'power', 'mobility', 'other');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE "movement_screen_score_type" AS ENUM ('grade_0_3', 'distance_in', 'time_sec', 'asymmetry_pct');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE "movement_screen_capture_method" AS ENUM ('manual', 'photo_import', 'camera_assisted');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE "body_side" AS ENUM ('left', 'right');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+CREATE TABLE IF NOT EXISTS "movement_screen_batteries" (
+  "id" serial PRIMARY KEY,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "is_forge_official" boolean NOT NULL DEFAULT false,
+  "name" text NOT NULL,
+  "description" text,
+  "forked_from_id" integer,
+  "created_at" timestamp NOT NULL DEFAULT now(),
+  "updated_at" timestamp NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS "movement_screen_battery_tests" (
+  "id" serial PRIMARY KEY,
+  "battery_id" integer NOT NULL REFERENCES "movement_screen_batteries"("id") ON DELETE CASCADE,
+  "test_key" text NOT NULL,
+  "label" text NOT NULL,
+  "category" movement_screen_category NOT NULL,
+  "score_type" movement_screen_score_type NOT NULL,
+  "side" laterality NOT NULL,
+  "instructions" text,
+  "sort_order" integer NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS "movement_screen_battery_tests_battery_idx" ON "movement_screen_battery_tests" ("battery_id", "sort_order");
+
+CREATE TABLE IF NOT EXISTS "movement_screens" (
+  "id" serial PRIMARY KEY,
+  "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "battery_id" integer REFERENCES "movement_screen_batteries"("id") ON DELETE SET NULL,
+  "date" date NOT NULL,
+  "capture_method" movement_screen_capture_method NOT NULL DEFAULT 'manual',
+  "notes" text,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "movement_screens_athlete_idx" ON "movement_screens" ("athlete_id", "date");
+
+CREATE TABLE IF NOT EXISTS "movement_screen_results" (
+  "id" serial PRIMARY KEY,
+  "screen_id" integer NOT NULL REFERENCES "movement_screens"("id") ON DELETE CASCADE,
+  "test_key" text NOT NULL,
+  "label" text NOT NULL,
+  "category" movement_screen_category NOT NULL,
+  "score_type" movement_screen_score_type NOT NULL,
+  "side" body_side,
+  "score_value" real NOT NULL,
+  "flagged" boolean NOT NULL DEFAULT false,
+  "notes" text
+);
+CREATE INDEX IF NOT EXISTS "movement_screen_results_screen_idx" ON "movement_screen_results" ("screen_id");
+
+-- Seeds the Forge-official "Forge Standard Screen" battery once an admin
+-- account exists to own it -- a no-op (and safe to re-run every deploy)
+-- once it's already been inserted, or if no admin exists yet.
+DO $$
+DECLARE
+  admin_id integer;
+  battery_id integer;
+BEGIN
+  SELECT id INTO admin_id FROM "users" WHERE "role" = 'admin' ORDER BY id LIMIT 1;
+  IF admin_id IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM "movement_screen_batteries" WHERE "is_forge_official" = true AND "name" = 'Forge Standard Screen'
+  ) THEN
+    INSERT INTO "movement_screen_batteries" ("coach_id", "is_forge_official", "name", "description")
+    VALUES (admin_id, true, 'Forge Standard Screen', 'Forge''s default functional-movement screen -- postural, mobility, power, and balance tests. Fork it to customize for your team.')
+    RETURNING id INTO battery_id;
+
+    INSERT INTO "movement_screen_battery_tests" ("battery_id", "test_key", "label", "category", "score_type", "side", "instructions", "sort_order") VALUES
+      (battery_id, 'overhead_squat', 'Overhead Squat', 'postural', 'grade_0_3', 'bilateral', 'Feet shoulder-width, arms overhead, descend as far as comfortable. Watch for heel rise, knee valgus, excessive forward lean, or arms falling forward. 3 = clean depth with no compensation, 2 = one compensation, 1 = multiple compensations, 0 = pain.', 0),
+      (battery_id, 'inline_lunge', 'In-Line Lunge', 'postural', 'grade_0_3', 'unilateral', 'Heel-to-toe stance on a line, back knee lowers to touch the floor. Watch for loss of balance, torso lean, or the front knee drifting off the line.', 1),
+      (battery_id, 'single_leg_squat', 'Single-Leg Squat', 'postural', 'grade_0_3', 'unilateral', 'Single-leg stance, squat to ~60 degrees of knee flexion. Watch for hip drop, knee valgus, or excessive trunk lean.', 2),
+      (battery_id, 'ankle_dorsiflexion', 'Ankle Dorsiflexion (Weight-Bearing Lunge)', 'mobility', 'distance_in', 'unilateral', 'Knee-to-wall lunge test -- record the farthest distance (inches) from the wall the big toe can be while the knee still touches the wall, heel flat.', 3),
+      (battery_id, 'shoulder_mobility_reach', 'Shoulder Mobility Reach', 'mobility', 'distance_in', 'unilateral', 'One hand reaches over the shoulder, the other up the back -- record the gap (inches) between fingertips. Smaller is better.', 4),
+      (battery_id, 'trunk_stability_pushup', 'Trunk Stability Push-Up', 'power', 'grade_0_3', 'bilateral', 'From a push-up position, the whole body rises as one unit with no lag in the spine. Watch for hips sagging or hiking before the chest clears the floor.', 5),
+      (battery_id, 'rotary_stability', 'Rotary Stability', 'power', 'grade_0_3', 'unilateral', 'Quadruped position, opposite hand/knee extend and touch together underneath. Watch for loss of balance or an inability to keep the spine neutral.', 6),
+      (battery_id, 'y_balance_anterior', 'Y-Balance -- Anterior Reach', 'balance', 'distance_in', 'unilateral', 'Single-leg stance, reach the free foot as far forward as possible without losing balance or touching down. Record the reach distance in inches.', 7),
+      (battery_id, 'y_balance_posteromedial', 'Y-Balance -- Posteromedial Reach', 'balance', 'distance_in', 'unilateral', 'Same setup as the anterior reach, reaching diagonally back and toward the midline.', 8),
+      (battery_id, 'y_balance_posterolateral', 'Y-Balance -- Posterolateral Reach', 'balance', 'distance_in', 'unilateral', 'Same setup as the anterior reach, reaching diagonally back and away from the midline.', 9);
+  END IF;
+END $$;
 `;
 
 async function main() {

@@ -1670,6 +1670,191 @@ export const insertGoniometerReadingSchema = z.object({
   notes: z.string().optional().nullable(),
 });
 
+// ---------- Movement Screen ----------
+// A coach/PT-administered battery of functional-movement tests (overhead
+// squat, Y-balance, etc.) under Forge's own name -- deliberately not built
+// as the trademarked, certification-gated FMS(R) system, so tests can be
+// added or dropped freely. Purely informational everywhere it's read:
+// nothing here gates a program or an assignment, same "flag, don't decide"
+// treatment health status already gets.
+export const movementScreenCategoryEnum = pgEnum("movement_screen_category", [
+  "postural",
+  "balance",
+  "power",
+  "mobility",
+  "other",
+]);
+export const movementScreenScoreTypeEnum = pgEnum("movement_screen_score_type", [
+  "grade_0_3",
+  "distance_in",
+  "time_sec",
+  "asymmetry_pct",
+]);
+export const movementScreenCaptureMethodEnum = pgEnum("movement_screen_capture_method", [
+  "manual",
+  "photo_import",
+  "camera_assisted",
+]);
+// Which side an individual RESULT belongs to -- distinct from lateralityEnum
+// above, which describes whether a battery TEST is scored per-side at all.
+export const bodySideEnum = pgEnum("body_side", ["left", "right"]);
+
+// A named, ordered test list. Forge ships one or more official batteries
+// (isForgeOfficial, owned by an admin account -- same explicit-flag pattern
+// classes.isForgeOfficial uses, since ownership can't just be inferred from
+// author role the way exercises do). A coach never edits an official
+// battery directly -- they fork it (forkedFromId) into their own copy via
+// the same duplicate-then-edit action program-list already has, and edit
+// that instead. Deleting a fork IS "revert to Forge's version" -- there's
+// nothing to lose, the original was never touched.
+export const movementScreenBatteries = pgTable("movement_screen_batteries", {
+  id: serial("id").primaryKey(),
+  coachId: integer("coach_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  isForgeOfficial: boolean("is_forge_official").notNull().default(false),
+  name: text("name").notNull(),
+  description: text("description"),
+  forkedFromId: integer("forked_from_id"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export type MovementScreenBattery = typeof movementScreenBatteries.$inferSelect;
+
+// The checklist definition -- drives both the printed score sheet and the
+// manual-entry form. testKey is the stable identity a captured result
+// snapshots (see movementScreenResults below), so re-ordering or
+// re-wording a test here never touches a result already recorded against
+// it.
+export const movementScreenBatteryTests = pgTable(
+  "movement_screen_battery_tests",
+  {
+    id: serial("id").primaryKey(),
+    batteryId: integer("battery_id")
+      .notNull()
+      .references(() => movementScreenBatteries.id, { onDelete: "cascade" }),
+    testKey: text("test_key").notNull(),
+    label: text("label").notNull(),
+    category: movementScreenCategoryEnum("category").notNull(),
+    scoreType: movementScreenScoreTypeEnum("score_type").notNull(),
+    side: lateralityEnum("side").notNull(),
+    instructions: text("instructions"),
+    sortOrder: integer("sort_order").notNull().default(0),
+  },
+  (table) => ({
+    batteryIdx: index("movement_screen_battery_tests_battery_idx").on(table.batteryId, table.sortOrder),
+  }),
+);
+
+export type MovementScreenBatteryTest = typeof movementScreenBatteryTests.$inferSelect;
+
+// One administered session. batteryId is nullable and purely a "what
+// template was this filled out from" pointer -- results below never depend
+// on it still existing or being unchanged.
+export const movementScreens = pgTable(
+  "movement_screens",
+  {
+    id: serial("id").primaryKey(),
+    athleteId: integer("athlete_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    coachId: integer("coach_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    batteryId: integer("battery_id").references(() => movementScreenBatteries.id, { onDelete: "set null" }),
+    date: date("date").notNull(),
+    captureMethod: movementScreenCaptureMethodEnum("capture_method").notNull().default("manual"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    athleteIdx: index("movement_screens_athlete_idx").on(table.athleteId, table.date),
+  }),
+);
+
+export type MovementScreen = typeof movementScreens.$inferSelect;
+
+// Self-contained per-test result -- testKey/label/category/scoreType are
+// snapshotted from the battery test at capture time, not FK'd, so editing a
+// battery later can never orphan or reinterpret a past result. side is null
+// for a bilateral test's single score, left/right for a unilateral test's
+// two. flagged is always computed at insert time (see createMovementScreen
+// in storage.ts) -- a grade<=1 threshold for grade_0_3 tests, or an
+// asymmetry check between a unilateral test's two sides -- never entered by
+// hand, since it's what drives both the corrective-exercise suggestions and
+// the AI athlete-context line.
+export const movementScreenResults = pgTable(
+  "movement_screen_results",
+  {
+    id: serial("id").primaryKey(),
+    screenId: integer("screen_id")
+      .notNull()
+      .references(() => movementScreens.id, { onDelete: "cascade" }),
+    testKey: text("test_key").notNull(),
+    label: text("label").notNull(),
+    category: movementScreenCategoryEnum("category").notNull(),
+    scoreType: movementScreenScoreTypeEnum("score_type").notNull(),
+    side: bodySideEnum("side"),
+    scoreValue: real("score_value").notNull(),
+    flagged: boolean("flagged").notNull().default(false),
+    notes: text("notes"),
+  },
+  (table) => ({
+    screenIdx: index("movement_screen_results_screen_idx").on(table.screenId),
+  }),
+);
+
+export type MovementScreenResult = typeof movementScreenResults.$inferSelect;
+
+const movementScreenCategorySchema = z.enum(["postural", "balance", "power", "mobility", "other"]);
+const movementScreenScoreTypeSchema = z.enum(["grade_0_3", "distance_in", "time_sec", "asymmetry_pct"]);
+
+export const movementScreenBatteryTestInputSchema = z.object({
+  testKey: z
+    .string()
+    .trim()
+    .min(1)
+    .max(60)
+    .regex(/^[a-z0-9_]+$/, "lowercase letters, numbers, underscores only"),
+  label: z.string().trim().min(1).max(120),
+  category: movementScreenCategorySchema,
+  scoreType: movementScreenScoreTypeSchema,
+  side: z.enum(["bilateral", "unilateral"]),
+  instructions: z.string().trim().max(500).optional().nullable(),
+});
+export type MovementScreenBatteryTestInput = z.infer<typeof movementScreenBatteryTestInputSchema>;
+
+export const updateMovementScreenBatterySchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  description: z.string().trim().max(500).optional().nullable(),
+  tests: z.array(movementScreenBatteryTestInputSchema).min(1).max(30),
+});
+export type UpdateMovementScreenBatteryInput = z.infer<typeof updateMovementScreenBatterySchema>;
+
+export const movementScreenResultInputSchema = z.object({
+  testKey: z.string().trim().min(1).max(60),
+  label: z.string().trim().min(1).max(120),
+  category: movementScreenCategorySchema,
+  scoreType: movementScreenScoreTypeSchema,
+  side: z.enum(["left", "right"]).optional().nullable(),
+  scoreValue: z.number(),
+  notes: z.string().trim().max(300).optional().nullable(),
+});
+export type MovementScreenResultInput = z.infer<typeof movementScreenResultInputSchema>;
+
+export const createMovementScreenSchema = z.object({
+  athleteId: z.number().int(),
+  batteryId: z.number().int().optional().nullable(),
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD"),
+  captureMethod: z.enum(["manual", "photo_import", "camera_assisted"]).default("manual"),
+  notes: z.string().trim().max(1000).optional().nullable(),
+  results: z.array(movementScreenResultInputSchema).min(1).max(30),
+});
+export type CreateMovementScreenInput = z.infer<typeof createMovementScreenSchema>;
+
 // One AI-generated deficit within a weakness report -- see weaknessReports
 // below. category is free text (not an enum) since the AI names it from
 // whatever data actually produced the flag (e.g. "Joint Mobility",
@@ -2729,6 +2914,28 @@ export const academyQuizAnswers = pgTable(
     questionIdx: index("academy_quiz_answers_question_idx").on(table.questionId),
   }),
 );
+
+export const movementScreenBatteriesRelations = relations(movementScreenBatteries, ({ many }) => ({
+  tests: many(movementScreenBatteryTests),
+}));
+
+export const movementScreenBatteryTestsRelations = relations(movementScreenBatteryTests, ({ one }) => ({
+  battery: one(movementScreenBatteries, {
+    fields: [movementScreenBatteryTests.batteryId],
+    references: [movementScreenBatteries.id],
+  }),
+}));
+
+export const movementScreensRelations = relations(movementScreens, ({ many }) => ({
+  results: many(movementScreenResults),
+}));
+
+export const movementScreenResultsRelations = relations(movementScreenResults, ({ one }) => ({
+  screen: one(movementScreens, {
+    fields: [movementScreenResults.screenId],
+    references: [movementScreens.id],
+  }),
+}));
 
 export const academyTracksRelations = relations(academyTracks, ({ many }) => ({
   lessons: many(academyLessons),

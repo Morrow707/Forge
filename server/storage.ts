@@ -77,6 +77,10 @@ import {
   aiKnowledgeGapLog,
   aggregateDataAccessLog,
   aiReflectionFindings,
+  movementScreenBatteries,
+  movementScreenBatteryTests,
+  movementScreens,
+  movementScreenResults,
   foodLogEntries,
   weaknessDeficitSchema,
   PERIODIZATION_PHASE_LABEL,
@@ -86,6 +90,12 @@ import {
   type InsertUser,
 } from "@shared/schema";
 import { classifyGoniometerReading, GONIOMETER_JOINTS } from "@shared/goniometer";
+import {
+  MOVEMENT_SCREEN_LOW_GRADE_THRESHOLD,
+  MOVEMENT_SCREEN_ASYMMETRY_FLAG_PCT,
+  testKeyFromForgeStandardScreen,
+  movementScreenScoreUnit,
+} from "@shared/movement-screen";
 import type {
   ProgramStructureInput,
   SkillProgramStructureInput,
@@ -114,6 +124,12 @@ import type {
   ForgeAiMessage,
   AiKnowledgeEntry,
   AiReflectionFinding,
+  MovementScreenBattery,
+  MovementScreenBatteryTest,
+  MovementScreen,
+  MovementScreenResult,
+  CreateMovementScreenInput,
+  UpdateMovementScreenBatteryInput,
   CreateFoodLogEntryInput,
   UpdateFoodLogEntryInput,
   ClassStructureInput,
@@ -2476,6 +2492,375 @@ export const storage = {
     return Array.from(latestByKey.values());
   },
 
+  // ---------- Movement Screen ----------
+  // A coach/PT-administered functional-movement battery -- see
+  // shared/movement-screen.ts for the seeded "Forge Standard Screen" test
+  // list and the flagging thresholds, and the schema comment on
+  // movementScreenBatteries for the ownership/forking model (mirrors
+  // classes.isForgeOfficial + program-list's "Duplicate" action). Purely
+  // informational everywhere it's read -- see getAthleteAiContext's own
+  // addition below; nothing here ever gates a program.
+
+  // Forge-official batteries (visible to every coach) plus this coach's
+  // (and their staff's) own -- same ownerIds union getVisibleExercisesForCoach
+  // uses for the exercise bank.
+  async getMovementScreenBatteries(
+    coachId: number,
+  ): Promise<(MovementScreenBattery & { editable: boolean })[]> {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    const admins = await db.query.users.findMany({ where: eq(users.role, "admin") });
+    const ownerIds = Array.from(new Set([...coachIds, ...admins.map((a) => a.id)]));
+    const rows = await db.query.movementScreenBatteries.findMany({
+      where: inArray(movementScreenBatteries.coachId, ownerIds),
+      orderBy: [desc(movementScreenBatteries.isForgeOfficial), asc(movementScreenBatteries.name)],
+    });
+    return rows.map((b) => ({ ...b, editable: coachIds.includes(b.coachId) }));
+  },
+
+  async getMovementScreenBatteryDetail(
+    coachId: number,
+    batteryId: number,
+  ): Promise<{ battery: MovementScreenBattery; tests: MovementScreenBatteryTest[]; editable: boolean } | null> {
+    const battery = await db.query.movementScreenBatteries.findFirst({
+      where: eq(movementScreenBatteries.id, batteryId),
+    });
+    if (!battery) return null;
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    if (!battery.isForgeOfficial && !coachIds.includes(battery.coachId)) return null;
+    const tests = await db.query.movementScreenBatteryTests.findMany({
+      where: eq(movementScreenBatteryTests.batteryId, batteryId),
+      orderBy: asc(movementScreenBatteryTests.sortOrder),
+    });
+    return { battery, tests, editable: coachIds.includes(battery.coachId) };
+  },
+
+  // Clones a battery into a new, fully-editable copy owned by this coach --
+  // same "fetch full structure, POST as new" action program-list's
+  // Duplicate button already uses. forkedFromId keeps the lineage, so
+  // deleting this copy later (see deleteMovementScreenBattery) IS the whole
+  // "revert to Forge's version" story -- there's nothing else to undo, the
+  // original was never touched.
+  async forkMovementScreenBattery(
+    coachId: number,
+    sourceBatteryId: number,
+    name?: string,
+  ): Promise<MovementScreenBattery | null> {
+    const source = await this.getMovementScreenBatteryDetail(coachId, sourceBatteryId);
+    if (!source) return null;
+    const [battery] = await db
+      .insert(movementScreenBatteries)
+      .values({
+        coachId,
+        isForgeOfficial: false,
+        name: name?.trim() || `${source.battery.name} (Custom)`,
+        description: source.battery.description,
+        forkedFromId: sourceBatteryId,
+      })
+      .returning();
+    if (source.tests.length > 0) {
+      await db.insert(movementScreenBatteryTests).values(
+        source.tests.map((t) => ({
+          batteryId: battery.id,
+          testKey: t.testKey,
+          label: t.label,
+          category: t.category,
+          scoreType: t.scoreType,
+          side: t.side,
+          instructions: t.instructions,
+          sortOrder: t.sortOrder,
+        })),
+      );
+    }
+    return battery;
+  },
+
+  // Full replace-on-save for a coach-owned battery's test list -- same
+  // pattern assignmentCorrectives uses for its own edit flow. Never allowed
+  // on a Forge-official battery; this check backs up the route layer's own
+  // since it's the one place that would actually mutate it.
+  async updateMovementScreenBattery(
+    coachId: number,
+    batteryId: number,
+    input: UpdateMovementScreenBatteryInput,
+  ): Promise<MovementScreenBattery | null> {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    const battery = await db.query.movementScreenBatteries.findFirst({
+      where: eq(movementScreenBatteries.id, batteryId),
+    });
+    if (!battery || battery.isForgeOfficial || !coachIds.includes(battery.coachId)) return null;
+
+    const [updated] = await db
+      .update(movementScreenBatteries)
+      .set({ name: input.name, description: input.description ?? null, updatedAt: new Date() })
+      .where(eq(movementScreenBatteries.id, batteryId))
+      .returning();
+    await db.delete(movementScreenBatteryTests).where(eq(movementScreenBatteryTests.batteryId, batteryId));
+    await db.insert(movementScreenBatteryTests).values(
+      input.tests.map((t, i) => ({
+        batteryId,
+        testKey: t.testKey,
+        label: t.label,
+        category: t.category,
+        scoreType: t.scoreType,
+        side: t.side,
+        instructions: t.instructions ?? null,
+        sortOrder: i,
+      })),
+    );
+    return updated;
+  },
+
+  // The only other half of "revert" -- deleting a coach's own fork falls
+  // back to whatever Forge/other batteries are still visible. Never allowed
+  // on a Forge-official battery.
+  async deleteMovementScreenBattery(coachId: number, batteryId: number): Promise<boolean> {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    const battery = await db.query.movementScreenBatteries.findFirst({
+      where: eq(movementScreenBatteries.id, batteryId),
+    });
+    if (!battery || battery.isForgeOfficial || !coachIds.includes(battery.coachId)) return false;
+    await db.delete(movementScreenBatteries).where(eq(movementScreenBatteries.id, batteryId));
+    return true;
+  },
+
+  // Inserts a full session + its results in one go, then computes `flagged`
+  // purely from the results themselves -- never entered by hand. A
+  // grade_0_3 result is flagged at or below MOVEMENT_SCREEN_LOW_GRADE_THRESHOLD;
+  // a unilateral test with both a left and right result in this same
+  // session gets an asymmetry check between the two, flagging both sides if
+  // it clears MOVEMENT_SCREEN_ASYMMETRY_FLAG_PCT; an asymmetry_pct result
+  // (already a computed difference -- e.g. from a photo-imported sheet that
+  // only reports the percentage) is flagged the same way directly.
+  async createMovementScreen(coachId: number, input: CreateMovementScreenInput): Promise<MovementScreen | null> {
+    const onRoster = await this.getRosterAthleteForCoach(coachId, input.athleteId);
+    if (!onRoster) return null;
+
+    const [screen] = await db
+      .insert(movementScreens)
+      .values({
+        athleteId: input.athleteId,
+        coachId,
+        batteryId: input.batteryId ?? null,
+        date: input.date,
+        captureMethod: input.captureMethod,
+        notes: input.notes ?? null,
+      })
+      .returning();
+
+    const byTestKey = new Map<string, { side: string | null; value: number }[]>();
+    for (const r of input.results) {
+      const list = byTestKey.get(r.testKey) ?? [];
+      list.push({ side: r.side ?? null, value: r.scoreValue });
+      byTestKey.set(r.testKey, list);
+    }
+    const asymmetryFlagged = new Set<string>();
+    for (const [testKey, entries] of byTestKey) {
+      const left = entries.find((e) => e.side === "left");
+      const right = entries.find((e) => e.side === "right");
+      if (!left || !right) continue;
+      const bigger = Math.max(left.value, right.value);
+      const asymmetryPct = bigger > 0 ? (Math.abs(left.value - right.value) / bigger) * 100 : 0;
+      if (asymmetryPct > MOVEMENT_SCREEN_ASYMMETRY_FLAG_PCT) {
+        asymmetryFlagged.add(`${testKey}:left`);
+        asymmetryFlagged.add(`${testKey}:right`);
+      }
+    }
+
+    await db.insert(movementScreenResults).values(
+      input.results.map((r) => {
+        const gradeFlag = r.scoreType === "grade_0_3" && r.scoreValue <= MOVEMENT_SCREEN_LOW_GRADE_THRESHOLD;
+        const asymmetryPctFlag = r.scoreType === "asymmetry_pct" && r.scoreValue > MOVEMENT_SCREEN_ASYMMETRY_FLAG_PCT;
+        const sideFlag = r.side ? asymmetryFlagged.has(`${r.testKey}:${r.side}`) : false;
+        return {
+          screenId: screen.id,
+          testKey: r.testKey,
+          label: r.label,
+          category: r.category,
+          scoreType: r.scoreType,
+          side: r.side ?? null,
+          scoreValue: r.scoreValue,
+          flagged: gradeFlag || asymmetryPctFlag || sideFlag,
+          notes: r.notes ?? null,
+        };
+      }),
+    );
+    return screen;
+  },
+
+  async getMovementScreensForAthlete(coachId: number, athleteId: number) {
+    const onRoster = await this.getRosterAthleteForCoach(coachId, athleteId);
+    if (!onRoster) return null;
+    const screens = await db.query.movementScreens.findMany({
+      where: eq(movementScreens.athleteId, athleteId),
+      orderBy: desc(movementScreens.date),
+      with: { results: true },
+    });
+    return screens.map((s) => ({
+      ...s,
+      flaggedCount: s.results.filter((r) => r.flagged).length,
+      testCount: s.results.length,
+    }));
+  },
+
+  // Each flagged result comes back with its suggested correctives already
+  // attached (via the same FAULT_CORRECTIVE_KEYWORDS matching every other
+  // camera-tracking fault uses) -- only for the seeded Forge Standard Screen
+  // test keys, since a coach's own custom test has no declared fault code
+  // to suggest from.
+  async getMovementScreenDetail(coachId: number, screenId: number) {
+    const screen = await db.query.movementScreens.findFirst({
+      where: eq(movementScreens.id, screenId),
+      with: { results: true },
+    });
+    if (!screen) return null;
+    const onRoster = await this.getRosterAthleteForCoach(coachId, screen.athleteId);
+    if (!onRoster) return null;
+
+    const results = await Promise.all(
+      screen.results.map(async (r) => {
+        if (!r.flagged) return { ...r, correctives: [] as { id: number; name: string; muscleGroup: string }[] };
+        const faultCode = testKeyFromForgeStandardScreen(r.testKey)?.faultCode;
+        const correctives = faultCode ? await this.getSuggestedCorrectivesForFault(screen.athleteId, faultCode) : [];
+        return { ...r, correctives };
+      }),
+    );
+    return { ...screen, results };
+  },
+
+  // Vision transcription of ONE athlete's filled-out score sheet -- unlike
+  // the roster-wide sheet imports above (many athletes, one row each), a
+  // movement screen is administered to one athlete at a time, so this reads
+  // rows-of-tests instead. Matches against the chosen battery's own test
+  // list (by label) so a handwritten score always lands on a real testKey
+  // rather than one Claude invents from the page.
+  async analyzeMovementScreenPhoto(
+    coachId: number,
+    batteryId: number,
+    images: { mediaType: "image/jpeg" | "image/png"; data: string }[],
+  ) {
+    if (!aiEnabled) {
+      return { error: "AI isn't set up yet -- ask whoever manages this Forge instance to configure it." };
+    }
+    const battery = await this.getMovementScreenBatteryDetail(coachId, batteryId);
+    if (!battery) return { error: "Battery not found." };
+    const testList = battery.tests
+      .map((t) => `${t.testKey} (${t.label}, scored in ${movementScreenScoreUnit(t.scoreType)}, ${t.side})`)
+      .join("\n");
+    const system =
+      "You are transcribing a photographed movement-screen score sheet for a strength coach. Report exactly what's handwritten on the sheet -- never infer or estimate a score that isn't legible. Match each written score to the closest test in the provided list by its testKey. A unilateral test has a left and/or right score; report each side you can actually read as its own row, and skip a side entirely if it's blank or illegible rather than guessing.";
+    const tool = {
+      name: "report_movement_screen",
+      description: "Reports each test score transcribed from the movement-screen sheet photo.",
+      input_schema: {
+        type: "object",
+        properties: {
+          rows: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                testKey: { type: "string", enum: battery.tests.map((t) => t.testKey) },
+                side: { type: "string", enum: ["left", "right"] },
+                scoreValue: { type: "number" },
+                notes: { type: "string" },
+              },
+              required: ["testKey", "scoreValue"],
+            },
+          },
+        },
+        required: ["rows"],
+      },
+    };
+    const result = await askClaudeVisionStructured<{ rows: unknown[] }>(
+      system,
+      `Battery tests (testKey: label, unit, side):\n${testList}\n\nTranscribe every legible score on the sheet.`,
+      images,
+      tool,
+      { maxTokens: 1536 },
+    );
+    if (!result || !Array.isArray(result.rows)) {
+      return { error: "Couldn't read that photo -- try a clearer shot or enter it manually." };
+    }
+    const byKey = new Map(battery.tests.map((t) => [t.testKey, t]));
+    const rowSchema = z.object({
+      testKey: z.string(),
+      side: z.enum(["left", "right"]).optional().nullable(),
+      scoreValue: z.number(),
+      notes: z.string().trim().max(300).optional().nullable(),
+    });
+    const rows = result.rows
+      .map((r) => rowSchema.safeParse(r))
+      .filter((p) => p.success)
+      .map((p) => p.data)
+      .filter((r) => byKey.has(r.testKey))
+      .map((r) => {
+        const test = byKey.get(r.testKey)!;
+        return {
+          testKey: r.testKey,
+          label: test.label,
+          category: test.category,
+          scoreType: test.scoreType,
+          side: test.side === "unilateral" ? r.side ?? null : null,
+          scoreValue: r.scoreValue,
+          notes: r.notes ?? null,
+        };
+      });
+    return { rows };
+  },
+
+  // Platform-wide, redacted movement-screen data -- same treatment as
+  // getAggregateAthleteData: exact score values, joined only to
+  // non-identifying demographics (age/gender/sport/position), no name/team,
+  // logged via the same aggregateDataAccessLog audit trail.
+  async getAggregateMovementScreenData(adminId: number): Promise<
+    {
+      testKey: string;
+      label: string;
+      category: string;
+      scoreType: string;
+      side: string | null;
+      scoreValue: number;
+      flagged: boolean;
+      age: number | null;
+      gender: string | null;
+      sport: string | null;
+      position: string | null;
+    }[]
+  > {
+    db.insert(aggregateDataAccessLog).values({ adminId }).catch(() => {});
+    return db
+      .select({
+        testKey: movementScreenResults.testKey,
+        label: movementScreenResults.label,
+        category: movementScreenResults.category,
+        scoreType: movementScreenResults.scoreType,
+        side: movementScreenResults.side,
+        scoreValue: movementScreenResults.scoreValue,
+        flagged: movementScreenResults.flagged,
+        age: users.age,
+        gender: users.gender,
+        sport: users.sport,
+        position: users.position,
+      })
+      .from(movementScreenResults)
+      .innerJoin(movementScreens, eq(movementScreenResults.screenId, movementScreens.id))
+      .innerJoin(users, eq(movementScreens.athleteId, users.id));
+  },
+
+  // Most recent screen's flagged results, unauthorized-free (internal,
+  // read-only -- used only by getAthleteAiContext below, which is already
+  // gated by getAuthorizedAthleteAiContext). Deliberately just the latest
+  // session, not a running history -- an old flag a coach already worked on
+  // shouldn't keep echoing into every future AI prompt forever.
+  async getLatestFlaggedMovementScreenResults(athleteId: number): Promise<MovementScreenResult[]> {
+    const latest = await db.query.movementScreens.findFirst({
+      where: eq(movementScreens.athleteId, athleteId),
+      orderBy: desc(movementScreens.date),
+      with: { results: true },
+    });
+    return latest ? latest.results.filter((r) => r.flagged) : [];
+  },
+
   // ---------- Injury history ----------
   // Self-reported (or coach-logged) history of injuries by body part and
   // date -- feeds getAthleteAiContext below so the program-builder AI can
@@ -3095,14 +3480,16 @@ Based on this athlete's actual rate of improvement, suggest a realistic target v
   },
 
   async getAthleteAiContext(athleteId: number): Promise<string> {
-    const [user, latestGoniometer, asymmetryFlags, acwrHistory, currentPhase, injuries] = await Promise.all([
-      db.query.users.findFirst({ where: eq(users.id, athleteId) }),
-      this.getLatestGoniometerReadingsForAthlete(athleteId),
-      this.getRecentLegAsymmetryFlagsForAthlete(athleteId),
-      this.getAcwrHistoryForAthlete(athleteId, 60),
-      this.getCurrentTrainingPhaseForAthlete(athleteId),
-      this.getInjuryHistoryForAthlete(athleteId),
-    ]);
+    const [user, latestGoniometer, asymmetryFlags, acwrHistory, currentPhase, injuries, screenFlags] =
+      await Promise.all([
+        db.query.users.findFirst({ where: eq(users.id, athleteId) }),
+        this.getLatestGoniometerReadingsForAthlete(athleteId),
+        this.getRecentLegAsymmetryFlagsForAthlete(athleteId),
+        this.getAcwrHistoryForAthlete(athleteId, 60),
+        this.getCurrentTrainingPhaseForAthlete(athleteId),
+        this.getInjuryHistoryForAthlete(athleteId),
+        this.getLatestFlaggedMovementScreenResults(athleteId),
+      ]);
     if (!user) return "No profile on file for this athlete.";
 
     const restrictedGoniometer = latestGoniometer
@@ -3140,6 +3527,11 @@ Based on this athlete's actual rate of improvement, suggest a realistic target v
       user.deadliftMaxLbs != null ? `deadlift ${user.deadliftMaxLbs}lbs` : null,
     ].filter(Boolean);
 
+    const screenText =
+      screenFlags.length > 0
+        ? screenFlags.map((r) => `${r.label}${r.side ? ` (${r.side})` : ""}: ${r.scoreValue} (flagged)`).join("; ")
+        : "none flagged";
+
     return `- Age: ${user.age != null ? user.age : "not set"}
 - Gender: ${user.gender ? user.gender.replace(/_/g, " ") : "not set"}
 - Height: ${user.heightIn != null ? `${user.heightIn}in` : "not set"}
@@ -3155,7 +3547,8 @@ Based on this athlete's actual rate of improvement, suggest a realistic target v
 - Combine/testing bests on file: ${testingParts.length > 0 ? testingParts.join(", ") : "none recorded"}
 - Joint range-of-motion flags (coach/PT-measured, not shown to the athlete directly): ${goniometerText}
 - Leg-drive asymmetry from camera-tracked bilateral lifts (not shown to the athlete directly): ${asymmetryText}
-- Training-load risk / ACWR (coach analytics, not shown to the athlete directly): ${acwrText}`;
+- Training-load risk / ACWR (coach analytics, not shown to the athlete directly): ${acwrText}
+- Movement-screen flags from the most recent screening (coach/PT-administered, not shown to the athlete directly -- weigh as a signal for corrective exercise selection, never as a rule that blocks a movement or program): ${screenText}`;
   },
 
   // Authorization wrapper around getAthleteAiContext for the "coach drafting

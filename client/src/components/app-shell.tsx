@@ -72,6 +72,7 @@ const coachNav: NavItem[] = [
     ],
   },
   { href: "/coach/roster", label: "Roster & Teams", icon: Users },
+  { href: "/coach/movement-screens", label: "Movement Screens", icon: ClipboardCheck },
   { href: "/coach/nutrition", label: "Nutrition", icon: Apple },
   { href: "/coach/analytics", label: "Analytics", icon: LineChart },
   { href: "/coach/leaderboard", label: "Leaderboard", icon: Trophy },

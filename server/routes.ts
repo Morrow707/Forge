@@ -13,6 +13,7 @@ import { sendEmail } from "./email";
 import { buildProgressReportEmail } from "./progress-report";
 import { buildRecruitingProfilePdf } from "./recruiting-profile";
 import { buildTrainingHistoryCsv, buildTrainingHistoryPdf } from "./training-history-export";
+import { buildMovementScreenSheetPdf } from "./movement-screen-export";
 import { notifyUser } from "./notify";
 import {
   insertExerciseSchema,
@@ -46,6 +47,8 @@ import {
   createAnnotationSchema,
   testingTrendsQuerySchema,
   insertGoniometerReadingSchema,
+  createMovementScreenSchema,
+  updateMovementScreenBatterySchema,
   createGoalSchema,
   suggestGoalTargetSchema,
   sendChatMessageSchema,
@@ -2312,6 +2315,96 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(204).end();
     },
   );
+
+  // Movement Screen -- see shared/movement-screen.ts and storage.ts's own
+  // comments for the data model and ownership/forking rules.
+  app.get("/api/coach/movement-screens/batteries", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const batteries = await storage.getMovementScreenBatteries(user.id);
+    res.json(batteries);
+  });
+
+  app.get("/api/coach/movement-screens/batteries/:id", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const detail = await storage.getMovementScreenBatteryDetail(user.id, Number(req.params.id));
+    if (!detail) return res.status(404).json({ message: "Battery not found" });
+    res.json(detail);
+  });
+
+  app.post("/api/coach/movement-screens/batteries/:id/fork", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const name = typeof req.body?.name === "string" ? req.body.name : undefined;
+    const battery = await storage.forkMovementScreenBattery(user.id, Number(req.params.id), name);
+    if (!battery) return res.status(404).json({ message: "Battery not found" });
+    res.status(201).json(battery);
+  });
+
+  app.put("/api/coach/movement-screens/batteries/:id", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = updateMovementScreenBatterySchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    const battery = await storage.updateMovementScreenBattery(user.id, Number(req.params.id), parsed.data);
+    if (!battery) return res.status(404).json({ message: "Battery not found, or it's the Forge-official one -- fork it first" });
+    res.json(battery);
+  });
+
+  app.delete("/api/coach/movement-screens/batteries/:id", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const ok = await storage.deleteMovementScreenBattery(user.id, Number(req.params.id));
+    if (!ok) return res.status(404).json({ message: "Battery not found, or it's the Forge-official one" });
+    res.status(204).end();
+  });
+
+  app.get("/api/coach/movement-screens/batteries/:id/print.pdf", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const detail = await storage.getMovementScreenBatteryDetail(user.id, Number(req.params.id));
+    if (!detail) return res.status(404).json({ message: "Battery not found" });
+    const pdf = await buildMovementScreenSheetPdf(detail.battery.name, detail.tests);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${detail.battery.name.replace(/[^a-z0-9]+/gi, "-")}.pdf"`);
+    res.send(pdf);
+  });
+
+  app.post("/api/coach/movement-screens/batteries/:id/analyze-photo", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = z.object({ images: photoImagesSchema }).safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    const result = await storage.analyzeMovementScreenPhoto(user.id, Number(req.params.id), parsed.data.images);
+    if ("error" in result) return res.status(422).json({ message: result.error });
+    res.json(result);
+  });
+
+  app.get("/api/coach/roster/:athleteId/movement-screens", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const screens = await storage.getMovementScreensForAthlete(user.id, Number(req.params.athleteId));
+    if (screens === null) return res.status(404).json({ message: "Athlete not found" });
+    res.json(screens);
+  });
+
+  app.post("/api/coach/roster/:athleteId/movement-screens", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = createMovementScreenSchema.safeParse({ ...req.body, athleteId: Number(req.params.athleteId) });
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    const screen = await storage.createMovementScreen(user.id, parsed.data);
+    if (!screen) return res.status(404).json({ message: "Athlete not found" });
+    res.status(201).json(screen);
+  });
+
+  app.get("/api/coach/movement-screens/:id", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const detail = await storage.getMovementScreenDetail(user.id, Number(req.params.id));
+    if (!detail) return res.status(404).json({ message: "Screen not found" });
+    res.json(detail);
+  });
+
+  // Admin-only, redacted (no name/team, exact score values) -- see
+  // getAggregateMovementScreenData's own comment; same access-log audit
+  // trail as /api/admin/aggregate-athlete-data.
+  app.get("/api/admin/movement-screens/aggregate", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const result = await storage.getAggregateMovementScreenData(user.id);
+    res.json(result);
+  });
 
   // Injury history -- a coach can view and log entries for their own
   // roster athlete, same roster-scoped pattern as goniometer readings

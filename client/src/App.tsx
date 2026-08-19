@@ -39,6 +39,7 @@ const CoachClassBuilder = lazy(() => import("@/pages/coach/class-builder"));
 const CoachCoachesCorner = lazy(() => import("@/pages/coach/coaches-corner"));
 const CoachRoster = lazy(() => import("@/pages/coach/roster"));
 const CoachAthleteDetail = lazy(() => import("@/pages/coach/athlete-detail"));
+const CoachMovementScreens = lazy(() => import("@/pages/coach/movement-screens"));
 const CoachNutrition = lazy(() => import("@/pages/coach/nutrition"));
 const CoachCalendar = lazy(() => import("@/pages/coach/calendar"));
 const CoachMyWorkout = lazy(() => import("@/pages/coach/my-workout"));
@@ -235,6 +236,9 @@ function Router() {
         </Route>
         <Route path="/coach/roster/:athleteId">
           <ProtectedRoute role="coach" component={CoachAthleteDetail} />
+        </Route>
+        <Route path="/coach/movement-screens">
+          <ProtectedRoute role="coach" component={CoachMovementScreens} />
         </Route>
         <Route path="/coach/roster">
           <ProtectedRoute role="coach" component={CoachRoster} />

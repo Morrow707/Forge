@@ -112,6 +112,26 @@ export default function ForgeAiPage() {
     enabled: showAggregate,
   });
 
+  type ScreenRow = {
+    testKey: string;
+    label: string;
+    category: string;
+    scoreType: string;
+    side: string | null;
+    scoreValue: number;
+    flagged: boolean;
+    age: number | null;
+    gender: string | null;
+    sport: string | null;
+    position: string | null;
+  };
+  const [showScreens, setShowScreens] = useState(false);
+  const { data: screenData, isLoading: screenLoading } = useQuery<ScreenRow[]>({
+    queryKey: ["/api/admin/movement-screens/aggregate"],
+    queryFn: () => getJson("/api/admin/movement-screens/aggregate"),
+    enabled: showScreens,
+  });
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
@@ -482,6 +502,68 @@ export default function ForgeAiPage() {
                         <td className="py-1.5 pr-3">{a.benchMaxLbs ?? "--"}</td>
                         <td className="py-1.5 pr-3">{a.squatMaxLbs ?? "--"}</td>
                         <td className="py-1.5 pr-3">{a.deadliftMaxLbs ?? "--"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </CardContent>
+          )}
+        </Card>
+      </div>
+
+      <div className="px-4 pb-4 lg:px-8">
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Database className="h-4 w-4 text-primary" />
+                  Movement screen results
+                </CardTitle>
+                <CardDescription>
+                  Every screened result across every coach's roster -- exact values, redacted to age/gender/sport/
+                  position. Each view is logged.
+                </CardDescription>
+              </div>
+              {!showScreens && (
+                <Button type="button" variant="outline" size="sm" onClick={() => setShowScreens(true)}>
+                  View data
+                </Button>
+              )}
+            </div>
+          </CardHeader>
+          {showScreens && (
+            <CardContent className="overflow-x-auto">
+              {screenLoading ? (
+                <div className="h-24 animate-pulse rounded-md bg-surface" />
+              ) : !screenData || screenData.length === 0 ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">No screens logged yet.</p>
+              ) : (
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-[10px] uppercase text-muted-foreground">
+                      <th className="py-1.5 pr-3">Test</th>
+                      <th className="py-1.5 pr-3">Side</th>
+                      <th className="py-1.5 pr-3">Score</th>
+                      <th className="py-1.5 pr-3">Flagged</th>
+                      <th className="py-1.5 pr-3">Age</th>
+                      <th className="py-1.5 pr-3">Gender</th>
+                      <th className="py-1.5 pr-3">Sport</th>
+                      <th className="py-1.5 pr-3">Position</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {screenData.map((r, i) => (
+                      <tr key={i} className="border-b border-border/50">
+                        <td className="py-1.5 pr-3">{r.label}</td>
+                        <td className="py-1.5 pr-3">{r.side ?? "--"}</td>
+                        <td className="py-1.5 pr-3">{r.scoreValue}</td>
+                        <td className="py-1.5 pr-3">{r.flagged ? "yes" : "no"}</td>
+                        <td className="py-1.5 pr-3">{r.age ?? "--"}</td>
+                        <td className="py-1.5 pr-3">{r.gender ?? "--"}</td>
+                        <td className="py-1.5 pr-3">{r.sport ?? "--"}</td>
+                        <td className="py-1.5 pr-3">{r.position ?? "--"}</td>
                       </tr>
                     ))}
                   </tbody>
