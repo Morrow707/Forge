@@ -16,12 +16,14 @@ import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { format, parseISO, formatISO } from "date-fns";
-import { Plus, Trash2, Ruler } from "lucide-react";
+import { Plus, Trash2, Ruler, Camera } from "lucide-react";
 import {
   GONIOMETER_JOINTS,
   classifyGoniometerReading,
   findGoniometerMovement,
 } from "@shared/goniometer";
+import { cameraSupportsGoniometerMovement } from "@/lib/movement-screen-vision";
+import { GoniometerCaptureDialog } from "@/components/goniometer-capture-dialog";
 
 type GoniometerReading = {
   id: number;
@@ -62,6 +64,7 @@ export function GoniometerPanel({ athleteId }: { athleteId: number }) {
   const [movementKey, setMovementKey] = useState(GONIOMETER_JOINTS[0].movements[0].key);
   const [angle, setAngle] = useState("");
   const [notes, setNotes] = useState("");
+  const [cameraCaptureOpen, setCameraCaptureOpen] = useState(false);
 
   const { data: readings = [], isLoading } = useQuery<GoniometerReading[]>({
     queryKey: [fetchUrl],
@@ -157,13 +160,33 @@ export function GoniometerPanel({ athleteId }: { athleteId: number }) {
           </div>
           <div className="space-y-1.5">
             <Label>Angle (degrees)</Label>
-            <Input
-              type="number"
-              value={angle}
-              onChange={(e) => setAngle(e.target.value)}
-              placeholder="e.g. 165"
-            />
+            <div className="flex gap-2">
+              <Input
+                type="number"
+                value={angle}
+                onChange={(e) => setAngle(e.target.value)}
+                placeholder="e.g. 165"
+              />
+              {cameraSupportsGoniometerMovement(jointKey, movementKey) && (
+                <Button type="button" variant="outline" onClick={() => setCameraCaptureOpen(true)}>
+                  <Camera className="h-4 w-4" />
+                  Camera
+                </Button>
+              )}
+            </div>
           </div>
+          <GoniometerCaptureDialog
+            open={cameraCaptureOpen}
+            onOpenChange={setCameraCaptureOpen}
+            jointKey={jointKey}
+            movementKey={movementKey}
+            jointLabel={joint.label}
+            movementLabel={joint.movements.find((m) => m.key === movementKey)?.label ?? movementKey}
+            onCapture={(deg) => {
+              setAngle(String(deg));
+              setCameraCaptureOpen(false);
+            }}
+          />
           <div className="space-y-1.5">
             <Label>Notes (optional)</Label>
             <Textarea

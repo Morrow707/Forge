@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,8 +18,10 @@ import type { CapturedPhoto } from "@/lib/photo-capture";
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { format, parseISO, formatISO } from "date-fns";
-import { Plus, ClipboardCheck, AlertTriangle, Camera, PenLine, Loader2 } from "lucide-react";
+import { Plus, ClipboardCheck, AlertTriangle, Camera, PenLine, Loader2, Ruler } from "lucide-react";
 import { resolveMovementScreenUnitLabel, formatMovementScreenScore } from "@shared/movement-screen";
+import { OverheadSquatCaptureDialog } from "@/components/overhead-squat-capture-dialog";
+import { isArMeasureSupported, measureWithAR } from "@/lib/ar-measure";
 
 type Battery = { id: number; name: string; isForgeOfficial: boolean; editable: boolean };
 type BatteryTest = {
@@ -205,6 +207,17 @@ function NewScreenDialog({
   const [scores, setScores] = useState<Record<string, string>>({});
   const [photos, setPhotos] = useState<CapturedPhoto[]>([]);
   const [photoRows, setPhotoRows] = useState<PhotoRow[] | null>(null);
+  const [squatCaptureOpen, setSquatCaptureOpen] = useState(false);
+  const [arSupported, setArSupported] = useState(false);
+
+  useEffect(() => {
+    isArMeasureSupported().then(setArSupported);
+  }, []);
+
+  async function measureFieldWithAR(key: string) {
+    const result = await measureWithAR();
+    if (result) setScores((s) => ({ ...s, [key]: result.inches.toFixed(1) }));
+  }
 
   const { data: batteries = [] } = useQuery<Battery[]>({
     queryKey: ["/api/coach/movement-screens/batteries"],
@@ -315,8 +328,18 @@ function NewScreenDialog({
             <div className="space-y-3">
               {batteryDetail.tests.map((t) => (
                 <div key={t.testKey} className="rounded-md border border-border p-3">
-                  <p className="text-sm font-semibold">{t.label}</p>
-                  <p className="text-xs text-muted-foreground">{t.category} &middot; scored in {resolveMovementScreenUnitLabel(t.scoreType, t.unitLabel)}</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-semibold">{t.label}</p>
+                      <p className="text-xs text-muted-foreground">{t.category} &middot; scored in {resolveMovementScreenUnitLabel(t.scoreType, t.unitLabel)}</p>
+                    </div>
+                    {t.testKey === "overhead_squat" && (
+                      <Button type="button" size="sm" variant="outline" onClick={() => setSquatCaptureOpen(true)}>
+                        <Camera className="h-3.5 w-3.5" />
+                        Camera
+                      </Button>
+                    )}
+                  </div>
                   {t.side === "bilateral" ? (
                     <Input
                       className="mt-2"
@@ -328,24 +351,46 @@ function NewScreenDialog({
                     />
                   ) : (
                     <div className="mt-2 grid grid-cols-2 gap-2">
-                      <Input
-                        type="number"
-                        step="0.1"
-                        placeholder="Left"
-                        value={scores[`${t.testKey}:left`] ?? ""}
-                        onChange={(e) => setScores((s) => ({ ...s, [`${t.testKey}:left`]: e.target.value }))}
-                      />
-                      <Input
-                        type="number"
-                        step="0.1"
-                        placeholder="Right"
-                        value={scores[`${t.testKey}:right`] ?? ""}
-                        onChange={(e) => setScores((s) => ({ ...s, [`${t.testKey}:right`]: e.target.value }))}
-                      />
+                      <div className="flex gap-1">
+                        <Input
+                          type="number"
+                          step="0.1"
+                          placeholder="Left"
+                          value={scores[`${t.testKey}:left`] ?? ""}
+                          onChange={(e) => setScores((s) => ({ ...s, [`${t.testKey}:left`]: e.target.value }))}
+                        />
+                        {t.scoreType === "distance_in" && arSupported && (
+                          <Button type="button" size="icon" variant="outline" title="Measure with AR" onClick={() => measureFieldWithAR(`${t.testKey}:left`)}>
+                            <Ruler className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                      <div className="flex gap-1">
+                        <Input
+                          type="number"
+                          step="0.1"
+                          placeholder="Right"
+                          value={scores[`${t.testKey}:right`] ?? ""}
+                          onChange={(e) => setScores((s) => ({ ...s, [`${t.testKey}:right`]: e.target.value }))}
+                        />
+                        {t.scoreType === "distance_in" && arSupported && (
+                          <Button type="button" size="icon" variant="outline" title="Measure with AR" onClick={() => measureFieldWithAR(`${t.testKey}:right`)}>
+                            <Ruler className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
               ))}
+              <OverheadSquatCaptureDialog
+                open={squatCaptureOpen}
+                onOpenChange={setSquatCaptureOpen}
+                onUseGrade={(grade) => {
+                  setScores((s) => ({ ...s, overhead_squat: String(grade) }));
+                  setSquatCaptureOpen(false);
+                }}
+              />
             </div>
           )}
 
