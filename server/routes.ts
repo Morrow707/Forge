@@ -55,6 +55,9 @@ import {
   sendSkillProgramChatMessageSchema,
   sendAiKnowledgeChatMessageSchema,
   applyKnowledgeProposalSchema,
+  sendForgeAiChatMessageSchema,
+  applyForgeAiEntryProposalSchema,
+  deactivateForgeAiEntrySchema,
   updateLegalAgreementSchema,
   substituteExerciseSchema,
   formFaultSchema,
@@ -1782,6 +1785,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!parsed.success) return res.status(400).json({ message: "Invalid guidelines" });
     const result = await storage.applyAiKnowledgeProposal(user.id, parsed.data.guidelines);
     res.status(201).json(result);
+  });
+
+  // Forge AI -- the central, per-entry knowledge base superseding the
+  // single-document ai-knowledge/nutrition-knowledge chats above (kept
+  // running until every AI feature is migrated to read from here instead).
+  app.get("/api/admin/forge-ai", requireRole("admin"), async (_req, res) => {
+    const result = await storage.getForgeAiChat();
+    res.json(result);
+  });
+
+  app.post("/api/admin/forge-ai/chat", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = sendForgeAiChatMessageSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "Invalid message" });
+    const result = await storage.chatWithForgeAi(user.id, parsed.data.content);
+    res.status(201).json(result);
+  });
+
+  // Commits an entry the chat above proposed -- the admin has seen it
+  // client-side and is choosing to apply it. Nothing reaches
+  // aiKnowledgeEntries (read platform-wide, once features are wired to it)
+  // without this explicit step.
+  app.post("/api/admin/forge-ai/apply", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = applyForgeAiEntryProposalSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "Invalid entry" });
+    const result = await storage.applyForgeAiEntryProposal(user.id, parsed.data);
+    res.status(201).json(result);
+  });
+
+  app.post("/api/admin/forge-ai/entries/:id/deactivate", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ message: "Invalid id" });
+    const parsed = deactivateForgeAiEntrySchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "A reason is required" });
+    const result = await storage.deactivateForgeAiEntry(user.id, id, parsed.data.reason);
+    if (!result) return res.status(404).json({ message: "Entry not found" });
+    res.json(result);
   });
 
   // The clickwrap agreement every new coach/athlete accepts at signup (see

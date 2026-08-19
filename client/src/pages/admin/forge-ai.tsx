@@ -1,0 +1,282 @@
+import { useEffect, useRef, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { AppShell } from "@/components/app-shell";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { apiRequest, getJson } from "@/lib/queryClient";
+import { format, parseISO } from "date-fns";
+import { toast } from "sonner";
+import { Send, Sparkles, Loader2, BookOpen, Eye, X } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+type ForgeAiMessage = { id: number; role: "admin" | "assistant"; content: string; createdAt: string };
+
+type EntryTags = {
+  category?: string | null;
+  position?: string | null;
+  gender?: string | null;
+  ageMin?: number | null;
+  ageMax?: number | null;
+  maturity: "established" | "experimental";
+};
+
+type ForgeAiEntry = EntryTags & { id: number; content: string; updatedAt: string };
+
+type Proposal = EntryTags & {
+  content: string;
+  summary: string;
+  updatesEntryId?: number | null;
+  isCorrection?: boolean;
+  changeReason?: string;
+};
+
+function scopeLabel(e: EntryTags): string {
+  const parts = [
+    e.position ? `position: ${e.position}` : null,
+    e.gender ? `gender: ${e.gender}` : null,
+    e.ageMin != null || e.ageMax != null ? `age ${e.ageMin ?? "any"}-${e.ageMax ?? "any"}` : null,
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(" · ") : "universal";
+}
+
+/** Forge AI's central teaching chat -- see chatWithForgeAi's own comment in
+ * storage.ts for why this is a per-entry propose flow (content + specificity
+ * tags + maturity level) rather than the old single-document rewrite the
+ * "Teach AI"/"Teach Nutrition AI" pages used. Nothing here reaches the live
+ * knowledge base every AI feature reads from until the admin reviews a
+ * proposal card and explicitly applies it. */
+export default function ForgeAiPage() {
+  const qc = useQueryClient();
+  const [content, setContent] = useState("");
+  const [proposal, setProposal] = useState<Proposal | null>(null);
+  const [retiringId, setRetiringId] = useState<number | null>(null);
+  const [retireReason, setRetireReason] = useState("");
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  const { data, isLoading } = useQuery<{ messages: ForgeAiMessage[]; entries: ForgeAiEntry[] }>({
+    queryKey: ["/api/admin/forge-ai"],
+    queryFn: () => getJson("/api/admin/forge-ai"),
+  });
+  const messages = data?.messages ?? [];
+  const entries = data?.entries ?? [];
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages.length]);
+
+  const send = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/admin/forge-ai/chat", { content });
+      return res.json() as Promise<{ proposal: Proposal | null }>;
+    },
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: ["/api/admin/forge-ai"] });
+      setContent("");
+      setProposal(result.proposal ?? null);
+    },
+    onError: () => toast.error("Couldn't send that -- try again"),
+  });
+
+  const apply = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/admin/forge-ai/apply", proposal);
+      return res.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/admin/forge-ai"] });
+      setProposal(null);
+      toast.success("Applied -- Forge AI knows this now");
+    },
+    onError: () => toast.error("Couldn't apply that -- try again"),
+  });
+
+  const retire = useMutation({
+    mutationFn: async (id: number) => {
+      await apiRequest("POST", `/api/admin/forge-ai/entries/${id}/deactivate`, { reason: retireReason });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/admin/forge-ai"] });
+      setRetiringId(null);
+      setRetireReason("");
+      toast.success("Retired");
+    },
+    onError: () => toast.error("Couldn't retire that -- a reason is required"),
+  });
+
+  return (
+    <AppShell title="Forge AI">
+      <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
+        <Card className="flex min-h-[28rem] flex-col">
+          <CardHeader className="shrink-0">
+            <CardTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-primary" />
+              Talk with Forge AI
+            </CardTitle>
+            <CardDescription>
+              A real conversation, not an intake form -- discuss ideas, ask questions, paste research. When something's
+              concrete enough to teach, it'll propose an entry for you to review below.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex min-h-0 flex-1 flex-col gap-3">
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto">
+              {isLoading && <div className="h-24 animate-pulse rounded-md bg-surface" />}
+              {!isLoading && messages.length === 0 && (
+                <p className="py-8 text-center text-sm text-muted-foreground">
+                  Nothing taught yet -- paste an idea, a quote, a link, or just ask a question to start.
+                </p>
+              )}
+              {messages.map((m) => (
+                <div key={m.id} className={cn("flex", m.role === "admin" ? "justify-end" : "justify-start")}>
+                  <div
+                    className={cn(
+                      "max-w-[85%] rounded-lg px-3 py-2 text-sm",
+                      m.role === "admin" ? "bg-primary text-primary-foreground" : "border border-primary/30 bg-primary/5",
+                    )}
+                  >
+                    <p className="whitespace-pre-wrap">{m.content}</p>
+                    <p className={cn("mt-1 text-[10px]", m.role === "admin" ? "text-primary-foreground/70" : "text-muted-foreground")}>
+                      {format(parseISO(m.createdAt), "MMM d, h:mm a")}
+                    </p>
+                  </div>
+                </div>
+              ))}
+              {send.isPending && (
+                <div className="flex justify-start">
+                  <div className="max-w-[85%] rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
+                    <span className="flex items-center gap-1.5 text-muted-foreground">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      Thinking...
+                    </span>
+                  </div>
+                </div>
+              )}
+              <div ref={bottomRef} />
+            </div>
+
+            {proposal && (
+              <div className="shrink-0 space-y-2 rounded-md border border-primary/30 bg-primary/5 p-3">
+                <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-primary">
+                  <Eye className="h-3.5 w-3.5" />
+                  {proposal.updatesEntryId ? `Review update to entry #${proposal.updatesEntryId}` : "Review new entry"}
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  <Badge variant={proposal.maturity === "established" ? "default" : "secondary"}>
+                    {proposal.maturity}
+                  </Badge>
+                  {proposal.category && <Badge variant="outline">{proposal.category}</Badge>}
+                  {proposal.position && <Badge variant="outline">{proposal.position}</Badge>}
+                  {proposal.gender && <Badge variant="outline">{proposal.gender}</Badge>}
+                  {(proposal.ageMin != null || proposal.ageMax != null) && (
+                    <Badge variant="outline">
+                      age {proposal.ageMin ?? "any"}-{proposal.ageMax ?? "any"}
+                    </Badge>
+                  )}
+                  {proposal.isCorrection && <Badge variant="destructive">correction</Badge>}
+                </div>
+                <p className="rounded bg-background/60 p-2 text-sm">{proposal.content}</p>
+                {proposal.changeReason && (
+                  <p className="text-xs text-muted-foreground">Why: {proposal.changeReason}</p>
+                )}
+                <div className="flex justify-end gap-2">
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setProposal(null)}>
+                    Discard
+                  </Button>
+                  <Button type="button" size="sm" onClick={() => apply.mutate()} disabled={apply.isPending}>
+                    {apply.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                    Apply
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!content.trim() || send.isPending) return;
+                send.mutate();
+              }}
+              className="flex shrink-0 items-end gap-2 border-t border-border pt-3"
+            >
+              <Textarea
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                placeholder="Teach it something, paste an article, or just ask a question..."
+                className="min-h-[44px] flex-1 resize-none"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    if (content.trim() && !send.isPending) send.mutate();
+                  }
+                }}
+              />
+              <Button type="submit" disabled={send.isPending || !content.trim()}>
+                <Send className="h-4 w-4" />
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        <Card className="flex min-h-[28rem] flex-col">
+          <CardHeader className="shrink-0">
+            <CardTitle className="flex items-center gap-2">
+              <BookOpen className="h-5 w-5 text-primary" />
+              What it knows ({entries.length})
+            </CardTitle>
+            <CardDescription>Every active taught entry, most recent first.</CardDescription>
+          </CardHeader>
+          <CardContent className="min-h-0 flex-1 space-y-2 overflow-y-auto">
+            {isLoading ? (
+              <div className="h-40 animate-pulse rounded-md bg-surface" />
+            ) : entries.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">Nothing taught yet.</p>
+            ) : (
+              entries.map((e) => (
+                <div key={e.id} className="rounded-md border border-border p-2.5">
+                  <div className="mb-1 flex flex-wrap items-center gap-1.5">
+                    <Badge variant={e.maturity === "established" ? "default" : "secondary"} className="text-[10px]">
+                      {e.maturity}
+                    </Badge>
+                    <span className="text-[10px] text-muted-foreground">{scopeLabel(e)}</span>
+                  </div>
+                  <p className="text-sm">{e.content}</p>
+                  {retiringId === e.id ? (
+                    <div className="mt-2 flex items-center gap-1.5">
+                      <Textarea
+                        value={retireReason}
+                        onChange={(ev) => setRetireReason(ev.target.value)}
+                        placeholder="Why is this being retired?"
+                        className="min-h-[32px] flex-1 resize-none text-xs"
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="destructive"
+                        disabled={!retireReason.trim() || retire.isPending}
+                        onClick={() => retire.mutate(e.id)}
+                      >
+                        Confirm
+                      </Button>
+                      <Button type="button" size="sm" variant="ghost" onClick={() => setRetiringId(null)}>
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setRetiringId(e.id)}
+                      className="mt-1 text-[10px] font-semibold text-muted-foreground hover:text-destructive"
+                    >
+                      This was wrong -- retire it
+                    </button>
+                  )}
+                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </AppShell>
+  );
+}

@@ -70,6 +70,10 @@ import {
   legalAgreement,
   nutritionKnowledgeMessages,
   nutritionKnowledge,
+  forgeAiMessages,
+  aiKnowledgeEntries,
+  aiKnowledgeChangelog,
+  aggregateDataAccessLog,
   foodLogEntries,
   weaknessDeficitSchema,
   PERIODIZATION_PHASE_LABEL,
@@ -104,6 +108,8 @@ import type {
   CreateGoalInput,
   AiKnowledgeMessage,
   NutritionKnowledgeMessage,
+  ForgeAiMessage,
+  AiKnowledgeEntry,
   CreateFoodLogEntryInput,
   UpdateFoodLogEntryInput,
   ClassStructureInput,
@@ -1179,6 +1185,27 @@ const updateGuidelinesResultSchema = z.object({
 });
 
 const knowledgeAskQuestionResultSchema = z.object({ reply: z.string() });
+
+const forgeAiDiscussResultSchema = z.object({ reply: z.string() });
+
+const forgeAiProposeEntryResultSchema = z.object({
+  content: z.string(),
+  category: z.string().optional().nullable(),
+  position: z.string().optional().nullable(),
+  gender: z.enum(["male", "female", "non_binary", "prefer_not_to_say"]).optional().nullable(),
+  ageMin: z.number().int().optional().nullable(),
+  ageMax: z.number().int().optional().nullable(),
+  maturity: z.enum(["established", "experimental"]).default("established"),
+  summary: z.string(),
+  // Set only when this refines/replaces something already taught -- omitted
+  // entirely means "this is new." isCorrection distinguishes a genuine "that
+  // was wrong" fix from an ordinary refinement of the same entry -- see
+  // aiKnowledgeChangeTypeEnum's own comment for why those get logged
+  // differently.
+  updatesEntryId: z.number().int().optional().nullable(),
+  isCorrection: z.boolean().optional().default(false),
+  changeReason: z.string().optional().default(""),
+});
 
 // Below this size, a bucket (a sport, an age bracket, a gender) is dropped
 // from every platform-trends breakdown rather than shown with a small
@@ -2445,12 +2472,43 @@ export const storage = {
   // 404) rather than updating/deleting nothing silently if the id doesn't
   // belong to them.
   async setInjuryResolved(athleteId: number, id: number, resolved: boolean) {
+    // resolvedOn records the actual date this flipped -- toggling back to
+    // unresolved (a re-aggravation) clears it rather than leaving a stale
+    // date that would make the injury look shorter than it really was.
     const [row] = await db
       .update(injuryHistory)
-      .set({ resolved })
+      .set({ resolved, resolvedOn: resolved ? new Date().toISOString().slice(0, 10) : null })
       .where(and(eq(injuryHistory.id, id), eq(injuryHistory.athleteId, athleteId)))
       .returning();
     return row ?? null;
+  },
+
+  // Everything the athlete logged (workout sets, RPE, tonnage) within an
+  // injury's actual window -- from when it occurred through when it
+  // resolved (or through now, if still active) -- so a later evidence-loop
+  // pass can ask "what training happened during recovery" instead of only
+  // ever seeing the injury record in isolation. Mirrors the athleteId+date
+  // access pattern getWorkoutLogsForAthlete already uses elsewhere in this
+  // file, just bounded to this specific window.
+  async getTrainingDuringInjuryWindow(athleteId: number, injuryId: number) {
+    const [injury] = await db
+      .select()
+      .from(injuryHistory)
+      .where(and(eq(injuryHistory.id, injuryId), eq(injuryHistory.athleteId, athleteId)));
+    if (!injury) return null;
+    const windowEnd = injury.resolvedOn ?? new Date().toISOString().slice(0, 10);
+    const logs = await db
+      .select()
+      .from(workoutLogs)
+      .where(
+        and(
+          eq(workoutLogs.athleteId, athleteId),
+          gte(workoutLogs.date, injury.occurredOn),
+          lte(workoutLogs.date, windowEnd),
+        ),
+      )
+      .orderBy(workoutLogs.date);
+    return { injury, logs };
   },
 
   async deleteInjuryHistoryEntry(athleteId: number, id: number) {
@@ -8477,6 +8535,253 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
       .returning();
 
     return { assistantMessage, guidelines: trimmed };
+  },
+
+  // All active, per-entry taught knowledge -- the central knowledge base
+  // every AI feature on the platform reads from (see the schema comment on
+  // aiKnowledgeEntries for why this replaced the single-document
+  // aiKnowledge/nutritionKnowledge tables above). filters narrows to what
+  // actually applies to one athlete: a universal entry (all four tag
+  // columns null) always matches; a tagged entry only matches when the
+  // athlete's own position/gender/age falls inside it. Passing no filters
+  // returns everything active, which is what the teaching chat itself needs
+  // (to check new teaching against the full existing set), not what a
+  // program-builder prompt should inject for one specific athlete.
+  async getActiveForgeAiEntries(filters?: { position?: string | null; gender?: string | null; age?: number | null }) {
+    const rows = await db.query.aiKnowledgeEntries.findMany({
+      where: eq(aiKnowledgeEntries.active, true),
+      orderBy: desc(aiKnowledgeEntries.updatedAt),
+    });
+    if (!filters) return rows;
+    return rows.filter((r) => {
+      if (r.position && r.position !== filters.position) return false;
+      if (r.gender && r.gender !== filters.gender) return false;
+      if (r.ageMin != null && (filters.age == null || filters.age < r.ageMin)) return false;
+      if (r.ageMax != null && (filters.age == null || filters.age > r.ageMax)) return false;
+      return true;
+    });
+  },
+
+  async getForgeAiChat(): Promise<{ messages: ForgeAiMessage[]; entries: AiKnowledgeEntry[] }> {
+    const [messages, entries] = await Promise.all([
+      db.query.forgeAiMessages.findMany({ orderBy: asc(forgeAiMessages.createdAt) }),
+      this.getActiveForgeAiEntries(),
+    ]);
+    return { messages, entries };
+  },
+
+  // Forge AI's teaching chat -- see the schema comments on aiKnowledgeEntries/
+  // aiKnowledgeChangelog for why this is a per-entry propose flow rather
+  // than updateAiKnowledgeFromChat's whole-document rewrite. Two tools:
+  // discuss (a genuine open reply -- explaining a concept, answering a
+  // question, thinking out loud -- not just "asking for clarification"),
+  // and propose_entry (one new or updated fact, reviewed before it commits,
+  // same review-before-apply safety net as the old flow).
+  async chatWithForgeAi(adminId: number, content: string) {
+    const [adminMessage] = await db.insert(forgeAiMessages).values({ authorId: adminId, role: "admin", content }).returning();
+
+    const fail = async (text: string) => {
+      const [assistantMessage] = await db
+        .insert(forgeAiMessages)
+        .values({ authorId: adminId, role: "assistant", content: text })
+        .returning();
+      return { adminMessage, assistantMessage, proposal: null as z.infer<typeof forgeAiProposeEntryResultSchema> | null };
+    };
+
+    if (!aiEnabled) {
+      return fail("AI isn't set up yet -- ask whoever manages this Forge instance to configure it.");
+    }
+
+    const [existingEntries, history] = await Promise.all([
+      this.getActiveForgeAiEntries(),
+      db.query.forgeAiMessages.findMany({ orderBy: asc(forgeAiMessages.createdAt) }),
+    ]);
+
+    // Condensed, not the raw changelog -- one line per existing entry is
+    // what the model needs to notice "this contradicts something already
+    // taught," not a full history of every edit that ever led there.
+    const entriesText =
+      existingEntries.length === 0
+        ? "(nothing taught yet)"
+        : existingEntries
+            .map((e) => {
+              const scope = [
+                e.position ? `position=${e.position}` : null,
+                e.gender ? `gender=${e.gender}` : null,
+                e.ageMin != null || e.ageMax != null ? `age=${e.ageMin ?? "any"}-${e.ageMax ?? "any"}` : null,
+              ]
+                .filter(Boolean)
+                .join(", ");
+              return `[id ${e.id}]${scope ? ` (${scope})` : " (universal)"} [${e.maturity}] ${e.content}`;
+            })
+            .join("\n");
+
+    const discussTool = {
+      name: "discuss",
+      description:
+        "A genuine conversational reply -- explain a concept, answer a question, think through an idea out loud, or flag a contradiction with something already taught and ask why. Use this any time the turn isn't ready to become a concrete taught entry yet.",
+      input_schema: {
+        type: "object",
+        properties: { reply: { type: "string", description: "Your reply to the admin." } },
+        required: ["reply"],
+      },
+    };
+
+    const proposeEntryTool = {
+      name: "propose_entry",
+      description:
+        "Proposes ONE concrete taught fact/rule for the admin to review before it takes effect. Use once the admin has actually taught something concrete -- not for general discussion (use discuss for that).",
+      input_schema: {
+        type: "object",
+        properties: {
+          content: { type: "string", description: "The rule itself, written as a concrete, actionable instruction another AI could follow -- not vague philosophy." },
+          category: { type: "string", description: "Loose organizational label (e.g. 'programming', 'nutrition', 'recovery') -- for admin's own browsing, never restricts which AI features see this." },
+          position: { type: "string", description: "Leave unset for a universal rule. Set only when this specifically applies to one position." },
+          gender: { type: "string", enum: ["male", "female", "non_binary", "prefer_not_to_say"], description: "Leave unset for a universal rule." },
+          ageMin: { type: "number", description: "Leave unset for a universal rule." },
+          ageMax: { type: "number", description: "Leave unset for a universal rule." },
+          maturity: {
+            type: "string",
+            enum: ["established", "experimental"],
+            description: "established = a gold-standard rule to apply as hard guidance. experimental = a newer idea an AI feature should offer as an option rather than force -- use this for anything not yet proven out.",
+          },
+          summary: { type: "string", description: "A short (1-3 sentence) conversational reply describing what you're proposing." },
+          updatesEntryId: { type: "number", description: "Set this to the [id N] of an existing entry above if this refines or replaces it. Omit entirely if this is new." },
+          isCorrection: {
+            type: "boolean",
+            description: "True only if updatesEntryId is set AND the admin is saying the old entry was simply wrong -- false for an ordinary refinement/specificity narrowing of it.",
+          },
+          changeReason: { type: "string", description: "Required whenever updatesEntryId is set: why this is changing, in the admin's own words/reasoning. This gets kept permanently so a future contradictory teaching turn can reference it." },
+        },
+        required: ["content", "maturity", "summary"],
+      },
+    };
+
+    const system = `You are Forge AI, this platform's central coaching knowledge assistant -- a knowledgeable strength-and-conditioning, nutrition, and coaching assistant the admin genuinely converses with, not a narrow intake form. Discussing an idea, explaining research, or just talking shop is a completely normal, first-class outcome of a turn -- proposing a taught entry is one thing you can do, not the whole point of the conversation.
+
+When the admin DOES teach something concrete, use propose_entry. A few things to get right:
+- Specificity hierarchy: leave position/gender/age unset for a universal (gold-standard) rule; set them only when the admin is teaching something specific to that position/gender/age. A specific rule doesn't have to contradict a universal one -- both can coexist, the specific one just applies to a narrower case.
+- Maturity: mark anything newly introduced (a study, a pamphlet, an idea being tried for the first time) as "experimental" rather than "established" unless the admin frames it as settled practice. Established rules get applied as hard guidance; experimental ones get offered as options.
+- Contradiction check: before proposing, compare against the existing taught entries listed below. If the new teaching genuinely conflicts with an existing entry (not just narrows it), don't silently overwrite it -- use discuss to name the conflict, quote the existing entry, and ask the admin why this is different or whether it should replace the old one. Only propose_entry once you have that answer, and put it in changeReason.
+- Corrections: if the admin says an existing entry was simply wrong (not just superseded by something more specific), set updatesEntryId + isCorrection: true.
+
+Existing taught entries (id, scope, maturity, content):
+${entriesText}`;
+
+    const historyText = history.map((m) => `${m.role === "admin" ? "Admin" : "Assistant"}: ${m.content}`).join("\n");
+    const userPrompt = `Conversation so far:\n${historyText}\n\nRespond to the admin's latest message by calling discuss or propose_entry.`;
+
+    const result = await askClaudeWithTools(system, userPrompt, [discussTool, proposeEntryTool], { maxTokens: 4096 });
+    if (!result) return fail("Sorry, I couldn't process that just now -- try again in a bit.");
+
+    if (result.toolName === "discuss") {
+      const parsed = forgeAiDiscussResultSchema.safeParse(result.input);
+      const reply = parsed.success ? parsed.data.reply.trim() : "";
+      const [assistantMessage] = await db
+        .insert(forgeAiMessages)
+        .values({ authorId: adminId, role: "assistant", content: reply || "Can you say more about that?" })
+        .returning();
+      return { adminMessage, assistantMessage, proposal: null };
+    }
+
+    const parsed = forgeAiProposeEntryResultSchema.safeParse(result.input);
+    if (!parsed.success || !parsed.data.content.trim()) {
+      return fail("Sorry, that came back malformed -- try again in a bit.");
+    }
+
+    const [assistantMessage] = await db
+      .insert(forgeAiMessages)
+      .values({
+        authorId: adminId,
+        role: "assistant",
+        content: parsed.data.summary.trim() || "Here's what I'd add -- review it below.",
+      })
+      .returning();
+
+    return { adminMessage, assistantMessage, proposal: parsed.data };
+  },
+
+  // Commits a previously-proposed entry -- either a brand-new row (changeType
+  // "created") or an update to an existing one (changeType "corrected" or
+  // "updated", per the proposal's own isCorrection flag), always writing a
+  // changelog row so cross-time contradiction detection above has real
+  // history to check new teaching against.
+  async applyForgeAiEntryProposal(adminId: number, proposal: z.infer<typeof forgeAiProposeEntryResultSchema>) {
+    const content = proposal.content.trim();
+    const shared = {
+      content,
+      category: proposal.category || null,
+      position: proposal.position || null,
+      gender: (proposal.gender as AiKnowledgeEntry["gender"]) || null,
+      ageMin: proposal.ageMin ?? null,
+      ageMax: proposal.ageMax ?? null,
+      maturity: proposal.maturity,
+      taughtBy: adminId,
+      updatedAt: new Date(),
+    };
+
+    let entry: AiKnowledgeEntry;
+    if (proposal.updatesEntryId) {
+      const [existing] = await db.select().from(aiKnowledgeEntries).where(eq(aiKnowledgeEntries.id, proposal.updatesEntryId));
+      const [updated] = await db
+        .update(aiKnowledgeEntries)
+        .set(shared)
+        .where(eq(aiKnowledgeEntries.id, proposal.updatesEntryId))
+        .returning();
+      entry = updated;
+      await db.insert(aiKnowledgeChangelog).values({
+        entryId: entry.id,
+        previousContent: existing?.content ?? null,
+        newContent: content,
+        reason: proposal.changeReason.trim() || proposal.summary.trim(),
+        changeType: proposal.isCorrection ? "corrected" : "updated",
+        changedBy: adminId,
+      });
+    } else {
+      const [created] = await db
+        .insert(aiKnowledgeEntries)
+        .values({ ...shared, sourceType: "chat", createdAt: new Date() })
+        .returning();
+      entry = created;
+      await db.insert(aiKnowledgeChangelog).values({
+        entryId: entry.id,
+        previousContent: null,
+        newContent: content,
+        reason: proposal.changeReason.trim() || proposal.summary.trim() || "Newly taught.",
+        changeType: "created",
+        changedBy: adminId,
+      });
+    }
+
+    const [assistantMessage] = await db
+      .insert(forgeAiMessages)
+      .values({ authorId: adminId, role: "assistant", content: "Applied -- that's now part of what Forge AI knows." })
+      .returning();
+
+    return { assistantMessage, entry };
+  },
+
+  // The narrow correction/deactivation path -- soft-deletes an entry
+  // (active: false, never a hard delete -- see the schema comment) with a
+  // required reason, distinct from an ordinary propose_entry update so
+  // "this was just wrong" is always a deliberate, logged decision.
+  async deactivateForgeAiEntry(adminId: number, entryId: number, reason: string) {
+    const [existing] = await db.select().from(aiKnowledgeEntries).where(eq(aiKnowledgeEntries.id, entryId));
+    if (!existing) return null;
+    const [updated] = await db
+      .update(aiKnowledgeEntries)
+      .set({ active: false, updatedAt: new Date() })
+      .where(eq(aiKnowledgeEntries.id, entryId))
+      .returning();
+    await db.insert(aiKnowledgeChangelog).values({
+      entryId,
+      previousContent: existing.content,
+      newContent: existing.content,
+      reason: reason.trim() || "Deactivated.",
+      changeType: "deactivated",
+      changedBy: adminId,
+    });
+    return updated;
   },
 
   // "Full function" AI form check: a direct, unsupervised critique from

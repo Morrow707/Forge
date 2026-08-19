@@ -1193,6 +1193,69 @@ ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "brand_logo_url" text;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "brand_primary_color" text;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "brand_secondary_color" text;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "enabled_features" json;
+
+ALTER TABLE "injury_history" ADD COLUMN IF NOT EXISTS "resolved_on" date;
+
+DO $$ BEGIN
+  CREATE TYPE "ai_knowledge_maturity" AS ENUM ('established', 'experimental');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE "ai_knowledge_source_type" AS ENUM ('chat', 'url', 'image', 'pasted_text');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE "ai_knowledge_change_type" AS ENUM ('created', 'updated', 'corrected', 'deactivated');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+-- Forge AI's central knowledge base -- one row per taught fact/rule,
+-- superseding the single-document ai_knowledge/nutrition_knowledge tables
+-- above (kept in place, not dropped, until the teaching chat itself is
+-- migrated to write here).
+CREATE TABLE IF NOT EXISTS "ai_knowledge_entries" (
+  "id" serial PRIMARY KEY,
+  "content" text NOT NULL,
+  "category" text,
+  "position" text,
+  "gender" gender,
+  "age_min" integer,
+  "age_max" integer,
+  "maturity" ai_knowledge_maturity NOT NULL DEFAULT 'established',
+  "source_type" ai_knowledge_source_type NOT NULL DEFAULT 'chat',
+  "source_excerpt" text,
+  "taught_by" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "active" boolean NOT NULL DEFAULT true,
+  "created_at" timestamp NOT NULL DEFAULT now(),
+  "updated_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "ai_knowledge_entries_active_idx" ON "ai_knowledge_entries" ("active");
+
+CREATE TABLE IF NOT EXISTS "ai_knowledge_changelog" (
+  "id" serial PRIMARY KEY,
+  "entry_id" integer NOT NULL REFERENCES "ai_knowledge_entries"("id") ON DELETE CASCADE,
+  "previous_content" text,
+  "new_content" text NOT NULL,
+  "reason" text NOT NULL,
+  "change_type" ai_knowledge_change_type NOT NULL DEFAULT 'updated',
+  "changed_by" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "ai_knowledge_changelog_entry_idx" ON "ai_knowledge_changelog" ("entry_id", "created_at");
+
+CREATE TABLE IF NOT EXISTS "aggregate_data_access_log" (
+  "id" serial PRIMARY KEY,
+  "admin_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "viewed_at" timestamp NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS "forge_ai_messages" (
+  "id" serial PRIMARY KEY,
+  "author_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "role" ai_knowledge_chat_role NOT NULL,
+  "content" text NOT NULL,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "forge_ai_messages_created_idx" ON "forge_ai_messages" ("created_at");
 `;
 
 async function main() {

@@ -1814,6 +1814,12 @@ export const injuryHistory = pgTable(
     occurredOn: date("occurred_on").notNull(),
     description: text("description"),
     resolved: boolean("resolved").notNull().default(false),
+    // Null while active, set the same moment `resolved` flips true (see
+    // setInjuryResolved in storage.ts) -- `resolved` alone can't answer how
+    // LONG an injury lasted, only whether it currently is or isn't over,
+    // which is what made it impossible to line an injury's actual duration
+    // up against the athlete's training log for that window.
+    resolvedOn: date("resolved_on"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({
@@ -2897,6 +2903,166 @@ export const nutritionKnowledge = pgTable("nutrition_knowledge", {
   guidelines: text("guidelines").notNull().default(""),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
+
+export const aiKnowledgeMaturityEnum = pgEnum("ai_knowledge_maturity", ["established", "experimental"]);
+export const aiKnowledgeSourceTypeEnum = pgEnum("ai_knowledge_source_type", [
+  "chat",
+  "url",
+  "image",
+  "pasted_text",
+]);
+
+// One row per discrete taught fact/rule -- the central knowledge base every
+// AI feature on the platform reads from, superseding the single free-text
+// aiKnowledge/nutritionKnowledge documents above (kept in place, not
+// dropped, until the teaching-chat flow itself is migrated over to write
+// here instead). Per-entry rows rather than one big blob is what makes real
+// changelog history (aiKnowledgeChangelog below), cross-time contradiction
+// detection, and position/gender/age filtering possible -- diffing a single
+// document can't cleanly answer "did THIS specific rule change" or "which
+// entries actually apply to THIS athlete."
+export const aiKnowledgeEntries = pgTable(
+  "ai_knowledge_entries",
+  {
+    id: serial("id").primaryKey(),
+    content: text("content").notNull(),
+    // Organizational only (admin UI grouping) -- every entry is available to
+    // every AI feature regardless of category, matching the "one central
+    // AI" design; this never gates which prompts see it.
+    category: text("category"),
+    // All four null = a universal rule (applies to every athlete). Any
+    // combination narrows it -- e.g. position="linebacker" with gender/age
+    // left null applies to every linebacker regardless of gender or age.
+    position: text("position"),
+    gender: genderEnum("gender"),
+    ageMin: integer("age_min"),
+    ageMax: integer("age_max"),
+    maturity: aiKnowledgeMaturityEnum("maturity").notNull().default("established"),
+    sourceType: aiKnowledgeSourceTypeEnum("source_type").notNull().default("chat"),
+    // The original material this was taught from -- a URL, an excerpt of
+    // pasted text, or a note about an uploaded image -- kept so a rule can
+    // be traced back to where it came from later, not just what it
+    // currently says.
+    sourceExcerpt: text("source_excerpt"),
+    taughtBy: integer("taught_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // Soft-deactivation, not deletion -- "everything learned is knowledge
+    // gained" even once superseded. An inactive entry still exists for the
+    // changelog and contradiction-detection to reference; it's just
+    // excluded from what gets injected into live AI prompts.
+    active: boolean("active").notNull().default(true),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    activeIdx: index("ai_knowledge_entries_active_idx").on(table.active),
+  }),
+);
+
+export type AiKnowledgeEntry = typeof aiKnowledgeEntries.$inferSelect;
+
+export const aiKnowledgeChangeTypeEnum = pgEnum("ai_knowledge_change_type", [
+  "created",
+  "updated",
+  "corrected",
+  "deactivated",
+]);
+
+// Append-only history of every change to an aiKnowledgeEntries row -- what
+// it said before, what it says now, and why -- so a later, contradictory
+// teaching turn can be answered with "you taught this on [date] because
+// [reason] -- what's different now?" instead of nothing remembering it ever
+// happened. changeType distinguishes a genuine correction ("that was just
+// wrong") from an ordinary refinement, since those should be weighed
+// differently by anything reading this history back.
+export const aiKnowledgeChangelog = pgTable(
+  "ai_knowledge_changelog",
+  {
+    id: serial("id").primaryKey(),
+    entryId: integer("entry_id")
+      .notNull()
+      .references(() => aiKnowledgeEntries.id, { onDelete: "cascade" }),
+    previousContent: text("previous_content"),
+    newContent: text("new_content").notNull(),
+    reason: text("reason").notNull(),
+    changeType: aiKnowledgeChangeTypeEnum("change_type").notNull().default("updated"),
+    changedBy: integer("changed_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    entryIdx: index("ai_knowledge_changelog_entry_idx").on(table.entryId, table.createdAt),
+  }),
+);
+
+export type AiKnowledgeChangelogEntry = typeof aiKnowledgeChangelog.$inferSelect;
+
+// Audit trail for the platform-wide aggregate athlete data view (admin-only)
+// -- the first place admin can see every athlete's data across every
+// coach's roster, not just programs/classes admin owns itself, so who
+// looked and when is worth keeping a record of even though nothing here
+// restricts what they can see.
+export const aggregateDataAccessLog = pgTable("aggregate_data_access_log", {
+  id: serial("id").primaryKey(),
+  adminId: integer("admin_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  viewedAt: timestamp("viewed_at").notNull().defaultNow(),
+});
+
+export type AggregateDataAccessLogEntry = typeof aggregateDataAccessLog.$inferSelect;
+
+// Forge AI's own chat thread -- separate from aiKnowledgeMessages/
+// nutritionKnowledgeMessages above (those stay as-is, feeding the two old
+// documents, until they're retired). Reuses aiKnowledgeChatRoleEnum since
+// it's the same admin/assistant vocabulary, just a distinct conversation.
+export const forgeAiMessages = pgTable(
+  "forge_ai_messages",
+  {
+    id: serial("id").primaryKey(),
+    authorId: integer("author_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    role: aiKnowledgeChatRoleEnum("role").notNull(),
+    content: text("content").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    createdIdx: index("forge_ai_messages_created_idx").on(table.createdAt),
+  }),
+);
+
+export type ForgeAiMessage = typeof forgeAiMessages.$inferSelect;
+
+export const sendForgeAiChatMessageSchema = z.object({
+  content: z.string().trim().min(1), // no max -- admin gets an unbounded paste, see task list
+});
+export type SendForgeAiChatMessageInput = z.infer<typeof sendForgeAiChatMessageSchema>;
+
+// Mirrors chatWithForgeAi's proposal shape (storage.ts) -- the admin is
+// applying exactly what the chat proposed, echoed back client-side, not
+// composing a new one from scratch.
+export const applyForgeAiEntryProposalSchema = z.object({
+  content: z.string().trim().min(1),
+  category: z.string().trim().max(60).optional().nullable(),
+  position: z.string().trim().max(60).optional().nullable(),
+  gender: z.enum(["male", "female", "non_binary", "prefer_not_to_say"]).optional().nullable(),
+  ageMin: z.number().int().optional().nullable(),
+  ageMax: z.number().int().optional().nullable(),
+  maturity: z.enum(["established", "experimental"]),
+  summary: z.string(),
+  updatesEntryId: z.number().int().optional().nullable(),
+  isCorrection: z.boolean().optional().default(false),
+  changeReason: z.string().optional().default(""),
+});
+export type ApplyForgeAiEntryProposalInput = z.infer<typeof applyForgeAiEntryProposalSchema>;
+
+export const deactivateForgeAiEntrySchema = z.object({
+  reason: z.string().trim().min(1).max(500),
+});
+export type DeactivateForgeAiEntryInput = z.infer<typeof deactivateForgeAiEntrySchema>;
 
 export const substituteExerciseSchema = z.object({
   programExerciseId: z.number().int().positive(),
