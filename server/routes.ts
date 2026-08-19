@@ -122,6 +122,16 @@ const photoImagesSchema = z
   .min(1)
   .max(4);
 
+// A tracked set has no fixed length -- a slow-tempo, high-rep set run
+// through the native ARKit recorder (no explicit bitrate set on that
+// encoder, see ArCameraPreviewPlugin.swift's appendVideoFrame) can
+// legitimately produce a file well past what these limits used to allow.
+// The real fix is encoding efficiently in the first place, not endlessly
+// raising a cap as recordings get longer -- but this needs to be generous
+// enough that a real, valid recording is never rejected for a reason that
+// has nothing to do with whether it's a valid video.
+const MAX_TRACKED_VIDEO_BYTES = 500 * 1024 * 1024;
+
 const uploadFormVideo = multer({
   storage: multer.diskStorage({
     destination: UPLOADS_DIR,
@@ -129,7 +139,7 @@ const uploadFormVideo = multer({
       cb(null, `${crypto.randomUUID()}${videoExtensionForMimetype(file.mimetype) ?? ""}`);
     },
   }),
-  limits: { fileSize: 100 * 1024 * 1024 },
+  limits: { fileSize: MAX_TRACKED_VIDEO_BYTES },
   fileFilter: (_req, file, cb) => {
     if (!videoExtensionForMimetype(file.mimetype)) {
       return cb(new Error("Unsupported video format"));
@@ -155,7 +165,7 @@ const uploadSkillVideo = multer({
       cb(null, `${crypto.randomUUID()}${videoExtensionForMimetype(file.mimetype) ?? ""}`);
     },
   }),
-  limits: { fileSize: 100 * 1024 * 1024 },
+  limits: { fileSize: MAX_TRACKED_VIDEO_BYTES },
   fileFilter: (_req, file, cb) => {
     if (!videoExtensionForMimetype(file.mimetype)) {
       return cb(new Error("Unsupported video format"));

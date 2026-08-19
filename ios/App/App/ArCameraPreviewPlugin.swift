@@ -415,7 +415,20 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
             let videoSettings: [String: Any] = [
                 AVVideoCodecKey: AVVideoCodecType.h264,
                 AVVideoWidthKey: Int(resolution.width),
-                AVVideoHeightKey: Int(resolution.height)
+                AVVideoHeightKey: Int(resolution.height),
+                // No bitrate here left AVAssetWriter's own default
+                // heuristic in charge, which scales aggressively with
+                // resolution -- at ARKit's own capture resolution (well
+                // above a typical getUserMedia preview stream) that
+                // produced recordings easily reaching several hundred MB
+                // for an ordinary multi-rep set, sized for nothing this
+                // footage is actually used for (on-device/small-screen form
+                // review, not archival or broadcast quality). 8 Mbps H.264
+                // stays clearly legible for that at any resolution this
+                // records at, at a fraction of the uncapped default's size.
+                AVVideoCompressionPropertiesKey: [
+                    AVVideoAverageBitRateKey: 8_000_000
+                ]
             ]
             let input = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings)
             input.expectsMediaDataInRealTime = true
