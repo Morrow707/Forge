@@ -1,7 +1,8 @@
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, useContext, useEffect, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest, ApiError, getQueryFn, setNativeToken } from "@/lib/queryClient";
 import { savePasswordToKeychain } from "@/lib/native-auth";
+import { logDebug } from "@/lib/debug-console";
 import { toast } from "sonner";
 import type { PublicUser } from "@shared/schema";
 
@@ -36,22 +37,31 @@ function useLoginMutation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (payload: LoginPayload) => {
+      logDebug("AUTH", `login mutation start (${payload.email})`);
       const res = await apiRequest("POST", "/api/auth/login", payload);
+      logDebug("AUTH", `login POST responded ${res.status}`);
       return (await res.json()) as PublicUser & { nativeToken?: string };
     },
     onSuccess: ({ nativeToken, ...user }, variables) => {
+      logDebug("AUTH", `login succeeded, nativeToken=${nativeToken ? "present" : "absent"}`);
       setNativeToken(nativeToken);
       qc.setQueryData(["/api/auth/me"], user);
+      logDebug("AUTH", "calling savePasswordToKeychain()...");
       // Temporary visible surfacing while this is being debugged on-device
       // (see native-auth.ts's own comment) -- a TestFlight tester has no
       // way to see the console.error there, and this has been silently
       // failing, so a toast is the only way to find out why without a
       // Mac/Xcode in hand.
-      savePasswordToKeychain(variables.email, variables.password).catch((err) => {
-        toast.error(err instanceof Error ? `Couldn't save password: ${err.message}` : "Couldn't save password");
-      });
+      savePasswordToKeychain(variables.email, variables.password)
+        .then(() => logDebug("AUTH", "savePasswordToKeychain() resolved"))
+        .catch((err) => {
+          const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+          logDebug("AUTH", `savePasswordToKeychain() rejected: ${detail}`);
+          toast.error(err instanceof Error ? `Couldn't save password: ${err.message}` : "Couldn't save password");
+        });
     },
     onError: (err: ApiError) => {
+      logDebug("AUTH", `login failed: ${err.status} ${err.message}`);
       toast.error(err.message || "Login failed");
     },
   });
@@ -61,22 +71,31 @@ function useSignupMutation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (payload: SignupPayload) => {
+      logDebug("AUTH", `signup mutation start (${payload.email})`);
       const res = await apiRequest("POST", "/api/auth/signup", payload);
+      logDebug("AUTH", `signup POST responded ${res.status}`);
       return (await res.json()) as PublicUser & { nativeToken?: string };
     },
     onSuccess: ({ nativeToken, ...user }, variables) => {
+      logDebug("AUTH", `signup succeeded, nativeToken=${nativeToken ? "present" : "absent"}`);
       setNativeToken(nativeToken);
       qc.setQueryData(["/api/auth/me"], user);
+      logDebug("AUTH", "calling savePasswordToKeychain()...");
       // Temporary visible surfacing while this is being debugged on-device
       // (see native-auth.ts's own comment) -- a TestFlight tester has no
       // way to see the console.error there, and this has been silently
       // failing, so a toast is the only way to find out why without a
       // Mac/Xcode in hand.
-      savePasswordToKeychain(variables.email, variables.password).catch((err) => {
-        toast.error(err instanceof Error ? `Couldn't save password: ${err.message}` : "Couldn't save password");
-      });
+      savePasswordToKeychain(variables.email, variables.password)
+        .then(() => logDebug("AUTH", "savePasswordToKeychain() resolved"))
+        .catch((err) => {
+          const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+          logDebug("AUTH", `savePasswordToKeychain() rejected: ${detail}`);
+          toast.error(err instanceof Error ? `Couldn't save password: ${err.message}` : "Couldn't save password");
+        });
     },
     onError: (err: ApiError) => {
+      logDebug("AUTH", `signup failed: ${err.status} ${err.message}`);
       toast.error(err.message || "Signup failed");
     },
   });
@@ -86,9 +105,11 @@ function useLogoutMutation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async () => {
+      logDebug("AUTH", "logout mutation start");
       await apiRequest("POST", "/api/auth/logout");
     },
     onSuccess: () => {
+      logDebug("AUTH", "logout succeeded, clearing nativeToken + query cache");
       setNativeToken(null);
       qc.setQueryData(["/api/auth/me"], null);
       qc.clear();
@@ -123,6 +144,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loginMutation = useLoginMutation();
   const signupMutation = useSignupMutation();
   const logoutMutation = useLogoutMutation();
+
+  useEffect(() => {
+    if (isLoading) return;
+    logDebug("AUTH", isError ? "auth/me check errored" : `auth/me resolved: ${user ? `logged in as ${user.role}` : "logged out"}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading, isError, user]);
 
   return (
     <AuthContext.Provider

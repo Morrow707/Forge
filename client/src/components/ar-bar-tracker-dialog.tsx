@@ -235,41 +235,77 @@ export function ArBarTrackerDialog({
     // dependency problem), not anything inside its body.
     setDiagLog((log) => [...log, "JS: startArPreview effect firing"]);
     try {
-      const rect = containerRef.current?.getBoundingClientRect();
-      if (!rect) {
-        setDiagLog((log) => [...log, "JS: no containerRef rect, aborting"]);
-        return;
-      }
       let cancelled = false;
-      setArCameraActive(true);
-      // Logged entirely on the JS side, independent of the native
-      // logDiag/getDiagnosticLog buffer -- if start() itself is never
-      // reached natively (that buffer stays empty even after the polling
-      // fix), this is what proves whether the JS call was even attempted,
-      // and whether the returned promise ever actually settles one way or
-      // the other, rather than hanging forever.
-      setDiagLog((log) => [...log, "JS: calling startArPreview()"]);
-      startArPreview(rect, true)
-        .then(() => {
-          if (!cancelled) setDiagLog((log) => [...log, "JS: startArPreview() resolved"]);
-        })
-        .catch((err) => {
-          if (!cancelled) {
-            const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
-            setDiagLog((log) => [...log, `JS: startArPreview() rejected: ${detail}`]);
-            setError(err instanceof Error ? err.message : "Could not start camera");
-          }
-        });
+      let rafId: number | null = null;
+      let started = false;
+      let loggedWaiting = false;
+      let waitFrames = 0;
+      // ~3s at 60fps -- generous, but bounded: if the container genuinely
+      // never mounts, that should show up as its own log line rather than
+      // an invisible infinite poll.
+      const MAX_WAIT_FRAMES = 180;
+
       function onResize() {
         const r = containerRef.current?.getBoundingClientRect();
         if (r) void updateArPreviewRect(r);
       }
-      window.addEventListener("resize", onResize);
+
+      function tryStart() {
+        if (cancelled) return;
+        const rect = containerRef.current?.getBoundingClientRect();
+        if (!rect || (rect.width === 0 && rect.height === 0)) {
+          // The dialog's own open-transition/portal mount can commit this
+          // ref's DOM node a tick AFTER `open` flips true -- this effect
+          // only ever runs once per dialog-open (deps: [open]), so giving
+          // up on the very first check here meant the camera silently
+          // never started for the rest of that session on exactly that
+          // race. Polling every frame until the ref is real costs nothing
+          // (a getBoundingClientRect read) and can't miss the window the
+          // way a one-shot check could.
+          if (!loggedWaiting) {
+            loggedWaiting = true;
+            setDiagLog((log) => [...log, "JS: containerRef not ready yet, waiting for it to mount..."]);
+          }
+          waitFrames++;
+          if (waitFrames > MAX_WAIT_FRAMES) {
+            setDiagLog((log) => [...log, "JS: containerRef never became ready, giving up"]);
+            return;
+          }
+          rafId = requestAnimationFrame(tryStart);
+          return;
+        }
+        started = true;
+        setArCameraActive(true);
+        // Logged entirely on the JS side, independent of the native
+        // logDiag/getDiagnosticLog buffer -- if start() itself is never
+        // reached natively (that buffer stays empty even after the polling
+        // fix), this is what proves whether the JS call was even attempted,
+        // and whether the returned promise ever actually settles one way or
+        // the other, rather than hanging forever.
+        setDiagLog((log) => [...log, "JS: calling startArPreview()"]);
+        startArPreview(rect, true)
+          .then(() => {
+            if (!cancelled) setDiagLog((log) => [...log, "JS: startArPreview() resolved"]);
+          })
+          .catch((err) => {
+            if (!cancelled) {
+              const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+              setDiagLog((log) => [...log, `JS: startArPreview() rejected: ${detail}`]);
+              setError(err instanceof Error ? err.message : "Could not start camera");
+            }
+          });
+        window.addEventListener("resize", onResize);
+      }
+
+      tryStart();
       return () => {
         cancelled = true;
-        setArCameraActive(false);
+        if (rafId != null) cancelAnimationFrame(rafId);
         window.removeEventListener("resize", onResize);
-        void stopArPreview();
+        if (started) {
+          setArCameraActive(false);
+          void stopArPreview();
+        }
       };
     } catch (err) {
       // A synchronous throw anywhere above this point would otherwise

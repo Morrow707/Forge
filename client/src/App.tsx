@@ -6,6 +6,7 @@ import { Capacitor } from "@capacitor/core";
 import { queryClient, persistOptions } from "@/lib/queryClient";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { BiometricLockGate } from "@/components/biometric-lock-gate";
+import { DebugConsole } from "@/components/debug-console";
 
 // Auth pages are small and needed on the very first, unauthenticated
 // request, so they stay in the main bundle rather than costing an extra
@@ -364,6 +365,10 @@ export default function App() {
         <BiometricLockGate>
           <Router />
           <Toaster theme="dark" position="top-right" richColors />
+          {/* Temporary -- see debug-console.tsx's own comment. Remove this
+              line, that file, and lib/debug-console.ts together once
+              login/password-save is diagnosed. */}
+          <DebugConsole />
         </BiometricLockGate>
       </AuthProvider>
     </PersistQueryClientProvider>

@@ -199,39 +199,69 @@ export function ArSprintTrackerDialog({
     // Unconditional the instant this effect fires for a real camera step --
     // if this line never shows up either, the effect itself isn't running.
     setDiagLog((log) => [...log, "JS: startArPreview effect firing"]);
-    const rect = containerRef.current?.getBoundingClientRect();
-    if (!rect) {
-      setDiagLog((log) => [...log, "JS: no containerRef rect, aborting"]);
-      return;
-    }
     let cancelled = false;
-    setArCameraActive(true);
-    // Logged entirely on the JS side, independent of the native
-    // logDiag/getDiagnosticLog buffer -- see the same block's own comment
-    // in ar-bar-tracker-dialog.tsx.
-    setDiagLog((log) => [...log, "JS: calling startArPreview()"]);
-    startArPreview(rect)
-      .then(() => {
-        if (!cancelled) setDiagLog((log) => [...log, "JS: startArPreview() resolved"]);
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
-          setDiagLog((log) => [...log, `JS: startArPreview() rejected: ${detail}`]);
-          setError(err instanceof Error ? err.message : "Could not start camera");
-        }
-      });
+    let rafId: number | null = null;
+    let started = false;
+    let loggedWaiting = false;
+    let waitFrames = 0;
+    const MAX_WAIT_FRAMES = 180;
+
     function onResize() {
       const r = containerRef.current?.getBoundingClientRect();
       if (r) void updateArPreviewRect(r);
       redrawCheckpointOverlay();
     }
-    window.addEventListener("resize", onResize);
+
+    function tryStart() {
+      if (cancelled) return;
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (!rect || (rect.width === 0 && rect.height === 0)) {
+        // See the same wait-and-retry comment in ar-bar-tracker-dialog.tsx --
+        // this effect only ever runs once per [open, step] transition, so a
+        // one-shot ref check that loses the race with the dialog's own
+        // open-transition/portal mount meant the camera silently never
+        // started for the rest of that step.
+        if (!loggedWaiting) {
+          loggedWaiting = true;
+          setDiagLog((log) => [...log, "JS: containerRef not ready yet, waiting for it to mount..."]);
+        }
+        waitFrames++;
+        if (waitFrames > MAX_WAIT_FRAMES) {
+          setDiagLog((log) => [...log, "JS: containerRef never became ready, giving up"]);
+          return;
+        }
+        rafId = requestAnimationFrame(tryStart);
+        return;
+      }
+      started = true;
+      setArCameraActive(true);
+      // Logged entirely on the JS side, independent of the native
+      // logDiag/getDiagnosticLog buffer -- see the same block's own comment
+      // in ar-bar-tracker-dialog.tsx.
+      setDiagLog((log) => [...log, "JS: calling startArPreview()"]);
+      startArPreview(rect)
+        .then(() => {
+          if (!cancelled) setDiagLog((log) => [...log, "JS: startArPreview() resolved"]);
+        })
+        .catch((err) => {
+          if (!cancelled) {
+            const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+            setDiagLog((log) => [...log, `JS: startArPreview() rejected: ${detail}`]);
+            setError(err instanceof Error ? err.message : "Could not start camera");
+          }
+        });
+      window.addEventListener("resize", onResize);
+    }
+
+    tryStart();
     return () => {
       cancelled = true;
-      setArCameraActive(false);
+      if (rafId != null) cancelAnimationFrame(rafId);
       window.removeEventListener("resize", onResize);
-      void stopArPreview();
+      if (started) {
+        setArCameraActive(false);
+        void stopArPreview();
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, step]);
