@@ -1274,6 +1274,26 @@ CREATE TABLE IF NOT EXISTS "ai_knowledge_gap_log" (
   "called_at" timestamp NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS "ai_knowledge_gap_log_context_idx" ON "ai_knowledge_gap_log" ("context", "called_at");
+
+DO $$ BEGIN
+  CREATE TYPE "reflection_finding_tier" AS ENUM ('safety', 'informational');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE "reflection_confidence" AS ENUM ('low', 'moderate', 'high');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+CREATE TABLE IF NOT EXISTS "ai_reflection_findings" (
+  "id" serial PRIMARY KEY,
+  "tier" reflection_finding_tier NOT NULL,
+  "category" text NOT NULL,
+  "summary" text NOT NULL,
+  "detail" text NOT NULL,
+  "sample_size" integer NOT NULL,
+  "confidence" reflection_confidence NOT NULL,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "ai_reflection_findings_category_idx" ON "ai_reflection_findings" ("category", "created_at");
 `;
 
 async function main() {

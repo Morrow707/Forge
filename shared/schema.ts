@@ -3060,6 +3060,48 @@ export const aiKnowledgeGapLog = pgTable(
   }),
 );
 
+export const reflectionFindingTierEnum = pgEnum("reflection_finding_tier", [
+  "safety",
+  "informational",
+]);
+export const reflectionConfidenceEnum = pgEnum("reflection_confidence", [
+  "low",
+  "moderate",
+  "high",
+]);
+
+// Output of the automatic background reflection job (server/reflection-job.ts)
+// -- mines the aggregate athlete dataset and the injury/training-load link
+// for patterns worth an admin's attention, without waiting for an admin to
+// go looking. "safety" findings (e.g. injuries clustering after a
+// training-load spike) push through immediately regardless of notification
+// prefs, same "emergency reach" override notifyUser already has for
+// announcements; "informational" ones (e.g. a real population segment with
+// no established guidance taught for it) land in-app only. sampleSize +
+// confidence are stored columns, not just baked into the prose, so a
+// finding can never be read as more certain than the underlying N actually
+// supports. category is the dedup key the job checks before generating a
+// fresh finding -- the same real pattern shouldn't renotify on every run
+// while it's still true, only once per cooldown window.
+export const aiReflectionFindings = pgTable(
+  "ai_reflection_findings",
+  {
+    id: serial("id").primaryKey(),
+    tier: reflectionFindingTierEnum("tier").notNull(),
+    category: text("category").notNull(),
+    summary: text("summary").notNull(),
+    detail: text("detail").notNull(),
+    sampleSize: integer("sample_size").notNull(),
+    confidence: reflectionConfidenceEnum("confidence").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    categoryIdx: index("ai_reflection_findings_category_idx").on(table.category, table.createdAt),
+  }),
+);
+
+export type AiReflectionFinding = typeof aiReflectionFindings.$inferSelect;
+
 // Forge AI's own chat thread -- separate from aiKnowledgeMessages/
 // nutritionKnowledgeMessages above (those stay as-is, feeding the two old
 // documents, until they're retired). Reuses aiKnowledgeChatRoleEnum since

@@ -10,7 +10,7 @@ import type { CapturedPhoto } from "@/lib/photo-capture";
 import { apiRequest, getJson } from "@/lib/queryClient";
 import { format, parseISO } from "date-fns";
 import { toast } from "sonner";
-import { Send, Sparkles, Loader2, BookOpen, Eye, X } from "lucide-react";
+import { Send, Sparkles, Loader2, BookOpen, Eye, X, Database, AlertTriangle, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type ForgeAiMessage = { id: number; role: "admin" | "assistant"; content: string; createdAt: string };
@@ -58,14 +58,25 @@ export default function ForgeAiPage() {
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [retiringId, setRetiringId] = useState<number | null>(null);
   const [retireReason, setRetireReason] = useState("");
+  const [showAggregate, setShowAggregate] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   type Gap = { context: string; position: string | null; gender: string | null; age: number | null; count: number; lastSeen: string };
+  type Finding = {
+    id: number;
+    tier: "safety" | "informational";
+    summary: string;
+    detail: string;
+    sampleSize: number;
+    confidence: "low" | "moderate" | "high";
+    createdAt: string;
+  };
   const { data, isLoading } = useQuery<{
     messages: ForgeAiMessage[];
     entries: ForgeAiEntry[];
     usageCounts: Record<number, number>;
     gaps: Gap[];
+    findings: Finding[];
   }>({
     queryKey: ["/api/admin/forge-ai"],
     queryFn: () => getJson("/api/admin/forge-ai"),
@@ -74,6 +85,32 @@ export default function ForgeAiPage() {
   const entries = data?.entries ?? [];
   const usageCounts = data?.usageCounts ?? {};
   const gaps = data?.gaps ?? [];
+  const findings = data?.findings ?? [];
+
+  type AthleteRow = {
+    age: number | null;
+    gender: string | null;
+    heightIn: number | null;
+    bodyWeightLbs: number | null;
+    sport: string | null;
+    position: string | null;
+    seasonPhase: string | null;
+    trainingStylePreference: string | null;
+    nutritionGoal: string | null;
+    healthStatus: string;
+    fortyYardDash: number | null;
+    verticalJumpIn: number | null;
+    broadJumpIn: number | null;
+    proAgilitySeconds: number | null;
+    benchMaxLbs: number | null;
+    squatMaxLbs: number | null;
+    deadliftMaxLbs: number | null;
+  };
+  const { data: aggregateData, isLoading: aggregateLoading } = useQuery<AthleteRow[]>({
+    queryKey: ["/api/admin/aggregate-athlete-data"],
+    queryFn: () => getJson("/api/admin/aggregate-athlete-data"),
+    enabled: showAggregate,
+  });
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -311,6 +348,46 @@ export default function ForgeAiPage() {
         </Card>
       </div>
 
+      {findings.length > 0 && (
+        <div className="px-4 pb-4 lg:px-8">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Reflection findings</CardTitle>
+              <CardDescription>
+                Patterns the background reflection job found in the injury/training-load data and the roster itself,
+                weighed against what's been taught. Every finding carries its own sample size -- read the number, not
+                just the headline.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {findings.map((f) => (
+                <div key={f.id} className="rounded-md border border-border p-2.5">
+                  <div className="mb-1 flex flex-wrap items-center gap-1.5">
+                    {f.tier === "safety" ? (
+                      <Badge variant="destructive" className="flex items-center gap-1 text-[10px]">
+                        <AlertTriangle className="h-3 w-3" />
+                        safety
+                      </Badge>
+                    ) : (
+                      <Badge variant="secondary" className="flex items-center gap-1 text-[10px]">
+                        <Info className="h-3 w-3" />
+                        informational
+                      </Badge>
+                    )}
+                    <Badge variant="outline" className="text-[10px]">
+                      n={f.sampleSize} · {f.confidence} confidence
+                    </Badge>
+                    <span className="text-[10px] text-muted-foreground">{format(parseISO(f.createdAt), "MMM d")}</span>
+                  </div>
+                  <p className="text-sm font-medium">{f.summary}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{f.detail}</p>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {gaps.length > 0 && (
         <div className="px-4 pb-4 lg:px-8">
           <Card>
@@ -334,6 +411,86 @@ export default function ForgeAiPage() {
           </Card>
         </div>
       )}
+
+      <div className="px-4 pb-4 lg:px-8">
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Database className="h-4 w-4 text-primary" />
+                  Aggregate athlete data
+                </CardTitle>
+                <CardDescription>
+                  Every athlete on the platform, across every coach's roster -- exact values, no names or team info.
+                  Each view is logged.
+                </CardDescription>
+              </div>
+              {!showAggregate && (
+                <Button type="button" variant="outline" size="sm" onClick={() => setShowAggregate(true)}>
+                  View data
+                </Button>
+              )}
+            </div>
+          </CardHeader>
+          {showAggregate && (
+            <CardContent className="overflow-x-auto">
+              {aggregateLoading ? (
+                <div className="h-24 animate-pulse rounded-md bg-surface" />
+              ) : !aggregateData || aggregateData.length === 0 ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">No athletes yet.</p>
+              ) : (
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-[10px] uppercase text-muted-foreground">
+                      <th className="py-1.5 pr-3">Age</th>
+                      <th className="py-1.5 pr-3">Gender</th>
+                      <th className="py-1.5 pr-3">Height</th>
+                      <th className="py-1.5 pr-3">Weight</th>
+                      <th className="py-1.5 pr-3">Sport</th>
+                      <th className="py-1.5 pr-3">Position</th>
+                      <th className="py-1.5 pr-3">Season</th>
+                      <th className="py-1.5 pr-3">Style</th>
+                      <th className="py-1.5 pr-3">Nutrition goal</th>
+                      <th className="py-1.5 pr-3">Health</th>
+                      <th className="py-1.5 pr-3">40-Yd</th>
+                      <th className="py-1.5 pr-3">Vertical</th>
+                      <th className="py-1.5 pr-3">Broad</th>
+                      <th className="py-1.5 pr-3">Agility</th>
+                      <th className="py-1.5 pr-3">Bench</th>
+                      <th className="py-1.5 pr-3">Squat</th>
+                      <th className="py-1.5 pr-3">Deadlift</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {aggregateData.map((a, i) => (
+                      <tr key={i} className="border-b border-border/50">
+                        <td className="py-1.5 pr-3">{a.age ?? "--"}</td>
+                        <td className="py-1.5 pr-3">{a.gender ?? "--"}</td>
+                        <td className="py-1.5 pr-3">{a.heightIn ?? "--"}</td>
+                        <td className="py-1.5 pr-3">{a.bodyWeightLbs ?? "--"}</td>
+                        <td className="py-1.5 pr-3">{a.sport ?? "--"}</td>
+                        <td className="py-1.5 pr-3">{a.position ?? "--"}</td>
+                        <td className="py-1.5 pr-3">{a.seasonPhase ?? "--"}</td>
+                        <td className="py-1.5 pr-3">{a.trainingStylePreference ?? "--"}</td>
+                        <td className="py-1.5 pr-3">{a.nutritionGoal ?? "--"}</td>
+                        <td className="py-1.5 pr-3">{a.healthStatus}</td>
+                        <td className="py-1.5 pr-3">{a.fortyYardDash ?? "--"}</td>
+                        <td className="py-1.5 pr-3">{a.verticalJumpIn ?? "--"}</td>
+                        <td className="py-1.5 pr-3">{a.broadJumpIn ?? "--"}</td>
+                        <td className="py-1.5 pr-3">{a.proAgilitySeconds ?? "--"}</td>
+                        <td className="py-1.5 pr-3">{a.benchMaxLbs ?? "--"}</td>
+                        <td className="py-1.5 pr-3">{a.squatMaxLbs ?? "--"}</td>
+                        <td className="py-1.5 pr-3">{a.deadliftMaxLbs ?? "--"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </CardContent>
+          )}
+        </Card>
+      </div>
     </AppShell>
   );
 }

@@ -76,6 +76,7 @@ import {
   aiKnowledgeUsageLog,
   aiKnowledgeGapLog,
   aggregateDataAccessLog,
+  aiReflectionFindings,
   foodLogEntries,
   weaknessDeficitSchema,
   PERIODIZATION_PHASE_LABEL,
@@ -112,6 +113,7 @@ import type {
   NutritionKnowledgeMessage,
   ForgeAiMessage,
   AiKnowledgeEntry,
+  AiReflectionFinding,
   CreateFoodLogEntryInput,
   UpdateFoodLogEntryInput,
   ClassStructureInput,
@@ -1481,6 +1483,30 @@ async function buildPlatformTrends() {
 // workoutComments -- see getAdminVideos' own comment) it actually came
 // from. "source" + "id" together are the only thing deleteAdminVideo needs
 // to find and clear the right row again.
+// One row shape for the platform-wide aggregate athlete data view
+// (getAggregateAthleteData/queryAggregateAthleteData) and the reflection
+// job that mines the same query -- exact values only, no name/email/team/
+// location, per the explicit "exact numbers produce exact results" call.
+type AggregateAthleteRow = {
+  age: number | null;
+  gender: string | null;
+  heightIn: number | null;
+  bodyWeightLbs: number | null;
+  sport: string | null;
+  position: string | null;
+  seasonPhase: string | null;
+  trainingStylePreference: string | null;
+  nutritionGoal: string | null;
+  healthStatus: string;
+  fortyYardDash: number | null;
+  verticalJumpIn: number | null;
+  broadJumpIn: number | null;
+  proAgilitySeconds: number | null;
+  benchMaxLbs: number | null;
+  squatMaxLbs: number | null;
+  deadliftMaxLbs: number | null;
+};
+
 type AdminVideoRow = {
   source: "set" | "skill" | "comment";
   id: number;
@@ -8692,14 +8718,172 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
     entries: AiKnowledgeEntry[];
     usageCounts: Record<number, number>;
     gaps: { context: string; position: string | null; gender: string | null; age: number | null; count: number; lastSeen: Date }[];
+    findings: AiReflectionFinding[];
   }> {
-    const [messages, entries, usageCounts, gaps] = await Promise.all([
+    const [messages, entries, usageCounts, gaps, findings] = await Promise.all([
       db.query.forgeAiMessages.findMany({ orderBy: asc(forgeAiMessages.createdAt) }),
       this.getActiveForgeAiEntries(),
       this.getForgeAiUsageCounts(),
       this.getForgeAiRecentGaps(),
+      this.getRecentReflectionFindings(),
     ]);
-    return { messages, entries, usageCounts, gaps };
+    return { messages, entries, usageCounts, gaps, findings };
+  },
+
+  // Platform-wide aggregate athlete data -- the first place admin can see
+  // every athlete's data across every coach's roster, not just their own.
+  // Exact, unbucketed values by explicit instruction: raw numbers produce
+  // real results, and this is an internal admin tool, not a public
+  // release -- if the data is ever published as an external study, THAT
+  // step is where anonymization/bucketing belongs, not here. Every
+  // identifying field (name, email, coachCode, team) is left out at the
+  // query level, not just hidden client-side. Every call logs who looked
+  // via aggregateDataAccessLog -- nothing here restricts access further,
+  // so the audit trail is the only accountability mechanism.
+  async getAggregateAthleteData(adminId: number): Promise<AggregateAthleteRow[]> {
+    db.insert(aggregateDataAccessLog).values({ adminId }).catch(() => {});
+    return this.queryAggregateAthleteData();
+  },
+
+  // The actual query behind getAggregateAthleteData, split out so the
+  // reflection job below can read the same data WITHOUT writing an access-
+  // log row -- that log means "a person looked," and a scheduled job isn't
+  // one. Never call this directly from a route; routes go through
+  // getAggregateAthleteData so the audit trail stays honest.
+  async queryAggregateAthleteData(): Promise<AggregateAthleteRow[]> {
+    return db
+      .select({
+        age: users.age,
+        gender: users.gender,
+        heightIn: users.heightIn,
+        bodyWeightLbs: users.bodyWeightLbs,
+        sport: users.sport,
+        position: users.position,
+        seasonPhase: users.seasonPhase,
+        trainingStylePreference: users.trainingStylePreference,
+        nutritionGoal: users.nutritionGoal,
+        healthStatus: users.healthStatus,
+        fortyYardDash: users.fortyYardDash,
+        verticalJumpIn: users.verticalJumpIn,
+        broadJumpIn: users.broadJumpIn,
+        proAgilitySeconds: users.proAgilitySeconds,
+        benchMaxLbs: users.benchMaxLbs,
+        squatMaxLbs: users.squatMaxLbs,
+        deadliftMaxLbs: users.deadliftMaxLbs,
+      })
+      .from(users)
+      .where(eq(users.role, "athlete"));
+  },
+
+  async getRecentReflectionFindings(days = 30): Promise<AiReflectionFinding[]> {
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    return db.query.aiReflectionFindings.findMany({
+      where: gte(aiReflectionFindings.createdAt, since),
+      orderBy: desc(aiReflectionFindings.createdAt),
+    });
+  },
+
+  // Mines the aggregate athlete dataset (queryAggregateAthleteData) and the
+  // injury/training-load link (getAcwrHistoryForAthlete) for patterns
+  // relative to what's actually been taught -- called on a timer (see
+  // server/reflection-job.ts), never from a request, since nothing here is
+  // scoped to one caller. Two finding types today, one per data source:
+  //
+  // "load_spike_injury" (safety) -- of the injuries logged platform-wide in
+  // the last 60 days, how many landed on a day this athlete's own
+  // acute:chronic workload ratio (see shared/load.ts) was already flagged
+  // red? A real, published spike-before-injury heuristic, not a guess --
+  // but still just a correlation across a small N, which is why the finding
+  // text says so explicitly rather than asserting cause.
+  //
+  // "coverage_gap:<position>:<gender>" (informational) -- a real population
+  // segment (3+ current athletes sharing a position+gender) with zero
+  // established entries in the knowledge base that apply to it. Distinct
+  // from aiKnowledgeGapLog (which only fires reactively, when a real AI
+  // call already needed guidance that wasn't there) -- this one is
+  // proactive, from the roster itself, and can catch a segment nobody's
+  // asked about yet.
+  //
+  // Every category is gated behind its own 7-day cooldown (checked against
+  // its own most recent prior finding) so a pattern that's still true
+  // doesn't renotify admin on every single run -- only once per week, same
+  // as a real recurring digest. Returns only the findings actually created
+  // this run, since that's what the caller needs to know to notify about.
+  async generateReflectionFindings(): Promise<AiReflectionFinding[]> {
+    const created: AiReflectionFinding[] = [];
+    const cooldownSince = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+    const recentlyFlagged = async (category: string): Promise<boolean> => {
+      const [existing] = await db
+        .select({ id: aiReflectionFindings.id })
+        .from(aiReflectionFindings)
+        .where(and(eq(aiReflectionFindings.category, category), gte(aiReflectionFindings.createdAt, cooldownSince)))
+        .limit(1);
+      return !!existing;
+    };
+    const confidenceFor = (n: number): "low" | "moderate" | "high" =>
+      n >= 8 ? "high" : n >= 5 ? "moderate" : "low";
+
+    // ---- Safety: injuries clustering after a training-load spike ----
+    if (!(await recentlyFlagged("load_spike_injury"))) {
+      const since = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const injuries = await db.select().from(injuryHistory).where(gte(injuryHistory.occurredOn, since));
+      let total = 0;
+      let elevated = 0;
+      for (const injury of injuries) {
+        const history = await this.getAcwrHistoryForAthlete(injury.athleteId, 90);
+        const point = history.find((p) => p.date === injury.occurredOn);
+        if (!point || point.ratio == null) continue;
+        total += 1;
+        if (point.level === "red") elevated += 1;
+      }
+      if (total >= 3 && elevated / total >= 0.5) {
+        const [finding] = await db
+          .insert(aiReflectionFindings)
+          .values({
+            tier: "safety",
+            category: "load_spike_injury",
+            summary: `${elevated} of ${total} injuries in the last 60 days landed on a red (high-risk) training-load day`,
+            detail: `Across every athlete on the platform, ${elevated} of ${total} injuries logged in the last 60 days occurred on a day where that athlete's own acute:chronic workload ratio was already in the red zone. That's a correlation across a small sample, not a diagnosis for any one athlete or proof a taught rule is wrong -- worth a look at whether load progression is being managed conservatively enough for the athletes it's happening to.`,
+            sampleSize: total,
+            confidence: confidenceFor(total),
+          })
+          .returning();
+        created.push(finding);
+      }
+    }
+
+    // ---- Informational: a real population segment with nothing established taught for it ----
+    const athletes = await this.queryAggregateAthleteData();
+    const segments = new Map<string, { position: string; gender: string; count: number }>();
+    for (const a of athletes) {
+      if (!a.position || !a.gender) continue;
+      const key = `${a.position}::${a.gender}`;
+      const seg = segments.get(key) ?? { position: a.position, gender: a.gender, count: 0 };
+      seg.count += 1;
+      segments.set(key, seg);
+    }
+    for (const seg of segments.values()) {
+      if (seg.count < 3) continue;
+      const category = `coverage_gap:${seg.position}:${seg.gender}`;
+      if (await recentlyFlagged(category)) continue;
+      const entries = await this.getActiveForgeAiEntries({ position: seg.position, gender: seg.gender, age: null });
+      if (entries.some((e) => e.maturity === "established")) continue;
+      const [finding] = await db
+        .insert(aiReflectionFindings)
+        .values({
+          tier: "informational",
+          category,
+          summary: `${seg.count} athletes are ${seg.position} / ${seg.gender} with no established guidance taught for them`,
+          detail: `${seg.count} current athletes share the position "${seg.position}" and gender "${seg.gender}", and the knowledge base has no universal or matching established entry that covers them (experimental entries, if any, don't count -- this is about settled guidance). Worth teaching Forge AI something for this segment if it's coming up in coaching decisions.`,
+          sampleSize: seg.count,
+          confidence: confidenceFor(seg.count),
+        })
+        .returning();
+      created.push(finding);
+    }
+
+    return created;
   },
 
   // Forge AI's teaching chat -- see the schema comments on aiKnowledgeEntries/

@@ -1826,6 +1826,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(result);
   });
 
+  // Platform-wide aggregate athlete data -- every athlete across every
+  // coach's roster, exact values, no names/teams/locations. Loaded on
+  // demand from within the Forge AI page rather than eagerly, since it's
+  // the first cross-coach data access in the app and each view is logged.
+  app.get("/api/admin/aggregate-athlete-data", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const result = await storage.getAggregateAthleteData(user.id);
+    res.json(result);
+  });
+
   // The clickwrap agreement every new coach/athlete accepts at signup (see
   // GET /api/legal-agreement above and signupSchema's agreedToTerms field).
   // A direct edit, not a propose-then-review chat flow like ai-knowledge
