@@ -1,6 +1,6 @@
 import { createContext, useContext, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiRequest, ApiError, getQueryFn, setNativeToken } from "@/lib/queryClient";
+import { apiRequest, ApiError, setNativeToken } from "@/lib/queryClient";
 import { toast } from "sonner";
 import type { PublicUser } from "@shared/schema";
 
@@ -74,12 +74,42 @@ function useLogoutMutation() {
   });
 }
 
+// ProtectedRoute unmounts every page in the app -- including a mid-workout
+// athlete's only copy of whatever isn't saved yet -- the instant this comes
+// back "no user." A phone waking from being backgrounded (screen lock, a
+// gym wifi dead zone, the 'online' event firing a beat before the
+// connection is actually stable) very often fires this check's first
+// attempt before the network is really back, so -- same reasoning as the
+// day-detail query in workout.tsx -- a raw failed fetch gets a couple of
+// quick retries before being believed. An ApiError means the server itself
+// answered; on401 already resolves a real 401 to `null` without throwing,
+// so anything that reaches the catch here is either a different ApiError
+// (a real problem, rethrown immediately) or the request never completing.
+async function fetchCurrentUser(): Promise<PublicUser | null> {
+  const maxAttempts = 3;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const res = await apiRequest("GET", "/api/auth/me");
+      return (await res.json()) as PublicUser;
+    } catch (err) {
+      if (err instanceof ApiError) {
+        if (err.status === 401) return null;
+        throw err;
+      }
+      if (attempt < maxAttempts) {
+        await new Promise((r) => setTimeout(r, 400 * attempt));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error("Unreachable");
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  // The one query in the app that wants a 401 treated as valid data --
-  // "no one is logged in" -- rather than an error (see queryClient.ts).
   const { data: user, isLoading } = useQuery<PublicUser | null>({
     queryKey: ["/api/auth/me"],
-    queryFn: getQueryFn({ on401: "returnNull" }),
+    queryFn: fetchCurrentUser,
   });
 
   const loginMutation = useLoginMutation();
