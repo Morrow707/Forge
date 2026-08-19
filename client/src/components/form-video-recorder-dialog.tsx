@@ -306,16 +306,32 @@ export function FormVideoRecorderDialog({
   async function save() {
     if (!blob) return;
     setStep("uploading");
-    try {
-      const formData = new FormData();
-      formData.append("video", blob, videoFilenameForBlob(blob, "form-check"));
-      const res = await apiRequest("POST", "/api/athlete/form-video", formData);
-      const { url } = await res.json();
-      onSaved(url);
-      onOpenChange(false);
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "Upload failed — try again");
-      setStep("preview");
+    // A 10-second clip is a few MB at most, so retrying the whole upload is
+    // cheap -- worth doing automatically rather than making a real capture
+    // (something the athlete can't just redo the same way, unlike a text
+    // field) depend on one connection blip not landing at exactly the wrong
+    // moment. An ApiError means the server actually answered (bad format,
+    // too large, auth) -- no amount of retrying changes that, so it's
+    // surfaced immediately same as before; only a raw failed request gets
+    // retried.
+    const maxAttempts = 3;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const formData = new FormData();
+        formData.append("video", blob, videoFilenameForBlob(blob, "form-check"));
+        const res = await apiRequest("POST", "/api/athlete/form-video", formData);
+        const { url } = await res.json();
+        onSaved(url);
+        onOpenChange(false);
+        return;
+      } catch (err) {
+        if (err instanceof ApiError || attempt === maxAttempts) {
+          toast.error(err instanceof ApiError ? err.message : "Upload failed — try again");
+          setStep("preview");
+          return;
+        }
+        await new Promise((r) => setTimeout(r, 800 * attempt));
+      }
     }
   }
 
@@ -375,7 +391,20 @@ export function FormVideoRecorderDialog({
             <button
               type="button"
               aria-label="Close"
-              onClick={() => onOpenChange(false)}
+              onClick={() => {
+                // Closing here silently drops the in-memory blob with no
+                // way back -- it's never been written anywhere else. Only
+                // worth confirming once there's an actual capture at risk
+                // (trim/preview); bail out of a bare camera/file-picker
+                // view with nothing recorded yet needs no prompt.
+                if (
+                  (step === "trim" || step === "preview") &&
+                  !window.confirm("Discard this recorded video? It hasn't been saved yet.")
+                ) {
+                  return;
+                }
+                onOpenChange(false);
+              }}
               className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-colors hover:bg-black/70"
             >
               <X className="h-5 w-5" />
