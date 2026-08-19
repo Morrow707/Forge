@@ -30,6 +30,8 @@ import {
   assessCameraAlignment,
   guessMovementPattern,
   computeLegDriveAsymmetry,
+  computeHeightScaleCorrection,
+  scaleWorldLandmarks,
   type PoseFrame,
   type CameraAlignment,
 } from "@/lib/pose-tracking";
@@ -196,6 +198,25 @@ export function ArBarTrackerDialog({
   // mid-set" reasoning as bar-tracker-dialog.tsx's own lastAlignmentReasonRef.
   const alignmentReasonRef = useRef<CameraAlignment["reason"] | null>(null);
   const trackingRef = useRef(false);
+  // Same correction bar-tracker-dialog.tsx's own scaleCorrectionRef applies
+  // (see computeHeightScaleCorrection's comment) -- MediaPipe's worldLandmarks
+  // are scaled by a learned population-average body-proportion prior, not
+  // anything measured in the actual scene, which is exactly the same
+  // ambiguity a non-LiDAR ARKit body-tracking skeleton has for its own
+  // individual joint-to-joint distances (the root/pelvis anchor is solid
+  // visual-inertial odometry, but limb proportions still lean on a body
+  // model, same category of guess). This was missing here entirely --
+  // scaleCorrectionRef.current stayed permanently null on this dialog, so
+  // every ARKit-tracked velocity/distance number went out with whatever
+  // scale error ARKit's own body-proportion guess happened to carry for
+  // this specific athlete, uncorrected. Sampled continuously from every
+  // tracked frame from the moment the AR session comes up (there's no
+  // separate setup/countdown step here to gate it to, unlike
+  // bar-tracker-dialog.tsx) so there's already a real sample pool by the
+  // time Start Set is tapped, not just whatever the single frame at that
+  // instant happened to read.
+  const heightCorrectionSamplesRef = useRef<number[]>([]);
+  const scaleCorrectionRef = useRef<number | null>(null);
 
   const usesSharedBar = usesSharedBarEquipment(equipment);
 
@@ -342,9 +363,30 @@ export function ArBarTrackerDialog({
     });
   }, [open]);
 
+  // Collected independently of trackingRef -- see heightCorrectionSamplesRef's
+  // own comment for why this runs continuously from whenever the AR session
+  // starts tracking a body, not gated to Start/Stop the way the trace-
+  // building effect below is.
+  useEffect(() => {
+    if (!frame || !frame.tracked || !heightIn) return;
+    const worldLm = arJointsToWorldLandmarks(frame.joints);
+    const sign = worldVerticalSign(worldLm) ?? verticalSignRef.current;
+    const candidate = computeHeightScaleCorrection(worldLm, sign, heightIn);
+    if (candidate != null) heightCorrectionSamplesRef.current.push(candidate);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [frame]);
+
   useEffect(() => {
     if (!frame || !frame.tracked || !trackingRef.current) return;
-    const worldLm = arJointsToWorldLandmarks(frame.joints);
+    // Scaled once here, right off the ARKit bridge, so every downstream
+    // consumer below (fused wrist/implement points, tilt, the primary
+    // trace) automatically inherits the correction -- same "one
+    // application point" pattern as bar-tracker-dialog.tsx's own
+    // worldLandmarks scaling. No-op when scaleCorrectionRef.current is
+    // null (no heightIn on file, or no plausible reading was ever sampled).
+    const rawWorldLm = arJointsToWorldLandmarks(frame.joints);
+    const worldLm =
+      scaleCorrectionRef.current != null ? scaleWorldLandmarks(rawWorldLm, scaleCorrectionRef.current) : rawWorldLm;
     framesRef.current.push({ t: frame.timestamp, landmarks: [], worldLandmarks: worldLm });
 
     const sign = worldVerticalSign(worldLm);
@@ -468,6 +510,17 @@ export function ArBarTrackerDialog({
     alignmentReasonRef.current = frame?.tracked
       ? assessCameraAlignment(arJointsToWorldLandmarks(frame.joints)).reason
       : null;
+    // Locked in from whatever accumulated since the AR session started
+    // tracking -- see heightCorrectionSamplesRef's own comment. Needs at
+    // least a handful of samples before it's trusted enough to correct a
+    // whole set's worth of numbers; only OVERWRITES the existing value
+    // when fresh samples cleared that bar, same "retry doesn't silently
+    // lose a good correction" reasoning as bar-tracker-dialog.tsx's own
+    // lock-in.
+    if (heightCorrectionSamplesRef.current.length >= 5) {
+      scaleCorrectionRef.current = medianOf(heightCorrectionSamplesRef.current);
+    }
+    heightCorrectionSamplesRef.current = [];
     trackingRef.current = true;
     setRecordedReps(0);
     setLiveTiltDeg(null);

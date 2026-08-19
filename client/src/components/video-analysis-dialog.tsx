@@ -285,7 +285,10 @@ export function VideoAnalysisDialog({
     if (selectedJointKey && frame) {
       const joint = MEASURABLE_JOINTS.find((j) => j.key === selectedJointKey);
       const measured = joint ? measureJoint(frame.landmarks, frame.worldLandmarks, joint) : null;
-      if (measured) {
+      // .at is only ever null when measureJoint was called without 2D
+      // landmarks (the ARKit-bridge path) -- this call always passes
+      // frame.landmarks, a real 2D array, so it's always populated here.
+      if (measured && measured.at) {
         const deg = flipAngle ? 360 - measured.insideDeg : measured.insideDeg;
         drawAngleLabel(ctx, measured.at.x * canvas.width, measured.at.y * canvas.height, deg, ANGLE_COLOR);
       }

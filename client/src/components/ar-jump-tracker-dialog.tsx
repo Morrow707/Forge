@@ -19,7 +19,15 @@ import {
   type BodyTrackingFrame,
 } from "@/lib/native-ar-preview";
 import { arJointsToWorldLandmarks } from "@/lib/ar-body-landmarks";
-import { deriveJumpPoint, detectFormFaults, computeLandingAsymmetry, type PoseFrame } from "@/lib/pose-tracking";
+import {
+  deriveJumpPoint,
+  detectFormFaults,
+  computeLandingAsymmetry,
+  computeHeightScaleCorrection,
+  scaleWorldLandmarks,
+  worldVerticalSign,
+  type PoseFrame,
+} from "@/lib/pose-tracking";
 import { summarizeJumpSet, type JumpSetMetrics } from "@/lib/jump-tracking";
 import type { TrackedPoint } from "@/lib/bar-tracking";
 import { videoFilenameForBlob } from "@/lib/video-recording";
@@ -60,6 +68,12 @@ import { videoFilenameForBlob } from "@/lib/video-recording";
 // trustworthy read -- see EMPTY_REP_METRICS's own comment in
 // ar-bar-tracker-dialog.tsx for why this is all zero/empty rather than
 // fabricated numbers.
+function medianOf(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+}
+
 const EMPTY_JUMP_METRICS: JumpSetMetrics = {
   bestJumpHeightCm: 0,
   bestHorizontalDistanceCm: null,
@@ -107,6 +121,13 @@ export function ArJumpTrackerDialog({
   // bridge never produces 2D data; see the file comment above.
   const framesRef = useRef<PoseFrame[]>([]);
   const trackingRef = useRef(false);
+  const verticalSignRef = useRef<1 | -1>(1);
+  // Same correction as ar-bar-tracker-dialog.tsx's own scaleCorrectionRef --
+  // see computeHeightScaleCorrection's comment. Sampled continuously from
+  // every tracked frame (no separate setup step here to gate it to) and
+  // locked in as a median at Start.
+  const heightCorrectionSamplesRef = useRef<number[]>([]);
+  const scaleCorrectionRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -234,9 +255,27 @@ export function ArJumpTrackerDialog({
     });
   }, [open]);
 
+  // Collected independently of trackingRef, same reasoning as
+  // ar-bar-tracker-dialog.tsx's own copy of this effect.
+  useEffect(() => {
+    if (!frame || !frame.tracked || !heightIn) return;
+    const worldLm = arJointsToWorldLandmarks(frame.joints);
+    const sign = worldVerticalSign(worldLm) ?? verticalSignRef.current;
+    const candidate = computeHeightScaleCorrection(worldLm, sign, heightIn);
+    if (candidate != null) heightCorrectionSamplesRef.current.push(candidate);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [frame]);
+
   useEffect(() => {
     if (!frame || !frame.tracked || !trackingRef.current) return;
-    const landmarks = arJointsToWorldLandmarks(frame.joints);
+    const rawLandmarks = arJointsToWorldLandmarks(frame.joints);
+    const sign = worldVerticalSign(rawLandmarks);
+    if (sign != null) verticalSignRef.current = sign;
+    // Same single application point as ar-bar-tracker-dialog.tsx's own
+    // worldLm scaling -- everything below (deriveJumpPoint, the trace)
+    // inherits the correction automatically.
+    const landmarks =
+      scaleCorrectionRef.current != null ? scaleWorldLandmarks(rawLandmarks, scaleCorrectionRef.current) : rawLandmarks;
     framesRef.current.push({ t: frame.timestamp, landmarks: [], worldLandmarks: landmarks });
     const point = deriveJumpPoint(landmarks);
     if (!point) return;
@@ -254,6 +293,13 @@ export function ArJumpTrackerDialog({
   function startTracking() {
     traceRef.current = [];
     framesRef.current = [];
+    // Same lock-in as ar-bar-tracker-dialog.tsx's own -- only overwrites
+    // when fresh samples cleared the trust bar, so a retry doesn't lose a
+    // good correction just because the buffer's empty again.
+    if (heightCorrectionSamplesRef.current.length >= 5) {
+      scaleCorrectionRef.current = medianOf(heightCorrectionSamplesRef.current);
+    }
+    heightCorrectionSamplesRef.current = [];
     trackingRef.current = true;
     setRecordedReps(0);
     setLastJumpCm(null);

@@ -104,29 +104,36 @@ export function findNearestJoint(
 // angle pipeline does. `landmarks` (image-space) is only used for `at`,
 // where to draw the label on screen -- that's just an on-screen position,
 // not a measurement, so it stays in the space the canvas already draws in.
+// landmarks (2D image-space) is optional -- ARKit's body-tracking bridge
+// (see ar-body-landmarks.ts) only ever produces world-space Landmark[],
+// never 2D data, so a caller reading ARKit joints passes null here. `at`
+// (a screen-space point for drawing the joint marker) is only meaningful
+// when 2D data exists, so it's null in that case too -- the angle itself
+// (insideDeg, computed from worldLandmarks alone) is unaffected either
+// way. Visibility falls back to the world landmarks' own visibility field
+// (populated by the ARKit bridge with real tracking confidence) when 2D
+// isn't available, rather than skipping the check entirely.
 export function measureJoint(
-  landmarks: NormalizedLandmark[],
+  landmarks: NormalizedLandmark[] | null,
   worldLandmarks: Landmark[],
   joint: MeasurableJoint,
-): { insideDeg: number; at: { x: number; y: number } } | null {
+): { insideDeg: number; at: { x: number; y: number } | null } | null {
   const [ai, bi, ci] = joint.triple;
-  const a = landmarks[ai];
-  const b = landmarks[bi];
-  const c = landmarks[ci];
   const wa = worldLandmarks[ai];
   const wb = worldLandmarks[bi];
   const wc = worldLandmarks[ci];
-  if (
-    !a ||
-    !b ||
-    !c ||
-    !wa ||
-    !wb ||
-    !wc ||
-    a.visibility < MIN_VISIBILITY ||
-    b.visibility < MIN_VISIBILITY ||
-    c.visibility < MIN_VISIBILITY
-  )
+  if (!wa || !wb || !wc) return null;
+  const a = landmarks?.[ai];
+  const b = landmarks?.[bi];
+  const c = landmarks?.[ci];
+  if (a && b && c) {
+    if (a.visibility < MIN_VISIBILITY || b.visibility < MIN_VISIBILITY || c.visibility < MIN_VISIBILITY) return null;
+  } else if (
+    (wa.visibility ?? 1) < MIN_VISIBILITY ||
+    (wb.visibility ?? 1) < MIN_VISIBILITY ||
+    (wc.visibility ?? 1) < MIN_VISIBILITY
+  ) {
     return null;
-  return { insideDeg: worldAngleAtVertex(wa, wb, wc), at: { x: b.x, y: b.y } };
+  }
+  return { insideDeg: worldAngleAtVertex(wa, wb, wc), at: a && b ? { x: b.x, y: b.y } : null };
 }
