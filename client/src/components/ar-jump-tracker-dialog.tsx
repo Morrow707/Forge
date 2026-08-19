@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { apiRequest, ApiError } from "@/lib/queryClient";
+import { ApiError, uploadWithProgress } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { Circle, Square, AlertTriangle, X } from "lucide-react";
 import {
@@ -98,6 +98,7 @@ export function ArJumpTrackerDialog({
   const [recordedReps, setRecordedReps] = useState(0);
   const [lastJumpCm, setLastJumpCm] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   const traceRef = useRef<TrackedPoint[]>([]);
   // Full per-frame world landmarks for the set, in the same PoseFrame shape
@@ -284,12 +285,12 @@ export function ArJumpTrackerDialog({
       // open exactly like before so the athlete can just retry the set.
       if (recordVideo) {
         setSaving(true);
+        setUploadProgress(0);
         try {
           const blob = await stopArRecording();
           const formData = new FormData();
           formData.append("video", blob, videoFilenameForBlob(blob, "form-check"));
-          const res = await apiRequest("POST", "/api/athlete/form-video", formData);
-          const { url } = await res.json();
+          const { url } = await uploadWithProgress("/api/athlete/form-video", formData, setUploadProgress);
           toast.error(
             "Couldn't get a clean read -- make sure your feet leave the ground clearly in frame. (Video saved for your coach.)",
           );
@@ -325,12 +326,12 @@ export function ArJumpTrackerDialog({
     }
 
     setSaving(true);
+    setUploadProgress(0);
     try {
       const blob = await stopArRecording();
       const formData = new FormData();
       formData.append("video", blob, videoFilenameForBlob(blob, "form-check"));
-      const res = await apiRequest("POST", "/api/athlete/form-video", formData);
-      const { url } = await res.json();
+      const { url } = await uploadWithProgress("/api/athlete/form-video", formData, setUploadProgress);
       onCapture(metrics, url);
       onOpenChange(false);
     } catch (err) {
@@ -428,7 +429,7 @@ export function ArJumpTrackerDialog({
             {tracking && (
               <Button size="lg" variant="secondary" onClick={stopTracking} disabled={saving}>
                 <Square className="h-4 w-4" />
-                {saving ? "Saving…" : "Stop Set"}
+                {saving ? `Saving… ${Math.round(uploadProgress * 100)}%` : "Stop Set"}
               </Button>
             )}
           </div>

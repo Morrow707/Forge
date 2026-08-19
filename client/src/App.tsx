@@ -364,7 +364,14 @@ export default function App() {
       <AuthProvider>
         <BiometricLockGate>
           <Router />
-          <Toaster theme="dark" position="top-right" richColors />
+          {/* expand: without it, Sonner collapses multiple toasts into a
+              peek-behind-the-front-one stack that only un-collapses on
+              hover -- fine on desktop, but there's no hover on a touch
+              screen, so a second toast landing before the first was read
+              just looked like it silently replaced it. expand keeps every
+              toast fully visible, each new one pushing the others down,
+              still auto-dismissing on their own default timers. */}
+          <Toaster theme="dark" position="top-right" richColors expand />
           {/* Temporary -- see debug-console.tsx's own comment. Remove this
               line, that file, and lib/debug-console.ts together once
               login/password-save is diagnosed. */}
