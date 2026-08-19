@@ -7,9 +7,11 @@
 // auto-committed, same safety net every other camera/AI-assisted feature in
 // this app already relies on.
 import { POSE_LANDMARKS, MIN_VISIBILITY, frameKneeAngles, type PoseFrame } from "./pose-tracking";
-import type { NormalizedLandmark } from "@mediapipe/tasks-vision";
 
-function visible(lm: NormalizedLandmark | undefined): lm is NormalizedLandmark {
+// Generic over NormalizedLandmark (2D, MediaPipe) and Landmark (3D world,
+// both MediaPipe and the ARKit bridge) -- both shapes carry their own
+// .visibility field.
+function visible<T extends { visibility: number }>(lm: T | undefined): lm is T {
   return !!lm && lm.visibility >= MIN_VISIBILITY;
 }
 
@@ -29,29 +31,41 @@ export function assessOverheadSquat(frames: PoseFrame[]): OverheadSquatAssessmen
   const torsoAngles: number[] = [];
 
   for (const frame of frames) {
-    const lm = frame.landmarks;
-    kneeAngles.push(...frameKneeAngles(frame.worldLandmarks));
+    const worldLm = frame.worldLandmarks;
+    kneeAngles.push(...frameKneeAngles(worldLm));
 
-    const lKnee = lm[POSE_LANDMARKS.LEFT_KNEE];
-    const rKnee = lm[POSE_LANDMARKS.RIGHT_KNEE];
-    const lAnkle = lm[POSE_LANDMARKS.LEFT_ANKLE];
-    const rAnkle = lm[POSE_LANDMARKS.RIGHT_ANKLE];
+    const lKnee = worldLm[POSE_LANDMARKS.LEFT_KNEE];
+    const rKnee = worldLm[POSE_LANDMARKS.RIGHT_KNEE];
+    const lAnkle = worldLm[POSE_LANDMARKS.LEFT_ANKLE];
+    const rAnkle = worldLm[POSE_LANDMARKS.RIGHT_ANKLE];
+    // Real-world 3D distance, not image-space x -- same fix already applied
+    // to detectFormFaults' own valgus check in pose-tracking.ts. Works off
+    // ARKit's world-only joints (no 2D landmarks to fall back on here), and
+    // isn't implicitly assuming a face-on camera the way a single
+    // image-axis difference is.
     if (visible(lKnee) && visible(rKnee) && visible(lAnkle) && visible(rAnkle)) {
-      const kneeWidth = Math.abs(lKnee.x - rKnee.x);
-      const ankleWidth = Math.abs(lAnkle.x - rAnkle.x);
+      const kneeWidth = Math.hypot(lKnee.x - rKnee.x, lKnee.y - rKnee.y, lKnee.z - rKnee.z);
+      const ankleWidth = Math.hypot(lAnkle.x - rAnkle.x, lAnkle.y - rAnkle.y, lAnkle.z - rAnkle.z);
       if (ankleWidth > 0.02) valgusRatios.push(kneeWidth / ankleWidth);
     }
 
-    const lShoulder = lm[POSE_LANDMARKS.LEFT_SHOULDER];
-    const rShoulder = lm[POSE_LANDMARKS.RIGHT_SHOULDER];
-    const lHip = lm[POSE_LANDMARKS.LEFT_HIP];
-    const rHip = lm[POSE_LANDMARKS.RIGHT_HIP];
+    const lShoulder = worldLm[POSE_LANDMARKS.LEFT_SHOULDER];
+    const rShoulder = worldLm[POSE_LANDMARKS.RIGHT_SHOULDER];
+    const lHip = worldLm[POSE_LANDMARKS.LEFT_HIP];
+    const rHip = worldLm[POSE_LANDMARKS.RIGHT_HIP];
+    // Same acos(|dy|/magnitude) world-space torso-lean formula as
+    // detectFormFaults -- needs no vertical-sign correction (see its own
+    // comment in pose-tracking.ts) and, being a real 3D angle rather than
+    // an image-space atan2, isn't distorted by portrait video or camera
+    // tilt the way the old 2D version was.
     if (visible(lShoulder) && visible(rShoulder) && visible(lHip) && visible(rHip)) {
-      const shoulderMid = { x: (lShoulder.x + rShoulder.x) / 2, y: (lShoulder.y + rShoulder.y) / 2 };
-      const hipMid = { x: (lHip.x + rHip.x) / 2, y: (lHip.y + rHip.y) / 2 };
-      const dx = shoulderMid.x - hipMid.x;
-      const dy = shoulderMid.y - hipMid.y;
-      torsoAngles.push((Math.atan2(Math.abs(dx), Math.abs(dy)) * 180) / Math.PI);
+      const dx = (lShoulder.x + rShoulder.x) / 2 - (lHip.x + rHip.x) / 2;
+      const dy = (lShoulder.y + rShoulder.y) / 2 - (lHip.y + rHip.y) / 2;
+      const dz = (lShoulder.z + rShoulder.z) / 2 - (lHip.z + rHip.z) / 2;
+      const magnitude = Math.hypot(dx, dy, dz);
+      if (magnitude > 0) {
+        torsoAngles.push((Math.acos(Math.min(1, Math.abs(dy) / magnitude)) * 180) / Math.PI);
+      }
     }
   }
 

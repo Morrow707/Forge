@@ -21,6 +21,8 @@ import { format, parseISO, formatISO } from "date-fns";
 import { Plus, ClipboardCheck, AlertTriangle, Camera, PenLine, Loader2, Ruler } from "lucide-react";
 import { resolveMovementScreenUnitLabel, formatMovementScreenScore } from "@shared/movement-screen";
 import { OverheadSquatCaptureDialog } from "@/components/overhead-squat-capture-dialog";
+import { ArOverheadSquatCaptureDialog } from "@/components/ar-overhead-squat-capture-dialog";
+import { isArPreviewPlatform } from "@/lib/native-ar-preview";
 import { isArMeasureSupported, measureWithAR } from "@/lib/ar-measure";
 
 type Battery = { id: number; name: string; isForgeOfficial: boolean; editable: boolean };
@@ -383,14 +385,21 @@ function NewScreenDialog({
                   )}
                 </div>
               ))}
-              <OverheadSquatCaptureDialog
-                open={squatCaptureOpen}
-                onOpenChange={setSquatCaptureOpen}
-                onUseGrade={(grade) => {
-                  setScores((s) => ({ ...s, overhead_squat: String(grade) }));
-                  setSquatCaptureOpen(false);
-                }}
-              />
+              {(() => {
+                const squatCaptureProps = {
+                  open: squatCaptureOpen,
+                  onOpenChange: setSquatCaptureOpen,
+                  onUseGrade: (grade: number) => {
+                    setScores((s) => ({ ...s, overhead_squat: String(grade) }));
+                    setSquatCaptureOpen(false);
+                  },
+                };
+                return isArPreviewPlatform() ? (
+                  <ArOverheadSquatCaptureDialog {...squatCaptureProps} />
+                ) : (
+                  <OverheadSquatCaptureDialog {...squatCaptureProps} />
+                );
+              })()}
             </div>
           )}
 

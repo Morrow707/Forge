@@ -24,6 +24,8 @@ import {
 } from "@shared/goniometer";
 import { cameraSupportsGoniometerMovement } from "@/lib/movement-screen-vision";
 import { GoniometerCaptureDialog } from "@/components/goniometer-capture-dialog";
+import { ArGoniometerCaptureDialog } from "@/components/ar-goniometer-capture-dialog";
+import { isArPreviewPlatform } from "@/lib/native-ar-preview";
 
 type GoniometerReading = {
   id: number;
@@ -175,18 +177,25 @@ export function GoniometerPanel({ athleteId }: { athleteId: number }) {
               )}
             </div>
           </div>
-          <GoniometerCaptureDialog
-            open={cameraCaptureOpen}
-            onOpenChange={setCameraCaptureOpen}
-            jointKey={jointKey}
-            movementKey={movementKey}
-            jointLabel={joint.label}
-            movementLabel={joint.movements.find((m) => m.key === movementKey)?.label ?? movementKey}
-            onCapture={(deg) => {
-              setAngle(String(deg));
-              setCameraCaptureOpen(false);
-            }}
-          />
+          {(() => {
+            const captureProps = {
+              open: cameraCaptureOpen,
+              onOpenChange: setCameraCaptureOpen,
+              jointKey,
+              movementKey,
+              jointLabel: joint.label,
+              movementLabel: joint.movements.find((m) => m.key === movementKey)?.label ?? movementKey,
+              onCapture: (deg: number) => {
+                setAngle(String(deg));
+                setCameraCaptureOpen(false);
+              },
+            };
+            return isArPreviewPlatform() ? (
+              <ArGoniometerCaptureDialog {...captureProps} />
+            ) : (
+              <GoniometerCaptureDialog {...captureProps} />
+            );
+          })()}
           <div className="space-y-1.5">
             <Label>Notes (optional)</Label>
             <Textarea
