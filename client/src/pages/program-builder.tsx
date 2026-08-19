@@ -126,6 +126,60 @@ function uid() {
   return crypto.randomUUID();
 }
 
+// This builder only ever writes to the server on an explicit "Save
+// Program" tap -- unlike the workout logger, there's no autosave POST on
+// every edit, since a full PUT here replaces the whole program and firing
+// that on every keystroke would be both wasteful and risky against a
+// concurrent AI-chat edit. That leaves a real gap: any interruption before
+// that tap -- a forced logout, a crashed tab, just navigating away mid-edit
+// -- loses everything typed since the last save, with no way back. This is
+// a local-only safety net for exactly that: every edit gets mirrored to
+// localStorage (not the server), and the builder offers to restore it the
+// next time this same program is opened, so a lost session costs a click
+// to recover from instead of the whole draft.
+type ProgramDraft = {
+  name: string;
+  description: string;
+  days: LocalDay[];
+  weekNames: string[];
+  blocks: LocalBlock[];
+  weekBlockKeys: (string | null)[];
+  savedAt: number;
+};
+
+function draftStorageKey(apiBase: string, programId: number) {
+  return `forge:program-draft:${apiBase}:${programId}`;
+}
+
+function loadProgramDraft(apiBase: string, programId: number): ProgramDraft | null {
+  try {
+    const raw = localStorage.getItem(draftStorageKey(apiBase, programId));
+    return raw ? (JSON.parse(raw) as ProgramDraft) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveProgramDraft(apiBase: string, programId: number, draft: Omit<ProgramDraft, "savedAt">) {
+  try {
+    localStorage.setItem(
+      draftStorageKey(apiBase, programId),
+      JSON.stringify({ ...draft, savedAt: Date.now() }),
+    );
+  } catch {
+    // Storage full/unavailable (private browsing, etc) -- the draft is a
+    // nice-to-have safety net, not something worth surfacing an error for.
+  }
+}
+
+function clearProgramDraft(apiBase: string, programId: number) {
+  try {
+    localStorage.removeItem(draftStorageKey(apiBase, programId));
+  } catch {
+    // best-effort
+  }
+}
+
 function makeBlock(): LocalBlock {
   return { key: uid(), name: "New Block", phase: null, notes: "" };
 }
@@ -247,7 +301,8 @@ export function ProgramBuilderPage({
 
   useEffect(() => {
     if (program && !hydrated) {
-      const state = stateFromProgram(program);
+      const draft = loadProgramDraft(apiBase, programId);
+      const state = draft ?? stateFromProgram(program);
       setName(state.name);
       setDescription(state.description);
       setDays(state.days);
@@ -255,8 +310,42 @@ export function ProgramBuilderPage({
       setBlocks(state.blocks);
       setWeekBlockKeys(state.weekBlockKeys);
       setHydrated(true);
+      if (draft) {
+        toast.info("Restored unsaved changes from your last session here", {
+          description: "Save Program to keep them, or Discard to go back to the last saved version.",
+          duration: 10000,
+          action: {
+            label: "Discard",
+            onClick: () => {
+              clearProgramDraft(apiBase, programId);
+              const fresh = stateFromProgram(program);
+              setName(fresh.name);
+              setDescription(fresh.description);
+              setDays(fresh.days);
+              setWeekNames(fresh.weekNames);
+              setBlocks(fresh.blocks);
+              setWeekBlockKeys(fresh.weekBlockKeys);
+            },
+          },
+        });
+      }
     }
-  }, [program, hydrated]);
+  }, [program, hydrated, apiBase, programId]);
+
+  // Mirrors every edit to localStorage so an interruption before the next
+  // explicit save -- see the ProgramDraft comment up top -- costs at most a
+  // restore prompt, not the whole draft. Skipped until hydrated so the
+  // initial, empty pre-load state can never overwrite a real draft.
+  // Deliberately keyed only to the actual content fields, not to
+  // saveMutation's state -- a successful save clears the draft directly
+  // (see onSuccess below) rather than being gated here, since gating on
+  // e.g. isSuccess would leave every edit made *after* a save permanently
+  // unprotected until the next save (mutation state doesn't reset itself
+  // back on its own between saves).
+  useEffect(() => {
+    if (!hydrated) return;
+    saveProgramDraft(apiBase, programId, { name, description, days, weekNames, blocks, weekBlockKeys });
+  }, [hydrated, apiBase, programId, name, description, days, weekNames, blocks, weekBlockKeys]);
 
   // Called by the AI chat panel after each turn with the fresh program it
   // just wrote -- updates the builder's fields immediately, no refetch
@@ -356,6 +445,7 @@ export function ProgramBuilderPage({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [`${apiBase}/programs`] });
+      clearProgramDraft(apiBase, programId);
       toast.success("Program saved");
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not save program"),

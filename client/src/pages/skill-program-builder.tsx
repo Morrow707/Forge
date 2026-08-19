@@ -45,6 +45,56 @@ function uid() {
   return crypto.randomUUID();
 }
 
+// Local-only safety net for the same gap as the strength ProgramBuilderPage
+// (see its own ProgramDraft comment): this builder also only writes to the
+// server on an explicit "Save Program" tap, so an interruption before that
+// -- forced logout, crashed tab, navigating away mid-edit -- would
+// otherwise lose everything with no way back.
+type SkillProgramDraft = {
+  name: string;
+  description: string;
+  days: LocalDay[];
+  weekNames: string[];
+  savedAt: number;
+};
+
+function skillDraftStorageKey(apiBase: string, programId: number) {
+  return `forge:skill-program-draft:${apiBase}:${programId}`;
+}
+
+function loadSkillProgramDraft(apiBase: string, programId: number): SkillProgramDraft | null {
+  try {
+    const raw = localStorage.getItem(skillDraftStorageKey(apiBase, programId));
+    return raw ? (JSON.parse(raw) as SkillProgramDraft) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveSkillProgramDraft(
+  apiBase: string,
+  programId: number,
+  draft: Omit<SkillProgramDraft, "savedAt">,
+) {
+  try {
+    localStorage.setItem(
+      skillDraftStorageKey(apiBase, programId),
+      JSON.stringify({ ...draft, savedAt: Date.now() }),
+    );
+  } catch {
+    // Storage full/unavailable (private browsing, etc) -- the draft is a
+    // nice-to-have safety net, not something worth surfacing an error for.
+  }
+}
+
+function clearSkillProgramDraft(apiBase: string, programId: number) {
+  try {
+    localStorage.removeItem(skillDraftStorageKey(apiBase, programId));
+  } catch {
+    // best-effort
+  }
+}
+
 function makeDay(): LocalDay {
   return { key: uid(), title: "Skill Session", isRestDay: false, exercises: [] };
 }
@@ -132,14 +182,42 @@ export function SkillProgramBuilderPage({
 
   useEffect(() => {
     if (program && !hydrated) {
-      const state = stateFromProgram(program);
+      const draft = loadSkillProgramDraft(apiBase, programId);
+      const state = draft ?? stateFromProgram(program);
       setName(state.name);
       setDescription(state.description);
       setDays(state.days);
       setWeekNames(state.weekNames);
       setHydrated(true);
+      if (draft) {
+        toast.info("Restored unsaved changes from your last session here", {
+          description: "Save Program to keep them, or Discard to go back to the last saved version.",
+          duration: 10000,
+          action: {
+            label: "Discard",
+            onClick: () => {
+              clearSkillProgramDraft(apiBase, programId);
+              const fresh = stateFromProgram(program);
+              setName(fresh.name);
+              setDescription(fresh.description);
+              setDays(fresh.days);
+              setWeekNames(fresh.weekNames);
+            },
+          },
+        });
+      }
     }
-  }, [program, hydrated]);
+  }, [program, hydrated, apiBase, programId]);
+
+  // Mirrors every edit to localStorage -- see the SkillProgramDraft comment
+  // up top. Keyed only to the actual content fields, not to saveMutation's
+  // state, for the same reason as the strength builder: a successful save
+  // clears the draft directly (onSuccess below), so gating this on mutation
+  // state would leave post-save edits unprotected until the next save.
+  useEffect(() => {
+    if (!hydrated) return;
+    saveSkillProgramDraft(apiBase, programId, { name, description, days, weekNames });
+  }, [hydrated, apiBase, programId, name, description, days, weekNames]);
 
   // Called by the AI chat panel after each turn with the fresh skill program
   // it just wrote -- same immediate-update pattern as the strength builder's
@@ -203,6 +281,7 @@ export function SkillProgramBuilderPage({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [`${apiBase}/skill-programs`] });
+      clearSkillProgramDraft(apiBase, programId);
       toast.success("Skill program saved");
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not save skill program"),
