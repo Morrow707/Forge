@@ -16,6 +16,7 @@ import { SprintTrackerDialog } from "@/components/sprint-tracker-dialog";
 import { ArSprintTrackerDialog } from "@/components/ar-sprint-tracker-dialog";
 import { isArPreviewPlatform } from "@/lib/native-ar-preview";
 import { MechanicsTrackerDialog } from "@/components/mechanics-tracker-dialog";
+import { ArMechanicsTrackerDialog } from "@/components/ar-mechanics-tracker-dialog";
 import { FormVideoRecorderDialog } from "@/components/form-video-recorder-dialog";
 import { WorkoutCommentThread } from "@/components/workout-comment-thread";
 import type { MechanicsMode } from "@/lib/mechanics-tracking";
@@ -355,7 +356,18 @@ export function SkillDayViewDialog({
         />
       ))}
 
-      {mechanicsExercise && source.kind === "athlete" && (
+      {mechanicsExercise && source.kind === "athlete" && (isArPreviewPlatform() ? (
+        <ArMechanicsTrackerDialog
+          open={!!mechanicsExercise}
+          onOpenChange={(o) => !o && setMechanicsExercise(null)}
+          drillName={mechanicsExercise.name}
+          mode={mechanicsModeFor(mechanicsExercise.skillType)}
+          actionLabel={mechanicsActionLabelFor(mechanicsExercise.skillType)}
+          skillAssignmentId={source.skillAssignmentId}
+          skillProgramDayId={source.skillProgramDayId}
+          skillProgramExerciseId={mechanicsExercise.id}
+        />
+      ) : (
         <MechanicsTrackerDialog
           open={!!mechanicsExercise}
           onOpenChange={(o) => !o && setMechanicsExercise(null)}
@@ -366,7 +378,7 @@ export function SkillDayViewDialog({
           skillProgramDayId={source.skillProgramDayId}
           skillProgramExerciseId={mechanicsExercise.id}
         />
-      )}
+      ))}
 
       {recordingExercise && source.kind === "athlete" && (
         <FormVideoRecorderDialog
