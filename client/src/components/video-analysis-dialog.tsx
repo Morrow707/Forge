@@ -10,6 +10,7 @@ import { angleAtVertex, MIN_VISIBILITY, type PoseFrame } from "@/lib/pose-tracki
 import { analyzeVideoPose } from "@/lib/video-pose-analysis";
 import { resolveVideoDuration } from "@/lib/video-recording";
 import { MEASURABLE_JOINTS, findNearestJoint, measureJoint } from "@/lib/joint-angles";
+import { isArPreviewPlatform } from "@/lib/native-ar-preview";
 import {
   X,
   PersonStanding,
@@ -383,6 +384,23 @@ export function VideoAnalysisDialog({
     if (showSkeleton) {
       setShowSkeleton(false);
       requestAnimationFrame(() => redrawRef.current());
+      return;
+    }
+    // This re-analyzes an already-recorded, flat video file with MediaPipe
+    // from scratch -- on iOS, where a live set was very likely already
+    // tracked with ARKit's real 3D joints (better source data than a 2D
+    // camera can reconstruct after the fact), running MediaPipe here would
+    // be a genuine step down in accuracy, not just "a different engine."
+    // No skeleton replay from the ORIGINAL ARKit tracking exists yet either
+    // -- that needs saving full per-frame joint data alongside a set, which
+    // isn't in place today (only the derived bar-path trail and per-rep
+    // summary stats are persisted). Rather than silently fall back to the
+    // worse MediaPipe re-derivation, this is honest about the gap instead.
+    if (isArPreviewPlatform()) {
+      setAnalyzeMessage(
+        "Skeleton replay isn't available here yet on iPhone -- re-running the 2D tracking model would be less accurate than the ARKit tracking this was likely captured with.",
+      );
+      setShowSkeleton(false);
       return;
     }
     setShowSkeleton(true);
