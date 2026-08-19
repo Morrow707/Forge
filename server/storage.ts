@@ -135,6 +135,7 @@ import { FAULT_CORRECTIVE_KEYWORDS } from "@shared/fault-correctives";
 import { resolveSkillFaultThresholds, type SkillFaultThresholds } from "@shared/skill-fault-thresholds";
 import { resolveCoachFeatures, type CoachFeature } from "@shared/team-features";
 import { askClaude, askClaudeStructured, askClaudeWithTools, askClaudeVision, askClaudeVisionStructured, aiEnabled, fastModel, type SystemPrompt } from "./ai";
+import { fetchUrlSafely, UnsafeUrlError } from "./safe-fetch";
 import { deleteUploadedFile, statUploadedFile } from "./uploaded-files";
 import { eq, and, inArray, asc, desc, lt, lte, gte, gt, isNull, isNotNull, sql, ilike } from "drizzle-orm";
 import { z } from "zod";
@@ -8577,8 +8578,19 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
   // question, thinking out loud -- not just "asking for clarification"),
   // and propose_entry (one new or updated fact, reviewed before it commits,
   // same review-before-apply safety net as the old flow).
-  async chatWithForgeAi(adminId: number, content: string) {
-    const [adminMessage] = await db.insert(forgeAiMessages).values({ authorId: adminId, role: "admin", content }).returning();
+  async chatWithForgeAi(
+    adminId: number,
+    content: string,
+    image?: { mediaType: "image/jpeg" | "image/png"; data: string },
+  ) {
+    // The image itself isn't stored in the message row (it'd bloat every
+    // future getForgeAiChat() load) -- a plain marker is enough for the
+    // conversation transcript/contradiction-check context downstream; the
+    // actual pixels only ever go to Claude for this one turn.
+    const [adminMessage] = await db
+      .insert(forgeAiMessages)
+      .values({ authorId: adminId, role: "admin", content: image ? `${content}\n[attached a photo]` : content })
+      .returning();
 
     const fail = async (text: string) => {
       const [assistantMessage] = await db
@@ -8657,6 +8669,17 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
       },
     };
 
+    const fetchUrlTool = {
+      name: "fetch_url",
+      description:
+        "Fetches the readable text content of a URL the admin pasted (an article, a study, a blog post). Call this when the admin's message contains a link they want you to read -- the fetched text is returned to you so you can then discuss it or propose_entry from it. Not for images -- the admin attaches those directly.",
+      input_schema: {
+        type: "object",
+        properties: { url: { type: "string", description: "The exact URL to fetch." } },
+        required: ["url"],
+      },
+    };
+
     const system = `You are Forge AI, this platform's central coaching knowledge assistant -- a knowledgeable strength-and-conditioning, nutrition, and coaching assistant the admin genuinely converses with, not a narrow intake form. Discussing an idea, explaining research, or just talking shop is a completely normal, first-class outcome of a turn -- proposing a taught entry is one thing you can do, not the whole point of the conversation.
 
 When the admin DOES teach something concrete, use propose_entry. A few things to get right:
@@ -8664,14 +8687,30 @@ When the admin DOES teach something concrete, use propose_entry. A few things to
 - Maturity: mark anything newly introduced (a study, a pamphlet, an idea being tried for the first time) as "experimental" rather than "established" unless the admin frames it as settled practice. Established rules get applied as hard guidance; experimental ones get offered as options.
 - Contradiction check: before proposing, compare against the existing taught entries listed below. If the new teaching genuinely conflicts with an existing entry (not just narrows it), don't silently overwrite it -- use discuss to name the conflict, quote the existing entry, and ask the admin why this is different or whether it should replace the old one. Only propose_entry once you have that answer, and put it in changeReason.
 - Corrections: if the admin says an existing entry was simply wrong (not just superseded by something more specific), set updatesEntryId + isCorrection: true.
+- Links: if the admin pastes a URL, call fetch_url first to actually read it -- never propose_entry off a URL you haven't fetched, and never guess at what a page says from its address alone.
 
 Existing taught entries (id, scope, maturity, content):
 ${entriesText}`;
 
     const historyText = history.map((m) => `${m.role === "admin" ? "Admin" : "Assistant"}: ${m.content}`).join("\n");
-    const userPrompt = `Conversation so far:\n${historyText}\n\nRespond to the admin's latest message by calling discuss or propose_entry.`;
+    const userPrompt = `Conversation so far:\n${historyText}\n\nRespond to the admin's latest message by calling discuss, propose_entry, or fetch_url.`;
 
-    const result = await askClaudeWithTools(system, userPrompt, [discussTool, proposeEntryTool], { maxTokens: 4096 });
+    let lastFetchedUrl: string | null = null;
+    const result = await askClaudeWithTools(system, userPrompt, [discussTool, proposeEntryTool, fetchUrlTool], {
+      maxTokens: 4096,
+      images: image ? [image] : undefined,
+      toolExecutors: {
+        fetch_url: async (input: { url: string }) => {
+          try {
+            lastFetchedUrl = input.url;
+            return await fetchUrlSafely(input.url);
+          } catch (err) {
+            const detail = err instanceof UnsafeUrlError ? err.message : err instanceof Error ? err.message : String(err);
+            return `Error: ${detail}`;
+          }
+        },
+      },
+    });
     if (!result) return fail("Sorry, I couldn't process that just now -- try again in a bit.");
 
     if (result.toolName === "discuss") {
@@ -8698,7 +8737,12 @@ ${entriesText}`;
       })
       .returning();
 
-    return { adminMessage, assistantMessage, proposal: parsed.data };
+    const sourceType: "image" | "url" | "chat" = image ? "image" : lastFetchedUrl ? "url" : "chat";
+    return {
+      adminMessage,
+      assistantMessage,
+      proposal: { ...parsed.data, sourceType, sourceExcerpt: lastFetchedUrl },
+    };
   },
 
   // Commits a previously-proposed entry -- either a brand-new row (changeType
@@ -8706,7 +8750,13 @@ ${entriesText}`;
   // "updated", per the proposal's own isCorrection flag), always writing a
   // changelog row so cross-time contradiction detection above has real
   // history to check new teaching against.
-  async applyForgeAiEntryProposal(adminId: number, proposal: z.infer<typeof forgeAiProposeEntryResultSchema>) {
+  async applyForgeAiEntryProposal(
+    adminId: number,
+    proposal: z.infer<typeof forgeAiProposeEntryResultSchema> & {
+      sourceType?: "chat" | "image" | "url" | "pasted_text";
+      sourceExcerpt?: string | null;
+    },
+  ) {
     const content = proposal.content.trim();
     const shared = {
       content,
@@ -8740,7 +8790,12 @@ ${entriesText}`;
     } else {
       const [created] = await db
         .insert(aiKnowledgeEntries)
-        .values({ ...shared, sourceType: "chat", createdAt: new Date() })
+        .values({
+          ...shared,
+          sourceType: proposal.sourceType || "chat",
+          sourceExcerpt: proposal.sourceExcerpt || null,
+          createdAt: new Date(),
+        })
         .returning();
       entry = created;
       await db.insert(aiKnowledgeChangelog).values({

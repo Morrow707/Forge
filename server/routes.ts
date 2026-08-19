@@ -1799,7 +1799,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const user = currentUser(req);
     const parsed = sendForgeAiChatMessageSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: "Invalid message" });
-    const result = await storage.chatWithForgeAi(user.id, parsed.data.content);
+    const result = await storage.chatWithForgeAi(user.id, parsed.data.content, parsed.data.image);
     res.status(201).json(result);
   });
 

@@ -5,6 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { PhotoUploadField } from "@/components/photo-upload-field";
+import type { CapturedPhoto } from "@/lib/photo-capture";
 import { apiRequest, getJson } from "@/lib/queryClient";
 import { format, parseISO } from "date-fns";
 import { toast } from "sonner";
@@ -30,6 +32,8 @@ type Proposal = EntryTags & {
   updatesEntryId?: number | null;
   isCorrection?: boolean;
   changeReason?: string;
+  sourceType?: "chat" | "image" | "url";
+  sourceExcerpt?: string | null;
 };
 
 function scopeLabel(e: EntryTags): string {
@@ -50,6 +54,7 @@ function scopeLabel(e: EntryTags): string {
 export default function ForgeAiPage() {
   const qc = useQueryClient();
   const [content, setContent] = useState("");
+  const [attachedImage, setAttachedImage] = useState<CapturedPhoto | null>(null);
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [retiringId, setRetiringId] = useState<number | null>(null);
   const [retireReason, setRetireReason] = useState("");
@@ -68,12 +73,16 @@ export default function ForgeAiPage() {
 
   const send = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/admin/forge-ai/chat", { content });
+      const res = await apiRequest("POST", "/api/admin/forge-ai/chat", {
+        content,
+        image: attachedImage ?? undefined,
+      });
       return res.json() as Promise<{ proposal: Proposal | null }>;
     },
     onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ["/api/admin/forge-ai"] });
       setContent("");
+      setAttachedImage(null);
       setProposal(result.proposal ?? null);
     },
     onError: () => toast.error("Couldn't send that -- try again"),
@@ -174,10 +183,15 @@ export default function ForgeAiPage() {
                     </Badge>
                   )}
                   {proposal.isCorrection && <Badge variant="destructive">correction</Badge>}
+                  {proposal.sourceType === "image" && <Badge variant="outline">from photo</Badge>}
+                  {proposal.sourceType === "url" && <Badge variant="outline">from a link</Badge>}
                 </div>
                 <p className="rounded bg-background/60 p-2 text-sm">{proposal.content}</p>
                 {proposal.changeReason && (
                   <p className="text-xs text-muted-foreground">Why: {proposal.changeReason}</p>
+                )}
+                {proposal.sourceType === "url" && proposal.sourceExcerpt && (
+                  <p className="truncate text-xs text-muted-foreground">Source: {proposal.sourceExcerpt}</p>
                 )}
                 <div className="flex justify-end gap-2">
                   <Button type="button" variant="ghost" size="sm" onClick={() => setProposal(null)}>
@@ -197,23 +211,31 @@ export default function ForgeAiPage() {
                 if (!content.trim() || send.isPending) return;
                 send.mutate();
               }}
-              className="flex shrink-0 items-end gap-2 border-t border-border pt-3"
+              className="shrink-0 space-y-2 border-t border-border pt-3"
             >
-              <Textarea
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                placeholder="Teach it something, paste an article, or just ask a question..."
-                className="min-h-[44px] flex-1 resize-none"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    if (content.trim() && !send.isPending) send.mutate();
-                  }
-                }}
+              <PhotoUploadField
+                images={attachedImage ? [attachedImage] : []}
+                onChange={(images) => setAttachedImage(images[images.length - 1] ?? null)}
+                maxImages={1}
+                document
               />
-              <Button type="submit" disabled={send.isPending || !content.trim()}>
-                <Send className="h-4 w-4" />
-              </Button>
+              <div className="flex items-end gap-2">
+                <Textarea
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  placeholder="Teach it something, paste an article, attach a photo, or just ask a question..."
+                  className="min-h-[44px] flex-1 resize-none"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      if (content.trim() && !send.isPending) send.mutate();
+                    }
+                  }}
+                />
+                <Button type="submit" disabled={send.isPending || !content.trim()}>
+                  <Send className="h-4 w-4" />
+                </Button>
+              </div>
             </form>
           </CardContent>
         </Card>

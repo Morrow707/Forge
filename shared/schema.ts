@@ -3038,6 +3038,10 @@ export type ForgeAiMessage = typeof forgeAiMessages.$inferSelect;
 
 export const sendForgeAiChatMessageSchema = z.object({
   content: z.string().trim().min(1), // no max -- admin gets an unbounded paste, see task list
+  // Same base64 image-block shape the meal-photo/food-scan AI routes
+  // already use (see /api/athlete/food/analyze-photo) -- never written to
+  // disk, only ever sent through to Claude for this one turn.
+  image: z.object({ mediaType: z.enum(["image/jpeg", "image/png"]), data: z.string().min(1) }).optional(),
 });
 export type SendForgeAiChatMessageInput = z.infer<typeof sendForgeAiChatMessageSchema>;
 
@@ -3056,6 +3060,8 @@ export const applyForgeAiEntryProposalSchema = z.object({
   updatesEntryId: z.number().int().optional().nullable(),
   isCorrection: z.boolean().optional().default(false),
   changeReason: z.string().optional().default(""),
+  sourceType: z.enum(["chat", "image", "url", "pasted_text"]).optional(),
+  sourceExcerpt: z.string().max(2000).optional().nullable(),
 });
 export type ApplyForgeAiEntryProposalInput = z.infer<typeof applyForgeAiEntryProposalSchema>;
 
