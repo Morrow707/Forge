@@ -26,5 +26,6 @@ class ForgeBridgeViewController: CAPBridgeViewController {
     override func capacitorDidLoad() {
         bridge?.registerPluginInstance(ArCameraPreviewPlugin())
         bridge?.registerPluginInstance(ArMeasurePlugin())
+        bridge?.registerPluginInstance(PasswordPickerPlugin())
     }
 }

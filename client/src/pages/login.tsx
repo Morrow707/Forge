@@ -1,6 +1,8 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Link, Redirect } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
+import { requestSavedPassword } from "@/lib/native-auth";
+import { logDebug } from "@/lib/debug-console";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
@@ -12,6 +14,25 @@ export default function LoginPage() {
   const { user, isLoading, loginMutation } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+
+  // Proactively offers the iOS "Choose a saved password to use" sheet the
+  // instant this page loads, instead of leaving it undiscoverable behind the
+  // key icon above the keyboard -- see requestSavedPassword's own comment
+  // for why WKWebView never does this on its own the way a real Safari page
+  // load would. Fires once per mount; a cancel or no-saved-credential result
+  // both resolve null and just leave the fields empty for normal typing.
+  useEffect(() => {
+    logDebug("AUTH", "requesting saved password on login mount...");
+    requestSavedPassword().then((credential) => {
+      if (!credential) {
+        logDebug("AUTH", "requestSavedPassword: none chosen/available");
+        return;
+      }
+      logDebug("AUTH", `requestSavedPassword: got credential for ${credential.username}`);
+      setEmail(credential.username);
+      setPassword(credential.password);
+    });
+  }, []);
 
   if (!isLoading && user) {
     return (

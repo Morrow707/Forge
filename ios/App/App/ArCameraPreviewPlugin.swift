@@ -372,7 +372,16 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
             DispatchQueue.main.async {
                 guard let self = self else { return }
                 if writer.status == .completed {
-                    call.resolve(["path": outputURL.path])
+                    // .path (a bare POSIX path, no scheme) is what this used
+                    // to send -- Capacitor's Filesystem.readFile (see
+                    // native-ar-preview.ts's stopArRecording), called with no
+                    // `directory` option, requires a real file:// URI to
+                    // parse, not a bare path. .absoluteString is that URI.
+                    // Never mattered before this fix landed because the
+                    // camera never ran long enough to reach a completed
+                    // recording in the first place -- this is a second, real
+                    // bug the first one was hiding, not a guess.
+                    call.resolve(["path": outputURL.absoluteString])
                 } else {
                     call.reject(writer.error?.localizedDescription ?? "Recording failed")
                 }

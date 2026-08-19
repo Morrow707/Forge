@@ -1,5 +1,11 @@
-import { Capacitor } from "@capacitor/core";
+import { Capacitor, registerPlugin } from "@capacitor/core";
 import { PasswordAutofill } from "@capawesome/capacitor-password-autofill";
+
+interface PasswordPickerPlugin {
+  requestSavedPassword(): Promise<{ username: string; password: string }>;
+}
+
+const PasswordPicker = registerPlugin<PasswordPickerPlugin>("PasswordPicker");
 
 // The domain declared in ios/App/App/App.entitlements' webcredentials
 // entry and served from /.well-known/apple-app-site-association (see
@@ -30,4 +36,34 @@ const CREDENTIAL_DOMAIN = "forge-ebhd.onrender.com";
 export async function savePasswordToKeychain(username: string, password: string): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
   await PasswordAutofill.savePassword({ domain: CREDENTIAL_DOMAIN, username, password });
+}
+
+/**
+ * Proactively surfaces the iOS "Choose a saved password to use" sheet on
+ * login-page mount, reading from the same iCloud Keychain shared-web-
+ * credentials store savePasswordToKeychain above already writes into.
+ *
+ * This exists because that store turned out to genuinely work (confirmed via
+ * the debug console: savePasswordToKeychain() resolves, and the credentials
+ * really do show up under iOS's "Passwords" source) -- the actual gap was
+ * that nothing ever surfaces them without the athlete knowing to tap the key
+ * icon above the keyboard first. WKWebView's implicit "just appears already
+ * filled in" AutoFill matching keys off the page's real origin, which a
+ * bundled capacitor://localhost page never has -- Shared Web Credentials
+ * (ASAuthorizationPasswordProvider, see PasswordPickerPlugin.swift) is
+ * Apple's own workaround for exactly that gap, meant to be triggered
+ * explicitly by the app rather than relying on implicit field-focus autofill.
+ *
+ * Resolves null (never rejects) on cancel, no saved credential, or any other
+ * native failure -- all three should look identical to the login page: just
+ * fall back to the athlete typing their own credentials normally, with
+ * nothing surfaced as an error for what's a completely ordinary outcome.
+ */
+export async function requestSavedPassword(): Promise<{ username: string; password: string } | null> {
+  if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== "ios") return null;
+  try {
+    return await PasswordPicker.requestSavedPassword();
+  } catch {
+    return null;
+  }
 }
