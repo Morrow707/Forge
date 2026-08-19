@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { externalLinkClick } from "@/lib/open-external";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiRequest, ApiError } from "@/lib/queryClient";
+import { apiRequest, ApiError, resolveApiUrl } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -25,15 +25,19 @@ type Comment = {
 
 /** A two-way thread on a specific day of a specific assignment -- flag a
  * rough set, attach a video link, get a reply -- without leaving the
- * workout. Used by both the athlete workout page and the coach's day-edit
- * dialog against the same underlying comments. */
+ * workout. Used by the athlete workout page, the coach's day-edit dialog,
+ * and (kind: "skill") the skill-day view against the parallel
+ * skillDayComments table -- same shape, same two routes, just a different
+ * URL prefix. */
 export function WorkoutCommentThread({
   role,
+  kind = "workout",
   assignmentId,
   programDayId,
   date,
 }: {
   role: "coach" | "athlete";
+  kind?: "workout" | "skill";
   assignmentId: number;
   programDayId: number;
   // The calendar date this thread is being viewed/posted from, when known
@@ -44,7 +48,8 @@ export function WorkoutCommentThread({
   date?: string;
 }) {
   const qc = useQueryClient();
-  const basePath = `/api/${role}/assignments/${assignmentId}/days/${programDayId}/comments`;
+  const pathSegment = kind === "skill" ? "skill-assignments" : "assignments";
+  const basePath = `/api/${role}/${pathSegment}/${assignmentId}/days/${programDayId}/comments`;
   const [body, setBody] = useState("");
   const [videoUrl, setVideoUrl] = useState("");
   const [showVideoField, setShowVideoField] = useState(false);
@@ -137,7 +142,7 @@ export function WorkoutCommentThread({
                   className="mt-1 block"
                 >
                   <img
-                    src={c.imageUrl}
+                    src={resolveApiUrl(c.imageUrl)}
                     alt="Coach annotation"
                     className="max-h-48 rounded-md border border-border"
                   />

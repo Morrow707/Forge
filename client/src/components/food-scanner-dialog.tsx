@@ -12,10 +12,29 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { apiRequest, getJson, ApiError } from "@/lib/queryClient";
 import { BarcodeScanner } from "@/lib/barcode-scanner";
-import { ensureCameraPermission, onAppForeground, onAppBackground } from "@/lib/native-camera";
+import {
+  ensureCameraPermission,
+  onAppForeground,
+  onAppBackground,
+  isTorchAvailable,
+  toggleTorch,
+  disableTorch,
+} from "@/lib/native-camera";
 import { capturePhotoFromVideo, downscalePhotoFile, type CapturedPhoto } from "@/lib/photo-capture";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { Camera, Search, Pencil, Loader2, Plus, ImagePlus, Upload, X } from "lucide-react";
+import {
+  Camera,
+  Search,
+  Pencil,
+  Loader2,
+  Plus,
+  ImagePlus,
+  Upload,
+  X,
+  Flashlight,
+  FlashlightOff,
+} from "lucide-react";
 
 type FoodCandidate = {
   description: string;
@@ -114,6 +133,8 @@ export function FoodScannerDialog({
   const [microsOpenForPhotoItem, setMicrosOpenForPhotoItem] = useState<Set<number>>(new Set());
   const [microsOpenForConfirm, setMicrosOpenForConfirm] = useState(false);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const [torchAvailable, setTorchAvailable] = useState(false);
+  const [torchOn, setTorchOn] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const scannerRef = useRef<BarcodeScanner | null>(null);
   const photoVideoRef = useRef<HTMLVideoElement>(null);
@@ -200,6 +221,32 @@ export function FoodScannerDialog({
       sharedStreamRef.current = null;
     };
   }, [open]);
+
+  // Torch tracks the shared stream, not `open`/`mode` -- it needs to turn
+  // off (and its availability re-check) every time the underlying stream is
+  // replaced, e.g. onAppForeground reacquiring after backgrounding, not just
+  // on dialog close, so a torch left on doesn't survive onto a fresh stream.
+  useEffect(() => {
+    if (!cameraStream) {
+      setTorchAvailable(false);
+      setTorchOn(false);
+      return;
+    }
+    let cancelled = false;
+    isTorchAvailable().then((available) => {
+      if (!cancelled) setTorchAvailable(available);
+    });
+    return () => {
+      cancelled = true;
+      setTorchOn(false);
+      disableTorch(cameraStream);
+    };
+  }, [cameraStream]);
+
+  async function handleToggleTorch() {
+    if (!cameraStream) return;
+    setTorchOn(await toggleTorch(cameraStream));
+  }
 
   useEffect(() => {
     if (!open || mode !== "scan" || !cameraStream) {
@@ -444,6 +491,7 @@ export function FoodScannerDialog({
           <div className="space-y-3">
             <div className="relative overflow-hidden rounded-md border border-border bg-black">
               <video ref={videoRef} autoPlay playsInline muted className="w-full" />
+              {torchAvailable && <TorchToggleButton on={torchOn} onToggle={handleToggleTorch} />}
               <div className="pointer-events-none absolute inset-x-8 top-1/2 h-16 -translate-y-1/2">
                 <div className="absolute left-0 top-0 h-5 w-5 rounded-tl-md border-l-2 border-t-2 border-primary" />
                 <div className="absolute right-0 top-0 h-5 w-5 rounded-tr-md border-r-2 border-t-2 border-primary" />
@@ -489,6 +537,7 @@ export function FoodScannerDialog({
           <div className="space-y-3">
             <div className="relative overflow-hidden rounded-md border border-border bg-black">
               <video ref={photoVideoRef} autoPlay playsInline muted className="w-full" />
+              {torchAvailable && <TorchToggleButton on={torchOn} onToggle={handleToggleTorch} />}
               {analyzingPhoto && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/70 text-white">
                   <Loader2 className="h-6 w-6 animate-spin" />
@@ -821,5 +870,26 @@ export function FoodScannerDialog({
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** Only rendered by callers once torchAvailable is known true, so no
+ * disabled/unavailable state to represent here -- just on vs. off. */
+function TorchToggleButton({ on, onToggle }: { on: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-label={on ? "Turn off flashlight" : "Turn on flashlight"}
+      aria-pressed={on}
+      className={cn(
+        "absolute right-2 top-2 z-10 flex h-8 w-8 items-center justify-center rounded-full border backdrop-blur",
+        on
+          ? "border-primary bg-primary text-primary-foreground"
+          : "border-white/30 bg-black/50 text-white",
+      )}
+    >
+      {on ? <Flashlight className="h-4 w-4" /> : <FlashlightOff className="h-4 w-4" />}
+    </button>
   );
 }

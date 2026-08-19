@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { apiRequest, ApiError, setNativeToken } from "@/lib/queryClient";
+import { savePasswordToKeychain } from "@/lib/native-auth";
 import { ForgeMark } from "@/components/forge-mark";
 import { toast } from "sonner";
 import type { PublicUser } from "@shared/schema";
@@ -47,6 +48,9 @@ export default function ClaimPage() {
     onSuccess: ({ nativeToken, ...claimedUser }) => {
       setNativeToken(nativeToken);
       qc.setQueryData(["/api/auth/me"], claimedUser);
+      savePasswordToKeychain(email, password).catch((err) => {
+        console.error("savePasswordToKeychain failed", err);
+      });
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not claim this slot"),
   });

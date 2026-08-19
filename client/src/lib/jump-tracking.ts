@@ -17,7 +17,7 @@ import {
   type TrackedPoint,
   type PathTracePoint,
 } from "./bar-tracking";
-import type { FormFault } from "./pose-tracking";
+import type { FormFault, LandingAsymmetryEntry } from "./pose-tracking";
 
 const GRAVITY_MPS2 = 9.81;
 // A flat frame count here would describe half as much real-world smoothing
@@ -88,6 +88,13 @@ export type JumpSetMetrics = {
   // this module only has the ankle trace, not the full landmark history
   // fault detection needs.
   formFaults: FormFault[];
+  // Filled in by the caller from pose-tracking.ts's computeLandingAsymmetry
+  // -- same "this module only has the ankle trace" reasoning as formFaults
+  // above. One entry per rep in repBreakdown (null for a rep without
+  // enough clean per-foot data), undefined when the caller never populates
+  // it at all (a MediaPipe caller with only 2D landmarks and no real depth
+  // to trust the timing signal from).
+  landingAsymmetry?: (LandingAsymmetryEntry | null)[];
 };
 
 const BASE_MIN_FLIGHT_AMPLITUDE_CM = 15;

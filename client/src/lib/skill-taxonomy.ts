@@ -8,4 +8,5 @@ export const SKILL_TYPES = [
   "Catching",
   "Footwork",
   "Pitching",
+  "Shooting",
 ];

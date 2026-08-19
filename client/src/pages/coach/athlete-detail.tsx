@@ -12,6 +12,7 @@ import { CalendarLinkDialog } from "@/components/calendar-link-dialog";
 import { BodyMetricsPanel } from "@/components/body-metrics-panel";
 import { TestingHistoryPanel } from "@/components/testing-history-panel";
 import { GoniometerPanel } from "@/components/goniometer-panel";
+import { MovementScreenPanel } from "@/components/movement-screen-panel";
 import { WeaknessReportPanel } from "@/components/weakness-report-panel";
 import { GoalsPanel } from "@/components/goals-panel";
 import { SkillSessionsPanel } from "@/components/skill-sessions-panel";
@@ -371,6 +372,7 @@ export default function AthleteDetailPage() {
                 <TabsTrigger value="metrics">Body Metrics</TabsTrigger>
                 <TabsTrigger value="testing">Testing History</TabsTrigger>
                 <TabsTrigger value="rom">Goniometer</TabsTrigger>
+                <TabsTrigger value="movement-screen">Movement Screen</TabsTrigger>
                 <TabsTrigger value="weakness">Weakness Report</TabsTrigger>
                 <TabsTrigger value="goals">Goals</TabsTrigger>
                 <TabsTrigger value="skills">Skill Clips</TabsTrigger>
@@ -402,6 +404,14 @@ export default function AthleteDetailPage() {
                 <Card>
                   <CardContent className="p-5">
                     <GoniometerPanel athleteId={athlete.id} />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="movement-screen">
+                <Card>
+                  <CardContent className="p-5">
+                    <MovementScreenPanel athleteId={athlete.id} />
                   </CardContent>
                 </Card>
               </TabsContent>

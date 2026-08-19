@@ -12,19 +12,25 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { RadioChipGroup } from "@/components/filter-chip-group";
 import { cn } from "@/lib/utils";
-import { apiRequest, getJson } from "@/lib/queryClient";
-import { getPoseLandmarker, isPlausibleHumanFrame, MIN_VISIBILITY, POSE_LANDMARKS, type PoseFrame } from "@/lib/pose-tracking";
+import { apiRequest, getJson, resolveApiUrl } from "@/lib/queryClient";
+import { getPoseLandmarker, SubjectContinuityGate, MIN_VISIBILITY, POSE_LANDMARKS, type PoseFrame } from "@/lib/pose-tracking";
 import { lockCameraExposure } from "@/lib/camera-exposure";
 import { ensureCameraPermission, onAppForeground, onAppBackground } from "@/lib/native-camera";
 import {
   deriveSprintReferencePoint,
   detectSprintCrossings,
   detectSprintFaults,
+  checkpointsForShuttleTaps,
+  checkpointsForThreeConeTap,
+  SPRINT_PRESETS,
   type SprintCameraAngle,
   type SprintPoint,
   type SprintResult,
   type SprintFault,
+  type SprintCheckpoint,
+  type SprintPreset,
 } from "@/lib/sprint-tracking";
 import { DEFAULT_SKILL_FAULT_THRESHOLDS, type SkillFaultThresholds } from "@shared/skill-fault-thresholds";
 import { PoseLandmarker, type NormalizedLandmark } from "@mediapipe/tasks-vision";
@@ -32,11 +38,15 @@ import { toast } from "sonner";
 import { AlertTriangle, Play, Square, RotateCcw, Check, Timer, Trophy, Eye, EyeOff } from "lucide-react";
 import { SuggestedCorrective } from "@/components/suggested-corrective";
 import { recordedVideoType, videoFilenameForBlob } from "@/lib/video-recording";
+import { burnTrackingOverlay, type OverlayRepMarker } from "@/lib/video-overlay";
 
 type Step = "warning" | "calibrate" | "capture" | "review";
 
 const SKELETON_COLOR = "#2dd4bf";
 const CHECKPOINT_COLOR = "#facc15";
+// The same hip-midpoint point deriveSprintReferencePoint tracks live -- see
+// its own comment for why hips over wrist/ankle.
+const HIP_INDICES = [POSE_LANDMARKS.LEFT_HIP, POSE_LANDMARKS.RIGHT_HIP];
 
 function drawSkeleton(ctx: CanvasRenderingContext2D, landmarks: NormalizedLandmark[], width: number, height: number) {
   ctx.strokeStyle = SKELETON_COLOR;
@@ -102,6 +112,11 @@ export function SprintTrackerDialog({
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number | null>(null);
   const poseLandmarkerRef = useRef<PoseLandmarker | null>(null);
+  // See SubjectContinuityGate's own comment -- rejects a detection that
+  // jumped implausibly far to plausibly still be the same athlete (a
+  // background lifter walking past mid-sprint would otherwise be able to
+  // hijack the tracked reference point).
+  const subjectGateRef = useRef(new SubjectContinuityGate());
   const lastVideoTimeRef = useRef(-1);
   const checkpointsRef = useRef<number[]>([]);
   const pointsRef = useRef<SprintPoint[]>([]);
@@ -126,6 +141,8 @@ export function SprintTrackerDialog({
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [modelLoading, setModelLoading] = useState(true);
   const [checkpointCount, setCheckpointCount] = useState(0);
+  const [presetId, setPresetId] = useState("40yd");
+  const preset: SprintPreset = SPRINT_PRESETS.find((p) => p.id === presetId) ?? SPRINT_PRESETS[2];
   const [distanceYards, setDistanceYards] = useState("40");
   const [result, setResult] = useState<SprintResult | null>(null);
   const [faults, setFaults] = useState<SprintFault[]>([]);
@@ -157,9 +174,12 @@ export function SprintTrackerDialog({
     setSavedToProfile(false);
     checkpointsRef.current = [];
     setCheckpointCount(0);
+    setPresetId("40yd");
+    setDistanceYards("40");
     pointsRef.current = [];
     framesRef.current = [];
     lastVideoTimeRef.current = -1;
+    subjectGateRef.current.reset();
     if (videoUrl) URL.revokeObjectURL(videoUrl);
     setVideoUrl(null);
     setShowSkeleton(true);
@@ -214,8 +234,10 @@ export function SprintTrackerDialog({
       stopCamera();
       return;
     }
-    // ideal, not exact -- see bar-tracker-dialog.tsx's own comment on this
-    // same constraint shape. Checkpoint-crossing time is interpolated
+    // ideal, not exact, and portrait (720x1280) -- see bar-tracker-dialog.tsx's
+    // own comment on both (the portrait rear-camera dimension mismatch this
+    // avoids is the same one tick()'s own comment below already works
+    // around for the overlay). Checkpoint-crossing time is interpolated
     // between frames either way, but a higher frame rate still means less
     // real screen-x distance the reference point can cover between two
     // samples, which tightens that interpolation for a fast sprint.
@@ -231,8 +253,8 @@ export function SprintTrackerDialog({
           .getUserMedia({
             video: {
               facingMode: { ideal: "environment" },
-              width: { ideal: 1280 },
-              height: { ideal: 720 },
+              width: { ideal: 720 },
+              height: { ideal: 1280 },
               frameRate: { ideal: 60, min: 30 },
             },
           })
@@ -263,13 +285,19 @@ export function SprintTrackerDialog({
 
     // See bar-tracker-dialog.tsx's own comment on onAppForeground -- same
     // reacquire-on-return fix, scoped to whichever camera-active step is
-    // live when the app was backgrounded.
+    // live when the app was backgrounded. onAppBackground below always
+    // cancels the rAF loop outright, independent of whether iOS actually
+    // tore down the stream -- without restarting it here too, the athlete
+    // would come back to a live-looking preview that never tracks another
+    // crossing again until they close and reopen the dialog.
     const unsubscribeForeground = onAppForeground(() => {
       const stillLive = streamRef.current?.getVideoTracks().some((t) => t.readyState === "live");
-      if (stillLive) return;
-      streamRef.current?.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
-      acquireCamera();
+      if (!stillLive) {
+        streamRef.current?.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+        acquireCamera();
+      }
+      if (!rafRef.current) rafRef.current = requestAnimationFrame(tick);
     });
     // See bar-tracker-dialog.tsx's own comment on onAppBackground -- release
     // the camera/recorder/rAF loop immediately on backgrounding rather than
@@ -318,12 +346,13 @@ export function SprintTrackerDialog({
     const now = performance.now();
     const detection = landmarker.detectForVideo(video, now);
     // Rejects a confident-looking detection on something that isn't
-    // actually a person (a box, a rack, a shadow) -- same torso-presence
-    // gate bar-tracker-dialog.tsx's live tick loop uses, applied here since
-    // this dialog runs its own independent detectForVideo loop rather than
-    // sharing that one.
+    // actually a person (a box, a rack, a shadow), and one that jumped
+    // implausibly far to plausibly still be the athlete being sprint-timed
+    // -- same SubjectContinuityGate bar-tracker-dialog.tsx's live tick loop
+    // uses, applied here since this dialog runs its own independent
+    // detectForVideo loop rather than sharing that one.
     const rawLandmarks = detection.landmarks[0] ?? null;
-    const landmarks = rawLandmarks && isPlausibleHumanFrame(rawLandmarks) ? rawLandmarks : null;
+    const landmarks = subjectGateRef.current.admit(rawLandmarks);
     const worldLandmarks = landmarks ? (detection.worldLandmarks[0] ?? null) : null;
 
     if (ctx) {
@@ -338,8 +367,8 @@ export function SprintTrackerDialog({
         pointsRef.current.push({ t: now - captureStartRef.current, x: ref.x });
         framesRef.current.push({ t: now - captureStartRef.current, landmarks, worldLandmarks });
 
-        const calibration = { checkpoints: checkpointsRef.current.map((x) => ({ x })), distanceYards: Number(distanceYards) || 0 };
-        const crossing = detectSprintCrossings(pointsRef.current, calibration);
+        const checkpoints = buildCheckpoints();
+        const crossing = checkpoints ? detectSprintCrossings(pointsRef.current, { checkpoints }) : null;
         if (crossing) {
           finishCapture(crossing);
           return;
@@ -391,7 +420,7 @@ export function SprintTrackerDialog({
   }
 
   function handleCanvasClick(e: React.MouseEvent<HTMLCanvasElement>) {
-    if (step !== "calibrate" || checkpointsRef.current.length >= 2) return;
+    if (step !== "calibrate" || checkpointsRef.current.length >= preset.tapCount) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const normalizedX = (e.clientX - rect.left) / rect.width;
     checkpointsRef.current = [...checkpointsRef.current, normalizedX];
@@ -401,6 +430,33 @@ export function SprintTrackerDialog({
   function resetCheckpoints() {
     checkpointsRef.current = [];
     setCheckpointCount(0);
+  }
+
+  function selectPreset(next: SprintPreset) {
+    setPresetId(next.id);
+    if (next.distanceYards != null) setDistanceYards(String(next.distanceYards));
+    resetCheckpoints();
+  }
+
+  // Builds the checkpoint list detectSprintCrossings needs from whatever
+  // the athlete has physically tapped so far -- null until there are
+  // enough taps (and, for a 2-tap preset, a real distance) to mean
+  // anything. A 3-tap preset (5-10-5 shuttle) expands its 3 taps into the
+  // full 4-checkpoint calibration checkpointsForShuttleTaps builds; a
+  // 2-tap preset is just the two tapped points with the whole distance on
+  // the second.
+  function buildCheckpoints(): SprintCheckpoint[] | null {
+    const taps = checkpointsRef.current;
+    if (taps.length < preset.tapCount) return null;
+    if (preset.tapCount === 3) {
+      return checkpointsForShuttleTaps([taps[0], taps[1], taps[2]]);
+    }
+    if (preset.tapCount === 1) {
+      return checkpointsForThreeConeTap(taps[0]);
+    }
+    const distanceNum = Number(distanceYards) || 0;
+    if (distanceNum <= 0) return null;
+    return [{ x: taps[0] }, { x: taps[1], segmentDistanceYards: distanceNum }];
   }
 
   function startCapture() {
@@ -463,12 +519,43 @@ export function SprintTrackerDialog({
       // device.
       let uploadedVideoUrl: string | null = null;
       if (saveClipForCoach && recordedBlobRef.current) {
+        // Same trail-and-badge burn bar-tracker-dialog.tsx's saved clips
+        // already get -- see burnTrackingOverlay's own comment on why
+        // trailIndices is just whatever point the caller wants traced (the
+        // hip midpoint here, matching deriveSprintReferencePoint's live
+        // tracking) rather than something this module has to know about
+        // sprint mode specifically. Cosmetic only -- any failure falls back
+        // to the plain recorded clip, same as bar-tracker-dialog.tsx's own
+        // fallback.
+        let videoToUpload: Blob = recordedBlobRef.current;
+        if (framesRef.current.length > 0) {
+          try {
+            let elapsedMs = 0;
+            const checkpointMarkers: OverlayRepMarker[] = result.splits.map((split) => {
+              elapsedMs += split.elapsedSeconds * 1000;
+              // The FINISH is always the last split, regardless of how many
+              // checkpoints a preset's calibration expands to (a 3-tap
+              // shuttle's 4 checkpoints, or a 2-tap sprint's 2) -- comparing
+              // against the raw tap count here would mislabel a shuttle's
+              // middle crossing as the finish.
+              const isFinish = split === result.splits[result.splits.length - 1];
+              return {
+                startMs: elapsedMs,
+                label: `${isFinish ? "FINISH" : `CP ${split.toCheckpoint}`} · ${(elapsedMs / 1000).toFixed(2)}s`,
+              };
+            });
+            videoToUpload = await burnTrackingOverlay(
+              recordedBlobRef.current,
+              framesRef.current,
+              HIP_INDICES,
+              checkpointMarkers,
+            );
+          } catch {
+            videoToUpload = recordedBlobRef.current;
+          }
+        }
         const formData = new FormData();
-        formData.append(
-          "video",
-          recordedBlobRef.current,
-          videoFilenameForBlob(recordedBlobRef.current, "skill-clip"),
-        );
+        formData.append("video", videoToUpload, videoFilenameForBlob(videoToUpload, "skill-clip"));
         const uploadRes = await apiRequest("POST", "/api/athlete/skill-video", formData);
         uploadedVideoUrl = (await uploadRes.json()).url;
       }
@@ -478,7 +565,7 @@ export function SprintTrackerDialog({
         skillProgramExerciseId,
         trackingLevel: "sprint",
         elapsedSeconds: result.totalElapsedSeconds,
-        distanceYards: Number(distanceYards) || null,
+        distanceYards: result.totalDistanceYards || null,
         cameraAngle,
         faults,
         videoUrl: uploadedVideoUrl,
@@ -493,12 +580,10 @@ export function SprintTrackerDialog({
   };
 
   // Only offered for a straight-line sprint in the ballpark of the standard
-  // 40 -- a shuttle/pro-agility distance needs direction reversals this v1's
-  // two-checkpoint straight-line model doesn't support (see the calibration
-  // comment in sprint-tracking.ts), so this deliberately doesn't try to also
-  // guess at proAgilitySeconds from the same capture.
-  const distanceNum = Number(distanceYards) || 0;
-  const looksLikeFortyYard = distanceNum >= 35 && distanceNum <= 45;
+  // 40 -- a 5-10-5 shuttle's total (20yd across 3 legs) never lands in this
+  // range, so this naturally never offers to save a shuttle time as a
+  // 40-yard dash.
+  const looksLikeFortyYard = (result?.totalDistanceYards ?? 0) >= 35 && (result?.totalDistanceYards ?? 0) <= 45;
 
   async function saveToTestingProfile() {
     if (!result) return;
@@ -581,19 +666,44 @@ export function SprintTrackerDialog({
 
             {step === "calibrate" && (
               <>
+                <RadioChipGroup
+                  label="Drill"
+                  options={SPRINT_PRESETS.map((p) => p.label)}
+                  value={preset.label}
+                  onChange={(label) => {
+                    const next = SPRINT_PRESETS.find((p) => p.label === label);
+                    if (next) selectPreset(next);
+                  }}
+                />
                 <p className="text-sm text-muted-foreground">
-                  Tap the video where the <strong>start line</strong> is, then where the{" "}
-                  <strong>finish line</strong> is ({checkpointCount}/2 marked).
+                  {preset.tapCount === 3 ? (
+                    <>
+                      Tap the video at <strong>center</strong>, then each <strong>cone</strong> in the order you'll
+                      run to them ({checkpointCount}/3 marked).
+                    </>
+                  ) : preset.tapCount === 1 ? (
+                    <>
+                      Tap the video where the <strong>start/finish line</strong> is -- the 3-cone starts and ends
+                      at the same spot ({checkpointCount}/1 marked).
+                    </>
+                  ) : (
+                    <>
+                      Tap the video where the <strong>start line</strong> is, then where the{" "}
+                      <strong>finish line</strong> is ({checkpointCount}/2 marked).
+                    </>
+                  )}
                 </p>
                 <div className="flex items-end gap-2">
-                  <div className="flex-1 space-y-1.5">
-                    <Label>Distance (yards)</Label>
-                    <Input
-                      type="number"
-                      value={distanceYards}
-                      onChange={(e) => setDistanceYards(e.target.value)}
-                    />
-                  </div>
+                  {preset.id === "custom" && (
+                    <div className="flex-1 space-y-1.5">
+                      <Label>Distance (yards)</Label>
+                      <Input
+                        type="number"
+                        value={distanceYards}
+                        onChange={(e) => setDistanceYards(e.target.value)}
+                      />
+                    </div>
+                  )}
                   <Button variant="outline" onClick={resetCheckpoints} disabled={checkpointCount === 0}>
                     <RotateCcw className="h-4 w-4" />
                     Reset marks
@@ -601,7 +711,7 @@ export function SprintTrackerDialog({
                 </div>
                 <DialogFooter>
                   <Button
-                    disabled={checkpointCount < 2 || (Number(distanceYards) || 0) <= 0}
+                    disabled={checkpointCount < preset.tapCount || (preset.tapCount === 2 && (Number(distanceYards) || 0) <= 0)}
                     onClick={startCapture}
                   >
                     <Play className="h-4 w-4" />
@@ -613,7 +723,15 @@ export function SprintTrackerDialog({
 
             {step === "capture" && (
               <>
-                <p className="text-sm text-teal-400">Recording -- run through both markers now.</p>
+                <p className="text-sm text-teal-400">
+                  Recording -- run through{" "}
+                  {preset.tapCount === 3
+                    ? "all three markers"
+                    : preset.tapCount === 1
+                      ? "the full drill, finishing back through the marker"
+                      : "both markers"}{" "}
+                  now.
+                </p>
                 <DialogFooter>
                   <Button variant="outline" onClick={retry}>
                     <Square className="h-4 w-4" />
@@ -632,7 +750,7 @@ export function SprintTrackerDialog({
                 <div className="relative overflow-hidden rounded-md bg-black">
                   <video
                     ref={reviewVideoRef}
-                    src={videoUrl}
+                    src={resolveApiUrl(videoUrl)}
                     playsInline
                     controls
                     className="w-full"
@@ -662,7 +780,12 @@ export function SprintTrackerDialog({
               </div>
               <div>
                 <p className="text-2xl font-bold">{result.avgSpeedYardsPerSec.toFixed(1)}</p>
-                <p className="text-xs text-muted-foreground">Yards / sec</p>
+                <p className="text-xs text-muted-foreground">
+                  Yards / sec
+                  {preset.id === "3-cone" && (
+                    <span className="block text-[10px] normal-case">(approximate -- path isn't a straight line)</span>
+                  )}
+                </p>
               </div>
             </div>
 

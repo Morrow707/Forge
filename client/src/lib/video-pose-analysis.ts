@@ -12,6 +12,8 @@
 // analysis can keep running (and feeding whatever instance it holds) well
 // after the dialog that started it has closed.
 import { getOfflinePoseLandmarker, isPlausibleHumanFrame, type PoseFrame } from "./pose-tracking";
+import { resolveApiUrl } from "./queryClient";
+import { resolveVideoDuration } from "./video-recording";
 
 // Detection is the expensive part, not seeking -- capping the sample count
 // bounds worst-case analysis time for a longer clip (a full tracked set can
@@ -46,7 +48,22 @@ export async function analyzeVideoPose(
   const landmarker = await getOfflinePoseLandmarker();
 
   const video = document.createElement("video");
-  video.src = videoUrl;
+  // crossOrigin must be set before src -- landmarker.detectForVideo() feeds
+  // this element into MediaPipe's WebGL pipeline as a texture, and WebKit
+  // throws a SecurityError ("The operation is insecure") uploading a texture
+  // from a cross-origin element that wasn't explicitly loaded with CORS. On
+  // native this element's src IS cross-origin (capacitor://localhost's own
+  // WebView loading a real https://forge-ebhd.onrender.com video, see
+  // resolveApiUrl's own comment below) -- "anonymous" (no cookies) is enough
+  // since /uploads is served unauthenticated, and the server's CORS
+  // allowlist already covers capacitor://localhost (see server/index.ts).
+  video.crossOrigin = "anonymous";
+  // Callers pass the server-relative path as stored (formCheckVideoUrl,
+  // etc.) -- on native that has to be resolved against the real backend
+  // rather than the bundled capacitor://localhost origin the WebView
+  // otherwise resolves it against, same as every fetch() call against this
+  // app's own backend already does (see resolveApiUrl's own comment).
+  video.src = resolveApiUrl(videoUrl);
   video.muted = true;
   video.playsInline = true;
 
@@ -57,7 +74,7 @@ export async function analyzeVideoPose(
     });
   });
 
-  const duration = video.duration;
+  const duration = await resolveVideoDuration(video);
   if (!Number.isFinite(duration) || duration <= 0) return [];
 
   const interval = Math.max(MIN_INTERVAL_SEC, duration / MAX_SAMPLES);

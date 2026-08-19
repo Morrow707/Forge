@@ -9,7 +9,6 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import {
   summarizeTrackedSet,
@@ -36,7 +35,6 @@ import { summarizeJumpSet, type JumpSetMetrics } from "@/lib/jump-tracking";
 import { ImplementTracker } from "@/lib/implement-tracking";
 import { getHandLandmarker, refineGripPoint } from "@/lib/hand-tracking";
 import { PoseSmoother } from "@/lib/one-euro-filter";
-import { playSuccessChime } from "@/lib/audio-cues";
 import { hapticLight } from "@/lib/haptics";
 import { recordedVideoType, videoFilenameForBlob } from "@/lib/video-recording";
 import { burnTrackingOverlay, type OverlayRepMarker } from "@/lib/video-overlay";
@@ -58,7 +56,7 @@ import {
   guessMovementPattern,
   worldVerticalSign,
   isFullBodyInFrame,
-  isPlausibleHumanFrame,
+  SubjectContinuityGate,
   computeHeightScaleCorrection,
   scaleWorldLandmarks,
   assessCameraAlignment,
@@ -86,8 +84,6 @@ import {
   AlertTriangle,
   Sparkles,
   Info,
-  Volume2,
-  VolumeX,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis } from "recharts";
@@ -99,29 +95,12 @@ const SKELETON_COLOR = "#4ade80";
 const TRAIL_COLOR = "#f97316";
 const TRAIL_MAX_POINTS = 90;
 
-const VOICE_PREF_KEY = "forge:tracker-voice-cues";
-
-function loadVoicePref(): boolean {
-  if (typeof window === "undefined") return false;
-  return window.localStorage.getItem(VOICE_PREF_KEY) === "1";
-}
-
-// Purely a personal convenience during a set (some athletes like a spoken
-// rep count, others find it distracting), so this is a device-level
-// preference, not something synced or shown to a coach.
-function speak(text: string) {
-  if (typeof window === "undefined" || !window.speechSynthesis) return;
-  window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.rate = 1.1;
-  window.speechSynthesis.speak(utterance);
-}
-
 // Loose keyword match from the exercise name to the handful of patterns
 // guessMovementPattern can distinguish -- used only to flag an obvious
 // mismatch ("tracking Bench Press but this moved like a Squat"), not to
-// validate anything precisely.
-function expectedPatternFromName(name: string): MovementPattern | null {
+// validate anything precisely. Exported for ar-bar-tracker-dialog.tsx,
+// which needs the exact same mismatch check for computeRepTrustScores.
+export function expectedPatternFromName(name: string): MovementPattern | null {
   const n = name.toLowerCase();
   if (n.includes("deadlift")) return "deadlift";
   if (n.includes("squat")) return "squat";
@@ -396,7 +375,6 @@ export function BarTrackerDialog({
   // Pose inference.
   const roiTickCounterRef = useRef(0);
   const lastVideoTimeRef = useRef(-1);
-  const voiceEnabledRef = useRef(loadVoicePref());
   // Which sign to multiply worldLandmarks' y by so "up" always means a
   // smaller value, matching the convention every formula in
   // bar-tracking.ts/jump-tracking.ts assumes -- see worldVerticalSign's own
@@ -416,6 +394,11 @@ export function BarTrackerDialog({
   // (already used for the saved metrics) isn't a good fit for a live view.
   const displaySmootherRef = useRef(new PoseSmoother());
   const worldSmootherRef = useRef(new PoseSmoother());
+  // Shared across previewTick and tick -- continuity should carry straight
+  // through the setup-to-tracking transition, not reset at Start Set, since
+  // it's still the same athlete standing in the same spot. See
+  // SubjectContinuityGate's own comment.
+  const subjectGateRef = useRef(new SubjectContinuityGate());
   const lastDisplayYRef = useRef<number | null>(null);
   const lastDisplayTRef = useRef(0);
   // Automatic pre-flight readiness: how long the athlete has continuously
@@ -555,7 +538,6 @@ export function BarTrackerDialog({
   const [implementDetected, setImplementDetected] = useState(false);
   const [result, setResult] = useState<RepMetrics | JumpSetMetrics | null>(null);
   const [movementGuess, setMovementGuess] = useState<MovementGuess | null>(null);
-  const [voiceEnabled, setVoiceEnabled] = useState(loadVoicePref);
   // "overlay" runs in real time (roughly the clip's own duration, since it
   // plays the recording through to draw each frame) BEFORE any network
   // activity starts -- a flat "Saving..." across both phases would read as
@@ -569,12 +551,6 @@ export function BarTrackerDialog({
   // below the same way detectFormFaults gates the saved bar_tilt/
   // bar_path_drift faults at Stop.
   const usesSharedBar = mode !== "jump" && usesSharedBarEquipment(equipment);
-
-  function toggleVoice(next: boolean) {
-    setVoiceEnabled(next);
-    voiceEnabledRef.current = next;
-    window.localStorage.setItem(VOICE_PREF_KEY, next ? "1" : "0");
-  }
 
   useEffect(() => {
     if (!open) return;
@@ -609,6 +585,7 @@ export function BarTrackerDialog({
     verticalSignRef.current = 1;
     displaySmootherRef.current.reset();
     worldSmootherRef.current.reset();
+    subjectGateRef.current.reset();
     implementTrackerRef.current.reset();
     leftImplementTrackerRef.current.reset();
     rightImplementTrackerRef.current.reset();
@@ -726,12 +703,19 @@ export function BarTrackerDialog({
     // MediaPipe's landmark model and leaves the bandwidth headroom to
     // actually land 60fps, which is what velocity/flight-time precision on
     // a fast rep or jump actually benefits from. `min: 30` keeps a floor
-    // under only-mildly-capable hardware without insisting on 60.
+    // under only-mildly-capable hardware without insisting on 60. Portrait
+    // (720x1280, not 1280x720) since the athlete is virtually always
+    // filming themselves standing in front of a portrait-held phone --
+    // requesting a landscape-shaped ideal here meant the recorded
+    // formCheckVideoUrl clip's own intrinsic dimensions didn't match how it
+    // was actually framed, which is what caused a saved clip to render
+    // squished/sideways in some playback contexts downstream (see
+    // form-video-recorder-dialog.tsx's own comment on this same fix).
     const videoOnlyConstraints = {
       video: {
         facingMode: { ideal: "environment" as const },
-        width: { ideal: 1280 },
-        height: { ideal: 720 },
+        width: { ideal: 720 },
+        height: { ideal: 1280 },
         frameRate: { ideal: 60, min: 30 },
       },
     };
@@ -759,18 +743,32 @@ export function BarTrackerDialog({
     // home screen leaves the athlete staring at a dead, frozen/black
     // <video> with no way back into tracking short of force-quitting the
     // app. Stop whatever's left of the old stream and grab a fresh one the
-    // moment the app is foregrounded again -- previewTick/tick already poll
-    // until the video has real dimensions, so a freshly attached stream
-    // picks the preview/tracking loop back up on its own. onAppForeground
-    // uses the native appStateChange signal inside Capacitor (more
-    // reliable than visibilitychange there) and visibilitychange itself on
-    // web/PWA.
+    // moment the app is foregrounded again -- previewTick/tick poll until
+    // the video has real dimensions, so a freshly attached stream is
+    // enough on its own once the loop itself is running again (see the
+    // explicit restart below; reacquiring the stream alone doesn't do
+    // that). onAppForeground uses the native appStateChange signal inside
+    // Capacitor (more reliable than visibilitychange there) and
+    // visibilitychange itself on web/PWA.
     const unsubscribeForeground = onAppForeground(() => {
       const stillLive = streamRef.current?.getVideoTracks().some((t) => t.readyState === "live");
-      if (stillLive) return;
-      streamRef.current?.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
-      acquireCamera();
+      if (!stillLive) {
+        streamRef.current?.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+        acquireCamera();
+      }
+      // onAppBackground below always cancels the rAF loop outright,
+      // independent of whether iOS actually tore down the stream above --
+      // reacquiring the camera alone doesn't restart previewTick/tick, so
+      // without this the athlete would come back to a live-looking preview
+      // that never tracks another rep again until they close and reopen
+      // the dialog. Whichever loop was driving the current step is the one
+      // to resume -- previewTick during setup/calibration, tick once a set
+      // is actually being tracked.
+      if (!rafRef.current) {
+        if (stepRef.current === "tracking") rafRef.current = requestAnimationFrame(tick);
+        else if (stepRef.current === "setup") rafRef.current = requestAnimationFrame(previewTick);
+      }
     });
 
     // The reactive foreground reacquisition above works whenever iOS gets
@@ -848,14 +846,16 @@ export function BarTrackerDialog({
       ctx.clearRect(0, 0, overlay.width, overlay.height);
       const now = performance.now();
       const detection = landmarker.detectForVideo(video, now);
-      // isPlausibleHumanFrame rejects a low-confidence "person" MediaPipe
+      // subjectGateRef rejects both a low-confidence "person" MediaPipe
       // occasionally reports on a strongly rectangular, loosely humanoid
       // object in frame (a plyo box's stacked edges, a rack's hanging
-      // straps -- see its own comment) -- without this, that false
+      // straps) and a detection that jumped implausibly far to plausibly
+      // still be the same athlete (a spotter, a background lifter) -- see
+      // SubjectContinuityGate's own comment. Without this, either false
       // detection gets drawn as a skeleton right here in the setup preview,
       // before tracking has even started.
       const rawLandmarks = detection.landmarks[0] ?? null;
-      const landmarks = rawLandmarks && isPlausibleHumanFrame(rawLandmarks) ? rawLandmarks : null;
+      const landmarks = subjectGateRef.current.admit(rawLandmarks);
       const worldLandmarks = landmarks ? (detection.worldLandmarks[0] ?? null) : null;
       if (landmarks) {
         // Smoothed purely for the on-screen preview -- see one-euro-filter.ts.
@@ -935,21 +935,13 @@ export function BarTrackerDialog({
   function beginAutoStart() {
     autoStartTriggeredRef.current = true;
     setAlignmentHint(null);
-    playSuccessChime();
     let n = 3;
     setCountdown(n);
-    // Always spoken, unlike every other speak() call in this component --
-    // the voice-cues preference below is for optional in-set flourishes
-    // (rep counts, a "set complete" line); this countdown is the only
-    // signal a solo athlete standing away from the phone gets that
-    // tracking is about to start, so it isn't optional the same way.
-    speak(String(n));
     const scheduleNext = () => {
       const id = window.setTimeout(() => {
         n -= 1;
         if (n > 0) {
           setCountdown(n);
-          speak(String(n));
           scheduleNext();
         } else {
           setCountdown(null);
@@ -1077,13 +1069,13 @@ export function BarTrackerDialog({
 
     const now = performance.now();
     const detection = landmarker.detectForVideo(video, now);
-    // See isPlausibleHumanFrame's own comment (and its use in the setup
-    // preview tick above) -- the same false-positive-on-an-object risk
-    // applies for every frame of an already-running set, not just once at
-    // auto-start, so this frame's detection is discarded (reads as "body
+    // See subjectGateRef's own comment (and its use in the setup preview
+    // tick above) -- the same false-positive-on-an-object and wrong-subject
+    // risks apply for every frame of an already-running set, not just once
+    // at auto-start, so this frame's detection is discarded (reads as "body
     // not visible" below) rather than trusted just because it's non-null.
     const rawLandmarks = detection.landmarks[0] ?? null;
-    const landmarks = rawLandmarks && isPlausibleHumanFrame(rawLandmarks) ? rawLandmarks : null;
+    const landmarks = subjectGateRef.current.admit(rawLandmarks);
     // Scaled once here, right off detectForVideo, so every downstream
     // consumer within this tick (bar-point derivation, tilt, grip width,
     // joint angles, jump ankle point -- all still just read `worldLandmarks`
@@ -1573,7 +1565,6 @@ export function BarTrackerDialog({
                 repCountRef.current += 1;
                 setRepCount(repCountRef.current);
                 hapticLight();
-                if (voiceEnabledRef.current) speak(String(repCountRef.current));
               }
               lastRepDirRef.current = dir;
             }
@@ -1626,9 +1617,6 @@ export function BarTrackerDialog({
       // squat-depth judgment and bar-path drift don't -- see the "jump"
       // context branch in detectFormFaults.
       jumpMetrics.formFaults = detectFormFaults(framesRef.current, 0, "jump", movementType, equipment);
-      if (voiceEnabledRef.current) {
-        speak(`Set complete. Best jump ${jumpMetrics.bestJumpHeightCm} centimeters.`);
-      }
       setResult(jumpMetrics);
       changeStep("review");
       return;
@@ -1756,11 +1744,6 @@ export function BarTrackerDialog({
       guessMismatch,
       lastAlignmentReasonRef.current,
     );
-
-    if (voiceEnabledRef.current) {
-      const count = metrics.formFaults.length;
-      speak(count > 0 ? `Set complete. ${count} form note${count > 1 ? "s" : ""}.` : "Set complete.");
-    }
 
     setResult(metrics);
     changeStep("review");
@@ -1922,13 +1905,6 @@ export function BarTrackerDialog({
                 Loading the pose-tracking model…
               </p>
             )}
-            <label className="flex items-center gap-2.5 text-sm">
-              <Checkbox checked={voiceEnabled} onCheckedChange={(c) => toggleVoice(c === true)} />
-              <span className="flex items-center gap-1.5">
-                {voiceEnabled ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
-                Voice rep counts &amp; end-of-set cues (off by default)
-              </span>
-            </label>
           </div>
         )}
 
@@ -2198,7 +2174,7 @@ export function BarTrackerDialog({
                         videoToUpload = await burnTrackingOverlay(
                           recordedBlobRef.current,
                           framesRef.current,
-                          mode,
+                          mode === "jump" ? ANKLE_INDICES : WRIST_INDICES,
                           repMarkers,
                           setOverlayProgress,
                         );

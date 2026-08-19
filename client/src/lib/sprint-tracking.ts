@@ -17,14 +17,37 @@ import {
   type SkillFaultThresholds,
 } from "@shared/skill-fault-thresholds";
 
-export type SprintCheckpoint = { x: number };
+export type SprintCheckpoint = {
+  x: number;
+  // Real-world distance from the PREVIOUS checkpoint to this one, in
+  // yards -- required on every checkpoint except the first (nothing
+  // precedes it, so there's no "segment" to give a distance). A straight
+  // two-checkpoint sprint puts the whole distance on the second (and only)
+  // checkpoint; a multi-checkpoint drill with direction reversals (a
+  // 5-10-5 shuttle -- see SPRINT_PRESETS) gives each leg its own real
+  // distance, since a reversal course doesn't cover equal ground each leg.
+  segmentDistanceYards?: number;
+  // How many same-direction crossings of this checkpoint's line to ignore
+  // before counting one as the real event. Unset/0 means "the first
+  // matching crossing is the real one" -- true for every straight sprint
+  // and the 5-10-5 shuttle. Needed for a drill whose start and finish are
+  // the SAME physical line and whose middle sends the reference point back
+  // past that line, in the finish direction, before the real finish (a
+  // 3-cone/L-drill: explode off the line, later return to touch it, then
+  // sprint back OUT toward the far cone a second time -- past the same
+  // line, same direction as the true finish -- before finally sprinting
+  // through it for real). See checkpointsForThreeConeTap.
+  skipCrossings?: number;
+};
 
 export type SprintCalibration = {
   // In crossing order -- checkpoints[0] is the start line, the last entry
-  // is the finish line. Two checkpoints is the common case (straight-line
-  // sprint); more support future multi-segment/shuttle splits.
+  // is the finish line. Two checkpoints is a straight-line sprint; more
+  // support a multi-segment drill with direction reversals (see
+  // checkpointDirection below, which computes direction PER SEGMENT rather
+  // than once for the whole calibration -- a global direction, the prior
+  // design, is wrong the moment a course doubles back on itself).
   checkpoints: SprintCheckpoint[];
-  distanceYards: number;
 };
 
 export type SprintPoint = { t: number; x: number };
@@ -33,10 +56,12 @@ export type SprintSplit = {
   fromCheckpoint: number;
   toCheckpoint: number;
   elapsedSeconds: number;
+  distanceYards: number;
 };
 
 export type SprintResult = {
   totalElapsedSeconds: number;
+  totalDistanceYards: number;
   splits: SprintSplit[];
   avgSpeedYardsPerSec: number;
 };
@@ -52,42 +77,65 @@ export function deriveSprintReferencePoint(landmarks: NormalizedLandmark[]): { x
   return { x: (leftHip.x + rightHip.x) / 2 };
 }
 
+// Direction of travel THROUGH checkpoint[index] -- the segment from the
+// previous checkpoint to this one, except for checkpoint 0, which has no
+// previous segment of its own: it borrows segment 0->1's direction, since
+// crossing the start line happens in the same direction as the first leg
+// that follows it.
+function checkpointDirection(checkpoints: SprintCheckpoint[], index: number): 1 | -1 {
+  const from = index === 0 ? 0 : index - 1;
+  const to = index === 0 ? 1 : index;
+  return checkpoints[to].x >= checkpoints[from].x ? 1 : -1;
+}
+
 // Finds the frame-to-frame crossing of each checkpoint's x-line, in order,
 // interpolating sub-frame timing linearly between the two straddling
-// frames. Direction (increasing vs decreasing x) is inferred from the
-// checkpoints' own order, so a run in either screen direction works as
-// long as the coach marked start-then-finish in that order.
+// frames. Direction is computed per segment (see checkpointDirection), not
+// once for the whole run, so a course with direction reversals (a shuttle)
+// works the same as a straight sprint -- each leg just needs its own two
+// checkpoints crossed in order, whichever way that particular leg runs.
 export function detectSprintCrossings(
   points: SprintPoint[],
   calibration: SprintCalibration,
 ): SprintResult | null {
   const checkpoints = calibration.checkpoints;
   if (checkpoints.length < 2 || points.length < 2) return null;
-  const direction = checkpoints[checkpoints.length - 1].x >= checkpoints[0].x ? 1 : -1;
+  if (checkpoints.slice(1).some((cp) => !cp.segmentDistanceYards || cp.segmentDistanceYards <= 0)) return null;
 
   let checkpointIdx = 0;
+  let skipRemaining = checkpoints[0]?.skipCrossings ?? 0;
   const crossingTimes: number[] = [];
   for (let i = 1; i < points.length && checkpointIdx < checkpoints.length; i++) {
+    const direction = checkpointDirection(checkpoints, checkpointIdx);
     const targetX = checkpoints[checkpointIdx].x;
     const prev = points[i - 1];
     const curr = points[i];
     const crossed =
       direction === 1 ? prev.x < targetX && curr.x >= targetX : prev.x > targetX && curr.x <= targetX;
     if (crossed) {
+      if (skipRemaining > 0) {
+        skipRemaining--;
+        continue;
+      }
       const span = curr.x - prev.x;
       const frac = span !== 0 ? (targetX - prev.x) / span : 0;
       crossingTimes.push(prev.t + frac * (curr.t - prev.t));
       checkpointIdx++;
+      skipRemaining = checkpoints[checkpointIdx]?.skipCrossings ?? 0;
     }
   }
   if (crossingTimes.length < 2) return null;
 
   const splits: SprintSplit[] = [];
+  let totalDistanceYards = 0;
   for (let i = 1; i < crossingTimes.length; i++) {
+    const distanceYards = checkpoints[i].segmentDistanceYards ?? 0;
+    totalDistanceYards += distanceYards;
     splits.push({
       fromCheckpoint: i - 1,
       toCheckpoint: i,
       elapsedSeconds: Math.round(((crossingTimes[i] - crossingTimes[i - 1]) / 1000) * 1000) / 1000,
+      distanceYards,
     });
   }
   const totalElapsedSeconds =
@@ -96,9 +144,73 @@ export function detectSprintCrossings(
 
   return {
     totalElapsedSeconds,
+    totalDistanceYards,
     splits,
-    avgSpeedYardsPerSec: Math.round((calibration.distanceYards / totalElapsedSeconds) * 100) / 100,
+    avgSpeedYardsPerSec: Math.round((totalDistanceYards / totalElapsedSeconds) * 100) / 100,
   };
+}
+
+// Named drill presets -- each gives its own checkpoint-tap count and, for a
+// straight-line drill, the standard distance so the athlete doesn't have to
+// type it. "custom" isn't listed here; it's just "manual distance entry,
+// two checkpoints," the prior (and still supported) default behavior.
+//
+// tapCount is how many physical markers the athlete taps to calibrate --
+// 2 for a straight sprint (start, finish), 3 for a 5-10-5 shuttle (center,
+// right cone, left cone; the finish is the SAME physical spot as the
+// start/center, so it isn't tapped a second time -- see
+// checkpointsForShuttleTaps below).
+export type SprintPreset = {
+  id: string;
+  label: string;
+  tapCount: 1 | 2 | 3;
+  // Only set for a straight-line (2-tap) preset -- a shuttle's distance is
+  // fixed by its own segment structure (5+10+5), not a single number to
+  // prefill.
+  distanceYards?: number;
+};
+
+export const SPRINT_PRESETS: SprintPreset[] = [
+  { id: "10yd", label: "10-yard split", tapCount: 2, distanceYards: 10 },
+  { id: "20yd", label: "20-yard split", tapCount: 2, distanceYards: 20 },
+  { id: "40yd", label: "40-yard dash", tapCount: 2, distanceYards: 40 },
+  { id: "5-10-5", label: "5-10-5 shuttle", tapCount: 3 },
+  { id: "3-cone", label: "3-cone drill", tapCount: 1 },
+  { id: "custom", label: "Custom distance", tapCount: 2 },
+];
+
+// Builds the full 4-checkpoint calibration a 5-10-5 shuttle needs
+// (start/center, right cone, left cone, finish/center again) from the 3
+// physical taps the athlete actually makes -- center only gets tapped
+// once, since the start and finish markers are the same physical spot.
+// tapXs must be in tap order: [center, side A, side B]; which side is
+// "right" vs "left" doesn't matter here, the crossing model only cares
+// about each leg's own direction (see checkpointDirection), not
+// screen-left/right labels.
+export function checkpointsForShuttleTaps(tapXs: [number, number, number]): SprintCheckpoint[] {
+  const [center, sideA, sideB] = tapXs;
+  return [
+    { x: center },
+    { x: sideA, segmentDistanceYards: 5 },
+    { x: sideB, segmentDistanceYards: 10 },
+    { x: center, segmentDistanceYards: 5 },
+  ];
+}
+
+// Builds the 2-checkpoint calibration a 3-cone/L-drill needs from the
+// single physical tap the athlete makes -- start and finish are the SAME
+// physical line (the athlete explodes off it, then sprints back through it
+// at the very end), so there's only one marker to tap, unlike the 5-10-5
+// shuttle's three distinct cones. The finish checkpoint skips the first
+// same-direction crossing of that line (see SprintCheckpoint.skipCrossings)
+// since the drill's middle also sends the athlete back out past the start
+// line -- toward the far cone a second time -- before the real finish.
+// segmentDistanceYards is an approximate total path length (5 + 5 out-and-
+// back, plus the two diagonal legs around the L), not a precise number --
+// the elapsed time is the headline figure here, the same way a combine
+// table reports 3-cone as a single time, never a pace.
+export function checkpointsForThreeConeTap(tapX: number): SprintCheckpoint[] {
+  return [{ x: tapX }, { x: tapX, segmentDistanceYards: 30, skipCrossings: 1 }];
 }
 
 export type SprintFault = { code: string; label: string };

@@ -21,6 +21,9 @@ import { RestTimerControl, type RestTimerHandle } from "@/components/rest-timer"
 import { useWakeLock } from "@/hooks/use-wake-lock";
 import { WorkoutCommentThread } from "@/components/workout-comment-thread";
 import { BarTrackerDialog } from "@/components/bar-tracker-dialog";
+import { ArJumpTrackerDialog } from "@/components/ar-jump-tracker-dialog";
+import { ArBarTrackerDialog } from "@/components/ar-bar-tracker-dialog";
+import { isArPreviewPlatform } from "@/lib/native-ar-preview";
 import { FormVideoRecorderDialog } from "@/components/form-video-recorder-dialog";
 import { SetVideoPreviewDialog, SetVideoCompareDialog } from "@/components/set-video-review";
 import { extractVideoFrames } from "@/lib/video-frames";
@@ -69,8 +72,8 @@ import {
   RefreshCw,
   GitCompare,
   Share2,
-  Headphones,
   Copy,
+  ShieldAlert,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import type { PublicUser } from "@shared/schema";
@@ -80,7 +83,6 @@ import { ReadinessBanner } from "@/components/readiness-banner";
 import { ModifiedWorkoutBanner } from "@/components/modified-workout-banner";
 import { WellnessGate } from "@/components/wellness-gate";
 import { CaraTimer } from "@/components/cara-timer";
-import { HandsFreeMode } from "@/components/hands-free-mode";
 
 type ExerciseInfo = {
   id: number;
@@ -749,7 +751,6 @@ export function WorkoutPage({
   const [hydrated, setHydrated] = useState(false);
   const [pageIndex, setPageIndex] = useState(0);
   const [viewMode, setViewMode] = useState<"overview" | "logging">("overview");
-  const [handsFreeActive, setHandsFreeActive] = useState(false);
   const restTimerRef = useRef<RestTimerHandle>(null);
 
   // Keep the screen awake for the length of an active logging session --
@@ -1553,17 +1554,6 @@ export function WorkoutPage({
                   <ArrowLeft className="h-3.5 w-3.5" />
                   Back to full workout
                 </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    autosaveNow(items);
-                    setHandsFreeActive(true);
-                  }}
-                  className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
-                >
-                  <Headphones className="h-3.5 w-3.5" />
-                  Hands-Free
-                </button>
               </div>
               {currentPage.kind === "corrective" && (
                 <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-cyan-400">
@@ -1677,14 +1667,6 @@ export function WorkoutPage({
             </button>
           </div>
         </div>
-      )}
-      {handsFreeActive && (
-        <HandsFreeMode
-          items={items}
-          unit={unit}
-          onUpdateSet={(key, setNumber, patch) => updateSet(key, setNumber, patch, { immediate: true })}
-          onClose={() => setHandsFreeActive(false)}
-        />
       )}
       </AppShell>
     </>
@@ -2285,15 +2267,53 @@ function ExerciseLogContent({
                     ))}
                   </div>
                 )}
+                {/* Trust score is computed for every tracked set (see
+                    computeRepTrustScores) but was never surfaced anywhere --
+                    only worth showing when it's actually flagging something,
+                    same "don't nag about a clean set" restraint formFaults
+                    above already follows. Low beats medium for the summary
+                    line's wording (a single "shaky" rep still deserves the
+                    stronger phrasing even among otherwise-solid ones); the
+                    per-rep chips below carry the detail either way. */}
+                {set.trustScores && set.trustScores.some((t) => t.label !== "high") && (
+                  <div
+                    className="mt-1 flex items-center gap-1 pl-9 text-[9px] text-amber-500"
+                    title={set.trustScores
+                      .filter((t) => t.label !== "high")
+                      .map((t) => `Rep ${t.repNumber}: ${t.notes.join("; ")}`)
+                      .join(" · ")}
+                  >
+                    <ShieldAlert className="h-3 w-3 shrink-0" />
+                    <span>
+                      {set.trustScores.some((t) => t.label === "low")
+                        ? "Tracking was shaky on at least one rep -- take those numbers with a grain of salt"
+                        : "Tracking mostly solid, a couple reps less certain"}
+                    </span>
+                  </div>
+                )}
                 {set.repBreakdown && set.repBreakdown.length > 1 && (
                   <div className="mt-1 flex flex-wrap items-center gap-1 pl-9 text-[9px] text-muted-foreground">
                     <span className="font-semibold uppercase tracking-wide">Rep by rep</span>
-                    {set.repBreakdown.map((r) => (
-                      <span key={r.repNumber} className="rounded bg-secondary px-1.5 py-0.5">
-                        {item.trackingLevel === "full" ? `${r.peakVelocityMps} m/s` : `#${r.repNumber}`}
-                        {r.depthDeg != null ? ` · ${r.depthDeg}°` : ""}
-                      </span>
-                    ))}
+                    {set.repBreakdown.map((r) => {
+                      const trust = set.trustScores?.find((t) => t.repNumber === r.repNumber);
+                      return (
+                        <span
+                          key={r.repNumber}
+                          className={cn(
+                            "rounded px-1.5 py-0.5",
+                            trust?.label === "low"
+                              ? "bg-destructive/15 text-destructive"
+                              : trust?.label === "medium"
+                                ? "bg-amber-500/15 text-amber-600"
+                                : "bg-secondary",
+                          )}
+                          title={trust?.notes.join("; ")}
+                        >
+                          {item.trackingLevel === "full" ? `${r.peakVelocityMps} m/s` : `#${r.repNumber}`}
+                          {r.depthDeg != null ? ` · ${r.depthDeg}°` : ""}
+                        </span>
+                      );
+                    })}
                   </div>
                 )}
                 {set.jumpBreakdown && set.jumpBreakdown.length > 1 && (
@@ -2321,6 +2341,106 @@ function ExerciseLogContent({
             item.materials.usesWeight && !Number.isNaN(trackedWeight)
               ? toKg(trackedWeight, unit)
               : undefined;
+
+          function handleTrackerCapture(metrics: RepMetrics | JumpSetMetrics, videoUrl?: string) {
+            if (trackingSet == null) return;
+            const videoPatch = videoUrl ? { formCheckVideoUrl: videoUrl } : {};
+            if ("bestJumpHeightCm" in metrics) {
+              onUpdateSet(
+                trackingSet,
+                {
+                  jumpHeightCm: metrics.bestJumpHeightCm,
+                  jumpDistanceCm: metrics.bestHorizontalDistanceCm,
+                  groundContactSeconds: metrics.avgGroundContactSeconds,
+                  reactiveStrengthIndex: metrics.reactiveStrengthIndex,
+                  jumpBreakdown: metrics.repBreakdown,
+                  barPathTrace: metrics.pathTrace,
+                  formFaults: metrics.formFaults,
+                  ...videoPatch,
+                },
+                // A tracked capture is expensive to redo -- save it the
+                // instant it lands rather than risk losing it to a
+                // force-close inside the normal autosave debounce window.
+                { immediate: true },
+              );
+            } else {
+              onUpdateSet(
+                trackingSet,
+                {
+                  peakVelocityMps: metrics.peakVelocityMps,
+                  meanVelocityMps: metrics.meanVelocityMps,
+                  concentricSeconds: metrics.concentricSeconds,
+                  eccentricSeconds: metrics.eccentricSeconds,
+                  barPathDeviationCm: metrics.barPathDeviationCm,
+                  barPathTrace: metrics.barPathTrace,
+                  formFaults: metrics.formFaults,
+                  repBreakdown: metrics.repBreakdown,
+                  armPathTrace: metrics.armPathTrace ?? null,
+                  peakPowerWatts: metrics.peakPowerWatts,
+                  meanPowerWatts: metrics.meanPowerWatts,
+                  eccentricMeanVelocityMps: metrics.eccentricMeanVelocityMps,
+                  romCm: metrics.romCm,
+                  velocityLossPercent: metrics.velocityLossPercent,
+                  legDriveAsymmetry: metrics.legDriveAsymmetry ?? null,
+                  armDriveAsymmetry: metrics.armDriveAsymmetry ?? null,
+                  trustScores: metrics.trustScores ?? null,
+                  ...videoPatch,
+                },
+                { immediate: true },
+              );
+            }
+            // Same downstream handling FormVideoRecorderDialog's onSaved
+            // does below -- a merged capture's video is just as much a
+            // real form-check clip as a standalone one.
+            if (videoUrl) {
+              if (videoCheckMode === "ai") aiFormCheckMutation.mutate({ setNumber: trackingSet, videoUrl });
+              else postFormVideoMutation.mutate({ setNumber: trackingSet, videoUrl });
+            }
+          }
+
+          // Jump mode is the first tracker mode moved off MediaPipe onto
+          // native ARKit -- see ar-jump-tracker-dialog.tsx's own comment for
+          // why jump specifically (no implement to follow, unlike bar_path/
+          // full, which still need implement tracking ported to Swift
+          // first). Every other mode, and jump mode on anything that isn't
+          // native iOS, keeps using the existing MediaPipe-based dialog
+          // unchanged.
+          if (isArPreviewPlatform() && item.trackingLevel === "jump") {
+            return (
+              <ArJumpTrackerDialog
+                open={trackingSet !== null}
+                onOpenChange={(open) => !open && setTrackingSet(null)}
+                heightIn={user?.heightIn}
+                movementType={item.movementType}
+                equipment={item.equipment}
+                recordVideo={mergedTracking}
+                onCapture={handleTrackerCapture}
+              />
+            );
+          }
+
+          // bar_path/full: needs a held implement tracked, unlike jump --
+          // see ArBarTrackerDialog's own file comment for what's ported vs
+          // deliberately still MediaPipe-only in this first pass.
+          if (isArPreviewPlatform() && (item.trackingLevel === "bar_path" || item.trackingLevel === "full")) {
+            return (
+              <ArBarTrackerDialog
+                open={trackingSet !== null}
+                onOpenChange={(open) => !open && setTrackingSet(null)}
+                mode={item.trackingLevel}
+                exerciseName={item.exerciseName}
+                movementType={item.movementType}
+                equipment={item.equipment}
+                laterality={item.laterality}
+                heightIn={user?.heightIn}
+                targetReps={parseTargetReps(item.prescribedReps)}
+                loadKg={loadKg}
+                recordVideo={mergedTracking}
+                onCapture={handleTrackerCapture}
+              />
+            );
+          }
+
           return (
             <BarTrackerDialog
               open={trackingSet !== null}
@@ -2334,61 +2454,7 @@ function ExerciseLogContent({
               targetReps={parseTargetReps(item.prescribedReps)}
               loadKg={loadKg}
               recordVideo={mergedTracking}
-              onCapture={(metrics: RepMetrics | JumpSetMetrics, videoUrl?: string) => {
-                if (trackingSet == null) return;
-                const videoPatch = videoUrl ? { formCheckVideoUrl: videoUrl } : {};
-                if ("bestJumpHeightCm" in metrics) {
-                  onUpdateSet(
-                    trackingSet,
-                    {
-                      jumpHeightCm: metrics.bestJumpHeightCm,
-                      jumpDistanceCm: metrics.bestHorizontalDistanceCm,
-                      groundContactSeconds: metrics.avgGroundContactSeconds,
-                      reactiveStrengthIndex: metrics.reactiveStrengthIndex,
-                      jumpBreakdown: metrics.repBreakdown,
-                      barPathTrace: metrics.pathTrace,
-                      formFaults: metrics.formFaults,
-                      ...videoPatch,
-                    },
-                    // A tracked capture is expensive to redo -- save it the
-                    // instant it lands rather than risk losing it to a
-                    // force-close inside the normal autosave debounce window.
-                    { immediate: true },
-                  );
-                } else {
-                  onUpdateSet(
-                    trackingSet,
-                    {
-                      peakVelocityMps: metrics.peakVelocityMps,
-                      meanVelocityMps: metrics.meanVelocityMps,
-                      concentricSeconds: metrics.concentricSeconds,
-                      eccentricSeconds: metrics.eccentricSeconds,
-                      barPathDeviationCm: metrics.barPathDeviationCm,
-                      barPathTrace: metrics.barPathTrace,
-                      formFaults: metrics.formFaults,
-                      repBreakdown: metrics.repBreakdown,
-                      armPathTrace: metrics.armPathTrace ?? null,
-                      peakPowerWatts: metrics.peakPowerWatts,
-                      meanPowerWatts: metrics.meanPowerWatts,
-                      eccentricMeanVelocityMps: metrics.eccentricMeanVelocityMps,
-                      romCm: metrics.romCm,
-                      velocityLossPercent: metrics.velocityLossPercent,
-                      legDriveAsymmetry: metrics.legDriveAsymmetry ?? null,
-                      armDriveAsymmetry: metrics.armDriveAsymmetry ?? null,
-                      trustScores: metrics.trustScores ?? null,
-                      ...videoPatch,
-                    },
-                    { immediate: true },
-                  );
-                }
-                // Same downstream handling FormVideoRecorderDialog's onSaved
-                // does below -- a merged capture's video is just as much a
-                // real form-check clip as a standalone one.
-                if (videoUrl) {
-                  if (videoCheckMode === "ai") aiFormCheckMutation.mutate({ setNumber: trackingSet, videoUrl });
-                  else postFormVideoMutation.mutate({ setNumber: trackingSet, videoUrl });
-                }
-              }}
+              onCapture={handleTrackerCapture}
             />
           );
         })()}

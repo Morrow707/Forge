@@ -125,6 +125,13 @@ type AnalyticsPoint = {
     asymmetryPercent: number;
     dominantSide: "left" | "right";
   }[] | null;
+  armDriveAsymmetry: {
+    repNumber: number;
+    leftVelocityMps: number;
+    rightVelocityMps: number;
+    asymmetryPercent: number;
+    dominantSide: "left" | "right";
+  }[] | null;
   formCheckVideoUrl: string | null;
   formCheckFlag: "best" | "worst" | null;
 };
@@ -136,6 +143,12 @@ const FAULT_NAMES: Record<string, string> = {
   bar_path_drift: "Bar path drift",
   bar_tilt: "Bar tilt",
   grip_shift: "Grip shift",
+  pelvic_drop: "Pelvic drop",
+  ankle_mobility_limit: "Ankle mobility limit",
+  arm_fallout: "Arm fallout",
+  thoracic_extension_loss: "Thoracic extension loss",
+  lockout_symmetry: "Lockout symmetry",
+  lockout_lean: "Lockout lean",
 };
 type RecentSession = {
   date: string;
@@ -165,6 +178,7 @@ const CHART_OPTIONS = [
   { key: "tempo", label: "Tempo" },
   { key: "rom", label: "Range of Motion" },
   { key: "faultTrend", label: "Form Fault Trend" },
+  { key: "asymmetryTrend", label: "Asymmetry Trend" },
 ] as const;
 type ChartKey = (typeof CHART_OPTIONS)[number]["key"];
 const HIDDEN_CHARTS_STORAGE_KEY = "forge-analytics-hidden-charts";
@@ -227,6 +241,66 @@ function ChartVisibilityMenu({
       </PopoverContent>
     </Popover>
   );
+}
+
+// Week-bucketed average for a continuous per-rep asymmetry reading (leg or
+// arm drive). A set only contributes when one side dominated at least 70% of
+// its reps (the same consistency gate storage.ts's
+// evaluateLegDriveAsymmetryFlags uses to decide whether to notify the coach)
+// -- a set with no clear dominant side isn't a "leans right" data point,
+// it's noise.
+function bucketAsymmetryByWeek(
+  rows: {
+    date: string;
+    reps: { asymmetryPercent: number; dominantSide: "left" | "right" }[] | null;
+  }[],
+) {
+  const buckets = new Map<string, { sum: number; count: number; leftCount: number; rightCount: number }>();
+  for (const row of rows) {
+    const reps = row.reps;
+    if (!reps || reps.length < 2) continue;
+    const leftCount = reps.filter((r) => r.dominantSide === "left").length;
+    const rightCount = reps.length - leftCount;
+    const consistency = Math.max(leftCount, rightCount) / reps.length;
+    if (consistency < 0.7) continue;
+    const avgAsymmetryPercent = reps.reduce((sum, r) => sum + r.asymmetryPercent, 0) / reps.length;
+    const weekKey = format(startOfWeek(parseISO(row.date), { weekStartsOn: 0 }), "yyyy-MM-dd");
+    const bucket = buckets.get(weekKey) ?? { sum: 0, count: 0, leftCount: 0, rightCount: 0 };
+    bucket.sum += avgAsymmetryPercent;
+    bucket.count += 1;
+    if (leftCount >= rightCount) bucket.leftCount += 1;
+    else bucket.rightCount += 1;
+    buckets.set(weekKey, bucket);
+  }
+  return buckets;
+}
+
+// Same "one continuous percentage per exercise, worth trending across
+// weeks" longitudinal view the skills side already has for sprint/mechanics
+// (skills-trends-panel.tsx), but for the strength side's leg/arm-drive
+// asymmetry -- a single lopsided set is a data point, six straight weeks of
+// favoring the same side is an injury-risk flag. Leg and arm buckets are
+// computed and merged separately since a given exercise is rarely tracked
+// for both at once (legDriveAsymmetry needs a lower-body bilateral lift,
+// armDriveAsymmetry needs a shared-bar press/pull).
+function weeklyAsymmetryTrend(
+  legRows: { date: string; reps: { asymmetryPercent: number; dominantSide: "left" | "right" }[] | null }[],
+  armRows: { date: string; reps: { asymmetryPercent: number; dominantSide: "left" | "right" }[] | null }[],
+) {
+  const legBuckets = bucketAsymmetryByWeek(legRows);
+  const armBuckets = bucketAsymmetryByWeek(armRows);
+  const weekKeys = Array.from(new Set([...legBuckets.keys(), ...armBuckets.keys()])).sort();
+  return weekKeys.map((weekKey) => {
+    const leg = legBuckets.get(weekKey);
+    const arm = armBuckets.get(weekKey);
+    return {
+      label: format(parseISO(weekKey), "MMM d"),
+      legAsymmetryPercent: leg ? Math.round((leg.sum / leg.count) * 10) / 10 : null,
+      legDominantSide: leg ? (leg.leftCount >= leg.rightCount ? "left" : "right") : null,
+      armAsymmetryPercent: arm ? Math.round((arm.sum / arm.count) * 10) / 10 : null,
+      armDominantSide: arm ? (arm.leftCount >= arm.rightCount ? "left" : "right") : null,
+    };
+  });
 }
 
 function formatSetWeight(p: {
@@ -623,6 +697,13 @@ export default function CoachAnalytics() {
       }
       return row;
     });
+  const asymmetryTrendData = weeklyAsymmetryTrend(
+    chartData.map((p) => ({ date: p.date, reps: p.legDriveAsymmetry })),
+    chartData.map((p) => ({ date: p.date, reps: p.armDriveAsymmetry })),
+  );
+  const hasAsymmetryTrend = asymmetryTrendData.some(
+    (r) => r.legAsymmetryPercent != null || r.armAsymmetryPercent != null,
+  );
   const prCount = chartData.filter((p) => p.isPR).length;
   const unit = chartData.find((p) => p.weightUnit)?.weightUnit ?? "lbs";
   const selectedExerciseName =
@@ -1526,6 +1607,51 @@ export default function CoachAnalytics() {
                         color={TREND_COLORS[i % TREND_COLORS.length]}
                       />
                     ))}
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
+          {hasAsymmetryTrend && !hiddenCharts.has("asymmetryTrend") && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Asymmetry Trend</CardTitle>
+                <CardDescription>
+                  Average left/right drive imbalance by week, for sets where one side clearly
+                  dominated the reps -- a single lopsided set is a data point, favoring the same
+                  side for weeks in a row is a load-management flag worth programming around.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={asymmetryTrendData} margin={{ left: 4, right: 12 }}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                    <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} width={40} unit="%" />
+                    <Tooltip
+                      contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))" }}
+                      formatter={(value, name, item) => {
+                        const side =
+                          item.dataKey === "legAsymmetryPercent"
+                            ? item.payload.legDominantSide
+                            : item.payload.armDominantSide;
+                        return [`${value}% favoring ${side ?? "?"}`, name];
+                      }}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <TrendSeries
+                      chartType={chartType}
+                      dataKey="legAsymmetryPercent"
+                      name="Leg drive"
+                      color={TREND_COLORS[0]}
+                    />
+                    <TrendSeries
+                      chartType={chartType}
+                      dataKey="armAsymmetryPercent"
+                      name="Arm drive"
+                      color={TREND_COLORS[1]}
+                    />
                   </ComposedChart>
                 </ResponsiveContainer>
               </CardContent>

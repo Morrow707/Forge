@@ -381,7 +381,7 @@ function computeSpeeds(points: TrackedPoint[], positions: number[]): number[] {
 // peak and mean calculations below the same way an implausible single-frame
 // POSITION jump is already rejected in bar-tracker-dialog.tsx, rather than
 // being averaged in or reported as the set's peak effort.
-const MAX_PLAUSIBLE_LIFT_VELOCITY_MPS = 3;
+export const MAX_PLAUSIBLE_LIFT_VELOCITY_MPS = 3;
 
 function robustPeakSpeed(
   speedsMps: number[],
@@ -419,6 +419,32 @@ function plausibleMean(speeds: number[]): number {
   const plausible = speeds.filter((v) => v <= MAX_PLAUSIBLE_LIFT_VELOCITY_MPS);
   const pool = plausible.length > 0 ? plausible : speeds;
   return pool.reduce((a, b) => a + b, 0) / pool.length;
+}
+
+// Peak speed (m/s) over a short live segment -- e.g. the trace since the
+// previous rep boundary -- for bar-tracker-dialog.tsx's live spoken
+// velocity cue (see its own comment on why this exists alongside the
+// precise batch pipeline: same "cheap live estimate now, precise pass at
+// Stop" split the live rep counter above it already uses). Deliberately
+// simpler than robustPeakSpeed's percentile trim: a live segment is only
+// ~10-40 samples (one rep's worth at typical frame rates), too few for a
+// stable 95th-percentile cut to mean anything, so this instead just
+// excludes anything past the same physically-implausible ceiling
+// robustPeakSpeed uses and reports the max of what's left -- a single bad
+// frame skews a max more than a percentile would, but a live cue calling
+// out an occasional slightly-high number is a much smaller cost than the
+// latency a steadier estimator would add before it could speak at all.
+// Null when there's too little data in the segment to say anything.
+export function estimateLiveRepVelocityMps(segment: { t: number; y: number }[]): number | null {
+  if (segment.length < 4) return null;
+  let peak = 0;
+  for (let i = 1; i < segment.length - 1; i++) {
+    const dt = (segment[i + 1].t - segment[i - 1].t) / 1000;
+    if (dt <= 0) continue;
+    const speed = Math.abs(segment[i + 1].y - segment[i - 1].y) / dt;
+    if (speed <= MAX_PLAUSIBLE_LIFT_VELOCITY_MPS && speed > peak) peak = speed;
+  }
+  return peak > 0 ? Math.round(peak * 100) / 100 : null;
 }
 
 // Splits a continuous vertical-position trace into alternating up/down

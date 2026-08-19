@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
+import { apiRequest, ApiError, getJson, resolveApiUrl } from "@/lib/queryClient";
 import { VideoAnnotationDialog } from "@/components/video-annotation-dialog";
 import { VideoAnalysisDialog } from "@/components/video-analysis-dialog";
 import { toast } from "sonner";
@@ -75,10 +75,10 @@ export function SkillSessionsPanel({
                   {format(parseISO(s.createdAt), "MMM d, yyyy")}
                 </p>
               </div>
-              <video src={s.videoUrl} controls className="mb-2 w-full rounded-md bg-black" />
+              <video src={resolveApiUrl(s.videoUrl)} controls className="mb-2 w-full rounded-md bg-black" />
               {s.coachAnnotationUrl && (
                 <img
-                  src={s.coachAnnotationUrl}
+                  src={resolveApiUrl(s.coachAnnotationUrl)}
                   alt="Your annotation"
                   className="mb-2 w-full rounded-md border border-border"
                 />

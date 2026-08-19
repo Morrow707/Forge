@@ -7,7 +7,16 @@ name: iOS TestFlight
 # every commit. Trigger from the Actions tab, or `gh workflow run` /
 # GitHub's REST API from anywhere -- none of that requires a Mac.
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      lane:
+        description: "beta uploads to TestFlight (counts against Apple's rate-limited upload quota). verify_build only archives + signs on a real Xcode toolchain -- use it to check native (Swift/Xcode project) changes compile before spending an upload on them."
+        required: false
+        default: beta
+        type: choice
+        options:
+          - beta
+          - verify_build
 
 jobs:
   build-and-upload:
@@ -93,9 +102,9 @@ jobs:
           echo "$IOS_PROVISIONING_PROFILE_BASE64" | base64 --decode -o "$RUNNER_TEMP/profile.mobileprovision"
           echo "$APP_STORE_CONNECT_API_KEY_BASE64" | base64 --decode -o "$RUNNER_TEMP/app_store_connect_key.p8"
 
-      - name: Build and upload to TestFlight
+      - name: Build (and upload to TestFlight unless verify_build)
         working-directory: ios
-        run: bundle exec fastlane beta
+        run: bundle exec fastlane ${{ inputs.lane || 'beta' }}
         env:
           IOS_DIST_CERTIFICATE_PATH: ${{ runner.temp }}/dist_certificate.p12
           IOS_DIST_CERTIFICATE_PASSWORD: ${{ secrets.IOS_DIST_CERTIFICATE_PASSWORD }}

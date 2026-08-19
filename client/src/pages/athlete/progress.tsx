@@ -420,9 +420,9 @@ export default function AthleteProgress() {
                   }
                   addMetric.mutate();
                 }}
-                className="grid grid-cols-2 gap-3 sm:grid-cols-5 sm:items-end"
+                className="grid grid-cols-2 gap-3"
               >
-                <div className="space-y-1.5">
+                <div className="min-w-0 space-y-1.5">
                   <Label htmlFor="metric-date">Date</Label>
                   <Input
                     id="metric-date"
@@ -430,9 +430,10 @@ export default function AthleteProgress() {
                     value={date}
                     onChange={(e) => setDate(e.target.value)}
                     max={new Date().toISOString().slice(0, 10)}
+                    className="w-full min-w-0"
                   />
                 </div>
-                <div className="space-y-1.5">
+                <div className="min-w-0 space-y-1.5">
                   <Label htmlFor="metric-weight">Weight</Label>
                   <Input
                     id="metric-weight"
@@ -445,7 +446,7 @@ export default function AthleteProgress() {
                     placeholder="185"
                   />
                 </div>
-                <div className="space-y-1.5">
+                <div className="min-w-0 space-y-1.5">
                   <Label htmlFor="metric-unit">Unit</Label>
                   <Select value={weightUnit} onValueChange={(v) => setWeightUnit(v as "lbs" | "kg")}>
                     <SelectTrigger id="metric-unit">
@@ -457,7 +458,7 @@ export default function AthleteProgress() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-1.5">
+                <div className="min-w-0 space-y-1.5">
                   <Label htmlFor="metric-bf">Body fat % (optional)</Label>
                   <Input
                     id="metric-bf"
@@ -471,7 +472,7 @@ export default function AthleteProgress() {
                     placeholder="15"
                   />
                 </div>
-                <Button type="submit" disabled={addMetric.isPending}>
+                <Button type="submit" disabled={addMetric.isPending} className="col-span-2 w-full">
                   Log Entry
                 </Button>
               </form>

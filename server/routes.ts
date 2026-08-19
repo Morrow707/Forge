@@ -13,6 +13,7 @@ import { sendEmail } from "./email";
 import { buildProgressReportEmail } from "./progress-report";
 import { buildRecruitingProfilePdf } from "./recruiting-profile";
 import { buildTrainingHistoryCsv, buildTrainingHistoryPdf } from "./training-history-export";
+import { buildMovementScreenSheetPdf } from "./movement-screen-export";
 import { notifyUser } from "./notify";
 import {
   insertExerciseSchema,
@@ -36,6 +37,8 @@ import {
   pushSubscribeSchema,
   apnsSubscribeSchema,
   createWorkoutCommentSchema,
+  createSkillDayCommentSchema,
+  setSkillDayCompleteSchema,
   createExerciseReportSchema,
   resolveSubmissionSchema,
   coachAnalyticsQuerySchema,
@@ -44,6 +47,8 @@ import {
   createAnnotationSchema,
   testingTrendsQuerySchema,
   insertGoniometerReadingSchema,
+  createMovementScreenSchema,
+  updateMovementScreenBatterySchema,
   createGoalSchema,
   suggestGoalTargetSchema,
   sendChatMessageSchema,
@@ -53,6 +58,9 @@ import {
   sendSkillProgramChatMessageSchema,
   sendAiKnowledgeChatMessageSchema,
   applyKnowledgeProposalSchema,
+  sendForgeAiChatMessageSchema,
+  applyForgeAiEntryProposalSchema,
+  deactivateForgeAiEntrySchema,
   updateLegalAgreementSchema,
   substituteExerciseSchema,
   formFaultSchema,
@@ -483,10 +491,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
   app.use(attachNativeTokenAuth);
 
-  // Lets iOS approve this domain for Keychain/AutoFill password saving.
-  // Without this, WKWebView's password-save prompt fails with OSStatus
-  // -25293 because Apple can't verify the app is allowed to claim the
-  // domain's credentials.
+  // Apple's Shared Web Credentials verification -- fetched by iOS itself
+  // (not the app) over HTTPS on install/first launch, cached on-device, and
+  // never re-fetched from inside a request the app makes, so this has to be
+  // a real unauthenticated GET at exactly this path with no redirect. Lists
+  // the native app under "webcredentials" so PasswordAutofill.savePassword
+  // (see client/src/lib/native-auth.ts) is allowed to write into this
+  // domain's iCloud Keychain entry -- see ios/App/App/App.entitlements for
+  // the matching Associated Domains capability. No file extension is
+  // intentional; that's the filename Apple's fetcher looks for.
   app.get("/.well-known/apple-app-site-association", (_req, res) => {
     res.type("application/json").json({
       webcredentials: {
@@ -1777,6 +1790,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.status(201).json(result);
   });
 
+  // Forge AI -- the central, per-entry knowledge base superseding the
+  // single-document ai-knowledge/nutrition-knowledge chats above (kept
+  // running until every AI feature is migrated to read from here instead).
+  app.get("/api/admin/forge-ai", requireRole("admin"), async (_req, res) => {
+    const result = await storage.getForgeAiChat();
+    res.json(result);
+  });
+
+  app.post("/api/admin/forge-ai/chat", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = sendForgeAiChatMessageSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "Invalid message" });
+    const result = await storage.chatWithForgeAi(user.id, parsed.data.content, parsed.data.image);
+    res.status(201).json(result);
+  });
+
+  // Commits an entry the chat above proposed -- the admin has seen it
+  // client-side and is choosing to apply it. Nothing reaches
+  // aiKnowledgeEntries (read platform-wide, once features are wired to it)
+  // without this explicit step.
+  app.post("/api/admin/forge-ai/apply", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = applyForgeAiEntryProposalSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "Invalid entry" });
+    const result = await storage.applyForgeAiEntryProposal(user.id, parsed.data);
+    res.status(201).json(result);
+  });
+
+  app.post("/api/admin/forge-ai/entries/:id/deactivate", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ message: "Invalid id" });
+    const parsed = deactivateForgeAiEntrySchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "A reason is required" });
+    const result = await storage.deactivateForgeAiEntry(user.id, id, parsed.data.reason);
+    if (!result) return res.status(404).json({ message: "Entry not found" });
+    res.json(result);
+  });
+
+  // Platform-wide aggregate athlete data -- every athlete across every
+  // coach's roster, exact values, no names/teams/locations. Loaded on
+  // demand from within the Forge AI page rather than eagerly, since it's
+  // the first cross-coach data access in the app and each view is logged.
+  app.get("/api/admin/aggregate-athlete-data", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const result = await storage.getAggregateAthleteData(user.id);
+    res.json(result);
+  });
+
   // The clickwrap agreement every new coach/athlete accepts at signup (see
   // GET /api/legal-agreement above and signupSchema's agreedToTerms field).
   // A direct edit, not a propose-then-review chat flow like ai-knowledge
@@ -2253,6 +2315,96 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(204).end();
     },
   );
+
+  // Movement Screen -- see shared/movement-screen.ts and storage.ts's own
+  // comments for the data model and ownership/forking rules.
+  app.get("/api/coach/movement-screens/batteries", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const batteries = await storage.getMovementScreenBatteries(user.id);
+    res.json(batteries);
+  });
+
+  app.get("/api/coach/movement-screens/batteries/:id", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const detail = await storage.getMovementScreenBatteryDetail(user.id, Number(req.params.id));
+    if (!detail) return res.status(404).json({ message: "Battery not found" });
+    res.json(detail);
+  });
+
+  app.post("/api/coach/movement-screens/batteries/:id/fork", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const name = typeof req.body?.name === "string" ? req.body.name : undefined;
+    const battery = await storage.forkMovementScreenBattery(user.id, Number(req.params.id), name);
+    if (!battery) return res.status(404).json({ message: "Battery not found" });
+    res.status(201).json(battery);
+  });
+
+  app.put("/api/coach/movement-screens/batteries/:id", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = updateMovementScreenBatterySchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    const battery = await storage.updateMovementScreenBattery(user.id, Number(req.params.id), parsed.data);
+    if (!battery) return res.status(404).json({ message: "Battery not found, or it's the Forge-official one -- fork it first" });
+    res.json(battery);
+  });
+
+  app.delete("/api/coach/movement-screens/batteries/:id", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const ok = await storage.deleteMovementScreenBattery(user.id, Number(req.params.id));
+    if (!ok) return res.status(404).json({ message: "Battery not found, or it's the Forge-official one" });
+    res.status(204).end();
+  });
+
+  app.get("/api/coach/movement-screens/batteries/:id/print.pdf", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const detail = await storage.getMovementScreenBatteryDetail(user.id, Number(req.params.id));
+    if (!detail) return res.status(404).json({ message: "Battery not found" });
+    const pdf = await buildMovementScreenSheetPdf(detail.battery.name, detail.tests);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${detail.battery.name.replace(/[^a-z0-9]+/gi, "-")}.pdf"`);
+    res.send(pdf);
+  });
+
+  app.post("/api/coach/movement-screens/batteries/:id/analyze-photo", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = z.object({ images: photoImagesSchema }).safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    const result = await storage.analyzeMovementScreenPhoto(user.id, Number(req.params.id), parsed.data.images);
+    if ("error" in result) return res.status(422).json({ message: result.error });
+    res.json(result);
+  });
+
+  app.get("/api/coach/roster/:athleteId/movement-screens", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const screens = await storage.getMovementScreensForAthlete(user.id, Number(req.params.athleteId));
+    if (screens === null) return res.status(404).json({ message: "Athlete not found" });
+    res.json(screens);
+  });
+
+  app.post("/api/coach/roster/:athleteId/movement-screens", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = createMovementScreenSchema.safeParse({ ...req.body, athleteId: Number(req.params.athleteId) });
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    const screen = await storage.createMovementScreen(user.id, parsed.data);
+    if (!screen) return res.status(404).json({ message: "Athlete not found" });
+    res.status(201).json(screen);
+  });
+
+  app.get("/api/coach/movement-screens/:id", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const detail = await storage.getMovementScreenDetail(user.id, Number(req.params.id));
+    if (!detail) return res.status(404).json({ message: "Screen not found" });
+    res.json(detail);
+  });
+
+  // Admin-only, redacted (no name/team, exact score values) -- see
+  // getAggregateMovementScreenData's own comment; same access-log audit
+  // trail as /api/admin/aggregate-athlete-data.
+  app.get("/api/admin/movement-screens/aggregate", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const result = await storage.getAggregateMovementScreenData(user.id);
+    res.json(result);
+  });
 
   // Injury history -- a coach can view and log entries for their own
   // roster athlete, same roster-scoped pattern as goniometer readings
@@ -3838,6 +3990,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
+  // Exact mirror of the two routes above, for a skill day instead of a
+  // strength program day -- see the schema comment on skillDayComments.
+  app.get(
+    "/api/coach/skill-assignments/:assignmentId/days/:skillProgramDayId/comments",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const assignmentId = Number(req.params.assignmentId);
+      const skillProgramDayId = Number(req.params.skillProgramDayId);
+      const owned = await storage.getSkillAssignmentForCoach(user.id, assignmentId);
+      if (!owned) return res.status(404).json({ message: "Skill assignment not found" });
+      const comments = await storage.getSkillDayComments(assignmentId, skillProgramDayId);
+      res.json(comments);
+    },
+  );
+
+  app.post(
+    "/api/coach/skill-assignments/:assignmentId/days/:skillProgramDayId/comments",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const assignmentId = Number(req.params.assignmentId);
+      const skillProgramDayId = Number(req.params.skillProgramDayId);
+      const owned = await storage.getSkillAssignmentForCoach(user.id, assignmentId);
+      if (!owned) return res.status(404).json({ message: "Skill assignment not found" });
+      const parsed = createSkillDayCommentSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      const comment = await storage.addSkillDayComment(assignmentId, skillProgramDayId, user.id, parsed.data);
+
+      const hasVideo = !!parsed.data.videoUrl || !!parsed.data.imageUrl;
+      const title = hasVideo ? "New video from your coach" : "New comment from your coach";
+      const body = `${user.name}: ${parsed.data.body}`;
+      await notifyUser(owned.athleteId, hasVideo ? "video" : "comment", title, body, "/athlete");
+
+      res.status(201).json(comment);
+    },
+  );
+
   // Coach draws on a paused frame of an athlete's video, client-side canvas
   // produces a PNG data URL, decoded and written to disk here -- the
   // resulting /uploads/annotations/... URL is then posted as imageUrl on a
@@ -4550,21 +4742,89 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(detail);
   });
 
-  // Read-only skill-day view -- the day's plan, not a workout page. Camera
-  // captures (sprint tracking below) are the only thing actually logged
-  // for a skill day so far.
+  // Skill-day view -- the day's plan, plus (when ?date= is given) that
+  // occurrence's completion state. date is optional since the coach-preview
+  // path through SkillDayViewDialog has none to give (it's previewing the
+  // program's structure, not one athlete's specific occurrence of it).
   app.get(
     "/api/athlete/skill-day/:skillAssignmentId/:skillProgramDayId",
     requireRole("athlete"),
     async (req, res) => {
       const user = currentUser(req);
+      const date = typeof req.query.date === "string" ? req.query.date : undefined;
       const detail = await storage.getSkillDayForAthlete(
         user.id,
         Number(req.params.skillAssignmentId),
         Number(req.params.skillProgramDayId),
+        date,
       );
       if (!detail) return res.status(404).json({ message: "Skill session not found" });
       res.json(detail);
+    },
+  );
+
+  app.post(
+    "/api/athlete/skill-day/:skillAssignmentId/:skillProgramDayId/complete",
+    requireRole("athlete"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const parsed = setSkillDayCompleteSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      const log = await storage.setSkillDayComplete(
+        user.id,
+        Number(req.params.skillAssignmentId),
+        Number(req.params.skillProgramDayId),
+        parsed.data.date,
+        parsed.data.completed,
+      );
+      if (!log) return res.status(404).json({ message: "Skill assignment not found" });
+      res.status(200).json(log);
+    },
+  );
+
+  app.get(
+    "/api/athlete/skill-assignments/:assignmentId/days/:skillProgramDayId/comments",
+    requireRole("athlete"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const assignmentId = Number(req.params.assignmentId);
+      const skillProgramDayId = Number(req.params.skillProgramDayId);
+      const owned = await storage.getSkillAssignmentForAthlete(user.id, assignmentId);
+      if (!owned) return res.status(404).json({ message: "Skill assignment not found" });
+      const comments = await storage.getSkillDayComments(assignmentId, skillProgramDayId);
+      res.json(comments);
+    },
+  );
+
+  app.post(
+    "/api/athlete/skill-assignments/:assignmentId/days/:skillProgramDayId/comments",
+    requireRole("athlete"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const assignmentId = Number(req.params.assignmentId);
+      const skillProgramDayId = Number(req.params.skillProgramDayId);
+      const owned = await storage.getSkillAssignmentForAthlete(user.id, assignmentId);
+      if (!owned) return res.status(404).json({ message: "Skill assignment not found" });
+      const parsed = createSkillDayCommentSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      const comment = await storage.addSkillDayComment(assignmentId, skillProgramDayId, user.id, parsed.data);
+
+      // Same "self-assigned has nobody to notify" guard as the sprint/
+      // mechanics fault notification below -- a Free Agent's own skill
+      // program (or self-enrolled Class lesson) stores their own id as
+      // coachId, so there's no real coach on the other end of this thread.
+      if (owned.coachId !== user.id) {
+        const hasVideo = !!parsed.data.videoUrl || !!parsed.data.imageUrl;
+        const title = hasVideo ? "New video from an athlete" : "New comment from an athlete";
+        const body = `${user.name}: ${parsed.data.body}`;
+        await notifyUser(owned.coachId, hasVideo ? "video" : "comment", title, body, "/coach/roster");
+      }
+
+      res.status(201).json(comment);
     },
   );
 
@@ -4717,6 +4977,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         legDriveFlag.coachId,
         "leg_asymmetry",
         `${user.name} showed a leg-drive imbalance today`,
+        body,
+        "/coach/analytics",
+      );
+    }
+    // Same treatment as skill-session faults (see POST
+    // /api/athlete/skill-session-logs) -- strength-side form faults
+    // previously only ever surfaced if a coach happened to open the set
+    // itself.
+    const formFaultFlag = await storage.evaluateFormFaultFlags(parsed.data.assignmentId, parsed.data.entries);
+    if (formFaultFlag) {
+      const body = formFaultFlag.flags.map((f) => `${f.exerciseName}: ${f.faultLabels.join("; ")}`).join(" · ");
+      await notifyUser(
+        formFaultFlag.coachId,
+        "form_fault",
+        `${user.name} had a form flag today`,
         body,
         "/coach/analytics",
       );
@@ -5240,6 +5515,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const parsed = sendSkillProgramChatMessageSchema.safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ message: "Invalid message" });
       const result = await storage.generateSkillProgramFromChat(id, user.id, parsed.data.content);
+      res.status(201).json(result);
+    },
+  );
+
+  // "Full function" AI skill form check -- exact mirror of the strength
+  // side's /api/athlete/programs/:id/form-check above (see
+  // storage.submitSkillFormCheck for why this is the one place the AI
+  // critiques technique with no human review step).
+  app.post(
+    "/api/athlete/skill-programs/:id/form-check",
+    requireRole("athlete"),
+    requireFreeAgent,
+    requirePaidAiAccess("skillsAi"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const id = Number(req.params.id);
+      const owned = await assertCoachOwnsSkillProgram(user.id, id);
+      if (!owned) return res.status(404).json({ message: "Skill program not found" });
+      const schema = z.object({
+        exerciseName: z.string().trim().min(1).max(200),
+        images: z
+          .array(
+            z.object({
+              mediaType: z.enum(["image/jpeg", "image/png"]),
+              data: z.string().min(1),
+            }),
+          )
+          .min(1)
+          .max(6),
+      });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      const result = await storage.submitSkillFormCheck(id, user.id, parsed.data.exerciseName, parsed.data.images);
+      if (!result) return res.status(400).json({ message: "This skill program isn't AI-authored yet" });
       res.status(201).json(result);
     },
   );

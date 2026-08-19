@@ -40,6 +40,7 @@ import { NotificationBell } from "@/components/notification-bell";
 import { NotificationSettingsDialog } from "@/components/notification-settings-dialog";
 import { CoachingStaffDialog } from "@/components/coaching-staff-dialog";
 import { TeamBrandingDialog } from "@/components/team-branding-dialog";
+import { NonIosTrackingNotice } from "@/components/non-ios-tracking-warning";
 import { hexToHslTriplet, contrastForegroundHsl } from "@/lib/color";
 import { COACH_FEATURE_FIELDS, type CoachFeature } from "@shared/team-features";
 
@@ -71,6 +72,7 @@ const coachNav: NavItem[] = [
     ],
   },
   { href: "/coach/roster", label: "Roster & Teams", icon: Users },
+  { href: "/coach/movement-screens", label: "Movement Screens", icon: ClipboardCheck },
   { href: "/coach/nutrition", label: "Nutrition", icon: Apple },
   { href: "/coach/analytics", label: "Analytics", icon: LineChart },
   { href: "/coach/leaderboard", label: "Leaderboard", icon: Trophy },
@@ -113,8 +115,7 @@ const adminNav: NavItem[] = [
   { href: "/admin/classes-analytics", label: "Class Analytics", icon: TrendingUp },
   { href: "/admin/coaches-corner", label: "Coaches Corner", icon: BookOpen },
   { href: "/admin/review", label: "Review Queue", icon: ClipboardCheck },
-  { href: "/admin/ai-knowledge", label: "Teach AI", icon: Sparkles },
-  { href: "/admin/nutrition-knowledge", label: "Teach Nutrition AI", icon: Apple },
+  { href: "/admin/forge-ai", label: "Forge AI", icon: Sparkles },
   { href: "/admin/platform-trends", label: "Platform Trends", icon: BarChart3 },
   { href: "/admin/videos", label: "Video Storage", icon: HardDrive },
   { href: "/admin/legal-agreement", label: "Legal Agreement", icon: FileText },
@@ -212,7 +213,10 @@ export function AppShell({
       : user?.role === "admin"
         ? adminNav
         : isFreeAgent
-          ? athleteNav
+          // A Free Agent has no team, so Team Board (a coach's roster-wide
+          // chat) has nobody on the other end -- same "would just 403/be
+          // empty" reasoning as the coached-athlete filter below.
+          ? athleteNav.filter((item) => item.href !== "/athlete/team-board")
           : athleteNav.filter((item) => item.href !== "/athlete/programs" && item.href !== "/athlete/chat")
   ).filter((item) => !disabledNavHrefs.has(item.href));
 
@@ -237,7 +241,7 @@ export function AppShell({
   return (
     <div
       className={cn(
-        "min-h-screen bg-background",
+        "app-shell-root min-h-screen bg-background",
         fitScreen && "flex flex-col md:h-screen md:overflow-hidden",
       )}
       style={brandStyle}
@@ -628,6 +632,7 @@ export function AppShell({
       {user?.role === "coach" && (
         <TeamBrandingDialog open={teamBrandingOpen} onOpenChange={setTeamBrandingOpen} />
       )}
+      <NonIosTrackingNotice />
     </div>
   );
 }

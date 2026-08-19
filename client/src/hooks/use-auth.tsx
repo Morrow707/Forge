@@ -1,6 +1,9 @@
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, useContext, useEffect, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiRequest, ApiError, setNativeToken } from "@/lib/queryClient";
+import { apiRequest, ApiError, getQueryFn, setNativeToken } from "@/lib/queryClient";
+import { savePasswordToKeychain } from "@/lib/native-auth";
+import { logDebug } from "@/lib/debug-console";
+import { flushPendingLogs } from "@/lib/offline-queue";
 import { toast } from "sonner";
 import type { PublicUser } from "@shared/schema";
 
@@ -19,6 +22,11 @@ type LoginPayload = { email: string; password: string };
 type AuthContextValue = {
   user: PublicUser | null | undefined;
   isLoading: boolean;
+  // True once the auth check has failed and exhausted its retries without
+  // ever getting a real answer (network error, server unreachable) --
+  // distinct from user === null, which means the server actively said "no
+  // one is logged in." See AuthProvider's own comment on the query above.
+  isError: boolean;
   loginMutation: ReturnType<typeof useLoginMutation>;
   signupMutation: ReturnType<typeof useSignupMutation>;
   logoutMutation: ReturnType<typeof useLogoutMutation>;
@@ -30,14 +38,37 @@ function useLoginMutation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (payload: LoginPayload) => {
+      logDebug("AUTH", `login mutation start (${payload.email})`);
       const res = await apiRequest("POST", "/api/auth/login", payload);
+      logDebug("AUTH", `login POST responded ${res.status}`);
       return (await res.json()) as PublicUser & { nativeToken?: string };
     },
-    onSuccess: ({ nativeToken, ...user }) => {
+    onSuccess: ({ nativeToken, ...user }, variables) => {
+      logDebug("AUTH", `login succeeded, nativeToken=${nativeToken ? "present" : "absent"}`);
       setNativeToken(nativeToken);
       qc.setQueryData(["/api/auth/me"], user);
+      // A stalled session earlier in this browser/app may have left a
+      // workout log queued locally instead of lost -- replay it now that
+      // there's a fresh, confirmed-valid session to save it against,
+      // rather than waiting on a full app reload or a network 'online'
+      // event that might never fire again.
+      flushPendingLogs();
+      logDebug("AUTH", "calling savePasswordToKeychain()...");
+      // Temporary visible surfacing while this is being debugged on-device
+      // (see native-auth.ts's own comment) -- a TestFlight tester has no
+      // way to see the console.error there, and this has been silently
+      // failing, so a toast is the only way to find out why without a
+      // Mac/Xcode in hand.
+      savePasswordToKeychain(variables.email, variables.password)
+        .then(() => logDebug("AUTH", "savePasswordToKeychain() resolved"))
+        .catch((err) => {
+          const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+          logDebug("AUTH", `savePasswordToKeychain() rejected: ${detail}`);
+          toast.error(err instanceof Error ? `Couldn't save password: ${err.message}` : "Couldn't save password");
+        });
     },
     onError: (err: ApiError) => {
+      logDebug("AUTH", `login failed: ${err.status} ${err.message}`);
       toast.error(err.message || "Login failed");
     },
   });
@@ -47,14 +78,31 @@ function useSignupMutation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (payload: SignupPayload) => {
+      logDebug("AUTH", `signup mutation start (${payload.email})`);
       const res = await apiRequest("POST", "/api/auth/signup", payload);
+      logDebug("AUTH", `signup POST responded ${res.status}`);
       return (await res.json()) as PublicUser & { nativeToken?: string };
     },
-    onSuccess: ({ nativeToken, ...user }) => {
+    onSuccess: ({ nativeToken, ...user }, variables) => {
+      logDebug("AUTH", `signup succeeded, nativeToken=${nativeToken ? "present" : "absent"}`);
       setNativeToken(nativeToken);
       qc.setQueryData(["/api/auth/me"], user);
+      logDebug("AUTH", "calling savePasswordToKeychain()...");
+      // Temporary visible surfacing while this is being debugged on-device
+      // (see native-auth.ts's own comment) -- a TestFlight tester has no
+      // way to see the console.error there, and this has been silently
+      // failing, so a toast is the only way to find out why without a
+      // Mac/Xcode in hand.
+      savePasswordToKeychain(variables.email, variables.password)
+        .then(() => logDebug("AUTH", "savePasswordToKeychain() resolved"))
+        .catch((err) => {
+          const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+          logDebug("AUTH", `savePasswordToKeychain() rejected: ${detail}`);
+          toast.error(err instanceof Error ? `Couldn't save password: ${err.message}` : "Couldn't save password");
+        });
     },
     onError: (err: ApiError) => {
+      logDebug("AUTH", `signup failed: ${err.status} ${err.message}`);
       toast.error(err.message || "Signup failed");
     },
   });
@@ -64,9 +112,11 @@ function useLogoutMutation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async () => {
+      logDebug("AUTH", "logout mutation start");
       await apiRequest("POST", "/api/auth/logout");
     },
     onSuccess: () => {
+      logDebug("AUTH", "logout succeeded, clearing nativeToken + query cache");
       setNativeToken(null);
       qc.setQueryData(["/api/auth/me"], null);
       qc.clear();
@@ -74,51 +124,43 @@ function useLogoutMutation() {
   });
 }
 
-// ProtectedRoute unmounts every page in the app -- including a mid-workout
-// athlete's only copy of whatever isn't saved yet -- the instant this comes
-// back "no user." A phone waking from being backgrounded (screen lock, a
-// gym wifi dead zone, the 'online' event firing a beat before the
-// connection is actually stable) very often fires this check's first
-// attempt before the network is really back, so -- same reasoning as the
-// day-detail query in workout.tsx -- a raw failed fetch gets a couple of
-// quick retries before being believed. An ApiError means the server itself
-// answered; on401 already resolves a real 401 to `null` without throwing,
-// so anything that reaches the catch here is either a different ApiError
-// (a real problem, rethrown immediately) or the request never completing.
-async function fetchCurrentUser(): Promise<PublicUser | null> {
-  const maxAttempts = 3;
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      const res = await apiRequest("GET", "/api/auth/me");
-      return (await res.json()) as PublicUser;
-    } catch (err) {
-      if (err instanceof ApiError) {
-        if (err.status === 401) return null;
-        throw err;
-      }
-      if (attempt < maxAttempts) {
-        await new Promise((r) => setTimeout(r, 400 * attempt));
-        continue;
-      }
-      throw err;
-    }
-  }
-  throw new Error("Unreachable");
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const { data: user, isLoading } = useQuery<PublicUser | null>({
+  // The one query in the app that wants a 401 treated as valid data --
+  // "no one is logged in" -- rather than an error (see queryClient.ts).
+  // Retries against the global default (retry: false) specifically because
+  // this query runs right on app resume from background, exactly the
+  // moment a mobile OS's network interface is most likely to still be
+  // re-establishing itself -- a transient failure here used to look
+  // identical to "not logged in" to every caller (both collapsed to a
+  // falsy `user`), bouncing someone with a completely valid session back
+  // to the login form over a one-off network blip. isError is exposed
+  // below specifically so ProtectedRoute/HomeRedirect can tell "confirmed
+  // logged out" (user === null) apart from "couldn't check" (isError, user
+  // stays undefined) and stop short of a wrong redirect in the second case.
+  const {
+    data: user,
+    isLoading,
+    isError,
+  } = useQuery<PublicUser | null>({
     queryKey: ["/api/auth/me"],
-    queryFn: fetchCurrentUser,
+    queryFn: getQueryFn({ on401: "returnNull" }),
+    retry: 3,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
   });
 
   const loginMutation = useLoginMutation();
   const signupMutation = useSignupMutation();
   const logoutMutation = useLogoutMutation();
 
+  useEffect(() => {
+    if (isLoading) return;
+    logDebug("AUTH", isError ? "auth/me check errored" : `auth/me resolved: ${user ? `logged in as ${user.role}` : "logged out"}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading, isError, user]);
+
   return (
     <AuthContext.Provider
-      value={{ user, isLoading, loginMutation, signupMutation, logoutMutation }}
+      value={{ user, isLoading, isError, loginMutation, signupMutation, logoutMutation }}
     >
       {children}
     </AuthContext.Provider>

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Dialog,
@@ -9,7 +10,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { getJson } from "@/lib/queryClient";
 import { externalLinkClick } from "@/lib/open-external";
-import { Copy, CalendarDays, CalendarPlus } from "lucide-react";
+import { shareOrDownloadFile } from "@/lib/share-file";
+import { Copy, CalendarDays, CalendarPlus, Download } from "lucide-react";
 import { toast } from "sonner";
 
 /** Shows a read-only .ics subscribe URL -- used both by an athlete syncing
@@ -28,6 +30,8 @@ export function CalendarLinkDialog({
   title: string;
   fetchUrl: string;
 }) {
+  const [importing, setImporting] = useState(false);
+
   const { data, isLoading } = useQuery<{ token: string }>({
     queryKey: [fetchUrl],
     queryFn: () => getJson(fetchUrl),
@@ -40,6 +44,26 @@ export function CalendarLinkDialog({
   // "add subscription" flow directly, no copy-pasting required.
   const webcalUrl = url.replace(/^https?:\/\//, "webcal://");
   const googleUrl = url ? `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(url)}` : "";
+
+  // "Add to Calendar" above only subscribes -- Apple Calendar polls a
+  // webcal:// subscription on its own slow schedule, so it can look like it
+  // did nothing. This downloads the same .ics file directly and hands it to
+  // the native share sheet, where iOS offers an immediate one-time import of
+  // every event right now instead of waiting on a background sync.
+  async function handleImportNow() {
+    setImporting(true);
+    try {
+      await shareOrDownloadFile(
+        `/api/calendar/${data!.token}.ics`,
+        "forge-calendar.ics",
+        "Forge Training Calendar",
+      );
+    } catch {
+      toast.error("Couldn't download the calendar file");
+    } finally {
+      setImporting(false);
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -58,10 +82,17 @@ export function CalendarLinkDialog({
           <div className="h-16 animate-pulse rounded-md bg-surface" />
         ) : (
           <div className="space-y-3">
-            <Button type="button" className="w-full" asChild>
+            <Button type="button" className="w-full" onClick={handleImportNow} disabled={importing}>
+              <Download className="h-4 w-4" />
+              {importing ? "Preparing..." : "Import Events Now"}
+            </Button>
+            <p className="text-center text-xs text-muted-foreground">
+              Downloads today's schedule and lets you import every event right away.
+            </p>
+            <Button type="button" variant="outline" className="w-full" asChild>
               <a href={webcalUrl}>
                 <CalendarPlus className="h-4 w-4" />
-                Add to Calendar
+                Subscribe to Calendar
               </a>
             </Button>
             <Button type="button" variant="outline" className="w-full" asChild>
@@ -71,8 +102,8 @@ export function CalendarLinkDialog({
               </a>
             </Button>
             <p className="text-center text-xs text-muted-foreground">
-              "Add to Calendar" works on iPhone/iPad and most calendar apps. Use the Google option
-              on Android or if the first one doesn't open anything.
+              "Subscribe to Calendar" keeps it updated automatically but can take a while to show
+              new events. Use Google Calendar's option on Android.
             </p>
             <div className="space-y-2 border-t pt-3">
               <p className="break-all rounded bg-surface-elevated p-2 font-mono text-xs">{url}</p>

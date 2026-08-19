@@ -653,6 +653,11 @@ export const skillPrograms = pgTable("skill_programs", {
   name: text("name").notNull(),
   description: text("description"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  // Exact mirror of programs.aiAuthored -- see its own comment. Gates the
+  // "full function" AI skill form-check the same way, for the same reason:
+  // only safe to let the AI critique technique unsupervised when it's
+  // already this skill program's author.
+  aiAuthored: boolean("ai_authored").notNull().default(false),
 });
 
 export const skillProgramWeeks = pgTable(
@@ -774,6 +779,20 @@ export const skillSessionLogs = pgTable(
     armSlotDeg: real("arm_slot_deg"),
     armSlotLabel: text("arm_slot_label"),
     wellSequenced: boolean("well_sequenced"),
+    // "throw" mode only -- see MechanicsResult.peakWristSpeedMps's own
+    // comment in mechanics-tracking.ts.
+    peakWristSpeedMps: real("peak_wrist_speed_mps"),
+    // Both modes -- see MechanicsResult.strideLengthM's own comment in
+    // mechanics-tracking.ts.
+    strideLengthM: real("stride_length_m"),
+    // "throw" mode only -- see the matching MechanicsResult fields' own
+    // comments in mechanics-tracking.ts (a basketball jump shot's release
+    // point, sharing the "throw" mode arm-slot/peak-wrist-speed metrics).
+    elbowExtensionDeg: real("elbow_extension_deg"),
+    releaseHeightM: real("release_height_m"),
+    setPointPauseSeconds: real("set_point_pause_seconds"),
+    // Both modes -- see MechanicsResult.kneeBendDepthDeg's own comment.
+    kneeBendDepthDeg: real("knee_bend_depth_deg"),
     // Both optional opt-ins, not part of a normal capture -- the athlete
     // must explicitly choose to keep the clip (see the privacy comment on
     // MechanicsTrackerDialog; a capture is ephemeral by default) before
@@ -789,6 +808,68 @@ export const skillSessionLogs = pgTable(
   (table) => ({
     athleteIdx: index("skill_session_logs_athlete_idx").on(table.athleteId),
     assignmentIdx: index("skill_session_logs_assignment_idx").on(table.skillAssignmentId),
+  }),
+);
+
+// Day-level "I did this" marker for a skill day, exactly parallel to
+// workoutLogs on the strength side -- separate from skillSessionLogs (one
+// row per camera-tracked drill capture) since a skill day can include
+// untracked drills too, and a whole day needs one completion state
+// regardless of how many of its drills were actually camera-tracked.
+export const skillDayLogs = pgTable(
+  "skill_day_logs",
+  {
+    id: serial("id").primaryKey(),
+    skillAssignmentId: integer("skill_assignment_id")
+      .notNull()
+      .references(() => skillAssignments.id, { onDelete: "cascade" }),
+    skillProgramDayId: integer("skill_program_day_id")
+      .notNull()
+      .references(() => skillProgramDays.id, { onDelete: "cascade" }),
+    athleteId: integer("athlete_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    date: date("date").notNull(),
+    completed: boolean("completed").notNull().default(false),
+    completedAt: timestamp("completed_at"),
+  },
+  (table) => ({
+    dayInstanceIdx: uniqueIndex("skill_day_log_day_instance_idx").on(
+      table.skillAssignmentId,
+      table.skillProgramDayId,
+      table.date,
+    ),
+  }),
+);
+
+// A two-way thread on a specific day of a specific skill assignment --
+// exact mirror of workoutComments (see its own comment) for the skill side:
+// a question about a drill, an attached video, a coach's (or, for a Free
+// Agent's self-assigned day, the AI's) reply.
+export const skillDayComments = pgTable(
+  "skill_day_comments",
+  {
+    id: serial("id").primaryKey(),
+    skillAssignmentId: integer("skill_assignment_id")
+      .notNull()
+      .references(() => skillAssignments.id, { onDelete: "cascade" }),
+    skillProgramDayId: integer("skill_program_day_id")
+      .notNull()
+      .references(() => skillProgramDays.id, { onDelete: "cascade" }),
+    authorId: integer("author_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    body: text("body").notNull(),
+    videoUrl: text("video_url"),
+    imageUrl: text("image_url"),
+    date: text("date"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    assignmentDayIdx: index("skill_day_comments_assignment_day_idx").on(
+      table.skillAssignmentId,
+      table.skillProgramDayId,
+    ),
   }),
 );
 
@@ -1589,6 +1670,197 @@ export const insertGoniometerReadingSchema = z.object({
   notes: z.string().optional().nullable(),
 });
 
+// ---------- Movement Screen ----------
+// A coach/PT-administered battery of functional-movement tests (overhead
+// squat, Y-balance, etc.) under Forge's own name -- deliberately not built
+// as the trademarked, certification-gated FMS(R) system, so tests can be
+// added or dropped freely. Purely informational everywhere it's read:
+// nothing here gates a program or an assignment, same "flag, don't decide"
+// treatment health status already gets.
+export const movementScreenScoreTypeEnum = pgEnum("movement_screen_score_type", [
+  "grade_0_3",
+  "distance_in",
+  "time_sec",
+  "asymmetry_pct",
+]);
+export const movementScreenCaptureMethodEnum = pgEnum("movement_screen_capture_method", [
+  "manual",
+  "photo_import",
+  "camera_assisted",
+]);
+// Which side an individual RESULT belongs to -- distinct from lateralityEnum
+// above, which describes whether a battery TEST is scored per-side at all.
+export const bodySideEnum = pgEnum("body_side", ["left", "right"]);
+
+// A named, ordered test list. Forge ships one or more official batteries
+// (isForgeOfficial, owned by an admin account -- same explicit-flag pattern
+// classes.isForgeOfficial uses, since ownership can't just be inferred from
+// author role the way exercises do). A coach never edits an official
+// battery directly -- they fork it (forkedFromId) into their own copy via
+// the same duplicate-then-edit action program-list already has, and edit
+// that instead. Deleting a fork IS "revert to Forge's version" -- there's
+// nothing to lose, the original was never touched.
+export const movementScreenBatteries = pgTable("movement_screen_batteries", {
+  id: serial("id").primaryKey(),
+  coachId: integer("coach_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  isForgeOfficial: boolean("is_forge_official").notNull().default(false),
+  name: text("name").notNull(),
+  description: text("description"),
+  forkedFromId: integer("forked_from_id"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export type MovementScreenBattery = typeof movementScreenBatteries.$inferSelect;
+
+// The checklist definition -- drives both the printed score sheet and the
+// manual-entry form. testKey is the stable identity a captured result
+// snapshots (see movementScreenResults below), so re-ordering or
+// re-wording a test here never touches a result already recorded against
+// it.
+export const movementScreenBatteryTests = pgTable(
+  "movement_screen_battery_tests",
+  {
+    id: serial("id").primaryKey(),
+    batteryId: integer("battery_id")
+      .notNull()
+      .references(() => movementScreenBatteries.id, { onDelete: "cascade" }),
+    testKey: text("test_key").notNull(),
+    label: text("label").notNull(),
+    // Free text, not an enum -- purely a display grouping with no logic
+    // keyed off its exact value, so a coach can type whatever label makes
+    // sense to them instead of picking from a fixed list.
+    category: text("category").notNull(),
+    scoreType: movementScreenScoreTypeEnum("score_type").notNull(),
+    // The coach's own typed unit label (e.g. "reps", "sec", "0-3") shown on
+    // the print sheet and manual-entry form in place of the generic label
+    // movementScreenScoreUnit(scoreType) would otherwise produce -- see
+    // resolveMovementScreenUnitLabel in shared/movement-screen.ts. Null
+    // means "just use the generic one for this scoreType."
+    unitLabel: text("unit_label"),
+    side: lateralityEnum("side").notNull(),
+    instructions: text("instructions"),
+    sortOrder: integer("sort_order").notNull().default(0),
+  },
+  (table) => ({
+    batteryIdx: index("movement_screen_battery_tests_battery_idx").on(table.batteryId, table.sortOrder),
+  }),
+);
+
+export type MovementScreenBatteryTest = typeof movementScreenBatteryTests.$inferSelect;
+
+// One administered session. batteryId is nullable and purely a "what
+// template was this filled out from" pointer -- results below never depend
+// on it still existing or being unchanged.
+export const movementScreens = pgTable(
+  "movement_screens",
+  {
+    id: serial("id").primaryKey(),
+    athleteId: integer("athlete_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    coachId: integer("coach_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    batteryId: integer("battery_id").references(() => movementScreenBatteries.id, { onDelete: "set null" }),
+    date: date("date").notNull(),
+    captureMethod: movementScreenCaptureMethodEnum("capture_method").notNull().default("manual"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    athleteIdx: index("movement_screens_athlete_idx").on(table.athleteId, table.date),
+  }),
+);
+
+export type MovementScreen = typeof movementScreens.$inferSelect;
+
+// Self-contained per-test result -- testKey/label/category/scoreType are
+// snapshotted from the battery test at capture time, not FK'd, so editing a
+// battery later can never orphan or reinterpret a past result. side is null
+// for a bilateral test's single score, left/right for a unilateral test's
+// two. flagged is always computed at insert time (see createMovementScreen
+// in storage.ts) -- a grade<=1 threshold for grade_0_3 tests, or an
+// asymmetry check between a unilateral test's two sides -- never entered by
+// hand, since it's what drives both the corrective-exercise suggestions and
+// the AI athlete-context line.
+export const movementScreenResults = pgTable(
+  "movement_screen_results",
+  {
+    id: serial("id").primaryKey(),
+    screenId: integer("screen_id")
+      .notNull()
+      .references(() => movementScreens.id, { onDelete: "cascade" }),
+    testKey: text("test_key").notNull(),
+    label: text("label").notNull(),
+    category: text("category").notNull(),
+    scoreType: movementScreenScoreTypeEnum("score_type").notNull(),
+    unitLabel: text("unit_label"),
+    side: bodySideEnum("side"),
+    scoreValue: real("score_value").notNull(),
+    flagged: boolean("flagged").notNull().default(false),
+    notes: text("notes"),
+  },
+  (table) => ({
+    screenIdx: index("movement_screen_results_screen_idx").on(table.screenId),
+  }),
+);
+
+export type MovementScreenResult = typeof movementScreenResults.$inferSelect;
+
+const movementScreenCategorySchema = z.string().trim().min(1).max(40);
+const movementScreenScoreTypeSchema = z.enum(["grade_0_3", "distance_in", "time_sec", "asymmetry_pct"]);
+const movementScreenUnitLabelSchema = z.string().trim().max(20).optional().nullable();
+
+export const movementScreenBatteryTestInputSchema = z.object({
+  testKey: z
+    .string()
+    .trim()
+    .min(1)
+    .max(60)
+    .regex(/^[a-z0-9_]+$/, "lowercase letters, numbers, underscores only"),
+  label: z.string().trim().min(1).max(120),
+  category: movementScreenCategorySchema,
+  scoreType: movementScreenScoreTypeSchema,
+  unitLabel: movementScreenUnitLabelSchema,
+  side: z.enum(["bilateral", "unilateral"]),
+  instructions: z.string().trim().max(500).optional().nullable(),
+});
+export type MovementScreenBatteryTestInput = z.infer<typeof movementScreenBatteryTestInputSchema>;
+
+export const updateMovementScreenBatterySchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  description: z.string().trim().max(500).optional().nullable(),
+  tests: z.array(movementScreenBatteryTestInputSchema).min(1).max(30),
+});
+export type UpdateMovementScreenBatteryInput = z.infer<typeof updateMovementScreenBatterySchema>;
+
+export const movementScreenResultInputSchema = z.object({
+  testKey: z.string().trim().min(1).max(60),
+  label: z.string().trim().min(1).max(120),
+  category: movementScreenCategorySchema,
+  scoreType: movementScreenScoreTypeSchema,
+  unitLabel: movementScreenUnitLabelSchema,
+  side: z.enum(["left", "right"]).optional().nullable(),
+  scoreValue: z.number(),
+  notes: z.string().trim().max(300).optional().nullable(),
+});
+export type MovementScreenResultInput = z.infer<typeof movementScreenResultInputSchema>;
+
+export const createMovementScreenSchema = z.object({
+  athleteId: z.number().int(),
+  batteryId: z.number().int().optional().nullable(),
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD"),
+  captureMethod: z.enum(["manual", "photo_import", "camera_assisted"]).default("manual"),
+  notes: z.string().trim().max(1000).optional().nullable(),
+  results: z.array(movementScreenResultInputSchema).min(1).max(30),
+});
+export type CreateMovementScreenInput = z.infer<typeof createMovementScreenSchema>;
+
 // One AI-generated deficit within a weakness report -- see weaknessReports
 // below. category is free text (not an enum) since the AI names it from
 // whatever data actually produced the flag (e.g. "Joint Mobility",
@@ -1733,6 +2005,12 @@ export const injuryHistory = pgTable(
     occurredOn: date("occurred_on").notNull(),
     description: text("description"),
     resolved: boolean("resolved").notNull().default(false),
+    // Null while active, set the same moment `resolved` flips true (see
+    // setInjuryResolved in storage.ts) -- `resolved` alone can't answer how
+    // LONG an injury lasted, only whether it currently is or isn't over,
+    // which is what made it impossible to line an injury's actual duration
+    // up against the athlete's training log for that window.
+    resolvedOn: date("resolved_on"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({
@@ -2643,6 +2921,28 @@ export const academyQuizAnswers = pgTable(
   }),
 );
 
+export const movementScreenBatteriesRelations = relations(movementScreenBatteries, ({ many }) => ({
+  tests: many(movementScreenBatteryTests),
+}));
+
+export const movementScreenBatteryTestsRelations = relations(movementScreenBatteryTests, ({ one }) => ({
+  battery: one(movementScreenBatteries, {
+    fields: [movementScreenBatteryTests.batteryId],
+    references: [movementScreenBatteries.id],
+  }),
+}));
+
+export const movementScreensRelations = relations(movementScreens, ({ many }) => ({
+  results: many(movementScreenResults),
+}));
+
+export const movementScreenResultsRelations = relations(movementScreenResults, ({ one }) => ({
+  screen: one(movementScreens, {
+    fields: [movementScreenResults.screenId],
+    references: [movementScreens.id],
+  }),
+}));
+
 export const academyTracksRelations = relations(academyTracks, ({ many }) => ({
   lessons: many(academyLessons),
   quizQuestions: many(academyQuizQuestions),
@@ -2817,6 +3117,260 @@ export const nutritionKnowledge = pgTable("nutrition_knowledge", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+export const aiKnowledgeMaturityEnum = pgEnum("ai_knowledge_maturity", ["established", "experimental"]);
+export const aiKnowledgeSourceTypeEnum = pgEnum("ai_knowledge_source_type", [
+  "chat",
+  "url",
+  "image",
+  "pasted_text",
+]);
+
+// One row per discrete taught fact/rule -- the central knowledge base every
+// AI feature on the platform reads from, superseding the single free-text
+// aiKnowledge/nutritionKnowledge documents above (kept in place, not
+// dropped, until the teaching-chat flow itself is migrated over to write
+// here instead). Per-entry rows rather than one big blob is what makes real
+// changelog history (aiKnowledgeChangelog below), cross-time contradiction
+// detection, and position/gender/age filtering possible -- diffing a single
+// document can't cleanly answer "did THIS specific rule change" or "which
+// entries actually apply to THIS athlete."
+export const aiKnowledgeEntries = pgTable(
+  "ai_knowledge_entries",
+  {
+    id: serial("id").primaryKey(),
+    content: text("content").notNull(),
+    // Organizational only (admin UI grouping) -- every entry is available to
+    // every AI feature regardless of category, matching the "one central
+    // AI" design; this never gates which prompts see it.
+    category: text("category"),
+    // All four null = a universal rule (applies to every athlete). Any
+    // combination narrows it -- e.g. position="linebacker" with gender/age
+    // left null applies to every linebacker regardless of gender or age.
+    position: text("position"),
+    gender: genderEnum("gender"),
+    ageMin: integer("age_min"),
+    ageMax: integer("age_max"),
+    maturity: aiKnowledgeMaturityEnum("maturity").notNull().default("established"),
+    sourceType: aiKnowledgeSourceTypeEnum("source_type").notNull().default("chat"),
+    // The original material this was taught from -- a URL, an excerpt of
+    // pasted text, or a note about an uploaded image -- kept so a rule can
+    // be traced back to where it came from later, not just what it
+    // currently says.
+    sourceExcerpt: text("source_excerpt"),
+    taughtBy: integer("taught_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // Soft-deactivation, not deletion -- "everything learned is knowledge
+    // gained" even once superseded. An inactive entry still exists for the
+    // changelog and contradiction-detection to reference; it's just
+    // excluded from what gets injected into live AI prompts.
+    active: boolean("active").notNull().default(true),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    activeIdx: index("ai_knowledge_entries_active_idx").on(table.active),
+  }),
+);
+
+export type AiKnowledgeEntry = typeof aiKnowledgeEntries.$inferSelect;
+
+export const aiKnowledgeChangeTypeEnum = pgEnum("ai_knowledge_change_type", [
+  "created",
+  "updated",
+  "corrected",
+  "deactivated",
+]);
+
+// Append-only history of every change to an aiKnowledgeEntries row -- what
+// it said before, what it says now, and why -- so a later, contradictory
+// teaching turn can be answered with "you taught this on [date] because
+// [reason] -- what's different now?" instead of nothing remembering it ever
+// happened. changeType distinguishes a genuine correction ("that was just
+// wrong") from an ordinary refinement, since those should be weighed
+// differently by anything reading this history back.
+export const aiKnowledgeChangelog = pgTable(
+  "ai_knowledge_changelog",
+  {
+    id: serial("id").primaryKey(),
+    entryId: integer("entry_id")
+      .notNull()
+      .references(() => aiKnowledgeEntries.id, { onDelete: "cascade" }),
+    previousContent: text("previous_content"),
+    newContent: text("new_content").notNull(),
+    reason: text("reason").notNull(),
+    changeType: aiKnowledgeChangeTypeEnum("change_type").notNull().default("updated"),
+    changedBy: integer("changed_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    entryIdx: index("ai_knowledge_changelog_entry_idx").on(table.entryId, table.createdAt),
+  }),
+);
+
+export type AiKnowledgeChangelogEntry = typeof aiKnowledgeChangelog.$inferSelect;
+
+// Audit trail for the platform-wide aggregate athlete data view (admin-only)
+// -- the first place admin can see every athlete's data across every
+// coach's roster, not just programs/classes admin owns itself, so who
+// looked and when is worth keeping a record of even though nothing here
+// restricts what they can see.
+export const aggregateDataAccessLog = pgTable("aggregate_data_access_log", {
+  id: serial("id").primaryKey(),
+  adminId: integer("admin_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  viewedAt: timestamp("viewed_at").notNull().defaultNow(),
+});
+
+export type AggregateDataAccessLogEntry = typeof aggregateDataAccessLog.$inferSelect;
+
+// One row per (entry, feature-call) match -- not a running counter on
+// aiKnowledgeEntries itself, so admin can see WHEN and WHERE an entry gets
+// pulled into context, not just how many times total. "Available to the
+// prompt" (this logs every entry buildForgeAiContext matched for a call),
+// not "the model definitely quoted it" -- true per-citation tracking would
+// need every consuming prompt to report back which specific rule it
+// leaned on, which is real future work; this is the honest, buildable
+// version: which taught knowledge is actually reaching real feature calls
+// versus sitting unused.
+export const aiKnowledgeUsageLog = pgTable(
+  "ai_knowledge_usage_log",
+  {
+    id: serial("id").primaryKey(),
+    entryId: integer("entry_id")
+      .notNull()
+      .references(() => aiKnowledgeEntries.id, { onDelete: "cascade" }),
+    // Which AI feature pulled it in -- "athlete_chat", "program_draft",
+    // "form_check", etc. (see buildForgeAiContext's own callers).
+    context: text("context").notNull(),
+    calledAt: timestamp("called_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    entryIdx: index("ai_knowledge_usage_log_entry_idx").on(table.entryId, table.calledAt),
+  }),
+);
+
+// The complement of the usage log above -- logged when a coaching-judgment
+// AI call had a specific athlete profile in view but nothing taught
+// matched it at all, so admin can see recurring blind spots ("guessed on
+// this position/age combo four times, nothing taught for it") instead of
+// only ever seeing what IS taught.
+export const aiKnowledgeGapLog = pgTable(
+  "ai_knowledge_gap_log",
+  {
+    id: serial("id").primaryKey(),
+    context: text("context").notNull(),
+    position: text("position"),
+    gender: genderEnum("gender"),
+    age: integer("age"),
+    calledAt: timestamp("called_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    contextIdx: index("ai_knowledge_gap_log_context_idx").on(table.context, table.calledAt),
+  }),
+);
+
+export const reflectionFindingTierEnum = pgEnum("reflection_finding_tier", [
+  "safety",
+  "informational",
+]);
+export const reflectionConfidenceEnum = pgEnum("reflection_confidence", [
+  "low",
+  "moderate",
+  "high",
+]);
+
+// Output of the automatic background reflection job (server/reflection-job.ts)
+// -- mines the aggregate athlete dataset and the injury/training-load link
+// for patterns worth an admin's attention, without waiting for an admin to
+// go looking. "safety" findings (e.g. injuries clustering after a
+// training-load spike) push through immediately regardless of notification
+// prefs, same "emergency reach" override notifyUser already has for
+// announcements; "informational" ones (e.g. a real population segment with
+// no established guidance taught for it) land in-app only. sampleSize +
+// confidence are stored columns, not just baked into the prose, so a
+// finding can never be read as more certain than the underlying N actually
+// supports. category is the dedup key the job checks before generating a
+// fresh finding -- the same real pattern shouldn't renotify on every run
+// while it's still true, only once per cooldown window.
+export const aiReflectionFindings = pgTable(
+  "ai_reflection_findings",
+  {
+    id: serial("id").primaryKey(),
+    tier: reflectionFindingTierEnum("tier").notNull(),
+    category: text("category").notNull(),
+    summary: text("summary").notNull(),
+    detail: text("detail").notNull(),
+    sampleSize: integer("sample_size").notNull(),
+    confidence: reflectionConfidenceEnum("confidence").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    categoryIdx: index("ai_reflection_findings_category_idx").on(table.category, table.createdAt),
+  }),
+);
+
+export type AiReflectionFinding = typeof aiReflectionFindings.$inferSelect;
+
+// Forge AI's own chat thread -- separate from aiKnowledgeMessages/
+// nutritionKnowledgeMessages above (those stay as-is, feeding the two old
+// documents, until they're retired). Reuses aiKnowledgeChatRoleEnum since
+// it's the same admin/assistant vocabulary, just a distinct conversation.
+export const forgeAiMessages = pgTable(
+  "forge_ai_messages",
+  {
+    id: serial("id").primaryKey(),
+    authorId: integer("author_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    role: aiKnowledgeChatRoleEnum("role").notNull(),
+    content: text("content").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    createdIdx: index("forge_ai_messages_created_idx").on(table.createdAt),
+  }),
+);
+
+export type ForgeAiMessage = typeof forgeAiMessages.$inferSelect;
+
+export const sendForgeAiChatMessageSchema = z.object({
+  content: z.string().trim().min(1), // no max -- admin gets an unbounded paste, see task list
+  // Same base64 image-block shape the meal-photo/food-scan AI routes
+  // already use (see /api/athlete/food/analyze-photo) -- never written to
+  // disk, only ever sent through to Claude for this one turn.
+  image: z.object({ mediaType: z.enum(["image/jpeg", "image/png"]), data: z.string().min(1) }).optional(),
+});
+export type SendForgeAiChatMessageInput = z.infer<typeof sendForgeAiChatMessageSchema>;
+
+// Mirrors chatWithForgeAi's proposal shape (storage.ts) -- the admin is
+// applying exactly what the chat proposed, echoed back client-side, not
+// composing a new one from scratch.
+export const applyForgeAiEntryProposalSchema = z.object({
+  content: z.string().trim().min(1),
+  category: z.string().trim().max(60).optional().nullable(),
+  position: z.string().trim().max(60).optional().nullable(),
+  gender: z.enum(["male", "female", "non_binary", "prefer_not_to_say"]).optional().nullable(),
+  ageMin: z.number().int().optional().nullable(),
+  ageMax: z.number().int().optional().nullable(),
+  maturity: z.enum(["established", "experimental"]),
+  summary: z.string(),
+  updatesEntryId: z.number().int().optional().nullable(),
+  isCorrection: z.boolean().optional().default(false),
+  changeReason: z.string().optional().default(""),
+  sourceType: z.enum(["chat", "image", "url", "pasted_text"]).optional(),
+  sourceExcerpt: z.string().max(2000).optional().nullable(),
+});
+export type ApplyForgeAiEntryProposalInput = z.infer<typeof applyForgeAiEntryProposalSchema>;
+
+export const deactivateForgeAiEntrySchema = z.object({
+  reason: z.string().trim().min(1).max(500),
+});
+export type DeactivateForgeAiEntryInput = z.infer<typeof deactivateForgeAiEntrySchema>;
+
 export const substituteExerciseSchema = z.object({
   programExerciseId: z.number().int().positive(),
   reason: z.string().trim().min(1).max(200),
@@ -2953,6 +3507,18 @@ export const skillSessionLogsRelations = relations(skillSessionLogs, ({ one }) =
     references: [skillProgramExercises.id],
   }),
   athlete: one(users, { fields: [skillSessionLogs.athleteId], references: [users.id] }),
+}));
+
+export const skillDayCommentsRelations = relations(skillDayComments, ({ one }) => ({
+  assignment: one(skillAssignments, {
+    fields: [skillDayComments.skillAssignmentId],
+    references: [skillAssignments.id],
+  }),
+  day: one(skillProgramDays, {
+    fields: [skillDayComments.skillProgramDayId],
+    references: [skillProgramDays.id],
+  }),
+  author: one(users, { fields: [skillDayComments.authorId], references: [users.id] }),
 }));
 
 export const exerciseSubmissionsRelations = relations(exerciseSubmissions, ({ one }) => ({
@@ -3404,6 +3970,20 @@ export const createWorkoutCommentSchema = z.object({
   date: z.string().trim().max(20).optional().nullable(),
 });
 
+// Exact mirror of createWorkoutCommentSchema for the skill side -- see
+// skillDayComments.
+export const createSkillDayCommentSchema = z.object({
+  body: z.string().trim().min(1).max(2000),
+  videoUrl: z.string().trim().max(500).optional().nullable(),
+  imageUrl: z.string().trim().max(500).optional().nullable(),
+  date: z.string().trim().max(20).optional().nullable(),
+});
+
+export const setSkillDayCompleteSchema = z.object({
+  date: z.string().trim().min(1).max(20),
+  completed: z.boolean(),
+});
+
 export const createAnnotationSchema = z.object({
   dataUrl: z.string().startsWith("data:image/png;base64,"),
 });
@@ -3450,6 +4030,19 @@ export const createSkillSessionLogSchema = z.object({
   armSlotDeg: z.number().min(0).max(90).optional().nullable(),
   armSlotLabel: z.enum(["overhand", "three-quarter", "sidearm"]).optional().nullable(),
   wellSequenced: z.boolean().optional().nullable(),
+  // "throw" mode only -- see MechanicsResult.peakWristSpeedMps's own
+  // comment for why this is a proxy (wrist speed, not the thrown object's
+  // own exit velocity -- there's no ball/implement detection here).
+  peakWristSpeedMps: z.number().min(0).max(60).optional().nullable(),
+  // Both modes -- see MechanicsResult.strideLengthM's own comment.
+  strideLengthM: z.number().min(0).max(3).optional().nullable(),
+  // "throw" mode only -- see the matching MechanicsResult fields' own
+  // comments in mechanics-tracking.ts.
+  elbowExtensionDeg: z.number().min(0).max(180).optional().nullable(),
+  releaseHeightM: z.number().min(-1).max(2).optional().nullable(),
+  setPointPauseSeconds: z.number().min(0).max(10).optional().nullable(),
+  // Both modes -- see MechanicsResult.kneeBendDepthDeg's own comment.
+  kneeBendDepthDeg: z.number().min(0).max(180).optional().nullable(),
   // Opt-in only -- set when the athlete explicitly chooses "Save clip for
   // coach" after a capture (see MechanicsTrackerDialog); absent otherwise.
   videoUrl: z.string().trim().max(500).optional().nullable(),
@@ -3642,6 +4235,8 @@ export type SkillExercise = typeof skillExercises.$inferSelect;
 export type SkillProgram = typeof skillPrograms.$inferSelect;
 export type SkillAssignment = typeof skillAssignments.$inferSelect;
 export type SkillSessionLog = typeof skillSessionLogs.$inferSelect;
+export type SkillDayLog = typeof skillDayLogs.$inferSelect;
+export type SkillDayComment = typeof skillDayComments.$inferSelect;
 export type Program = typeof programs.$inferSelect;
 export type ProgramWeek = typeof programWeeks.$inferSelect;
 export type ProgramDay = typeof programDays.$inferSelect;
@@ -3679,6 +4274,8 @@ export type UpdatePreferencesInput = z.infer<typeof updatePreferencesSchema>;
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 export type UpdateNotificationPrefsInput = z.infer<typeof updateNotificationPrefsSchema>;
 export type CreateWorkoutCommentInput = z.infer<typeof createWorkoutCommentSchema>;
+export type CreateSkillDayCommentInput = z.infer<typeof createSkillDayCommentSchema>;
+export type SetSkillDayCompleteInput = z.infer<typeof setSkillDayCompleteSchema>;
 export type CreateExerciseReportInput = z.infer<typeof createExerciseReportSchema>;
 export type ResolveSubmissionInput = z.infer<typeof resolveSubmissionSchema>;
 

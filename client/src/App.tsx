@@ -6,6 +6,7 @@ import { Capacitor } from "@capacitor/core";
 import { queryClient, persistOptions } from "@/lib/queryClient";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { BiometricLockGate } from "@/components/biometric-lock-gate";
+import { DebugConsole } from "@/components/debug-console";
 
 // Auth pages are small and needed on the very first, unauthenticated
 // request, so they stay in the main bundle rather than costing an extra
@@ -38,6 +39,7 @@ const CoachClassBuilder = lazy(() => import("@/pages/coach/class-builder"));
 const CoachCoachesCorner = lazy(() => import("@/pages/coach/coaches-corner"));
 const CoachRoster = lazy(() => import("@/pages/coach/roster"));
 const CoachAthleteDetail = lazy(() => import("@/pages/coach/athlete-detail"));
+const CoachMovementScreens = lazy(() => import("@/pages/coach/movement-screens"));
 const CoachNutrition = lazy(() => import("@/pages/coach/nutrition"));
 const CoachCalendar = lazy(() => import("@/pages/coach/calendar"));
 const CoachMyWorkout = lazy(() => import("@/pages/coach/my-workout"));
@@ -67,6 +69,7 @@ const AdminPrograms = lazy(() => import("@/pages/admin/programs"));
 const AdminProgramBuilder = lazy(() => import("@/pages/admin/program-builder"));
 const AdminReviewQueue = lazy(() => import("@/pages/admin/review-queue"));
 const AdminAiKnowledge = lazy(() => import("@/pages/admin/ai-knowledge"));
+const ForgeAi = lazy(() => import("@/pages/admin/forge-ai"));
 const AdminLegalAgreement = lazy(() => import("@/pages/admin/legal-agreement"));
 const AdminNutritionKnowledge = lazy(() => import("@/pages/admin/nutrition-knowledge"));
 const AdminMyCalendar = lazy(() => import("@/pages/admin/my-calendar"));
@@ -87,6 +90,26 @@ function FullScreenSpinner() {
   );
 }
 
+// Shown when the auth check has failed and exhausted its retries without a
+// real answer -- distinct from "confirmed logged out," so this deliberately
+// never redirects to /login. See useAuth's isError comment for why this
+// case exists (most commonly: app just resumed from background and the
+// network isn't back yet).
+function ConnectionProblem() {
+  return (
+    <div className="flex h-screen w-full flex-col items-center justify-center gap-4 bg-background px-6 text-center">
+      <p className="text-sm text-muted-foreground">Can't reach Forge -- check your connection.</p>
+      <button
+        type="button"
+        onClick={() => queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] })}
+        className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+      >
+        Retry
+      </button>
+    </div>
+  );
+}
+
 function homeFor(role: "coach" | "athlete" | "admin") {
   if (role === "coach") return "/coach";
   if (role === "admin") return "/admin";
@@ -100,9 +123,14 @@ function ProtectedRoute({
   role: "coach" | "athlete" | "admin";
   component: ComponentType;
 }) {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, isError } = useAuth();
 
   if (isLoading) return <FullScreenSpinner />;
+  // isError (couldn't check) is deliberately handled before the plain
+  // `!user` check below -- user is undefined in both that case and the
+  // still-loading case, but only a confirmed 401 (user === null) actually
+  // means "not logged in." See useAuth's isError comment.
+  if (isError) return <ConnectionProblem />;
   if (!user) return <Redirect to="/login" />;
   if (user.role !== role) {
     return <Redirect to={homeFor(user.role)} />;
@@ -111,8 +139,11 @@ function ProtectedRoute({
 }
 
 function HomeRedirect() {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, isError } = useAuth();
   if (isLoading) return <FullScreenSpinner />;
+  // Same isError-before-!user ordering as ProtectedRoute, and for the same
+  // reason -- a failed check isn't a confirmed "not logged in".
+  if (isError) return <ConnectionProblem />;
   // Logged-out visitors land on the marketing page instead of being bounced
   // straight to the login form -- "/" is the front door now, not just a
   // redirect stub. Anyone already signed in still goes straight to their
@@ -205,6 +236,9 @@ function Router() {
         </Route>
         <Route path="/coach/roster/:athleteId">
           <ProtectedRoute role="coach" component={CoachAthleteDetail} />
+        </Route>
+        <Route path="/coach/movement-screens">
+          <ProtectedRoute role="coach" component={CoachMovementScreens} />
         </Route>
         <Route path="/coach/roster">
           <ProtectedRoute role="coach" component={CoachRoster} />
@@ -311,6 +345,9 @@ function Router() {
         <Route path="/admin/ai-knowledge">
           <ProtectedRoute role="admin" component={AdminAiKnowledge} />
         </Route>
+        <Route path="/admin/forge-ai">
+          <ProtectedRoute role="admin" component={ForgeAi} />
+        </Route>
         <Route path="/admin/legal-agreement">
           <ProtectedRoute role="admin" component={AdminLegalAgreement} />
         </Route>
@@ -335,7 +372,18 @@ export default function App() {
       <AuthProvider>
         <BiometricLockGate>
           <Router />
-          <Toaster theme="dark" position="top-right" richColors />
+          {/* expand: without it, Sonner collapses multiple toasts into a
+              peek-behind-the-front-one stack that only un-collapses on
+              hover -- fine on desktop, but there's no hover on a touch
+              screen, so a second toast landing before the first was read
+              just looked like it silently replaced it. expand keeps every
+              toast fully visible, each new one pushing the others down,
+              still auto-dismissing on their own default timers. */}
+          <Toaster theme="dark" position="top-right" richColors expand />
+          {/* Temporary -- see debug-console.tsx's own comment. Remove this
+              line, that file, and lib/debug-console.ts together once
+              login/password-save is diagnosed. */}
+          <DebugConsole />
         </BiometricLockGate>
       </AuthProvider>
     </PersistQueryClientProvider>

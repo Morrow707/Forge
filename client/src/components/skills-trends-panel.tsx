@@ -40,21 +40,48 @@ type SkillSessionRow = {
   armSlotDeg: number | null;
   armSlotLabel: string | null;
   wellSequenced: boolean | null;
+  peakWristSpeedMps: number | null;
+  strideLengthM: number | null;
+  elbowExtensionDeg: number | null;
+  releaseHeightM: number | null;
+  setPointPauseSeconds: number | null;
+  kneeBendDepthDeg: number | null;
   videoUrl: string | null;
 };
 
-type MechanicsMetric = "hipShoulderSeparationDeg" | "weightTransferPct" | "hipRotationDeg";
+type MechanicsMetric =
+  | "hipShoulderSeparationDeg"
+  | "weightTransferPct"
+  | "hipRotationDeg"
+  | "peakWristSpeedMps"
+  | "strideLengthM"
+  | "elbowExtensionDeg"
+  | "releaseHeightM"
+  | "setPointPauseSeconds"
+  | "kneeBendDepthDeg";
 
 const MECHANICS_METRIC_LABEL: Record<MechanicsMetric, string> = {
   hipShoulderSeparationDeg: "Hip-Shoulder Separation",
   weightTransferPct: "Weight Transfer",
   hipRotationDeg: "Hip Rotation",
+  peakWristSpeedMps: "Peak Wrist Speed",
+  strideLengthM: "Stride Length",
+  elbowExtensionDeg: "Elbow Extension at Release",
+  releaseHeightM: "Release Height",
+  setPointPauseSeconds: "Set-Point Pause",
+  kneeBendDepthDeg: "Knee-Bend Load Depth",
 };
 
 const MECHANICS_METRIC_UNIT: Record<MechanicsMetric, string> = {
   hipShoulderSeparationDeg: "°",
   weightTransferPct: "%",
   hipRotationDeg: "°",
+  peakWristSpeedMps: "m/s",
+  strideLengthM: "m",
+  elbowExtensionDeg: "°",
+  releaseHeightM: "m",
+  setPointPauseSeconds: "s",
+  kneeBendDepthDeg: "°",
 };
 
 function fmtSpeed(elapsedSeconds: number | null, distanceYards: number | null): string {
@@ -144,6 +171,12 @@ export function SkillsTrendsPanel({ athleteId, athleteName }: { athleteId: strin
             MECHANICS_METRIC_LABEL.hipShoulderSeparationDeg,
             MECHANICS_METRIC_LABEL.weightTransferPct,
             MECHANICS_METRIC_LABEL.hipRotationDeg,
+            MECHANICS_METRIC_LABEL.peakWristSpeedMps,
+            MECHANICS_METRIC_LABEL.strideLengthM,
+            MECHANICS_METRIC_LABEL.elbowExtensionDeg,
+            MECHANICS_METRIC_LABEL.releaseHeightM,
+            MECHANICS_METRIC_LABEL.setPointPauseSeconds,
+            MECHANICS_METRIC_LABEL.kneeBendDepthDeg,
           ]}
           value={MECHANICS_METRIC_LABEL[mechanicsMetric]}
           onChange={(label) => {

@@ -236,12 +236,43 @@ export async function askClaudeWithTools<T = any>(
     maxTokens = 1024,
     model,
     serverTools,
-  }: CallOptions & { serverTools?: Record<string, unknown>[] } = {},
+    images,
+    toolExecutors,
+  }: CallOptions & {
+    serverTools?: Record<string, unknown>[];
+    // Optional -- same base64 image-block shape askClaudeVision already
+    // uses. Most tool-calling callers have no image, so this stays a plain
+    // string content block unless one's actually attached (e.g. Forge AI's
+    // teaching chat, when the admin uploads a photo of a book page).
+    images?: { mediaType: "image/jpeg" | "image/png"; data: string }[];
+    // Tools this function runs itself and feeds the result back into the
+    // conversation, rather than returning to the caller (e.g. Forge AI's
+    // fetch_url -- see chatWithForgeAi in storage.ts). Any tool name NOT
+    // listed here still returns immediately like before; existing callers
+    // that never pass this see no change in behavior at all.
+    toolExecutors?: Record<string, (input: any) => Promise<string>>;
+  } = {},
 ): Promise<{ toolName: string; input: T } | null> {
   if (!aiEnabled) return null;
   const allTools = serverTools ? [...serverTools, ...tools] : tools;
-  let messages: any[] = [{ role: "user", content: userPrompt }];
-  for (let attempt = 0; attempt < 3; attempt++) {
+  const userContent =
+    images && images.length > 0
+      ? [
+          ...images.map((img) => ({
+            type: "image",
+            source: { type: "base64", media_type: img.mediaType, data: img.data },
+          })),
+          { type: "text", text: userPrompt },
+        ]
+      : userPrompt;
+  let messages: any[] = [{ role: "user", content: userContent }];
+  // A server-executed tool round-trip (fetch a URL, get the text back, let
+  // the model keep going) costs one extra attempt each time, so this needs
+  // more headroom than the plain pause_turn retry loop alone -- bounded
+  // all the same, so a model stuck calling fetch_url in a loop can't spin
+  // forever.
+  const maxAttempts = toolExecutors ? 8 : 3;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const data = await callAnthropic({
       model: model || defaultModel,
       max_tokens: maxTokens,
@@ -252,7 +283,25 @@ export async function askClaudeWithTools<T = any>(
     });
     if (!data) return null;
     const toolUse = data.content?.find((b: any) => b.type === "tool_use");
-    if (toolUse) return { toolName: toolUse.name as string, input: toolUse.input as T };
+    if (toolUse) {
+      const executor = toolExecutors?.[toolUse.name];
+      if (!executor) return { toolName: toolUse.name as string, input: toolUse.input as T };
+      let resultText: string;
+      try {
+        resultText = await executor(toolUse.input);
+      } catch (err) {
+        resultText = `Error: ${err instanceof Error ? err.message : String(err)}`;
+      }
+      messages = [
+        ...messages,
+        { role: "assistant", content: data.content },
+        {
+          role: "user",
+          content: [{ type: "tool_result", tool_use_id: toolUse.id, content: resultText }],
+        },
+      ];
+      continue;
+    }
     if (data.stop_reason === "pause_turn") {
       messages = [...messages, { role: "assistant", content: data.content }];
       continue;

@@ -10,8 +10,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
-import { apiRequest, getJson } from "@/lib/queryClient";
-import { getPoseLandmarker, isPlausibleHumanFrame, MIN_VISIBILITY } from "@/lib/pose-tracking";
+import { apiRequest, getJson, resolveApiUrl } from "@/lib/queryClient";
+import { getPoseLandmarker, SubjectContinuityGate, MIN_VISIBILITY } from "@/lib/pose-tracking";
 import { lockCameraExposure } from "@/lib/camera-exposure";
 import { ensureCameraPermission, onAppForeground, onAppBackground } from "@/lib/native-camera";
 import {
@@ -76,6 +76,7 @@ export function MechanicsTrackerDialog({
   onOpenChange,
   drillName,
   mode,
+  actionLabel: actionLabelProp,
   skillAssignmentId,
   skillProgramDayId,
   skillProgramExerciseId,
@@ -84,6 +85,11 @@ export function MechanicsTrackerDialog({
   onOpenChange: (open: boolean) => void;
   drillName: string;
   mode: MechanicsMode;
+  // Overrides the default "Throw"/"Swing" button/toast wording -- a jump
+  // shot uses "throw" mode (same one-arm-extends-and-releases metrics) but
+  // shouldn't say "Throw saved" for a shot. Defaults to the mode-derived
+  // word for every caller that doesn't pass this.
+  actionLabel?: string;
   skillAssignmentId: number;
   skillProgramDayId: number;
   skillProgramExerciseId: number;
@@ -99,6 +105,11 @@ export function MechanicsTrackerDialog({
   }
   const rafRef = useRef<number | null>(null);
   const poseLandmarkerRef = useRef<PoseLandmarker | null>(null);
+  // See SubjectContinuityGate's own comment -- rejects a detection that
+  // jumped implausibly far to plausibly still be the athlete being filmed
+  // (a teammate stepping into frame mid-swing would otherwise be able to
+  // hijack the tracked hip/shoulder angles).
+  const subjectGateRef = useRef(new SubjectContinuityGate());
   const lastVideoTimeRef = useRef(-1);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -147,6 +158,7 @@ export function MechanicsTrackerDialog({
     chunksRef.current = [];
     recordedBlobRef.current = null;
     lastVideoTimeRef.current = -1;
+    subjectGateRef.current.reset();
 
     setModelLoading(true);
     getPoseLandmarker()
@@ -177,11 +189,11 @@ export function MechanicsTrackerDialog({
       stopCamera();
       return;
     }
-    // ideal, not exact -- see bar-tracker-dialog.tsx's own comment on this
-    // same constraint shape. A bat swing or throw is the fastest motion
-    // this app tracks, so peakAngularVelocityTime's sequencing precision
-    // (hip vs. shoulder vs. arm peak timing) benefits from 60fps more here
-    // than almost anywhere else in the camera tracker.
+    // ideal, not exact, and portrait (720x1280) -- see bar-tracker-dialog.tsx's
+    // own comment on both. A bat swing or throw is the fastest motion this
+    // app tracks, so peakAngularVelocityTime's sequencing precision (hip vs.
+    // shoulder vs. arm peak timing) benefits from 60fps more here than
+    // almost anywhere else in the camera tracker.
     let cancelled = false;
     const acquireCamera = () => {
       ensureCameraPermission().then((granted) => {
@@ -194,8 +206,8 @@ export function MechanicsTrackerDialog({
           .getUserMedia({
             video: {
               facingMode: { ideal: "environment" },
-              width: { ideal: 1280 },
-              height: { ideal: 720 },
+              width: { ideal: 720 },
+              height: { ideal: 1280 },
               frameRate: { ideal: 60, min: 30 },
             },
           })
@@ -224,13 +236,17 @@ export function MechanicsTrackerDialog({
     acquireCamera();
     rafRef.current = requestAnimationFrame(tick);
 
-    // See bar-tracker-dialog.tsx's own comment on onAppForeground.
+    // See bar-tracker-dialog.tsx's own comment on onAppForeground -- and its
+    // sprint-tracker-dialog.tsx comment on why this also has to restart the
+    // rAF loop itself, not just the camera stream.
     const unsubscribeForeground = onAppForeground(() => {
       const stillLive = streamRef.current?.getVideoTracks().some((t) => t.readyState === "live");
-      if (stillLive) return;
-      streamRef.current?.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
-      acquireCamera();
+      if (!stillLive) {
+        streamRef.current?.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+        acquireCamera();
+      }
+      if (!rafRef.current) rafRef.current = requestAnimationFrame(tick);
     });
     // See bar-tracker-dialog.tsx's own comment on onAppBackground.
     const unsubscribeBackground = onAppBackground(() => {
@@ -276,12 +292,13 @@ export function MechanicsTrackerDialog({
     const now = performance.now();
     const detection = landmarker.detectForVideo(video, now);
     // Rejects a confident-looking detection on something that isn't
-    // actually a person (a box, a rack, a shadow) -- same torso-presence
-    // gate bar-tracker-dialog.tsx's live tick loop uses, applied here since
-    // this dialog runs its own independent detectForVideo loop rather than
-    // sharing that one.
+    // actually a person (a box, a rack, a shadow), and one that jumped
+    // implausibly far to plausibly still be the same athlete -- same
+    // SubjectContinuityGate bar-tracker-dialog.tsx's live tick loop uses,
+    // applied here since this dialog runs its own independent
+    // detectForVideo loop rather than sharing that one.
     const rawLandmarks = detection.landmarks[0] ?? null;
-    const landmarks = rawLandmarks && isPlausibleHumanFrame(rawLandmarks) ? rawLandmarks : null;
+    const landmarks = subjectGateRef.current.admit(rawLandmarks);
     const worldLandmarks = landmarks ? (detection.worldLandmarks[0] ?? null) : null;
 
     if (ctx) {
@@ -411,9 +428,15 @@ export function MechanicsTrackerDialog({
         armSlotDeg: result.armSlot?.angleDeg ?? null,
         armSlotLabel: result.armSlot?.label ?? null,
         wellSequenced: result.sequencing.wellSequenced,
+        peakWristSpeedMps: result.peakWristSpeedMps,
+        strideLengthM: result.strideLengthM,
+        elbowExtensionDeg: result.elbowExtensionDeg,
+        releaseHeightM: result.releaseHeightM,
+        setPointPauseSeconds: result.setPointPauseSeconds,
+        kneeBendDepthDeg: result.kneeBendDepthDeg,
         videoUrl: uploadedVideoUrl,
       });
-      toast.success(mode === "throw" ? "Throw saved" : "Swing saved");
+      toast.success(`${actionLabel} saved`);
       onOpenChange(false);
     } catch (err: any) {
       toast.error(err.message || "Could not save this session");
@@ -422,7 +445,7 @@ export function MechanicsTrackerDialog({
     }
   }
 
-  const actionLabel = mode === "throw" ? "Throw" : "Swing";
+  const actionLabel = actionLabelProp ?? (mode === "throw" ? "Throw" : "Swing");
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -511,7 +534,7 @@ export function MechanicsTrackerDialog({
             <div className="relative overflow-hidden rounded-md bg-black">
               <video
                 ref={reviewVideoRef}
-                src={videoUrl}
+                src={resolveApiUrl(videoUrl)}
                 playsInline
                 controls
                 className="w-full"
@@ -556,6 +579,45 @@ export function MechanicsTrackerDialog({
                 <div>
                   <p className="text-xl font-bold capitalize">{result.armSlot.label}</p>
                   <p className="text-xs text-muted-foreground">Arm slot ({result.armSlot.angleDeg}°)</p>
+                </div>
+              )}
+              {result.peakWristSpeedMps != null && (
+                <div>
+                  <p className="text-xl font-bold">{result.peakWristSpeedMps} m/s</p>
+                  <p className="text-xs text-muted-foreground">
+                    Peak wrist speed
+                    <span className="block text-[10px] normal-case">(proxy for release velocity)</span>
+                  </p>
+                </div>
+              )}
+              {result.strideLengthM != null && (
+                <div>
+                  <p className="text-xl font-bold">{result.strideLengthM} m</p>
+                  <p className="text-xs text-muted-foreground">Stride length</p>
+                </div>
+              )}
+              {result.elbowExtensionDeg != null && (
+                <div>
+                  <p className="text-xl font-bold">{result.elbowExtensionDeg}°</p>
+                  <p className="text-xs text-muted-foreground">Elbow extension at release</p>
+                </div>
+              )}
+              {result.releaseHeightM != null && (
+                <div>
+                  <p className="text-xl font-bold">{result.releaseHeightM} m</p>
+                  <p className="text-xs text-muted-foreground">Release height above hips</p>
+                </div>
+              )}
+              {result.setPointPauseSeconds != null && (
+                <div>
+                  <p className="text-xl font-bold">{result.setPointPauseSeconds}s</p>
+                  <p className="text-xs text-muted-foreground">Set-point pause</p>
+                </div>
+              )}
+              {result.kneeBendDepthDeg != null && (
+                <div>
+                  <p className="text-xl font-bold">{result.kneeBendDepthDeg}°</p>
+                  <p className="text-xs text-muted-foreground">Knee-bend load depth</p>
                 </div>
               )}
               <div>

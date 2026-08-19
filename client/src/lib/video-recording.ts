@@ -24,3 +24,45 @@ export function videoFilenameForBlob(blob: Blob, baseName: string): string {
   const ext = baseType === "video/mp4" ? "mp4" : baseType === "video/quicktime" ? "mov" : "webm";
   return `${baseName}.${ext}`;
 }
+
+// Duration-Infinity workaround for MediaRecorder-produced Blobs -- a
+// well-documented Chromium/WebKit quirk: the recorder writes its container
+// incrementally rather than finalizing a real duration field the way a
+// normally-encoded file would, so <video>.duration reads back as Infinity
+// (sometimes NaN) right after loadedmetadata, and stays that way until the
+// browser actually scans the whole file to work the real value out for
+// itself -- which it only does once something asks it to seek near the end.
+// This is the actual root cause behind "0:00 / 0:00" durations on a
+// just-recorded clip, and analyzeVideoPose's own duration<=0 guard (which
+// exists for genuinely broken/empty files) was silently swallowing this
+// same symptom and returning zero frames -- reading as "couldn't find a
+// body" when the real problem was never body detection at all, detection
+// never got the chance to run. Every caller here needs an accurate
+// duration, so this runs the standard fix once right after loadedmetadata:
+// seek far past the end to force that scan, read the corrected duration off
+// the resulting durationchange, then seek back to where playback should
+// actually start.
+export function resolveVideoDuration(video: HTMLVideoElement): Promise<number> {
+  if (Number.isFinite(video.duration) && video.duration > 0) {
+    return Promise.resolve(video.duration);
+  }
+  return new Promise((resolve) => {
+    let settled = false;
+    function finish(duration: number) {
+      if (settled) return;
+      settled = true;
+      video.removeEventListener("durationchange", onDurationChange);
+      video.currentTime = 0;
+      resolve(duration);
+    }
+    function onDurationChange() {
+      if (Number.isFinite(video.duration) && video.duration > 0) finish(video.duration);
+    }
+    video.addEventListener("durationchange", onDurationChange);
+    // Safety net -- if the browser never fires a usable durationchange (an
+    // edge case, not the common path here), fall back to whatever's already
+    // on the element rather than hanging the caller forever.
+    window.setTimeout(() => finish(video.duration), 2000);
+    video.currentTime = 1e101;
+  });
+}

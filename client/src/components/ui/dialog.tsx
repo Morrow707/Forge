@@ -25,10 +25,19 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & { hideClose?: boolean }
->(({ className, children, hideClose, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
+    hideClose?: boolean;
+    // Lets a full-screen native-camera dialog (see the AR tracker dialogs)
+    // punch through the overlay's own bg-black/70 + backdrop-blur -- both
+    // paint opaque/semi-opaque pixels in the exact screen region a
+    // WKWebView needs left fully unpainted to reveal a native UIView
+    // (ArCameraPreviewPlugin's ARSCNView) inserted behind it. Every other
+    // caller keeps the default dark scrim untouched.
+    overlayClassName?: string;
+  }
+>(({ className, children, hideClose, overlayClassName, ...props }, ref) => (
   <DialogPortal>
-    <DialogOverlay />
+    <DialogOverlay className={overlayClassName} />
     <DialogPrimitive.Content
       ref={ref}
       className={cn(

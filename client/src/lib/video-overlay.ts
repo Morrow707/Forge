@@ -8,12 +8,10 @@
 // in memory. A downloaded clip ends up with both layers baked in (trail +
 // badges from here, the Forge mark from watermarking), with neither pass
 // needing to know about the other.
-import { MIN_VISIBILITY, POSE_LANDMARKS, type PoseFrame } from "./pose-tracking";
+import { MIN_VISIBILITY, type PoseFrame } from "./pose-tracking";
 import { recordedVideoType } from "./video-recording";
 
 const TRAIL_COLOR = "#f97316";
-const WRIST_INDICES = [POSE_LANDMARKS.LEFT_WRIST, POSE_LANDMARKS.RIGHT_WRIST];
-const ANKLE_INDICES = [POSE_LANDMARKS.LEFT_ANKLE, POSE_LANDMARKS.RIGHT_ANKLE];
 
 export type OverlayRepMarker = {
   // Same clock as PoseFrame.t / TrackedPoint.t (ms since tracking started).
@@ -46,15 +44,19 @@ function pixelPointForFrame(
 // display buffer), and repMarkers comes from the caller's own already-
 // computed rep breakdown (lift mode's RepBreakdown.startT/peakVelocityMps,
 // jump mode's JumpRep.takeoffT/jumpHeightCm) -- this module has no opinion
-// on how a label is worded, only where to show it.
+// on how a label is worded, only where to show it. trailIndices is which
+// landmark(s) to trail (WRIST_INDICES/ANKLE_INDICES below are the two bar-
+// tracker-dialog.tsx uses; a caller trailing a different point, like the
+// hip midpoint for a sprint, just passes its own indices -- this used to
+// infer trailIndices from a bar-tracker-specific "mode" union, which had
+// no way to grow to a caller this module doesn't otherwise know about).
 export async function burnTrackingOverlay(
   sourceBlob: Blob,
   frames: PoseFrame[],
-  mode: "bar_path" | "full" | "jump",
+  trailIndices: number[],
   repMarkers: OverlayRepMarker[],
   onProgress?: (fraction: number) => void,
 ): Promise<Blob> {
-  const trailIndices = mode === "jump" ? ANKLE_INDICES : WRIST_INDICES;
   const sourceUrl = URL.createObjectURL(sourceBlob);
 
   return new Promise((resolve, reject) => {

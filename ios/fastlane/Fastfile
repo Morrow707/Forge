@@ -9,8 +9,13 @@ default_platform(:ios)
 # encrypted git repo, since that's one more piece of infrastructure this
 # project doesn't otherwise need.
 platform :ios do
-  desc "Build the app and upload a new build to TestFlight"
-  lane :beta do
+  # Shared by both lanes below -- everything through build_app (signing
+  # setup + the actual archive) is identical whether or not the result gets
+  # uploaded afterward. Returns the keychain name so each caller can clean
+  # up after its own next step (upload_to_testflight for beta, nothing
+  # further for verify_build) rather than this private lane owning cleanup
+  # timing it doesn't actually control.
+  private_lane :build_only do
     keychain_name = "forge-ci.keychain"
     keychain_password = SecureRandom.hex(16)
 
@@ -60,7 +65,10 @@ platform :ios do
     # unique and monotonically increasing across every workflow run, unlike
     # a timestamp (which two builds triggered in the same second could
     # collide on) or the app's own marketing version (which doesn't change
-    # between TestFlight builds of the same release).
+    # between TestFlight builds of the same release). Harmless to bump this
+    # even for a verify_build run that never uploads -- build numbers are
+    # local to the archive, not reserved/consumed against Apple until an
+    # actual upload happens.
     increment_build_number(
       xcodeproj: "App/App.xcodeproj",
       build_number: ENV.fetch("GITHUB_RUN_NUMBER"),
@@ -79,6 +87,13 @@ platform :ios do
       },
     )
 
+    keychain_name
+  end
+
+  desc "Build the app and upload a new build to TestFlight"
+  lane :beta do
+    keychain_name = build_only
+
     api_key = app_store_connect_api_key(
       key_id: ENV.fetch("APP_STORE_CONNECT_KEY_ID"),
       issuer_id: ENV.fetch("APP_STORE_CONNECT_ISSUER_ID"),
@@ -91,6 +106,12 @@ platform :ios do
       skip_waiting_for_build_processing: true,
     )
 
+    delete_keychain(name: keychain_name)
+  end
+
+  desc "Archive and sign only, no TestFlight upload -- verifies native (Swift/Xcode project) changes actually compile on a real toolchain without spending any of Apple's rate-limited TestFlight upload quota (build_app itself is never rate-limited, only upload_to_testflight is). Use this to check native changes before batching them into an actual beta upload."
+  lane :verify_build do
+    keychain_name = build_only
     delete_keychain(name: keychain_name)
   end
 end

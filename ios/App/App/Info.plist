@@ -51,11 +51,22 @@
 	<array>
 		<string>armv7</string>
 	</array>
+	<!-- iPhone: portrait-only. Landscape was briefly supported so the
+	     video-analysis screen could be viewed rotated, but iOS's own
+	     rotation transition between the two proved unreliable on-device (a
+	     stuck-sideways dialog with no way to rotate back, and a squished
+	     layout right after starting playback) -- every screen in this app
+	     is designed for portrait, and none of it depends on landscape
+	     actually working, so removing it outright is a real fix, not a
+	     workaround. iPad keeps all four orientations: App Store validation
+	     rejects a bundle that restricts iPad's orientations without also
+	     setting UIRequiresFullScreen to opt out of Split View/Slide Over
+	     multitasking (error 90474, which the first attempt at this fix hit),
+	     and nothing about the reported bug involved iPad in the first
+	     place -- every report has been on iPhone. -->
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>
