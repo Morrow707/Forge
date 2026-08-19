@@ -3014,6 +3014,52 @@ export const aggregateDataAccessLog = pgTable("aggregate_data_access_log", {
 
 export type AggregateDataAccessLogEntry = typeof aggregateDataAccessLog.$inferSelect;
 
+// One row per (entry, feature-call) match -- not a running counter on
+// aiKnowledgeEntries itself, so admin can see WHEN and WHERE an entry gets
+// pulled into context, not just how many times total. "Available to the
+// prompt" (this logs every entry buildForgeAiContext matched for a call),
+// not "the model definitely quoted it" -- true per-citation tracking would
+// need every consuming prompt to report back which specific rule it
+// leaned on, which is real future work; this is the honest, buildable
+// version: which taught knowledge is actually reaching real feature calls
+// versus sitting unused.
+export const aiKnowledgeUsageLog = pgTable(
+  "ai_knowledge_usage_log",
+  {
+    id: serial("id").primaryKey(),
+    entryId: integer("entry_id")
+      .notNull()
+      .references(() => aiKnowledgeEntries.id, { onDelete: "cascade" }),
+    // Which AI feature pulled it in -- "athlete_chat", "program_draft",
+    // "form_check", etc. (see buildForgeAiContext's own callers).
+    context: text("context").notNull(),
+    calledAt: timestamp("called_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    entryIdx: index("ai_knowledge_usage_log_entry_idx").on(table.entryId, table.calledAt),
+  }),
+);
+
+// The complement of the usage log above -- logged when a coaching-judgment
+// AI call had a specific athlete profile in view but nothing taught
+// matched it at all, so admin can see recurring blind spots ("guessed on
+// this position/age combo four times, nothing taught for it") instead of
+// only ever seeing what IS taught.
+export const aiKnowledgeGapLog = pgTable(
+  "ai_knowledge_gap_log",
+  {
+    id: serial("id").primaryKey(),
+    context: text("context").notNull(),
+    position: text("position"),
+    gender: genderEnum("gender"),
+    age: integer("age"),
+    calledAt: timestamp("called_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    contextIdx: index("ai_knowledge_gap_log_context_idx").on(table.context, table.calledAt),
+  }),
+);
+
 // Forge AI's own chat thread -- separate from aiKnowledgeMessages/
 // nutritionKnowledgeMessages above (those stay as-is, feeding the two old
 // documents, until they're retired). Reuses aiKnowledgeChatRoleEnum since

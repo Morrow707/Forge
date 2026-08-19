@@ -1256,6 +1256,24 @@ CREATE TABLE IF NOT EXISTS "forge_ai_messages" (
   "created_at" timestamp NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS "forge_ai_messages_created_idx" ON "forge_ai_messages" ("created_at");
+
+CREATE TABLE IF NOT EXISTS "ai_knowledge_usage_log" (
+  "id" serial PRIMARY KEY,
+  "entry_id" integer NOT NULL REFERENCES "ai_knowledge_entries"("id") ON DELETE CASCADE,
+  "context" text NOT NULL,
+  "called_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "ai_knowledge_usage_log_entry_idx" ON "ai_knowledge_usage_log" ("entry_id", "called_at");
+
+CREATE TABLE IF NOT EXISTS "ai_knowledge_gap_log" (
+  "id" serial PRIMARY KEY,
+  "context" text NOT NULL,
+  "position" text,
+  "gender" gender,
+  "age" integer,
+  "called_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "ai_knowledge_gap_log_context_idx" ON "ai_knowledge_gap_log" ("context", "called_at");
 `;
 
 async function main() {

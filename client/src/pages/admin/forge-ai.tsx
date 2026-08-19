@@ -60,12 +60,20 @@ export default function ForgeAiPage() {
   const [retireReason, setRetireReason] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  const { data, isLoading } = useQuery<{ messages: ForgeAiMessage[]; entries: ForgeAiEntry[] }>({
+  type Gap = { context: string; position: string | null; gender: string | null; age: number | null; count: number; lastSeen: string };
+  const { data, isLoading } = useQuery<{
+    messages: ForgeAiMessage[];
+    entries: ForgeAiEntry[];
+    usageCounts: Record<number, number>;
+    gaps: Gap[];
+  }>({
     queryKey: ["/api/admin/forge-ai"],
     queryFn: () => getJson("/api/admin/forge-ai"),
   });
   const messages = data?.messages ?? [];
   const entries = data?.entries ?? [];
+  const usageCounts = data?.usageCounts ?? {};
+  const gaps = data?.gaps ?? [];
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -261,6 +269,9 @@ export default function ForgeAiPage() {
                       {e.maturity}
                     </Badge>
                     <span className="text-[10px] text-muted-foreground">{scopeLabel(e)}</span>
+                    <span className="text-[10px] text-muted-foreground">
+                      · {usageCounts[e.id] ? `used ${usageCounts[e.id]}x this week` : "unused this week"}
+                    </span>
                   </div>
                   <p className="text-sm">{e.content}</p>
                   {retiringId === e.id ? (
@@ -299,6 +310,30 @@ export default function ForgeAiPage() {
           </CardContent>
         </Card>
       </div>
+
+      {gaps.length > 0 && (
+        <div className="px-4 pb-4 lg:px-8">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Recurring gaps</CardTitle>
+              <CardDescription>
+                Cases that came up more than once in the last two weeks with nothing taught for them.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-1.5">
+              {gaps.map((g, i) => (
+                <div key={i} className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm">
+                  <span>
+                    <span className="font-semibold">{g.context.replace(/_/g, " ")}</span> ·{" "}
+                    {[g.position, g.gender, g.age != null ? `age ${g.age}` : null].filter(Boolean).join(", ") || "no profile detail"}
+                  </span>
+                  <Badge variant="outline">{g.count}x</Badge>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </AppShell>
   );
 }
