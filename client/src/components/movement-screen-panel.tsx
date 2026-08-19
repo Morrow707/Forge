@@ -19,7 +19,7 @@ import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { format, parseISO, formatISO } from "date-fns";
 import { Plus, ClipboardCheck, AlertTriangle, Camera, PenLine, Loader2 } from "lucide-react";
-import { movementScreenCategoryLabel, movementScreenScoreUnit, formatMovementScreenScore } from "@shared/movement-screen";
+import { resolveMovementScreenUnitLabel, formatMovementScreenScore } from "@shared/movement-screen";
 
 type Battery = { id: number; name: string; isForgeOfficial: boolean; editable: boolean };
 type BatteryTest = {
@@ -27,6 +27,7 @@ type BatteryTest = {
   label: string;
   category: string;
   scoreType: "grade_0_3" | "distance_in" | "time_sec" | "asymmetry_pct";
+  unitLabel: string | null;
   side: "bilateral" | "unilateral";
   instructions: string | null;
 };
@@ -43,6 +44,7 @@ type ScreenResult = {
   label: string;
   category: string;
   scoreType: BatteryTest["scoreType"];
+  unitLabel: string | null;
   side: "left" | "right" | null;
   scoreValue: number;
   flagged: boolean;
@@ -54,6 +56,7 @@ type PhotoRow = {
   label: string;
   category: string;
   scoreType: BatteryTest["scoreType"];
+  unitLabel: string | null;
   side: "left" | "right" | null;
   scoreValue: number;
   notes: string | null;
@@ -166,9 +169,9 @@ function ScreenDetailDialog({ screenId, onClose }: { screenId: number; onClose: 
                     {r.label}
                     {r.side ? ` (${r.side})` : ""}
                   </p>
-                  <span className="font-mono text-xs">{formatMovementScreenScore(r.scoreType, r.scoreValue)}</span>
+                  <span className="font-mono text-xs">{formatMovementScreenScore(r.scoreType, r.scoreValue, r.unitLabel)}</span>
                 </div>
-                <p className="text-xs text-muted-foreground">{movementScreenCategoryLabel(r.category)}</p>
+                <p className="text-xs text-muted-foreground">{r.category}</p>
                 {r.flagged && r.correctives.length > 0 && (
                   <div className="mt-2 space-y-1 border-t border-destructive/20 pt-2">
                     <p className="text-xs font-semibold text-destructive">Suggested correctives</p>
@@ -231,17 +234,17 @@ function NewScreenDialog({
           const raw = scores[t.testKey];
           if (!raw) return [];
           return [
-            { testKey: t.testKey, label: t.label, category: t.category, scoreType: t.scoreType, side: null, scoreValue: Number(raw), notes: null },
+            { testKey: t.testKey, label: t.label, category: t.category, scoreType: t.scoreType, unitLabel: t.unitLabel, side: null, scoreValue: Number(raw), notes: null },
           ];
         }
         const out: PhotoRow[] = [];
         const left = scores[`${t.testKey}:left`];
         const right = scores[`${t.testKey}:right`];
         if (left) {
-          out.push({ testKey: t.testKey, label: t.label, category: t.category, scoreType: t.scoreType, side: "left", scoreValue: Number(left), notes: null });
+          out.push({ testKey: t.testKey, label: t.label, category: t.category, scoreType: t.scoreType, unitLabel: t.unitLabel, side: "left", scoreValue: Number(left), notes: null });
         }
         if (right) {
-          out.push({ testKey: t.testKey, label: t.label, category: t.category, scoreType: t.scoreType, side: "right", scoreValue: Number(right), notes: null });
+          out.push({ testKey: t.testKey, label: t.label, category: t.category, scoreType: t.scoreType, unitLabel: t.unitLabel, side: "right", scoreValue: Number(right), notes: null });
         }
         return out;
       });
@@ -313,7 +316,7 @@ function NewScreenDialog({
               {batteryDetail.tests.map((t) => (
                 <div key={t.testKey} className="rounded-md border border-border p-3">
                   <p className="text-sm font-semibold">{t.label}</p>
-                  <p className="text-xs text-muted-foreground">{movementScreenCategoryLabel(t.category)} &middot; {movementScreenScoreUnit(t.scoreType)}</p>
+                  <p className="text-xs text-muted-foreground">{t.category} &middot; scored in {resolveMovementScreenUnitLabel(t.scoreType, t.unitLabel)}</p>
                   {t.side === "bilateral" ? (
                     <Input
                       className="mt-2"

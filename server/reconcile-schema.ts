@@ -1296,10 +1296,6 @@ CREATE TABLE IF NOT EXISTS "ai_reflection_findings" (
 CREATE INDEX IF NOT EXISTS "ai_reflection_findings_category_idx" ON "ai_reflection_findings" ("category", "created_at");
 
 DO $$ BEGIN
-  CREATE TYPE "movement_screen_category" AS ENUM ('postural', 'balance', 'power', 'mobility', 'other');
-EXCEPTION WHEN duplicate_object THEN null; END $$;
-
-DO $$ BEGIN
   CREATE TYPE "movement_screen_score_type" AS ENUM ('grade_0_3', 'distance_in', 'time_sec', 'asymmetry_pct');
 EXCEPTION WHEN duplicate_object THEN null; END $$;
 
@@ -1327,13 +1323,19 @@ CREATE TABLE IF NOT EXISTS "movement_screen_battery_tests" (
   "battery_id" integer NOT NULL REFERENCES "movement_screen_batteries"("id") ON DELETE CASCADE,
   "test_key" text NOT NULL,
   "label" text NOT NULL,
-  "category" movement_screen_category NOT NULL,
+  "category" text NOT NULL,
   "score_type" movement_screen_score_type NOT NULL,
+  "unit_label" text,
   "side" laterality NOT NULL,
   "instructions" text,
   "sort_order" integer NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS "movement_screen_battery_tests_battery_idx" ON "movement_screen_battery_tests" ("battery_id", "sort_order");
+-- category started as an enum before it was loosened to free text so a
+-- coach could type their own grouping label instead of picking from a
+-- fixed list -- these are no-ops once already migrated, safe to re-run.
+ALTER TABLE "movement_screen_battery_tests" ALTER COLUMN "category" TYPE text USING "category"::text;
+ALTER TABLE "movement_screen_battery_tests" ADD COLUMN IF NOT EXISTS "unit_label" text;
 
 CREATE TABLE IF NOT EXISTS "movement_screens" (
   "id" serial PRIMARY KEY,
@@ -1352,14 +1354,17 @@ CREATE TABLE IF NOT EXISTS "movement_screen_results" (
   "screen_id" integer NOT NULL REFERENCES "movement_screens"("id") ON DELETE CASCADE,
   "test_key" text NOT NULL,
   "label" text NOT NULL,
-  "category" movement_screen_category NOT NULL,
+  "category" text NOT NULL,
   "score_type" movement_screen_score_type NOT NULL,
+  "unit_label" text,
   "side" body_side,
   "score_value" real NOT NULL,
   "flagged" boolean NOT NULL DEFAULT false,
   "notes" text
 );
 CREATE INDEX IF NOT EXISTS "movement_screen_results_screen_idx" ON "movement_screen_results" ("screen_id");
+ALTER TABLE "movement_screen_results" ALTER COLUMN "category" TYPE text USING "category"::text;
+ALTER TABLE "movement_screen_results" ADD COLUMN IF NOT EXISTS "unit_label" text;
 
 -- Seeds the Forge-official "Forge Standard Screen" battery once an admin
 -- account exists to own it -- a no-op (and safe to re-run every deploy)

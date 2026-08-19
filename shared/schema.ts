@@ -1677,13 +1677,6 @@ export const insertGoniometerReadingSchema = z.object({
 // added or dropped freely. Purely informational everywhere it's read:
 // nothing here gates a program or an assignment, same "flag, don't decide"
 // treatment health status already gets.
-export const movementScreenCategoryEnum = pgEnum("movement_screen_category", [
-  "postural",
-  "balance",
-  "power",
-  "mobility",
-  "other",
-]);
 export const movementScreenScoreTypeEnum = pgEnum("movement_screen_score_type", [
   "grade_0_3",
   "distance_in",
@@ -1736,8 +1729,17 @@ export const movementScreenBatteryTests = pgTable(
       .references(() => movementScreenBatteries.id, { onDelete: "cascade" }),
     testKey: text("test_key").notNull(),
     label: text("label").notNull(),
-    category: movementScreenCategoryEnum("category").notNull(),
+    // Free text, not an enum -- purely a display grouping with no logic
+    // keyed off its exact value, so a coach can type whatever label makes
+    // sense to them instead of picking from a fixed list.
+    category: text("category").notNull(),
     scoreType: movementScreenScoreTypeEnum("score_type").notNull(),
+    // The coach's own typed unit label (e.g. "reps", "sec", "0-3") shown on
+    // the print sheet and manual-entry form in place of the generic label
+    // movementScreenScoreUnit(scoreType) would otherwise produce -- see
+    // resolveMovementScreenUnitLabel in shared/movement-screen.ts. Null
+    // means "just use the generic one for this scoreType."
+    unitLabel: text("unit_label"),
     side: lateralityEnum("side").notNull(),
     instructions: text("instructions"),
     sortOrder: integer("sort_order").notNull().default(0),
@@ -1793,8 +1795,9 @@ export const movementScreenResults = pgTable(
       .references(() => movementScreens.id, { onDelete: "cascade" }),
     testKey: text("test_key").notNull(),
     label: text("label").notNull(),
-    category: movementScreenCategoryEnum("category").notNull(),
+    category: text("category").notNull(),
     scoreType: movementScreenScoreTypeEnum("score_type").notNull(),
+    unitLabel: text("unit_label"),
     side: bodySideEnum("side"),
     scoreValue: real("score_value").notNull(),
     flagged: boolean("flagged").notNull().default(false),
@@ -1807,8 +1810,9 @@ export const movementScreenResults = pgTable(
 
 export type MovementScreenResult = typeof movementScreenResults.$inferSelect;
 
-const movementScreenCategorySchema = z.enum(["postural", "balance", "power", "mobility", "other"]);
+const movementScreenCategorySchema = z.string().trim().min(1).max(40);
 const movementScreenScoreTypeSchema = z.enum(["grade_0_3", "distance_in", "time_sec", "asymmetry_pct"]);
+const movementScreenUnitLabelSchema = z.string().trim().max(20).optional().nullable();
 
 export const movementScreenBatteryTestInputSchema = z.object({
   testKey: z
@@ -1820,6 +1824,7 @@ export const movementScreenBatteryTestInputSchema = z.object({
   label: z.string().trim().min(1).max(120),
   category: movementScreenCategorySchema,
   scoreType: movementScreenScoreTypeSchema,
+  unitLabel: movementScreenUnitLabelSchema,
   side: z.enum(["bilateral", "unilateral"]),
   instructions: z.string().trim().max(500).optional().nullable(),
 });
@@ -1837,6 +1842,7 @@ export const movementScreenResultInputSchema = z.object({
   label: z.string().trim().min(1).max(120),
   category: movementScreenCategorySchema,
   scoreType: movementScreenScoreTypeSchema,
+  unitLabel: movementScreenUnitLabelSchema,
   side: z.enum(["left", "right"]).optional().nullable(),
   scoreValue: z.number(),
   notes: z.string().trim().max(300).optional().nullable(),

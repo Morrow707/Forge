@@ -94,7 +94,7 @@ import {
   MOVEMENT_SCREEN_LOW_GRADE_THRESHOLD,
   MOVEMENT_SCREEN_ASYMMETRY_FLAG_PCT,
   testKeyFromForgeStandardScreen,
-  movementScreenScoreUnit,
+  resolveMovementScreenUnitLabel,
 } from "@shared/movement-screen";
 import type {
   ProgramStructureInput,
@@ -2565,6 +2565,7 @@ export const storage = {
           label: t.label,
           category: t.category,
           scoreType: t.scoreType,
+          unitLabel: t.unitLabel,
           side: t.side,
           instructions: t.instructions,
           sortOrder: t.sortOrder,
@@ -2602,6 +2603,7 @@ export const storage = {
         label: t.label,
         category: t.category,
         scoreType: t.scoreType,
+        unitLabel: t.unitLabel ?? null,
         side: t.side,
         instructions: t.instructions ?? null,
         sortOrder: i,
@@ -2677,6 +2679,7 @@ export const storage = {
           label: r.label,
           category: r.category,
           scoreType: r.scoreType,
+          unitLabel: r.unitLabel ?? null,
           side: r.side ?? null,
           scoreValue: r.scoreValue,
           flagged: gradeFlag || asymmetryPctFlag || sideFlag,
@@ -2744,7 +2747,7 @@ export const storage = {
     const battery = await this.getMovementScreenBatteryDetail(coachId, batteryId);
     if (!battery) return { error: "Battery not found." };
     const testList = battery.tests
-      .map((t) => `${t.testKey} (${t.label}, scored in ${movementScreenScoreUnit(t.scoreType)}, ${t.side})`)
+      .map((t) => `${t.testKey} (${t.label}, scored in ${resolveMovementScreenUnitLabel(t.scoreType, t.unitLabel)}, ${t.side})`)
       .join("\n");
     const system =
       "You are transcribing a photographed movement-screen score sheet for a strength coach. Report exactly what's handwritten on the sheet -- never infer or estimate a score that isn't legible. Match each written score to the closest test in the provided list by its testKey. A unilateral test has a left and/or right score; report each side you can actually read as its own row, and skip a side entirely if it's blank or illegible rather than guessing.";
@@ -2800,6 +2803,7 @@ export const storage = {
           label: test.label,
           category: test.category,
           scoreType: test.scoreType,
+          unitLabel: test.unitLabel,
           side: test.side === "unilateral" ? r.side ?? null : null,
           scoreValue: r.scoreValue,
           notes: r.notes ?? null,

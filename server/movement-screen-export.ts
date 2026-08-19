@@ -1,10 +1,11 @@
 import PDFDocument from "pdfkit";
-import { movementScreenScoreUnit, movementScreenCategoryLabel, type MovementScreenScoreType } from "@shared/movement-screen";
+import { resolveMovementScreenUnitLabel, type MovementScreenScoreType } from "@shared/movement-screen";
 
 export interface MovementScreenSheetTest {
   label: string;
   category: string;
   scoreType: MovementScreenScoreType;
+  unitLabel: string | null;
   side: "bilateral" | "unilateral";
   instructions: string | null;
 }
@@ -39,7 +40,7 @@ export function buildMovementScreenSheetPdf(batteryName: string, tests: Movement
       if (doc.y > doc.page.height - 140) doc.addPage();
       doc.fillColor(DARK).fontSize(12).font("Helvetica-Bold").text(test.label);
       doc.fillColor(GREY).fontSize(8.5).font("Helvetica").text(
-        `${movementScreenCategoryLabel(test.category)} · scored in ${movementScreenScoreUnit(test.scoreType)}`,
+        `${test.category} · scored in ${resolveMovementScreenUnitLabel(test.scoreType, test.unitLabel)}`,
       );
       if (test.instructions) {
         doc.fillColor(GREY).fontSize(9).font("Helvetica").text(test.instructions, { width: 500 });

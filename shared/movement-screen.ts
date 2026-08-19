@@ -6,15 +6,22 @@
 // every consumer (coach UI, corrective suggestions, AI context, admin feed)
 // shares, so they can never quietly disagree about what a score means.
 
-export type MovementScreenCategory = "postural" | "balance" | "power" | "mobility" | "other";
+// Free text, not a closed union -- a coach types whatever grouping label
+// makes sense to them (see the battery editor's Category field). Nothing
+// downstream keys logic off a specific value, purely a display grouping.
 export type MovementScreenScoreType = "grade_0_3" | "distance_in" | "time_sec" | "asymmetry_pct";
 export type MovementScreenSide = "bilateral" | "unilateral";
 
 export type MovementScreenTestDef = {
   testKey: string;
   label: string;
-  category: MovementScreenCategory;
+  category: string;
   scoreType: MovementScreenScoreType;
+  // The coach's own typed unit label (e.g. "reps," "0-3," "sec") -- see
+  // resolveMovementScreenUnitLabel. Omitted on the seeded Forge tests since
+  // their generic movementScreenScoreUnit(scoreType) label is already
+  // correct ("in," "/ 3").
+  unitLabel?: string;
   side: MovementScreenSide;
   instructions: string;
   // Which FAULT_CORRECTIVE_KEYWORDS key (shared/fault-correctives.ts) to
@@ -140,9 +147,36 @@ export function movementScreenScoreUnit(scoreType: string): string {
   return units[scoreType] ?? "";
 }
 
-export function formatMovementScreenScore(scoreType: string, value: number): string {
-  if (scoreType === "grade_0_3") return `${value}/3`;
-  return `${value}${movementScreenScoreUnit(scoreType)}`;
+// A coach's own typed unit label wins over the generic one for its
+// scoreType -- see the unitLabel field's own comment on MovementScreenTestDef
+// for why this exists (the battery editor's Score Type field is a plain
+// text box, not a picker, so whatever they typed should actually show up).
+export function resolveMovementScreenUnitLabel(scoreType: string, unitLabel?: string | null): string {
+  const trimmed = unitLabel?.trim();
+  return trimmed ? trimmed : movementScreenScoreUnit(scoreType);
+}
+
+export function formatMovementScreenScore(scoreType: string, value: number, unitLabel?: string | null): string {
+  if (scoreType === "grade_0_3" && !unitLabel?.trim()) return `${value}/3`;
+  return `${value}${resolveMovementScreenUnitLabel(scoreType, unitLabel)}`;
+}
+
+// Turns whatever a coach types into the battery editor's Score Type field
+// (a plain text box, e.g. "0-3," "reps," "sec," "% asymmetry") into the one
+// canonical scoreType the rest of the app actually needs to know -- which
+// absolute-value flagging rule applies (see MOVEMENT_SCREEN_LOW_GRADE_THRESHOLD)
+// and how the manual-entry number input behaves. Their exact text is kept
+// separately as unitLabel for display; this only decides behavior, and
+// defaults to the generic numeric bucket (no absolute-value flagging, just
+// the L/R asymmetry check every unilateral test already gets) for anything
+// that doesn't look like a grade, a percentage, or a time.
+export function inferMovementScreenScoreType(text: string): MovementScreenScoreType {
+  const t = text.trim().toLowerCase();
+  if (!t) return "distance_in";
+  if (t.includes("0-3") || t.includes("0 to 3") || t.includes("grade")) return "grade_0_3";
+  if (t.includes("%") || t.includes("asym")) return "asymmetry_pct";
+  if (t.includes("sec") || t.includes("time") || t === "s") return "time_sec";
+  return "distance_in";
 }
 
 // A grade of 1 or 0 (out of 3) is the same "clear compensation present"

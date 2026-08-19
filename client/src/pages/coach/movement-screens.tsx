@@ -7,19 +7,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { shareOrDownloadFile } from "@/lib/share-file";
 import { toast } from "sonner";
 import { Copy, Printer, Trash2, ArrowUp, ArrowDown, Plus, X, ClipboardCheck, Loader2 } from "lucide-react";
-import { movementScreenCategoryLabel } from "@shared/movement-screen";
+import { inferMovementScreenScoreType } from "@shared/movement-screen";
 
 type Battery = {
   id: number;
@@ -32,19 +25,12 @@ type Battery = {
 type Test = {
   testKey: string;
   label: string;
-  category: "postural" | "balance" | "power" | "mobility" | "other";
+  category: string;
   scoreType: "grade_0_3" | "distance_in" | "time_sec" | "asymmetry_pct";
+  unitLabel: string | null;
   side: "bilateral" | "unilateral";
   instructions: string | null;
 };
-
-const CATEGORIES: Test["category"][] = ["postural", "balance", "power", "mobility", "other"];
-const SCORE_TYPES: { value: Test["scoreType"]; label: string }[] = [
-  { value: "grade_0_3", label: "Grade (0-3)" },
-  { value: "distance_in", label: "Distance (in)" },
-  { value: "time_sec", label: "Time (sec)" },
-  { value: "asymmetry_pct", label: "Asymmetry (%)" },
-];
 
 function slugify(label: string) {
   return label.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "test";
@@ -245,40 +231,48 @@ function BatteryEditorDialog({ batteryId, onClose }: { batteryId: number; onClos
                       <X className="h-4 w-4" />
                     </button>
                   </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <Select value={t.category} onValueChange={(v) => updateTest(i, { category: v as Test["category"] })}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {CATEGORIES.map((c) => (
-                          <SelectItem key={c} value={c}>
-                            {movementScreenCategoryLabel(c)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Select value={t.scoreType} onValueChange={(v) => updateTest(i, { scoreType: v as Test["scoreType"] })}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {SCORE_TYPES.map((s) => (
-                          <SelectItem key={s.value} value={s.value}>
-                            {s.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Select value={t.side} onValueChange={(v) => updateTest(i, { side: v as Test["side"] })}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="bilateral">Bilateral</SelectItem>
-                        <SelectItem value="unilateral">Left/Right</SelectItem>
-                      </SelectContent>
-                    </Select>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                    <div className="space-y-1">
+                      <Label className="text-[10px] uppercase text-muted-foreground">Category</Label>
+                      <Input
+                        value={t.category}
+                        onChange={(e) => updateTest(i, { category: e.target.value })}
+                        placeholder="e.g. Mobility"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[10px] uppercase text-muted-foreground">Scored in</Label>
+                      <Input
+                        value={t.unitLabel ?? ""}
+                        onChange={(e) =>
+                          updateTest(i, { unitLabel: e.target.value, scoreType: inferMovementScreenScoreType(e.target.value) })
+                        }
+                        placeholder="e.g. 0-3, in, sec, reps"
+                      />
+                    </div>
+                    <div className="col-span-2 space-y-1 sm:col-span-1">
+                      <Label className="text-[10px] uppercase text-muted-foreground">Side</Label>
+                      <div className="flex gap-1.5">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={t.side === "bilateral" ? "default" : "outline"}
+                          className="flex-1"
+                          onClick={() => updateTest(i, { side: "bilateral" })}
+                        >
+                          One score
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={t.side === "unilateral" ? "default" : "outline"}
+                          className="flex-1"
+                          onClick={() => updateTest(i, { side: "unilateral" })}
+                        >
+                          Left / Right
+                        </Button>
+                      </div>
+                    </div>
                   </div>
                   <Textarea
                     value={t.instructions ?? ""}
@@ -296,7 +290,15 @@ function BatteryEditorDialog({ batteryId, onClose }: { batteryId: number; onClos
                 onClick={() =>
                   setTests((ts) => [
                     ...ts,
-                    { testKey: `test_${ts.length + 1}`, label: "New test", category: "other", scoreType: "grade_0_3", side: "bilateral", instructions: "" },
+                    {
+                      testKey: `test_${ts.length + 1}`,
+                      label: "New test",
+                      category: "",
+                      scoreType: "distance_in",
+                      unitLabel: "",
+                      side: "bilateral",
+                      instructions: "",
+                    },
                   ])
                 }
               >
