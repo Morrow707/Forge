@@ -1,6 +1,7 @@
 import { createContext, useContext, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest, ApiError, getQueryFn } from "@/lib/queryClient";
+import { flushPendingLogs } from "@/lib/offline-queue";
 import { toast } from "sonner";
 import type { PublicUser } from "@shared/schema";
 
@@ -18,6 +19,14 @@ type LoginPayload = { email: string; password: string };
 type AuthContextValue = {
   user: PublicUser | null | undefined;
   isLoading: boolean;
+  // True only when the "who am I" check itself failed to complete (network
+  // blip, server hiccup) after retrying -- NOT when it completed and came
+  // back confirming no one is logged in. Callers that gate on `user` being
+  // falsy (see ProtectedRoute) need this to tell "definitely logged out" apart
+  // from "couldn't find out either way," so a flaky connection at the exact
+  // moment this check runs can't get misread as a real logout and boot
+  // someone off a page mid-task.
+  isError: boolean;
   loginMutation: ReturnType<typeof useLoginMutation>;
   signupMutation: ReturnType<typeof useSignupMutation>;
   logoutMutation: ReturnType<typeof useLogoutMutation>;
@@ -34,6 +43,12 @@ function useLoginMutation() {
     },
     onSuccess: (user) => {
       qc.setQueryData(["/api/auth/me"], user);
+      // A stalled session earlier in this browser (see workout.tsx's
+      // unmount-flush) may have left a workout log queued locally instead
+      // of lost -- replay it now that there's a fresh, confirmed-valid
+      // session to save it against, rather than waiting on a full app
+      // reload or a network 'online' event that might never fire.
+      flushPendingLogs();
     },
     onError: (err: ApiError) => {
       toast.error(err.message || "Login failed");
@@ -73,9 +88,26 @@ function useLogoutMutation() {
 export function AuthProvider({ children }: { children: ReactNode }) {
   // The one query in the app that wants a 401 treated as valid data --
   // "no one is logged in" -- rather than an error (see queryClient.ts).
-  const { data: user, isLoading } = useQuery<PublicUser | null>({
+  //
+  // Retries here matter more than on any other query: this is what decides
+  // whether ProtectedRoute keeps someone on their page or boots them to
+  // /login. The global default is `retry: false`, which is fine for most
+  // queries -- but for this one, a single dropped packet (gym wifi, a phone
+  // waking from being backgrounded) reads as "not logged in" and unmounts
+  // whatever page they were mid-task on. A real 401 doesn't need retrying
+  // (getQueryFn already resolves that to `null` without throwing); this
+  // retry only covers the connection actually failing to complete, so a
+  // momentary blip gets a couple of quick second chances before anything
+  // downstream treats it as a confirmed logout.
+  const {
+    data: user,
+    isLoading,
+    isError,
+  } = useQuery<PublicUser | null>({
     queryKey: ["/api/auth/me"],
     queryFn: getQueryFn({ on401: "returnNull" }),
+    retry: 2,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 4000),
   });
 
   const loginMutation = useLoginMutation();
@@ -84,7 +116,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, isLoading, loginMutation, signupMutation, logoutMutation }}
+      value={{ user, isLoading, isError, loginMutation, signupMutation, logoutMutation }}
     >
       {children}
     </AuthContext.Provider>

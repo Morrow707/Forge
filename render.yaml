@@ -6,6 +6,17 @@ services:
     buildCommand: npm install --include=dev && npm run build && npm run db:reconcile && npm run db:seed
     startCommand: npm start
     healthCheckPath: /
+    # Athlete-uploaded form-check videos and coach annotation PNGs are
+    # written to server/uploads (see UPLOADS_DIR/ANNOTATIONS_DIR in
+    # server/routes.ts). Without a persistent disk, that directory lives on
+    # the instance's ephemeral filesystem and is wiped on every deploy and
+    # restart -- every previously-saved video/annotation URL 404s the moment
+    # the service redeploys, even though the DB row referencing it survives.
+    # Mounting a disk here keeps those files across deploys and restarts.
+    disk:
+      name: forge-uploads
+      mountPath: /opt/render/project/src/server/uploads
+      sizeGB: 10
     envVars:
       - key: NODE_ENV
         value: production

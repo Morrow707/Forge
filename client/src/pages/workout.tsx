@@ -808,10 +808,20 @@ export function WorkoutPage({
         const res = await apiRequest("POST", `${apiBase}/log`, payload);
         return { synced: true as const, data: await res.json(), silent };
       } catch (err) {
-        // A real server rejection (bad data, auth, etc) should surface as
-        // an error same as always -- only a genuine network failure gets
-        // queued for automatic retry.
-        if (err instanceof ApiError) throw err;
+        // A genuine rejection of the payload itself (bad data, forbidden,
+        // not found) should surface as an error same as always -- retrying
+        // it later won't change the outcome. Everything else -- a raw
+        // network failure, a 401 (a stalled/expired session looks
+        // identical to a real logout from here, but the 30-day session
+        // cookie means it's almost always still valid server-side once the
+        // connection recovers), or a 5xx blip -- gets queued for automatic
+        // retry instead of silently dropping the athlete's data. This is
+        // what makes autosave safe to run silently: a queued entry gets
+        // replayed by startOfflineLogSync on the next reconnect/reload, so
+        // nothing typed is ever lost to a transient hiccup.
+        const isPermanentRejection =
+          err instanceof ApiError && err.status !== 401 && err.status < 500;
+        if (isPermanentRejection) throw err;
         queueLog(dayKey, payload);
         return { synced: false as const, data: null, silent };
       }
@@ -910,8 +920,20 @@ export function WorkoutPage({
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("pagehide", flush);
+      // The tab/app-close cases above don't cover an *in-app* navigation
+      // away from this page -- most importantly ProtectedRoute swapping
+      // this component out for a login redirect when an auth check fails.
+      // That's a normal React unmount, not a page teardown, so sendBeacon
+      // isn't needed and a plain synchronous write to the same durable
+      // queue startOfflineLogSync drains is enough: it guarantees the
+      // latest snapshot is captured the moment this page goes away for any
+      // reason, not just a closed tab. Redundant if the last save already
+      // synced -- queueLog just gets replayed against an already-saved
+      // state -- but never redundant with data loss.
+      const payload = buildLogPayload(itemsRef.current, dayCompletedRef.current);
+      queueLog(dayKey, payload);
     };
-    // apiBase is static for the life of this page; only needs to run once.
+    // apiBase/dayKey are static for the life of this page; only needs to run once.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

@@ -1,5 +1,5 @@
 import { Switch, Route, Redirect, useLocation } from "wouter";
-import { QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { Toaster } from "sonner";
 import { lazy, Suspense, useEffect, type ComponentType } from "react";
 import { queryClient } from "@/lib/queryClient";
@@ -63,6 +63,33 @@ function homeFor(role: "coach" | "athlete" | "admin") {
   return "/athlete";
 }
 
+// Shown instead of a hard redirect-to-login when the "who am I" check
+// itself couldn't complete (dropped connection, server hiccup) -- as
+// opposed to completing and confirming no one is logged in. The
+// distinction matters: booting someone to /login on a plain network blip
+// unmounts whatever page they're mid-task on (e.g. an in-progress workout
+// log) for no real reason, since their session is almost certainly still
+// valid the moment the connection recovers. This keeps them in place and
+// lets them retry instead.
+function ConnectionProblem() {
+  const qc = useQueryClient();
+  return (
+    <div className="flex h-screen w-full flex-col items-center justify-center gap-4 bg-background px-6 text-center">
+      <p className="text-sm text-muted-foreground">
+        Having trouble reaching Forge. Your session is still fine -- check your connection and
+        try again.
+      </p>
+      <button
+        type="button"
+        className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
+        onClick={() => qc.refetchQueries({ queryKey: ["/api/auth/me"] })}
+      >
+        Retry
+      </button>
+    </div>
+  );
+}
+
 function ProtectedRoute({
   role,
   component: Component,
@@ -70,9 +97,15 @@ function ProtectedRoute({
   role: "coach" | "athlete" | "admin";
   component: ComponentType;
 }) {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, isError } = useAuth();
 
   if (isLoading) return <FullScreenSpinner />;
+  // isError means the check itself failed to complete (network/server
+  // blip) after retrying -- NOT a confirmed "you're logged out." Only a
+  // completed check that actually came back with no user (user === null)
+  // is a real logout; anything else keeps the athlete on their page rather
+  // than guessing and unmounting it.
+  if (isError && user === undefined) return <ConnectionProblem />;
   if (!user) return <Redirect to="/login" />;
   if (user.role !== role) {
     return <Redirect to={homeFor(user.role)} />;
@@ -81,8 +114,9 @@ function ProtectedRoute({
 }
 
 function HomeRedirect() {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, isError } = useAuth();
   if (isLoading) return <FullScreenSpinner />;
+  if (isError && user === undefined) return <ConnectionProblem />;
   if (!user) return <Redirect to="/login" />;
   return <Redirect to={homeFor(user.role)} />;
 }

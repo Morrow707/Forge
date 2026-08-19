@@ -76,7 +76,7 @@ export function queueLog(dayKey: string, payload: unknown) {
   return entry;
 }
 
-async function flushPendingLogs() {
+export async function flushPendingLogs() {
   const pending = readQueue();
   if (pending.length === 0) return;
   let syncedAny = false;
