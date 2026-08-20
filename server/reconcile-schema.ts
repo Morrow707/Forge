@@ -1395,6 +1395,62 @@ BEGIN
       (battery_id, 'y_balance_posterolateral', 'Y-Balance -- Posterolateral Reach', 'balance', 'distance_in', 'unilateral', 'Same setup as the anterior reach, reaching diagonally back and away from the midline.', 9);
   END IF;
 END $$;
+
+-- Age-tier scaffolding (see shared/privacy-tiers.ts) -- real date of birth,
+-- separate from the self-reported "age" snapshot above, plus provenance/
+-- notice flags used by the signup and claim-code routes.
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "date_of_birth" date;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "provisioned_via_coach_consent" boolean NOT NULL DEFAULT false;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "requires_guardian_notice" boolean NOT NULL DEFAULT false;
+ALTER TABLE "provisional_athletes" ADD COLUMN IF NOT EXISTS "date_of_birth" date;
+
+-- Admin Query Engine saved filter presets (shared/schema.ts adminSavedViews).
+CREATE TABLE IF NOT EXISTS "admin_saved_views" (
+  "id" serial PRIMARY KEY,
+  "name" text NOT NULL,
+  "filters" json NOT NULL,
+  "created_by_admin_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+
+-- Immutable consent audit log (shared/schema.ts consentRecords).
+DO $$ BEGIN
+  CREATE TYPE "consent_type" AS ENUM ('terms_of_service', 'biometric_waiver', 'coach_coppa_consent', 'parental_notice_ack');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+CREATE TABLE IF NOT EXISTS "consent_records" (
+  "id" serial PRIMARY KEY,
+  "user_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "consent_type" consent_type NOT NULL,
+  "document_text" text NOT NULL,
+  "document_version" text NOT NULL,
+  "given_by_user_id" integer REFERENCES "users"("id") ON DELETE SET NULL,
+  "ip_address" text,
+  "user_agent" text,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "consent_records_user_idx" ON "consent_records" ("user_id", "created_at");
+
+-- Immutable per-record access audit log (shared/schema.ts recordAccessAuditLogs).
+DO $$ BEGIN
+  CREATE TYPE "record_access_action" AS ENUM ('viewed', 'streamed', 'downloaded', 'exported', 'deleted');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+CREATE TABLE IF NOT EXISTS "record_access_audit_logs" (
+  "id" serial PRIMARY KEY,
+  "user_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "target_athlete_id" integer REFERENCES "users"("id") ON DELETE SET NULL,
+  "action_type" record_access_action NOT NULL,
+  "resource_type" text NOT NULL,
+  "resource_id" text,
+  "detail" text,
+  "justification" text,
+  "ip_address" text,
+  "user_agent" text,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "record_access_audit_logs_target_idx" ON "record_access_audit_logs" ("target_athlete_id", "created_at");
+CREATE INDEX IF NOT EXISTS "record_access_audit_logs_user_idx" ON "record_access_audit_logs" ("user_id", "created_at");
 `;
 
 async function main() {
