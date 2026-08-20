@@ -247,6 +247,16 @@ export function FormVideoRecorderDialog({
     // too large, auth) -- no amount of retrying changes that, so it's
     // surfaced immediately same as before; only a raw failed request gets
     // retried.
+    //
+    // FLAGGED for a future build: this retry loop only covers a live
+    // connection blip -- `blob` lives in React state, not on disk, so a
+    // whole-session outage (bad gym wifi) or the app backgrounding/getting
+    // killed by iOS mid-upload loses the recording entirely. Workout
+    // logging already solves the equivalent problem for reps/sets (see
+    // client/src/lib/offline-queue.ts -- localStorage-persisted, survives
+    // restart, auto-flushes on reconnect via startOfflineLogSync); video
+    // needs the same shape, writing to native filesystem storage instead
+    // of localStorage. Deferred, not built yet.
     const maxAttempts = 3;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       setUploadProgress(0);
