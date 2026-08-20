@@ -14,7 +14,7 @@ import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { format, parseISO, addDays, formatISO } from "date-fns";
-import { Target, Dumbbell, Trophy, X, Plus, Sparkles, Timer } from "lucide-react";
+import { Target, Dumbbell, Trophy, X, Plus, Sparkles, Timer, History } from "lucide-react";
 import { TESTING_METRICS, type TestingMetricKey } from "@shared/testing-metrics";
 
 type ExerciseOption = { id: number; name: string };
@@ -30,6 +30,8 @@ type Goal = {
   targetValue: number;
   targetUnit: string;
   targetDate: string | null;
+  achievedAt: string | null;
+  archivedAt: string | null;
   currentValue: number | null;
   achieved: boolean;
 };
@@ -56,6 +58,7 @@ export function GoalsPanel({
 }) {
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const [type, setType] = useState<"exercise" | "testing" | "skill">("exercise");
   const [exerciseId, setExerciseId] = useState("");
   const [testingMetric, setTestingMetric] = useState<TestingMetricKey | "">("");
@@ -73,6 +76,15 @@ export function GoalsPanel({
     queryKey: [goalsUrl],
     queryFn: () => getJson(goalsUrl),
   });
+
+  const { data: history = [], isLoading: historyLoading } = useQuery<Goal[]>({
+    queryKey: [goalsUrl, "history"],
+    queryFn: () => getJson(`${goalsUrl}?history=true`),
+    enabled: showHistory,
+  });
+  // getGoalsForAthlete(..., true) returns every goal, active ones included --
+  // History is specifically the ones no longer on the active list above.
+  const archivedGoals = history.filter((g) => g.archivedAt);
 
   const { data: exercises = [] } = useQuery<ExerciseOption[]>({
     queryKey: [exercisesUrl],
@@ -145,19 +157,81 @@ export function GoalsPanel({
     mutationFn: async (id: number) => {
       await apiRequest("DELETE", `${goalsUrl}/${id}`);
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: [goalsUrl] }),
+    // Archiving (not a hard delete server-side now) moves a goal from the
+    // active list into History, so both queries need to refresh.
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [goalsUrl] });
+      qc.invalidateQueries({ queryKey: [goalsUrl, "history"] });
+    },
   });
 
   return (
     <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        {canCreate && !showForm && (
+          <Button size="sm" variant="outline" onClick={() => setShowForm(true)}>
+            <Plus className="h-4 w-4" />
+            Set a Goal
+          </Button>
+        )}
+        <Button size="sm" variant="ghost" onClick={() => setShowHistory((v) => !v)}>
+          <History className="h-4 w-4" />
+          {showHistory ? "Hide History" : "View History"}
+        </Button>
+      </div>
+
+      {showHistory && (
+        <div className="space-y-2 rounded-md border border-dashed border-border p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Past Goals
+          </p>
+          {historyLoading ? (
+            <div className="h-10 animate-pulse rounded-md bg-surface" />
+          ) : archivedGoals.length === 0 ? (
+            <p className="py-2 text-center text-sm text-muted-foreground">
+              Nothing here yet -- goals you remove from the active list stay here.
+            </p>
+          ) : (
+            archivedGoals.map((g) => {
+              const label =
+                g.type === "exercise"
+                  ? g.exerciseName ?? "Deleted exercise"
+                  : g.type === "skill"
+                    ? g.skillExerciseName ?? "Deleted drill"
+                    : TESTING_METRICS.find((m) => m.key === g.testingMetric)?.label ?? g.testingMetric;
+              return (
+                <div key={g.id} className="flex items-center justify-between gap-2 rounded-md border border-border p-2.5 text-sm">
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    {g.type === "exercise" ? (
+                      <Dumbbell className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    ) : g.type === "skill" ? (
+                      <Timer className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    ) : (
+                      <Target className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    )}
+                    <span className="truncate font-medium">{label}</span>
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      target {g.targetValue} {g.targetUnit}
+                    </span>
+                  </div>
+                  {g.achievedAt ? (
+                    <span className="flex shrink-0 items-center gap-1 rounded-full bg-amber-400/15 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-500">
+                      <Trophy className="h-3 w-3" />
+                      Hit {format(parseISO(g.achievedAt), "MMM d, yyyy")}
+                    </span>
+                  ) : (
+                    <span className="shrink-0 text-xs text-muted-foreground">Not achieved</span>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
+
       {canCreate && (
         <div>
-          {!showForm ? (
-            <Button size="sm" variant="outline" onClick={() => setShowForm(true)}>
-              <Plus className="h-4 w-4" />
-              Set a Goal
-            </Button>
-          ) : (
+          {!showForm ? null : (
             <form
               onSubmit={(e) => {
                 e.preventDefault();

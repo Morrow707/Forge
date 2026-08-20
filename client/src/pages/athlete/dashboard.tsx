@@ -148,6 +148,11 @@ export default function AthleteDashboard() {
           </CardContent>
         </Card>
 
+        {/* Today's nutrition sits right under the calendar -- it's the one
+            thing on this page an athlete plausibly checks/updates several
+            times a day, unlike the stat tiles and team chat below it. */}
+        <NutritionQuickSummary />
+
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <StatTile
             icon={Flame}
@@ -175,13 +180,9 @@ export default function AthleteDashboard() {
           />
         </div>
 
-        {/* Quick view: today's nutrition and (for a coached athlete -- a
-            Free Agent has no team) the latest team chat, both just a
-            summary with a link through to their full page. */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <NutritionQuickSummary />
-          {!coachesLoading && coaches.length > 0 && <TeamChatQuickSummary />}
-        </div>
+        {/* Team chat quick view -- coached athletes only, a Free Agent has
+            no team. */}
+        {!coachesLoading && coaches.length > 0 && <TeamChatQuickSummary />}
 
         {/* Free Agent status is purely derived (zero rows in coachAthletes
             for this athlete, nothing stored) -- see app-shell.tsx's own nav

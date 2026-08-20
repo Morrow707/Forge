@@ -37,7 +37,9 @@ export function WeaknessReportPanel({
   canGenerate = true,
 }: {
   fetchUrl: string;
-  generateUrl: string;
+  /** Only needed when canGenerate is true -- an athlete's own view never
+   * generates (coach-only now), so it never passes this. */
+  generateUrl?: string;
   canGenerate?: boolean;
 }) {
   const qc = useQueryClient();
@@ -50,7 +52,7 @@ export function WeaknessReportPanel({
 
   const generateMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", generateUrl, {});
+      const res = await apiRequest("POST", generateUrl!, {});
       return res.json();
     },
     onSuccess: (report: WeaknessReport) => {
@@ -77,7 +79,7 @@ export function WeaknessReportPanel({
         diagnosis. Each report is a snapshot; generate a new one later to see what's changed.
       </p>
 
-      {canGenerate && (
+      {canGenerate && generateUrl && (
         <Button size="sm" onClick={() => generateMutation.mutate()} disabled={generateMutation.isPending}>
           <Sparkles className="h-4 w-4" />
           {generateMutation.isPending ? "Analyzing…" : "Generate Report"}

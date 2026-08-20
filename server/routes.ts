@@ -2995,32 +2995,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
-  // An athlete (coached or Free Agent) can always read their own reports,
-  // whoever generated them -- this is the "provide detailed data to the
-  // patient" half of the feature. Free Agent self-generation is a separate,
-  // paywalled route below.
+  // A coached athlete can read their own reports, whoever generated them --
+  // this is the "provide detailed data to the patient" half of the feature.
+  // A Free Agent gets nothing here: this is clinical-adjacent PT/S&C data
+  // (goniometer, asymmetry, load flags), and unlike the rest of the
+  // Free-Agent-only AI surface, Forge wants a coach reading and contextualizing
+  // it with the athlete rather than the AI handing a deficit list straight to
+  // someone training unsupervised. If this athlete had reports from a past
+  // coach relationship, those rows are never deleted (see weaknessReports'
+  // own comment -- keyed on athleteId, no coachId), so they resurface here
+  // automatically the moment a new coach picks this athlete up.
   app.get("/api/athlete/weakness-reports", requireRole("athlete"), async (req, res) => {
     const user = currentUser(req);
+    const coaches = await storage.getCoachesForAthlete(user.id);
+    if (coaches.length === 0) return res.json([]);
     const reports = await storage.getWeaknessReportsForAthlete(user.id);
     res.json(reports);
   });
-
-  app.post(
-    "/api/athlete/weakness-report",
-    requireRole("athlete"),
-    requireFreeAgent,
-    requirePaidAiAccess("strengthAi"),
-    async (req, res) => {
-      const user = currentUser(req);
-      const report = await storage.generateWeaknessReport(user.id, user.id);
-      if (!report) {
-        return res
-          .status(422)
-          .json({ message: "Not enough PT/S&C data logged yet to generate a report." });
-      }
-      res.status(201).json(report);
-    },
-  );
 
   app.get("/api/coach/testing-trends", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
@@ -3125,7 +3116,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const athleteId = Number(req.params.athleteId);
     const onRoster = await storage.getRosterAthleteForCoach(user.id, athleteId);
     if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
-    const list = await storage.getGoalsForAthlete(athleteId);
+    const list = await storage.getGoalsForAthlete(athleteId, req.query.history === "true");
     res.json(list);
   });
 
@@ -3175,7 +3166,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const athleteId = Number(req.params.athleteId);
       const onRoster = await storage.getRosterAthleteForCoach(user.id, athleteId);
       if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
-      await storage.deleteGoal(athleteId, Number(req.params.goalId));
+      await storage.archiveGoal(athleteId, Number(req.params.goalId));
       res.status(204).end();
     },
   );
@@ -4696,6 +4687,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(history);
   });
 
+  // Uncapped version of the Progress page's Recent PRs card (which only
+  // shows the top 5) -- backs the "View Full History" page.
+  app.get("/api/athlete/pr-history", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const history = await storage.getFullPrHistoryForAthlete(user.id);
+    res.json(history);
+  });
+
   app.get("/api/athlete/recruiting-profile.pdf", requireRole("athlete"), async (req, res) => {
     const user = currentUser(req);
     const [profile, summary] = await Promise.all([
@@ -4811,7 +4810,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/athlete/goals", requireRole("athlete"), async (req, res) => {
     const user = currentUser(req);
-    const list = await storage.getGoalsForAthlete(user.id);
+    const list = await storage.getGoalsForAthlete(user.id, req.query.history === "true");
     res.json(list);
   });
 
@@ -4842,7 +4841,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/athlete/goals/:id", requireRole("athlete"), async (req, res) => {
     const user = currentUser(req);
-    await storage.deleteGoal(user.id, Number(req.params.id));
+    await storage.archiveGoal(user.id, Number(req.params.id));
     res.status(204).end();
   });
 

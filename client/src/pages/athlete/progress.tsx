@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,7 +29,6 @@ import {
 } from "recharts";
 import {
   Crown,
-  Dumbbell,
   CalendarCheck,
   Flame,
   Scale,
@@ -42,12 +40,14 @@ import {
   FileDown,
   Sparkles,
 } from "lucide-react";
+import { Link } from "wouter";
 import { GoalsPanel } from "@/components/goals-panel";
 import { WeaknessReportPanel } from "@/components/weakness-report-panel";
 import { StreakBadges } from "@/components/streak-badge";
 import { DigestBanner } from "@/components/digest-banner";
 import { TrophyCase, type AthleteTrophyView } from "@/components/trophy-case";
 import { TrainingHistoryExportDialog } from "@/components/training-history-export-dialog";
+import { ExerciseTrendDialog } from "@/components/exercise-trend-dialog";
 
 type ProgressSummary = {
   totalWorkoutsCompleted: number;
@@ -62,7 +62,6 @@ type ProgressSummary = {
     reps: string;
     date: string;
   }[];
-  currentLifts: { exerciseName: string; weight: string; unit: string; reps: string; date: string }[];
 };
 
 type BodyMetric = {
@@ -184,8 +183,13 @@ export default function AthleteProgress() {
   return (
     <AppShell
       title="My Progress"
-      actions={
-        <div className="flex items-center gap-2">
+      // On a phone-width screen, two full-text buttons crammed into the same
+      // row as the title (AppShell's `actions` slot) squeezed "My Progress"
+      // down to an unreadable "M...". They live in `subheader` instead --
+      // its own row below the title, same pattern the Library tab strip
+      // uses elsewhere -- so the title always renders in full.
+      subheader={
+        <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => setExportOpen(true)}>
             <FileDown className="h-4 w-4" />
             Export History
@@ -248,7 +252,7 @@ export default function AthleteProgress() {
             </Card>
           </div>
 
-          {(data?.currentStreak || data?.totalCompleted) && (
+          {!!(data?.currentStreak || data?.totalCompleted) && (
             <div className="mb-6 flex flex-wrap gap-2">
               <StreakBadges
                 currentStreak={data?.currentStreak ?? 0}
@@ -257,24 +261,9 @@ export default function AthleteProgress() {
             </div>
           )}
 
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Trophy className="h-5 w-5 text-primary" />
-                Trophy Case
-              </CardTitle>
-              <CardDescription>
-                Every milestone you've ever unlocked -- they stack, and they're yours for good.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <TrophyCase trophies={trophies ?? []} />
-            </CardContent>
-          </Card>
-
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <Card>
-              <CardHeader>
+          <Card>
+            <CardHeader className="flex flex-row items-start justify-between gap-2">
+              <div>
                 <CardTitle className="flex items-center gap-2">
                   <Crown className="h-5 w-5 text-primary" />
                   Recent PRs
@@ -282,83 +271,53 @@ export default function AthleteProgress() {
                 <CardDescription>
                   Your current best on each lift, most recent first -- tap one to see the trend.
                 </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {!data?.recentPRs.length && (
-                  <p className="py-6 text-center text-sm text-muted-foreground">
-                    Log some sets to start tracking PRs.
-                  </p>
-                )}
-                {data?.recentPRs.map((pr, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center gap-1 rounded-md border border-border p-3 transition-colors hover:border-primary/50 hover:bg-surface"
-                  >
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setTrendExercise({ id: pr.exerciseId, name: pr.exerciseName })
-                      }
-                      className="flex flex-1 items-center justify-between text-left"
-                    >
-                      <div>
-                        <p className="font-semibold">{pr.exerciseName}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {format(parseISO(pr.date), "MMM d, yyyy")}
-                        </p>
-                      </div>
-                      <p className="font-display text-lg font-bold text-primary">
-                        {pr.weight} {pr.unit} × {pr.reps}
-                      </p>
-                    </button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="shrink-0"
-                      aria-label={`Share ${pr.exerciseName} PR`}
-                      disabled={sharingPrIndex === i}
-                      onClick={() => handleSharePr(pr, i)}
-                    >
-                      <Share2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Dumbbell className="h-5 w-5 text-primary" />
-                  Your Lifts
-                </CardTitle>
-                <CardDescription>Most recently logged set for each exercise.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {!data?.currentLifts.length && (
-                  <p className="py-6 text-center text-sm text-muted-foreground">
-                    Nothing logged yet.
-                  </p>
-                )}
-                {data?.currentLifts.map((lift, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center justify-between rounded-md border border-border p-3"
+              </div>
+              <Button asChild variant="ghost" size="sm" className="shrink-0">
+                <Link href="/athlete/lift-history">View Full History</Link>
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {!data?.recentPRs.length && (
+                <p className="py-6 text-center text-sm text-muted-foreground">
+                  Log some sets to start tracking PRs.
+                </p>
+              )}
+              {data?.recentPRs.slice(0, 5).map((pr, i) => (
+                <div
+                  key={i}
+                  className="flex items-center gap-1 rounded-md border border-border p-3 transition-colors hover:border-primary/50 hover:bg-surface"
+                >
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setTrendExercise({ id: pr.exerciseId, name: pr.exerciseName })
+                    }
+                    className="flex flex-1 items-center justify-between text-left"
                   >
                     <div>
-                      <p className="font-semibold">{lift.exerciseName}</p>
+                      <p className="font-semibold">{pr.exerciseName}</p>
                       <p className="text-xs text-muted-foreground">
-                        {format(parseISO(lift.date), "MMM d, yyyy")}
+                        {format(parseISO(pr.date), "MMM d, yyyy")}
                       </p>
                     </div>
-                    <p className="text-sm font-semibold text-muted-foreground">
-                      {lift.weight} {lift.unit} × {lift.reps}
+                    <p className="font-display text-lg font-bold text-primary">
+                      {pr.weight} {pr.unit} × {pr.reps}
                     </p>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          </div>
+                  </button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="shrink-0"
+                    aria-label={`Share ${pr.exerciseName} PR`}
+                    disabled={sharingPrIndex === i}
+                    onClick={() => handleSharePr(pr, i)}
+                  >
+                    <Share2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
 
           <Card className="mt-4">
             <CardHeader>
@@ -379,26 +338,24 @@ export default function AthleteProgress() {
             </CardContent>
           </Card>
 
-          <Card className="mt-4">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-primary" />
-                Weakness Report
-              </CardTitle>
-              <CardDescription>
-                {isFreeAgent
-                  ? "AI analysis of your ROM, asymmetry, load, wellness, and testing data."
-                  : "AI analysis of your ROM, asymmetry, load, wellness, and testing data -- ask your coach to generate a new one."}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <WeaknessReportPanel
-                fetchUrl="/api/athlete/weakness-reports"
-                generateUrl="/api/athlete/weakness-report"
-                canGenerate={isFreeAgent}
-              />
-            </CardContent>
-          </Card>
+          {/* Coach-only feature -- a Free Agent has no coach to read this
+              PT/S&C deficit analysis alongside them, so it stays hidden
+              entirely until they have one. See the /api/athlete/weakness-reports
+              route comment for how visibility ties to the active coach link. */}
+          {!isFreeAgent && (
+            <Card className="mt-4">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-primary" />
+                  Weakness Report
+                </CardTitle>
+                <CardDescription>Generated by your coach -- ask them for a new one.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <WeaknessReportPanel fetchUrl="/api/athlete/weakness-reports" canGenerate={false} />
+              </CardContent>
+            </Card>
+          )}
 
           <Card className="mt-4">
             <CardHeader>
@@ -422,7 +379,12 @@ export default function AthleteProgress() {
                 }}
                 className="grid grid-cols-2 gap-3"
               >
-                <div className="min-w-0 space-y-1.5">
+                {/* Date gets its own full-width row -- iOS's native date
+                    picker ignores the grid column's width and renders at
+                    its own intrinsic size, which was wide enough to
+                    overlap the Weight field next to it when the two shared
+                    a row. */}
+                <div className="col-span-2 min-w-0 space-y-1.5">
                   <Label htmlFor="metric-date">Date</Label>
                   <Input
                     id="metric-date"
@@ -458,7 +420,7 @@ export default function AthleteProgress() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="min-w-0 space-y-1.5">
+                <div className="col-span-2 min-w-0 space-y-1.5">
                   <Label htmlFor="metric-bf">Body fat % (optional)</Label>
                   <Input
                     id="metric-bf"
@@ -549,6 +511,24 @@ export default function AthleteProgress() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Bottom of the page, deliberately -- cool to see, but it's a
+              record of what's already been earned, not something the
+              athlete needs to check regularly the way the cards above are. */}
+          <Card className="mt-4">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Trophy className="h-5 w-5 text-primary" />
+                Trophy Case
+              </CardTitle>
+              <CardDescription>
+                Every milestone you've ever unlocked -- they stack, and they're yours for good.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <TrophyCase trophies={trophies ?? []} />
+            </CardContent>
+          </Card>
         </>
       )}
 
@@ -570,92 +550,3 @@ export default function AthleteProgress() {
   );
 }
 
-type ExerciseHistoryPoint = {
-  date: string;
-  weight: number;
-  weightUnit: "lbs" | "kg";
-  estimatedOneRm: number | null;
-  isPR: boolean;
-};
-
-/** The one piece of "growth over time" this deliberately limited page shows --
- * just weight & est. 1RM for the exercise tapped in Recent PRs. Everything
- * else (velocity, bar path, tempo) stays coach-only in the full analytics
- * page. */
-function ExerciseTrendDialog({
-  exercise,
-  onOpenChange,
-}: {
-  exercise: { id: number; name: string } | null;
-  onOpenChange: (open: boolean) => void;
-}) {
-  const { data: history = [], isLoading } = useQuery<ExerciseHistoryPoint[]>({
-    queryKey: ["/api/athlete/exercise-history", exercise?.id],
-    queryFn: () => getJson(`/api/athlete/exercise-history?exerciseId=${exercise!.id}`),
-    enabled: exercise != null,
-  });
-
-  const chartData = history.map((p) => ({
-    label: format(parseISO(p.date), "MMM d"),
-    weight: p.weight,
-    estimatedOneRm: p.estimatedOneRm,
-    isPR: p.isPR,
-  }));
-  const unit = history.find((p) => p.weightUnit)?.weightUnit ?? "lbs";
-
-  return (
-    <Dialog open={exercise != null} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>{exercise?.name} — Growth Trend</DialogTitle>
-        </DialogHeader>
-        {isLoading ? (
-          <div className="h-64 animate-pulse rounded-md bg-surface" />
-        ) : chartData.length === 0 ? (
-          <p className="py-10 text-center text-sm text-muted-foreground">
-            Not enough logged sets yet to show a trend.
-          </p>
-        ) : (
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData} margin={{ left: 4, right: 12 }}>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} width={44} />
-                <Tooltip
-                  contentStyle={{
-                    background: "hsl(var(--card))",
-                    border: "1px solid hsl(var(--border))",
-                  }}
-                  formatter={(value: unknown, name: unknown, item: any) => [
-                    `${value} ${unit}${item?.payload?.isPR ? " — PR!" : ""}`,
-                    String(name),
-                  ]}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="weight"
-                  name="Weight"
-                  stroke="hsl(var(--primary))"
-                  strokeWidth={2}
-                  connectNulls
-                  dot={{ r: 3 }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="estimatedOneRm"
-                  name="Est. 1RM"
-                  stroke="#3b82f6"
-                  strokeWidth={1.5}
-                  strokeDasharray="4 3"
-                  connectNulls
-                  dot={{ r: 2 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        )}
-      </DialogContent>
-    </Dialog>
-  );
-}

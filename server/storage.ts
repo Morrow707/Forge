@@ -3087,10 +3087,14 @@ export const storage = {
 
   // Progress toward each goal is computed fresh here rather than stored, so
   // it can never drift out of sync with the athlete's actual lift history or
-  // current testing numbers.
-  async getGoalsForAthlete(athleteId: number) {
+  // current testing numbers. includeArchived=true is History's view --
+  // otherwise a goal removed via archiveGoal() below drops out of the
+  // normal active list without losing the row.
+  async getGoalsForAthlete(athleteId: number, includeArchived = false) {
     const rows = await db.query.goals.findMany({
-      where: eq(goals.athleteId, athleteId),
+      where: includeArchived
+        ? eq(goals.athleteId, athleteId)
+        : and(eq(goals.athleteId, athleteId), isNull(goals.archivedAt)),
       orderBy: desc(goals.createdAt),
     });
     const exerciseIds = rows.map((g) => g.exerciseId).filter((id): id is number => id != null);
@@ -3139,6 +3143,16 @@ export const storage = {
           currentValue != null &&
           (lowerIsBetter ? currentValue <= g.targetValue : currentValue >= g.targetValue);
 
+        // First time this goal is seen achieved, stamp it permanently --
+        // unlike `achieved` above, this never flips back even if the
+        // athlete's number regresses later, so History still shows it was
+        // once hit.
+        let achievedAt = g.achievedAt;
+        if (achieved && !achievedAt) {
+          achievedAt = new Date();
+          await db.update(goals).set({ achievedAt }).where(eq(goals.id, g.id));
+        }
+
         return {
           id: g.id,
           type: g.type,
@@ -3151,6 +3165,8 @@ export const storage = {
           targetUnit: g.targetUnit,
           targetDate: g.targetDate,
           createdAt: g.createdAt,
+          achievedAt,
+          archivedAt: g.archivedAt,
           currentValue,
           achieved,
         };
@@ -3158,8 +3174,14 @@ export const storage = {
     );
   },
 
-  async deleteGoal(athleteId: number, goalId: number) {
-    await db.delete(goals).where(and(eq(goals.id, goalId), eq(goals.athleteId, athleteId)));
+  // Soft delete -- keeps the row (and its achievedAt record) for History
+  // instead of losing it, since "did I ever hit this" is worth keeping even
+  // after clearing it off the active list.
+  async archiveGoal(athleteId: number, goalId: number) {
+    await db
+      .update(goals)
+      .set({ archivedAt: new Date() })
+      .where(and(eq(goals.id, goalId), eq(goals.athleteId, athleteId)));
   },
 
   // Grounded in the athlete's actual historical trend for this exercise/
@@ -3561,7 +3583,7 @@ Based on this athlete's actual rate of improvement, suggest a realistic target v
   },
 
   async getAthleteAiContext(athleteId: number): Promise<string> {
-    const [user, latestGoniometer, asymmetryFlags, acwrHistory, currentPhase, injuries, screenFlags] =
+    const [user, latestGoniometer, asymmetryFlags, acwrHistory, currentPhase, injuries, screenFlags, activeGoals] =
       await Promise.all([
         db.query.users.findFirst({ where: eq(users.id, athleteId) }),
         this.getLatestGoniometerReadingsForAthlete(athleteId),
@@ -3570,8 +3592,25 @@ Based on this athlete's actual rate of improvement, suggest a realistic target v
         this.getCurrentTrainingPhaseForAthlete(athleteId),
         this.getInjuryHistoryForAthlete(athleteId),
         this.getLatestFlaggedMovementScreenResults(athleteId),
+        this.getGoalsForAthlete(athleteId),
       ]);
     if (!user) return "No profile on file for this athlete.";
+
+    const goalsText =
+      activeGoals.length > 0
+        ? activeGoals
+            .map((g) => {
+              const label =
+                g.type === "exercise"
+                  ? g.exerciseName ?? "an exercise"
+                  : g.type === "skill"
+                    ? g.skillExerciseName ?? "a sprint drill"
+                    : g.testingMetric;
+              const current = g.currentValue != null ? `, currently ${g.currentValue} ${g.targetUnit}` : "";
+              return `${label}: target ${g.targetValue} ${g.targetUnit}${current}${g.achieved ? " (achieved)" : ""}`;
+            })
+            .join("; ")
+        : "none set";
 
     const restrictedGoniometer = latestGoniometer
       .map((r) => ({ ...r, status: classifyGoniometerReading(r.joint, r.movement, r.angleDegrees) }))
@@ -3629,7 +3668,8 @@ Based on this athlete's actual rate of improvement, suggest a realistic target v
 - Joint range-of-motion flags (coach/PT-measured, not shown to the athlete directly): ${goniometerText}
 - Leg-drive asymmetry from camera-tracked bilateral lifts (not shown to the athlete directly): ${asymmetryText}
 - Training-load risk / ACWR (coach analytics, not shown to the athlete directly): ${acwrText}
-- Movement-screen flags from the most recent screening (coach/PT-administered, not shown to the athlete directly -- weigh as a signal for corrective exercise selection, never as a rule that blocks a movement or program): ${screenText}`;
+- Movement-screen flags from the most recent screening (coach/PT-administered, not shown to the athlete directly -- weigh as a signal for corrective exercise selection, never as a rule that blocks a movement or program): ${screenText}
+- Goals this athlete has set for themself (weigh into exercise selection and program design -- e.g. a bench press target means bench should show up with enough frequency/volume to actually move it, a 40-yard-dash target means sprint/speed work matters here): ${goalsText}`;
   },
 
   // Authorization wrapper around getAthleteAiContext for the "coach drafting
@@ -12240,11 +12280,16 @@ ${catalog}`;
     return { points: roundedPoints, profile };
   },
 
-  // An athlete's own, deliberately limited view of their progress -- just
-  // enough to see recent PRs and where they currently stand on each lift.
-  // No velocity/bar-path/RPE trends or charts and no historical time series;
-  // that level of detail stays behind the coach's full analytics page.
-  async getAthleteProgressSummary(athleteId: number) {
+  // One row per exercise -- the athlete's most recent PR at any rep count,
+  // most-recent-first. A PR is still tracked per exact rep count internally
+  // (a 5-rep best and a 1-rep best are different achievements), but this
+  // collapses to one row per exercise so hitting several rep-range PRs on
+  // the same lift doesn't flood the list with near-duplicate rows. Full
+  // rep-by-rep PR history still lives in the coach's analytics page
+  // (getExerciseAnalyticsForCoach). Shared by getAthleteProgressSummary
+  // (capped to the dashboard-sized top 10) and getFullPrHistoryForAthlete
+  // (uncapped, backs the athlete's own "full history" page).
+  async getAllPrsForAthlete(athleteId: number) {
     const rows = await db
       .select({
         date: workoutLogs.date,
@@ -12268,12 +12313,6 @@ ${catalog}`;
       .filter((r) => r.weightMode === "numeric" && r.weight && r.reps)
       .sort((a, b) => a.date.localeCompare(b.date) || a.setNumber - b.setNumber);
 
-    // A PR is still tracked per exact rep count internally (a 5-rep best and
-    // a 1-rep best are different achievements), but the athlete-facing list
-    // below collapses to one row per exercise -- their most recent PR at any
-    // rep count -- so hitting several rep-range PRs on the same lift doesn't
-    // flood the list with near-duplicate rows. Full rep-by-rep PR history
-    // still lives in the coach's analytics page (getExerciseAnalyticsForCoach).
     const bestByKey = new Map<string, number>();
     const latestPrByExercise = new Map<
       number,
@@ -12296,12 +12335,51 @@ ${catalog}`;
         });
       }
     }
-    const recentPRs = Array.from(latestPrByExercise.values())
-      .sort((a, b) => b.date.localeCompare(a.date))
-      .slice(0, 10);
+    return Array.from(latestPrByExercise.values()).sort((a, b) => b.date.localeCompare(a.date));
+  },
 
-    const latestByExercise = new Map<number, (typeof sorted)[number]>();
-    for (const r of sorted) latestByExercise.set(r.exerciseId, r);
+  // Uncapped version of getAthleteProgressSummary's recentPRs -- backs the
+  // "View Full History" page linked from the athlete's Progress page, since
+  // the dashboard card itself only ever shows the top 5.
+  async getFullPrHistoryForAthlete(athleteId: number) {
+    return this.getAllPrsForAthlete(athleteId);
+  },
+
+  // An athlete's own, deliberately limited view of their progress -- just
+  // enough to see recent PRs and where they currently stand on each lift.
+  // No velocity/bar-path/RPE trends or charts and no historical time series;
+  // that level of detail stays behind the coach's full analytics page.
+  // currentLifts stays here even though the athlete's own Progress page no
+  // longer renders a separate "Your Lifts" list for it (merged into the one
+  // Recent PRs card) -- the coach-initiated progress-report email
+  // (progress-report.ts) still uses it for its own "current lifts" section.
+  async getAthleteProgressSummary(athleteId: number) {
+    const allPrs = await this.getAllPrsForAthlete(athleteId);
+    const recentPRs = allPrs.slice(0, 10);
+
+    const liftRows = await db
+      .select({
+        date: workoutLogs.date,
+        setNumber: workoutSetEntries.setNumber,
+        reps: workoutSetEntries.reps,
+        weight: workoutSetEntries.weight,
+        weightUnit: workoutSetEntries.weightUnit,
+        weightMode: workoutLogEntries.weightMode,
+        exerciseId: exercises.id,
+        exerciseName: exercises.name,
+      })
+      .from(workoutSetEntries)
+      .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
+      .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
+      .innerJoin(assignments, eq(workoutLogs.assignmentId, assignments.id))
+      .innerJoin(programExercises, eq(workoutLogEntries.programExerciseId, programExercises.id))
+      .innerJoin(exercises, eq(programExercises.exerciseId, exercises.id))
+      .where(eq(assignments.athleteId, athleteId));
+    const sortedLifts = liftRows
+      .filter((r) => r.weightMode === "numeric" && r.weight && r.reps)
+      .sort((a, b) => a.date.localeCompare(b.date) || a.setNumber - b.setNumber);
+    const latestByExercise = new Map<number, (typeof sortedLifts)[number]>();
+    for (const r of sortedLifts) latestByExercise.set(r.exerciseId, r);
     const currentLifts = Array.from(latestByExercise.values())
       .map((r) => ({
         exerciseName: r.exerciseName,

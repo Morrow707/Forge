@@ -87,7 +87,15 @@ export function EditMyProfileDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent
+        className="max-w-lg"
+        // Radix focuses the first focusable element on open by default --
+        // that's the Name input here, and focusing a text input on iOS
+        // pops the keyboard immediately, covering most of the form before
+        // anyone's chosen to type anything. Only pop up when actually
+        // tapping into a field.
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle>My Profile</DialogTitle>
         </DialogHeader>

@@ -1926,12 +1926,17 @@ export type WeaknessReport = typeof weaknessReports.$inferSelect;
 // wholly strength-side table.
 export const goalTypeEnum = pgEnum("goal_type", ["exercise", "testing", "skill"]);
 
-// A target the athlete (or their coach) is working toward -- "achieved" is
-// deliberately not a stored column. It's computed fresh each time goals are
-// fetched by comparing targetValue against the athlete's current best (max
-// weight ever logged, for an exercise goal; current profile value, for a
-// testing goal; best sprint time, for a skill goal), so it can never drift
-// out of sync with the data it's about.
+// A target the athlete (or their coach) is working toward -- the live
+// "achieved" flag a caller sees is still computed fresh every fetch (never
+// stored), comparing targetValue against the athlete's current best, so it
+// can never drift out of sync with the data it's about. achievedAt is a
+// different thing: a one-way stamp of the first moment that live check ever
+// came back true, written once and kept even if the athlete's number later
+// regresses -- the permanent "you hit this" record. archivedAt turns the
+// old hard-delete into a soft one: removing a goal from the active list
+// (getGoalsForAthlete's default view) just sets this instead of dropping
+// the row, so History (includeArchived) can still show what was set, when,
+// and whether it was ever hit.
 export const goals = pgTable(
   "goals",
   {
@@ -1955,6 +1960,8 @@ export const goals = pgTable(
     targetUnit: text("target_unit").notNull(),
     targetDate: date("target_date"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
+    achievedAt: timestamp("achieved_at"),
+    archivedAt: timestamp("archived_at"),
   },
   (table) => ({
     athleteIdx: index("goals_athlete_idx").on(table.athleteId),

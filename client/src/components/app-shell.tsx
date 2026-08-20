@@ -629,11 +629,17 @@ export function AppShell({
             content div below -- previously they scrolled away with the page
             on mobile (no persistent desktop nav row to keep them company
             there), which read as "the tabs disappear when I scroll." */}
-        <header className="flex items-center justify-between gap-3 border-t border-white/10 bg-background/60 px-4 py-3 backdrop-blur-xl backdrop-saturate-150 md:px-8 md:py-4">
-          <h1 className="truncate font-display text-xl font-bold uppercase tracking-wide md:text-3xl">
+        {/* flex-wrap (not the old strict one-line row) -- a title and wide
+            actions (e.g. a full-text "New Program" button) used to fight
+            over one line on a narrow phone, and the title always lost:
+            `truncate` + actions' `shrink-0` squeezed titles like "My
+            Progress" down to an unreadable "M...". Now actions wrap to
+            their own line under the title instead of crushing it. */}
+        <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-white/10 bg-background/60 px-4 py-3 backdrop-blur-xl backdrop-saturate-150 md:flex-nowrap md:px-8 md:py-4">
+          <h1 className="min-w-0 font-display text-xl font-bold uppercase tracking-wide md:truncate md:text-3xl">
             {title}
           </h1>
-          <div className="flex min-w-0 shrink-0 items-center gap-2 overflow-x-auto">{actions}</div>
+          <div className="flex min-w-0 items-center gap-2 overflow-x-auto">{actions}</div>
         </header>
         {subheader && (
           <div className="border-t border-border bg-background px-4 py-2 md:px-8">{subheader}</div>
