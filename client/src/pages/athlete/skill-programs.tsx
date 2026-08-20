@@ -20,6 +20,7 @@ export default function AthleteSkillPrograms() {
             exercisesHref="/athlete/exercises"
             skillProgramsHref="/athlete/skill-programs"
             skillBankHref="/athlete/skills"
+            showBanks={false}
           />
         }
       />

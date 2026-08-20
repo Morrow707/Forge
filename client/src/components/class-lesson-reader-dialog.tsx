@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { externalLinkClick } from "@/lib/open-external";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -201,13 +201,48 @@ export function ClassLessonReaderDialog({
   const questions = lessonContent?.quizQuestions ?? [];
   const allAnswered = questions.length > 0 && questions.every((q) => selectedAnswers[q.id] != null);
 
+  // Reset scroll to the top of the new page/phase -- without this, a page
+  // that scrolls further than the next one keeps the old scroll offset,
+  // which can leave the new page's top content (a heading, a stat) sitting
+  // above the visible area until the reader manually scrolls back up.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: 0 });
+  }, [phase, pageIndex]);
+
+  // Swipe left/right to turn the page, like flipping through a book --
+  // reading phase only, and only a clearly horizontal drag counts so a
+  // vertical scroll gesture doesn't accidentally flip pages.
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  function handleTouchStart(e: React.TouchEvent) {
+    const t = e.touches[0];
+    touchStartRef.current = { x: t.clientX, y: t.clientY };
+  }
+  function handleTouchEnd(e: React.TouchEvent) {
+    const start = touchStartRef.current;
+    touchStartRef.current = null;
+    if (!start || phase !== "reading" || pages.length === 0) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - start.x;
+    const dy = t.clientY - start.y;
+    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    if (dx < 0 && pageIndex < pages.length - 1) {
+      setPageIndex((i) => Math.min(pages.length - 1, i + 1));
+    } else if (dx > 0 && pageIndex > 0) {
+      setPageIndex((i) => Math.max(0, i - 1));
+    }
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         hideClose
         className="inset-0 top-0 left-0 flex h-screen w-screen max-w-none max-h-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 p-0"
       >
-        <div className="shrink-0 space-y-1 border-b border-border p-4 sm:p-6">
+        <div
+          className="shrink-0 space-y-1 border-b border-border p-4 sm:p-6"
+          style={{ paddingTop: "calc(env(safe-area-inset-top) + 1rem)" }}
+        >
           <DialogHeader>
             {/* Explicit, always-reachable exit -- the quiz phase's footer
                 has no back/cancel button of its own (only "Submit Quiz"
@@ -243,7 +278,12 @@ export function ClassLessonReaderDialog({
           )}
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+        <div
+          ref={scrollRef}
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+          className="flex-1 overflow-y-auto p-4 sm:p-6"
+        >
           {isLoading && <div className="h-40 animate-pulse rounded-lg bg-surface" />}
 
           {!isLoading && phase === "reading" && (
@@ -495,14 +535,24 @@ export function ClassLessonReaderDialog({
             )}
 
             {phase === "quiz" && !quizResult && (
-              <Button
-                size="lg"
-                className="ml-auto"
-                onClick={() => submitQuizMutation.mutate()}
-                disabled={!allAnswered || submitQuizMutation.isPending}
-              >
-                {submitQuizMutation.isPending ? "Submitting…" : "Submit Quiz"}
-              </Button>
+              <>
+                {/* Duplicate of the header's exit X, reachable down here
+                    instead -- on a real phone the header sits right under
+                    the status bar/notch, so this is the one that's
+                    actually easy to tap mid-quiz. */}
+                <Button size="lg" variant="outline" onClick={() => onOpenChange(false)} aria-label="Exit lesson">
+                  <X className="h-5 w-5" />
+                  Exit
+                </Button>
+                <Button
+                  size="lg"
+                  className="ml-auto"
+                  onClick={() => submitQuizMutation.mutate()}
+                  disabled={!allAnswered || submitQuizMutation.isPending}
+                >
+                  {submitQuizMutation.isPending ? "Submitting…" : "Submit Quiz"}
+                </Button>
+              </>
             )}
 
             {phase === "quiz" && quizResult && !quizResult.passed && (
