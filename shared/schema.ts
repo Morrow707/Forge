@@ -3390,6 +3390,53 @@ export const consentRecords = pgTable(
 );
 export type ConsentRecord = typeof consentRecords.$inferSelect;
 
+// ---------- Record access audit log ----------
+// Immutable, insert-only log of a staff member (coach or admin) touching
+// one specific athlete's video or biometric record -- the per-record
+// counterpart to aggregateDataAccessLog above, which only ever covers
+// bulk/aggregate views with no single athlete to name. Built for a lawyer
+// (or an admin) to review, not as a claim that this covers every access
+// path in the app yet: today it's wired into the admin video-management
+// page only (list-viewed and delete events) -- see
+// getRecordAccessAuditLog's own comment in storage.ts for the honest
+// scope of what is and isn't instrumented.
+export const recordAccessActionEnum = pgEnum("record_access_action", [
+  "viewed",
+  "streamed",
+  "downloaded",
+  "exported",
+  "deleted",
+]);
+
+export const recordAccessAuditLogs = pgTable(
+  "record_access_audit_logs",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // Null for an action with no single athlete (e.g. loading the admin
+    // video list, or a bulk delete sweep) -- see resourceType/detail for
+    // what actually happened in that case.
+    targetAthleteId: integer("target_athlete_id").references(() => users.id, { onDelete: "set null" }),
+    actionType: recordAccessActionEnum("action_type").notNull(),
+    resourceType: text("resource_type").notNull(),
+    resourceId: text("resource_id"),
+    // Free text, e.g. a bulk action's cutoff/count -- not the same as
+    // justification below, which is specifically "why did a human do this."
+    detail: text("detail"),
+    justification: text("justification"),
+    ipAddress: text("ip_address"),
+    userAgent: text("user_agent"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    targetIdx: index("record_access_audit_logs_target_idx").on(table.targetAthleteId, table.createdAt),
+    userIdx: index("record_access_audit_logs_user_idx").on(table.userId, table.createdAt),
+  }),
+);
+export type RecordAccessAuditLog = typeof recordAccessAuditLogs.$inferSelect;
+
 // Audit trail for the platform-wide aggregate athlete data view (admin-only)
 // -- the first place admin can see every athlete's data across every
 // coach's roster, not just programs/classes admin owns itself, so who

@@ -120,7 +120,7 @@ const adminNav: NavItem[] = [
   { href: "/admin/platform-trends", label: "Platform Trends", icon: BarChart3 },
   { href: "/admin/videos", label: "Video Storage", icon: HardDrive },
   { href: "/admin/legal-agreement", label: "Legal Agreement", icon: FileText },
-  { href: "/admin/compliance-report", label: "Compliance Report", icon: ShieldCheck },
+  { href: "/admin/documents", label: "Documents", icon: ShieldCheck },
 ];
 
 export function AppShell({

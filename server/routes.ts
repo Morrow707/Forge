@@ -1609,24 +1609,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // storage.getAdminVideos' own comment for why this exists (Render's web
   // service disk is a fixed size, and nothing else in the app ever deletes
   // a video's underlying file on its own).
-  app.get("/api/admin/videos", requireRole("admin"), async (_req, res) => {
+  app.get("/api/admin/videos", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
     const videos = await storage.getAdminVideos();
+    // No single target athlete for a bulk list -- see recordAccessAuditLogs'
+    // own schema comment on why targetAthleteId is nullable for exactly
+    // this case.
+    storage
+      .logRecordAccess({
+        userId: user.id,
+        actionType: "viewed",
+        resourceType: "admin_video_list",
+        detail: `${videos.length} video(s) listed`,
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent") ?? undefined,
+      })
+      .catch(() => {});
     res.json(videos);
   });
 
   app.delete("/api/admin/videos/:source/:id", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
     const source = req.params.source;
     if (source !== "set" && source !== "skill" && source !== "comment") {
       return res.status(400).json({ message: "Invalid video source" });
     }
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) return res.status(400).json({ message: "Invalid video id" });
-    const deleted = await storage.deleteAdminVideo(source, id);
-    if (!deleted) return res.status(404).json({ message: "Video not found" });
+    const result = await storage.deleteAdminVideo(source, id);
+    if (!result.deleted) return res.status(404).json({ message: "Video not found" });
+    const justification = typeof req.body?.justification === "string" ? req.body.justification.trim() : undefined;
+    await storage.logRecordAccess({
+      userId: user.id,
+      targetAthleteId: result.athleteId,
+      actionType: "deleted",
+      resourceType: `video:${source}`,
+      resourceId: String(id),
+      justification: justification || undefined,
+      ipAddress: req.ip,
+      userAgent: req.get("user-agent") ?? undefined,
+    });
     res.json({ success: true });
   });
 
   app.post("/api/admin/videos/bulk-delete", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
     const days = Number(req.body?.olderThanDays);
     if (!Number.isFinite(days) || days < 1) {
       return res.status(400).json({ message: "olderThanDays must be a positive number" });
@@ -1634,7 +1661,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - days);
     const count = await storage.bulkDeleteAdminVideosOlderThan(cutoff);
+    await storage.logRecordAccess({
+      userId: user.id,
+      actionType: "deleted",
+      resourceType: "admin_video_bulk_delete",
+      detail: `${count} video(s) older than ${days} day(s) (cutoff ${cutoff.toISOString().slice(0, 10)})`,
+      ipAddress: req.ip,
+      userAgent: req.get("user-agent") ?? undefined,
+    });
     res.json({ count });
+  });
+
+  // Read view for the audit log itself -- see getRecordAccessAuditLog's own
+  // comment for the honest, still-partial scope of what's instrumented.
+  app.get("/api/admin/audit-log", requireRole("admin"), async (req, res) => {
+    const limit = Math.min(Number(req.query.limit) || 200, 1000);
+    res.json(await storage.getRecordAccessAuditLog(limit));
+  });
+
+  app.get("/api/admin/audit-log.csv", requireRole("admin"), async (req, res) => {
+    const limit = Math.min(Number(req.query.limit) || 1000, 5000);
+    const rows = await storage.getRecordAccessAuditLog(limit);
+    const header = ["Timestamp", "Staff", "Athlete", "Action", "Resource", "Detail", "Justification", "IP"];
+    const lines = [header.join(",")];
+    for (const r of rows) {
+      lines.push(
+        [
+          csvField(r.createdAt.toISOString()),
+          csvField(r.userName ?? `user #${r.userId}`),
+          csvField(r.targetAthleteName ?? (r.targetAthleteId ? `user #${r.targetAthleteId}` : "")),
+          csvField(r.actionType),
+          csvField(r.resourceType),
+          csvField(r.detail),
+          csvField(r.justification),
+          csvField(r.ipAddress),
+        ].join(","),
+      );
+    }
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", `attachment; filename="forge-audit-log.csv"`);
+    res.send(lines.join("\n"));
   });
 
   // Self-assignment: coachId and athleteId are both the admin's own id.

@@ -90,6 +90,7 @@ import {
   adminSavedViews,
   adminAthleteQueryFiltersSchema,
   consentRecords,
+  recordAccessAuditLogs,
   type InsertUser,
 } from "@shared/schema";
 import { derivePrivacyTier, videoRetentionDaysForTier, type PrivacyTier } from "@shared/privacy-tiers";
@@ -145,6 +146,7 @@ import type {
   AdminSavedView,
   CreateAdminSavedViewInput,
   ConsentRecord,
+  RecordAccessAuditLog,
 } from "@shared/schema";
 import { lookupBarcode, searchFoodsByName, type FoodCandidate } from "./food-lookup";
 import { TESTING_METRICS, testingMetricLowerIsBetter } from "@shared/testing-metrics";
@@ -167,6 +169,7 @@ import { askClaude, askClaudeStructured, askClaudeWithTools, askClaudeVision, as
 import { fetchUrlSafely, UnsafeUrlError } from "./safe-fetch";
 import { deleteUploadedFile, statUploadedFile } from "./uploaded-files";
 import { eq, and, inArray, asc, desc, lt, lte, gte, gt, isNull, isNotNull, sql, ilike } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import { diffLines } from "diff";
 import {
@@ -12665,44 +12668,118 @@ ${catalog}`;
   // row existence matters here: the row survives every delete (see above),
   // so "row exists" alone can't tell a genuine delete apart from a no-op
   // repeat.
-  async deleteAdminVideo(source: AdminVideoRow["source"], id: number): Promise<boolean> {
+  // Returns which athlete the deleted video belonged to (null if the row
+  // itself didn't exist) so the route layer can log a real, per-athlete
+  // audit entry -- see recordAccessAuditLogs' own schema comment.
+  async deleteAdminVideo(
+    source: AdminVideoRow["source"],
+    id: number,
+  ): Promise<{ deleted: boolean; athleteId: number | null }> {
     if (source === "set") {
       const [row] = await db
-        .select({ videoUrl: workoutSetEntries.formCheckVideoUrl })
+        .select({ videoUrl: workoutSetEntries.formCheckVideoUrl, athleteId: workoutLogs.athleteId })
         .from(workoutSetEntries)
+        .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
+        .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
         .where(eq(workoutSetEntries.id, id));
-      if (!row?.videoUrl) return false;
+      if (!row?.videoUrl) return { deleted: false, athleteId: null };
       await deleteUploadedFile(row.videoUrl);
       await db
         .update(workoutSetEntries)
         .set({ formCheckVideoUrl: null, formCheckFlag: null })
         .where(eq(workoutSetEntries.id, id));
-      return true;
+      return { deleted: true, athleteId: row.athleteId };
     }
     if (source === "skill") {
       const [row] = await db
-        .select({ videoUrl: skillSessionLogs.videoUrl, coachAnnotationUrl: skillSessionLogs.coachAnnotationUrl })
+        .select({
+          videoUrl: skillSessionLogs.videoUrl,
+          coachAnnotationUrl: skillSessionLogs.coachAnnotationUrl,
+          athleteId: skillSessionLogs.athleteId,
+        })
         .from(skillSessionLogs)
         .where(eq(skillSessionLogs.id, id));
-      if (!row?.videoUrl) return false;
+      if (!row?.videoUrl) return { deleted: false, athleteId: null };
       await Promise.all([deleteUploadedFile(row.videoUrl), deleteUploadedFile(row.coachAnnotationUrl)]);
       await db
         .update(skillSessionLogs)
         .set({ videoUrl: null, coachAnnotationUrl: null })
         .where(eq(skillSessionLogs.id, id));
-      return true;
+      return { deleted: true, athleteId: row.athleteId };
     }
     const [row] = await db
-      .select({ videoUrl: workoutComments.videoUrl, imageUrl: workoutComments.imageUrl })
+      .select({ videoUrl: workoutComments.videoUrl, imageUrl: workoutComments.imageUrl, athleteId: assignments.athleteId })
       .from(workoutComments)
+      .innerJoin(assignments, eq(workoutComments.assignmentId, assignments.id))
       .where(eq(workoutComments.id, id));
-    if (!row?.videoUrl) return false;
+    if (!row?.videoUrl) return { deleted: false, athleteId: null };
     await Promise.all([deleteUploadedFile(row.videoUrl), deleteUploadedFile(row.imageUrl)]);
     await db
       .update(workoutComments)
       .set({ videoUrl: null, imageUrl: null })
       .where(eq(workoutComments.id, id));
-    return true;
+    return { deleted: true, athleteId: row.athleteId };
+  },
+
+  // Insert-only -- see recordAccessAuditLogs' own schema comment for why
+  // nothing should ever update or delete a row here.
+  async logRecordAccess(input: {
+    userId: number;
+    targetAthleteId?: number | null;
+    actionType: "viewed" | "streamed" | "downloaded" | "exported" | "deleted";
+    resourceType: string;
+    resourceId?: string;
+    detail?: string;
+    justification?: string;
+    ipAddress?: string;
+    userAgent?: string;
+  }): Promise<void> {
+    await db.insert(recordAccessAuditLogs).values({
+      userId: input.userId,
+      targetAthleteId: input.targetAthleteId ?? null,
+      actionType: input.actionType,
+      resourceType: input.resourceType,
+      resourceId: input.resourceId ?? null,
+      detail: input.detail ?? null,
+      justification: input.justification ?? null,
+      ipAddress: input.ipAddress ?? null,
+      userAgent: input.userAgent ?? null,
+    });
+  },
+
+  // Real names on both sides deliberately, unlike the redacted aggregate
+  // views elsewhere in this file -- an accountability log that hides WHO
+  // looked at WHOSE record defeats its own purpose. Honest scope: today
+  // this only has rows for the admin video-management page's list/delete
+  // actions (see the two call sites in routes.ts). It is not yet wired
+  // into every place a coach or admin can view an athlete's video across
+  // the app -- that's real remaining work, not silently assumed done.
+  async getRecordAccessAuditLog(limit = 200): Promise<
+    (RecordAccessAuditLog & { userName: string | null; targetAthleteName: string | null })[]
+  > {
+    const staff = alias(users, "staff");
+    const target = alias(users, "target_athlete");
+    return db
+      .select({
+        id: recordAccessAuditLogs.id,
+        userId: recordAccessAuditLogs.userId,
+        targetAthleteId: recordAccessAuditLogs.targetAthleteId,
+        actionType: recordAccessAuditLogs.actionType,
+        resourceType: recordAccessAuditLogs.resourceType,
+        resourceId: recordAccessAuditLogs.resourceId,
+        detail: recordAccessAuditLogs.detail,
+        justification: recordAccessAuditLogs.justification,
+        ipAddress: recordAccessAuditLogs.ipAddress,
+        userAgent: recordAccessAuditLogs.userAgent,
+        createdAt: recordAccessAuditLogs.createdAt,
+        userName: staff.name,
+        targetAthleteName: target.name,
+      })
+      .from(recordAccessAuditLogs)
+      .leftJoin(staff, eq(recordAccessAuditLogs.userId, staff.id))
+      .leftJoin(target, eq(recordAccessAuditLogs.targetAthleteId, target.id))
+      .orderBy(desc(recordAccessAuditLogs.createdAt))
+      .limit(limit);
   },
 
   // Same per-source cleanup as deleteAdminVideo above, applied in bulk to
