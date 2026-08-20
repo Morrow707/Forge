@@ -260,7 +260,7 @@ export function AppShell({
           extends up under the iPhone notch/Dynamic Island instead of leaving
           a gap -- only the content below needs pushing down, not the bar. */}
       <div
-        className="sticky top-0 z-30 shrink-0 border-b border-border bg-surface"
+        className="sticky top-0 z-30 shrink-0 border-b border-white/10 bg-surface/70 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)] backdrop-blur-xl backdrop-saturate-150"
         style={{
           paddingTop: "env(safe-area-inset-top)",
           // A coach's second brand color gets exactly this one bounded,
@@ -386,7 +386,7 @@ export function AppShell({
               {accountMenuOpen && (
                 <div
                   role="menu"
-                  className="absolute right-0 top-full z-40 mt-1 w-64 overflow-hidden rounded-md border border-border bg-surface shadow-lg"
+                  className="absolute right-0 top-full z-40 mt-1 w-64 overflow-hidden rounded-xl border border-white/10 bg-surface/80 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.08),0_8px_30px_-10px_rgba(0,0,0,0.6)] backdrop-blur-xl backdrop-saturate-150"
                 >
                   {user?.role === "athlete" && (
                     <button
@@ -629,7 +629,7 @@ export function AppShell({
             content div below -- previously they scrolled away with the page
             on mobile (no persistent desktop nav row to keep them company
             there), which read as "the tabs disappear when I scroll." */}
-        <header className="flex items-center justify-between gap-3 border-t border-border bg-background/95 px-4 py-3 backdrop-blur md:px-8 md:py-4">
+        <header className="flex items-center justify-between gap-3 border-t border-white/10 bg-background/60 px-4 py-3 backdrop-blur-xl backdrop-saturate-150 md:px-8 md:py-4">
           <h1 className="truncate font-display text-xl font-bold uppercase tracking-wide md:text-3xl">
             {title}
           </h1>
