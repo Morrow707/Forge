@@ -16,6 +16,7 @@ import {
   PlayCircle,
   Trophy,
   FileDown,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -202,13 +203,35 @@ export function ClassLessonReaderDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="inset-0 top-0 left-0 flex h-screen w-screen max-w-none max-h-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 p-0">
+      <DialogContent
+        hideClose
+        className="inset-0 top-0 left-0 flex h-screen w-screen max-w-none max-h-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 p-0"
+      >
         <div className="shrink-0 space-y-1 border-b border-border p-4 sm:p-6">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Badge variant="outline">Lesson {lesson.lessonNumber}</Badge>
-              {lesson.title}
-            </DialogTitle>
+            {/* Explicit, always-reachable exit -- the quiz phase's footer
+                has no back/cancel button of its own (only "Submit Quiz"
+                once questions are answered), so this is the only way out
+                of an in-progress test short of force-closing the app. The
+                generic corner X the base Dialog would otherwise render
+                (see hideClose above) sat in this same top-right spot with
+                no clearance from the title/badge, easy to miss entirely. */}
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => onOpenChange(false)}
+                aria-label="Exit lesson"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border text-foreground hover:bg-surface-elevated"
+              >
+                <X className="h-5 w-5" />
+              </button>
+              <DialogTitle className="flex min-w-0 items-center gap-2">
+                <Badge variant="outline" className="shrink-0">
+                  Lesson {lesson.lessonNumber}
+                </Badge>
+                <span className="truncate">{lesson.title}</span>
+              </DialogTitle>
+            </div>
           </DialogHeader>
           {phase === "reading" && pages.length > 0 && (
             <p className="text-xs text-muted-foreground">
