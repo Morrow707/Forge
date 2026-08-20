@@ -1,5 +1,5 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { HeartPulse, HeartCrack, Gauge, Activity } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { HeartPulse, HeartCrack, Gauge, Activity, ShieldAlert } from "lucide-react";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { READINESS_LABEL, type ReadinessLevel } from "@shared/wellness";
 import { ACWR_RISK_LABEL, type AcwrRiskLevel } from "@shared/load";
@@ -67,6 +67,48 @@ export function AcwrBadge({
     >
       <Activity className="h-3 w-3" />
       {ACWR_RISK_LABEL[entry.level]}
+    </button>
+  );
+}
+
+// Recommendation, not an enforced gate -- an athlete flagged as a minor at
+// signup, until the coach marks a waiver/consent on file. Built in full but
+// dormant until GUARDIAN_NOTICE_LIVE (shared/privacy-tiers.ts) is flipped
+// on: the query it reads always comes back { flagged: false } until then,
+// so this renders nothing (see the early return below) in the meantime --
+// no separate check needed here.
+export function GuardianNoticeBadge({ athleteId }: { athleteId: number }) {
+  const qc = useQueryClient();
+  const { data } = useQuery<{ flagged: boolean; acknowledgedAt: string | null }>({
+    queryKey: [`/api/coach/roster/${athleteId}/guardian-notice`],
+  });
+
+  const ackMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("POST", `/api/coach/roster/${athleteId}/guardian-notice/acknowledge`);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [`/api/coach/roster/${athleteId}/guardian-notice`] });
+      toast.success("Marked -- waiver/consent on file");
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Could not update"),
+  });
+
+  if (!data?.flagged || data.acknowledgedAt) return null;
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        ackMutation.mutate();
+      }}
+      disabled={ackMutation.isPending}
+      aria-label="This athlete signed up as a minor -- recommend a parent/guardian waiver, click once one is on file"
+      title="Signed up as a minor -- recommend getting a parent/guardian waiver or consent on file, then click to mark it done"
+      className="flex shrink-0 items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-500 transition-opacity hover:opacity-80"
+    >
+      <ShieldAlert className="h-3 w-3" />
+      {ackMutation.isPending ? "Marking…" : "Guardian waiver needed"}
     </button>
   );
 }

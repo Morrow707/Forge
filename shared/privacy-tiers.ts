@@ -36,6 +36,19 @@ export function derivePrivacyTier(dateOfBirth: string | Date, asOf: Date = new D
 export const TIER1_VIDEO_RETENTION_DAYS = 30;
 export const TIER2_VIDEO_RETENTION_DAYS = 90;
 
+// Master switch for the guardian-notice flag/badge feature (coach-facing
+// "this athlete is a minor, get a parent/guardian waiver on file" nudge --
+// see users.requiresGuardianNotice and the "parental_notice_ack" consent
+// type, both already live). Built in full -- the notification, the coach-
+// facing badge, the "mark waiver on file" acknowledgment -- but held off
+// by explicit request until a future build turns it on. Flipping this to
+// true is the entire rollout: nothing else needs to change. Never
+// described to a coach as "Forge requires a waiver" -- the wording used
+// throughout is deliberately a recommendation, not an enforced
+// requirement, same as every other "flag, don't decide" signal in this
+// app (health status, movement-screen flags).
+export const GUARDIAN_NOTICE_LIVE = false;
+
 export function videoRetentionDaysForTier(tier: PrivacyTier): number | null {
   switch (tier) {
     case "tier1_under13":

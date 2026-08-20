@@ -14247,11 +14247,46 @@ ${catalog}`;
     });
     await this.linkAthleteToCoach(provisional.coachId, user.id);
     await this.deleteProvisionalAthlete(provisional.coachId, provisional.id);
-    return { user };
+    return { user, coachId: provisional.coachId };
   },
 
   // Insert-only -- see consentRecords' own schema comment for why nothing
   // in this codebase should ever update or delete a row here.
+  // Guardian-notice flag status for one athlete -- "needed" is true only
+  // when the account was flagged as a Tier 2 minor at signup AND no
+  // parental_notice_ack consent record has been logged for them yet.
+  // Callers behind GUARDIAN_NOTICE_LIVE should treat a false "needed" as
+  // authoritative regardless of the underlying requiresGuardianNotice
+  // column -- see that flag's own comment for why the gate lives in the
+  // route layer, not here.
+  async getGuardianNoticeStatus(
+    athleteId: number,
+  ): Promise<{ flagged: boolean; acknowledgedAt: Date | null }> {
+    const user = await this.getUser(athleteId);
+    if (!user?.requiresGuardianNotice) return { flagged: false, acknowledgedAt: null };
+    const [ack] = await db
+      .select({ createdAt: consentRecords.createdAt })
+      .from(consentRecords)
+      .where(and(eq(consentRecords.userId, athleteId), eq(consentRecords.consentType, "parental_notice_ack")))
+      .orderBy(desc(consentRecords.createdAt))
+      .limit(1);
+    return { flagged: true, acknowledgedAt: ack?.createdAt ?? null };
+  },
+
+  // Logged by the COACH confirming they've obtained (or seen) a signed
+  // waiver -- this is the coach's own attestation, not a parent's digital
+  // signature captured by Forge itself. Worded that way deliberately in
+  // documentText so the record never overclaims what it actually proves.
+  async acknowledgeGuardianNotice(athleteId: number, coachId: number): Promise<void> {
+    await this.logConsentRecord({
+      userId: athleteId,
+      consentType: "parental_notice_ack",
+      documentText:
+        "Coach confirmed a parent/guardian waiver or consent has been obtained for this minor athlete, outside of Forge.",
+      givenByUserId: coachId,
+    });
+  },
+
   async logConsentRecord(input: {
     userId: number;
     consentType: "terms_of_service" | "biometric_waiver" | "coach_coppa_consent" | "parental_notice_ack";

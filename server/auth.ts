@@ -18,7 +18,8 @@ import {
   claimProvisionalAthleteSchema,
   type PublicUser,
 } from "@shared/schema";
-import { derivePrivacyTier } from "@shared/privacy-tiers";
+import { derivePrivacyTier, GUARDIAN_NOTICE_LIVE } from "@shared/privacy-tiers";
+import { notifyUser } from "./notify";
 
 const PgStore = connectPgSimple(session);
 
@@ -256,6 +257,18 @@ export function setupAuth(app: Express) {
       if (coach) {
         await storage.linkAthleteToCoach(coach.id, user.id);
         if (team) await storage.addAthleteToTeam(team.id, user.id);
+        // Gated off for now -- see GUARDIAN_NOTICE_LIVE's own comment.
+        // Flip that one constant when this is ready to actually reach a
+        // coach's inbox; nothing else in this route needs to change.
+        if (GUARDIAN_NOTICE_LIVE && user.requiresGuardianNotice) {
+          await notifyUser(
+            coach.id,
+            "guardian_notice_needed",
+            `${user.name} may need a guardian waiver on file`,
+            `${user.name} signed up as a minor (under 18). We'd recommend getting a parent/guardian waiver or consent on file for them, outside of Forge -- you can mark it done from their profile once you have.`,
+            `/coach/roster/${user.id}`,
+          );
+        }
       }
 
       req.login(user, (err) => {
@@ -306,7 +319,18 @@ export function setupAuth(app: Express) {
         { ipAddress: req.ip, userAgent: req.get("user-agent") ?? undefined },
       );
       if ("error" in result) return res.status(400).json({ message: result.error });
-      const { user } = result;
+      const { user, coachId } = result;
+      // Same gate as the direct-signup route above -- see
+      // GUARDIAN_NOTICE_LIVE's own comment.
+      if (GUARDIAN_NOTICE_LIVE && user.requiresGuardianNotice) {
+        await notifyUser(
+          coachId,
+          "guardian_notice_needed",
+          `${user.name} may need a guardian waiver on file`,
+          `${user.name} signed up as a minor (under 18). We'd recommend getting a parent/guardian waiver or consent on file for them, outside of Forge -- you can mark it done from their profile once you have.`,
+          `/coach/roster/${user.id}`,
+        );
+      }
       req.login(user, (err) => {
         if (err) return next(err);
         sendEmail({

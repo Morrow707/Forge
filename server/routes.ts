@@ -16,6 +16,7 @@ import { buildTrainingHistoryCsv, buildTrainingHistoryPdf, csvField } from "./tr
 import { buildMovementScreenSheetPdf } from "./movement-screen-export";
 import { buildComplianceReportPdf } from "./compliance-report";
 import { buildLegalDocumentPdf } from "./legal-document-export";
+import { GUARDIAN_NOTICE_LIVE } from "@shared/privacy-tiers";
 import { notifyUser } from "./notify";
 import {
   insertExerciseSchema,
@@ -2357,6 +2358,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
       if (!updated) return res.status(404).json({ message: "Athlete not found" });
       res.json(updated);
+    },
+  );
+
+  // Guardian-notice flag + acknowledgment -- see GUARDIAN_NOTICE_LIVE's own
+  // comment in shared/privacy-tiers.ts. Gated here too, not just at the
+  // notification-send call site: "flagged" comes back false while the
+  // feature is off regardless of the athlete's real requiresGuardianNotice
+  // value, so the badge these feed has nothing to show yet either.
+  app.get(
+    "/api/coach/roster/:athleteId/guardian-notice",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      const onRoster = await storage.getRosterAthleteForCoach(user.id, athleteId);
+      if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
+      if (!GUARDIAN_NOTICE_LIVE) return res.json({ flagged: false, acknowledgedAt: null });
+      res.json(await storage.getGuardianNoticeStatus(athleteId));
+    },
+  );
+
+  app.post(
+    "/api/coach/roster/:athleteId/guardian-notice/acknowledge",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      const onRoster = await storage.getRosterAthleteForCoach(user.id, athleteId);
+      if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
+      if (!GUARDIAN_NOTICE_LIVE) return res.status(400).json({ message: "Not available yet" });
+      await storage.acknowledgeGuardianNotice(athleteId, user.id);
+      res.json(await storage.getGuardianNoticeStatus(athleteId));
     },
   );
 
