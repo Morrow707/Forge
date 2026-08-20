@@ -12,7 +12,21 @@ import { pool } from "./db";
 // build. Since this script never asks Postgres to reconcile two structures
 // it can't tell apart, it can't hit that failure mode, regardless of
 // exactly what state the database is currently in.
-const SQL = `
+// Split into two statements run as two separate pool.query() calls (see
+// main() below), not one -- Postgres's simple query protocol treats a
+// multi-statement string as a single implicit transaction, and a value
+// added by ALTER TYPE ... ADD VALUE can't be read by a later statement in
+// that same transaction ("unsafe use of new value" / hint: "New enum
+// values must be committed before they can be used"). On a database that's
+// already been through an earlier deploy, this never bites -- 'admin' (and
+// every other ADD VALUE below) was already committed by a previous,
+// separate process run. It DOES bite a genuinely from-scratch database
+// (a fresh CI run, a disaster-recovery restore, a brand-new environment),
+// which is exactly what surfaced it: SQL_PART_2's movement-screen-battery
+// seed reads role = 'admin' in the same breath SQL_PART_1 would have just
+// added that value. If a future edit adds another ALTER TYPE ... ADD VALUE
+// followed by a same-run read of that value, split it the same way.
+const SQL_PART_1 = `
 DO $$ BEGIN
   CREATE TYPE "role" AS ENUM ('coach', 'athlete');
 EXCEPTION WHEN duplicate_object THEN null; END $$;
@@ -1366,6 +1380,12 @@ CREATE INDEX IF NOT EXISTS "movement_screen_results_screen_idx" ON "movement_scr
 ALTER TABLE "movement_screen_results" ALTER COLUMN "category" TYPE text USING "category"::text;
 ALTER TABLE "movement_screen_results" ADD COLUMN IF NOT EXISTS "unit_label" text;
 
+`;
+
+// See SQL_PART_1's own comment above for why this is a second, separate
+// pool.query() call rather than one continuous string with the block
+// above -- this half reads the 'admin' role value SQL_PART_1 just added.
+const SQL_PART_2 = `
 -- Seeds the Forge-official "Forge Standard Screen" battery once an admin
 -- account exists to own it -- a no-op (and safe to re-run every deploy)
 -- once it's already been inserted, or if no admin exists yet.
@@ -1471,7 +1491,11 @@ CREATE TABLE IF NOT EXISTS "legal_documents" (
 
 async function main() {
   console.log("Reconciling schema (idempotent, additive-only)...");
-  await pool.query(SQL);
+  // Two separate calls, two separate implicit transactions -- see
+  // SQL_PART_1's own comment for why that matters on a from-scratch
+  // database.
+  await pool.query(SQL_PART_1);
+  await pool.query(SQL_PART_2);
   console.log("Schema reconciliation complete.");
   await pool.end();
 }

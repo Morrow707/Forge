@@ -1,0 +1,74 @@
+name: CI
+
+# Catches exactly the failure class that broke four Render deploys in a
+# row on 2026-08-19/20: shared/schema.ts (the Drizzle type layer) drifting
+# out of sync with server/reconcile-schema.ts (the actual migration script
+# Render's build runs -- see that file's own comment for why drizzle-kit
+# push isn't used instead). Runs the same build/reconcile/seed sequence
+# Render's buildCommand does, against a throwaway Postgres, so a broken
+# migration fails here in a couple of minutes instead of showing up as a
+# failed production deploy.
+on:
+  push: {}
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  build-and-migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: forge_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/forge_ci
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run check
+
+      - name: Build (web + server)
+        run: npm run build
+
+      # Every column/table shared/schema.ts declares must exist in a real
+      # database by the time this step ends -- if it doesn't, reconcile-
+      # schema.ts wasn't updated to match, exactly like tonight's incident.
+      - name: Reconcile schema against a fresh database
+        run: npm run db:reconcile
+
+      # Runs every query seed.ts makes against the real table shapes --
+      # this is what actually caught the missing date_of_birth column,
+      # since reconcile succeeding just means its own statements didn't
+      # error, not that the schema is complete.
+      - name: Seed demo data
+        run: npm run db:seed
+
+      # Re-running both confirms they're still idempotent (additive-only,
+      # safe to re-run on every deploy) and that seeding never clobbers
+      # data a real admin might have already edited -- see seed.ts's own
+      # onConflictDoNothing/"only if not already configured" guards.
+      - name: Reconcile + seed again (idempotency check)
+        run: |
+          npm run db:reconcile
+          npm run db:seed
