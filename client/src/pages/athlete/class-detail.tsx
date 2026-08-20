@@ -159,7 +159,7 @@ export default function AthleteClassDetail() {
                       size="sm"
                       variant="ghost"
                       className="text-success hover:text-success"
-                      onClick={() => navigate("/athlete")}
+                      onClick={() => navigate("/athlete/calendar")}
                     >
                       <CheckCircle2 className="h-4 w-4" />
                       On your calendar

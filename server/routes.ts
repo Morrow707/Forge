@@ -4243,7 +4243,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const hasVideo = !!parsed.data.videoUrl || !!parsed.data.imageUrl;
       const title = hasVideo ? "New video from your coach" : "New comment from your coach";
       const body = `${user.name}: ${parsed.data.body}`;
-      await notifyUser(owned.athleteId, hasVideo ? "video" : "comment", title, body, "/athlete");
+      await notifyUser(owned.athleteId, hasVideo ? "video" : "comment", title, body, "/athlete/calendar");
 
       res.status(201).json(comment);
     },
@@ -4283,7 +4283,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const hasVideo = !!parsed.data.videoUrl || !!parsed.data.imageUrl;
       const title = hasVideo ? "New video from your coach" : "New comment from your coach";
       const body = `${user.name}: ${parsed.data.body}`;
-      await notifyUser(owned.athleteId, hasVideo ? "video" : "comment", title, body, "/athlete");
+      await notifyUser(owned.athleteId, hasVideo ? "video" : "comment", title, body, "/athlete/calendar");
 
       res.status(201).json(comment);
     },

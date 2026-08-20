@@ -1,47 +1,46 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useLocation } from "wouter";
-import { Link } from "wouter";
+import { useLocation, Link } from "wouter";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
-import { CalendarView, type CalendarEntry } from "@/components/calendar-view";
-import { CalendarLinkDialog } from "@/components/calendar-link-dialog";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { EntryPill, type CalendarEntry } from "@/components/calendar-view";
 import { SkillDayViewDialog } from "@/components/skill-day-view-dialog";
 import { NutritionQuickSummary } from "@/components/nutrition-quick-summary";
 import { TeamChatQuickSummary } from "@/components/team-chat-quick-summary";
+import { DigestBanner } from "@/components/digest-banner";
+import { useAuth } from "@/hooks/use-auth";
 import { apiRequest, ApiError } from "@/lib/queryClient";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { CalendarDays, UserPlus } from "lucide-react";
+import { addDays, format, formatISO, isToday } from "date-fns";
+import {
+  CalendarDays,
+  UserPlus,
+  Flame,
+  ListChecks,
+  CalendarCheck,
+  Trophy,
+} from "lucide-react";
+
+type ProgressSummary = {
+  totalWorkoutsCompleted: number;
+  workoutsThisMonth: number;
+  currentStreak: number;
+  totalCompleted: number;
+  recentPRs: { exerciseId: number; exerciseName: string }[];
+};
 
 export default function AthleteDashboard() {
+  const { user } = useAuth();
   const [, navigate] = useLocation();
-  const [range, setRange] = useState<{ start: string; end: string }>({ start: "", end: "" });
-  const [syncOpen, setSyncOpen] = useState(false);
   const [viewingSkill, setViewingSkill] = useState<{
     skillAssignmentId: number;
     skillProgramDayId: number;
     date: string;
   } | null>(null);
-
-  const { data: entries = [] } = useQuery<CalendarEntry[]>({
-    queryKey: ["/api/athlete/calendar", range.start, range.end],
-    queryFn: async () => {
-      const res = await apiRequest(
-        "GET",
-        `/api/athlete/calendar?start=${range.start}&end=${range.end}`,
-      );
-      return res.json();
-    },
-    enabled: Boolean(range.start && range.end),
-    // 60s matches every other poll in the app -- refetchOnWindowFocus
-    // already covers the common "coach changed today's plan while I had
-    // this tab open" case the moment the athlete comes back to look.
-    refetchInterval: 60_000,
-    refetchOnWindowFocus: true,
-  });
 
   const { data: coaches = [], isLoading: coachesLoading } = useQuery<
     { id: number; name: string; coachCode: string }[]
@@ -49,88 +48,175 @@ export default function AthleteDashboard() {
     queryKey: ["/api/athlete/coaches"],
   });
 
+  const { data: progress } = useQuery<ProgressSummary>({
+    queryKey: ["/api/athlete/progress"],
+  });
+
+  // Same 3-day window the coach/admin dashboards use, against the same
+  // /api/athlete/calendar the full Calendar tab reads -- always in sync,
+  // never a second source of truth for what's actually scheduled.
+  const days = [0, 1, 2].map((offset) => addDays(new Date(), offset));
+  const rangeStart = formatISO(days[0], { representation: "date" });
+  const rangeEnd = formatISO(days[days.length - 1], { representation: "date" });
+  const { data: upcoming = [] } = useQuery<CalendarEntry[]>({
+    queryKey: ["/api/athlete/calendar", rangeStart, rangeEnd],
+    queryFn: async () => {
+      const res = await apiRequest(
+        "GET",
+        `/api/athlete/calendar?start=${rangeStart}&end=${rangeEnd}`,
+      );
+      return res.json();
+    },
+  });
+
   return (
-    <AppShell
-      title="My Calendar"
-      actions={
-        <Button variant="outline" size="sm" onClick={() => setSyncOpen(true)}>
-          <CalendarDays className="h-4 w-4" />
-          Sync to Phone
-        </Button>
-      }
-    >
-      <PendingCoachRequests />
+    <AppShell title={`Welcome, ${user?.name?.split(" ")[0] ?? "Athlete"}`}>
+      <div className="flex flex-col gap-4">
+        <PendingCoachRequests />
+        <DigestBanner />
 
-      {/* Quick view: today's nutrition and (for a coached athlete -- a Free
-          Agent has no team, see app-shell.tsx's own nav filtering) the
-          latest team chat, both just a summary with a link through to their
-          full page. The calendar below still defaults to the 3-day agenda
-          rather than the month grid so "what's actually happening the next
-          couple days" is visible without switching views. */}
-      <div className="mb-6 grid gap-4 sm:grid-cols-2">
-        <NutritionQuickSummary />
-        {!coachesLoading && coaches.length > 0 && <TeamChatQuickSummary />}
-      </div>
-
-      <CalendarView
-        entries={entries}
-        initialView="day"
-        onRangeChange={(start, end) => setRange({ start, end })}
-        onEntryClick={(e) =>
-          e.kind === "skill"
-            ? setViewingSkill({
-                skillAssignmentId: e.assignmentId,
-                skillProgramDayId: e.programDayId,
-                date: e.date,
-              })
-            : navigate(`/athlete/day/${e.assignmentId}/${e.programDayId}/${e.date}`)
-        }
-      />
-
-      {/* Only the "you have no coach at all" case gets a big empty state --
-          an empty day/week within a real program is just "nothing scheduled",
-          already shown inline by the calendar itself. Showing both here too
-          was a redundant, confusing double empty-state. No coach doesn't
-          mean no path forward though -- Free Agent status is purely derived
-          (zero rows in coachAthletes for this athlete, nothing stored).
-          The full AI program builder/chat/form-check are a paid upgrade for
-          a Free Agent (see requirePaidAiAccess in routes.ts, always false
-          until real billing exists) -- Forge templates and exercise
-          substitution stay free either way. Deliberately no AI branding or
-          entry point here (no Sparkles icon, no "AI" in the copy) -- the AI
-          program builder lives exclusively on the Programs page (see
-          aiFirstCreate in program-list.tsx); this is just a plain link over. */}
-      {!coachesLoading && coaches.length === 0 && (
-        <Card className="mt-6">
-          <CardContent className="flex flex-col items-center gap-3 py-14 text-center">
-            <Badge className="gap-1.5 bg-primary/15 text-primary hover:bg-primary/15">
-              Free Agent
-            </Badge>
-            <p className="max-w-sm text-muted-foreground">
-              You don't have a coach yet. Head to My Programs to build one -- start from a Forge
-              template and swap out any exercise that doesn't work for you, or let the AI ask a
-              few questions and build it with you (a paid upgrade, coming soon).
-            </p>
-            <Button asChild>
-              <Link href="/athlete/programs">
-                <CalendarDays className="h-4 w-4" />
-                Go to My Programs
-              </Link>
-            </Button>
-            <p className="mt-2 text-xs text-muted-foreground">
-              Joining a team later? Your programs stay right where they are.
-            </p>
-            <CoachJoinHint />
+        <Card>
+          <CardHeader className="flex-row items-center justify-between space-y-0">
+            <div>
+              <CardTitle>Next 3 Days</CardTitle>
+              <CardDescription className="hidden sm:block">
+                Quick look at what's coming up -- synced with the full calendar.
+              </CardDescription>
+            </div>
+            <Link href="/athlete/calendar">
+              <Button variant="outline" size="sm">
+                Full Calendar
+              </Button>
+            </Link>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-2.5 sm:grid-cols-3">
+              {days.map((day) => {
+                const dateStr = formatISO(day, { representation: "date" });
+                const dayEntries = upcoming.filter((e) => e.date === dateStr);
+                const shown = dayEntries.slice(0, 3);
+                const overflow = dayEntries.length - shown.length;
+                return (
+                  <div key={dateStr} className="rounded-md border border-border p-2">
+                    <div className="mb-1.5 flex items-baseline justify-between">
+                      <span
+                        className={cn(
+                          "text-xs font-semibold uppercase text-muted-foreground",
+                          isToday(day) && "text-primary",
+                        )}
+                      >
+                        {isToday(day) ? "Today" : format(day, "EEEE")}
+                      </span>
+                      <span className={cn("text-sm font-bold", isToday(day) && "text-primary")}>
+                        {format(day, "MMM d")}
+                      </span>
+                    </div>
+                    <div className="space-y-1">
+                      {shown.length === 0 && (
+                        <p className="flex items-center justify-center gap-1.5 py-2 text-center text-xs text-muted-foreground">
+                          <CalendarDays className="h-3.5 w-3.5" />
+                          Nothing scheduled
+                        </p>
+                      )}
+                      {shown.map((e) => (
+                        <EntryPill
+                          key={`${e.assignmentId}-${e.programDayId}`}
+                          entry={e}
+                          onClick={() =>
+                            e.kind === "skill"
+                              ? setViewingSkill({
+                                  skillAssignmentId: e.assignmentId,
+                                  skillProgramDayId: e.programDayId,
+                                  date: e.date,
+                                })
+                              : navigate(`/athlete/day/${e.assignmentId}/${e.programDayId}/${e.date}`)
+                          }
+                        />
+                      ))}
+                      {overflow > 0 && (
+                        <Link href="/athlete/calendar">
+                          <span className="block px-1.5 text-[11px] font-semibold text-primary hover:underline">
+                            +{overflow} more
+                          </span>
+                        </Link>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </CardContent>
         </Card>
-      )}
 
-      <CalendarLinkDialog
-        open={syncOpen}
-        onOpenChange={setSyncOpen}
-        title="Sync Your Calendar"
-        fetchUrl="/api/athlete/calendar-link"
-      />
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <StatTile
+            icon={Flame}
+            label="Day streak"
+            value={progress?.currentStreak ?? 0}
+            href="/athlete/progress"
+          />
+          <StatTile
+            icon={CalendarCheck}
+            label="Workouts this month"
+            value={progress?.workoutsThisMonth ?? 0}
+            href="/athlete/progress"
+          />
+          <StatTile
+            icon={ListChecks}
+            label="Total completed"
+            value={progress?.totalCompleted ?? 0}
+            href="/athlete/progress"
+          />
+          <StatTile
+            icon={Trophy}
+            label="Recent PRs"
+            value={progress?.recentPRs?.length ?? 0}
+            href="/athlete/progress"
+          />
+        </div>
+
+        {/* Quick view: today's nutrition and (for a coached athlete -- a
+            Free Agent has no team) the latest team chat, both just a
+            summary with a link through to their full page. */}
+        <div className="grid gap-4 sm:grid-cols-2">
+          <NutritionQuickSummary />
+          {!coachesLoading && coaches.length > 0 && <TeamChatQuickSummary />}
+        </div>
+
+        {/* Free Agent status is purely derived (zero rows in coachAthletes
+            for this athlete, nothing stored) -- see app-shell.tsx's own nav
+            filtering for the same check. The full AI program builder/chat/
+            form-check are a paid upgrade for a Free Agent (see
+            requirePaidAiAccess in routes.ts, always false until real
+            billing exists) -- Forge templates and exercise substitution
+            stay free either way. Deliberately no AI branding or entry point
+            here (no Sparkles icon, no "AI" in the copy) -- the AI program
+            builder lives exclusively on the Library page. */}
+        {!coachesLoading && coaches.length === 0 && (
+          <Card>
+            <CardContent className="flex flex-col items-center gap-3 py-14 text-center">
+              <Badge className="gap-1.5 bg-primary/15 text-primary hover:bg-primary/15">
+                Free Agent
+              </Badge>
+              <p className="max-w-sm text-muted-foreground">
+                You don't have a coach yet. Head to Library to build a program -- start from a
+                Forge template and swap out any exercise that doesn't work for you, or let the AI
+                ask a few questions and build it with you (a paid upgrade, coming soon).
+              </p>
+              <Button asChild>
+                <Link href="/athlete/programs">
+                  <CalendarDays className="h-4 w-4" />
+                  Go to Library
+                </Link>
+              </Button>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Joining a team later? Your programs stay right where they are.
+              </p>
+              <CoachJoinHint />
+            </CardContent>
+          </Card>
+        )}
+      </div>
 
       {viewingSkill && (
         <SkillDayViewDialog
@@ -145,6 +231,34 @@ export default function AthleteDashboard() {
         />
       )}
     </AppShell>
+  );
+}
+
+function StatTile({
+  icon: Icon,
+  label,
+  value,
+  href,
+}: {
+  icon: typeof Flame;
+  label: string;
+  value: number;
+  href: string;
+}) {
+  return (
+    <Link href={href}>
+      <Card className="cursor-pointer transition-colors hover:border-primary/50">
+        <CardContent className="flex items-center gap-3 p-3 md:p-4">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary/15 text-primary">
+            <Icon className="h-5 w-5" />
+          </div>
+          <div className="min-w-0">
+            <p className="font-display text-2xl font-bold md:text-3xl">{value}</p>
+            <p className="truncate text-sm text-muted-foreground">{label}</p>
+          </div>
+        </CardContent>
+      </Card>
+    </Link>
   );
 }
 
@@ -175,7 +289,7 @@ function PendingCoachRequests() {
   if (requests.length === 0) return null;
 
   return (
-    <div className="mb-6 space-y-2">
+    <div className="space-y-2">
       {requests.map((r) => (
         <Card key={r.id} className="border-primary/40">
           <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">

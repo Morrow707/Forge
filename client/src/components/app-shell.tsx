@@ -83,7 +83,8 @@ const coachNav: NavItem[] = [
 ];
 
 const athleteNav: NavItem[] = [
-  { href: "/athlete", label: "Calendar", icon: CalendarDays, exact: true },
+  { href: "/athlete", label: "Dashboard", icon: Flame, exact: true },
+  { href: "/athlete/calendar", label: "Calendar", icon: CalendarDays },
   {
     href: "/athlete/programs",
     label: "Library",
