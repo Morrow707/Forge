@@ -3212,6 +3212,93 @@ export const aiKnowledgeChangelog = pgTable(
 
 export type AiKnowledgeChangelogEntry = typeof aiKnowledgeChangelog.$inferSelect;
 
+// ---------- Admin Query Engine ----------
+// Multi-parametric filtering across the platform-wide aggregate view --
+// extends queryAggregateAthleteData's redaction rule (no name/email/team)
+// to the wider performance/health categories that endpoint never covered:
+// VBT set metrics, daily wellness, injury status, skill/mechanics faults,
+// movement-screen flags, tracking trust scores, and CARA compliance.
+// lookbackDays bounds how recent a set/wellness/skill capture must be to
+// count, since most of what's filtered here is repeated-measures data, not
+// a single profile value. Video URLs and every free-text field (injury
+// descriptions, food-log text, AI-written briefings/digests) are
+// deliberately left out of both the filters and the returned rows -- a
+// materially bigger privacy step than exact numeric/categorical values,
+// held back for a later, explicit decision rather than folded in here.
+// Results carry an opaque athleteId (never a name) so a match can actually
+// be acted on -- see queryAthletesAdvanced's own comment in storage.ts for
+// why that's a real, deliberate step beyond what queryAggregateAthleteData
+// exposes today.
+const numericRangeSchema = z
+  .object({ min: z.number().optional(), max: z.number().optional() })
+  .optional();
+
+export const adminAthleteQueryFiltersSchema = z.object({
+  lookbackDays: z.number().int().min(1).max(365).default(30),
+  sport: z.array(z.string()).optional(),
+  position: z.array(z.string()).optional(),
+  seasonPhase: z.array(z.string()).optional(),
+  gender: z.array(z.string()).optional(),
+  healthStatus: z.array(z.enum(["healthy", "hurt"])).optional(),
+  age: numericRangeSchema,
+  bodyWeightLbs: numericRangeSchema,
+  fortyYardDash: numericRangeSchema,
+  verticalJumpIn: numericRangeSchema,
+  broadJumpIn: numericRangeSchema,
+  proAgilitySeconds: numericRangeSchema,
+  benchMaxLbs: numericRangeSchema,
+  squatMaxLbs: numericRangeSchema,
+  deadliftMaxLbs: numericRangeSchema,
+  // Latest daily wellness check-in within lookbackDays.
+  soreness: numericRangeSchema,
+  stress: numericRangeSchema,
+  sleepHours: numericRangeSchema,
+  hydration: numericRangeSchema,
+  mentalFocus: numericRangeSchema,
+  // Tracked-set VBT metrics within lookbackDays -- best peak, average mean.
+  peakVelocityMps: numericRangeSchema,
+  meanVelocityMps: numericRangeSchema,
+  romCm: numericRangeSchema,
+  velocityLossPercent: numericRangeSchema,
+  // Lowest per-rep trust score seen within lookbackDays, 0-100.
+  minTrustScorePct: numericRangeSchema,
+  // Fault codes from detectFormFaults (pose-tracking.ts) / mechanics-tracking.ts
+  // / sprint-tracking.ts -- any set/session within lookbackDays carrying one
+  // of these codes matches. Free text, not an enum, same reasoning as the
+  // faults themselves (see bar-tracker-dialog.tsx's FormFault type).
+  formFaultCodes: z.array(z.string()).optional(),
+  skillFaultCodes: z.array(z.string()).optional(),
+  hasUnresolvedInjury: z.boolean().optional(),
+  hasFlaggedMovementScreen: z.boolean().optional(),
+  // Trailing-7-day CARA minutes used, as a percent of caraWeeklyCapMinutes --
+  // only athletes with a cap set can match. Always trailing 7 days
+  // regardless of lookbackDays, since the cap itself is weekly.
+  caraCapUsagePercent: numericRangeSchema,
+});
+export type AdminAthleteQueryFilters = z.infer<typeof adminAthleteQueryFiltersSchema>;
+
+// A saved filter combination an admin can re-run in one click ("Red Flag /
+// At-Risk", "NCAA Compliance Audit", etc.) instead of rebuilding it every
+// time. filters is snapshotted whole, not decomposed into columns, since
+// adminAthleteQueryFiltersSchema is still evolving and a saved view should
+// survive fields being added around it.
+export const adminSavedViews = pgTable("admin_saved_views", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  filters: json("filters").$type<AdminAthleteQueryFilters>().notNull(),
+  createdByAdminId: integer("created_by_admin_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+export type AdminSavedView = typeof adminSavedViews.$inferSelect;
+
+export const createAdminSavedViewSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  filters: adminAthleteQueryFiltersSchema,
+});
+export type CreateAdminSavedViewInput = z.infer<typeof createAdminSavedViewSchema>;
+
 // Audit trail for the platform-wide aggregate athlete data view (admin-only)
 // -- the first place admin can see every athlete's data across every
 // coach's roster, not just programs/classes admin owns itself, so who

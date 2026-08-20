@@ -87,6 +87,8 @@ import {
   NUTRITION_GOAL_LABEL,
   importedTestingData,
   provisionalAthletes,
+  adminSavedViews,
+  adminAthleteQueryFiltersSchema,
   type InsertUser,
 } from "@shared/schema";
 import { classifyGoniometerReading, GONIOMETER_JOINTS } from "@shared/goniometer";
@@ -136,6 +138,9 @@ import type {
   ClassCoachSettingsInput,
   AcademyTrackStructureInput,
   AcademyQuizQuestionInput,
+  AdminAthleteQueryFilters,
+  AdminSavedView,
+  CreateAdminSavedViewInput,
 } from "@shared/schema";
 import { lookupBarcode, searchFoodsByName, type FoodCandidate } from "./food-lookup";
 import { TESTING_METRICS, testingMetricLowerIsBetter } from "@shared/testing-metrics";
@@ -9170,6 +9175,297 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
       })
       .from(users)
       .where(eq(users.role, "athlete"));
+  },
+
+  // The Admin Query Engine's one entry point -- extends the redaction rule
+  // above (no name/email/team) across every performance/health category,
+  // not just profile/testing. Returns an opaque athleteId per row, which
+  // queryAggregateAthleteData deliberately never did: without SOME stable
+  // handle, a filtered result can't actually be acted on (flagged, opened,
+  // followed up on) by the admin who ran the query -- a bare id isn't
+  // personally identifying on its own, but it IS a real step beyond what
+  // exists today, so it's called out here rather than folded in silently.
+  // Every "recent" condition is a correlated subquery bounded by
+  // filters.lookbackDays (default 30) except injury/movement-screen status,
+  // which read as current state rather than a repeated-measures window --
+  // an old unresolved injury or a months-old flagged screen is still true
+  // today, not something that should fall out of the result just because
+  // the capture itself is old. CARA usage is always trailing-7-days,
+  // independent of lookbackDays, since the cap it's compared against is
+  // itself weekly.
+  async queryAthletesAdvanced(adminId: number, filters: AdminAthleteQueryFilters): Promise<
+    (AggregateAthleteRow & {
+      athleteId: number;
+      latestSoreness: number | null;
+      latestStress: number | null;
+      latestSleepHours: number | null;
+      latestHydration: number | null;
+      latestMentalFocus: number | null;
+      bestPeakVelocityMps: number | null;
+      avgMeanVelocityMps: number | null;
+      avgRomCm: number | null;
+      avgVelocityLossPercent: number | null;
+      minTrustScorePct: number | null;
+      hasUnresolvedInjury: boolean;
+      hasFlaggedMovementScreen: boolean;
+      caraCapUsagePercent: number | null;
+    })[]
+  > {
+    db.insert(aggregateDataAccessLog).values({ adminId }).catch(() => {});
+
+    const cutoff = new Date(Date.now() - filters.lookbackDays * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10);
+    const caraCutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+    const range = (col: any, r?: { min?: number; max?: number }) => {
+      const out = [];
+      if (r?.min != null) out.push(gte(col, r.min));
+      if (r?.max != null) out.push(lte(col, r.max));
+      return out;
+    };
+    // A computed (SQL expression) column can't go through gte/lte directly --
+    // same range semantics, just built as raw comparisons against the
+    // expression instead of a table column.
+    const rangeExpr = (expr: ReturnType<typeof sql<number | null>>, r?: { min?: number; max?: number }) => {
+      const out = [];
+      if (r?.min != null) out.push(sql`${expr} >= ${r.min}`);
+      if (r?.max != null) out.push(sql`${expr} <= ${r.max}`);
+      return out;
+    };
+
+    // ---- Correlated scalar subqueries, reused in both SELECT and WHERE ----
+    const latestWellness = (col: "soreness" | "stress" | "sleep_hours" | "hydration" | "mental_focus") =>
+      sql<number | null>`(SELECT wc.${sql.raw(col)} FROM wellness_checkins wc
+        WHERE wc.athlete_id = ${users.id} ORDER BY wc.date DESC LIMIT 1)`;
+
+    const bestPeakVelocity = sql<number | null>`(SELECT MAX(wse.peak_velocity_mps)
+      FROM workout_set_entries wse
+      JOIN workout_log_entries wle ON wse.log_entry_id = wle.id
+      JOIN workout_logs wl ON wle.workout_log_id = wl.id
+      WHERE wl.athlete_id = ${users.id} AND wl.date >= ${cutoff})`;
+    const avgMeanVelocity = sql<number | null>`(SELECT AVG(wse.mean_velocity_mps)
+      FROM workout_set_entries wse
+      JOIN workout_log_entries wle ON wse.log_entry_id = wle.id
+      JOIN workout_logs wl ON wle.workout_log_id = wl.id
+      WHERE wl.athlete_id = ${users.id} AND wl.date >= ${cutoff})`;
+    const avgRom = sql<number | null>`(SELECT AVG(wse.rom_cm)
+      FROM workout_set_entries wse
+      JOIN workout_log_entries wle ON wse.log_entry_id = wle.id
+      JOIN workout_logs wl ON wle.workout_log_id = wl.id
+      WHERE wl.athlete_id = ${users.id} AND wl.date >= ${cutoff})`;
+    const avgVelocityLoss = sql<number | null>`(SELECT AVG(wse.velocity_loss_percent)
+      FROM workout_set_entries wse
+      JOIN workout_log_entries wle ON wse.log_entry_id = wle.id
+      JOIN workout_logs wl ON wle.workout_log_id = wl.id
+      WHERE wl.athlete_id = ${users.id} AND wl.date >= ${cutoff})`;
+    const minTrustScore = sql<number | null>`(SELECT MIN((elem->>'score')::numeric)
+      FROM workout_set_entries wse
+      JOIN workout_log_entries wle ON wse.log_entry_id = wle.id
+      JOIN workout_logs wl ON wle.workout_log_id = wl.id
+      CROSS JOIN LATERAL jsonb_array_elements(COALESCE(wse.trust_scores, '[]'::jsonb)) elem
+      WHERE wl.athlete_id = ${users.id} AND wl.date >= ${cutoff})`;
+    const hasUnresolvedInjury = sql<boolean>`EXISTS (SELECT 1 FROM injury_history ih
+      WHERE ih.athlete_id = ${users.id} AND ih.resolved = false)`;
+    const hasFlaggedScreen = sql<boolean>`EXISTS (SELECT 1 FROM movement_screen_results msr
+      JOIN movement_screens ms ON msr.screen_id = ms.id
+      WHERE ms.athlete_id = ${users.id} AND msr.flagged = true)`;
+    const caraMinutesUsed = sql<number>`(SELECT COALESCE(SUM(
+        EXTRACT(EPOCH FROM (COALESCE(cs.ended_at, now()) - cs.started_at)) / 60
+      ), 0)
+      FROM cara_sessions cs
+      WHERE cs.athlete_id = ${users.id} AND cs.started_at >= ${caraCutoff.toISOString()})`;
+    const caraCapUsagePct = sql<number | null>`(CASE WHEN ${users.caraWeeklyCapMinutes} IS NULL THEN NULL
+      ELSE (${caraMinutesUsed} / NULLIF(${users.caraWeeklyCapMinutes}, 0)) * 100 END)`;
+
+    const conditions = [eq(users.role, "athlete")];
+    if (filters.sport?.length) conditions.push(inArray(users.sport, filters.sport));
+    if (filters.position?.length) conditions.push(inArray(users.position, filters.position));
+    if (filters.seasonPhase?.length) conditions.push(inArray(users.seasonPhase, filters.seasonPhase as any));
+    if (filters.gender?.length) conditions.push(inArray(users.gender, filters.gender as any));
+    if (filters.healthStatus?.length) conditions.push(inArray(users.healthStatus, filters.healthStatus));
+    conditions.push(
+      ...range(users.age, filters.age),
+      ...range(users.bodyWeightLbs, filters.bodyWeightLbs),
+      ...range(users.fortyYardDash, filters.fortyYardDash),
+      ...range(users.verticalJumpIn, filters.verticalJumpIn),
+      ...range(users.broadJumpIn, filters.broadJumpIn),
+      ...range(users.proAgilitySeconds, filters.proAgilitySeconds),
+      ...range(users.benchMaxLbs, filters.benchMaxLbs),
+      ...range(users.squatMaxLbs, filters.squatMaxLbs),
+      ...range(users.deadliftMaxLbs, filters.deadliftMaxLbs),
+      ...rangeExpr(sql<number | null>`${latestWellness("soreness")}`, filters.soreness),
+      ...rangeExpr(sql<number | null>`${latestWellness("stress")}`, filters.stress),
+      ...rangeExpr(sql<number | null>`${latestWellness("sleep_hours")}`, filters.sleepHours),
+      ...rangeExpr(sql<number | null>`${latestWellness("hydration")}`, filters.hydration),
+      ...rangeExpr(sql<number | null>`${latestWellness("mental_focus")}`, filters.mentalFocus),
+      ...rangeExpr(bestPeakVelocity, filters.peakVelocityMps),
+      ...rangeExpr(avgMeanVelocity, filters.meanVelocityMps),
+      ...rangeExpr(avgRom, filters.romCm),
+      ...rangeExpr(avgVelocityLoss, filters.velocityLossPercent),
+      ...rangeExpr(minTrustScore, filters.minTrustScorePct),
+      ...rangeExpr(caraCapUsagePct, filters.caraCapUsagePercent),
+    );
+    if (filters.hasUnresolvedInjury) conditions.push(sql`${hasUnresolvedInjury}`);
+    if (filters.hasFlaggedMovementScreen) conditions.push(sql`${hasFlaggedScreen}`);
+    if (filters.formFaultCodes?.length) {
+      const codes = sql.join(
+        filters.formFaultCodes.map((c) => sql`${c}`),
+        sql`, `,
+      );
+      conditions.push(sql`EXISTS (
+        SELECT 1 FROM workout_set_entries wse
+        JOIN workout_log_entries wle ON wse.log_entry_id = wle.id
+        JOIN workout_logs wl ON wle.workout_log_id = wl.id
+        CROSS JOIN LATERAL jsonb_array_elements(COALESCE(wse.form_faults, '[]'::jsonb)) elem
+        WHERE wl.athlete_id = ${users.id} AND wl.date >= ${cutoff} AND elem->>'code' IN (${codes})
+      )`);
+    }
+    if (filters.skillFaultCodes?.length) {
+      const codes = sql.join(
+        filters.skillFaultCodes.map((c) => sql`${c}`),
+        sql`, `,
+      );
+      conditions.push(sql`EXISTS (
+        SELECT 1 FROM skill_session_logs ssl
+        CROSS JOIN LATERAL jsonb_array_elements(COALESCE(ssl.faults, '[]'::jsonb)) elem
+        WHERE ssl.athlete_id = ${users.id} AND ssl.created_at >= ${cutoff} AND elem->>'code' IN (${codes})
+      )`);
+    }
+
+    return db
+      .select({
+        athleteId: users.id,
+        age: users.age,
+        gender: users.gender,
+        heightIn: users.heightIn,
+        bodyWeightLbs: users.bodyWeightLbs,
+        sport: users.sport,
+        position: users.position,
+        seasonPhase: users.seasonPhase,
+        trainingStylePreference: users.trainingStylePreference,
+        nutritionGoal: users.nutritionGoal,
+        healthStatus: users.healthStatus,
+        fortyYardDash: users.fortyYardDash,
+        verticalJumpIn: users.verticalJumpIn,
+        broadJumpIn: users.broadJumpIn,
+        proAgilitySeconds: users.proAgilitySeconds,
+        benchMaxLbs: users.benchMaxLbs,
+        squatMaxLbs: users.squatMaxLbs,
+        deadliftMaxLbs: users.deadliftMaxLbs,
+        latestSoreness: latestWellness("soreness"),
+        latestStress: latestWellness("stress"),
+        latestSleepHours: latestWellness("sleep_hours"),
+        latestHydration: latestWellness("hydration"),
+        latestMentalFocus: latestWellness("mental_focus"),
+        bestPeakVelocityMps: bestPeakVelocity,
+        avgMeanVelocityMps: avgMeanVelocity,
+        avgRomCm: avgRom,
+        avgVelocityLossPercent: avgVelocityLoss,
+        minTrustScorePct: minTrustScore,
+        hasUnresolvedInjury,
+        hasFlaggedMovementScreen: hasFlaggedScreen,
+        caraCapUsagePercent: caraCapUsagePct,
+      })
+      .from(users)
+      .where(and(...conditions));
+  },
+
+  // ---------- Admin saved views ----------
+  // 1-click re-runnable filter presets for the query engine above -- see
+  // adminSavedViews' own schema comment. Not scoped to the admin who
+  // created it (same "merges together" treatment the Forge exercise/
+  // program library gives every admin's contributions) since there's no
+  // per-admin ownership split anywhere else in the admin tooling either.
+  async listAdminSavedViews(): Promise<AdminSavedView[]> {
+    return db.query.adminSavedViews.findMany({ orderBy: desc(adminSavedViews.createdAt) });
+  },
+
+  async createAdminSavedView(adminId: number, input: CreateAdminSavedViewInput): Promise<AdminSavedView> {
+    const [view] = await db
+      .insert(adminSavedViews)
+      .values({ name: input.name, filters: input.filters, createdByAdminId: adminId })
+      .returning();
+    return view;
+  },
+
+  async deleteAdminSavedView(id: number): Promise<void> {
+    await db.delete(adminSavedViews).where(eq(adminSavedViews.id, id));
+  },
+
+  // Natural-language front end for queryAthletesAdvanced -- the model never
+  // gets database access or an SQL string to fill in. It's forced (via
+  // tool_choice) to emit the exact same typed filter shape the manual
+  // filter panel builds, which then goes through adminAthleteQueryFiltersSchema
+  // validation and the same parameterized query as every other caller.
+  // That's the whole safety story: there is no path from a user's typed
+  // sentence to a raw query string, structurally, not just by convention.
+  // Returns null on a no-config/unparseable prompt -- callers should fall
+  // back to "couldn't understand that, try the filter panel instead."
+  async translateNlqToAthleteFilters(prompt: string): Promise<AdminAthleteQueryFilters | null> {
+    const rangeSchema = {
+      type: "object",
+      properties: { min: { type: "number" }, max: { type: "number" } },
+    };
+    const tool = {
+      name: "build_athlete_filters",
+      description:
+        "Translate a coach/admin's plain-English athlete search into structured filters. Omit any field the sentence doesn't mention -- never guess a range or flag that wasn't asked for.",
+      input_schema: {
+        type: "object",
+        properties: {
+          lookbackDays: { type: "integer", description: "How many days back 'recent'/'this week'/'today' should cover. Default 30, use 7 for 'this week'." },
+          sport: { type: "array", items: { type: "string" } },
+          position: { type: "array", items: { type: "string" } },
+          seasonPhase: { type: "array", items: { type: "string" } },
+          gender: { type: "array", items: { type: "string" } },
+          healthStatus: { type: "array", items: { type: "string", enum: ["healthy", "hurt"] } },
+          age: rangeSchema,
+          bodyWeightLbs: rangeSchema,
+          fortyYardDash: rangeSchema,
+          verticalJumpIn: rangeSchema,
+          broadJumpIn: rangeSchema,
+          proAgilitySeconds: rangeSchema,
+          benchMaxLbs: rangeSchema,
+          squatMaxLbs: rangeSchema,
+          deadliftMaxLbs: rangeSchema,
+          soreness: { ...rangeSchema, description: "1-5 scale" },
+          stress: { ...rangeSchema, description: "1-5 scale" },
+          sleepHours: rangeSchema,
+          hydration: { ...rangeSchema, description: "1-5 scale" },
+          mentalFocus: { ...rangeSchema, description: "1-5 scale" },
+          peakVelocityMps: rangeSchema,
+          meanVelocityMps: rangeSchema,
+          romCm: rangeSchema,
+          velocityLossPercent: rangeSchema,
+          minTrustScorePct: { ...rangeSchema, description: "0-100 tracking-confidence score" },
+          formFaultCodes: {
+            type: "array",
+            items: { type: "string" },
+            description:
+              "Lift/jump fault codes: shallow_depth, knee_valgus, pelvic_drop, ankle_mobility_limit, thoracic_extension_loss, forward_lean, arm_fallout, bar_path_drift, bar_tilt, grip_shift, lockout_symmetry, lockout_lean",
+          },
+          skillFaultCodes: {
+            type: "array",
+            items: { type: "string" },
+            description:
+              "Sprint/mechanics fault codes: upright_acceleration, hip_drop, low_weight_transfer, low_hip_rotation, low_hip_shoulder_separation, poor_sequencing",
+          },
+          hasUnresolvedInjury: { type: "boolean" },
+          hasFlaggedMovementScreen: { type: "boolean" },
+          caraCapUsagePercent: { ...rangeSchema, description: "% of weekly CARA countable-hours cap used, trailing 7 days" },
+        },
+      },
+    };
+    const result = await askClaudeStructured<Record<string, unknown>>(
+      "You translate a strength coach's plain-English athlete search into structured filters for an internal roster query tool. Only include fields the sentence actually implies -- an unmentioned constraint must be left out, never defaulted.",
+      prompt,
+      tool,
+      { maxTokens: 600, model: fastModel },
+    );
+    if (!result) return null;
+    const parsed = adminAthleteQueryFiltersSchema.safeParse(result);
+    return parsed.success ? parsed.data : null;
   },
 
   async getRecentReflectionFindings(days = 30): Promise<AiReflectionFinding[]> {

@@ -12,7 +12,7 @@ import { scheduleRestOverPush, cancelRestOverPush } from "./rest-timer-push";
 import { sendEmail } from "./email";
 import { buildProgressReportEmail } from "./progress-report";
 import { buildRecruitingProfilePdf } from "./recruiting-profile";
-import { buildTrainingHistoryCsv, buildTrainingHistoryPdf } from "./training-history-export";
+import { buildTrainingHistoryCsv, buildTrainingHistoryPdf, csvField } from "./training-history-export";
 import { buildMovementScreenSheetPdf } from "./movement-screen-export";
 import { notifyUser } from "./notify";
 import {
@@ -79,6 +79,8 @@ import {
   academyTrackStructureSchema,
   updateCoachBrandingSchema,
   updateCoachFeaturesSchema,
+  adminAthleteQueryFiltersSchema,
+  createAdminSavedViewSchema,
 } from "@shared/schema";
 import { computeReadiness } from "@shared/wellness";
 import { z } from "zod";
@@ -1847,6 +1849,63 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const user = currentUser(req);
     const result = await storage.getAggregateAthleteData(user.id);
     res.json(result);
+  });
+
+  // The Admin Query Engine -- multi-parametric filtering across the wider
+  // set of redacted athlete data (see adminAthleteQueryFiltersSchema's own
+  // comment). Same access-log audit trail as aggregate-athlete-data above.
+  // ?format=csv streams the same rows as a download instead of JSON, for
+  // dropping a filtered subset into Excel/R/Python.
+  app.post("/api/admin/athletes/query", requireRole("admin"), async (req, res) => {
+    const parsed = adminAthleteQueryFiltersSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "Invalid filters", issues: parsed.error.issues });
+    const user = currentUser(req);
+    const rows = await storage.queryAthletesAdvanced(user.id, parsed.data);
+    if (req.query.format === "csv") {
+      const header = Object.keys(rows[0] ?? { athleteId: 0 });
+      const lines = [header.join(",")];
+      for (const row of rows) {
+        lines.push(header.map((k) => csvField((row as any)[k] ?? "")).join(","));
+      }
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", `attachment; filename="athlete-query-results.csv"`);
+      return res.send(lines.join("\n"));
+    }
+    res.json(rows);
+  });
+
+  // Free-text front end for the same query -- the model only ever produces
+  // the same typed filter object above (see translateNlqToAthleteFilters'
+  // own comment for why that's the actual safety boundary, not a prompt
+  // instruction). Returns the parsed filters alongside the results so the
+  // UI can show the admin what it understood before they trust the list.
+  app.post("/api/admin/athletes/query/nlq", requireRole("admin"), async (req, res) => {
+    const prompt = typeof req.body?.prompt === "string" ? req.body.prompt.trim() : "";
+    if (!prompt) return res.status(400).json({ message: "prompt is required" });
+    const filters = await storage.translateNlqToAthleteFilters(prompt);
+    if (!filters) {
+      return res.status(422).json({ message: "Couldn't understand that search -- try the filter panel instead." });
+    }
+    const user = currentUser(req);
+    const rows = await storage.queryAthletesAdvanced(user.id, filters);
+    res.json({ filters, rows });
+  });
+
+  app.get("/api/admin/saved-views", requireRole("admin"), async (_req, res) => {
+    res.json(await storage.listAdminSavedViews());
+  });
+
+  app.post("/api/admin/saved-views", requireRole("admin"), async (req, res) => {
+    const parsed = createAdminSavedViewSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "Invalid saved view", issues: parsed.error.issues });
+    const user = currentUser(req);
+    const view = await storage.createAdminSavedView(user.id, parsed.data);
+    res.status(201).json(view);
+  });
+
+  app.delete("/api/admin/saved-views/:id", requireRole("admin"), async (req, res) => {
+    await storage.deleteAdminSavedView(Number(req.params.id));
+    res.json({ success: true });
   });
 
   // The clickwrap agreement every new coach/athlete accepts at signup (see
