@@ -22,6 +22,7 @@ import ClaimPage from "@/pages/claim";
 import ForgotPasswordPage from "@/pages/forgot-password";
 import ResetPasswordPage from "@/pages/reset-password";
 import LegalPage from "@/pages/legal";
+import DeleteAccountPage from "@/pages/delete-account";
 import NotFound from "@/pages/not-found";
 const ArPreviewTestPage = lazy(() => import("@/pages/dev/ar-preview-test"));
 
@@ -192,6 +193,7 @@ function Router() {
         <Route path="/forgot-password" component={ForgotPasswordPage} />
         <Route path="/reset-password" component={ResetPasswordPage} />
         <Route path="/legal" component={LegalPage} />
+        <Route path="/delete-account" component={DeleteAccountPage} />
         <Route path="/dev/ar-preview-test" component={ArPreviewTestPage} />
         <Route path="/coach">
           <ProtectedRoute role="coach" component={CoachDashboard} />

@@ -15,6 +15,7 @@ import { buildRecruitingProfilePdf } from "./recruiting-profile";
 import { buildTrainingHistoryCsv, buildTrainingHistoryPdf, csvField } from "./training-history-export";
 import { buildMovementScreenSheetPdf } from "./movement-screen-export";
 import { buildComplianceReportPdf } from "./compliance-report";
+import { buildLegalDocumentPdf } from "./legal-document-export";
 import { notifyUser } from "./notify";
 import {
   insertExerciseSchema,
@@ -82,6 +83,8 @@ import {
   updateCoachFeaturesSchema,
   adminAthleteQueryFiltersSchema,
   createAdminSavedViewSchema,
+  updateLegalDocumentSchema,
+  emailLegalDocumentSchema,
 } from "@shared/schema";
 import { computeReadiness } from "@shared/wellness";
 import { z } from "zod";
@@ -2001,6 +2004,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     const content = await storage.updateLegalAgreement(parsed.data.content);
     res.json({ content });
+  });
+
+  // Draft Terms of Service / Privacy Policy -- see legalDocuments' own
+  // schema comment: separate from legalAgreement above, not wired into
+  // signup, purely for admin editing/printing/emailing pending real legal
+  // review. docType is validated against the enum's two literal values
+  // directly rather than a full zod schema, same weight as validating any
+  // other route param.
+  const LEGAL_DOC_TYPES = ["terms_of_service", "privacy_policy"] as const;
+  type LegalDocType = (typeof LEGAL_DOC_TYPES)[number];
+  const isLegalDocType = (v: string): v is LegalDocType => (LEGAL_DOC_TYPES as readonly string[]).includes(v);
+
+  app.get("/api/admin/legal-documents", requireRole("admin"), async (_req, res) => {
+    res.json(await storage.listLegalDocuments());
+  });
+
+  app.put("/api/admin/legal-documents/:type", requireRole("admin"), async (req, res) => {
+    const type = String(req.params.type);
+    if (!isLegalDocType(type)) return res.status(400).json({ message: "Invalid document type" });
+    const parsed = updateLegalDocumentSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    const doc = await storage.updateLegalDocument(type, parsed.data.content);
+    res.json(doc);
+  });
+
+  app.get("/api/admin/legal-documents/:type.pdf", requireRole("admin"), async (req, res) => {
+    const type = String(req.params.type).replace(/\.pdf$/, "");
+    if (!isLegalDocType(type)) return res.status(400).json({ message: "Invalid document type" });
+    const doc = await storage.getLegalDocument(type);
+    if (!doc) return res.status(404).json({ message: "Not found" });
+    const title = type === "terms_of_service" ? "Forge -- Terms of Service (Draft)" : "Forge -- Privacy Policy (Draft)";
+    const pdf = await buildLegalDocumentPdf(title, doc.content);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="forge-${type}.pdf"`);
+    res.send(pdf);
+  });
+
+  app.post("/api/admin/legal-documents/:type/email", requireRole("admin"), async (req, res) => {
+    const type = String(req.params.type);
+    if (!isLegalDocType(type)) return res.status(400).json({ message: "Invalid document type" });
+    const parsed = emailLegalDocumentSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    const doc = await storage.getLegalDocument(type);
+    if (!doc) return res.status(404).json({ message: "Not found" });
+    const title = type === "terms_of_service" ? "Forge Terms of Service (Draft)" : "Forge Privacy Policy (Draft)";
+    const html = `<h2>${title}</h2><p style="white-space:pre-wrap;font-family:sans-serif;">${doc.content
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")}</p>`;
+    const result = await sendEmail({ to: parsed.data.to, subject: title, html });
+    if (!result.sent) return res.status(502).json({ message: "Email not sent -- provider isn't configured." });
+    res.json({ success: true });
   });
 
   // Same admin-teaching pattern, for the nutrition education AI

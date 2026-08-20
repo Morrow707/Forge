@@ -32,11 +32,13 @@ import {
   Camera,
   Palette,
   ShieldCheck,
+  Trash2,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ForgeMark } from "@/components/forge-mark";
 import { EditMyProfileDialog } from "@/components/edit-my-profile-dialog";
+import { DeleteAccountDialog } from "@/components/delete-account-dialog";
 import { NotificationBell } from "@/components/notification-bell";
 import { NotificationSettingsDialog } from "@/components/notification-settings-dialog";
 import { CoachingStaffDialog } from "@/components/coaching-staff-dialog";
@@ -148,6 +150,7 @@ export function AppShell({
   const [coachingStaffOpen, setCoachingStaffOpen] = useState(false);
   const [teamBrandingOpen, setTeamBrandingOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
 
   // Resolved server-side: a coach's own team settings, or their athlete's
   // coach's -- see getEffectiveBrandingForUser in storage.ts. Drives the
@@ -456,6 +459,18 @@ export function AppShell({
                     <LogOut className="h-4 w-4" />
                     Log out
                   </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setDeleteAccountOpen(true);
+                      setAccountMenuOpen(false);
+                    }}
+                    className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-destructive/70 hover:bg-surface-elevated"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete account
+                  </button>
                 </div>
               )}
             </div>
@@ -585,6 +600,17 @@ export function AppShell({
                   <LogOut className="h-4 w-4" />
                   Log out
                 </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDeleteAccountOpen(true);
+                    setMobileNavOpen(false);
+                  }}
+                  className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete account
+                </button>
               </div>
             </div>
           </div>
@@ -634,6 +660,7 @@ export function AppShell({
       {user?.role === "coach" && (
         <TeamBrandingDialog open={teamBrandingOpen} onOpenChange={setTeamBrandingOpen} />
       )}
+      {user && <DeleteAccountDialog open={deleteAccountOpen} onOpenChange={setDeleteAccountOpen} />}
       <NonIosTrackingNotice />
     </div>
   );

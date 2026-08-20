@@ -15,6 +15,7 @@ import {
 } from "@shared/schema";
 import { eq, isNull, and, asc } from "drizzle-orm";
 import { AMERICAN_HITTING_CHAPTERS } from "./seed-data/american-hitting-content";
+import { TERMS_OF_SERVICE_DRAFT, PRIVACY_POLICY_DRAFT } from "./seed-data/legal-documents-draft";
 
 // We don't have live web access from this environment to verify specific
 // YouTube video IDs are real and still online, so hand-picking exact links
@@ -5284,6 +5285,16 @@ You're responsible for the accuracy of what you or your athletes log, and for st
 
 Forge stores the training, health-status, and performance data you provide in order to run the features you use (programming, analytics, camera-based tracking, nutrition logging). Don't enter anyone else's personal information without their permission to do so.`,
     );
+  }
+
+  // Draft Terms of Service / Privacy Policy -- same "only if not already
+  // there" guard as the legalAgreement placeholder above, so a redeploy
+  // never overwrites an admin's edits to either document.
+  if (!(await storage.getLegalDocument("terms_of_service"))) {
+    await storage.updateLegalDocument("terms_of_service", TERMS_OF_SERVICE_DRAFT);
+  }
+  if (!(await storage.getLegalDocument("privacy_policy"))) {
+    await storage.updateLegalDocument("privacy_policy", PRIVACY_POLICY_DRAFT);
   }
 
   console.log("Seed complete.");

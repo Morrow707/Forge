@@ -91,6 +91,7 @@ import {
   adminAthleteQueryFiltersSchema,
   consentRecords,
   recordAccessAuditLogs,
+  legalDocuments,
   type InsertUser,
 } from "@shared/schema";
 import { derivePrivacyTier, videoRetentionDaysForTier, type PrivacyTier } from "@shared/privacy-tiers";
@@ -147,6 +148,7 @@ import type {
   CreateAdminSavedViewInput,
   ConsentRecord,
   RecordAccessAuditLog,
+  LegalDocument,
 } from "@shared/schema";
 import { lookupBarcode, searchFoodsByName, type FoodCandidate } from "./food-lookup";
 import { TESTING_METRICS, testingMetricLowerIsBetter } from "@shared/testing-metrics";
@@ -179,6 +181,7 @@ import {
   generateCalendarToken,
   generateClaimCode,
   hashPassword,
+  comparePasswords,
 } from "./auth-utils";
 import {
   addDays,
@@ -1589,6 +1592,51 @@ export const storage = {
     }
     const [user] = await db.insert(users).values(values).returning();
     return user;
+  },
+
+  // Self-service account deletion (Apple 5.1.1(v) / Google Play's account-
+  // deletion requirement) -- password re-entry since this is permanent and
+  // irreversible, same bar as any other destructive action in this app.
+  // Cleans up this athlete's own video files on disk first (cascading FKs
+  // remove the DB rows, but a DB-level cascade never touches the
+  // filesystem -- same reasoning deleteAdminVideo already follows for a
+  // single video). Coach/admin accounts have no video files of their own
+  // to clean up; their owned content (programs, exercises, etc.) cascades
+  // via the same onDelete: cascade FKs everything else in this schema uses.
+  async deleteOwnAccount(userId: number, password: string): Promise<{ ok: true } | { error: string }> {
+    const user = await this.getUser(userId);
+    if (!user) return { error: "Account not found." };
+    if (!(await comparePasswords(password, user.passwordHash))) {
+      return { error: "Incorrect password." };
+    }
+
+    if (user.role === "athlete") {
+      const [setVideos, skillVideos, commentVideos] = await Promise.all([
+        db
+          .select({ url: workoutSetEntries.formCheckVideoUrl })
+          .from(workoutSetEntries)
+          .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
+          .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
+          .where(and(eq(workoutLogs.athleteId, userId), isNotNull(workoutSetEntries.formCheckVideoUrl))),
+        db
+          .select({ url: skillSessionLogs.videoUrl, annotation: skillSessionLogs.coachAnnotationUrl })
+          .from(skillSessionLogs)
+          .where(eq(skillSessionLogs.athleteId, userId)),
+        db
+          .select({ url: workoutComments.videoUrl, image: workoutComments.imageUrl })
+          .from(workoutComments)
+          .innerJoin(assignments, eq(workoutComments.assignmentId, assignments.id))
+          .where(eq(assignments.athleteId, userId)),
+      ]);
+      await Promise.all([
+        ...setVideos.map((v) => deleteUploadedFile(v.url)),
+        ...skillVideos.flatMap((v) => [deleteUploadedFile(v.url), deleteUploadedFile(v.annotation)]),
+        ...commentVideos.flatMap((v) => [deleteUploadedFile(v.url), deleteUploadedFile(v.image)]),
+      ]);
+    }
+
+    await db.delete(users).where(eq(users.id, userId));
+    return { ok: true };
   },
 
   async updateUserPreferences(userId: number, input: UpdatePreferencesInput) {
@@ -8856,6 +8904,34 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
         set: { content, updatedAt: new Date() },
       });
     return content;
+  },
+
+  // ---------- Legal documents (draft ToS/Privacy Policy) ----------
+  // See legalDocuments' own schema comment: separate from legalAgreement
+  // above, not wired into signup, purely for admin editing/printing/
+  // emailing until there's real legal sign-off.
+  async listLegalDocuments(): Promise<LegalDocument[]> {
+    return db.query.legalDocuments.findMany();
+  },
+
+  async getLegalDocument(docType: "terms_of_service" | "privacy_policy"): Promise<LegalDocument | null> {
+    const [row] = await db.select().from(legalDocuments).where(eq(legalDocuments.docType, docType));
+    return row ?? null;
+  },
+
+  async updateLegalDocument(
+    docType: "terms_of_service" | "privacy_policy",
+    content: string,
+  ): Promise<LegalDocument> {
+    const [row] = await db
+      .insert(legalDocuments)
+      .values({ docType, content, updatedAt: new Date() })
+      .onConflictDoUpdate({
+        target: legalDocuments.docType,
+        set: { content, updatedAt: new Date() },
+      })
+      .returning();
+    return row;
   },
 
   async getAiKnowledgeChat(): Promise<{ guidelines: string; messages: AiKnowledgeMessage[] }> {

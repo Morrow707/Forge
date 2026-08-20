@@ -3437,6 +3437,34 @@ export const recordAccessAuditLogs = pgTable(
 );
 export type RecordAccessAuditLog = typeof recordAccessAuditLogs.$inferSelect;
 
+// ---------- Legal documents (draft, admin-editable) ----------
+// A real Terms of Service and Privacy Policy, kept separate from
+// legalAgreement above -- that table is specifically the short clickwrap
+// text a new signup must accept, and is already live/enforced. These are
+// fuller reference documents for editing, printing, and emailing (see the
+// admin Documents tab) -- not wired into the signup flow, and not enforced
+// against current beta accounts. Seeded once with real starting draft text
+// (see server/seed.ts) via onConflictDoNothing, so re-seeding never
+// clobbers an admin's edits.
+export const legalDocumentTypeEnum = pgEnum("legal_document_type", ["terms_of_service", "privacy_policy"]);
+
+export const legalDocuments = pgTable("legal_documents", {
+  id: serial("id").primaryKey(),
+  docType: legalDocumentTypeEnum("doc_type").notNull().unique(),
+  content: text("content").notNull().default(""),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+export type LegalDocument = typeof legalDocuments.$inferSelect;
+
+export const updateLegalDocumentSchema = z.object({
+  content: z.string().trim().min(1).max(50000),
+});
+export type UpdateLegalDocumentInput = z.infer<typeof updateLegalDocumentSchema>;
+
+export const emailLegalDocumentSchema = z.object({
+  to: z.string().trim().email(),
+});
+
 // Audit trail for the platform-wide aggregate athlete data view (admin-only)
 // -- the first place admin can see every athlete's data across every
 // coach's roster, not just programs/classes admin owns itself, so who

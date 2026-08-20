@@ -1451,6 +1451,22 @@ CREATE TABLE IF NOT EXISTS "record_access_audit_logs" (
 );
 CREATE INDEX IF NOT EXISTS "record_access_audit_logs_target_idx" ON "record_access_audit_logs" ("target_athlete_id", "created_at");
 CREATE INDEX IF NOT EXISTS "record_access_audit_logs_user_idx" ON "record_access_audit_logs" ("user_id", "created_at");
+
+-- Draft Terms of Service / Privacy Policy documents (shared/schema.ts
+-- legalDocuments) -- structure only, content is seeded idempotently by
+-- server/seed.ts (onConflictDoNothing), not here, since a multi-paragraph
+-- document is much safer to insert via a parameterized Drizzle query than
+-- hand-escaped into a raw SQL string literal.
+DO $$ BEGIN
+  CREATE TYPE "legal_document_type" AS ENUM ('terms_of_service', 'privacy_policy');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+CREATE TABLE IF NOT EXISTS "legal_documents" (
+  "id" serial PRIMARY KEY,
+  "doc_type" legal_document_type NOT NULL UNIQUE,
+  "content" text NOT NULL DEFAULT '',
+  "updated_at" timestamp NOT NULL DEFAULT now()
+);
 `;
 
 async function main() {

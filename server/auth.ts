@@ -361,6 +361,26 @@ export function setupAuth(app: Express) {
     });
   });
 
+  // Self-service, permanent account deletion -- any role. See
+  // storage.deleteOwnAccount's own comment for exactly what this does and
+  // doesn't clean up. Logs the session out the same way /api/auth/logout
+  // does once the account itself is gone, since there's nothing left to
+  // stay authenticated as.
+  app.post("/api/account/delete", requireAuth, async (req, res, next) => {
+    const user = req.user as { id: number };
+    const password = typeof req.body?.password === "string" ? req.body.password : "";
+    if (!password) return res.status(400).json({ message: "Password is required." });
+    const result = await storage.deleteOwnAccount(user.id, password);
+    if ("error" in result) return res.status(400).json({ message: result.error });
+    req.logout((err) => {
+      if (err) return next(err);
+      req.session.destroy(() => {
+        res.clearCookie("connect.sid");
+        res.status(204).end();
+      });
+    });
+  });
+
   // Emails the reset link via Resend now that a provider is connected,
   // rather than handing the token straight back in the response for the
   // frontend to show as a copyable link (the previous stopgap while no

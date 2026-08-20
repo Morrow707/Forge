@@ -1,9 +1,16 @@
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { resolveApiUrl } from "@/lib/queryClient";
-import { Download, ShieldAlert } from "lucide-react";
+import { apiRequest, resolveApiUrl, ApiError } from "@/lib/queryClient";
+import { toast } from "sonner";
+import { Download, ShieldAlert, Save, Mail } from "lucide-react";
+
+type LegalDocType = "terms_of_service" | "privacy_policy";
+type LegalDocument = { docType: LegalDocType; content: string; updatedAt: string };
 
 type ComplianceReportData = {
   generatedAt: string;
@@ -191,8 +198,112 @@ export default function AdminDocuments() {
             )}
           </CardContent>
         </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Terms of Service (Draft)</CardTitle>
+            <CardDescription>
+              Not wired into signup and not enforced against current accounts -- current beta
+              testers are friends, no need to force a re-consent flow on them. Edit, print, or
+              email this for review.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <LegalDocEditor docType="terms_of_service" />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Privacy Policy (Draft)</CardTitle>
+            <CardDescription>Same treatment as the Terms of Service above.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <LegalDocEditor docType="privacy_policy" />
+          </CardContent>
+        </Card>
       </div>
     </AppShell>
+  );
+}
+
+function LegalDocEditor({ docType }: { docType: LegalDocType }) {
+  const qc = useQueryClient();
+  const { data: docs } = useQuery<LegalDocument[]>({ queryKey: ["/api/admin/legal-documents"] });
+  const doc = docs?.find((d) => d.docType === docType);
+  const [content, setContent] = useState("");
+  const [hydrated, setHydrated] = useState(false);
+  const [emailTo, setEmailTo] = useState("");
+
+  useEffect(() => {
+    if (doc && !hydrated) {
+      setContent(doc.content);
+      setHydrated(true);
+    }
+  }, [doc, hydrated]);
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("PUT", `/api/admin/legal-documents/${docType}`, { content });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/admin/legal-documents"] });
+      toast.success("Saved");
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Could not save"),
+  });
+
+  const emailMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("POST", `/api/admin/legal-documents/${docType}/email`, { to: emailTo });
+    },
+    onSuccess: () => {
+      toast.success(`Sent to ${emailTo}`);
+      setEmailTo("");
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Could not send"),
+  });
+
+  return (
+    <div className="space-y-3">
+      <Textarea
+        value={content}
+        onChange={(e) => setContent(e.target.value)}
+        rows={12}
+        className="font-mono text-xs"
+        placeholder="Loading…"
+      />
+      <div className="flex flex-wrap items-center gap-2">
+        <Button size="sm" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending || !content.trim()}>
+          <Save className="h-4 w-4" />
+          {saveMutation.isPending ? "Saving…" : "Save"}
+        </Button>
+        <Button asChild size="sm" variant="outline">
+          <a href={resolveApiUrl(`/api/admin/legal-documents/${docType}.pdf`)} download>
+            <Download className="h-4 w-4" />
+            Print / Download PDF
+          </a>
+        </Button>
+        <div className="flex items-center gap-1.5">
+          <Input
+            type="email"
+            value={emailTo}
+            onChange={(e) => setEmailTo(e.target.value)}
+            placeholder="Email to…"
+            className="h-8 w-48"
+          />
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => emailMutation.mutate()}
+            disabled={emailMutation.isPending || !emailTo.trim()}
+          >
+            <Mail className="h-4 w-4" />
+            Send
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }
 
