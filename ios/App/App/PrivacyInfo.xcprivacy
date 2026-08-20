@@ -2,6 +2,16 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- FLAGGED 2026-08-20, pre-Apple-upload audit: this list predates the
+	     age-tier/COPPA work (date of birth collected at signup) and the
+	     health-adjacent data the app now collects (injury history, health
+	     status, movement-screen/ROM data, CARA compliance logs); neither
+	     is declared below yet, likely under its own data type(s) rather
+	     than folded into the existing Fitness entry. Deliberately held,
+	     not fixed here: same "needs a real compliance/legal pass, don't
+	     self-certify" track as the draft ToS/Privacy Policy and the rest
+	     of the COPPA/BIPA scaffolding in the admin Documents tab. See
+	     task "Update iOS PrivacyInfo.xcprivacy for DOB/health data". -->
 	<key>NSPrivacyTracking</key>
 	<false/>
 	<key>NSPrivacyTrackingDomains</key>
