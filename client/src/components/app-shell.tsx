@@ -246,7 +246,11 @@ export function AppShell({
   return (
     <div
       className={cn(
-        "app-shell-root min-h-screen bg-background",
+        // overflow-x-hidden here is a page-wide safety net, not a fix for
+        // one spot -- individual wide content (tables, long code blocks)
+        // should scroll inside its own overflow-x-auto container instead of
+        // ever growing the page itself past the viewport width.
+        "app-shell-root min-h-screen overflow-x-hidden bg-background",
         fitScreen && "flex flex-col md:h-screen md:overflow-hidden",
       )}
       style={brandStyle}
@@ -489,6 +493,15 @@ export function AppShell({
 
         {mobileNavOpen && (
           <div className="border-t border-border px-4 py-3 md:hidden">
+            {/* Name/role gets its own row, above the tabs -- crammed into the
+                same row as Notifications/Staff/Log out (below) it was
+                truncating down to a few characters on a real phone width. */}
+            <div className="mb-3 min-w-0">
+              <p className="truncate text-sm font-semibold">{user?.name}</p>
+              <p className="truncate text-xs capitalize text-muted-foreground">
+                {isFreeAgent ? "Free Agent" : user?.role}
+              </p>
+            </div>
             <div className="flex flex-wrap gap-2">
               {nav.map((item) => {
                 const Icon = item.icon;
@@ -532,14 +545,8 @@ export function AppShell({
                 </Link>
               )}
             </div>
-            <div className="mt-3 flex items-center justify-between border-t border-border pt-3">
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold">{user?.name}</p>
-                <p className="truncate text-xs capitalize text-muted-foreground">
-                  {isFreeAgent ? "Free Agent" : user?.role}
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
+            <div className="mt-3 border-t border-border pt-3">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                 {user?.role === "athlete" && (
                   <button
                     type="button"
