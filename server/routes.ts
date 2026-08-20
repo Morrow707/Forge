@@ -6,10 +6,12 @@ import multer from "multer";
 import { setupAuth, requireAuth, requireRole, attachNativeTokenAuth } from "./auth";
 import { storage } from "./storage";
 import { buildIcsFeed } from "./ics";
-import { getVapidPublicKey } from "./push";
+import { getVapidPublicKey, pushEnabled } from "./push";
 import { apnsEnabled } from "./apns";
 import { scheduleRestOverPush, cancelRestOverPush } from "./rest-timer-push";
-import { sendEmail } from "./email";
+import { sendEmail, emailEnabled } from "./email";
+import { aiEnabled } from "./ai";
+import { usdaFoodLookupEnabled } from "./food-lookup";
 import { buildProgressReportEmail } from "./progress-report";
 import { buildRecruitingProfilePdf } from "./recruiting-profile";
 import { buildTrainingHistoryCsv, buildTrainingHistoryPdf, csvField } from "./training-history-export";
@@ -1606,6 +1608,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/admin/platform-trends", requireRole("admin"), async (_req, res) => {
     const trends = await storage.getPlatformTrends();
     res.json(trends);
+  });
+
+  // Cheap headcount tiles for the admin dashboard -- see
+  // storage.getAdminPlatformStats' own comment for why this is separate
+  // from the (much heavier) platform-trends aggregation above.
+  app.get("/api/admin/platform-stats", requireRole("admin"), async (_req, res) => {
+    const stats = await storage.getAdminPlatformStats();
+    res.json(stats);
+  });
+
+  // Whether each optional, key-gated integration is actually configured
+  // right now -- every boolean here already exists as a module-level export
+  // (each integration resolves its own env vars to a boolean on import), so
+  // this route only ever exposes those booleans, never a secret value.
+  app.get("/api/admin/system-status", requireRole("admin"), async (_req, res) => {
+    res.json({
+      ai: aiEnabled,
+      email: emailEnabled,
+      webPush: pushEnabled,
+      apns: apnsEnabled,
+      usdaFoodLookup: usdaFoodLookupEnabled,
+    });
   });
 
   // Storage-management page: every user-uploaded video currently on disk,

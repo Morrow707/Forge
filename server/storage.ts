@@ -170,7 +170,23 @@ import { resolveCoachFeatures, type CoachFeature } from "@shared/team-features";
 import { askClaude, askClaudeStructured, askClaudeWithTools, askClaudeVision, askClaudeVisionStructured, aiEnabled, fastModel, type SystemPrompt } from "./ai";
 import { fetchUrlSafely, UnsafeUrlError } from "./safe-fetch";
 import { deleteUploadedFile, statUploadedFile } from "./uploaded-files";
-import { eq, and, inArray, asc, desc, lt, lte, gte, gt, isNull, isNotNull, sql, ilike } from "drizzle-orm";
+import {
+  eq,
+  and,
+  inArray,
+  notInArray,
+  asc,
+  desc,
+  lt,
+  lte,
+  gte,
+  gt,
+  isNull,
+  isNotNull,
+  sql,
+  ilike,
+  count,
+} from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import { diffLines } from "diff";
@@ -13637,6 +13653,42 @@ ${catalog}`;
 
   async getPlatformTrends() {
     return buildPlatformTrends();
+  },
+
+  // Cheap headcounts for the admin dashboard's stat tiles -- deliberately
+  // separate from getPlatformTrends/buildPlatformTrends above, which does a
+  // lot of unrelated heavy aggregation (workout sets, wellness checkins,
+  // ACWR) that a simple "how many coaches do we have" number shouldn't have
+  // to pay for.
+  async getAdminPlatformStats() {
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const [[coachRow], [athleteRow], [newSignupRow], [freeAgentRow]] = await Promise.all([
+      db.select({ count: count() }).from(users).where(eq(users.role, "coach")),
+      db.select({ count: count() }).from(users).where(eq(users.role, "athlete")),
+      db.select({ count: count() }).from(users).where(gte(users.createdAt, sevenDaysAgo)),
+      // Free Agent = an athlete with zero coachAthletes rows -- same
+      // definition requireFreeAgent (routes.ts) and getCoachesForAthlete
+      // use per-athlete, just as a platform-wide set difference instead of
+      // one query per athlete.
+      db
+        .select({ count: count() })
+        .from(users)
+        .where(
+          and(
+            eq(users.role, "athlete"),
+            notInArray(
+              users.id,
+              db.select({ athleteId: coachAthletes.athleteId }).from(coachAthletes),
+            ),
+          ),
+        ),
+    ]);
+    return {
+      totalCoaches: coachRow?.count ?? 0,
+      totalAthletes: athleteRow?.count ?? 0,
+      newSignupsThisWeek: newSignupRow?.count ?? 0,
+      freeAgentCount: freeAgentRow?.count ?? 0,
+    };
   },
 
   // Data behind the printable admin compliance snapshot (see
