@@ -5000,6 +5000,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(detail);
   });
 
+  // Lightweight version of the above -- just exercise names + sets/reps, no
+  // logging state or history -- backs the Calendar Today view's inline
+  // expand, so tapping to peek at a workout doesn't navigate away from the
+  // calendar at all.
+  app.get("/api/athlete/day-preview", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const schema = z.object({
+      assignmentId: z.coerce.number(),
+      programDayId: z.coerce.number(),
+    });
+    const parsed = schema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Missing or invalid query params" });
+    }
+    const preview = await storage.getWorkoutDayPreview(
+      user.id,
+      parsed.data.assignmentId,
+      parsed.data.programDayId,
+    );
+    if (!preview) return res.status(404).json({ message: "Workout not found" });
+    res.json(preview);
+  });
+
   // Skill-day view -- the day's plan, plus (when ?date= is given) that
   // occurrence's completion state. date is optional since the coach-preview
   // path through SkillDayViewDialog has none to give (it's previewing the

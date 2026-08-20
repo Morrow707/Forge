@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { getJson } from "@/lib/queryClient";
 import {
   addDays,
   addMonths,
@@ -20,7 +22,15 @@ import {
 } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { ChevronLeft, ChevronRight, CheckCircle2, Dumbbell, MoonStar, Target } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  ChevronDown,
+  CheckCircle2,
+  Dumbbell,
+  MoonStar,
+  Target,
+} from "lucide-react";
 
 export type CalendarEntry = {
   // Which system this entry came from -- an exercise-program day and a
@@ -130,6 +140,7 @@ export function CalendarView({
   onDayClick,
   initialView = "month",
   singleDayContent,
+  dayPreviewFetchUrl,
 }: {
   entries: CalendarEntry[];
   onRangeChange: (startISO: string, endISO: string, view: CalendarViewMode) => void;
@@ -150,6 +161,13 @@ export function CalendarView({
    * and get the plain grouped-by-program list, since there's no roster of
    * other athletes to brief there. */
   singleDayContent?: (dateISO: string) => ReactNode;
+  /** Opt-in: when provided, an exercise-day row in the default Today view
+   * (i.e. singleDayContent isn't overriding it) gets an expand chevron that
+   * fetches and shows a quick exercises/sets/reps preview inline, no
+   * navigation required. Only the athlete's own calendar wires this up --
+   * it needs an athlete-scoped preview endpoint that the coach/admin
+   * calendars don't have one of yet. */
+  dayPreviewFetchUrl?: (entry: CalendarEntry) => string;
 }) {
   const [view, setView] = useState<CalendarViewMode>(initialView);
   const [cursor, setCursor] = useState(() => new Date());
@@ -254,6 +272,7 @@ export function CalendarView({
             entries={entriesByDate.get(startISO) ?? []}
             onEntryClick={onEntryClick}
             emptyLabel="Nothing scheduled."
+            dayPreviewFetchUrl={dayPreviewFetchUrl}
           />
         ))}
     </div>
@@ -292,10 +311,12 @@ export function DayDetailList({
   entries,
   onEntryClick,
   emptyLabel = "Nothing scheduled.",
+  dayPreviewFetchUrl,
 }: {
   entries: CalendarEntry[];
   onEntryClick: (entry: CalendarEntry) => void;
   emptyLabel?: string;
+  dayPreviewFetchUrl?: (entry: CalendarEntry) => string;
 }) {
   const groups = groupDayEntries(entries);
 
@@ -340,17 +361,16 @@ export function DayDetailList({
         // itself is the tappable row instead of a redundant "View details"
         // button underneath restating what's already on screen.
         if (group.length === 1 && !rep.athleteName) {
+          const canPreview = dayPreviewFetchUrl && !rep.isRestDay && rep.kind === "exercise";
           return (
-            <button
+            <PreviewableEntryRow
               key={groupKey(rep)}
-              type="button"
-              onClick={() => onEntryClick(rep)}
-              className="flex w-full items-center gap-2 rounded-md border border-border p-2.5 text-left transition-colors hover:bg-surface-elevated"
-            >
-              {iconBox}
-              {titleBlock}
-              {rep.completed && <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />}
-            </button>
+              entry={rep}
+              iconBox={iconBox}
+              titleBlock={titleBlock}
+              onEntryClick={onEntryClick}
+              previewFetchUrl={canPreview ? dayPreviewFetchUrl!(rep) : undefined}
+            />
           );
         }
 
@@ -381,6 +401,99 @@ export function DayDetailList({
           </div>
         );
       })}
+    </div>
+  );
+}
+
+type DayPreviewExercise = { exerciseName: string; sets: number; reps: string; supersetGroup: string | null };
+
+/** Expand chevron button for DayPreviewRow below -- split out only so its
+ * onClick can stop the click from bubbling to the row's own onEntryClick
+ * (navigating away) without the whole row needing to know about that. */
+function DayPreviewChevron({ open, onToggle, label }: { open: boolean; onToggle: () => void; label: string }) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        onToggle();
+      }}
+      aria-label={open ? `Hide ${label} preview` : `Preview ${label}`}
+      aria-expanded={open}
+      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-surface-elevated hover:text-foreground"
+    >
+      <ChevronDown className={cn("h-4 w-4 transition-transform", open && "rotate-180")} />
+    </button>
+  );
+}
+
+/** The expanded content itself -- just exercise names + sets/reps (see
+ * /api/athlete/day-preview), nothing a full workout page already shows in
+ * more detail. Query only fires once actually expanded, and stays cached
+ * after that (a day's prescription doesn't change underneath you
+ * mid-glance). */
+function DayPreviewList({ fetchUrl }: { fetchUrl: string }) {
+  const { data, isLoading } = useQuery<DayPreviewExercise[]>({
+    queryKey: [fetchUrl],
+    queryFn: () => getJson(fetchUrl),
+    staleTime: Infinity,
+  });
+
+  return (
+    <div className="space-y-1 border-t border-border p-2.5">
+      {isLoading ? (
+        <div className="h-12 animate-pulse rounded bg-surface" />
+      ) : !data?.length ? (
+        <p className="py-1 text-center text-xs text-muted-foreground">Nothing prescribed here yet.</p>
+      ) : (
+        data.map((ex, i) => (
+          <div key={i} className="flex items-baseline justify-between gap-3 text-xs">
+            <span className="truncate">{ex.exerciseName}</span>
+            <span className="shrink-0 font-semibold text-muted-foreground">
+              {ex.sets}x{ex.reps}
+            </span>
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
+
+/** The Today view's "looking at your own single day" row -- tapping the
+ * row itself still navigates to the full workout page like before; the
+ * chevron (only rendered when a preview URL is given) instead expands a
+ * quick exercises/sets/reps list in place, without leaving the calendar. */
+function PreviewableEntryRow({
+  entry,
+  iconBox,
+  titleBlock,
+  onEntryClick,
+  previewFetchUrl,
+}: {
+  entry: CalendarEntry;
+  iconBox: ReactNode;
+  titleBlock: ReactNode;
+  onEntryClick: (entry: CalendarEntry) => void;
+  previewFetchUrl?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="rounded-md border border-border">
+      <div className="flex w-full items-center gap-2 p-2.5">
+        <button
+          type="button"
+          onClick={() => onEntryClick(entry)}
+          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+        >
+          {iconBox}
+          {titleBlock}
+        </button>
+        {entry.completed && <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />}
+        {previewFetchUrl && (
+          <DayPreviewChevron open={open} onToggle={() => setOpen((v) => !v)} label={entry.title} />
+        )}
+      </div>
+      {open && previewFetchUrl && <DayPreviewList fetchUrl={previewFetchUrl} />}
     </div>
   );
 }

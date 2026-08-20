@@ -11548,6 +11548,51 @@ ${entriesText}`;
     };
   },
 
+  // Just exercise names + prescribed sets/reps, respecting this athlete's
+  // own swaps for this occurrence -- the "quick glance" version of
+  // getWorkoutDayDetail above, for the calendar's Today view where a coach
+  // comment thread, logged sets, and corrective history would be way more
+  // than a glance needs.
+  async getWorkoutDayPreview(athleteId: number, assignmentId: number, programDayId: number) {
+    const assignment = await db.query.assignments.findFirst({
+      where: and(eq(assignments.id, assignmentId), eq(assignments.athleteId, athleteId)),
+      with: { program: true },
+    });
+    if (!assignment) return undefined;
+
+    const day = await db.query.programDays.findFirst({
+      where: eq(programDays.id, programDayId),
+      with: {
+        exercises: {
+          orderBy: asc(programExercises.orderIndex),
+          with: { exercise: true },
+        },
+        week: true,
+      },
+    });
+    if (!day || day.week.programId !== assignment.program.id) return undefined;
+
+    const overrides = await db.query.assignmentExerciseOverrides.findMany({
+      where: and(
+        eq(assignmentExerciseOverrides.assignmentId, assignmentId),
+        eq(assignmentExerciseOverrides.programDayId, programDayId),
+      ),
+      with: { substituteExercise: true },
+    });
+    const overrideByProgramExerciseId = new Map(overrides.map((o) => [o.programExerciseId, o]));
+
+    return day.exercises.map((pe) => {
+      const override = overrideByProgramExerciseId.get(pe.id);
+      const effectiveExercise = override ? override.substituteExercise : pe.exercise;
+      return {
+        exerciseName: effectiveExercise.name,
+        sets: pe.sets,
+        reps: pe.reps,
+        supersetGroup: pe.supersetGroup,
+      };
+    });
+  },
+
   async clearModifiedWorkout(assignmentId: number, programDayId: number) {
     await db
       .delete(assignmentExerciseOverrides)

@@ -60,6 +60,9 @@ export default function AthleteCalendar() {
               })
             : navigate(`/athlete/day/${e.assignmentId}/${e.programDayId}/${e.date}`)
         }
+        dayPreviewFetchUrl={(e) =>
+          `/api/athlete/day-preview?assignmentId=${e.assignmentId}&programDayId=${e.programDayId}`
+        }
       />
 
       <CalendarLinkDialog

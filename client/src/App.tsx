@@ -393,7 +393,19 @@ export default function App() {
               just looked like it silently replaced it. expand keeps every
               toast fully visible, each new one pushing the others down,
               still auto-dismissing on their own default timers. */}
-          <Toaster theme="dark" position="top-right" richColors expand />
+          {/* offset/mobileOffset (sonner switches between them under/over a
+              600px viewport, which this app is always under) clear the
+              iPhone notch/status bar -- without it every toast (errors,
+              success, info alike) rendered flush against the top edge,
+              landing right under the camera/clock. */}
+          <Toaster
+            theme="dark"
+            position="top-right"
+            richColors
+            expand
+            offset={{ top: "calc(env(safe-area-inset-top) + 1rem)" }}
+            mobileOffset={{ top: "calc(env(safe-area-inset-top) + 1rem)" }}
+          />
           {/* Temporary -- see debug-console.tsx's own comment. Remove this
               line, that file, and lib/debug-console.ts together once
               login/password-save is diagnosed. */}

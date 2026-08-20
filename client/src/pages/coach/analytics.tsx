@@ -41,6 +41,7 @@ import {
   Trophy,
   ChevronDown,
   ChevronUp,
+  Flag,
 } from "lucide-react";
 import { VideoAnalysisDialog } from "@/components/video-analysis-dialog";
 import { SkillsTrendsPanel } from "@/components/skills-trends-panel";
@@ -569,6 +570,16 @@ export default function CoachAnalytics() {
   } | null>(null);
   const [videoPreviewError, setVideoPreviewError] = useState(false);
   const [analyzingVideo, setAnalyzingVideo] = useState(false);
+  // Full fault descriptions ("Bar drifted 27.7cm off a straight vertical
+  // line") used to render inline as wrapping badges right in the table --
+  // fine for one short fault, but a set with several blew the row height
+  // out to several times its neighbors'. Now the cell is just a flag icon;
+  // this holds which row's faults are open in the detail dialog.
+  const [viewingFaults, setViewingFaults] = useState<{
+    date: string;
+    setNumber: number;
+    faults: { code: string; label: string }[];
+  } | null>(null);
 
   const { data: roster = [] } = useQuery<RosterEntry[]>({
     queryKey: ["/api/coach/roster"],
@@ -1680,7 +1691,7 @@ export default function CoachAnalytics() {
                     <th className="py-1.5 pr-3">Power (W)</th>
                     <th className="py-1.5 pr-3">Path (cm)</th>
                     <th className="py-1.5 pr-3">Jump ({distanceUnit})</th>
-                    <th className="py-1.5 pr-3">Form notes</th>
+                    <th className="py-1.5 pr-3">Flags</th>
                     <th className="py-1.5 pr-3">Video</th>
                     <th className="py-1.5">PR</th>
                   </tr>
@@ -1708,13 +1719,17 @@ export default function CoachAnalytics() {
                       <td className="py-1.5 pr-3">{p.jumpHeightCm ?? "-"}</td>
                       <td className="py-1.5 pr-3">
                         {p.formFaults && p.formFaults.length > 0 ? (
-                          <div className="flex flex-wrap gap-1">
-                            {p.formFaults.map((f) => (
-                              <Badge key={f.code} variant="secondary" className="text-[9px] font-normal">
-                                {f.label}
-                              </Badge>
-                            ))}
-                          </div>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setViewingFaults({ date: p.date, setNumber: p.setNumber, faults: p.formFaults! })
+                            }
+                            aria-label={`${p.formFaults.length} form flag${p.formFaults.length === 1 ? "" : "s"} on this set`}
+                            className="flex items-center gap-1 rounded-md border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-amber-500 hover:bg-amber-500/20"
+                          >
+                            <Flag className="h-3 w-3" />
+                            <span className="text-[10px] font-semibold">{p.formFaults.length}</span>
+                          </button>
                         ) : (
                           "-"
                         )}
@@ -1802,6 +1817,23 @@ export default function CoachAnalytics() {
               title={videoPreview.label}
             />
           )}
+          <Dialog open={!!viewingFaults} onOpenChange={(o) => !o && setViewingFaults(null)}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Flag className="h-4 w-4 text-amber-500" />
+                  {viewingFaults && `${format(parseISO(viewingFaults.date), "MMM d")} · Set ${viewingFaults.setNumber}`}
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-2">
+                {viewingFaults?.faults.map((f) => (
+                  <div key={f.code} className="rounded-md border border-amber-500/30 bg-amber-500/5 p-2.5 text-sm">
+                    {f.label}
+                  </div>
+                ))}
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
       )}
         </TabsContent>

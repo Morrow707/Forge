@@ -379,11 +379,12 @@ export default function AthleteProgress() {
                 }}
                 className="grid grid-cols-2 gap-3"
               >
-                {/* Date gets its own full-width row -- iOS's native date
-                    picker ignores the grid column's width and renders at
-                    its own intrinsic size, which was wide enough to
-                    overlap the Weight field next to it when the two shared
-                    a row. */}
+                {/* Date gets its own row so iOS's native date picker (which
+                    ignores the grid column's width and renders at its own
+                    intrinsic size) can't overlap the Weight field beside
+                    it -- capped to a sane max-width, though, so the box
+                    itself doesn't balloon out to the full card width for
+                    a value this short. */}
                 <div className="col-span-2 min-w-0 space-y-1.5">
                   <Label htmlFor="metric-date">Date</Label>
                   <Input
@@ -392,7 +393,7 @@ export default function AthleteProgress() {
                     value={date}
                     onChange={(e) => setDate(e.target.value)}
                     max={new Date().toISOString().slice(0, 10)}
-                    className="w-full min-w-0"
+                    className="w-full max-w-[200px] min-w-0"
                   />
                 </div>
                 <div className="min-w-0 space-y-1.5">
