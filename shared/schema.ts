@@ -174,6 +174,27 @@ export const users = pgTable(
     // a coach managing their roster. Used for roster/team identification
     // and the coach-only leaderboard; meaningless for coach/admin accounts.
     age: integer("age"),
+    // Real birthdate, kept separate from the self-reported/coach-entered
+    // "age" snapshot above -- age gating (see shared/privacy-tiers.ts) needs
+    // a value that doesn't go stale as a season passes. Nullable because no
+    // account created before this existed has one; those accounts fall back
+    // to "tier unknown" everywhere tiering is checked rather than being
+    // guessed at.
+    dateOfBirth: date("date_of_birth"),
+    // True only for an account created through claimProvisionalAthlete's
+    // coach-issued-claim-code flow, where a coach/program acted as the
+    // provisioning agent rather than the athlete self-registering directly.
+    // Recorded permanently even after the athlete ages out of Tier 1 --
+    // it's a historical fact about how consent was originally obtained, not
+    // a live status.
+    provisionedViaCoachConsent: boolean("provisioned_via_coach_consent").notNull().default(false),
+    // Set at signup for a Tier 2 (13-17) account -- a real parental-notice
+    // delivery flow (what it says, how/when it's sent) is intentionally NOT
+    // built yet; this column exists so that pipeline has somewhere to read
+    // "does this account need one" from once the actual notice content has
+    // legal sign-off, instead of that decision being made silently by
+    // omission.
+    requiresGuardianNotice: boolean("requires_guardian_notice").notNull().default(false),
     gender: genderEnum("gender"),
     heightIn: integer("height_in"),
     bodyWeightLbs: real("body_weight_lbs"),
@@ -2081,6 +2102,12 @@ export const provisionalAthletes = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     claimCode: text("claim_code").notNull(),
     name: text("name").notNull(),
+    // Optional -- a coach filling in an intake sheet may not have this on
+    // hand yet. The claiming athlete (or their parent/guardian) supplies a
+    // real one in claimProvisionalAthleteSchema if it's still missing here,
+    // since a real DOB is required to derive a privacy tier before the
+    // account is created.
+    dateOfBirth: date("date_of_birth"),
     heightIn: integer("height_in"),
     bodyWeightLbs: real("body_weight_lbs"),
     age: integer("age"),
@@ -2099,6 +2126,14 @@ export type ProvisionalAthlete = typeof provisionalAthletes.$inferSelect;
 export const claimProvisionalAthleteSchema = z.object({
   email: z.string().trim().email(),
   password: z.string().min(6, "Password must be at least 6 characters"),
+  // Only required here if the coach's intake sheet didn't already capture
+  // one (see provisionalAthletes.dateOfBirth) -- whichever of the two is
+  // present is what the claim route uses to derive a privacy tier.
+  dateOfBirth: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD")
+    .refine((v) => new Date(v) <= new Date(), "Date of birth can't be in the future")
+    .optional(),
   agreedToTerms: z.literal(true, {
     errorMap: () => ({ message: "You must agree to the terms to create an account" }),
   }),
@@ -3299,6 +3334,62 @@ export const createAdminSavedViewSchema = z.object({
 });
 export type CreateAdminSavedViewInput = z.infer<typeof createAdminSavedViewSchema>;
 
+// ---------- Consent records ----------
+// Immutable log of every clickwrap/consent event a user's account has on
+// file -- insert-only, no update or delete route anywhere touches this
+// table. Distinct from users.agreedToTermsAt/agreedToTermsText (which only
+// ever holds the CURRENT snapshot for basic Terms-of-Service acceptance):
+// this table can hold multiple, differently-typed consent events per user
+// over time (a biometric waiver is a separate legal instrument from a
+// general ToS acceptance, and a Tier 1 account's consent is given by a
+// coach acting as agent, not the athlete themselves -- givenByUserId
+// records exactly who clicked "I agree" and on whose behalf).
+//
+// See shared/privacy-tiers.ts's own comment: which consent types are
+// actually required for which tier, and the exact document text each one
+// should show, is legal work that hasn't happened yet. This table is the
+// place that work lands once it has -- logConsentRecord already fires for
+// ordinary Terms-of-Service acceptance today so the audit trail exists
+// from day one, not bolted on retroactively later.
+export const consentTypeEnum = pgEnum("consent_type", [
+  "terms_of_service",
+  "biometric_waiver",
+  "coach_coppa_consent",
+  "parental_notice_ack",
+]);
+
+export const consentRecords = pgTable(
+  "consent_records",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    consentType: consentTypeEnum("consent_type").notNull(),
+    // Exact text shown at the moment of consent, same "snapshot, not a
+    // pointer" reasoning as users.agreedToTermsText -- an admin editing the
+    // current document later must never change what this row says someone
+    // already agreed to.
+    documentText: text("document_text").notNull(),
+    // A short label for which version of that text this was (e.g. a date
+    // or short hash) -- lets two rows be compared without diffing the full
+    // text every time.
+    documentVersion: text("document_version").notNull(),
+    // Null when the account holder gave consent themselves; set to the
+    // coach's user id for a coach_coppa_consent row, where the coach is
+    // acting as the provisioning agent for a Tier 1 athlete who can't
+    // legally consent on their own behalf.
+    givenByUserId: integer("given_by_user_id").references(() => users.id, { onDelete: "set null" }),
+    ipAddress: text("ip_address"),
+    userAgent: text("user_agent"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    userIdx: index("consent_records_user_idx").on(table.userId, table.createdAt),
+  }),
+);
+export type ConsentRecord = typeof consentRecords.$inferSelect;
+
 // Audit trail for the platform-wide aggregate athlete data view (admin-only)
 // -- the first place admin can see every athlete's data across every
 // coach's roster, not just programs/classes admin owns itself, so who
@@ -3813,6 +3904,17 @@ export const signupSchema = z.object({
   role: z.enum(["coach", "athlete"]),
   coachCode: z.string().optional(),
   phone: z.string().trim().max(20).optional(),
+  // Required for every signup (coach and athlete both) so the route can
+  // derive a privacy tier (see shared/privacy-tiers.ts) before the account
+  // is ever created -- an athlete signup that resolves to Tier 1 (under 13)
+  // is rejected outright there rather than created and gated after the
+  // fact. The route only applies that rejection to role "athlete" in
+  // practice (a 12-year-old head coach isn't a real case this app needs to
+  // handle), but every account gets a real DOB on file either way.
+  dateOfBirth: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD")
+    .refine((v) => new Date(v) <= new Date(), "Date of birth can't be in the future"),
   agreedToTerms: z.literal(true, {
     errorMap: () => ({ message: "You must agree to the terms to create an account" }),
   }),

@@ -14,6 +14,7 @@ type SignupPayload = {
   role: "coach" | "athlete";
   coachCode?: string;
   phone?: string;
+  dateOfBirth: string;
   agreedToTerms: true;
 };
 

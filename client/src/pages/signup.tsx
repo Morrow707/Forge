@@ -63,6 +63,7 @@ export default function SignupPage() {
     } as CSSProperties;
   })();
   const [phone, setPhone] = useState("");
+  const [dateOfBirth, setDateOfBirth] = useState("");
   // Whether the in-flight/just-submitted signup is a no-code athlete
   // signup -- set synchronously on submit (a ref, not state, so it's
   // already correct by the time the mutation's success re-render happens,
@@ -108,6 +109,7 @@ export default function SignupPage() {
       role,
       coachCode: role === "athlete" ? coachCode || undefined : undefined,
       phone: phone.trim() || undefined,
+      dateOfBirth,
       agreedToTerms: true,
     });
   }
@@ -214,6 +216,24 @@ export default function SignupPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="At least 6 characters"
                 />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="dateOfBirth">Date of birth</Label>
+                <Input
+                  id="dateOfBirth"
+                  type="date"
+                  autoComplete="bday"
+                  required
+                  max={new Date().toISOString().slice(0, 10)}
+                  value={dateOfBirth}
+                  onChange={(e) => setDateOfBirth(e.target.value)}
+                />
+                {role === "athlete" && (
+                  <p className="text-xs text-muted-foreground">
+                    Athletes under 13 can't self-register -- ask your coach or program to set up
+                    your account instead.
+                  </p>
+                )}
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="phone">Phone number (optional)</Label>

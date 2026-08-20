@@ -89,8 +89,11 @@ import {
   provisionalAthletes,
   adminSavedViews,
   adminAthleteQueryFiltersSchema,
+  consentRecords,
   type InsertUser,
 } from "@shared/schema";
+import { derivePrivacyTier, videoRetentionDaysForTier, type PrivacyTier } from "@shared/privacy-tiers";
+import { createHash } from "node:crypto";
 import { classifyGoniometerReading, GONIOMETER_JOINTS } from "@shared/goniometer";
 import {
   MOVEMENT_SCREEN_LOW_GRADE_THRESHOLD,
@@ -141,6 +144,7 @@ import type {
   AdminAthleteQueryFilters,
   AdminSavedView,
   CreateAdminSavedViewInput,
+  ConsentRecord,
 } from "@shared/schema";
 import { lookupBarcode, searchFoodsByName, type FoodCandidate } from "./food-lookup";
 import { TESTING_METRICS, testingMetricLowerIsBetter } from "@shared/testing-metrics";
@@ -13966,17 +13970,34 @@ ${catalog}`;
     claimCode: string,
     input: ClaimProvisionalAthleteInput,
     agreedToTermsText: string,
+    consentContext?: { ipAddress?: string; userAgent?: string },
   ) {
     const provisional = await this.getProvisionalAthleteByClaimCode(claimCode);
     if (!provisional) return { error: "This claim link isn't valid -- ask your coach for a new one." as const };
     const existing = await this.getUserByEmail(input.email);
     if (existing) return { error: "That email is already in use." as const };
+    // Whichever of the two actually has one -- the coach's intake sheet, or
+    // what the athlete/parent entered while claiming (see the two schemas'
+    // own comments on dateOfBirth for why either can supply it). A tier
+    // can't be derived, and the account can't be created, with neither.
+    const dateOfBirth = provisional.dateOfBirth ?? input.dateOfBirth;
+    if (!dateOfBirth) {
+      return { error: "A date of birth is required to finish creating this account." as const };
+    }
+    const tier: PrivacyTier = derivePrivacyTier(dateOfBirth);
     const passwordHash = await hashPassword(input.password);
     const user = await this.createUser({
       email: input.email,
       passwordHash,
       name: provisional.name,
       role: "athlete",
+      dateOfBirth,
+      // A claim code only ever exists because a coach created this
+      // provisional slot -- that coach is acting as the provisioning agent
+      // regardless of which tier the athlete lands in, so this is always
+      // true for the claim-code path, not just for Tier 1.
+      provisionedViaCoachConsent: true,
+      requiresGuardianNotice: tier === "tier2_teen_13_17",
       age: provisional.age ?? undefined,
       gender: provisional.gender ?? undefined,
       heightIn: provisional.heightIn ?? undefined,
@@ -13986,9 +14007,100 @@ ${catalog}`;
       agreedToTermsAt: new Date(),
       agreedToTermsText,
     });
+    await this.logConsentRecord({
+      userId: user.id,
+      consentType: tier === "tier1_under13" ? "coach_coppa_consent" : "terms_of_service",
+      documentText: agreedToTermsText,
+      // For Tier 1, the coach is the one who set up this claim link and is
+      // recorded as having consented on the athlete's behalf; for Tier 2/3
+      // claimed via a coach's link, the athlete/parent typing their own
+      // password into the claim form is still the one accepting the terms.
+      givenByUserId: tier === "tier1_under13" ? provisional.coachId : undefined,
+      ipAddress: consentContext?.ipAddress,
+      userAgent: consentContext?.userAgent,
+    });
     await this.linkAthleteToCoach(provisional.coachId, user.id);
     await this.deleteProvisionalAthlete(provisional.coachId, provisional.id);
     return { user };
+  },
+
+  // Insert-only -- see consentRecords' own schema comment for why nothing
+  // in this codebase should ever update or delete a row here.
+  async logConsentRecord(input: {
+    userId: number;
+    consentType: "terms_of_service" | "biometric_waiver" | "coach_coppa_consent" | "parental_notice_ack";
+    documentText: string;
+    givenByUserId?: number;
+    ipAddress?: string;
+    userAgent?: string;
+  }): Promise<ConsentRecord> {
+    const documentVersion = createHash("sha256").update(input.documentText).digest("hex").slice(0, 12);
+    const [record] = await db
+      .insert(consentRecords)
+      .values({
+        userId: input.userId,
+        consentType: input.consentType,
+        documentText: input.documentText,
+        documentVersion,
+        givenByUserId: input.givenByUserId ?? null,
+        ipAddress: input.ipAddress ?? null,
+        userAgent: input.userAgent ?? null,
+      })
+      .returning();
+    return record;
+  },
+
+  // Rows currently eligible for the data-retention job to purge -- a Tier
+  // 1/2 athlete's tracked-set or skill-session video whose underlying
+  // capture date is older than that tier's configured retention window
+  // (shared/privacy-tiers.ts) and hasn't already been purged. Deliberately
+  // read-only: server/data-retention-job.ts does the actual delete, through
+  // the exact same deleteAdminVideo path the admin video-management page
+  // uses, so there is exactly one place in the codebase that ever deletes a
+  // video file.
+  async getVideosEligibleForRetentionPurge(): Promise<
+    { source: "set" | "skill"; id: number; tier: PrivacyTier }[]
+  > {
+    const minors = await db
+      .select({ id: users.id, dateOfBirth: users.dateOfBirth })
+      .from(users)
+      .where(and(eq(users.role, "athlete"), sql`${users.dateOfBirth} IS NOT NULL`));
+    const eligibleByAthlete = new Map<number, PrivacyTier>();
+    for (const m of minors) {
+      if (!m.dateOfBirth) continue;
+      const tier = derivePrivacyTier(m.dateOfBirth);
+      const days = videoRetentionDaysForTier(tier);
+      if (days != null) eligibleByAthlete.set(m.id, tier);
+    }
+    if (eligibleByAthlete.size === 0) return [];
+
+    const results: { source: "set" | "skill"; id: number; tier: PrivacyTier }[] = [];
+    const setRows = await db
+      .select({ id: workoutSetEntries.id, athleteId: workoutLogs.athleteId, date: workoutLogs.date })
+      .from(workoutSetEntries)
+      .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
+      .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
+      .where(sql`${workoutSetEntries.formCheckVideoUrl} IS NOT NULL`);
+    for (const row of setRows) {
+      const tier = eligibleByAthlete.get(row.athleteId);
+      if (!tier) continue;
+      const days = videoRetentionDaysForTier(tier)!;
+      const ageMs = Date.now() - new Date(row.date).getTime();
+      if (ageMs > days * 24 * 60 * 60 * 1000) results.push({ source: "set", id: row.id, tier });
+    }
+
+    const skillRows = await db
+      .select({ id: skillSessionLogs.id, athleteId: skillSessionLogs.athleteId, createdAt: skillSessionLogs.createdAt })
+      .from(skillSessionLogs)
+      .where(sql`${skillSessionLogs.videoUrl} IS NOT NULL`);
+    for (const row of skillRows) {
+      const tier = eligibleByAthlete.get(row.athleteId);
+      if (!tier) continue;
+      const days = videoRetentionDaysForTier(tier)!;
+      const ageMs = Date.now() - new Date(row.createdAt).getTime();
+      if (ageMs > days * 24 * 60 * 60 * 1000) results.push({ source: "skill", id: row.id, tier });
+    }
+    return results;
   },
 
   // Verbatim program transcription -- see programPhotoDraftSchema's own

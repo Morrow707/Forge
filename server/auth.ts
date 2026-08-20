@@ -18,6 +18,7 @@ import {
   claimProvisionalAthleteSchema,
   type PublicUser,
 } from "@shared/schema";
+import { derivePrivacyTier } from "@shared/privacy-tiers";
 
 const PgStore = connectPgSimple(session);
 
@@ -190,10 +191,25 @@ export function setupAuth(app: Express) {
       if (!parsed.success) {
         return res.status(400).json({ message: parsed.error.issues[0]?.message });
       }
-      const { email, password, name, role, coachCode, phone } = parsed.data;
+      const { email, password, name, role, coachCode, phone, dateOfBirth } = parsed.data;
       const existing = await storage.getUserByEmail(email);
       if (existing) {
         return res.status(409).json({ message: "Email already in use" });
+      }
+
+      // Tier 1 (under 13) athletes can't self-register at all -- see
+      // shared/privacy-tiers.ts's own comment on why this specific gate
+      // exists and what still needs legal review around it. A coach role
+      // signup skips this: a coach account for a 12-year-old isn't a real
+      // case this app needs to handle, so the DOB is collected and stored
+      // either way but only athlete self-serve is actually gated on it.
+      const tier = derivePrivacyTier(dateOfBirth);
+      if (role === "athlete" && tier === "tier1_under13") {
+        return res.status(403).json({
+          message:
+            "Athletes under 13 can't create their own account. Ask your coach or program to set one up for you.",
+          code: "coach_provisioning_required",
+        });
       }
 
       let coach = null;
@@ -224,8 +240,17 @@ export function setupAuth(app: Express) {
         name,
         role,
         phone: phone || null,
+        dateOfBirth,
+        requiresGuardianNotice: role === "athlete" && tier === "tier2_teen_13_17",
         agreedToTermsAt: new Date(),
         agreedToTermsText,
+      });
+      await storage.logConsentRecord({
+        userId: user.id,
+        consentType: "terms_of_service",
+        documentText: agreedToTermsText,
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent") ?? undefined,
       });
 
       if (coach) {
@@ -258,7 +283,9 @@ export function setupAuth(app: Express) {
     const provisional = await storage.getProvisionalAthleteByClaimCode(req.params.code);
     if (!provisional) return res.status(404).json({ message: "This claim link isn't valid." });
     const { name, sport, position } = provisional;
-    res.json({ name, sport, position });
+    // Never sends the actual date back on this unauthenticated preview --
+    // just whether the claim-signup form still needs to ask for one.
+    res.json({ name, sport, position, needsDateOfBirth: !provisional.dateOfBirth });
   });
 
   // Finishes a player-inflow-sheet import (see provisionalAthletes' schema
@@ -276,6 +303,7 @@ export function setupAuth(app: Express) {
         String(req.params.code),
         parsed.data,
         agreedToTermsText,
+        { ipAddress: req.ip, userAgent: req.get("user-agent") ?? undefined },
       );
       if ("error" in result) return res.status(400).json({ message: result.error });
       const { user } = result;

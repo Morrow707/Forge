@@ -14,7 +14,12 @@ import { ForgeMark } from "@/components/forge-mark";
 import { toast } from "sonner";
 import type { PublicUser } from "@shared/schema";
 
-type ProvisionalPreview = { name: string; sport: string | null; position: string | null };
+type ProvisionalPreview = {
+  name: string;
+  sport: string | null;
+  position: string | null;
+  needsDateOfBirth: boolean;
+};
 
 /** Where a player-inflow-sheet claim code lands (see PlayerIntakeImportDialog
  * and provisionalAthletes' schema comment) -- a coach photographed a tryout
@@ -29,6 +34,7 @@ export default function ClaimPage() {
   const qc = useQueryClient();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [dateOfBirth, setDateOfBirth] = useState("");
   const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   const { data: preview, isLoading: previewLoading, isError: previewError } = useQuery<ProvisionalPreview>({
@@ -41,6 +47,7 @@ export default function ClaimPage() {
       const res = await apiRequest("POST", `/api/claim/${code}/signup`, {
         email,
         password,
+        dateOfBirth: dateOfBirth || undefined,
         agreedToTerms: true,
       });
       return (await res.json()) as PublicUser & { nativeToken?: string };
@@ -105,6 +112,20 @@ export default function ClaimPage() {
                 autoComplete="username"
               />
             </div>
+            {preview?.needsDateOfBirth && (
+              <div className="space-y-1.5">
+                <Label htmlFor="claim-dob">Date of birth</Label>
+                <Input
+                  id="claim-dob"
+                  type="date"
+                  required
+                  max={new Date().toISOString().slice(0, 10)}
+                  value={dateOfBirth}
+                  onChange={(e) => setDateOfBirth(e.target.value)}
+                  autoComplete="bday"
+                />
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label htmlFor="claim-password">Password</Label>
               <PasswordInput

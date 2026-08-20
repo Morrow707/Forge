@@ -21,6 +21,7 @@ import cors from "cors";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { startReflectionJob } from "./reflection-job";
+import { startDataRetentionJob } from "./data-retention-job";
 
 const app = express();
 // contentSecurityPolicy and crossOriginEmbedderPolicy are both off --
@@ -112,5 +113,6 @@ app.use((req, res, next) => {
   server.listen(port, "0.0.0.0", () => {
     log(`serving on port ${port}`);
     startReflectionJob();
+    startDataRetentionJob();
   });
 })();
