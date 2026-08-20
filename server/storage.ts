@@ -2010,6 +2010,7 @@ export const storage = {
         email: users.email,
         createdAt: users.createdAt,
         age: users.age,
+        dateOfBirth: users.dateOfBirth,
         gender: users.gender,
         heightIn: users.heightIn,
         bodyWeightLbs: users.bodyWeightLbs,

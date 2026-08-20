@@ -22,6 +22,7 @@ export type ProfileAthlete = {
   name: string;
   email: string;
   age?: number | null;
+  dateOfBirth?: string | null;
   gender?: string | null;
   heightIn?: number | null;
   bodyWeightLbs?: number | null;
@@ -118,7 +119,12 @@ export function AthleteProfileDialog({
         {athlete && (
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">{athlete.email}</p>
-            <ProfileFieldsForm value={value} onChange={setValue} idPrefix="athlete-profile" />
+            <ProfileFieldsForm
+              value={value}
+              onChange={setValue}
+              idPrefix="athlete-profile"
+              dateOfBirth={athlete.dateOfBirth}
+            />
             <InjuryHistoryPanel
               baseUrl={`/api/coach/roster/${athlete.id}/injury-history`}
               canToggleResolved={false}

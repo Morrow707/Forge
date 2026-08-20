@@ -77,6 +77,7 @@ export function ProfileFieldsForm({
   onChange,
   idPrefix,
   showName = true,
+  dateOfBirth,
 }: {
   value: ProfileFieldsValue;
   onChange: (next: ProfileFieldsValue) => void;
@@ -84,6 +85,13 @@ export function ProfileFieldsForm({
   /** Hide the name field when a caller already shows it elsewhere (e.g. as
    * the dialog title). Defaults to shown. */
   showName?: boolean;
+  /** Read-only for now -- collected once at signup (see signup.tsx/claim.tsx)
+   * for age-tier purposes (shared/privacy-tiers.ts), not yet editable here.
+   * Deliberately not reconciled with the Age field above, which stays its
+   * own separately-entered value; unifying them is a follow-up, not this
+   * change. Omitted entirely (not even an empty row) when the account
+   * predates this field. */
+  dateOfBirth?: string | null;
 }) {
   return (
     <div className="space-y-5">
@@ -175,6 +183,18 @@ export function ProfileFieldsForm({
             onChange={(e) => onChange({ ...value, age: e.target.value })}
           />
         </div>
+        {dateOfBirth && (
+          <div className="space-y-1.5">
+            <Label>Date of birth</Label>
+            <p className="flex h-9 items-center rounded-md border border-transparent px-3 text-sm text-muted-foreground">
+              {new Date(`${dateOfBirth}T00:00:00`).toLocaleDateString(undefined, {
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+              })}
+            </p>
+          </div>
+        )}
         <div className="space-y-1.5">
           <Label htmlFor={`${idPrefix}-gender`}>Gender</Label>
           <Select

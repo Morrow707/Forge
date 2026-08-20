@@ -46,6 +46,7 @@ type Athlete = {
   name: string;
   email: string;
   age?: number | null;
+  dateOfBirth?: string | null;
   gender?: string | null;
   heightIn?: number | null;
   bodyWeightLbs?: number | null;

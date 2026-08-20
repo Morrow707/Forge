@@ -94,7 +94,12 @@ export function EditMyProfileDialog({
         <p className="text-sm text-muted-foreground">
           Your coach uses this to build the team leaderboard and get to know you.
         </p>
-        <ProfileFieldsForm value={value} onChange={setValue} idPrefix="my-profile" />
+        <ProfileFieldsForm
+          value={value}
+          onChange={setValue}
+          idPrefix="my-profile"
+          dateOfBirth={user.dateOfBirth}
+        />
         <InjuryHistoryPanel baseUrl="/api/athlete/injury-history" />
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
