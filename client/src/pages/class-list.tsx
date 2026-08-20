@@ -204,7 +204,7 @@ export function ClassListPage({
         <p className="py-8 text-center text-sm text-muted-foreground">No classes match your search.</p>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {filteredClasses.map((c) => (
           <Card key={c.id} className="flex flex-col">
             <CardContent className="flex flex-1 flex-col gap-3 p-5">

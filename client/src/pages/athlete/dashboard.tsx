@@ -90,7 +90,7 @@ export default function AthleteDashboard() {
             </Link>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-2.5 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
               {days.map((day) => {
                 const dateStr = formatISO(day, { representation: "date" });
                 const dayEntries = upcoming.filter((e) => e.date === dateStr);
@@ -148,7 +148,7 @@ export default function AthleteDashboard() {
           </CardContent>
         </Card>
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <StatTile
             icon={Flame}
             label="Day streak"
@@ -178,7 +178,7 @@ export default function AthleteDashboard() {
         {/* Quick view: today's nutrition and (for a coached athlete -- a
             Free Agent has no team) the latest team chat, both just a
             summary with a link through to their full page. */}
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <NutritionQuickSummary />
           {!coachesLoading && coaches.length > 0 && <TeamChatQuickSummary />}
         </div>

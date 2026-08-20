@@ -201,7 +201,7 @@ export function SkillProgramListPage({
         </Card>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {programs.map((p) => (
           <Card key={p.id} className="flex flex-col">
             <CardContent className="flex flex-1 flex-col gap-3 p-5">

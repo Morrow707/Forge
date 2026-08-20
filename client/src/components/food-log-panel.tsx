@@ -227,7 +227,7 @@ export function FoodLogPanel({
         <div className="h-20 animate-pulse rounded-md bg-surface" />
       ) : (
         <>
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <ProgressBar label="Calories" value={totals.caloriesKcal} target={targets?.caloriesKcal ?? null} unit="kcal" />
             <ProgressBar label="Protein" value={totals.proteinG} target={targets?.proteinG ?? null} unit="g" />
             <ProgressBar label="Carbs" value={totals.carbsG} target={targets?.carbsG ?? null} unit="g" />

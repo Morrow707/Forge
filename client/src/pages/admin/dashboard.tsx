@@ -98,7 +98,7 @@ export default function AdminDashboard() {
             </Link>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-2.5 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
               {days.map((day) => {
                 const dateStr = formatISO(day, { representation: "date" });
                 const dayEntries = upcoming.filter((e) => e.date === dateStr);
@@ -156,7 +156,7 @@ export default function AdminDashboard() {
           </CardContent>
         </Card>
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <StatTile icon={Users} label="Coaches" value={platformStats?.totalCoaches ?? 0} />
           <StatTile icon={UserCheck} label="Athletes" value={platformStats?.totalAthletes ?? 0} />
           <StatTile
@@ -167,7 +167,7 @@ export default function AdminDashboard() {
           <StatTile icon={Compass} label="Free Agents" value={platformStats?.freeAgentCount ?? 0} />
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <Card>
             <CardContent className="flex items-center gap-4 p-5">
               <div className="flex h-11 w-11 items-center justify-center rounded-md bg-primary/15 text-primary">
@@ -214,7 +214,7 @@ export default function AdminDashboard() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-2 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
               <StatusRow label="AI features" ok={systemStatus?.ai} />
               <StatusRow label="Email sending" ok={systemStatus?.email} />
               <StatusRow label="Web push" ok={systemStatus?.webPush} />

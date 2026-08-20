@@ -122,7 +122,7 @@ export default function CoachDashboard() {
             </Link>
           </CardHeader>
           <CardContent className="p-3 pt-0 md:p-4 md:pt-0">
-            <div className="grid gap-2.5 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
               {days.map((day) => {
                 const dateStr = formatISO(day, { representation: "date" });
                 const dayEntries = upcoming.filter((e) => e.date === dateStr);
@@ -185,7 +185,7 @@ export default function CoachDashboard() {
           </CardContent>
         </Card>
 
-        <div className="grid shrink-0 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 shrink-0 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard icon={Users} label="Athletes" value={roster.length} href="/coach/roster" />
           <StatCard
             icon={ListChecks}
@@ -207,7 +207,7 @@ export default function CoachDashboard() {
           />
         </div>
 
-        <div className="grid gap-3 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
           <Card className="flex flex-col lg:col-span-2">
             <CardHeader className="flex-row shrink-0 items-center justify-between space-y-0 p-3 md:p-4">
               <div>

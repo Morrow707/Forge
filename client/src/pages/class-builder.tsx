@@ -576,7 +576,7 @@ export function ClassBuilderPage({
 
       <fieldset disabled={!editable} className="contents">
         <Card className="mb-6">
-          <CardContent className="grid gap-3 p-5 sm:grid-cols-2">
+          <CardContent className="grid grid-cols-1 gap-3 p-5 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label>Class name</Label>
               <Input value={name} onChange={(e) => setName(e.target.value)} />
@@ -1064,7 +1064,7 @@ function LessonCard({
         />
 
         {!isFirst && (
-          <div className="grid gap-2 rounded-md border border-border p-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-2 rounded-md border border-border p-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label className="text-xs">Unlocks when previous lesson's...</Label>
               <Select

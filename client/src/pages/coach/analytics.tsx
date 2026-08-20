@@ -2021,7 +2021,7 @@ function VideosTab({
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <AthletePickerField
           roster={roster}
           athleteId={athleteId}
@@ -2587,7 +2587,7 @@ function CoachClassAnalyticsTab() {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Card>
           <CardContent className="flex items-center gap-4 p-5">
             <div className="flex h-11 w-11 items-center justify-center rounded-md bg-primary/15 text-primary">

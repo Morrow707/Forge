@@ -365,7 +365,7 @@ export function SkillProgramBuilderPage({
         <fieldset disabled={!editable} className="contents">
           <div className="min-w-0">
             <Card className="mb-6">
-              <CardContent className="grid gap-3 p-5 sm:grid-cols-2">
+              <CardContent className="grid grid-cols-1 gap-3 p-5 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label>Skill program name</Label>
                   <Input value={name} onChange={(e) => setName(e.target.value)} />
@@ -400,7 +400,7 @@ export function SkillProgramBuilderPage({
                         className="h-8 max-w-xs border-none bg-transparent px-0 text-xs font-bold uppercase tracking-wide text-muted-foreground focus-visible:ring-0"
                       />
                     </div>
-                    <div className="grid items-start gap-4 lg:grid-cols-2 xl:grid-cols-3">
+                    <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2 xl:grid-cols-3">
                       {chunk.map((day, di) => (
                         <DayCard
                           key={day.key}

@@ -38,15 +38,15 @@ function ClassFunnelRow({ row }: { row: ClassAnalyticsRow }) {
         className="flex w-full items-center justify-between gap-3 p-3 text-left"
       >
         <div className="min-w-0">
-          <p className="flex items-center gap-1.5 truncate text-sm font-semibold">
-            {row.name}
+          <p className="flex items-center gap-1.5 text-sm font-semibold">
+            <span className="truncate">{row.name}</span>
             {row.isDraft && (
-              <Badge variant="secondary" className="text-[10px]">
+              <Badge variant="secondary" className="shrink-0 text-[10px]">
                 DRAFT
               </Badge>
             )}
             {row.isForgeOfficial && (
-              <Badge variant="outline" className="text-[10px]">
+              <Badge variant="outline" className="shrink-0 text-[10px]">
                 FORGE
               </Badge>
             )}
@@ -125,7 +125,7 @@ export default function AdminClassesAnalytics() {
 
         {data && (
           <>
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <Card>
                 <CardContent className="flex items-center gap-4 p-5">
                   <div className="flex h-11 w-11 items-center justify-center rounded-md bg-primary/15 text-primary">

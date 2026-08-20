@@ -116,7 +116,7 @@ export default function AthleteClasses() {
               </CardContent>
             </Card>
           )}
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {myClasses.map((c) => (
               <Card
                 key={c.classId}
@@ -205,7 +205,7 @@ export default function AthleteClasses() {
             {unenrolledCatalog.length > 0 && filteredCatalog.length === 0 && (
               <p className="py-6 text-center text-sm text-muted-foreground">No classes match your search.</p>
             )}
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {filteredCatalog.map((c) => (
                 <Card key={c.id} className="flex flex-col">
                   <CardContent className="flex flex-1 flex-col gap-3 p-5">

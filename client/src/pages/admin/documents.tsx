@@ -101,7 +101,7 @@ export default function AdminDocuments() {
             {complianceLoading || !compliance ? (
               <p className="text-sm text-muted-foreground">Loading…</p>
             ) : (
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <SubSection title="Privacy tiers -- roster counts">
                   {compliance.tierCounts.map((t) => (
                     <Row key={t.tier} label={TIER_LABEL[t.tier] ?? t.tier} value={String(t.count)} />

@@ -170,7 +170,7 @@ export default function AdminCoachesCorner() {
         Coaches Corner nav item next to the account menu). Click a track to read it, or the pencil to
         edit its lessons and quiz.
       </p>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {tracks.map((track) => (
           <Card key={track.id} className="transition-colors hover:border-primary/50">
             <CardContent className="flex flex-col gap-2 p-5">

@@ -60,7 +60,7 @@ export function CoachDayBriefing({ date }: { date: string }) {
 
   return (
     <>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {data.map((a) => (
           <div key={a.athleteId} className="rounded-lg border border-border bg-surface p-3">
             <div className="mb-2 flex flex-wrap items-center gap-1.5">

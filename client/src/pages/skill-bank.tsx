@@ -176,7 +176,7 @@ export function SkillBankPage({
         </Card>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {filtered.map((sk) => (
           <Link key={sk.id} href={`${routeBase}/${sk.id}`}>
             <Card className="flex cursor-pointer flex-col transition-colors hover:border-teal-500/50">

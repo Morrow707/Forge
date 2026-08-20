@@ -95,7 +95,7 @@ export function ProfileFieldsForm({
 }) {
   return (
     <div className="space-y-5">
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {showName && (
           <div className="space-y-1.5 sm:col-span-2">
             <Label htmlFor={`${idPrefix}-name`}>Name</Label>
@@ -245,7 +245,7 @@ export function ProfileFieldsForm({
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Testing / Combine
         </p>
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label htmlFor={`${idPrefix}-forty`}>40-Yard Dash (sec)</Label>
             <Input
