@@ -31,6 +31,7 @@ import {
   FileText,
   Camera,
   Palette,
+  ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -119,6 +120,7 @@ const adminNav: NavItem[] = [
   { href: "/admin/platform-trends", label: "Platform Trends", icon: BarChart3 },
   { href: "/admin/videos", label: "Video Storage", icon: HardDrive },
   { href: "/admin/legal-agreement", label: "Legal Agreement", icon: FileText },
+  { href: "/admin/compliance-report", label: "Compliance Report", icon: ShieldCheck },
 ];
 
 export function AppShell({

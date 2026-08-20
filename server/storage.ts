@@ -13485,6 +13485,79 @@ ${catalog}`;
     return buildPlatformTrends();
   },
 
+  // Data behind the printable admin compliance snapshot (see
+  // server/compliance-report.ts) -- current counts and configuration only,
+  // deliberately not a roster dump of individual athletes' birthdates or
+  // consent rows. See shared/privacy-tiers.ts's own comment: the tier
+  // definitions and retention windows reported here are the ones actually
+  // wired into the code today, not a claim that they satisfy any specific
+  // law -- that's exactly why the "not yet reviewed" section below exists
+  // as real, structured output instead of living only in code comments.
+  async getComplianceReportData(): Promise<{
+    generatedAt: Date;
+    tierCounts: { tier: PrivacyTier | "unknown"; count: number }[];
+    retentionWindows: { tier: PrivacyTier; days: number }[];
+    consentCounts: { consentType: string; count: number; mostRecent: Date | null }[];
+    videosEligibleForPurgeNow: number;
+    provisionedViaCoachConsentCount: number;
+    requiresGuardianNoticeCount: number;
+    notYetBuilt: string[];
+  }> {
+    const athletes = await db
+      .select({ dateOfBirth: users.dateOfBirth })
+      .from(users)
+      .where(eq(users.role, "athlete"));
+    const tierCounts = new Map<string, number>();
+    for (const a of athletes) {
+      const key = a.dateOfBirth ? derivePrivacyTier(a.dateOfBirth) : "unknown";
+      tierCounts.set(key, (tierCounts.get(key) ?? 0) + 1);
+    }
+
+    const consentRows = await db
+      .select({
+        consentType: consentRecords.consentType,
+        count: sql<number>`count(*)::int`,
+        mostRecent: sql<Date | null>`max(${consentRecords.createdAt})`,
+      })
+      .from(consentRecords)
+      .groupBy(consentRecords.consentType);
+
+    const eligible = await this.getVideosEligibleForRetentionPurge();
+
+    const [{ count: provisionedCount }] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(users)
+      .where(and(eq(users.role, "athlete"), eq(users.provisionedViaCoachConsent, true)));
+    const [{ count: guardianNoticeCount }] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(users)
+      .where(and(eq(users.role, "athlete"), eq(users.requiresGuardianNotice, true)));
+
+    return {
+      generatedAt: new Date(),
+      tierCounts: [
+        { tier: "tier1_under13" as const, count: tierCounts.get("tier1_under13") ?? 0 },
+        { tier: "tier2_teen_13_17" as const, count: tierCounts.get("tier2_teen_13_17") ?? 0 },
+        { tier: "tier3_adult_18plus" as const, count: tierCounts.get("tier3_adult_18plus") ?? 0 },
+        { tier: "unknown" as const, count: tierCounts.get("unknown") ?? 0 },
+      ],
+      retentionWindows: [
+        { tier: "tier1_under13", days: videoRetentionDaysForTier("tier1_under13")! },
+        { tier: "tier2_teen_13_17", days: videoRetentionDaysForTier("tier2_teen_13_17")! },
+      ],
+      consentCounts: consentRows,
+      videosEligibleForPurgeNow: eligible.length,
+      provisionedViaCoachConsentCount: provisionedCount,
+      requiresGuardianNoticeCount: guardianNoticeCount,
+      notYetBuilt: [
+        "Parental-notice delivery content and channel for Tier 2 accounts (requiresGuardianNotice is tracked; nothing sends or shows a notice yet).",
+        "Biometric waiver consent copy (the consent_type exists in the schema; no document text has been written).",
+        "Legal review confirming the tier thresholds, retention windows, and coach-consent mechanism actually satisfy COPPA, any state Age-Appropriate Design Code, BIPA, or other applicable law.",
+        "Any accounts created before dateOfBirth existed remain tier \"unknown\" until that field is backfilled.",
+      ],
+    };
+  },
+
   // ---------- Photo import (bulk roster intake from a photographed sheet) ----------
   // Every analyze* method below is transcription, not judgment: the system
   // prompt always tells Claude to report exactly what's on the page and

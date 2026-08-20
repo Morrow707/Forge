@@ -14,6 +14,7 @@ import { buildProgressReportEmail } from "./progress-report";
 import { buildRecruitingProfilePdf } from "./recruiting-profile";
 import { buildTrainingHistoryCsv, buildTrainingHistoryPdf, csvField } from "./training-history-export";
 import { buildMovementScreenSheetPdf } from "./movement-screen-export";
+import { buildComplianceReportPdf } from "./compliance-report";
 import { notifyUser } from "./notify";
 import {
   insertExerciseSchema,
@@ -1845,6 +1846,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // coach's roster, exact values, no names/teams/locations. Loaded on
   // demand from within the Forge AI page rather than eagerly, since it's
   // the first cross-coach data access in the app and each view is logged.
+  app.get("/api/admin/compliance-report", requireRole("admin"), async (_req, res) => {
+    res.json(await storage.getComplianceReportData());
+  });
+
+  app.get("/api/admin/compliance-report.pdf", requireRole("admin"), async (_req, res) => {
+    const data = await storage.getComplianceReportData();
+    const pdf = await buildComplianceReportPdf(data);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="forge-compliance-snapshot.pdf"`);
+    res.send(pdf);
+  });
+
   app.get("/api/admin/aggregate-athlete-data", requireRole("admin"), async (req, res) => {
     const user = currentUser(req);
     const result = await storage.getAggregateAthleteData(user.id);
