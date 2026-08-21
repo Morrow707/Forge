@@ -602,6 +602,8 @@ export function ArBarTrackerDialog({
       movementType,
       equipment,
       tiltReadingsRef.current,
+      undefined,
+      metrics.repBreakdown.map((r) => ({ startT: r.startT, endT: r.endT })),
     );
 
     // Same gating as bar-tracker-dialog.tsx: only a bilateral lower-body

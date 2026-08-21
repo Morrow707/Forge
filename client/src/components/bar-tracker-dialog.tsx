@@ -1616,7 +1616,16 @@ export function BarTrackerDialog({
       // Landing mechanics (valgus, forward lean) still matter for a jump;
       // squat-depth judgment and bar-path drift don't -- see the "jump"
       // context branch in detectFormFaults.
-      jumpMetrics.formFaults = detectFormFaults(framesRef.current, 0, "jump", movementType, equipment);
+      jumpMetrics.formFaults = detectFormFaults(
+        framesRef.current,
+        0,
+        "jump",
+        movementType,
+        equipment,
+        undefined,
+        undefined,
+        jumpMetrics.repBreakdown.map((r) => ({ startT: r.takeoffT, endT: r.landingT })),
+      );
       setResult(jumpMetrics);
       changeStep("review");
       return;
@@ -1652,6 +1661,13 @@ export function BarTrackerDialog({
       // See gripWidthReadingsRef's own comment -- new fault, no prior
       // behavior to preserve.
       gripWidthReadingsRef.current,
+      // Scopes fault detection to the rep windows summarizeTrackedSet
+      // already found -- see detectFormFaults' own comment on repWindows.
+      // Without this, the rack walkout before the first rep and the
+      // re-rack bend after the last one -- both included in framesRef.current
+      // the same way rawPoints includes them for barPathDeviationCm -- could
+      // trip forward_lean (or knee_valgus/pelvic_drop) on their own.
+      metrics.repBreakdown.map((r) => ({ startT: r.startT, endT: r.endT })),
     );
 
     const depths = computeRepDepths(

@@ -1066,9 +1066,25 @@ export function detectFormFaults(
   // (it's new, not a replacement for prior behavior), so it's simply
   // skipped when not provided.
   gripWidthReadings?: number[],
+  // Same rep windows summarizeTrackedSet's own repBreakdown already
+  // establishes -- see bar-tracking.ts's summarizeTrackedSet for the full
+  // reasoning (this is the identical problem, just for per-frame faults
+  // instead of the aggregate bar-path deviation). `frames` spans the whole
+  // Start Set-to-Stop Set window, including stepping back out of the rack
+  // before the first rep and bending down to re-rack after the last one --
+  // real motion, but not a rep, and a re-rack's forward bend easily clears
+  // this function's own forward_lean threshold on its own. Left undefined
+  // by any caller that doesn't have rep windows yet (falls back to every
+  // frame, the prior behavior) -- same gradual-threading pattern as
+  // movementType/equipment above.
+  repWindows?: { startT: number; endT: number }[],
 ): FormFault[] {
   const faults: FormFault[] = [];
-  if (frames.length < 6) return faults;
+  const activeFrames =
+    repWindows && repWindows.length > 0
+      ? frames.filter((f) => repWindows.some((w) => f.t >= w.startT && f.t <= w.endT))
+      : frames;
+  if (activeFrames.length < 6) return faults;
 
   const usesSharedBar = context === "lift" && usesSharedBarEquipment(equipment);
 
@@ -1114,7 +1130,7 @@ export function detectFormFaults(
   // unsigned and unaffected by which way world-Y points.
   let currentVerticalSign: 1 | -1 = 1;
 
-  for (const frame of frames) {
+  for (const frame of activeFrames) {
     const worldLm = frame.worldLandmarks;
     const sign = worldVerticalSign(worldLm);
     if (sign != null) currentVerticalSign = sign;

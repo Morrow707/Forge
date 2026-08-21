@@ -732,10 +732,25 @@ export function summarizeTrackedSet(
   // in the full horizontal plane (x and z, i.e. side-to-side AND
   // forward/backward drift from a straight vertical line) now that real
   // depth is available -- 2D pixel tracking could only ever see x drift.
+  // rawPoints spans the whole Start Set-to-Stop Set window, not just the
+  // reps themselves -- it includes stepping back out of the rack before the
+  // first rep and stepping/bending back in to re-rack after the last one.
+  // Both are real, correctly-tracked motion, not noise, but neither is bar
+  // drift: a 2m step back out of a rack reads as a bigger "deviation from
+  // center" than any real rep's bar path ever would, and dominates the
+  // median/percentile below if left in. Scoping to repBreakdown's own
+  // windows (each already spans its full rep, per RepBreakdown's own
+  // comment) keeps the deviation measurement to motion that was actually
+  // part of a rep. Falls back to the full trace when repBreakdown is empty
+  // (e.g. every phase got filtered as phantom) rather than computing
+  // deviation over nothing.
+  const activePoints = rawPoints.filter((p) => repBreakdown.some((r) => p.t >= r.startT && p.t <= r.endT));
+  const driftPoints = activePoints.length > 0 ? activePoints : rawPoints;
+
   const medianOf = (values: number[]) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
-  const medianX = medianOf(rawPoints.map((p) => p.x));
-  const medianZ = medianOf(rawPoints.map((p) => p.z));
-  const sortedDeviations = rawPoints
+  const medianX = medianOf(driftPoints.map((p) => p.x));
+  const medianZ = medianOf(driftPoints.map((p) => p.z));
+  const sortedDeviations = driftPoints
     .map((p) => Math.hypot(p.x - medianX, p.z - medianZ))
     .sort((a, b) => a - b);
   const p90Idx = Math.min(sortedDeviations.length - 1, Math.floor(sortedDeviations.length * 0.9));

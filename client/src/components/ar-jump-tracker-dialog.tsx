@@ -361,7 +361,16 @@ export function ArJumpTrackerDialog({
     }
     // See the "jump" context branch in detectFormFaults -- landing valgus
     // and forward lean still apply, shallow-depth/bar-path checks don't.
-    metrics.formFaults = detectFormFaults(framesRef.current, 0, "jump", movementType, equipment);
+    metrics.formFaults = detectFormFaults(
+      framesRef.current,
+      0,
+      "jump",
+      movementType,
+      equipment,
+      undefined,
+      undefined,
+      metrics.repBreakdown.map((r) => ({ startT: r.takeoffT, endT: r.landingT })),
+    );
     // Per-rep landing-foot timing -- see computeLandingAsymmetry's own
     // comment for why this is only trustworthy with real per-frame 3D
     // ankle positions (ARKit's, not MediaPipe's 2D-derived ones), so this
