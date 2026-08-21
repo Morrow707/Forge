@@ -8,6 +8,7 @@ import { recordedVideoType, videoFilenameForBlob } from "@/lib/video-recording";
 import { lockCameraExposure } from "@/lib/camera-exposure";
 import { ensureCameraPermission, onAppForeground, onAppBackground } from "@/lib/native-camera";
 import { isArMeasureSupported, measureWithAR } from "@/lib/ar-measure";
+import { persistVideoForUpload, clearPersistedVideo } from "@/lib/video-offline-store";
 
 // Live recording has no fixed duration -- a set is as long as it takes
 // (a slow tempo squat or a higher-rep set both run well past what a fixed
@@ -38,6 +39,12 @@ export function FormVideoRecorderDialog({
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<number | null>(null);
+  // Set once save() has written the blob to native disk -- see
+  // video-offline-store.ts. Cleared (and the disk copy freed) on a
+  // successful upload or an explicit retake/discard; left alone on a
+  // failed attempt so startOfflineVideoSync() keeps retrying it in the
+  // background even after this dialog closes.
+  const persistedVideoIdRef = useRef<string | null>(null);
 
   const [step, setStep] = useState<Step>("capture");
   const [cameraError, setCameraError] = useState<string | null>(null);
@@ -104,6 +111,13 @@ export function FormVideoRecorderDialog({
     setPreviewUrl(null);
     setBlob(null);
     chunksRef.current = [];
+    // A retake/discard means this exact clip is no longer wanted -- free
+    // its disk copy so startOfflineVideoSync() doesn't keep uploading a
+    // recording the athlete already walked away from.
+    if (persistedVideoIdRef.current) {
+      void clearPersistedVideo(persistedVideoIdRef.current);
+      persistedVideoIdRef.current = null;
+    }
   }
 
   useEffect(() => {
@@ -239,37 +253,59 @@ export function FormVideoRecorderDialog({
   async function save() {
     if (!blob) return;
     setStep("uploading");
+    const filename = videoFilenameForBlob(blob, "form-check");
+
+    // Written to native disk (a no-op on web -- see video-offline-store.ts's
+    // own comment) before the first attempt even starts, so a killed app or
+    // a whole-session outage mid-upload can still recover the recording on
+    // next launch via startOfflineVideoSync() instead of losing it outright
+    // the way an in-memory-only retry loop would.
+    persistedVideoIdRef.current = await persistVideoForUpload(
+      blob,
+      "/api/athlete/form-video",
+      "video",
+      filename,
+    ).catch(() => null);
+
     // A 10-second clip is a few MB at most, so retrying the whole upload is
     // cheap -- worth doing automatically rather than making a real capture
     // (something the athlete can't just redo the same way, unlike a text
     // field) depend on one connection blip not landing at exactly the wrong
     // moment. An ApiError means the server actually answered (bad format,
     // too large, auth) -- no amount of retrying changes that, so it's
-    // surfaced immediately same as before; only a raw failed request gets
-    // retried.
-    //
-    // FLAGGED for a future build: this retry loop only covers a live
-    // connection blip -- `blob` lives in React state, not on disk, so a
-    // whole-session outage (bad gym wifi) or the app backgrounding/getting
-    // killed by iOS mid-upload loses the recording entirely. Workout
-    // logging already solves the equivalent problem for reps/sets (see
-    // client/src/lib/offline-queue.ts -- localStorage-persisted, survives
-    // restart, auto-flushes on reconnect via startOfflineLogSync); video
-    // needs the same shape, writing to native filesystem storage instead
-    // of localStorage. Deferred, not built yet.
+    // surfaced immediately; only a raw failed request gets retried here.
     const maxAttempts = 3;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       setUploadProgress(0);
       try {
         const formData = new FormData();
-        formData.append("video", blob, videoFilenameForBlob(blob, "form-check"));
+        formData.append("video", blob, filename);
         const { url } = await uploadWithProgress("/api/athlete/form-video", formData, setUploadProgress);
+        await clearPersistedVideo(persistedVideoIdRef.current);
+        persistedVideoIdRef.current = null;
         onSaved(url);
         onOpenChange(false);
         return;
       } catch (err) {
-        if (err instanceof ApiError || attempt === maxAttempts) {
-          toast.error(err instanceof ApiError ? err.message : "Upload failed — try again");
+        if (err instanceof ApiError) {
+          // The server answered and rejected it -- no amount of retrying
+          // fixes that, so the disk copy isn't worth keeping either.
+          await clearPersistedVideo(persistedVideoIdRef.current);
+          persistedVideoIdRef.current = null;
+          toast.error(err.message);
+          setStep("preview");
+          return;
+        }
+        if (attempt === maxAttempts) {
+          // Still on disk if persistVideoForUpload succeeded -- leaving
+          // this dialog now doesn't lose it: startOfflineVideoSync() keeps
+          // retrying in the background, so this reads as a status update,
+          // not a final loss, whenever persistence actually took.
+          toast.error(
+            persistedVideoIdRef.current
+              ? "Upload didn't go through -- it's saved on your device and will finish uploading automatically once you're back online."
+              : "Upload failed — try again",
+          );
           setStep("preview");
           return;
         }
@@ -300,13 +336,18 @@ export function FormVideoRecorderDialog({
               type="button"
               aria-label="Close"
               onClick={() => {
-                // Closing here silently drops the in-memory blob with no
-                // way back -- it's never been written anywhere else. Only
-                // worth confirming once there's an actual capture at risk
-                // (preview); bail out of a bare camera/file-picker view
+                // Only worth confirming once there's an actual capture at
+                // risk (preview); bail out of a bare camera/file-picker view
                 // with nothing recorded yet needs no prompt.
                 if (step === "preview" && !window.confirm("Discard this recorded video? It hasn't been saved yet.")) {
                   return;
+                }
+                // A confirmed discard means any disk copy from a prior
+                // failed save attempt is no longer wanted either -- see
+                // resetAll()'s own comment.
+                if (persistedVideoIdRef.current) {
+                  void clearPersistedVideo(persistedVideoIdRef.current);
+                  persistedVideoIdRef.current = null;
                 }
                 onOpenChange(false);
               }}
