@@ -132,7 +132,13 @@ function isPlausibleVelocity(
 ): boolean {
   if (!prev) return true;
   const dt = (next.t - prev.t) / 1000;
-  if (dt <= 0) return true;
+  // A duplicate or out-of-order timestamp (dt <= 0) has no meaningful speed
+  // to check -- returning true here used to accept the frame unconditionally,
+  // skipping the whole plausibility check below regardless of how far the
+  // position actually moved. Rejecting instead means a genuinely degenerate
+  // frame gets thrown out (and reacquired clean next frame, same as any
+  // other implausible reading) rather than let through as a special case.
+  if (dt <= 0) return false;
   // A real barbell/dumbbell/kettlebell can't cover more than ~3m/s in any
   // direction -- same ceiling bar-tracker-dialog.tsx's own
   // MAX_PLAUSIBLE_VELOCITY_MPS uses, catching a single bad frame (tracker
