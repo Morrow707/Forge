@@ -93,6 +93,12 @@ import { videoFilenameForBlob } from "@/lib/video-recording";
 const MAX_PLAUSIBLE_GRIP_OFFSET_M = 0.35;
 const LIVE_TILT_HISTORY_SIZE = 5;
 
+// Flip to true to bring back the on-screen supported/perm/tracked +
+// diagLog readout for a real device debugging session -- the capture
+// itself (diagLog state, getDiagnosticLog() polling) always keeps
+// running regardless of this flag, so no data is lost by leaving it off.
+const SHOW_DIAGNOSTIC_OVERLAY = false;
+
 function medianOf(values: number[]): number {
   const sorted = [...values].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
@@ -688,19 +694,21 @@ export function ArBarTrackerDialog({
               <X className="h-5 w-5" />
             </button>
 
-            {/* Permanent, always-on diagnostic readout -- see the same
-                strip's own comment in ar-jump-tracker-dialog.tsx. */}
-            <div className="absolute left-3 right-16 top-[max(0.75rem,env(safe-area-inset-top))] z-10 select-text space-y-0.5 rounded-md bg-black/60 px-2 py-1.5 font-mono text-[9px] leading-tight text-white/80 backdrop-blur-sm">
-              <div>
-                supported={String(supported)} perm={cameraPermission ?? "?"} tracked=
-                {String(frame?.tracked ?? false)}
-              </div>
-              {diagLog.map((line, i) => (
-                <div key={i} className="text-white/60">
-                  {line}
+            {/* Diagnostic readout -- see SHOW_DIAGNOSTIC_OVERLAY's own
+                comment in ar-jump-tracker-dialog.tsx. */}
+            {SHOW_DIAGNOSTIC_OVERLAY && (
+              <div className="absolute left-3 right-16 top-[max(0.75rem,env(safe-area-inset-top))] z-10 select-text space-y-0.5 rounded-md bg-black/60 px-2 py-1.5 font-mono text-[9px] leading-tight text-white/80 backdrop-blur-sm">
+                <div>
+                  supported={String(supported)} perm={cameraPermission ?? "?"} tracked=
+                  {String(frame?.tracked ?? false)}
                 </div>
-              ))}
-            </div>
+                {diagLog.map((line, i) => (
+                  <div key={i} className="text-white/60">
+                    {line}
+                  </div>
+                ))}
+              </div>
+            )}
 
             {tracking && (
               <div className="absolute left-1/2 top-[max(0.75rem,env(safe-area-inset-top))] flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5 text-sm font-bold text-white backdrop-blur-sm">

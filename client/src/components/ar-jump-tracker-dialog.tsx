@@ -64,6 +64,12 @@ import { videoFilenameForBlob } from "@/lib/video-recording";
  * schema column, no UI badge) -- that's the next step once there's real
  * data to design the display around. */
 
+// Flip to true to bring back the on-screen supported/perm/tracked +
+// diagLog readout for a real device debugging session -- the capture
+// itself (diagLog state, getDiagnosticLog() polling) always keeps
+// running regardless of this flag, so no data is lost by leaving it off.
+const SHOW_DIAGNOSTIC_OVERLAY = false;
+
 // Attached to a saved video when summarizeJumpSet couldn't produce a
 // trustworthy read -- see EMPTY_REP_METRICS's own comment in
 // ar-bar-tracker-dialog.tsx for why this is all zero/empty rather than
@@ -409,23 +415,25 @@ export function ArJumpTrackerDialog({
               <X className="h-5 w-5" />
             </button>
 
-            {/* Permanent, always-on diagnostic readout -- not gated behind
-                any error state, per the standing "make the phone the
-                diagnostic tool" rule. Real values straight off the device
-                (supported/permission from isSupported(), tracked from the
-                live bodyTracking stream), not inferred from what happens to
-                render. */}
-            <div className="absolute left-3 right-16 top-[max(0.75rem,env(safe-area-inset-top))] z-10 select-text space-y-0.5 rounded-md bg-black/60 px-2 py-1.5 font-mono text-[9px] leading-tight text-white/80 backdrop-blur-sm">
-              <div>
-                supported={String(supported)} perm={cameraPermission ?? "?"} tracked=
-                {String(frame?.tracked ?? false)}
-              </div>
-              {diagLog.map((line, i) => (
-                <div key={i} className="text-white/60">
-                  {line}
+            {/* Diagnostic readout -- collection (supported/cameraPermission/
+                frame.tracked/diagLog, fed by getDiagnosticLog() in
+                native-ar-preview.ts) is untouched; only the on-screen text
+                is switched off, so it's a one-line flip back to visible if
+                a real device issue ever needs the log again instead of
+                cluttering the camera view during normal recording. */}
+            {SHOW_DIAGNOSTIC_OVERLAY && (
+              <div className="absolute left-3 right-16 top-[max(0.75rem,env(safe-area-inset-top))] z-10 select-text space-y-0.5 rounded-md bg-black/60 px-2 py-1.5 font-mono text-[9px] leading-tight text-white/80 backdrop-blur-sm">
+                <div>
+                  supported={String(supported)} perm={cameraPermission ?? "?"} tracked=
+                  {String(frame?.tracked ?? false)}
                 </div>
-              ))}
-            </div>
+                {diagLog.map((line, i) => (
+                  <div key={i} className="text-white/60">
+                    {line}
+                  </div>
+                ))}
+              </div>
+            )}
 
             {tracking && (
               <div className="absolute left-1/2 top-[max(0.75rem,env(safe-area-inset-top))] flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5 text-sm font-bold text-white backdrop-blur-sm">

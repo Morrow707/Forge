@@ -409,10 +409,16 @@ export default function App() {
             offset={{ top: "calc(env(safe-area-inset-top) + 1rem)" }}
             mobileOffset={{ top: "calc(env(safe-area-inset-top) + 1rem)" }}
           />
-          {/* Temporary -- see debug-console.tsx's own comment. Remove this
-              line, that file, and lib/debug-console.ts together once
-              login/password-save is diagnosed. */}
-          <DebugConsole />
+          {/* Not mounted -- the login issue this was built to diagnose
+              turned out to be transient, not a real bug (confirmed once
+              the site was working normally again). Left commented out
+              rather than deleted: debug-console.tsx, lib/debug-console.ts,
+              and the logDebug() calls in login.tsx/use-auth.tsx all still
+              capture AUTH/NAV events into the in-memory buffer exactly as
+              before -- only the on-screen bug-icon toggle and its panel
+              are off. Uncomment this one line to bring the console back
+              for a future login/session issue. */}
+          {/* <DebugConsole /> */}
         </BiometricLockGate>
       </AuthProvider>
     </PersistQueryClientProvider>
