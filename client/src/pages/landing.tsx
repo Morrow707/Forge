@@ -444,7 +444,7 @@ export default function LandingPage() {
             <Link href="/admin/login" className="hover:text-foreground">
               Admin
             </Link>
-            <Link href="/legal" className="hover:text-foreground">
+            <Link href="/privacy" className="hover:text-foreground">
               Terms &amp; Privacy
             </Link>
           </div>

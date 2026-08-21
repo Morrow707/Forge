@@ -2109,6 +2109,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ success: true });
   });
 
+  // Public counterpart to the admin-only /api/admin/legal-documents above --
+  // App Store Connect (and any visitor) needs a working, unauthenticated URL
+  // for the real Terms of Service / Privacy Policy, not just the shorter
+  // signup clickwrap GET /api/legal-agreement serves. Same "there" vs "not
+  // there" distinction, 404s on an unknown type rather than silently
+  // returning empty so a typo'd URL doesn't quietly render a blank page.
+  app.get("/api/legal-documents/:type", async (req, res) => {
+    const type = String(req.params.type);
+    if (!isLegalDocType(type)) return res.status(404).json({ message: "Unknown document type" });
+    const doc = await storage.getLegalDocument(type);
+    res.json({ content: doc?.content ?? "", updatedAt: doc?.updatedAt ?? null });
+  });
+
   // Same admin-teaching pattern, for the nutrition education AI
   // (answerNutritionQuestion) instead of the program builder -- see
   // storage.getNutritionKnowledgeGuidelines, read by every nutrition Q&A
