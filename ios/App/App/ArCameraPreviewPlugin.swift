@@ -75,6 +75,76 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
     private var lastEmitTimestamp: TimeInterval = 0
     private let emitIntervalSeconds: TimeInterval = 1.0 / 30.0
     private var hadBody = false
+
+    // MARK: - Body-anchor plausibility gating
+    //
+    // ARKit reports *some* ARBodyAnchor in two situations this file
+    // shouldn't draw or trust: (1) a brand-new anchor, on the very first
+    // frame(s) it appears -- a one-frame spurious detection off a rack or
+    // barbell looks identical to a real lock for a single frame, the same
+    // reason ArImplementTracker doesn't trust a found implement until its
+    // own lockStreak has held for a few frames; and (2) an anchor that WAS
+    // a real, correctly-tracked person, but whose subject has since left
+    // frame or gone fully occluded -- ARKit doesn't remove the anchor from
+    // frame.anchors immediately in that case, it keeps reporting its last
+    // known (now frozen) transform for a while first, and bodyAnchor
+    // presence alone can't tell "real, live" from "stale, frozen" apart.
+    //
+    // Both cases share one signal a real, live human doesn't: no person
+    // holds their root (hip) position within a few millimeters for a full
+    // second, even standing "still" -- postural sway and breathing alone
+    // move more than that. A static rack, or a real anchor ARKit is just
+    // coasting on without fresh data, doesn't move at all. Requiring the
+    // anchor's root to have moved a minimum amount over a trailing window,
+    // on top of having held continuously for a short ramp-up, catches both
+    // without this file needing to know which case it's looking at.
+    //
+    // Thresholds are a starting guess, not measured against a real device
+    // -- same caveat as native-ar-preview.ts's framingHint distance
+    // thresholds. Meant to be tightened (or loosened, if genuine tracking
+    // ever gets wrongly rejected) once real-device testing shows what a
+    // real hold vs. a false lock actually look like.
+    private static let minHoldSecondsBeforeTrust: TimeInterval = 0.3
+    private static let motionWindowSeconds: TimeInterval = 1.0
+    private static let minPlausibleMotionMeters: Float = 0.006
+
+    private var plausibilityAnchorId: UUID?
+    private var plausibilityFirstSeenAt: TimeInterval = 0
+    private var plausibilityHistory: [(t: TimeInterval, pos: SIMD3<Float>)] = []
+
+    // Called once per didUpdate frame, before anything else trusts
+    // bodyAnchor -- skeleton drawing, implement tracking, and the emitted
+    // "bodyTracking" event all sit downstream of this returning true.
+    private func isBodyAnchorPlausible(_ bodyAnchor: ARBodyAnchor, now: TimeInterval) -> Bool {
+        let column = bodyAnchor.transform.columns.3
+        let rootPos = SIMD3<Float>(column.x, column.y, column.z)
+
+        if plausibilityAnchorId != bodyAnchor.identifier {
+            plausibilityAnchorId = bodyAnchor.identifier
+            plausibilityFirstSeenAt = now
+            plausibilityHistory = []
+        }
+
+        plausibilityHistory.append((t: now, pos: rootPos))
+        plausibilityHistory.removeAll { now - $0.t > Self.motionWindowSeconds }
+
+        guard now - plausibilityFirstSeenAt >= Self.minHoldSecondsBeforeTrust else { return false }
+
+        // Not enough history yet to judge motion (this anchor is younger
+        // than half a window) -- fall back to trusting the hold-time ramp
+        // alone rather than penalizing a genuinely fresh, real lock for not
+        // yet having a full window of history.
+        guard let oldest = plausibilityHistory.first, now - oldest.t >= Self.motionWindowSeconds * 0.5 else {
+            return true
+        }
+
+        var maxSpread: Float = 0
+        for sample in plausibilityHistory {
+            maxSpread = max(maxSpread, simd_distance(sample.pos, rootPos))
+        }
+        return maxSpread >= Self.minPlausibleMotionMeters
+    }
+
     // ARSkeletonDefinition.defaultBody3D.jointNames is index-matched to
     // ARSkeleton3D.jointModelTransforms -- read once and reused rather than
     // hardcoding ARKit's internal joint-name strings (which aren't exposed
@@ -247,6 +317,9 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
             self.trackImplement = call.getBool("trackImplement") ?? false
             self.leftImplementTracker.reset()
             self.rightImplementTracker.reset()
+            self.plausibilityAnchorId = nil
+            self.plausibilityFirstSeenAt = 0
+            self.plausibilityHistory = []
             let configuration = ARBodyTrackingConfiguration()
             // Runs in the SAME session as body tracking -- no separate
             // ARSession needed. Never rendered -- no grid, no mesh
@@ -580,7 +653,7 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
 
         let bodyAnchor = frame.anchors.compactMap { $0 as? ARBodyAnchor }.first
 
-        guard let bodyAnchor = bodyAnchor else {
+        guard let bodyAnchor = bodyAnchor, isBodyAnchorPlausible(bodyAnchor, now: frame.timestamp) else {
             skeletonNode?.isHidden = true
             // A body-tracking dropout can span an arbitrary gap (the
             // athlete stepped out of frame, tracking got lost) -- a held
