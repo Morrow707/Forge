@@ -58,6 +58,11 @@ type NavItem = {
    * whenever the current location starts with ANY of these, instead of just
    * `href`. */
   matchPrefixes?: string[];
+  /** Tucked into the "More" dropdown instead of sitting inline in the top
+   * bar -- for a role whose full nav is wide enough to force horizontal
+   * scrolling (coach today: 9 items plus Coaches Corner, the account
+   * button, and the bell). Unused by roles with fewer items. */
+  overflow?: boolean;
 };
 
 const coachNav: NavItem[] = [
@@ -76,11 +81,11 @@ const coachNav: NavItem[] = [
     ],
   },
   { href: "/coach/roster", label: "Roster & Teams", icon: Users },
-  { href: "/coach/movement-screens", label: "Movement Screens", icon: ClipboardCheck },
-  { href: "/coach/nutrition", label: "Nutrition", icon: Apple },
   { href: "/coach/analytics", label: "Analytics", icon: LineChart },
-  { href: "/coach/leaderboard", label: "Leaderboard", icon: Trophy },
-  { href: "/coach/team-board", label: "Team Board", icon: MessagesSquare },
+  { href: "/coach/movement-screens", label: "Movement Screens", icon: ClipboardCheck, overflow: true },
+  { href: "/coach/nutrition", label: "Nutrition", icon: Apple, overflow: true },
+  { href: "/coach/leaderboard", label: "Leaderboard", icon: Trophy, overflow: true },
+  { href: "/coach/team-board", label: "Team Board", icon: MessagesSquare, overflow: true },
 ];
 
 const athleteNav: NavItem[] = [
@@ -153,6 +158,7 @@ export function AppShell({
   const [teamBrandingOpen, setTeamBrandingOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
+  const [moreNavOpen, setMoreNavOpen] = useState(false);
 
   // Resolved server-side: a coach's own team settings, or their athlete's
   // coach's -- see getEffectiveBrandingForUser in storage.ts. Drives the
@@ -236,6 +242,8 @@ export function AppShell({
           ? athleteNav.filter((item) => item.href !== "/athlete/team-board")
           : athleteNav.filter((item) => item.href !== "/athlete/programs" && item.href !== "/athlete/chat")
   ).filter((item) => !disabledNavHrefs.has(item.href));
+  const primaryNav = nav.filter((item) => !item.overflow);
+  const overflowNav = nav.filter((item) => item.overflow);
 
   const teamBoardUnreadUrl =
     user?.role === "coach"
@@ -315,7 +323,7 @@ export function AppShell({
               does: nothing missing on the left, a natural scroll to reveal
               the rest on the right. */}
           <nav className="hidden min-w-0 flex-1 items-center justify-start gap-0.5 overflow-x-auto md:flex">
-            {nav.map((item) => {
+            {primaryNav.map((item) => {
               const Icon = item.icon;
               const active = isActive(item);
               const showUnreadDot = item.href.endsWith("/team-board") && teamBoardUnread?.hasUnread;
@@ -324,7 +332,7 @@ export function AppShell({
                   key={item.href}
                   href={item.href}
                   className={cn(
-                    "flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md px-2.5 py-2 text-sm font-semibold transition-colors",
+                    "flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md px-2 py-1.5 text-[13px] font-semibold transition-colors",
                     active
                       ? "bg-primary text-primary-foreground"
                       : "text-muted-foreground hover:bg-surface-elevated hover:text-foreground",
@@ -343,6 +351,77 @@ export function AppShell({
           </nav>
 
           <div className="flex shrink-0 items-center gap-2">
+            {/* Everything below the top ~5 items for a coach (Movement
+                Screens, Nutrition, Leaderboard, Team Board) -- keeps this
+                one from ever needing horizontal scroll the way the full,
+                un-split coach nav did once Movement Screens shipped.
+                Deliberately outside the scrollable <nav> above so it's
+                always reachable regardless of window width, same reasoning
+                as the account menu sitting out here. */}
+            {overflowNav.length > 0 && (
+              <div
+                className="relative hidden md:block"
+                onMouseEnter={() => setMoreNavOpen(true)}
+                onMouseLeave={() => setMoreNavOpen(false)}
+              >
+                <button
+                  type="button"
+                  onClick={() => setMoreNavOpen((v) => !v)}
+                  aria-haspopup="menu"
+                  aria-expanded={moreNavOpen}
+                  className={cn(
+                    "flex items-center gap-1 whitespace-nowrap rounded-md px-2 py-1.5 text-[13px] font-semibold transition-colors",
+                    overflowNav.some((item) => isActive(item))
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:bg-surface-elevated hover:text-foreground",
+                  )}
+                >
+                  More
+                  {overflowNav.some(
+                    (item) => item.href.endsWith("/team-board") && teamBoardUnread?.hasUnread,
+                  ) && <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />}
+                  <ChevronDown
+                    className={cn(
+                      "h-3.5 w-3.5 shrink-0 transition-transform",
+                      moreNavOpen && "rotate-180",
+                    )}
+                  />
+                </button>
+                {moreNavOpen && (
+                  <div
+                    role="menu"
+                    className="absolute left-0 top-full z-40 mt-1 w-56 overflow-hidden rounded-xl border border-white/10 bg-surface/80 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.08),0_8px_30px_-10px_rgba(0,0,0,0.6)] backdrop-blur-xl backdrop-saturate-150"
+                  >
+                    {overflowNav.map((item) => {
+                      const Icon = item.icon;
+                      const active = isActive(item);
+                      const showUnreadDot =
+                        item.href.endsWith("/team-board") && teamBoardUnread?.hasUnread;
+                      return (
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          role="menuitem"
+                          onClick={() => setMoreNavOpen(false)}
+                          className={cn(
+                            "flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium hover:bg-surface-elevated",
+                            active ? "text-primary" : "text-foreground",
+                          )}
+                        >
+                          <Icon className="h-4 w-4" />
+                          {item.label}
+                          {showUnreadDot && (
+                            <span className="ml-auto rounded-full bg-amber-400 px-1.5 py-0.5 text-[9px] font-bold uppercase leading-none text-black">
+                              New
+                            </span>
+                          )}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
             {/* Deliberately NOT one of the main nav tabs above (which mixes
                 it in visually with Team Board and the rest) -- this is a
                 coach's own paid upgrade, not a team feature, so it sits
