@@ -108,8 +108,23 @@ final class ArImplementTracker {
     private var lockPixelX: Double?
     private var lockPixelY: Double?
     private var lockWorld: SIMD3<Float>?
+    private var lockWorldTimestamp: TimeInterval?
     private var lockStreak: Double = 0
     private var lastColor: ColorSignature?
+
+    // The wrist-offset check in ArCameraPreviewPlugin's plausibilityGated
+    // (maxPlausibleGripOffsetM) only asks "is this frame's found point near
+    // the wrist" -- it says nothing about whether the point moved
+    // plausibly since the PREVIOUS frame. A rigid barbell can't teleport;
+    // a motion-diff centroid that jumps from tracking the bar to tracking
+    // a passing reflection, a spotter's hand, or a bright patch one frame
+    // over can still land within maxPlausibleGripOffsetM of the wrist
+    // every single frame while never moving like a real held object does.
+    // Capping implied frame-to-frame speed catches that: real barbell
+    // speed even in a fast pull rarely exceeds ~2.5 m/s, so this cap is
+    // generous, not a tight calibration -- it's meant to reject
+    // teleport-style noise, not shape genuine tempo.
+    private let maxPlausibleImplementSpeedMps: Double = 3.0
 
     func reset() {
         prevLuma = nil
@@ -120,6 +135,7 @@ final class ArImplementTracker {
         lockPixelX = nil
         lockPixelY = nil
         lockWorld = nil
+        lockWorldTimestamp = nil
         lockStreak = 0
         lastColor = nil
     }
@@ -200,7 +216,28 @@ final class ArImplementTracker {
             return nil
         }
 
+        // Reject a physically-impossible jump from the last accepted
+        // position before trusting this one -- see this class's own file
+        // comment on maxPlausibleImplementSpeedMps for why the existing
+        // wrist-offset check alone can't catch this. Only checked when
+        // there IS a previous position+timestamp to compare against
+        // (skipped on a fresh acquisition, same as hasPlausibleLock above);
+        // dt <= 0 is also skipped rather than divided by, since a
+        // duplicate/out-of-order frame timestamp shouldn't be read as
+        // infinite speed.
+        if let previousWorld = lockWorld, let previousTimestamp = lockWorldTimestamp {
+            let dt = frame.timestamp - previousTimestamp
+            if dt > 0 {
+                let impliedSpeed = Double(simd_distance(world, previousWorld)) / dt
+                if impliedSpeed > maxPlausibleImplementSpeedMps {
+                    dropLock()
+                    return nil
+                }
+            }
+        }
+
         lockWorld = world
+        lockWorldTimestamp = frame.timestamp
         lockStreak = hasPlausibleLock ? lockStreak + 1 : 1
         lockPixelX = centroid.x
         lockPixelY = centroid.y
