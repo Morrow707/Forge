@@ -72,3 +72,38 @@ jobs:
         run: |
           npm run db:reconcile
           npm run db:seed
+
+  # This is the actual fix for the gap that let the 2026-08-19/20 incident
+  # (and this morning's repeat of it) reach production: build-and-migrate
+  # above proved CI *catches* a bad schema/reconcile drift, but Render was
+  # still deploying straight off the raw git push webhook regardless of
+  # whether this workflow passed or failed -- a red CI run only ever told
+  # someone about the problem after the fact, at the same moment as the
+  # failed deploy, not before it.
+  #
+  # `needs: build-and-migrate` is what actually closes that gap: this job
+  # (and the deploy it triggers) is skipped entirely if that job fails, no
+  # separate condition required.
+  #
+  # For this to work, Auto-Deploy must be turned OFF in the Render
+  # dashboard for the forge service (Settings -> Build & Deploy) so Render
+  # stops deploying on every raw push -- otherwise a bad commit still
+  # reaches production immediately, in parallel with this job, and this
+  # gate is decorative. Then paste that service's Deploy Hook URL
+  # (Settings -> Deploy Hook) into a repo secret named
+  # RENDER_DEPLOY_HOOK_URL (Settings -> Secrets and variables -> Actions).
+  # Until that secret exists, this job intentionally no-ops rather than
+  # failing the whole workflow over infra that hasn't been wired up yet.
+  deploy:
+    needs: build-and-migrate
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Trigger Render deploy
+        run: |
+          if [ -z "${{ secrets.RENDER_DEPLOY_HOOK_URL }}" ]; then
+            echo "RENDER_DEPLOY_HOOK_URL isn't set yet -- see this job's own comment in ci.yml for the two Render/GitHub setup steps. Skipping, not failing."
+            exit 0
+          fi
+          curl -fsS -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
