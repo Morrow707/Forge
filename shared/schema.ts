@@ -2053,6 +2053,15 @@ export const wellnessCheckins = pgTable(
     stress: integer("stress").notNull(),
     hydration: integer("hydration").notNull().default(3),
     mentalFocus: integer("mental_focus").notNull().default(3),
+    // Optional, wearable-sourced (Apple Health today, see native-health.ts --
+    // opt-in per device, off by default). Null for every manually-typed
+    // check-in and for any athlete who hasn't turned sync on. Deliberately
+    // not folded into computeReadiness's 0-100 score -- that formula is
+    // tuned against the five self-reported inputs it's always had; showing
+    // these alongside it is the safer first step than changing what the
+    // score already means.
+    restingHeartRate: real("resting_heart_rate"),
+    hrv: real("hrv"),
     // Which body parts the athlete flagged as hurting today -- only ever
     // shown/edited in the expanded check-in form, never the collapsed
     // one-line summary. Empty array is the common case (nothing hurts).
@@ -2077,6 +2086,8 @@ export const submitWellnessCheckinSchema = z.object({
   hydration: z.number().int().min(1).max(5).default(3),
   mentalFocus: z.number().int().min(1).max(5).default(3),
   bodyPainMap: z.array(z.string()).max(BODY_PAIN_PARTS.length).default([]),
+  restingHeartRate: z.number().min(20).max(220).nullish(),
+  hrv: z.number().min(0).max(300).nullish(),
 });
 
 // Self-reported by the athlete (or logged by a coach for a roster athlete),

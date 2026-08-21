@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { App } from "@capacitor/app";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { Moon, Activity, Brain, Droplets, Focus, Pencil, X } from "lucide-react";
+import { Moon, Activity, Brain, Droplets, Focus, Pencil, X, HeartPulse, Watch } from "lucide-react";
 import {
   SORENESS_SCALE,
   STRESS_SCALE,
@@ -16,6 +17,12 @@ import {
   computeReadiness,
   READINESS_LABEL,
 } from "@shared/wellness";
+import {
+  isNativeHealthSupported,
+  isHealthSyncEnabled,
+  promptHealthSyncOnce,
+  fetchLatestHealthSnapshot,
+} from "@/lib/native-health";
 
 type WellnessCheckin = {
   id: number;
@@ -26,6 +33,8 @@ type WellnessCheckin = {
   hydration: number;
   mentalFocus: number;
   bodyPainMap: string[];
+  restingHeartRate: number | null;
+  hrv: number | null;
 } | null;
 
 /** Inline, always-editable check-in card for today's training session --
@@ -50,6 +59,8 @@ export function WellnessGate() {
   const [hydration, setHydration] = useState<number | null>(null);
   const [mentalFocus, setMentalFocus] = useState<number | null>(null);
   const [bodyPainMap, setBodyPainMap] = useState<string[]>([]);
+  const [restingHeartRate, setRestingHeartRate] = useState<number | null>(null);
+  const [hrv, setHrv] = useState<number | null>(null);
 
   // Re-sync the editable fields from whatever's on file whenever it
   // changes (first load, or right after a save) so opening the editor
@@ -62,8 +73,69 @@ export function WellnessGate() {
       setHydration(data.hydration);
       setMentalFocus(data.mentalFocus);
       setBodyPainMap(data.bodyPainMap);
+      setRestingHeartRate(data.restingHeartRate);
+      setHrv(data.hrv);
     }
   }, [data]);
+
+  // Tracks the sleep-hours string we last set *from Health*, so a refresh
+  // can tell "still whatever Health said last time" (safe to overwrite)
+  // apart from "the athlete typed over it" (never touch again this
+  // session). restingHeartRate/hrv have no manual input in this form, so
+  // they carry no equivalent risk and always take the freshest reading.
+  const lastSyncedSleep = useRef<string | null>(null);
+  // syncFromHealth runs from a setInterval/resume-listener closure set up
+  // once per mount (see the effect below) -- it needs the *current*
+  // sleepHours to check against, not whatever sleepHours was when that
+  // closure was created, so it reads through a ref kept fresh here rather
+  // than the state variable directly.
+  const sleepHoursRef = useRef(sleepHours);
+  useEffect(() => {
+    sleepHoursRef.current = sleepHours;
+  }, [sleepHours]);
+
+  async function syncFromHealth() {
+    if (!isHealthSyncEnabled()) return;
+    const snapshot = await fetchLatestHealthSnapshot();
+    if (
+      snapshot.sleepHours != null &&
+      (lastSyncedSleep.current == null || sleepHoursRef.current === lastSyncedSleep.current)
+    ) {
+      lastSyncedSleep.current = String(snapshot.sleepHours);
+      setSleepHours(String(snapshot.sleepHours));
+    }
+    if (snapshot.restingHeartRate != null) setRestingHeartRate(snapshot.restingHeartRate);
+    if (snapshot.hrv != null) setHrv(snapshot.hrv);
+  }
+
+  // Nothing on file yet for today -- ask for Health access right here, the
+  // first time it's actually relevant, instead of making the athlete find
+  // a checkbox in settings first (same "ask in context" shape as the rest
+  // of the app's permission prompts). Then pre-fill, and keep pre-filling:
+  // a poll every few minutes plus a refresh on every app-foreground catches
+  // a watch that finishes syncing to the phone after this screen already
+  // opened, without needing true OS-level background execution (which
+  // would need native Swift + HealthKit background delivery this plugin
+  // doesn't expose over its JS bridge).
+  useEffect(() => {
+    if (data || isLoading || !isNativeHealthSupported()) return;
+    let cancelled = false;
+
+    (async () => {
+      await promptHealthSyncOnce();
+      if (!cancelled) await syncFromHealth();
+    })();
+
+    const interval = setInterval(() => void syncFromHealth(), 5 * 60 * 1000);
+    const resumeListener = App.addListener("resume", () => void syncFromHealth());
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      resumeListener.then((l) => l.remove());
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, isLoading]);
 
   const submitMutation = useMutation({
     mutationFn: async () => {
@@ -74,6 +146,8 @@ export function WellnessGate() {
         hydration,
         mentalFocus,
         bodyPainMap,
+        restingHeartRate,
+        hrv,
       });
       return res.json();
     },
@@ -119,6 +193,17 @@ export function WellnessGate() {
           <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
             <Moon className="h-3.5 w-3.5 shrink-0" /> {data.sleepHours}h sleep
           </span>
+          {data.restingHeartRate != null && (
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+              <HeartPulse className="h-3.5 w-3.5 shrink-0" /> {Math.round(data.restingHeartRate)} bpm
+              RHR
+            </span>
+          )}
+          {data.hrv != null && (
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+              <Watch className="h-3.5 w-3.5 shrink-0" /> {Math.round(data.hrv)}ms HRV
+            </span>
+          )}
           <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
             <Activity className="h-3.5 w-3.5 shrink-0" />
             {SORENESS_SCALE.find((s) => s.value === data.soreness)?.label}
@@ -180,6 +265,11 @@ export function WellnessGate() {
             onChange={(e) => setSleepHours(e.target.value)}
             placeholder="e.g. 7.5"
           />
+          {lastSyncedSleep.current != null && sleepHours === lastSyncedSleep.current && (
+            <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
+              <Watch className="h-3 w-3" /> Synced from Health -- edit if this looks off
+            </p>
+          )}
         </div>
         <ScaleField
           label="Soreness"
@@ -210,6 +300,22 @@ export function WellnessGate() {
           onChange={setMentalFocus}
         />
       </div>
+      {(restingHeartRate != null || hrv != null) && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-md bg-background px-2.5 py-2">
+          <span className="flex items-center gap-1 text-[11px] font-semibold text-muted-foreground">
+            <Watch className="h-3 w-3" /> From your watch:
+          </span>
+          {restingHeartRate != null && (
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+              <HeartPulse className="h-3.5 w-3.5 shrink-0" /> {Math.round(restingHeartRate)} bpm
+              resting HR
+            </span>
+          )}
+          {hrv != null && (
+            <span className="text-xs font-semibold text-foreground">{Math.round(hrv)}ms HRV</span>
+          )}
+        </div>
+      )}
       <div className="space-y-1.5">
         <Label className="text-xs">Anything hurting today? (optional)</Label>
         <div className="flex flex-wrap gap-1.5">

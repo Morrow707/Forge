@@ -3316,6 +3316,8 @@ Based on this athlete's actual rate of improvement, suggest a realistic target v
       hydration: number;
       mentalFocus: number;
       bodyPainMap: string[];
+      restingHeartRate?: number | null;
+      hrv?: number | null;
     },
   ) {
     const [row] = await db

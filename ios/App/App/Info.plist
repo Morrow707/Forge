@@ -87,5 +87,9 @@
 	<false/>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Forge uses Face ID to unlock the app if you enable the optional lock screen in Notification Settings.</string>
+	<key>NSHealthShareUsageDescription</key>
+	<string>Forge reads your sleep, resting heart rate, and heart rate variability from Health to pre-fill your daily check-in if you turn on Health sync in Notification Settings.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>Forge does not currently write anything to Health.</string>
 </dict>
 </plist>

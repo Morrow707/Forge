@@ -1524,6 +1524,11 @@ CREATE TABLE IF NOT EXISTS "favorite_skill_exercises" (
   "created_at" timestamp NOT NULL DEFAULT now()
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "favorite_skill_exercises_pair_idx" ON "favorite_skill_exercises" ("coach_id", "skill_exercise_id");
+
+-- Optional wearable-sourced recovery metrics on the daily check-in
+-- (shared/schema.ts wellnessCheckins.restingHeartRate/hrv).
+ALTER TABLE "wellness_checkins" ADD COLUMN IF NOT EXISTS "resting_heart_rate" real;
+ALTER TABLE "wellness_checkins" ADD COLUMN IF NOT EXISTS "hrv" real;
 `;
 
 async function main() {

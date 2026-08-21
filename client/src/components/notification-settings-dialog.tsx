@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { Mail, MessageCircle, Bell, ScanFace } from "lucide-react";
+import { Mail, MessageCircle, Bell, ScanFace, Watch } from "lucide-react";
 import type { PublicUser } from "@shared/schema";
 import {
   isPushSupported,
@@ -33,6 +33,12 @@ import {
   setBiometricLockEnabled,
   checkBiometryAvailable,
 } from "@/lib/biometric-lock";
+import {
+  isNativeHealthSupported,
+  isHealthSyncEnabled,
+  enableHealthSync,
+  disableHealthSync,
+} from "@/lib/native-health";
 
 export function NotificationSettingsDialog({
   user,
@@ -62,6 +68,10 @@ export function NotificationSettingsDialog({
   // athlete/coach's other devices.
   const [bioLockAvailable, setBioLockAvailable] = useState(false);
   const [bioLockEnabled, setBioLockEnabled] = useState(false);
+  // Same per-device shape as push/bio-lock above -- which watch/tracker is
+  // paired is a property of this phone, not the account.
+  const [healthSyncEnabled, setHealthSyncEnabledState] = useState(false);
+  const [healthSyncBusy, setHealthSyncBusy] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -77,6 +87,9 @@ export function NotificationSettingsDialog({
         checkBiometryAvailable().then(setBioLockAvailable);
         setBioLockEnabled(isBiometricLockEnabled());
       }
+      if (isNativeHealthSupported()) {
+        setHealthSyncEnabledState(isHealthSyncEnabled());
+      }
     }
   }, [open, user]);
 
@@ -84,6 +97,24 @@ export function NotificationSettingsDialog({
     setBiometricLockEnabled(next);
     setBioLockEnabled(next);
     toast.success(next ? "Face ID/Touch ID lock enabled" : "Lock screen turned off");
+  }
+
+  async function toggleHealthSync(next: boolean) {
+    setHealthSyncBusy(true);
+    try {
+      if (next) {
+        await enableHealthSync();
+        toast.success("Apple Health sync enabled -- your check-in will pre-fill when available");
+      } else {
+        disableHealthSync();
+        toast.success("Apple Health sync turned off");
+      }
+      setHealthSyncEnabledState(next);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not update Health sync");
+    } finally {
+      setHealthSyncBusy(false);
+    }
   }
 
   async function togglePush(next: boolean) {
@@ -163,6 +194,25 @@ export function NotificationSettingsDialog({
                 <span className="text-xs text-muted-foreground">
                   Lock the app on this device until you authenticate -- on top of
                   staying signed in, not instead of it.
+                </span>
+              </span>
+            </label>
+          )}
+          {isNativeHealthSupported() && (
+            <label className="flex items-start gap-2.5 text-sm">
+              <Checkbox
+                checked={healthSyncEnabled}
+                disabled={healthSyncBusy}
+                onCheckedChange={(checked) => toggleHealthSync(checked === true)}
+              />
+              <span>
+                <span className="flex items-center gap-1.5 font-semibold">
+                  <Watch className="h-3.5 w-3.5" /> Sync Apple Health
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  Pre-fills sleep, resting heart rate, and heart rate variability on
+                  your daily check-in from your watch or tracker -- always editable
+                  before you submit.
                 </span>
               </span>
             </label>
