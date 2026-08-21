@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { Moon, Activity, Brain, Droplets, Focus, Pencil, X, HeartPulse, Watch } from "lucide-react";
+import { Moon, Activity, Brain, Droplets, Focus, Pencil, X, HeartPulse, Watch, RefreshCw } from "lucide-react";
 import {
   SORENESS_SCALE,
   STRESS_SCALE,
@@ -20,6 +20,7 @@ import {
 import {
   isNativeHealthSupported,
   isHealthSyncEnabled,
+  enableHealthSync,
   promptHealthSyncOnce,
   fetchLatestHealthSnapshot,
 } from "@/lib/native-health";
@@ -108,6 +109,27 @@ export function WellnessGate() {
     if (snapshot.hrv != null) setHrv(snapshot.hrv);
   }
 
+  // Explicit "Sync" tap -- unlike the automatic pull above, this works
+  // any time, including after today's check-in is already submitted,
+  // where the automatic effect deliberately goes quiet (see its own
+  // comment). Prompts for Health access on the spot if it was never
+  // granted, rather than requiring a trip to Notification Settings first,
+  // since tapping a button labeled "Sync" is as explicit an ask as the
+  // permission prompt itself.
+  const [manualSyncing, setManualSyncing] = useState(false);
+  async function handleManualSync() {
+    setManualSyncing(true);
+    try {
+      if (!isHealthSyncEnabled()) await enableHealthSync();
+      await syncFromHealth();
+      toast.success("Synced with Apple Health");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't sync with Health");
+    } finally {
+      setManualSyncing(false);
+    }
+  }
+
   // Nothing on file yet for today -- ask for Health access right here, the
   // first time it's actually relevant, instead of making the athlete find
   // a checkbox in settings first (same "ask in context" shape as the rest
@@ -180,51 +202,67 @@ export function WellnessGate() {
   if (data && !editing) {
     const { score, level } = computeReadiness(data);
     return (
-      <button
-        type="button"
-        onClick={() => setEditing(true)}
-        className="flex w-full items-center justify-between gap-3 rounded-lg border border-border bg-surface px-3 py-2.5 text-left transition-colors hover:border-primary/40"
-      >
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-          <span className="flex items-center gap-1.5 text-xs font-bold text-foreground">
-            {score}/100
-            <span className="font-semibold text-muted-foreground">{READINESS_LABEL[level]}</span>
-          </span>
-          <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-            <Moon className="h-3.5 w-3.5 shrink-0" /> {data.sleepHours}h sleep
-          </span>
-          {data.restingHeartRate != null && (
-            <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-              <HeartPulse className="h-3.5 w-3.5 shrink-0" /> {Math.round(data.restingHeartRate)} bpm
-              RHR
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          className="flex w-full items-center justify-between gap-3 rounded-lg border border-border bg-surface px-3 py-2.5 text-left transition-colors hover:border-primary/40"
+        >
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            <span className="flex items-center gap-1.5 text-xs font-bold text-foreground">
+              {score}/100
+              <span className="font-semibold text-muted-foreground">{READINESS_LABEL[level]}</span>
             </span>
-          )}
-          {data.hrv != null && (
             <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-              <Watch className="h-3.5 w-3.5 shrink-0" /> {Math.round(data.hrv)}ms HRV
+              <Moon className="h-3.5 w-3.5 shrink-0" /> {data.sleepHours}h sleep
             </span>
-          )}
-          <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-            <Activity className="h-3.5 w-3.5 shrink-0" />
-            {SORENESS_SCALE.find((s) => s.value === data.soreness)?.label}
+            {data.restingHeartRate != null && (
+              <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+                <HeartPulse className="h-3.5 w-3.5 shrink-0" /> {Math.round(data.restingHeartRate)} bpm
+                RHR
+              </span>
+            )}
+            {data.hrv != null && (
+              <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+                <Watch className="h-3.5 w-3.5 shrink-0" /> {Math.round(data.hrv)}ms HRV
+              </span>
+            )}
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+              <Activity className="h-3.5 w-3.5 shrink-0" />
+              {SORENESS_SCALE.find((s) => s.value === data.soreness)?.label}
+            </span>
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+              <Brain className="h-3.5 w-3.5 shrink-0" />
+              {STRESS_SCALE.find((s) => s.value === data.stress)?.label}
+            </span>
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+              <Droplets className="h-3.5 w-3.5 shrink-0" />
+              {HYDRATION_SCALE.find((s) => s.value === data.hydration)?.label}
+            </span>
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+              <Focus className="h-3.5 w-3.5 shrink-0" />
+              {MENTAL_FOCUS_SCALE.find((s) => s.value === data.mentalFocus)?.label}
+            </span>
+          </div>
+          <span className="flex shrink-0 items-center gap-1 text-xs font-semibold text-primary">
+            <Pencil className="h-3 w-3" /> Edit
           </span>
-          <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-            <Brain className="h-3.5 w-3.5 shrink-0" />
-            {STRESS_SCALE.find((s) => s.value === data.stress)?.label}
-          </span>
-          <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-            <Droplets className="h-3.5 w-3.5 shrink-0" />
-            {HYDRATION_SCALE.find((s) => s.value === data.hydration)?.label}
-          </span>
-          <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-            <Focus className="h-3.5 w-3.5 shrink-0" />
-            {MENTAL_FOCUS_SCALE.find((s) => s.value === data.mentalFocus)?.label}
-          </span>
-        </div>
-        <span className="flex shrink-0 items-center gap-1 text-xs font-semibold text-primary">
-          <Pencil className="h-3 w-3" /> Edit
-        </span>
-      </button>
+        </button>
+        {isNativeHealthSupported() && (
+          <button
+            type="button"
+            aria-label="Sync from Health"
+            disabled={manualSyncing}
+            onClick={() => {
+              setEditing(true);
+              void handleManualSync();
+            }}
+            className="flex shrink-0 items-center justify-center rounded-lg border border-border bg-surface px-3 text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground disabled:opacity-50"
+          >
+            <RefreshCw className={cn("h-4 w-4", manualSyncing && "animate-spin")} />
+          </button>
+        )}
+      </div>
     );
   }
 
@@ -239,16 +277,29 @@ export function WellnessGate() {
             Takes 20 seconds and helps your coach see how you're recovering.
           </p>
         </div>
-        {data && (
-          <button
-            type="button"
-            aria-label="Cancel editing"
-            onClick={() => setEditing(false)}
-            className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        )}
+        <div className="flex shrink-0 items-center gap-2">
+          {isNativeHealthSupported() && (
+            <button
+              type="button"
+              disabled={manualSyncing}
+              onClick={() => void handleManualSync()}
+              className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground disabled:opacity-50"
+            >
+              <RefreshCw className={cn("h-3.5 w-3.5", manualSyncing && "animate-spin")} />
+              Sync
+            </button>
+          )}
+          {data && (
+            <button
+              type="button"
+              aria-label="Cancel editing"
+              onClick={() => setEditing(false)}
+              className="text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
       </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div className="space-y-1.5">
