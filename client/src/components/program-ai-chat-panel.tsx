@@ -17,6 +17,21 @@ type ProgramChatMessage = {
   createdAt: string;
 };
 
+// What generateProgramFromChat actually does, in order: gather the current
+// program/exercise library/coaching guidelines, run it through the model,
+// then write the result back. There's no server-sent progress -- this is
+// one request/response, not a stream -- so these can't track real-time
+// state; the index just advances on a timer and holds on the last step
+// rather than looping back to "Reading," which would give the game away on
+// a slow reply. Still grounded in what the request is actually doing, not
+// arbitrary busy-work text.
+const THINKING_STEPS = [
+  "Reading your program...",
+  "Checking your exercise library...",
+  "Thinking through the changes...",
+  "Applying updates...",
+];
+
 /** Conversational AI program builder -- describe what you want, the AI
  * rewrites the whole program structure and replies with a summary, applied
  * immediately (no separate draft/review step). Used by admin (their own
@@ -104,6 +119,18 @@ export function ProgramAiChatPanel({
     },
     onError: () => toast.error("Couldn't send that -- try again"),
   });
+
+  const [thinkingStep, setThinkingStep] = useState(0);
+  useEffect(() => {
+    if (!send.isPending) {
+      setThinkingStep(0);
+      return;
+    }
+    const interval = setInterval(() => {
+      setThinkingStep((i) => Math.min(i + 1, THINKING_STEPS.length - 1));
+    }, 1600);
+    return () => clearInterval(interval);
+  }, [send.isPending]);
 
   useEffect(() => {
     if (
@@ -219,11 +246,14 @@ export function ProgramAiChatPanel({
           ))}
           {send.isPending && (
             <div className="flex justify-start">
-              <div className="max-w-[85%] rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
+              <div className="w-56 max-w-[85%] rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
                 <span className="flex items-center gap-1.5 text-muted-foreground">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  Thinking...
+                  <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+                  {THINKING_STEPS[thinkingStep]}
                 </span>
+                <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-primary/15">
+                  <div className="h-full w-1/3 rounded-full bg-primary animate-shimmer" />
+                </div>
               </div>
             </div>
           )}
