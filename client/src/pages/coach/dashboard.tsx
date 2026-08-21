@@ -9,6 +9,9 @@ import { CoachDayEditDialog } from "@/components/coach-day-edit-dialog";
 import { SkillDayViewDialog } from "@/components/skill-day-view-dialog";
 import { CoachDigestBanner } from "@/components/coach-digest-banner";
 import { ReengagementBanner } from "@/components/reengagement-banner";
+import { HideableWidget } from "@/components/hideable-widget";
+import { useWidgetVisibility } from "@/hooks/use-widget-visibility";
+import { Pencil, Check } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
@@ -57,6 +60,7 @@ type TeamSummary = { id: number; name: string; code: string | null };
 
 export default function CoachDashboard() {
   const { user } = useAuth();
+  const widgetVisibility = useWidgetVisibility();
   const { data: programs = [] } = useQuery<ProgramSummary[]>({
     queryKey: ["/api/coach/programs"],
   });
@@ -102,11 +106,30 @@ export default function CoachDashboard() {
   } | null>(null);
 
   return (
-    <AppShell title={`Welcome, ${user?.name?.split(" ")[0] ?? "Coach"}`}>
+    <AppShell
+      title={`Welcome, ${user?.name?.split(" ")[0] ?? "Coach"}`}
+      actions={
+        <Button
+          size="sm"
+          variant={widgetVisibility.editMode ? "default" : "outline"}
+          onClick={() => widgetVisibility.setEditMode((v) => !v)}
+        >
+          {widgetVisibility.editMode ? <Check className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
+          {widgetVisibility.editMode ? "Done" : "Edit"}
+        </Button>
+      }
+    >
       <div className="flex flex-col gap-3">
         <CoachDigestBanner />
         <ReengagementBanner />
 
+        <HideableWidget
+          id="next-3-days"
+          label="Next 3 Days"
+          editMode={widgetVisibility.editMode}
+          isHidden={widgetVisibility.hidden.has("next-3-days")}
+          onToggle={widgetVisibility.setHidden}
+        >
         <Card className="shrink-0">
           <CardHeader className="flex-row items-center justify-between space-y-0 p-3 md:p-4">
             <div>
@@ -184,7 +207,15 @@ export default function CoachDashboard() {
             </div>
           </CardContent>
         </Card>
+        </HideableWidget>
 
+        <HideableWidget
+          id="stat-tiles"
+          label="Stat Tiles"
+          editMode={widgetVisibility.editMode}
+          isHidden={widgetVisibility.hidden.has("stat-tiles")}
+          onToggle={widgetVisibility.setHidden}
+        >
         <div className="grid grid-cols-1 shrink-0 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard icon={Users} label="Athletes" value={roster.length} href="/coach/roster" />
           <StatCard
@@ -206,8 +237,17 @@ export default function CoachDashboard() {
             href="/coach/roster"
           />
         </div>
+        </HideableWidget>
 
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+          <HideableWidget
+            id="recent-programs"
+            label="Recent Programs"
+            editMode={widgetVisibility.editMode}
+            isHidden={widgetVisibility.hidden.has("recent-programs")}
+            onToggle={widgetVisibility.setHidden}
+            className="lg:col-span-2"
+          >
           <Card className="flex flex-col lg:col-span-2">
             <CardHeader className="flex-row shrink-0 items-center justify-between space-y-0 p-3 md:p-4">
               <div>
@@ -249,8 +289,17 @@ export default function CoachDashboard() {
               </Link>
             </CardContent>
           </Card>
+          </HideableWidget>
 
-          <TeamInviteCard teams={teams} coachCode={user?.coachCode ?? null} />
+          <HideableWidget
+            id="invite-athletes"
+            label="Invite Athletes"
+            editMode={widgetVisibility.editMode}
+            isHidden={widgetVisibility.hidden.has("invite-athletes")}
+            onToggle={widgetVisibility.setHidden}
+          >
+            <TeamInviteCard teams={teams} coachCode={user?.coachCode ?? null} />
+          </HideableWidget>
         </div>
       </div>
 

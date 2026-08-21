@@ -10,6 +10,8 @@ import {
   teamGameDays,
   exercises,
   skillExercises,
+  favoriteExercises,
+  favoriteSkillExercises,
   skillPrograms,
   skillProgramWeeks,
   skillProgramDays,
@@ -167,6 +169,7 @@ import { ALL_TROPHY_DEFINITIONS } from "@shared/achievements";
 import { FAULT_CORRECTIVE_KEYWORDS } from "@shared/fault-correctives";
 import { resolveSkillFaultThresholds, type SkillFaultThresholds } from "@shared/skill-fault-thresholds";
 import { resolveCoachFeatures, type CoachFeature } from "@shared/team-features";
+import type { CoachSection } from "@shared/coach-sections";
 import { askClaude, askClaudeStructured, askClaudeWithTools, askClaudeVision, askClaudeVisionStructured, aiEnabled, fastModel, type SystemPrompt } from "./ai";
 import { fetchUrlSafely, UnsafeUrlError } from "./safe-fetch";
 import { deleteUploadedFile, statUploadedFile } from "./uploaded-files";
@@ -2187,8 +2190,41 @@ export const storage = {
     });
     return {
       primaryCoachId: primaryId,
-      staff: rows.map((r) => r.staffCoach),
+      staff: rows.map((r) => ({ ...r.staffCoach, hiddenSections: r.hiddenSections })),
     };
+  },
+
+  // Primary-only -- which parts of the app one specific staff member
+  // doesn't get. See coachSectionEnum's own comment for why the primary
+  // coach can never be the target here (there's no coachStaff row for
+  // their own account to restrict).
+  async setStaffHiddenSections(
+    primaryCoachId: number,
+    staffCoachId: number,
+    hiddenSections: CoachSection[],
+  ) {
+    const [row] = await db
+      .update(coachStaff)
+      .set({ hiddenSections })
+      .where(
+        and(
+          eq(coachStaff.primaryCoachId, primaryCoachId),
+          eq(coachStaff.staffCoachId, staffCoachId),
+        ),
+      )
+      .returning();
+    return row;
+  },
+
+  // Empty for a primary coach or anyone not on a staff at all -- only a
+  // joined staff member can have anything hidden. Read on every
+  // /api/auth/me call (see toPublicUser's caller in auth.ts), so this stays
+  // a single indexed lookup rather than anything heavier.
+  async getHiddenSectionsForCoach(coachId: number): Promise<CoachSection[]> {
+    const asStaff = await db.query.coachStaff.findFirst({
+      where: eq(coachStaff.staffCoachId, coachId),
+    });
+    return asStaff?.hiddenSections ?? [];
   },
 
   // The primary removes a specific staff member. No-op (not an error) if
@@ -4797,6 +4833,54 @@ ${athleteContext}
     };
   },
 
+  // Per-coach shortlist, not shared with staff-mates -- two coaches on the
+  // same staff can each favorite a different subset of the shared bank.
+  // Favorites sort first in getVisibleExercisesForCoach below, which is
+  // also what the program-builder's exercise picker reads from, so
+  // favoriting here is exactly "put it at the top when I'm building a
+  // program" with no separate picker-side wiring needed.
+  async favoriteExercise(coachId: number, exerciseId: number) {
+    await db
+      .insert(favoriteExercises)
+      .values({ coachId, exerciseId })
+      .onConflictDoNothing();
+  },
+  async unfavoriteExercise(coachId: number, exerciseId: number) {
+    await db
+      .delete(favoriteExercises)
+      .where(and(eq(favoriteExercises.coachId, coachId), eq(favoriteExercises.exerciseId, exerciseId)));
+  },
+  async favoriteSkillExercise(coachId: number, skillExerciseId: number) {
+    await db
+      .insert(favoriteSkillExercises)
+      .values({ coachId, skillExerciseId })
+      .onConflictDoNothing();
+  },
+  async unfavoriteSkillExercise(coachId: number, skillExerciseId: number) {
+    await db
+      .delete(favoriteSkillExercises)
+      .where(
+        and(
+          eq(favoriteSkillExercises.coachId, coachId),
+          eq(favoriteSkillExercises.skillExerciseId, skillExerciseId),
+        ),
+      );
+  },
+
+  // Per-account, not resolved through the staff -- unlike hiddenSections
+  // above (set BY the primary coach FOR a staff member), this is a coach's
+  // own personal "which cards on my Dashboard/Analytics do I not want to
+  // see" preference, so two coaches on the same staff can each hide
+  // different cards without stepping on each other.
+  async getHiddenWidgetsForCoach(coachId: number) {
+    const user = await db.query.users.findFirst({ where: eq(users.id, coachId) });
+    return user?.hiddenWidgets ?? [];
+  },
+  async setHiddenWidgetsForCoach(coachId: number, hidden: string[]) {
+    await db.update(users).set({ hiddenWidgets: hidden }).where(eq(users.id, coachId));
+    return hidden;
+  },
+
   // A coach's own (and their staff's) bank plus every Forge-official
   // exercise -- what a coach sees in their exercise bank and the
   // program-builder picker.
@@ -4804,12 +4888,22 @@ ${athleteContext}
     const coachIds = await this.getEffectiveCoachIds(coachId);
     const admins = await db.query.users.findMany({ where: eq(users.role, "admin") });
     const ownerIds = Array.from(new Set([...coachIds, ...admins.map((a) => a.id)]));
-    const rows = await db.query.exercises.findMany({
-      where: inArray(exercises.coachId, ownerIds),
-      orderBy: desc(exercises.createdAt),
-      with: { coach: true },
-    });
-    return rows.map((ex) => this.withOwnership(ex, coachId, coachIds));
+    const [rows, favorites] = await Promise.all([
+      db.query.exercises.findMany({
+        where: inArray(exercises.coachId, ownerIds),
+        orderBy: desc(exercises.createdAt),
+        with: { coach: true },
+      }),
+      db.query.favoriteExercises.findMany({ where: eq(favoriteExercises.coachId, coachId) }),
+    ]);
+    const favoriteIds = new Set(favorites.map((f) => f.exerciseId));
+    // Favorites first (most-recently-created favorite first within that
+    // group), everything else after in its normal order -- .sort is stable
+    // in Node, so this doesn't need a secondary tiebreaker to preserve the
+    // original createdAt ordering within each group.
+    return rows
+      .map((ex) => ({ ...this.withOwnership(ex, coachId, coachIds), isFavorite: favoriteIds.has(ex.id) }))
+      .sort((a, b) => Number(b.isFavorite) - Number(a.isFavorite));
   },
 
   // Suggests an existing corrective exercise for a camera-tracking fault
@@ -4968,12 +5062,18 @@ ${athleteContext}
     const coachIds = await this.getEffectiveCoachIds(coachId);
     const admins = await db.query.users.findMany({ where: eq(users.role, "admin") });
     const ownerIds = Array.from(new Set([...coachIds, ...admins.map((a) => a.id)]));
-    const rows = await db.query.skillExercises.findMany({
-      where: inArray(skillExercises.coachId, ownerIds),
-      orderBy: desc(skillExercises.createdAt),
-      with: { coach: true },
-    });
-    return rows.map((ex) => this.withOwnership(ex, coachId, coachIds));
+    const [rows, favorites] = await Promise.all([
+      db.query.skillExercises.findMany({
+        where: inArray(skillExercises.coachId, ownerIds),
+        orderBy: desc(skillExercises.createdAt),
+        with: { coach: true },
+      }),
+      db.query.favoriteSkillExercises.findMany({ where: eq(favoriteSkillExercises.coachId, coachId) }),
+    ]);
+    const favoriteIds = new Set(favorites.map((f) => f.skillExerciseId));
+    return rows
+      .map((ex) => ({ ...this.withOwnership(ex, coachId, coachIds), isFavorite: favoriteIds.has(ex.id) }))
+      .sort((a, b) => Number(b.isFavorite) - Number(a.isFavorite));
   },
 
   // Admin counterpart to getExercisesByCoach -- an admin's own skill bank

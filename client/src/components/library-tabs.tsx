@@ -1,6 +1,7 @@
 import { useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import { ListChecks, Dumbbell, ClipboardList, Target, GraduationCap } from "lucide-react";
+import type { CoachSection } from "@shared/coach-sections";
 
 /** Tab strip shown under the page title on the coach's Programs, Exercise
  * Bank, Skill Programs, Skill Bank, and (coach-only) Classes list pages --
@@ -17,7 +18,10 @@ import { ListChecks, Dumbbell, ClipboardList, Target, GraduationCap } from "luci
  * AI-gated, unlike the rest of Library), so no Classes button renders there.
  * `showBanks` hides the Exercise Bank/Skill Bank tabs -- a Free Agent is
  * guided entirely by the AI and doesn't get a standalone-browse page for
- * either bank, so their Library strip only offers Programs/Skill Programs. */
+ * either bank, so their Library strip only offers Programs/Skill Programs.
+ * `hiddenSections` is the coach-staff-permissions equivalent, one level more
+ * granular -- a staff coach's primary can hide any one of the five tabs
+ * independently (see the Staff dialog), not just banks together. */
 export function LibraryTabs({
   active,
   programsHref,
@@ -26,6 +30,7 @@ export function LibraryTabs({
   skillBankHref,
   classesHref,
   showBanks = true,
+  hiddenSections,
 }: {
   active: "programs" | "exercises" | "skill-programs" | "skill-bank" | "classes";
   programsHref: string;
@@ -34,8 +39,10 @@ export function LibraryTabs({
   skillBankHref: string;
   classesHref?: string;
   showBanks?: boolean;
+  hiddenSections?: CoachSection[];
 }) {
   const [, navigate] = useLocation();
+  const hidden = new Set(hiddenSections);
 
   const tabClass = (isActive: boolean, activeColorClass = "bg-primary text-primary-foreground") =>
     cn(
@@ -45,25 +52,29 @@ export function LibraryTabs({
 
   return (
     <div className="flex flex-wrap gap-1">
-      <button type="button" onClick={() => navigate(programsHref)} className={tabClass(active === "programs")}>
-        <ListChecks className="h-3.5 w-3.5" />
-        Programs
-      </button>
-      {showBanks && (
+      {!hidden.has("programs") && (
+        <button type="button" onClick={() => navigate(programsHref)} className={tabClass(active === "programs")}>
+          <ListChecks className="h-3.5 w-3.5" />
+          Programs
+        </button>
+      )}
+      {showBanks && !hidden.has("exercises") && (
         <button type="button" onClick={() => navigate(exercisesHref)} className={tabClass(active === "exercises")}>
           <Dumbbell className="h-3.5 w-3.5" />
           Exercise Bank
         </button>
       )}
-      <button
-        type="button"
-        onClick={() => navigate(skillProgramsHref)}
-        className={tabClass(active === "skill-programs", "bg-teal-500 text-white")}
-      >
-        <ClipboardList className="h-3.5 w-3.5" />
-        Skill Programs
-      </button>
-      {showBanks && (
+      {!hidden.has("skillPrograms") && (
+        <button
+          type="button"
+          onClick={() => navigate(skillProgramsHref)}
+          className={tabClass(active === "skill-programs", "bg-teal-500 text-white")}
+        >
+          <ClipboardList className="h-3.5 w-3.5" />
+          Skill Programs
+        </button>
+      )}
+      {showBanks && !hidden.has("skillBank") && (
         <button
           type="button"
           onClick={() => navigate(skillBankHref)}
@@ -73,7 +84,7 @@ export function LibraryTabs({
           Skill Bank
         </button>
       )}
-      {classesHref && (
+      {classesHref && !hidden.has("classes") && (
         <button
           type="button"
           onClick={() => navigate(classesHref)}

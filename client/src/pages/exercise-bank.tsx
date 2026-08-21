@@ -9,7 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
 import { apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
-import { Plus, Trash2, Dumbbell, Search, Video, Stethoscope } from "lucide-react";
+import { Plus, Trash2, Dumbbell, Search, Video, Stethoscope, Star } from "lucide-react";
 import type { ExerciseWithOwnership } from "@/lib/exercise-types";
 import {
   MOVEMENT_TYPES,
@@ -168,6 +168,18 @@ export function ExerciseBankPage({
     onError: (err: ApiError) => toast.error(err.message || "Could not delete exercise"),
   });
 
+  // Admin's Forge-library browse doesn't get this -- favoriting is a
+  // coach's own shortlist for building their programs faster, not a
+  // concept that applies to curating the shared library.
+  const canFavorite = apiBase === "/api/coach";
+  const favoriteMutation = useMutation({
+    mutationFn: async ({ id, next }: { id: number; next: boolean }) => {
+      await apiRequest(next ? "POST" : "DELETE", `${apiBase}/exercises/${id}/favorite`);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: [`${apiBase}/exercises`] }),
+    onError: () => toast.error("Couldn't update favorite"),
+  });
+
   return (
     <AppShell
       title={title}
@@ -302,16 +314,33 @@ export function ExerciseBankPage({
             <Card className="flex cursor-pointer flex-col transition-colors hover:border-primary/50">
               <CardContent className="flex flex-1 flex-col gap-3 p-4">
                 <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="font-semibold leading-tight">{ex.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {ex.muscleGroup}
-                      {ex.movementType ? ` · ${ex.movementType}` : ""}
-                      {ex.plane ? ` (${ex.plane})` : ""}
-                      {ex.laterality ? ` · ${ex.laterality}` : ""}
-                      {ex.bodyRegion ? ` · ${ex.bodyRegion}` : ""}
-                      {ex.movementComplexity ? ` · ${ex.movementComplexity}` : ""}
-                    </p>
+                  <div className="flex min-w-0 items-start gap-1.5">
+                    {canFavorite && (
+                      <button
+                        type="button"
+                        aria-label={ex.isFavorite ? `Unfavorite ${ex.name}` : `Favorite ${ex.name}`}
+                        aria-pressed={!!ex.isFavorite}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          favoriteMutation.mutate({ id: ex.id, next: !ex.isFavorite });
+                        }}
+                        className="mt-0.5 shrink-0 text-muted-foreground hover:text-amber-400"
+                      >
+                        <Star className={cn("h-4 w-4", ex.isFavorite && "fill-amber-400 text-amber-400")} />
+                      </button>
+                    )}
+                    <div className="min-w-0">
+                      <p className="font-semibold leading-tight">{ex.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {ex.muscleGroup}
+                        {ex.movementType ? ` · ${ex.movementType}` : ""}
+                        {ex.plane ? ` (${ex.plane})` : ""}
+                        {ex.laterality ? ` · ${ex.laterality}` : ""}
+                        {ex.bodyRegion ? ` · ${ex.bodyRegion}` : ""}
+                        {ex.movementComplexity ? ` · ${ex.movementComplexity}` : ""}
+                      </p>
+                    </div>
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-1">
                     <ExerciseOwnershipBadge

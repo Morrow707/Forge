@@ -8,7 +8,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
 import { SkillFaultThresholdsDialog } from "@/components/skill-fault-thresholds-dialog";
 import { apiRequest } from "@/lib/queryClient";
-import { Plus, Trash2, Target, Search, Video, SlidersHorizontal } from "lucide-react";
+import { Plus, Trash2, Target, Search, Video, SlidersHorizontal, Star } from "lucide-react";
+import { cn } from "@/lib/utils";
 import type { SkillExerciseWithOwnership } from "@/lib/skill-types";
 import { SKILL_TYPES } from "@/lib/skill-taxonomy";
 import { SPORTS } from "@/lib/exercise-taxonomy";
@@ -94,6 +95,15 @@ export function SkillBankPage({
       toast.success("Skill drill deleted");
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not delete skill drill"),
+  });
+
+  const canFavorite = apiBase === "/api/coach";
+  const favoriteMutation = useMutation({
+    mutationFn: async ({ id, next }: { id: number; next: boolean }) => {
+      await apiRequest(next ? "POST" : "DELETE", `${apiBase}/skill-exercises/${id}/favorite`);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: [`${apiBase}/skill-exercises`] }),
+    onError: () => toast.error("Couldn't update favorite"),
   });
 
   return (
@@ -182,9 +192,26 @@ export function SkillBankPage({
             <Card className="flex cursor-pointer flex-col transition-colors hover:border-teal-500/50">
               <CardContent className="flex flex-1 flex-col gap-3 p-4">
                 <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="font-semibold leading-tight">{sk.name}</p>
-                    <p className="text-xs text-muted-foreground">{sk.skillType}</p>
+                  <div className="flex min-w-0 items-start gap-1.5">
+                    {canFavorite && (
+                      <button
+                        type="button"
+                        aria-label={sk.isFavorite ? `Unfavorite ${sk.name}` : `Favorite ${sk.name}`}
+                        aria-pressed={!!sk.isFavorite}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          favoriteMutation.mutate({ id: sk.id, next: !sk.isFavorite });
+                        }}
+                        className="mt-0.5 shrink-0 text-muted-foreground hover:text-amber-400"
+                      >
+                        <Star className={cn("h-4 w-4", sk.isFavorite && "fill-amber-400 text-amber-400")} />
+                      </button>
+                    )}
+                    <div className="min-w-0">
+                      <p className="font-semibold leading-tight">{sk.name}</p>
+                      <p className="text-xs text-muted-foreground">{sk.skillType}</p>
+                    </div>
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-1">
                     <ExerciseOwnershipBadge isForgeOfficial={sk.isForgeOfficial} ownerLabel={sk.ownerLabel} />

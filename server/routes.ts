@@ -19,6 +19,7 @@ import { buildMovementScreenSheetPdf } from "./movement-screen-export";
 import { buildComplianceReportPdf } from "./compliance-report";
 import { buildLegalDocumentPdf } from "./legal-document-export";
 import { GUARDIAN_NOTICE_LIVE } from "@shared/privacy-tiers";
+import { COACH_SECTIONS } from "@shared/coach-sections";
 import { notifyUser } from "./notify";
 import {
   insertExerciseSchema,
@@ -607,6 +608,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(exercise);
   });
 
+  // Per-coach, not shared with staff-mates -- see favoriteExercise's own
+  // comment. No ownership/visibility check beyond requireRole: favoriting
+  // an id that isn't actually visible to this coach is harmless (it just
+  // never shows up anywhere), so there's nothing worth a 404 over.
+  app.post("/api/coach/exercises/:id/favorite", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    await storage.favoriteExercise(user.id, Number(req.params.id));
+    res.status(204).end();
+  });
+  app.delete("/api/coach/exercises/:id/favorite", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    await storage.unfavoriteExercise(user.id, Number(req.params.id));
+    res.status(204).end();
+  });
+
   app.post("/api/coach/exercises", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     const parsed = insertExerciseSchema.safeParse(req.body);
@@ -684,6 +700,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     const skillExercise = await storage.createSkillExercise(user.id, parsed.data);
     res.status(201).json(skillExercise);
+  });
+
+  app.post("/api/coach/skill-exercises/:id/favorite", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    await storage.favoriteSkillExercise(user.id, Number(req.params.id));
+    res.status(204).end();
+  });
+  app.delete("/api/coach/skill-exercises/:id/favorite", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    await storage.unfavoriteSkillExercise(user.id, Number(req.params.id));
+    res.status(204).end();
   });
 
   app.put("/api/coach/skill-exercises/:id", requireRole("coach"), async (req, res) => {
@@ -2261,6 +2288,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // solo coach. See coachStaff in shared/schema.ts and getEffectiveCoachIds
   // in storage.ts for how membership propagates everywhere else.
 
+  // Which Dashboard/Analytics cards this coach personally hid via the Edit
+  // button on those pages -- see hiddenWidgets' own comment in schema.ts.
+  app.get("/api/coach/widget-prefs", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const hidden = await storage.getHiddenWidgetsForCoach(user.id);
+    res.json({ hidden });
+  });
+  app.patch("/api/coach/widget-prefs", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const schema = z.object({ hidden: z.array(z.string()) });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "hidden must be a list of widget ids" });
+    }
+    const hidden = await storage.setHiddenWidgetsForCoach(user.id, parsed.data.hidden);
+    res.json({ hidden });
+  });
+
   app.get("/api/coach/staff", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     const result = await storage.getStaffForCoach(user.id);
@@ -2289,6 +2334,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     await storage.removeCoachStaff(user.id, Number(req.params.staffCoachId));
     res.status(204).end();
   });
+
+  // Primary coach only -- storage.setStaffHiddenSections already scopes its
+  // WHERE to (primaryCoachId=this coach, staffCoachId=target), so a coach
+  // who isn't actually this staff member's primary just silently updates
+  // zero rows rather than needing a separate ownership check here.
+  app.patch(
+    "/api/coach/staff/:staffCoachId/permissions",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const schema = z.object({ hiddenSections: z.array(z.enum(COACH_SECTIONS)) });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "hiddenSections must be a list of valid section keys" });
+      }
+      const row = await storage.setStaffHiddenSections(
+        user.id,
+        Number(req.params.staffCoachId),
+        parsed.data.hiddenSections,
+      );
+      if (!row) return res.status(404).json({ message: "Not one of your staff members" });
+      res.json({ hiddenSections: row.hiddenSections });
+    },
+  );
 
   app.post("/api/coach/staff/leave", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);

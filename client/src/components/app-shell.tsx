@@ -46,6 +46,7 @@ import { TeamBrandingDialog } from "@/components/team-branding-dialog";
 import { NonIosTrackingNotice } from "@/components/non-ios-tracking-warning";
 import { hexToHslTriplet, contrastForegroundHsl } from "@/lib/color";
 import { COACH_FEATURE_FIELDS, type CoachFeature } from "@shared/team-features";
+import { COACH_SECTION_NAV_HREFS } from "@shared/coach-sections";
 
 type NavItem = {
   href: string;
@@ -197,6 +198,16 @@ export function AppShell({
       if (branding.features[field.key] === false) {
         for (const href of field.navHrefs) disabledNavHrefs.add(href);
       }
+    }
+  }
+  // Per-staff-member restriction, set by the primary coach (see the Staff
+  // dialog) -- distinct from the team-wide branding.features toggles above,
+  // which hide a tab for the whole team, athletes included. This only ever
+  // narrows what THIS ONE staff coach's own nav shows; empty for the
+  // primary coach and anyone not on a staff at all.
+  if (user?.role === "coach" && user.hiddenSections) {
+    for (const section of user.hiddenSections) {
+      for (const href of COACH_SECTION_NAV_HREFS[section] ?? []) disabledNavHrefs.add(href);
     }
   }
 

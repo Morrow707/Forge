@@ -63,6 +63,21 @@ function toPublicUser(user: any): PublicUser {
   return rest;
 }
 
+// Every endpoint that hands back a fresh user object (signup, login,
+// /api/auth/me) needs to go through this, not just toPublicUser alone --
+// use-auth.tsx's login/signup mutations seed the /api/auth/me query cache
+// directly from THIS response body (see qc.setQueryData in use-auth.tsx),
+// so a login response missing hiddenSections leaves a just-restricted staff
+// coach's nav showing everything until their next full page load happens
+// to trigger a real /api/auth/me refetch.
+async function toPublicUserWithSections(user: any): Promise<PublicUser> {
+  const publicUser = toPublicUser(user);
+  if (user.role === "coach") {
+    (publicUser as any).hiddenSections = await storage.getHiddenSectionsForCoach(user.id);
+  }
+  return publicUser;
+}
+
 // Bearer-token fallback for the native app, alongside (not instead of) the
 // cookie session above. iOS's WKWebView is subject to Apple's Intelligent
 // Tracking Prevention, which silently drops a cross-origin Set-Cookie from a
@@ -271,7 +286,7 @@ export function setupAuth(app: Express) {
         }
       }
 
-      req.login(user, (err) => {
+      req.login(user, async (err) => {
         if (err) return next(err);
         // Fire-and-forget: sendEmail never throws (see email.ts) and a slow
         // or failed welcome email is never a reason to hold up the response
@@ -281,7 +296,9 @@ export function setupAuth(app: Express) {
           subject: "Welcome to Forge",
           html: buildWelcomeEmail(user, coach?.name ?? null),
         });
-        res.status(201).json({ ...toPublicUser(user), nativeToken: signNativeToken(user.id) });
+        res
+          .status(201)
+          .json({ ...(await toPublicUserWithSections(user)), nativeToken: signNativeToken(user.id) });
       });
     } catch (err) {
       next(err);
@@ -331,14 +348,16 @@ export function setupAuth(app: Express) {
           `/coach/roster/${user.id}`,
         );
       }
-      req.login(user, (err) => {
+      req.login(user, async (err) => {
         if (err) return next(err);
         sendEmail({
           to: user.email,
           subject: "Welcome to Forge",
           html: buildWelcomeEmail(user, null),
         });
-        res.status(201).json({ ...toPublicUser(user), nativeToken: signNativeToken(user.id) });
+        res
+          .status(201)
+          .json({ ...(await toPublicUserWithSections(user)), nativeToken: signNativeToken(user.id) });
       });
     } catch (err) {
       next(err);
@@ -367,7 +386,7 @@ export function setupAuth(app: Express) {
         if (err2) return next(err2);
         try {
           await storage.touchUserActivity(user.id);
-          res.json({ ...toPublicUser(user), nativeToken: signNativeToken(user.id) });
+          res.json({ ...(await toPublicUserWithSections(user)), nativeToken: signNativeToken(user.id) });
         } catch (err3) {
           next(err3);
         }
@@ -462,11 +481,11 @@ export function setupAuth(app: Express) {
     }
   });
 
-  app.get("/api/auth/me", (req, res) => {
+  app.get("/api/auth/me", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Not authenticated" });
     }
-    res.json(toPublicUser(req.user));
+    res.json(await toPublicUserWithSections(req.user));
   });
 
   app.post("/api/auth/join-coach", async (req, res, next) => {

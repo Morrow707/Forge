@@ -44,6 +44,9 @@ import {
   Flag,
 } from "lucide-react";
 import { VideoAnalysisDialog } from "@/components/video-analysis-dialog";
+import { HideableWidget } from "@/components/hideable-widget";
+import { useWidgetVisibility } from "@/hooks/use-widget-visibility";
+import { Pencil, Check } from "lucide-react";
 import { SkillsTrendsPanel } from "@/components/skills-trends-panel";
 import {
   LineChart,
@@ -541,6 +544,7 @@ export default function CoachAnalytics() {
   const [athleteSearch, setAthleteSearch] = useState("");
   const [exerciseId, setExerciseId] = useState<string>(initialParams.get("exerciseId") ?? "");
   const [hiddenCharts, setHiddenCharts] = useState<Set<ChartKey>>(() => loadHiddenCharts());
+  const widgetVisibility = useWidgetVisibility();
   // Three ways to look at the same exercise history: a quick per-set,
   // per-rep breakdown for one workout ("byDate", the default -- a coach
   // opening this page wants to see today's numbers at a glance, not parse a
@@ -726,7 +730,19 @@ export default function CoachAnalytics() {
   }
 
   return (
-    <AppShell title="Analytics">
+    <AppShell
+      title="Analytics"
+      actions={
+        <Button
+          size="sm"
+          variant={widgetVisibility.editMode ? "default" : "outline"}
+          onClick={() => widgetVisibility.setEditMode((v) => !v)}
+        >
+          {widgetVisibility.editMode ? <Check className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
+          {widgetVisibility.editMode ? "Done" : "Edit"}
+        </Button>
+      }
+    >
       <Tabs defaultValue="performance">
         <TabsList className="mb-6">
           <TabsTrigger value="performance">Performance</TabsTrigger>
@@ -782,9 +798,24 @@ export default function CoachAnalytics() {
 
       {athleteId && !exerciseId && (
         <div className="space-y-4">
-          <AcwrTrendCard athleteId={athleteId} />
-          <WeeklyLoadTrendCard athleteId={athleteId} />
-          <MuscleHeatMap athleteId={athleteId} />
+          <HideableWidget
+            id="weekly-load-trend"
+            label="Weekly Load Trend"
+            editMode={widgetVisibility.editMode}
+            isHidden={widgetVisibility.hidden.has("weekly-load-trend")}
+            onToggle={widgetVisibility.setHidden}
+          >
+            <WeeklyLoadTrendCard athleteId={athleteId} />
+          </HideableWidget>
+          <HideableWidget
+            id="muscle-heat-map"
+            label="Muscle Heat Map"
+            editMode={widgetVisibility.editMode}
+            isHidden={widgetVisibility.hidden.has("muscle-heat-map")}
+            onToggle={widgetVisibility.setHidden}
+          >
+            <MuscleHeatMap athleteId={athleteId} />
+          </HideableWidget>
 
           <Card>
             <CardHeader>
@@ -847,6 +878,18 @@ export default function CoachAnalytics() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Bottom of the page, deliberately -- useful context, not the
+              first thing a coach needs to see when they pick an athlete. */}
+          <HideableWidget
+            id="acwr-trend"
+            label="Training Load (ACWR)"
+            editMode={widgetVisibility.editMode}
+            isHidden={widgetVisibility.hidden.has("acwr-trend")}
+            onToggle={widgetVisibility.setHidden}
+          >
+            <AcwrTrendCard athleteId={athleteId} />
+          </HideableWidget>
         </div>
       )}
 

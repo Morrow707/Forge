@@ -5,4 +5,5 @@ export type ExerciseWithOwnership = Exercise & {
   isForgeOfficial: boolean;
   editable: boolean;
   hasOpenReport?: boolean;
+  isFavorite?: boolean;
 };

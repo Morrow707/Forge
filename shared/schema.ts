@@ -22,6 +22,8 @@ import type { SkillFaultThresholds } from "./skill-fault-thresholds";
 import { SKILL_FAULT_THRESHOLD_BOUNDS } from "./skill-fault-thresholds";
 import type { CoachFeature } from "./team-features";
 import { COACH_FEATURES } from "./team-features";
+import type { CoachSection } from "./coach-sections";
+import { COACH_SECTIONS } from "./coach-sections";
 
 // Owned and populated by connect-pg-simple at runtime, not by our own code --
 // declared here purely so drizzle-kit's live-diff sees it as an already-
@@ -284,6 +286,14 @@ export const users = pgTable(
     // the field list and "missing means on" resolution. Same primary-coach
     // resolution as the branding fields above.
     enabledFeatures: json("enabled_features").$type<Partial<Record<CoachFeature, boolean>>>(),
+    // Individual-coach, individual-card preference -- unlike enabledFeatures
+    // above (whole nav tabs, team-wide, primary-coach-controlled), this is
+    // "which cards on MY OWN Dashboard/Analytics do I personally not want
+    // to see," so it lives per-account rather than resolving through the
+    // staff. Each entry is a stable widget id (see WIDGET_LABEL client-side)
+    // -- missing/empty means every widget shows, same "unset means on"
+    // convention as everything else here.
+    hiddenWidgets: json("hidden_widgets").$type<string[]>(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({
@@ -478,6 +488,13 @@ export const createTeamGameDaySchema = z.object({
 // everyone on the staff sees the same thing. Joining reuses the primary
 // coach's existing coachCode (the same code an athlete would use to find
 // them) rather than a separate invite-code system.
+// Every named value here is one toggleable slice of the app -- see
+// COACH_SECTION_LABELS (shared/coach-sections.ts) for the human label of
+// each. "dashboard" is deliberately not one of these: a staff coach always
+// keeps their own landing page regardless of what the primary coach
+// restricts, same as there's always a way back to home.
+export const coachSectionEnum = pgEnum("coach_section", COACH_SECTIONS);
+
 export const coachStaff = pgTable(
   "coach_staff",
   {
@@ -489,6 +506,13 @@ export const coachStaff = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     createdAt: timestamp("created_at").notNull().defaultNow(),
+    // Which of the sections above this staff member does NOT get -- empty
+    // (the default) means full access, same as before this existed, so a
+    // staff member who joined before this feature shipped is unaffected
+    // until the primary coach actively restricts them. Never applies to
+    // the primary coach themself -- there's no row here for their own
+    // account to restrict.
+    hiddenSections: coachSectionEnum("hidden_sections").array().notNull().default([]),
   },
   (table) => ({
     pairIdx: uniqueIndex("coach_staff_pair_idx").on(
@@ -656,6 +680,50 @@ export const skillExercises = pgTable(
   },
   (table) => ({
     coachIdx: index("skill_exercises_coach_idx").on(table.coachId),
+  }),
+);
+
+// A coach's own shortlist -- per-coach, not global (the same exercise can be
+// a favorite for one coach and not another), so it's a join table rather
+// than a column on exercises/skillExercises. Only ever read to answer "is
+// this favorited" and "sort favorites first," never joined against for
+// anything heavier, so two flat tables (one per exercise type) beat a single
+// polymorphic one here -- no exerciseType discriminant column to keep in
+// sync, and each FK stays a real, checked reference to its own table.
+export const favoriteExercises = pgTable(
+  "favorite_exercises",
+  {
+    id: serial("id").primaryKey(),
+    coachId: integer("coach_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    exerciseId: integer("exercise_id")
+      .notNull()
+      .references(() => exercises.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    pairIdx: uniqueIndex("favorite_exercises_pair_idx").on(table.coachId, table.exerciseId),
+  }),
+);
+
+export const favoriteSkillExercises = pgTable(
+  "favorite_skill_exercises",
+  {
+    id: serial("id").primaryKey(),
+    coachId: integer("coach_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    skillExerciseId: integer("skill_exercise_id")
+      .notNull()
+      .references(() => skillExercises.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    pairIdx: uniqueIndex("favorite_skill_exercises_pair_idx").on(
+      table.coachId,
+      table.skillExerciseId,
+    ),
   }),
 );
 
@@ -4556,7 +4624,13 @@ export type ResolveSubmissionInput = z.infer<typeof resolveSubmissionSchema>;
 export type PublicUser = Omit<
   User,
   "passwordHash" | "healthStatus" | "agreedToTermsText"
->;
+> & {
+  // Not a users column -- computed per-request from this coach's own
+  // coachStaff row (see getHiddenSectionsForCoach) and attached by
+  // /api/auth/me. Always [] for a primary/non-staff coach, and absent
+  // entirely for an athlete/admin.
+  hiddenSections?: CoachSection[];
+};
 
 export const updateHealthStatusSchema = z.object({
   healthStatus: z.enum(["healthy", "hurt"]),

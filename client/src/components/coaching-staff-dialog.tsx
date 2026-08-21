@@ -13,9 +13,12 @@ import { Label } from "@/components/ui/label";
 import { apiRequest, getJson, ApiError } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
-import { UserMinus, Copy } from "lucide-react";
+import { UserMinus, Copy, Settings2, ChevronDown } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { COACH_SECTIONS, COACH_SECTION_LABEL, type CoachSection } from "@shared/coach-sections";
+import { cn } from "@/lib/utils";
 
-type StaffMember = { id: number; name: string; email: string };
+type StaffMember = { id: number; name: string; email: string; hiddenSections: CoachSection[] };
 type StaffResponse = { primaryCoachId: number; staff: StaffMember[] };
 
 /** Lets a whole coaching staff (assistant/position coaches) share one
@@ -34,6 +37,7 @@ export function CoachingStaffDialog({
   const { user } = useAuth();
   const qc = useQueryClient();
   const [joinCode, setJoinCode] = useState("");
+  const [editingPermissionsFor, setEditingPermissionsFor] = useState<number | null>(null);
 
   const { data, isLoading } = useQuery<StaffResponse>({
     queryKey: ["/api/coach/staff"],
@@ -57,6 +61,14 @@ export function CoachingStaffDialog({
       toast.success("Joined -- you now share this staff's full roster and programs");
     },
     onError: (err: ApiError) => toast.error(err.message || "Couldn't join with that code"),
+  });
+
+  const permissionsMutation = useMutation({
+    mutationFn: async ({ staffCoachId, hiddenSections }: { staffCoachId: number; hiddenSections: CoachSection[] }) => {
+      await apiRequest("PATCH", `/api/coach/staff/${staffCoachId}/permissions`, { hiddenSections });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/coach/staff"] }),
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't update their access"),
   });
 
   const removeMutation = useMutation({
@@ -133,29 +145,85 @@ export function CoachingStaffDialog({
               <div className="space-y-1.5">
                 <Label>Staff members</Label>
                 <div className="space-y-2">
-                  {data.staff.map((s) => (
-                    <div
-                      key={s.id}
-                      className="flex items-center justify-between rounded-md border border-border p-2.5 text-sm"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate font-medium">{s.name}</p>
-                        <p className="truncate text-xs text-muted-foreground">{s.email}</p>
+                  {data.staff.map((s) => {
+                    const isEditingThis = editingPermissionsFor === s.id;
+                    return (
+                      <div key={s.id} className="rounded-md border border-border">
+                        <div className="flex items-center justify-between p-2.5 text-sm">
+                          <div className="min-w-0">
+                            <p className="truncate font-medium">{s.name}</p>
+                            <p className="truncate text-xs text-muted-foreground">{s.email}</p>
+                            {s.hiddenSections.length > 0 && (
+                              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                                {s.hiddenSections.length} section{s.hiddenSections.length === 1 ? "" : "s"} hidden
+                              </p>
+                            )}
+                          </div>
+                          {isPrimary && (
+                            <div className="flex shrink-0 items-center">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                aria-label={isEditingThis ? `Close ${s.name}'s access settings` : `Edit ${s.name}'s access`}
+                                onClick={() => setEditingPermissionsFor(isEditingThis ? null : s.id)}
+                              >
+                                {isEditingThis ? (
+                                  <ChevronDown className="h-4 w-4" />
+                                ) : (
+                                  <Settings2 className="h-4 w-4" />
+                                )}
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                aria-label={`Remove ${s.name}`}
+                                onClick={() => removeMutation.mutate(s.id)}
+                                disabled={removeMutation.isPending}
+                              >
+                                <UserMinus className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                        {isEditingThis && (
+                          <div className="space-y-2 border-t border-border p-2.5">
+                            <p className="text-xs text-muted-foreground">
+                              What {s.name.split(" ")[0]} can see -- unchecked sections stay hidden from
+                              their nav until you turn them back on.
+                            </p>
+                            <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+                              {COACH_SECTIONS.map((section) => {
+                                const checked = !s.hiddenSections.includes(section);
+                                return (
+                                  <label
+                                    key={section}
+                                    className={cn(
+                                      "flex items-center gap-1.5 rounded-md border border-border px-2 py-1.5 text-xs",
+                                      permissionsMutation.isPending && "opacity-60",
+                                    )}
+                                  >
+                                    <Checkbox
+                                      checked={checked}
+                                      disabled={permissionsMutation.isPending}
+                                      onCheckedChange={(next) => {
+                                        const hiddenSections = next
+                                          ? s.hiddenSections.filter((sec) => sec !== section)
+                                          : [...s.hiddenSections, section];
+                                        permissionsMutation.mutate({ staffCoachId: s.id, hiddenSections });
+                                      }}
+                                    />
+                                    {COACH_SECTION_LABEL[section]}
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
                       </div>
-                      {isPrimary && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          aria-label={`Remove ${s.name}`}
-                          onClick={() => removeMutation.mutate(s.id)}
-                          disabled={removeMutation.isPending}
-                        >
-                          <UserMinus className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
