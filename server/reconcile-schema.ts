@@ -821,6 +821,8 @@ CREATE TABLE IF NOT EXISTS "goals" (
   "created_at" timestamp NOT NULL DEFAULT now()
 );
 ALTER TABLE "goals" ADD COLUMN IF NOT EXISTS "skill_exercise_id" integer REFERENCES "skill_exercises"("id") ON DELETE CASCADE;
+ALTER TABLE "goals" ADD COLUMN IF NOT EXISTS "achieved_at" timestamp;
+ALTER TABLE "goals" ADD COLUMN IF NOT EXISTS "archived_at" timestamp;
 CREATE INDEX IF NOT EXISTS "goals_athlete_idx" ON "goals" ("athlete_id");
 
 CREATE TABLE IF NOT EXISTS "wellness_checkins" (
