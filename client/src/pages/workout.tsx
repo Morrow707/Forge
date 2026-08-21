@@ -2346,14 +2346,33 @@ function ExerciseLogContent({
             if (trackingSet == null) return;
             const videoPatch = videoUrl ? { formCheckVideoUrl: videoUrl } : {};
             if ("bestJumpHeightCm" in metrics) {
+              // A box jump's flight time is cut short by landing on the
+              // elevated box, not the ground -- jumpHeightCm's flight-time
+              // formula assumes a symmetric ground-to-ground arc, so it
+              // systematically understates a box jump's real height, worse
+              // the taller the box. peakHeightCm has no such assumption --
+              // it's a direct read of how far the ankle rose above its own
+              // pre-jump position, not inferred from timing -- so this
+              // substitutes it in under the same "jumpHeightCm" field name
+              // for any box-jump exercise, automatically. Every downstream
+              // consumer (PR badges, coach analytics, history) reads that
+              // one field name unchanged; nowhere else needs to know this
+              // was a box jump.
+              const repBreakdown = item.materials.usesBox
+                ? metrics.repBreakdown.map((r) => ({ ...r, jumpHeightCm: r.peakHeightCm }))
+                : metrics.repBreakdown;
+              const jumpHeightCm =
+                repBreakdown.length > 0
+                  ? Math.max(...repBreakdown.map((r) => r.jumpHeightCm))
+                  : metrics.bestJumpHeightCm;
               onUpdateSet(
                 trackingSet,
                 {
-                  jumpHeightCm: metrics.bestJumpHeightCm,
+                  jumpHeightCm,
                   jumpDistanceCm: metrics.bestHorizontalDistanceCm,
                   groundContactSeconds: metrics.avgGroundContactSeconds,
                   reactiveStrengthIndex: metrics.reactiveStrengthIndex,
-                  jumpBreakdown: metrics.repBreakdown,
+                  jumpBreakdown: repBreakdown,
                   barPathTrace: metrics.pathTrace,
                   formFaults: metrics.formFaults,
                   ...videoPatch,
