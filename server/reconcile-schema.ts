@@ -1487,6 +1487,41 @@ CREATE TABLE IF NOT EXISTS "legal_documents" (
   "content" text NOT NULL DEFAULT '',
   "updated_at" timestamp NOT NULL DEFAULT now()
 );
+
+-- Coach-personal widget visibility (shared/schema.ts users.hiddenWidgets).
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "hidden_widgets" json;
+
+-- Per-staff granular section permissions (shared/coach-sections.ts,
+-- shared/schema.ts coachSectionEnum + coachStaff.hiddenSections). Same
+-- missing-reconcile-line class of bug as apns_device_tokens above: added to
+-- shared/schema.ts but never added here, so the column/type never existed
+-- on the live database at all.
+DO $$ BEGIN
+  CREATE TYPE "coach_section" AS ENUM (
+    'calendar', 'programs', 'exercises', 'skillPrograms', 'skillBank',
+    'classes', 'roster', 'movementScreens', 'nutrition', 'analytics',
+    'leaderboard', 'teamBoard'
+  );
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+ALTER TABLE "coach_staff" ADD COLUMN IF NOT EXISTS "hidden_sections" coach_section[] NOT NULL DEFAULT '{}';
+
+-- Coach exercise/skill favoriting (shared/schema.ts favoriteExercises,
+-- favoriteSkillExercises).
+CREATE TABLE IF NOT EXISTS "favorite_exercises" (
+  "id" serial PRIMARY KEY,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "exercise_id" integer NOT NULL REFERENCES "exercises"("id") ON DELETE CASCADE,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "favorite_exercises_pair_idx" ON "favorite_exercises" ("coach_id", "exercise_id");
+
+CREATE TABLE IF NOT EXISTS "favorite_skill_exercises" (
+  "id" serial PRIMARY KEY,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "skill_exercise_id" integer NOT NULL REFERENCES "skill_exercises"("id") ON DELETE CASCADE,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "favorite_skill_exercises_pair_idx" ON "favorite_skill_exercises" ("coach_id", "skill_exercise_id");
 `;
 
 async function main() {
