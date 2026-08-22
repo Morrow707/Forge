@@ -68,7 +68,7 @@ import {
 
 type RosterEntry = { id: number; name: string; email: string };
 
-type TrackingLevel = "none" | "bar_path" | "full" | "jump";
+type TrackingLevel = "none" | "bar_path" | "full" | "jump" | "golf_swing" | "baseball_swing";
 
 type LocalExercise = {
   key: string;
@@ -1034,6 +1034,7 @@ function SortableExerciseRow({
         <VideoTrackingToggle
           trackingLevel={exercise.trackingLevel}
           category={exercise.category}
+          exerciseName={exercise.exerciseName}
           onChange={(patch) => onUpdate(patch)}
         />
       </div>

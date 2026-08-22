@@ -63,6 +63,10 @@ ALTER TYPE "tracking_level" ADD VALUE IF NOT EXISTS 'jump';
 -- table either way.
 ALTER TYPE "tracking_level" ADD VALUE IF NOT EXISTS 'sprint';
 ALTER TYPE "tracking_level" ADD VALUE IF NOT EXISTS 'mechanics';
+-- Rotation-engine modes (hip/shoulder separation, swing tempo, head sway)
+-- -- see the comment on trackingLevelEnum in shared/schema.ts.
+ALTER TYPE "tracking_level" ADD VALUE IF NOT EXISTS 'golf_swing';
+ALTER TYPE "tracking_level" ADD VALUE IF NOT EXISTS 'baseball_swing';
 
 DO $$ BEGIN
   CREATE TYPE "health_status" AS ENUM ('healthy', 'hurt');
@@ -1546,6 +1550,15 @@ ALTER TABLE "wellness_checkins" ADD COLUMN IF NOT EXISTS "heart_rate_recovery" r
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "is_pr" boolean NOT NULL DEFAULT false;
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "favorited" boolean NOT NULL DEFAULT false;
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "pending_deletion_at" date;
+
+-- Golf/baseball swing tracking (shared/schema.ts workoutSetEntries's
+-- swingSeparationDeg/swingTempoRatio/swingBackswingMs/swingDownswingMs/
+-- swingHeadSwayCm).
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "swing_separation_deg" real;
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "swing_tempo_ratio" real;
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "swing_backswing_ms" integer;
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "swing_downswing_ms" integer;
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "swing_head_sway_cm" real;
 
 -- Billing framework -- see shared/schema.ts's own comment above the
 -- subscriptions table for why this exists with nothing wired to real

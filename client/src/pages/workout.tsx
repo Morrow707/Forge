@@ -23,6 +23,7 @@ import { WorkoutCommentThread } from "@/components/workout-comment-thread";
 import { BarTrackerDialog } from "@/components/bar-tracker-dialog";
 import { ArJumpTrackerDialog } from "@/components/ar-jump-tracker-dialog";
 import { ArBarTrackerDialog } from "@/components/ar-bar-tracker-dialog";
+import { ArSwingTrackerDialog, type SwingSetMetrics } from "@/components/ar-swing-tracker-dialog";
 import { isArPreviewPlatform } from "@/lib/native-ar-preview";
 import { FormVideoRecorderDialog } from "@/components/form-video-recorder-dialog";
 import { SetVideoPreviewDialog, SetVideoCompareDialog } from "@/components/set-video-review";
@@ -185,7 +186,7 @@ type SetHistoryPoint = {
   rpe: number | null;
 };
 
-type TrackingLevel = "none" | "bar_path" | "full" | "jump";
+type TrackingLevel = "none" | "bar_path" | "full" | "jump" | "golf_swing" | "baseball_swing";
 
 type PrescribedExercise = {
   id: number;
@@ -306,6 +307,13 @@ type SetMetrics = {
   groundContactSeconds: number | null;
   reactiveStrengthIndex: number | null;
   jumpBreakdown: JumpBreakdownEntry[] | null;
+  // "golf_swing"/"baseball_swing" tracking mode's numbers -- see
+  // ar-swing-tracker-dialog.tsx and rotation-tracking.ts/swing-tracking.ts.
+  swingSeparationDeg: number | null;
+  swingTempoRatio: number | null;
+  swingBackswingMs: number | null;
+  swingDownswingMs: number | null;
+  swingHeadSwayCm: number | null;
   // Per-rep left/right knee-drive comparison for bilateral lower-body lifts
   // -- see pose-tracking.ts's computeLegDriveAsymmetry. Null unless the
   // exercise's movementType/laterality made a same-rep comparison valid.
@@ -447,6 +455,11 @@ function buildItem(
       groundContactSeconds: existingSet?.groundContactSeconds ?? null,
       reactiveStrengthIndex: existingSet?.reactiveStrengthIndex ?? null,
       jumpBreakdown: existingSet?.jumpBreakdown ?? null,
+      swingSeparationDeg: existingSet?.swingSeparationDeg ?? null,
+      swingTempoRatio: existingSet?.swingTempoRatio ?? null,
+      swingBackswingMs: existingSet?.swingBackswingMs ?? null,
+      swingDownswingMs: existingSet?.swingDownswingMs ?? null,
+      swingHeadSwayCm: existingSet?.swingHeadSwayCm ?? null,
       legDriveAsymmetry: existingSet?.legDriveAsymmetry ?? null,
       armDriveAsymmetry: existingSet?.armDriveAsymmetry ?? null,
       trustScores: existingSet?.trustScores ?? null,
@@ -858,6 +871,11 @@ export function WorkoutPage({
           groundContactSeconds: s.groundContactSeconds,
           reactiveStrengthIndex: s.reactiveStrengthIndex,
           jumpBreakdown: s.jumpBreakdown,
+          swingSeparationDeg: s.swingSeparationDeg,
+          swingTempoRatio: s.swingTempoRatio,
+          swingBackswingMs: s.swingBackswingMs,
+          swingDownswingMs: s.swingDownswingMs,
+          swingHeadSwayCm: s.swingHeadSwayCm,
           legDriveAsymmetry: s.legDriveAsymmetry,
           armDriveAsymmetry: s.armDriveAsymmetry,
           trustScores: s.trustScores,
@@ -1255,6 +1273,11 @@ export function WorkoutPage({
               groundContactSeconds: null,
               reactiveStrengthIndex: null,
               jumpBreakdown: null,
+              swingSeparationDeg: null,
+              swingTempoRatio: null,
+              swingBackswingMs: null,
+              swingDownswingMs: null,
+              swingHeadSwayCm: null,
               legDriveAsymmetry: null,
               armDriveAsymmetry: null,
               trustScores: null,
@@ -2390,6 +2413,26 @@ function ExerciseLogContent({
                     ))}
                   </div>
                 )}
+                {(set.swingSeparationDeg != null || set.swingTempoRatio != null) && (
+                  <div className="mt-1 flex flex-wrap items-center gap-1 pl-9 text-[9px] text-muted-foreground">
+                    <span className="font-semibold uppercase tracking-wide">Swing</span>
+                    {set.swingSeparationDeg != null && (
+                      <span className="rounded bg-secondary px-1.5 py-0.5">
+                        X-Factor {Math.abs(set.swingSeparationDeg)}°
+                      </span>
+                    )}
+                    {set.swingTempoRatio != null && (
+                      <span className="rounded bg-secondary px-1.5 py-0.5">
+                        Tempo {set.swingTempoRatio}:1
+                      </span>
+                    )}
+                    {set.swingHeadSwayCm != null && (
+                      <span className="rounded bg-secondary px-1.5 py-0.5">
+                        Head sway {set.swingHeadSwayCm}cm
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })}
@@ -2478,6 +2521,67 @@ function ExerciseLogContent({
               if (videoCheckMode === "ai") aiFormCheckMutation.mutate({ setNumber: trackingSet, videoUrl });
               else postFormVideoMutation.mutate({ setNumber: trackingSet, videoUrl });
             }
+          }
+
+          // Separate from handleTrackerCapture above -- golf/baseball swing
+          // metrics (SwingSetMetrics) don't fit the RepMetrics/
+          // JumpSetMetrics union that function already narrows between,
+          // and reusing that narrowing here would mean widening it across
+          // every other call site that pattern-matches on it instead.
+          function handleSwingCapture(metrics: SwingSetMetrics, videoUrl?: string) {
+            if (trackingSet == null) return;
+            const videoPatch = videoUrl ? { formCheckVideoUrl: videoUrl } : {};
+            onUpdateSet(
+              trackingSet,
+              {
+                swingSeparationDeg: metrics.peakSeparationDeg,
+                swingTempoRatio: metrics.tempoRatio,
+                swingBackswingMs: metrics.backswingMs,
+                swingDownswingMs: metrics.downswingMs,
+                swingHeadSwayCm: metrics.headSwayCm,
+                ...videoPatch,
+              },
+              { immediate: true },
+            );
+            if (videoUrl) {
+              if (videoCheckMode === "ai") aiFormCheckMutation.mutate({ setNumber: trackingSet, videoUrl });
+              else postFormVideoMutation.mutate({ setNumber: trackingSet, videoUrl });
+            }
+          }
+
+          if (item.trackingLevel === "golf_swing" || item.trackingLevel === "baseball_swing") {
+            if (isArPreviewPlatform()) {
+              return (
+                <ArSwingTrackerDialog
+                  open={trackingSet !== null}
+                  onOpenChange={(open) => !open && setTrackingSet(null)}
+                  sport={item.trackingLevel === "golf_swing" ? "golf" : "baseball"}
+                  heightIn={user?.heightIn}
+                  recordVideo={mergedTracking}
+                  onCapture={handleSwingCapture}
+                  videoContext={videoContextFor(trackingSet)}
+                />
+              );
+            }
+            // MediaPipe-based rotation/tempo tracking for swings isn't
+            // built yet -- see ar-swing-tracker-dialog.tsx's own comment on
+            // why ARKit went first here too (same "no implement to follow"
+            // reasoning jump mode used). Falls back to a plain video-only
+            // capture rather than forcing this through BarTrackerDialog's
+            // bar/jump-shaped tracking, which doesn't fit a swing at all.
+            return (
+              <FormVideoRecorderDialog
+                open={trackingSet !== null}
+                onOpenChange={(open) => !open && setTrackingSet(null)}
+                videoContext={videoContextFor(trackingSet)}
+                onSaved={(url) => {
+                  if (trackingSet == null) return;
+                  onUpdateSet(trackingSet, { formCheckVideoUrl: url }, { immediate: true });
+                  setTrackingSet(null);
+                }}
+                onQueued={() => setTrackingSet(null)}
+              />
+            );
           }
 
           // Jump mode is the first tracker mode moved off MediaPipe onto

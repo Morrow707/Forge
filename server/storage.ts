@@ -710,7 +710,7 @@ type MergeableDay = {
     notes: string | null;
     supersetGroup: string | null;
     restAfterGroupOnly: boolean;
-    trackingLevel?: "none" | "bar_path" | "full" | "jump" | "sprint" | "mechanics";
+    trackingLevel?: "none" | "bar_path" | "full" | "jump" | "sprint" | "mechanics" | "golf_swing" | "baseball_swing";
     videoCheckEnabled: boolean;
   }[];
 };
@@ -735,7 +735,7 @@ type WeekPatch = {
       notes?: string;
       supersetGroup?: string;
       restAfterGroupOnly?: boolean;
-      trackingLevel?: "none" | "bar_path" | "full" | "jump" | "sprint" | "mechanics";
+      trackingLevel?: "none" | "bar_path" | "full" | "jump" | "sprint" | "mechanics" | "golf_swing" | "baseball_swing";
       videoCheckEnabled?: boolean;
     }[];
   }[];
@@ -1109,7 +1109,7 @@ const programExerciseItemSchema = z.object({
   notes: z.string().optional(),
   supersetGroup: z.string().optional(),
   restAfterGroupOnly: z.boolean().optional(),
-  trackingLevel: z.enum(["none", "bar_path", "full", "jump"]).optional(),
+  trackingLevel: z.enum(["none", "bar_path", "full", "jump", "golf_swing", "baseball_swing"]).optional(),
   videoCheckEnabled: z.boolean().optional(),
 });
 
@@ -12136,6 +12136,11 @@ ${catalog}`;
               trustScores: s.trustScores ?? null,
               isPr,
               favorited: s.favorited ?? false,
+              swingSeparationDeg: s.swingSeparationDeg ?? null,
+              swingTempoRatio: s.swingTempoRatio ?? null,
+              swingBackswingMs: s.swingBackswingMs ?? null,
+              swingDownswingMs: s.swingDownswingMs ?? null,
+              swingHeadSwayCm: s.swingHeadSwayCm ?? null,
               };
             }),
           );

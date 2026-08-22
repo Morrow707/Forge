@@ -31,7 +31,7 @@ import { toast } from "sonner";
 import { Plus, Trash2, MoonStar, Link2, Stethoscope, Copy, Clock, Repeat, LineChart } from "lucide-react";
 import type { Exercise } from "@shared/schema";
 
-type TrackingLevel = "none" | "bar_path" | "full" | "jump";
+type TrackingLevel = "none" | "bar_path" | "full" | "jump" | "golf_swing" | "baseball_swing";
 
 type LocalExercise = {
   key: string;
@@ -490,6 +490,7 @@ export function CoachDayEditDialog({
                             <VideoTrackingToggle
                               trackingLevel={ex.trackingLevel}
                               category={ex.category}
+                              exerciseName={ex.exerciseName}
                               onChange={(patch) =>
                                 setExercises((prev) =>
                                   prev.map((e) => (e.key === ex.key ? { ...e, ...patch } : e)),

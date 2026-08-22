@@ -158,6 +158,14 @@ export const trackingLevelEnum = pgEnum("tracking_level", [
   "jump",
   "sprint",
   "mechanics",
+  // Rotation-engine modes -- hip/shoulder separation (X-Factor), swing
+  // tempo, head sway, all off the same body-tracking joint stream every
+  // other mode already uses. Deliberately NOT tracking the bat/club
+  // itself yet (see video-tracking-toggle.tsx's own comment on why) --
+  // that's real native ARKit tuning work that needs on-device validation
+  // against actual swings before it ships, not something to guess at.
+  "golf_swing",
+  "baseball_swing",
 ]);
 
 export const users = pgTable(
@@ -1359,6 +1367,19 @@ export const workoutSetEntries = pgTable("workout_set_entries", {
   groundContactSeconds: real("ground_contact_seconds"),
   reactiveStrengthIndex: real("reactive_strength_index"),
   jumpBreakdown: json("jump_breakdown"),
+  // "golf_swing"/"baseball_swing" tracking mode's numbers (see
+  // rotation-tracking.ts/swing-tracking.ts) -- null unless trackingLevel
+  // was one of those two when this set was logged. All derived from body
+  // joints only (shoulder/hip line and wrist-midpoint grip proxy), not
+  // from tracking the club/bat itself -- see ar-swing-tracker-dialog.tsx's
+  // own comment for why that's a deliberately separate, not-yet-built
+  // piece. swingSeparationDeg is the peak shoulder-hip separation reached
+  // ("X-Factor"); swingTempoRatio is backswing:downswing duration.
+  swingSeparationDeg: real("swing_separation_deg"),
+  swingTempoRatio: real("swing_tempo_ratio"),
+  swingBackswingMs: integer("swing_backswing_ms"),
+  swingDownswingMs: integer("swing_downswing_ms"),
+  swingHeadSwayCm: real("swing_head_sway_cm"),
   // Per-rep left/right knee-drive comparison for bilateral lower-body lifts
   // (see pose-tracking.ts's computeLegDriveAsymmetry) -- null unless the
   // exercise's movementType was "Squat" (or it was jump-tracked) and both
@@ -4354,7 +4375,7 @@ export const programExerciseInputSchema = z.object({
   notes: z.string().optional().nullable(),
   supersetGroup: z.string().optional().nullable(),
   restAfterGroupOnly: z.boolean().optional(),
-  trackingLevel: z.enum(["none", "bar_path", "full", "jump"]).optional(),
+  trackingLevel: z.enum(["none", "bar_path", "full", "jump", "golf_swing", "baseball_swing"]).optional(),
   videoCheckEnabled: z.boolean().optional(),
 });
 
@@ -4684,6 +4705,11 @@ export const setLogInputSchema = z.object({
   groundContactSeconds: z.number().optional().nullable(),
   reactiveStrengthIndex: z.number().optional().nullable(),
   jumpBreakdown: z.array(jumpBreakdownEntrySchema).optional().nullable(),
+  swingSeparationDeg: z.number().optional().nullable(),
+  swingTempoRatio: z.number().optional().nullable(),
+  swingBackswingMs: z.number().optional().nullable(),
+  swingDownswingMs: z.number().optional().nullable(),
+  swingHeadSwayCm: z.number().optional().nullable(),
 });
 
 export const logEntryInputSchema = z

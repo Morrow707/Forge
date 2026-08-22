@@ -1,7 +1,17 @@
 import { Video, VideoOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type TrackingLevel = "none" | "bar_path" | "full" | "jump";
+export type TrackingLevel = "none" | "bar_path" | "full" | "jump" | "golf_swing" | "baseball_swing";
+
+// Word-boundary, not substring -- "Baseball-Style Rotational Med Ball
+// Throw" shouldn't silently become a swing-tracked exercise just because
+// the word appears in its name; an exercise actually named "Golf Swing" or
+// "Baseball Batting Drill" should. Checked against the exercise's own name
+// only (never its description) -- description text is far more likely to
+// mention a sport in passing ("great for baseball players") without the
+// exercise itself being that sport's swing.
+const GOLF_NAME_PATTERN = /\bgolf\b/i;
+const BASEBALL_NAME_PATTERN = /\bbaseball\b/i;
 
 /** Coach-facing camera control for one program exercise. Used to be 5
  * separate controls (4 tracking-level buttons -- Off/Path/Full/Jump --
@@ -25,14 +35,27 @@ export type TrackingLevel = "none" | "bar_path" | "full" | "jump";
 export function VideoTrackingToggle({
   trackingLevel,
   category,
+  exerciseName,
   onChange,
 }: {
   trackingLevel: TrackingLevel;
   category?: string | null;
+  /** Used only to auto-pick golf_swing/baseball_swing -- see
+   * GOLF_NAME_PATTERN's own comment. Optional so every existing caller
+   * that doesn't have a name handy (or doesn't care) keeps working exactly
+   * as before. */
+  exerciseName?: string | null;
   onChange: (patch: { trackingLevel: TrackingLevel; videoCheckEnabled: boolean }) => void;
 }) {
   const isOn = trackingLevel !== "none";
-  const onLevel: TrackingLevel = category === "plyometric" ? "jump" : "full";
+  const onLevel: TrackingLevel =
+    category === "plyometric"
+      ? "jump"
+      : exerciseName && GOLF_NAME_PATTERN.test(exerciseName)
+        ? "golf_swing"
+        : exerciseName && BASEBALL_NAME_PATTERN.test(exerciseName)
+          ? "baseball_swing"
+          : "full";
 
   return (
     <button
