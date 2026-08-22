@@ -2062,6 +2062,17 @@ export const wellnessCheckins = pgTable(
     // score already means.
     restingHeartRate: real("resting_heart_rate"),
     hrv: real("hrv"),
+    // Same wearable-sourced, opt-in, null-unless-synced story as
+    // restingHeartRate/hrv above -- see native-health.ts. vo2Max and
+    // respiratoryRate come from Apple Health directly; bodyMass is
+    // Health's own "weight" data type, named to match how it's shown on
+    // the nutrition profile (a nutritionist thinks "body mass," not
+    // "weight sample"). Stored in pounds -- native-health.ts converts
+    // HealthKit's kilogram reading before it ever reaches this column, to
+    // match the app's imperial-by-default convention everywhere else.
+    vo2Max: real("vo2_max"),
+    respiratoryRate: real("respiratory_rate"),
+    bodyMass: real("body_mass"),
     // Which body parts the athlete flagged as hurting today -- only ever
     // shown/edited in the expanded check-in form, never the collapsed
     // one-line summary. Empty array is the common case (nothing hurts).
@@ -2088,6 +2099,9 @@ export const submitWellnessCheckinSchema = z.object({
   bodyPainMap: z.array(z.string()).max(BODY_PAIN_PARTS.length).default([]),
   restingHeartRate: z.number().min(20).max(220).nullish(),
   hrv: z.number().min(0).max(300).nullish(),
+  vo2Max: z.number().min(10).max(90).nullish(),
+  respiratoryRate: z.number().min(4).max(60).nullish(),
+  bodyMass: z.number().min(20).max(400).nullish(),
 });
 
 // Self-reported by the athlete (or logged by a coach for a roster athlete),

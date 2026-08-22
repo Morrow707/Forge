@@ -3318,6 +3318,9 @@ Based on this athlete's actual rate of improvement, suggest a realistic target v
       bodyPainMap: string[];
       restingHeartRate?: number | null;
       hrv?: number | null;
+      vo2Max?: number | null;
+      respiratoryRate?: number | null;
+      bodyMass?: number | null;
     },
   ) {
     const [row] = await db

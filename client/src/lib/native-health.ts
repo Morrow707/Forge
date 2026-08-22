@@ -21,11 +21,31 @@ const STORAGE_KEY = "forge-health-sync-enabled";
 // distinguish "denied" from "not yet decided" after the first ask anyway,
 // so this is the only reliable signal for "already asked."
 const PROMPTED_KEY = "forge-health-sync-prompted";
-const READ_TYPES = ["sleep", "restingHeartRate", "heartRateVariability"] as const;
+const READ_TYPES = [
+  "sleep",
+  "restingHeartRate",
+  "heartRateVariability",
+  "vo2Max",
+  "respiratoryRate",
+  "weight",
+] as const;
+// Read-only for the same reason as the rest of this file's own comment --
+// workouts aren't part of the daily check-in snapshot (they don't have a
+// "today's value" the way sleep/HR do), so they're fetched separately by
+// fetchRecentWorkouts below, not folded into HealthSnapshot.
+const WORKOUT_READ_TYPE = "workouts" as const;
 // Segments that don't represent actual sleep time -- everything else
 // (an explicit 'asleep'/'rem'/'deep'/'light', or no stage info at all,
 // which is what a basic tracker reports) counts toward the total.
 const NON_SLEEP_STATES = new Set(["inBed", "awake"]);
+
+// The plugin's "weight" type comes back in kilograms unless a unit is
+// requested explicitly (there's no "pound" HealthUnit to ask for instead),
+// but wellnessCheckins.bodyMass and its validator (20-400) assume pounds,
+// matching the rest of the app's imperial-by-default convention (see
+// distance-unit.ts). Converted once here so every caller downstream just
+// gets pounds, same as it would from the manual Body Metrics form.
+const LBS_PER_KG = 2.20462;
 
 export function isNativeHealthSupported() {
   return Capacitor.isNativePlatform() && Capacitor.getPlatform() === "ios";
@@ -48,7 +68,7 @@ export async function enableHealthSync(): Promise<void> {
   if (!isNativeHealthSupported()) {
     throw new Error("Health sync isn't supported on this device.");
   }
-  const status = await Health.requestAuthorization({ read: [...READ_TYPES], write: [] });
+  const status = await Health.requestAuthorization({ read: [...READ_TYPES, WORKOUT_READ_TYPE], write: [] });
   localStorage.setItem(PROMPTED_KEY, "1");
   const authorized = status.readAuthorized ?? [];
   if (!READ_TYPES.some((t) => authorized.includes(t))) {
@@ -79,9 +99,19 @@ export type HealthSnapshot = {
   sleepHours: number | null;
   restingHeartRate: number | null;
   hrv: number | null;
+  vo2Max: number | null;
+  respiratoryRate: number | null;
+  bodyMass: number | null;
 };
 
-const EMPTY_SNAPSHOT: HealthSnapshot = { sleepHours: null, restingHeartRate: null, hrv: null };
+const EMPTY_SNAPSHOT: HealthSnapshot = {
+  sleepHours: null,
+  restingHeartRate: null,
+  hrv: null,
+  vo2Max: null,
+  respiratoryRate: null,
+  bodyMass: null,
+};
 
 /** Best-effort pull of last night's sleep plus the most recent resting
  * heart rate/HRV reading, to pre-fill the daily check-in -- an athlete can
@@ -92,10 +122,17 @@ export async function fetchLatestHealthSnapshot(): Promise<HealthSnapshot> {
 
   const now = new Date();
   const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+  // vo2Max and bodyMass don't update daily the way sleep/heart data do --
+  // VO2 max only refreshes off an occasional outdoor walk/run, and body
+  // mass only changes when the athlete actually steps on a connected
+  // scale. A 24h window would come back empty most days for both; a
+  // month-wide lookback still surfaces "the most recent real reading"
+  // instead of nothing.
+  const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
   const nowIso = now.toISOString();
 
   try {
-    const [sleep, restingHr, hrv] = await Promise.all([
+    const [sleep, restingHr, hrv, vo2Max, respiratoryRate, bodyMass] = await Promise.all([
       Health.readSamples({
         dataType: "sleep",
         startDate: dayAgo,
@@ -117,16 +154,82 @@ export async function fetchLatestHealthSnapshot(): Promise<HealthSnapshot> {
         limit: 1,
         ascending: false,
       }),
+      Health.readSamples({
+        dataType: "vo2Max",
+        startDate: monthAgo,
+        endDate: nowIso,
+        limit: 1,
+        ascending: false,
+      }),
+      Health.readSamples({
+        dataType: "respiratoryRate",
+        startDate: dayAgo,
+        endDate: nowIso,
+        limit: 1,
+        ascending: false,
+      }),
+      Health.readSamples({
+        dataType: "weight",
+        startDate: monthAgo,
+        endDate: nowIso,
+        limit: 1,
+        ascending: false,
+      }),
     ]);
 
     return {
       sleepHours: sumSleepHours(sleep.samples),
       restingHeartRate: restingHr.samples[0]?.value ?? null,
       hrv: hrv.samples[0]?.value ?? null,
+      vo2Max: vo2Max.samples[0]?.value ?? null,
+      respiratoryRate: respiratoryRate.samples[0]?.value ?? null,
+      bodyMass: bodyMass.samples[0]?.value != null ? bodyMass.samples[0].value * LBS_PER_KG : null,
     };
   } catch {
     // Best-effort -- the manual form still works if HealthKit throws.
     return EMPTY_SNAPSHOT;
+  }
+}
+
+export type HealthWorkoutSummary = {
+  workoutType: string;
+  durationMinutes: number;
+  startDate: string;
+  endDate: string;
+  // Estimated by the OS from accelerometer + heart rate, same estimation
+  // pipeline as Active Energy Burned -- see this file's own file comment
+  // and native-health.ts's caller for why that estimate is materially
+  // less trustworthy for resistance training than for steady-state cardio.
+  // Kept (not dropped) so a caller can still show it, just labeled as an
+  // estimate rather than treated as ground truth.
+  estimatedCaloriesBurned: number | null;
+};
+
+/** Recent workouts logged to Health (Apple Watch or a third-party app that
+ * writes to it) -- informational only, not folded into readiness scoring.
+ * Read-only, same as the rest of this file. */
+export async function fetchRecentWorkouts(days = 14): Promise<HealthWorkoutSummary[]> {
+  if (!isNativeHealthSupported() || !isHealthSyncEnabled()) return [];
+
+  const now = new Date();
+  const startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000).toISOString();
+
+  try {
+    const { workouts } = await Health.queryWorkouts({
+      startDate,
+      endDate: now.toISOString(),
+      limit: 50,
+      ascending: false,
+    });
+    return workouts.map((w) => ({
+      workoutType: w.workoutType,
+      durationMinutes: Math.round((w.duration / 60) * 10) / 10,
+      startDate: w.startDate,
+      endDate: w.endDate,
+      estimatedCaloriesBurned: w.totalEnergyBurned ?? null,
+    }));
+  } catch {
+    return [];
   }
 }
 

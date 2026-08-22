@@ -36,6 +36,9 @@ type WellnessCheckin = {
   bodyPainMap: string[];
   restingHeartRate: number | null;
   hrv: number | null;
+  vo2Max: number | null;
+  respiratoryRate: number | null;
+  bodyMass: number | null;
 } | null;
 
 /** Inline, always-editable check-in card for today's training session --
@@ -62,6 +65,9 @@ export function WellnessGate() {
   const [bodyPainMap, setBodyPainMap] = useState<string[]>([]);
   const [restingHeartRate, setRestingHeartRate] = useState<number | null>(null);
   const [hrv, setHrv] = useState<number | null>(null);
+  const [vo2Max, setVo2Max] = useState<number | null>(null);
+  const [respiratoryRate, setRespiratoryRate] = useState<number | null>(null);
+  const [bodyMass, setBodyMass] = useState<number | null>(null);
 
   // Re-sync the editable fields from whatever's on file whenever it
   // changes (first load, or right after a save) so opening the editor
@@ -76,6 +82,9 @@ export function WellnessGate() {
       setBodyPainMap(data.bodyPainMap);
       setRestingHeartRate(data.restingHeartRate);
       setHrv(data.hrv);
+      setVo2Max(data.vo2Max);
+      setRespiratoryRate(data.respiratoryRate);
+      setBodyMass(data.bodyMass);
     }
   }, [data]);
 
@@ -107,6 +116,9 @@ export function WellnessGate() {
     }
     if (snapshot.restingHeartRate != null) setRestingHeartRate(snapshot.restingHeartRate);
     if (snapshot.hrv != null) setHrv(snapshot.hrv);
+    if (snapshot.vo2Max != null) setVo2Max(snapshot.vo2Max);
+    if (snapshot.respiratoryRate != null) setRespiratoryRate(snapshot.respiratoryRate);
+    if (snapshot.bodyMass != null) setBodyMass(snapshot.bodyMass);
   }
 
   // Explicit "Sync" tap -- unlike the automatic pull above, this works
@@ -170,6 +182,9 @@ export function WellnessGate() {
         bodyPainMap,
         restingHeartRate,
         hrv,
+        vo2Max,
+        respiratoryRate,
+        bodyMass,
       });
       return res.json();
     },

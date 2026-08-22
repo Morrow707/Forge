@@ -1529,6 +1529,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS "favorite_skill_exercises_pair_idx" ON "favori
 -- (shared/schema.ts wellnessCheckins.restingHeartRate/hrv).
 ALTER TABLE "wellness_checkins" ADD COLUMN IF NOT EXISTS "resting_heart_rate" real;
 ALTER TABLE "wellness_checkins" ADD COLUMN IF NOT EXISTS "hrv" real;
+
+-- Same wearable-sourced, opt-in story, three more Health-derived metrics
+-- (shared/schema.ts wellnessCheckins.vo2Max/respiratoryRate/bodyMass).
+ALTER TABLE "wellness_checkins" ADD COLUMN IF NOT EXISTS "vo2_max" real;
+ALTER TABLE "wellness_checkins" ADD COLUMN IF NOT EXISTS "respiratory_rate" real;
+ALTER TABLE "wellness_checkins" ADD COLUMN IF NOT EXISTS "body_mass" real;
 `;
 
 async function main() {

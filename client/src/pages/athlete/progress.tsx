@@ -39,7 +39,9 @@ import {
   Trophy,
   FileDown,
   Sparkles,
+  HeartPulse,
 } from "lucide-react";
+import { average } from "@/lib/wellness-metrics";
 import { Link } from "wouter";
 import { GoalsPanel } from "@/components/goals-panel";
 import { WeaknessReportPanel } from "@/components/weakness-report-panel";
@@ -72,6 +74,15 @@ type BodyMetric = {
   bodyFatPercent: number | null;
   notes: string | null;
 };
+
+type WellnessEntry = {
+  restingHeartRate: number | null;
+  hrv: number | null;
+  vo2Max: number | null;
+  respiratoryRate: number | null;
+};
+
+const RECOVERY_HISTORY_DAYS = 90;
 
 export default function AthleteProgress() {
   const { user } = useAuth();
@@ -142,6 +153,15 @@ export default function AthleteProgress() {
   const { data: metrics } = useQuery<BodyMetric[]>({
     queryKey: ["/api/athlete/body-metrics"],
     queryFn: () => getJson("/api/athlete/body-metrics"),
+  });
+
+  // Same 90-day window and queryKey as the Recovery & Vitals page (see
+  // recovery.tsx) so the two share a react-query cache entry instead of
+  // double-fetching. Averages here recompute from this raw data on every
+  // render -- there's no stored running total to keep in sync.
+  const { data: wellnessHistory } = useQuery<WellnessEntry[]>({
+    queryKey: ["/api/athlete/wellness/history", RECOVERY_HISTORY_DAYS],
+    queryFn: () => getJson(`/api/athlete/wellness/history?limit=${RECOVERY_HISTORY_DAYS}`),
   });
 
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -337,6 +357,48 @@ export default function AthleteProgress() {
               />
             </CardContent>
           </Card>
+
+          {!!wellnessHistory?.some(
+            (w) => w.restingHeartRate != null || w.hrv != null || w.vo2Max != null || w.respiratoryRate != null,
+          ) && (
+            <Card className="mt-4">
+              <CardHeader className="flex flex-row items-start justify-between gap-2">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <HeartPulse className="h-5 w-5 text-primary" />
+                    Recovery & Vitals
+                  </CardTitle>
+                  <CardDescription>
+                    {RECOVERY_HISTORY_DAYS}-day averages from your synced Apple Health data --
+                    recalculated every time you check in.
+                  </CardDescription>
+                </div>
+                <Button asChild variant="ghost" size="sm" className="shrink-0">
+                  <Link href="/athlete/recovery">View Trends</Link>
+                </Button>
+              </CardHeader>
+              <CardContent className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                {(
+                  [
+                    { key: "restingHeartRate", label: "Resting HR", unit: "bpm", decimals: 0 },
+                    { key: "hrv", label: "HRV", unit: "ms", decimals: 0 },
+                    { key: "vo2Max", label: "VO2 Max", unit: "", decimals: 1 },
+                    { key: "respiratoryRate", label: "Resp. Rate", unit: "br/min", decimals: 1 },
+                  ] as const
+                ).map((m) => {
+                  const avg = average((wellnessHistory ?? []).map((w) => w[m.key]));
+                  return (
+                    <div key={m.key}>
+                      <p className="font-display text-xl font-bold">
+                        {avg == null ? "--" : `${avg.toFixed(m.decimals)}${m.unit ? ` ${m.unit}` : ""}`}
+                      </p>
+                      <p className="text-xs text-muted-foreground">{m.label}</p>
+                    </div>
+                  );
+                })}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Coach-only feature -- a Free Agent has no coach to read this
               PT/S&C deficit analysis alongside them, so it stays hidden

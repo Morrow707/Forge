@@ -4955,7 +4955,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/athlete/wellness/history", requireRole("athlete"), async (req, res) => {
     const user = currentUser(req);
-    const history = await storage.getWellnessHistoryForAthlete(user.id);
+    // Default (14) matches every other caller of this table -- the
+    // Recovery & Vitals trend page (recovery.tsx) asks for a season-length
+    // window instead so slow-moving metrics like VO2 Max actually show a
+    // trend, capped well short of "the athlete's entire history" to keep
+    // the query cheap.
+    const requested = Number(req.query.limit);
+    const limit = Number.isFinite(requested) ? Math.min(Math.max(Math.round(requested), 1), 180) : 14;
+    const history = await storage.getWellnessHistoryForAthlete(user.id, limit);
     res.json(history.map((h) => ({ ...h, ...computeReadiness(h) })));
   });
 
