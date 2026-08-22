@@ -1,23 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
-<!--
-  com.apple.developer.healthkit / .access were removed here TEMPORARILY.
-  The provisioning profile behind IOS_PROVISIONING_PROFILE_BASE64 (GitHub
-  secret) doesn't grant HealthKit yet -- requesting it here without a
-  matching profile fails the archive step outright (build #91, 2026-08-21:
-  "Provisioning profile doesn't include the HealthKit capability").
-  Once the App ID has HealthKit enabled on developer.apple.com and the
-  profile is regenerated + the secret updated to match, restore:
-    <key>com.apple.developer.healthkit</key>
-    <true/>
-    <key>com.apple.developer.healthkit.access</key>
-    <array/>
-  The JS-side Health sync code (native-health.ts, wellness-gate.tsx) is
-  untouched and still native-platform-gated -- it'll fail gracefully (a
-  toast, not a crash) via its existing try/catch until this is restored.
--->
 <dict>
+	<key>com.apple.developer.healthkit</key>
+	<true/>
+	<key>com.apple.developer.healthkit.access</key>
+	<array/>
 	<key>aps-environment</key>
 	<string>production</string>
 	<key>com.apple.developer.associated-domains</key>
