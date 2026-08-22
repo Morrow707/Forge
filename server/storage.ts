@@ -11971,8 +11971,56 @@ ${catalog}`;
           .returning();
 
         if (entry.sets.length > 0) {
+          // Auto "PR" badge -- see workoutSetEntries.isPr's own comment.
+          // Only numeric-weight exercise entries have a meaningful PR at
+          // all (correctives/bodyweight/band sets never get one). Resolved
+          // once per distinct (weightUnit, reps) pair actually present in
+          // this entry's sets, not per set, since a pyramid scheme's
+          // several sets sharing a rep count would otherwise re-run the
+          // identical prior-best lookup.
+          const priorBestByKey = new Map<string, number | null>();
+          if (entry.weightMode === "numeric" && entry.programExerciseId != null) {
+            const [programExercise] = await tx
+              .select({ exerciseId: programExercises.exerciseId })
+              .from(programExercises)
+              .where(eq(programExercises.id, entry.programExerciseId));
+            if (programExercise) {
+              for (const s of entry.sets) {
+                if (!s.weight || !s.reps) continue;
+                const key = `${weightUnit}-${s.reps}`;
+                if (priorBestByKey.has(key)) continue;
+                const rows = await tx
+                  .select({ weight: workoutSetEntries.weight })
+                  .from(workoutSetEntries)
+                  .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
+                  .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
+                  .innerJoin(programExercises, eq(workoutLogEntries.programExerciseId, programExercises.id))
+                  .where(
+                    and(
+                      eq(workoutLogs.athleteId, athleteId),
+                      eq(programExercises.exerciseId, programExercise.exerciseId),
+                      eq(workoutSetEntries.weightUnit, weightUnit),
+                      eq(workoutSetEntries.reps, s.reps),
+                      lt(workoutLogs.date, input.date),
+                    ),
+                  );
+                let best: number | null = null;
+                for (const r of rows) {
+                  const w = r.weight ? parseFloat(r.weight) : NaN;
+                  if (!Number.isNaN(w) && (best === null || w > best)) best = w;
+                }
+                priorBestByKey.set(key, best);
+              }
+            }
+          }
+
           await tx.insert(workoutSetEntries).values(
-            entry.sets.map((s) => ({
+            entry.sets.map((s) => {
+              const weightNum = s.weight ? parseFloat(s.weight) : NaN;
+              const priorBest = priorBestByKey.get(`${weightUnit}-${s.reps ?? ""}`);
+              const isPr =
+                !Number.isNaN(weightNum) && priorBest != null && weightNum > priorBest;
+              return {
               logEntryId: entryRow.id,
               setNumber: s.setNumber,
               reps: s.reps ?? null,
@@ -12005,7 +12053,10 @@ ${catalog}`;
               legDriveAsymmetry: s.legDriveAsymmetry ?? null,
               armDriveAsymmetry: s.armDriveAsymmetry ?? null,
               trustScores: s.trustScores ?? null,
-            })),
+              isPr,
+              favorited: s.favorited ?? false,
+              };
+            }),
           );
         }
       }
@@ -13058,7 +13109,13 @@ ${catalog}`;
       await deleteUploadedFile(row.videoUrl);
       await db
         .update(workoutSetEntries)
-        .set({ formCheckVideoUrl: null, formCheckFlag: null })
+        .set({
+          formCheckVideoUrl: null,
+          formCheckFlag: null,
+          isPr: false,
+          favorited: false,
+          pendingDeletionAt: null,
+        })
         .where(eq(workoutSetEntries.id, id));
       return { deleted: true, athleteId: row.athleteId };
     }
@@ -14694,6 +14751,103 @@ ${catalog}`;
       if (ageMs > days * 24 * 60 * 60 * 1000) results.push({ source: "skill", id: row.id, tier });
     }
     return results;
+  },
+
+  // Free Agent video storage cap -- the app's only self-serve, no-coach
+  // account type, and the one whose video count nobody else is curating.
+  // Coached athletes keep every video regardless of count (a coach may
+  // want a full season on file); this only ever touches Free Agents. Cap
+  // is per (athlete, exercise): the 10 most recent unfavorited videos are
+  // kept, older unfavorited ones beyond that get a grace window
+  // (FREE_AGENT_VIDEO_GRACE_DAYS) before actual deletion, and any
+  // favorited video is completely exempt -- see workoutSetEntries'
+  // isPr/favorited/pendingDeletionAt comments. Returns what happened this
+  // run so the job file can log/notify without a second query.
+  async sweepFreeAgentVideoCap(): Promise<{
+    warned: { id: number; athleteId: number; exerciseName: string; link: string }[];
+    purged: number;
+  }> {
+    const FREE_AGENT_VIDEO_CAP = 10;
+    const FREE_AGENT_VIDEO_GRACE_DAYS = 7;
+
+    const athleteRows = await db.select({ id: users.id }).from(users).where(eq(users.role, "athlete"));
+    const coachedAthleteIds = new Set(
+      (await db.select({ athleteId: coachAthletes.athleteId }).from(coachAthletes)).map((r) => r.athleteId),
+    );
+    const freeAgentIds = athleteRows.map((a) => a.id).filter((id) => !coachedAthleteIds.has(id));
+    if (freeAgentIds.length === 0) return { warned: [], purged: 0 };
+
+    const rows = await db
+      .select({
+        id: workoutSetEntries.id,
+        pendingDeletionAt: workoutSetEntries.pendingDeletionAt,
+        athleteId: workoutLogs.athleteId,
+        assignmentId: workoutLogs.assignmentId,
+        programDayId: workoutLogs.programDayId,
+        date: workoutLogs.date,
+        exerciseId: exercises.id,
+        exerciseName: exercises.name,
+      })
+      .from(workoutSetEntries)
+      .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
+      .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
+      .innerJoin(programExercises, eq(workoutLogEntries.programExerciseId, programExercises.id))
+      .innerJoin(exercises, eq(programExercises.exerciseId, exercises.id))
+      .where(
+        and(
+          inArray(workoutLogs.athleteId, freeAgentIds),
+          isNotNull(workoutSetEntries.formCheckVideoUrl),
+          eq(workoutSetEntries.favorited, false),
+        ),
+      );
+
+    const groups = new Map<string, typeof rows>();
+    for (const row of rows) {
+      const key = `${row.athleteId}-${row.exerciseId}`;
+      const group = groups.get(key);
+      if (group) group.push(row);
+      else groups.set(key, [row]);
+    }
+
+    const warned: { id: number; athleteId: number; exerciseName: string; link: string }[] = [];
+    let purged = 0;
+    const todayMs = Date.now();
+    const graceMs = FREE_AGENT_VIDEO_GRACE_DAYS * 24 * 60 * 60 * 1000;
+
+    for (const group of groups.values()) {
+      group.sort((a, b) => a.date.localeCompare(b.date));
+      const excess = group.slice(0, Math.max(0, group.length - FREE_AGENT_VIDEO_CAP));
+      const excessIds = new Set(excess.map((r) => r.id));
+
+      for (const row of group) {
+        if (excessIds.has(row.id)) {
+          if (row.pendingDeletionAt == null) {
+            await db
+              .update(workoutSetEntries)
+              .set({ pendingDeletionAt: new Date().toISOString().slice(0, 10) })
+              .where(eq(workoutSetEntries.id, row.id));
+            warned.push({
+              id: row.id,
+              athleteId: row.athleteId,
+              exerciseName: row.exerciseName,
+              link: `/athlete/day/${row.assignmentId}/${row.programDayId}/${row.date}`,
+            });
+          } else if (todayMs - new Date(row.pendingDeletionAt).getTime() >= graceMs) {
+            const result = await this.deleteAdminVideo("set", row.id);
+            if (result.deleted) purged++;
+          }
+        } else if (row.pendingDeletionAt != null) {
+          // Fell back within the cap (older excess videos already purged
+          // ahead of it) -- no longer at risk.
+          await db
+            .update(workoutSetEntries)
+            .set({ pendingDeletionAt: null })
+            .where(eq(workoutSetEntries.id, row.id));
+        }
+      }
+    }
+
+    return { warned, purged };
   },
 
   // Verbatim program transcription -- see programPhotoDraftSchema's own

@@ -1322,6 +1322,32 @@ export const workoutSetEntries = pgTable("workout_set_entries", {
   // deletion signal.
   formCheckVideoUrl: text("form_check_video_url"),
   formCheckFlag: formCheckFlagEnum("form_check_flag"),
+  // Auto-computed at save time (submitWorkoutLog), never client-set: true
+  // when this set's weight beat every prior set's weight for the exact
+  // same (exercise, weight unit, rep count) combination as of the date it
+  // was logged. Purely cosmetic -- a "PR" badge on the video -- and
+  // deliberately immutable once true (a later set beating this one doesn't
+  // retroactively un-flag it; it really was a milestone at the time).
+  isPr: boolean("is_pr").notNull().default(false),
+  // The heart -- explicit, athlete-set, the ONLY thing that exempts a video
+  // from the Free Agent rolling-cap purge below. Distinct from
+  // formCheckFlag (a coach-facing best/worst comparison marker) on
+  // purpose: a set can be a coach's "best" pick and not be the athlete's
+  // own favorite, or vice versa.
+  favorited: boolean("favorited").notNull().default(false),
+  // Set the first time this video becomes one of the oldest-beyond-the-cap
+  // unfavorited videos for a Free Agent's exercise (see
+  // free-agent-video-cap-job.ts) -- starts a grace window before the file
+  // is actually deleted, rather than purging the instant it's over the
+  // limit. Cleared if the athlete favorites it, or if it falls back within
+  // the cap before the grace window elapses (newer excess videos got
+  // purged first). Null for every coached athlete; this column only ever
+  // matters for Free Agents. Note: any autosave of this set's day deletes
+  // and reinserts every set row on it (see submitWorkoutLog), which resets
+  // this back to null along with everything else -- editing an old day
+  // during a video's grace window restarts that video's clock rather than
+  // losing it, the safe direction for this particular edge case to fail.
+  pendingDeletionAt: date("pending_deletion_at"),
   // "jump" tracking mode's numbers (see jump-tracking.ts) -- null unless
   // trackingLevel was "jump" when this set was logged. Best-of-set height
   // and distance rather than an average, same convention as peakVelocityMps
@@ -4564,6 +4590,11 @@ export const setLogInputSchema = z.object({
   velocityLossPercent: z.number().optional().nullable(),
   formCheckVideoUrl: z.string().trim().max(500).optional().nullable(),
   formCheckFlag: z.enum(["best", "worst"]).optional().nullable(),
+  // isPr and pendingDeletionAt are deliberately absent here -- both are
+  // server-computed only (see workoutSetEntries' own comments) and would
+  // otherwise let a client claim a set was a PR or dictate its own purge
+  // timing.
+  favorited: z.boolean().optional(),
   jumpHeightCm: z.number().optional().nullable(),
   jumpDistanceCm: z.number().optional().nullable(),
   groundContactSeconds: z.number().optional().nullable(),

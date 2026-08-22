@@ -1540,6 +1540,12 @@ ALTER TABLE "wellness_checkins" ADD COLUMN IF NOT EXISTS "body_mass" real;
 -- rather than read directly from Health (shared/schema.ts
 -- wellnessCheckins.heartRateRecovery).
 ALTER TABLE "wellness_checkins" ADD COLUMN IF NOT EXISTS "heart_rate_recovery" real;
+
+-- Video favoriting/PR-badge/Free-Agent rolling-cap purge (shared/schema.ts
+-- workoutSetEntries.isPr/favorited/pendingDeletionAt).
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "is_pr" boolean NOT NULL DEFAULT false;
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "favorited" boolean NOT NULL DEFAULT false;
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "pending_deletion_at" date;
 `;
 
 async function main() {

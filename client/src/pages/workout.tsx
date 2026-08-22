@@ -294,6 +294,11 @@ type SetMetrics = {
   // view; every recorded clip is kept regardless of whether it's flagged.
   formCheckVideoUrl: string | null;
   formCheckFlag: FormCheckFlag;
+  // The heart -- exempts a Free Agent's video from the rolling storage cap
+  // (see server/free-agent-video-cap-job.ts). isPr is server-computed and
+  // read-only from here (never sent back on save, see buildLogPayload).
+  favorited: boolean;
+  isPr: boolean;
   // Jump-mode-only metrics -- barPathTrace is reused for the ankle-height
   // trace in jump mode rather than adding a redundant trace column.
   jumpHeightCm: number | null;
@@ -435,6 +440,8 @@ function buildItem(
       velocityLossPercent: existingSet?.velocityLossPercent ?? null,
       formCheckVideoUrl: existingSet?.formCheckVideoUrl ?? null,
       formCheckFlag: existingSet?.formCheckFlag ?? null,
+      favorited: existingSet?.favorited ?? false,
+      isPr: existingSet?.isPr ?? false,
       jumpHeightCm: existingSet?.jumpHeightCm ?? null,
       jumpDistanceCm: existingSet?.jumpDistanceCm ?? null,
       groundContactSeconds: existingSet?.groundContactSeconds ?? null,
@@ -845,6 +852,7 @@ export function WorkoutPage({
           velocityLossPercent: s.velocityLossPercent,
           formCheckVideoUrl: s.formCheckVideoUrl,
           formCheckFlag: s.formCheckFlag,
+          favorited: s.favorited,
           jumpHeightCm: s.jumpHeightCm,
           jumpDistanceCm: s.jumpDistanceCm,
           groundContactSeconds: s.groundContactSeconds,
@@ -1240,6 +1248,8 @@ export function WorkoutPage({
               velocityLossPercent: null,
               formCheckVideoUrl: null,
               formCheckFlag: null,
+              favorited: false,
+              isPr: false,
               jumpHeightCm: null,
               jumpDistanceCm: null,
               groundContactSeconds: null,
@@ -2558,6 +2568,11 @@ function ExerciseLogContent({
           videoUrl={previewSet.formCheckVideoUrl}
           flag={previewSet.formCheckFlag}
           onFlag={(flag) => handleFlagVideo(previewSet.setNumber, flag)}
+          favorited={previewSet.favorited}
+          isPr={previewSet.isPr}
+          onToggleFavorite={() =>
+            onUpdateSet(previewSet.setNumber, { favorited: !previewSet.favorited }, { immediate: true })
+          }
           onRetake={() => {
             setPreviewSetNumber(null);
             setRecordingSetNumber(previewSet.setNumber);

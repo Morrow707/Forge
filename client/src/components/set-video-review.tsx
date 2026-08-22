@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { resolveApiUrl } from "@/lib/queryClient";
-import { RotateCcw, Trash2, ThumbsUp, ThumbsDown, Wand2, X } from "lucide-react";
+import { RotateCcw, Trash2, ThumbsUp, ThumbsDown, Wand2, X, Heart, Trophy } from "lucide-react";
 import { VideoAnalysisDialog } from "@/components/video-analysis-dialog";
 
 export type FlaggedSetVideo = {
@@ -63,6 +63,9 @@ export function SetVideoPreviewDialog({
   onFlag,
   onRetake,
   onRemove,
+  favorited,
+  onToggleFavorite,
+  isPr,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -72,6 +75,14 @@ export function SetVideoPreviewDialog({
   onFlag: (flag: "best" | "worst" | null) => void;
   onRetake: () => void;
   onRemove: () => void;
+  /** The heart -- the only thing that exempts a Free Agent's video from
+   * the rolling storage cap (see server/free-agent-video-cap-job.ts). No
+   * effect for a coached athlete beyond just marking it a favorite. */
+  favorited?: boolean;
+  onToggleFavorite?: () => void;
+  /** Auto-computed server-side (submitWorkoutLog) -- purely a badge, never
+   * user-set, never a reason a video survives the cap on its own. */
+  isPr?: boolean;
 }) {
   const [analyzing, setAnalyzing] = useState(false);
   return (
@@ -90,12 +101,34 @@ export function SetVideoPreviewDialog({
       >
         <div className="flex shrink-0 items-center justify-between px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
           <DialogTitle className="text-sm text-white">Set {setNumber} — Form Check</DialogTitle>
-          <DialogClose className="rounded-sm text-white/70 transition-colors hover:text-white focus:outline-none focus:ring-2 focus:ring-ring">
-            <X className="h-5 w-5" />
-            <span className="sr-only">Close</span>
-          </DialogClose>
+          <div className="flex items-center gap-3">
+            {onToggleFavorite && (
+              <button
+                type="button"
+                onClick={onToggleFavorite}
+                aria-label={favorited ? "Remove favorite" : "Favorite this video"}
+                aria-pressed={!!favorited}
+                className={cn(
+                  "transition-colors",
+                  favorited ? "text-destructive" : "text-white/70 hover:text-white",
+                )}
+              >
+                <Heart className={cn("h-5 w-5", favorited && "fill-current")} />
+              </button>
+            )}
+            <DialogClose className="rounded-sm text-white/70 transition-colors hover:text-white focus:outline-none focus:ring-2 focus:ring-ring">
+              <X className="h-5 w-5" />
+              <span className="sr-only">Close</span>
+            </DialogClose>
+          </div>
         </div>
-        <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-black">
+        <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-black">
+          {isPr && (
+            <span className="absolute left-3 top-3 z-10 flex items-center gap-1 rounded-full bg-amber-400/90 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-black">
+              <Trophy className="h-3 w-3" />
+              PR
+            </span>
+          )}
           <video
             src={resolveApiUrl(videoUrl)}
             controls
