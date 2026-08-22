@@ -1,7 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { ApiError, uploadWithProgress } from "@/lib/queryClient";
+import { ApiError } from "@/lib/queryClient";
+import {
+  uploadOrQueueVideo,
+  hasWarnedAboutQueueing,
+  markWarnedAboutQueueing,
+  type VideoRecordContext,
+} from "@/lib/video-offline-store";
 import { toast } from "sonner";
 import { Circle, Square, AlertTriangle, X } from "lucide-react";
 import {
@@ -98,6 +104,7 @@ export function ArJumpTrackerDialog({
   equipment,
   recordVideo,
   onCapture,
+  videoContext,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -106,6 +113,10 @@ export function ArJumpTrackerDialog({
   equipment?: string | null;
   recordVideo?: boolean;
   onCapture: (metrics: JumpSetMetrics, videoUrl?: string) => void;
+  /** Identifies which set this clip is for, so a deferred (queued-for-
+   * Wi-Fi) upload can find its way back to it later -- see
+   * video-offline-store.ts. */
+  videoContext?: VideoRecordContext;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [tracking, setTracking] = useState(false);
@@ -340,13 +351,30 @@ export function ArJumpTrackerDialog({
         setUploadProgress(0);
         try {
           const blob = await stopArRecording();
-          const formData = new FormData();
-          formData.append("video", blob, videoFilenameForBlob(blob, "form-check"));
-          const { url } = await uploadWithProgress("/api/athlete/form-video", formData, setUploadProgress);
-          toast.error(
-            "Couldn't get a clean read -- make sure your feet leave the ground clearly in frame. (Video saved for your coach.)",
+          const filename = videoFilenameForBlob(blob, "form-check");
+          const result = await uploadOrQueueVideo(
+            blob,
+            filename,
+            videoContext ?? { label: "Jump" },
+            setUploadProgress,
           );
-          onCapture(EMPTY_JUMP_METRICS, url);
+          toast.error(
+            result.status === "queued"
+              ? "Couldn't get a clean read -- make sure your feet leave the ground clearly in frame. (No Wi-Fi -- video saved on your device, will upload for your coach once connected.)"
+              : "Couldn't get a clean read -- make sure your feet leave the ground clearly in frame. (Video saved for your coach.)",
+          );
+          if (result.status === "queued") {
+            if (!hasWarnedAboutQueueing()) {
+              markWarnedAboutQueueing();
+              toast.info(
+                "You can also upload a queued video manually anytime -- even over cellular -- from the Video Bank.",
+                { duration: 10000 },
+              );
+            }
+            onCapture(EMPTY_JUMP_METRICS);
+          } else {
+            onCapture(EMPTY_JUMP_METRICS, result.url);
+          }
           onOpenChange(false);
         } catch (err) {
           const detail = err instanceof ApiError ? err.message : err instanceof Error ? err.message : String(err);
@@ -390,10 +418,25 @@ export function ArJumpTrackerDialog({
     setUploadProgress(0);
     try {
       const blob = await stopArRecording();
-      const formData = new FormData();
-      formData.append("video", blob, videoFilenameForBlob(blob, "form-check"));
-      const { url } = await uploadWithProgress("/api/athlete/form-video", formData, setUploadProgress);
-      onCapture(metrics, url);
+      const filename = videoFilenameForBlob(blob, "form-check");
+      const result = await uploadOrQueueVideo(
+        blob,
+        filename,
+        videoContext ?? { label: "Jump" },
+        setUploadProgress,
+      );
+      if (result.status === "queued") {
+        if (!hasWarnedAboutQueueing()) {
+          markWarnedAboutQueueing();
+          toast.info(
+            "No Wi-Fi -- this video is saved on your device and will upload automatically once you're connected. You can also upload it manually anytime from the Video Bank, even over cellular.",
+            { duration: 10000 },
+          );
+        }
+        onCapture(metrics);
+      } else {
+        onCapture(metrics, result.url);
+      }
       onOpenChange(false);
     } catch (err) {
       // The set itself is still good even if the clip failed to save --

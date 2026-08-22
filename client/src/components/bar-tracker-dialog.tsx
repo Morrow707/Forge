@@ -87,7 +87,12 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis } from "recharts";
-import { apiRequest } from "@/lib/queryClient";
+import {
+  uploadOrQueueVideo,
+  hasWarnedAboutQueueing,
+  markWarnedAboutQueueing,
+  type VideoRecordContext,
+} from "@/lib/video-offline-store";
 
 type Step = "setup" | "tracking" | "review";
 
@@ -293,6 +298,7 @@ export function BarTrackerDialog({
   loadKg,
   recordVideo,
   onCapture,
+  videoContext,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -340,6 +346,10 @@ export function BarTrackerDialog({
   // behavior for exercises that track form but were never asked for video.
   recordVideo?: boolean;
   onCapture: (metrics: RepMetrics | JumpSetMetrics, videoUrl?: string) => void;
+  /** Identifies which set this clip is for, so a deferred (queued-for-
+   * Wi-Fi) upload can find its way back to it later -- see
+   * video-offline-store.ts. */
+  videoContext?: VideoRecordContext;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
@@ -2201,11 +2211,24 @@ export function BarTrackerDialog({
                     }
                     setSavePhase("uploading");
                     try {
-                      const formData = new FormData();
-                      formData.append("video", videoToUpload, videoFilenameForBlob(videoToUpload, "form-check"));
-                      const res = await apiRequest("POST", "/api/athlete/form-video", formData);
-                      const { url } = await res.json();
-                      onCapture(result, url);
+                      const filename = videoFilenameForBlob(videoToUpload, "form-check");
+                      const uploadResult = await uploadOrQueueVideo(
+                        videoToUpload,
+                        filename,
+                        videoContext ?? { label: exerciseName },
+                      );
+                      if (uploadResult.status === "queued") {
+                        if (!hasWarnedAboutQueueing()) {
+                          markWarnedAboutQueueing();
+                          toast.info(
+                            "No Wi-Fi -- this video is saved on your device and will upload automatically once you're connected. You can also upload it manually anytime from the Video Bank, even over cellular.",
+                            { duration: 10000 },
+                          );
+                        }
+                        onCapture(result);
+                      } else {
+                        onCapture(result, uploadResult.url);
+                      }
                       onOpenChange(false);
                     } catch {
                       toast.error("Couldn't upload the video -- analytics are still saved below.");

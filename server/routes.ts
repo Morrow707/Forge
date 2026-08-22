@@ -33,6 +33,7 @@ import {
   updateSkillFaultThresholdsSchema,
   updateAssignmentSchema,
   submitWorkoutLogSchema,
+  attachVideoToSetSchema,
   updateProgramDaySchema,
   updateCorrectivesSchema,
   applyCorrectivesToDaysSchema,
@@ -5383,6 +5384,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.touchCaraSession(user.id);
     }
     res.status(200).json({ ...log, newlyUnlockedTrophies });
+  });
+
+  // Reattaches a deferred-upload video (recorded with no Wi-Fi, uploaded
+  // later from the local queue -- see client/src/lib/video-offline-store.ts)
+  // to the exact set it came from. { attached: false } is the expected
+  // outcome whenever the day/exercise/set has since changed underneath it
+  // (edited, deleted, or already carrying a different video) -- the client
+  // falls back to keeping the clip as a standalone entry in the Video Bank
+  // rather than treating that as an error.
+  app.post("/api/athlete/log/attach-video", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = attachVideoToSetSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const attached = await storage.attachVideoToLoggedSet(user.id, parsed.data);
+    res.json({ attached });
   });
 
   // ---------- CARA (countable athletically-related activity) tracking ----------

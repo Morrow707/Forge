@@ -35,6 +35,11 @@ import { DistanceUnitToggle } from "@/components/distance-unit-toggle";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import { hapticLight, hapticSuccess } from "@/lib/haptics";
+import {
+  VIDEO_REATTACHED_EVENT,
+  type VideoReattachedDetail,
+  type VideoRecordContext,
+} from "@/lib/video-offline-store";
 import { renderWorkoutShareCard } from "@/lib/share-card";
 import { shareOrDownloadBlob } from "@/lib/share-file";
 import {
@@ -1174,6 +1179,35 @@ export function WorkoutPage({
     });
   }
 
+  // Picks up a video that finished a deferred (queued-for-Wi-Fi) upload and
+  // got reattached server-side -- see video-offline-store.ts's own comment
+  // on VIDEO_REATTACHED_EVENT for why this matters even though the DB row
+  // is already correct by the time this fires: if this exact day is still
+  // open (the athlete queued one set's video, then kept training while
+  // Wi-Fi came back), this page's own in-memory `items` has no idea the
+  // attach happened, and its next autosave would silently overwrite the
+  // set back to no video. Only patches local state for the matching
+  // exercise/set on this exact day; every other day/session ignores it.
+  useEffect(() => {
+    function handleReattached(e: Event) {
+      const detail = (e as CustomEvent<VideoReattachedDetail>).detail;
+      if (
+        String(detail.assignmentId) !== assignmentId ||
+        String(detail.programDayId) !== programDayId ||
+        detail.date !== date
+      ) {
+        return;
+      }
+      const match = itemsRef.current.find(
+        (it) => it.kind === "exercise" && it.refId === detail.programExerciseId,
+      );
+      if (match) updateSet(match.key, detail.setNumber, { formCheckVideoUrl: detail.videoUrl });
+    }
+    window.addEventListener(VIDEO_REATTACHED_EVENT, handleReattached);
+    return () => window.removeEventListener(VIDEO_REATTACHED_EVENT, handleReattached);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assignmentId, programDayId, date]);
+
   function addSet(key: string) {
     setItems((prev) => {
       const next = prev.map((it) => {
@@ -1718,6 +1752,25 @@ function ExerciseLogContent({
   // video-review surfaces: reviewing one already-recorded clip, and
   // comparing two of them side by side.
   const [recordingSetNumber, setRecordingSetNumber] = useState<number | null>(null);
+
+  // Identifies which set a tracker/form-check dialog's clip belongs to, so
+  // a deferred (queued-for-no-Wi-Fi) upload can find its way back to the
+  // exact set later -- see video-offline-store.ts's VideoReattachTarget.
+  // Correctives have no programExerciseId (attachVideoToSetSchema only
+  // covers real exercises), so a corrective's clip simply queues without a
+  // reattach target and lands as a standalone Video Bank entry instead --
+  // same outcome as any recording context this doesn't apply to.
+  function videoContextFor(setNumber: number | null): VideoRecordContext | undefined {
+    if (setNumber == null) return undefined;
+    return {
+      label: `${item.exerciseName} · Set ${setNumber}`,
+      reattach:
+        item.kind === "exercise"
+          ? { assignmentId, programDayId, date, programExerciseId: item.refId, setNumber }
+          : undefined,
+    };
+  }
+
   const [previewSetNumber, setPreviewSetNumber] = useState<number | null>(null);
   const [compareOpen, setCompareOpen] = useState(false);
   const [plateCalcOpen, setPlateCalcOpen] = useState(false);
@@ -2434,6 +2487,7 @@ function ExerciseLogContent({
                 equipment={item.equipment}
                 recordVideo={mergedTracking}
                 onCapture={handleTrackerCapture}
+                videoContext={videoContextFor(trackingSet)}
               />
             );
           }
@@ -2456,6 +2510,7 @@ function ExerciseLogContent({
                 loadKg={loadKg}
                 recordVideo={mergedTracking}
                 onCapture={handleTrackerCapture}
+                videoContext={videoContextFor(trackingSet)}
               />
             );
           }
@@ -2474,6 +2529,7 @@ function ExerciseLogContent({
               loadKg={loadKg}
               recordVideo={mergedTracking}
               onCapture={handleTrackerCapture}
+              videoContext={videoContextFor(trackingSet)}
             />
           );
         })()}
@@ -2482,6 +2538,7 @@ function ExerciseLogContent({
         <FormVideoRecorderDialog
           open={recordingSetNumber !== null}
           onOpenChange={(open) => !open && setRecordingSetNumber(null)}
+          videoContext={videoContextFor(recordingSetNumber)}
           onSaved={(url) => {
             if (recordingSetNumber == null) return;
             onUpdateSet(recordingSetNumber, { formCheckVideoUrl: url }, { immediate: true });
@@ -2489,6 +2546,7 @@ function ExerciseLogContent({
             else postFormVideoMutation.mutate({ setNumber: recordingSetNumber, videoUrl: url });
             setRecordingSetNumber(null);
           }}
+          onQueued={() => setRecordingSetNumber(null)}
         />
       )}
 

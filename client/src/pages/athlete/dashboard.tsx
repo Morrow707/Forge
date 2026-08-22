@@ -11,6 +11,7 @@ import { SkillDayViewDialog } from "@/components/skill-day-view-dialog";
 import { NutritionQuickSummary } from "@/components/nutrition-quick-summary";
 import { TeamChatQuickSummary } from "@/components/team-chat-quick-summary";
 import { DigestBanner } from "@/components/digest-banner";
+import { PendingVideosBanner } from "@/components/pending-videos-banner";
 import { useAuth } from "@/hooks/use-auth";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
@@ -73,6 +74,7 @@ export default function AthleteDashboard() {
     <AppShell title={`Welcome, ${user?.name?.split(" ")[0] ?? "Athlete"}`}>
       <div className="flex flex-col gap-4">
         <PendingCoachRequests />
+        <PendingVideosBanner />
         <DigestBanner />
 
         <Card>

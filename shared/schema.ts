@@ -4642,6 +4642,22 @@ export type UpdateProgramDayInput = z.infer<typeof updateProgramDaySchema>;
 export type UpdateCorrectivesInput = z.infer<typeof updateCorrectivesSchema>;
 export type ApplyCorrectivesToDaysInput = z.infer<typeof applyCorrectivesToDaysSchema>;
 export type SubmitWorkoutLogInput = z.infer<typeof submitWorkoutLogSchema>;
+
+// Reattaches a form-check/tracker video to the exact set it was recorded
+// for, after a deferred (queued-for-Wi-Fi) upload finally completes -- see
+// client/src/lib/video-offline-store.ts. Every autosave of a workout day is
+// a full delete-and-reinsert of that day's set rows (see
+// storage.submitWorkoutLog), so no set ever has a stable database id to
+// capture at record time; this tuple is the actual stable address instead.
+export const attachVideoToSetSchema = z.object({
+  assignmentId: z.number(),
+  programDayId: z.number(),
+  date: z.string(),
+  programExerciseId: z.number(),
+  setNumber: z.number(),
+  videoUrl: z.string(),
+});
+export type AttachVideoToSetInput = z.infer<typeof attachVideoToSetSchema>;
 export type UpdatePreferencesInput = z.infer<typeof updatePreferencesSchema>;
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 export type UpdateNotificationPrefsInput = z.infer<typeof updateNotificationPrefsSchema>;

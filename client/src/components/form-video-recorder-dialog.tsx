@@ -8,7 +8,14 @@ import { recordedVideoType, videoFilenameForBlob } from "@/lib/video-recording";
 import { lockCameraExposure } from "@/lib/camera-exposure";
 import { ensureCameraPermission, onAppForeground, onAppBackground } from "@/lib/native-camera";
 import { isArMeasureSupported, measureWithAR } from "@/lib/ar-measure";
-import { persistVideoForUpload, clearPersistedVideo } from "@/lib/video-offline-store";
+import {
+  persistVideoForUpload,
+  clearPersistedVideo,
+  isOnWifi,
+  hasWarnedAboutQueueing,
+  markWarnedAboutQueueing,
+  type VideoRecordContext,
+} from "@/lib/video-offline-store";
 
 // Live recording has no fixed duration -- a set is as long as it takes
 // (a slow tempo squat or a higher-rep set both run well past what a fixed
@@ -28,11 +35,21 @@ type Step = "capture" | "preview" | "uploading";
 export function FormVideoRecorderDialog({
   open,
   onOpenChange,
+  videoContext,
   onSaved,
+  onQueued,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Identifies which set this clip is for, so a deferred upload can find
+   * its way back to it later -- see video-offline-store.ts. Undefined when
+   * there's no set to reattach to (the clip still records/uploads fine). */
+  videoContext?: VideoRecordContext;
   onSaved: (url: string) => void;
+  /** Fired instead of onSaved when there's no Wi-Fi and the clip was
+   * queued on-device rather than uploaded -- the caller should close out
+   * the set the same way it would with no video at all. */
+  onQueued?: () => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -254,6 +271,31 @@ export function FormVideoRecorderDialog({
     if (!blob) return;
     setStep("uploading");
     const filename = videoFilenameForBlob(blob, "form-check");
+    const context: VideoRecordContext = videoContext ?? { label: "Form check" };
+
+    // No Wi-Fi on a native device -- don't even attempt the upload
+    // (burning the athlete's cellular data on a multi-MB gym video is
+    // exactly what this exists to avoid). Straight to disk, same manifest
+    // startOfflineVideoSync() already retries from.
+    if (!(await isOnWifi())) {
+      persistedVideoIdRef.current = await persistVideoForUpload(
+        blob,
+        "/api/athlete/form-video",
+        "video",
+        filename,
+        context,
+      ).catch(() => null);
+      if (!hasWarnedAboutQueueing()) {
+        markWarnedAboutQueueing();
+        toast.info(
+          "No Wi-Fi -- this video is saved on your device and will upload automatically once you're connected. You can also upload it manually anytime from the Video Bank, even over cellular.",
+          { duration: 10000 },
+        );
+      }
+      onQueued?.();
+      onOpenChange(false);
+      return;
+    }
 
     // Written to native disk (a no-op on web -- see video-offline-store.ts's
     // own comment) before the first attempt even starts, so a killed app or
@@ -265,6 +307,7 @@ export function FormVideoRecorderDialog({
       "/api/athlete/form-video",
       "video",
       filename,
+      context,
     ).catch(() => null);
 
     // A 10-second clip is a few MB at most, so retrying the whole upload is

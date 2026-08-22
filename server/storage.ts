@@ -110,6 +110,7 @@ import type {
   SkillProgramStructureInput,
   CreateSkillSessionLogInput,
   SubmitWorkoutLogInput,
+  AttachVideoToSetInput,
   UpdateProgramDayInput,
   UpdateCorrectivesInput,
   UpdateAssignmentInput,
@@ -12025,6 +12026,55 @@ ${catalog}`;
     }
 
     return log;
+  },
+
+  // Reattaches a deferred-upload video to the exact set it was recorded
+  // for -- see client/src/lib/video-offline-store.ts and
+  // shared/schema.ts's attachVideoToSetSchema comment for why the tuple
+  // (assignmentId, programDayId, date, programExerciseId, setNumber) is
+  // the only stable address a set has (submitWorkoutLog above deletes and
+  // reinserts every set row on every autosave, so no row id survives
+  // between the moment a clip is recorded and the moment it finally
+  // uploads). Returns false -- never throws -- for every "can't safely
+  // attach" case: wrong owner, the day/exercise/set no longer exists, or
+  // the set already has a different video, so a caller always has a clear
+  // "queue it as a standalone clip instead" fallback.
+  async attachVideoToLoggedSet(athleteId: number, input: AttachVideoToSetInput): Promise<boolean> {
+    const assignment = await db.query.assignments.findFirst({
+      where: and(eq(assignments.id, input.assignmentId), eq(assignments.athleteId, athleteId)),
+    });
+    if (!assignment) return false;
+
+    const log = await db.query.workoutLogs.findFirst({
+      where: and(
+        eq(workoutLogs.assignmentId, input.assignmentId),
+        eq(workoutLogs.programDayId, input.programDayId),
+        eq(workoutLogs.date, input.date),
+      ),
+    });
+    if (!log) return false;
+
+    const entry = await db.query.workoutLogEntries.findFirst({
+      where: and(
+        eq(workoutLogEntries.workoutLogId, log.id),
+        eq(workoutLogEntries.programExerciseId, input.programExerciseId),
+      ),
+    });
+    if (!entry) return false;
+
+    const [updated] = await db
+      .update(workoutSetEntries)
+      .set({ formCheckVideoUrl: input.videoUrl })
+      .where(
+        and(
+          eq(workoutSetEntries.logEntryId, entry.id),
+          eq(workoutSetEntries.setNumber, input.setNumber),
+          isNull(workoutSetEntries.formCheckVideoUrl),
+        ),
+      )
+      .returning({ id: workoutSetEntries.id });
+
+    return !!updated;
   },
 
   // Scans a just-submitted log's sets for a genuine (not single-rep-noise)

@@ -53,6 +53,7 @@ const AthleteCalendar = lazy(() => import("@/pages/athlete/calendar"));
 const AthleteProgress = lazy(() => import("@/pages/athlete/progress"));
 const AthleteLiftHistory = lazy(() => import("@/pages/athlete/lift-history"));
 const AthleteRecovery = lazy(() => import("@/pages/athlete/recovery"));
+const AthleteVideoBank = lazy(() => import("@/pages/athlete/video-bank"));
 const AthleteTeamBoard = lazy(() => import("@/pages/athlete/team-board"));
 const AthleteWorkout = lazy(() => import("@/pages/athlete/workout"));
 const AthleteChat = lazy(() => import("@/pages/athlete/chat"));
@@ -278,6 +279,9 @@ function Router() {
         </Route>
         <Route path="/athlete/recovery">
           <ProtectedRoute role="athlete" component={AthleteRecovery} />
+        </Route>
+        <Route path="/athlete/video-bank">
+          <ProtectedRoute role="athlete" component={AthleteVideoBank} />
         </Route>
         <Route path="/athlete/nutrition">
           <ProtectedRoute role="athlete" component={AthleteNutrition} />
