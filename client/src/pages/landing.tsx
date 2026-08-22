@@ -156,6 +156,13 @@ const COACH_SEAT_TIERS = [
   { seats: "Up to 250", base: "$299.99", pro: "$499.99" },
 ];
 
+// Off by default -- the app is still in testing, so the pricing section
+// stays out of the public landing page even though it's fully built (same
+// "framework's there, hold it off" posture as server/billing.ts's own
+// BILLING_LIVE, which this should flip alongside once billing actually
+// goes live, not before).
+const PRICING_SECTION_LIVE = false;
+
 export default function LandingPage() {
   return (
     <div className="min-h-screen overflow-x-hidden bg-background text-foreground">
@@ -432,7 +439,8 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ---------------- Pricing ---------------- */}
+      {/* ---------------- Pricing (hidden until PRICING_SECTION_LIVE) ---------------- */}
+      {PRICING_SECTION_LIVE && (
       <section className="bg-surface px-4 py-20 md:px-8 md:py-28">
         <div className="mx-auto max-w-6xl">
           <div className="mx-auto max-w-2xl text-center">
@@ -541,6 +549,7 @@ export default function LandingPage() {
           </p>
         </div>
       </section>
+      )}
 
       {/* ---------------- Final CTA ---------------- */}
       <section className="relative isolate overflow-hidden px-4 py-24 text-center md:px-8">
