@@ -41,6 +41,7 @@ import { ForgeMark } from "@/components/forge-mark";
 import { EditMyProfileDialog } from "@/components/edit-my-profile-dialog";
 import { DeleteAccountDialog } from "@/components/delete-account-dialog";
 import { ReportProblemDialog } from "@/components/report-problem-dialog";
+import { MfaSettingsDialog } from "@/components/mfa-settings-dialog";
 import { NotificationBell } from "@/components/notification-bell";
 import { NotificationSettingsDialog } from "@/components/notification-settings-dialog";
 import { CoachingStaffDialog } from "@/components/coaching-staff-dialog";
@@ -162,6 +163,7 @@ export function AppShell({
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
   const [reportProblemOpen, setReportProblemOpen] = useState(false);
+  const [mfaSettingsOpen, setMfaSettingsOpen] = useState(false);
   const [moreNavOpen, setMoreNavOpen] = useState(false);
 
   // Resolved server-side: a coach's own team settings, or their athlete's
@@ -528,6 +530,20 @@ export function AppShell({
                     <Flag className="h-4 w-4" />
                     Report a problem
                   </button>
+                  {(user?.role === "coach" || user?.role === "admin") && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setMfaSettingsOpen(true);
+                        setAccountMenuOpen(false);
+                      }}
+                      className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-foreground hover:bg-surface-elevated"
+                    >
+                      <ShieldCheck className="h-4 w-4" />
+                      Two-factor authentication
+                    </button>
+                  )}
                   {user?.role === "coach" && (
                     <button
                       type="button"
@@ -697,6 +713,19 @@ export function AppShell({
                   <Flag className="h-4 w-4" />
                   Report a problem
                 </button>
+                {(user?.role === "coach" || user?.role === "admin") && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMfaSettingsOpen(true);
+                      setMobileNavOpen(false);
+                    }}
+                    className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground"
+                  >
+                    <ShieldCheck className="h-4 w-4" />
+                    2FA
+                  </button>
+                )}
                 {user?.role === "coach" && (
                   <button
                     type="button"
@@ -799,6 +828,9 @@ export function AppShell({
       )}
       {user && <DeleteAccountDialog open={deleteAccountOpen} onOpenChange={setDeleteAccountOpen} />}
       {user && <ReportProblemDialog open={reportProblemOpen} onOpenChange={setReportProblemOpen} />}
+      {(user?.role === "coach" || user?.role === "admin") && (
+        <MfaSettingsDialog open={mfaSettingsOpen} onOpenChange={setMfaSettingsOpen} />
+      )}
       <NonIosTrackingNotice />
     </div>
   );

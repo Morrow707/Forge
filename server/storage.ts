@@ -207,6 +207,7 @@ import {
   hashPassword,
   comparePasswords,
 } from "./auth-utils";
+import { generateTotpSecret, verifyTotpCode, generateBackupCodes, consumeBackupCode } from "./mfa";
 import {
   addDays,
   subDays,
@@ -1661,6 +1662,61 @@ export const storage = {
 
     await db.delete(users).where(eq(users.id, userId));
     return { ok: true };
+  },
+
+  // ---------- Two-factor auth (coach/admin only, see requireRole on the
+  // /api/auth/mfa/* routes in auth.ts) ----------
+
+  // Writes a fresh secret immediately but leaves mfaEnabled false -- it
+  // only flips to true once confirmMfaSetup proves the user actually
+  // scanned it into a real authenticator app. Calling this again before
+  // confirming (an abandoned setup, a retry) just overwrites the pending
+  // secret; nothing is "enabled" until confirmed regardless.
+  async startMfaSetup(userId: number): Promise<{ secret: string }> {
+    const secret = generateTotpSecret();
+    await db.update(users).set({ mfaSecret: secret }).where(eq(users.id, userId));
+    return { secret };
+  },
+
+  async confirmMfaSetup(userId: number, code: string): Promise<{ backupCodes: string[] } | null> {
+    const user = await this.getUser(userId);
+    if (!user?.mfaSecret) return null;
+    if (!(await verifyTotpCode(user.mfaSecret, code))) return null;
+    const { plain, hashes } = await generateBackupCodes();
+    await db
+      .update(users)
+      .set({ mfaEnabled: true, mfaBackupCodeHashes: hashes })
+      .where(eq(users.id, userId));
+    return { backupCodes: plain };
+  },
+
+  // Tries a live TOTP code first, then falls back to a backup code --
+  // consuming (removing) it on match so each one only ever works once.
+  async verifyMfaLogin(userId: number, code: string): Promise<boolean> {
+    const user = await this.getUser(userId);
+    if (!user?.mfaEnabled || !user.mfaSecret) return false;
+    if (await verifyTotpCode(user.mfaSecret, code)) return true;
+    if (user.mfaBackupCodeHashes?.length) {
+      const remaining = await consumeBackupCode(user.mfaBackupCodeHashes, code);
+      if (remaining) {
+        await db.update(users).set({ mfaBackupCodeHashes: remaining }).where(eq(users.id, userId));
+        return true;
+      }
+    }
+    return false;
+  },
+
+  // Password re-entry gates this the same way deleteOwnAccount's does --
+  // an attacker with a stolen session shouldn't be able to silently turn
+  // off the one thing standing between them and full account takeover.
+  async disableMfa(userId: number, password: string): Promise<boolean> {
+    const user = await this.getUser(userId);
+    if (!user || !(await comparePasswords(password, user.passwordHash))) return false;
+    await db
+      .update(users)
+      .set({ mfaEnabled: false, mfaSecret: null, mfaBackupCodeHashes: null })
+      .where(eq(users.id, userId));
+    return true;
   },
 
   async updateUserPreferences(userId: number, input: UpdatePreferencesInput) {

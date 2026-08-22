@@ -11,6 +11,7 @@ import { pool } from "./db";
 import { sendEmail } from "./email";
 import { buildWelcomeEmail } from "./welcome-email";
 import { buildPasswordResetEmail } from "./password-reset-email";
+import { totpOtpauthUri } from "./mfa";
 import {
   signupSchema,
   requestPasswordResetSchema,
@@ -53,13 +54,26 @@ const passwordResetLimiter = rateLimit({
   legacyHeaders: false,
   message: { message: "Too many reset requests. Please try again later." },
 });
+// A 6-digit TOTP code is only ~1M possibilities -- shared by the
+// second-factor login step, setup confirmation, and disabling, all of
+// which boil down to "guess a code," so all three get the same limiter.
+const mfaCodeLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 15,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many attempts. Please try again in a few minutes." },
+});
 
 function toPublicUser(user: any): PublicUser {
   // agreedToTermsText is a full snapshot of whatever the agreement said at
   // signup -- potentially long, and not something any client-side UI reads,
   // so it's stripped here the same way passwordHash/healthStatus already
   // are rather than round-tripping on every /api/auth/me call forever.
-  const { passwordHash, healthStatus, agreedToTermsText, ...rest } = user;
+  // mfaSecret/mfaBackupCodeHashes never belong on the client past the
+  // one-time setup/confirm response (see the /api/auth/mfa/* routes below,
+  // which return them directly, not through this function).
+  const { passwordHash, healthStatus, agreedToTermsText, mfaSecret, mfaBackupCodeHashes, ...rest } = user;
   return rest;
 }
 
@@ -111,6 +125,43 @@ function verifyNativeToken(token: string): number | null {
   const expected = crypto
     .createHmac("sha256", NATIVE_TOKEN_SECRET)
     .update(`${userIdStr}.${expiresAtStr}`)
+    .digest("hex");
+  const sigBuf = Buffer.from(sig, "hex");
+  const expectedBuf = Buffer.from(expected, "hex");
+  if (sigBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(sigBuf, expectedBuf)) {
+    return null;
+  }
+  const expiresAt = Number(expiresAtStr);
+  if (!Number.isFinite(expiresAt) || expiresAt < Date.now()) return null;
+  const userId = Number(userIdStr);
+  return Number.isInteger(userId) ? userId : null;
+}
+
+// Identifies who's mid-login between the password check succeeding and the
+// second factor being verified (see the login route's mfaEnabled branch
+// below) -- reuses NATIVE_TOKEN_SECRET rather than getting its own secret,
+// unlike media-url-signing.ts's MEDIA_URL_SECRET split: this token alone
+// grants nothing by itself (it just names a userId to check a code
+// against), so it doesn't carry the same "the token IS the credential"
+// risk a signed media URL does. Five minutes is long enough to type a
+// 6-digit code, short enough that an expired login attempt just means
+// starting over.
+const MFA_PENDING_TOKEN_TTL_MS = 5 * 60 * 1000;
+
+function signMfaPendingToken(userId: number): string {
+  const expiresAt = Date.now() + MFA_PENDING_TOKEN_TTL_MS;
+  const payload = `mfa.${userId}.${expiresAt}`;
+  const sig = crypto.createHmac("sha256", NATIVE_TOKEN_SECRET).update(payload).digest("hex");
+  return `${payload}.${sig}`;
+}
+
+function verifyMfaPendingToken(token: string): number | null {
+  const parts = token.split(".");
+  if (parts.length !== 4 || parts[0] !== "mfa") return null;
+  const [, userIdStr, expiresAtStr, sig] = parts;
+  const expected = crypto
+    .createHmac("sha256", NATIVE_TOKEN_SECRET)
+    .update(`mfa.${userIdStr}.${expiresAtStr}`)
     .digest("hex");
   const sigBuf = Buffer.from(sig, "hex");
   const expectedBuf = Buffer.from(expected, "hex");
@@ -375,6 +426,25 @@ export function setupAuth(app: Express) {
     }
   });
 
+  // Shared tail for both a normal password-only login and the second step
+  // of an MFA login (/api/auth/mfa/verify-login below) -- factored out so
+  // the touchUserActivity/response shape stays identical for both instead
+  // of drifting out of sync. See the inline comment at its original call
+  // site for why the try/catch around the async work inside req.login's
+  // callback matters (its callback isn't promise-aware, so an unhandled
+  // rejection in here would otherwise never reach Express's error middleware).
+  function completeLogin(req: any, res: any, next: any, user: any) {
+    req.login(user, async (err2: any) => {
+      if (err2) return next(err2);
+      try {
+        await storage.touchUserActivity(user.id);
+        res.json({ ...(await toPublicUserWithSections(user)), nativeToken: signNativeToken(user.id) });
+      } catch (err3) {
+        next(err3);
+      }
+    });
+  }
+
   app.post("/api/auth/login", loginLimiter, (req, res, next) => {
     passport.authenticate("local", (err: any, user: any, info: any) => {
       if (err) return next(err);
@@ -383,26 +453,65 @@ export function setupAuth(app: Express) {
           .status(401)
           .json({ message: info?.message || "Invalid email or password" });
       }
-      // req.login()'s callback isn't promise-aware -- it invokes this
-      // function and ignores whatever it returns, so an unhandled `await`
-      // rejection in here (a dropped DB connection, a transient query
-      // failure) never reaches Express's error middleware. Without this
-      // try/catch, that failure mode is a response that's never sent at
-      // all: the client gets a connection reset with no JSON body, which
-      // apiRequest's res.json() can't parse, falling back to an empty
-      // res.statusText (blank over HTTP/2) and finally to the generic
-      // "Login failed" toast -- indistinguishable from a wrong password,
-      // even though the credentials were correct.
-      req.login(user, async (err2) => {
-        if (err2) return next(err2);
-        try {
-          await storage.touchUserActivity(user.id);
-          res.json({ ...(await toPublicUserWithSections(user)), nativeToken: signNativeToken(user.id) });
-        } catch (err3) {
-          next(err3);
-        }
-      });
+      // Password alone isn't enough for an MFA-enabled account -- hand
+      // back a short-lived token identifying who's mid-login instead of
+      // establishing the real session yet; the client collects a code and
+      // finishes at /api/auth/mfa/verify-login below.
+      if (user.mfaEnabled) {
+        return res.json({ mfaRequired: true, mfaToken: signMfaPendingToken(user.id) });
+      }
+      completeLogin(req, res, next, user);
     })(req, res, next);
+  });
+
+  app.post("/api/auth/mfa/verify-login", mfaCodeLimiter, async (req, res, next) => {
+    const mfaToken = typeof req.body?.mfaToken === "string" ? req.body.mfaToken : "";
+    const code = typeof req.body?.code === "string" ? req.body.code : "";
+    const userId = verifyMfaPendingToken(mfaToken);
+    if (userId === null) {
+      return res.status(401).json({ message: "That login attempt expired. Please log in again." });
+    }
+    const ok = await storage.verifyMfaLogin(userId, code);
+    if (!ok) {
+      return res.status(401).json({ message: "Invalid code" });
+    }
+    const user = await storage.getUser(userId);
+    if (!user) return res.status(401).json({ message: "Account not found" });
+    completeLogin(req, res, next, user);
+  });
+
+  app.get("/api/auth/mfa/status", requireAuth, (req, res) => {
+    res.json({ enabled: !!(req.user as any).mfaEnabled });
+  });
+
+  // Coach/admin only -- those are the accounts with broad visibility into
+  // other people's data (a coach's whole roster, an admin's whole
+  // platform), so a compromised one is the highest-value target; an
+  // athlete only ever sees their own. Writes a fresh secret but doesn't
+  // enable anything yet; /api/auth/mfa/confirm below is what actually
+  // flips mfaEnabled once the user proves they scanned it successfully.
+  app.post("/api/auth/mfa/setup", requireRole(["coach", "admin"]), async (req, res) => {
+    const user = req.user as any;
+    const { secret } = await storage.startMfaSetup(user.id);
+    res.json({ secret, otpauthUri: totpOtpauthUri(user.email, secret) });
+  });
+
+  app.post("/api/auth/mfa/confirm", requireRole(["coach", "admin"]), mfaCodeLimiter, async (req, res) => {
+    const user = req.user as any;
+    const code = typeof req.body?.code === "string" ? req.body.code : "";
+    const result = await storage.confirmMfaSetup(user.id, code);
+    if (!result) {
+      return res.status(400).json({ message: "Invalid code -- check your authenticator app and try again." });
+    }
+    res.json(result);
+  });
+
+  app.post("/api/auth/mfa/disable", requireRole(["coach", "admin"]), mfaCodeLimiter, async (req, res) => {
+    const user = req.user as any;
+    const password = typeof req.body?.password === "string" ? req.body.password : "";
+    const ok = await storage.disableMfa(user.id, password);
+    if (!ok) return res.status(400).json({ message: "Incorrect password" });
+    res.json({ ok: true });
   });
 
   app.post("/api/auth/logout", (req, res, next) => {

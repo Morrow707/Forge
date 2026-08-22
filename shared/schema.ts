@@ -174,6 +174,19 @@ export const users = pgTable(
     id: serial("id").primaryKey(),
     email: text("email").notNull(),
     passwordHash: text("password_hash").notNull(),
+    // TOTP-based two-factor auth -- coach/admin only (see requireRole on the
+    // /api/auth/mfa/* routes in auth.ts), optional-but-encouraged rather than
+    // forced, so no existing account gets locked out by a rollout. mfaSecret
+    // is written (but mfaEnabled left false) the moment setup starts, and
+    // only flips to true once the user proves they can generate a real code
+    // against it -- see storage.confirmMfaSetup. mfaBackupCodeHashes are
+    // scrypt-hashed the same way passwordHash is (see auth-utils.ts),
+    // consumed one at a time on use. Both mfaSecret and
+    // mfaBackupCodeHashes are stripped from PublicUser -- never sent to the
+    // client past the one-time setup/confirm response.
+    mfaEnabled: boolean("mfa_enabled").notNull().default(false),
+    mfaSecret: text("mfa_secret"),
+    mfaBackupCodeHashes: json("mfa_backup_code_hashes").$type<string[]>(),
     name: text("name").notNull(),
     role: roleEnum("role").notNull(),
     coachCode: text("coach_code"),
@@ -4846,7 +4859,7 @@ export type ResolveSubmissionInput = z.infer<typeof resolveSubmissionSchema>;
 // endpoints attach it explicitly (see getRosterForCoach).
 export type PublicUser = Omit<
   User,
-  "passwordHash" | "healthStatus" | "agreedToTermsText"
+  "passwordHash" | "healthStatus" | "agreedToTermsText" | "mfaSecret" | "mfaBackupCodeHashes"
 > & {
   // Not a users column -- computed per-request from this coach's own
   // coachStaff row (see getHiddenSectionsForCoach) and attached by
