@@ -33,12 +33,14 @@ import {
   Palette,
   ShieldCheck,
   Trash2,
+  Flag,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ForgeMark } from "@/components/forge-mark";
 import { EditMyProfileDialog } from "@/components/edit-my-profile-dialog";
 import { DeleteAccountDialog } from "@/components/delete-account-dialog";
+import { ReportProblemDialog } from "@/components/report-problem-dialog";
 import { NotificationBell } from "@/components/notification-bell";
 import { NotificationSettingsDialog } from "@/components/notification-settings-dialog";
 import { CoachingStaffDialog } from "@/components/coaching-staff-dialog";
@@ -130,6 +132,7 @@ const adminNav: NavItem[] = [
   { href: "/admin/videos", label: "Video Storage", icon: HardDrive },
   { href: "/admin/legal-agreement", label: "Legal Agreement", icon: FileText },
   { href: "/admin/documents", label: "Documents", icon: ShieldCheck },
+  { href: "/admin/problem-reports", label: "Problem Reports", icon: Flag },
 ];
 
 export function AppShell({
@@ -158,6 +161,7 @@ export function AppShell({
   const [teamBrandingOpen, setTeamBrandingOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
+  const [reportProblemOpen, setReportProblemOpen] = useState(false);
   const [moreNavOpen, setMoreNavOpen] = useState(false);
 
   // Resolved server-side: a coach's own team settings, or their athlete's
@@ -506,6 +510,24 @@ export function AppShell({
                       Notification settings
                     </button>
                   )}
+                  {/* Tucked right under Notification settings rather than
+                      given its own top-level spot -- reporting a bug isn't
+                      something most people need often, so it doesn't need
+                      to compete for attention the way Log out/Delete
+                      account (both destructive, both need to stay visible)
+                      do. */}
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setReportProblemOpen(true);
+                      setAccountMenuOpen(false);
+                    }}
+                    className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-foreground hover:bg-surface-elevated"
+                  >
+                    <Flag className="h-4 w-4" />
+                    Report a problem
+                  </button>
                   {user?.role === "coach" && (
                     <button
                       type="button"
@@ -664,6 +686,17 @@ export function AppShell({
                     Notifications
                   </button>
                 )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReportProblemOpen(true);
+                    setMobileNavOpen(false);
+                  }}
+                  className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground"
+                >
+                  <Flag className="h-4 w-4" />
+                  Report a problem
+                </button>
                 {user?.role === "coach" && (
                   <button
                     type="button"
@@ -765,6 +798,7 @@ export function AppShell({
         <TeamBrandingDialog open={teamBrandingOpen} onOpenChange={setTeamBrandingOpen} />
       )}
       {user && <DeleteAccountDialog open={deleteAccountOpen} onOpenChange={setDeleteAccountOpen} />}
+      {user && <ReportProblemDialog open={reportProblemOpen} onOpenChange={setReportProblemOpen} />}
       <NonIosTrackingNotice />
     </div>
   );

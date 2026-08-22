@@ -96,6 +96,8 @@ import {
   consentRecords,
   recordAccessAuditLogs,
   legalDocuments,
+  problemReports,
+  type ProblemReport,
   type InsertUser,
 } from "@shared/schema";
 import { derivePrivacyTier, videoRetentionDaysForTier, type PrivacyTier } from "@shared/privacy-tiers";
@@ -13294,6 +13296,34 @@ ${catalog}`;
       .leftJoin(staff, eq(recordAccessAuditLogs.userId, staff.id))
       .leftJoin(target, eq(recordAccessAuditLogs.targetAthleteId, target.id))
       .orderBy(desc(recordAccessAuditLogs.createdAt))
+      .limit(limit);
+  },
+
+  async createProblemReport(
+    userId: number,
+    input: { message: string; imageUrl: string | null; path?: string | null },
+  ): Promise<ProblemReport> {
+    const [row] = await db
+      .insert(problemReports)
+      .values({ userId, message: input.message, imageUrl: input.imageUrl, path: input.path ?? null })
+      .returning();
+    return row;
+  },
+
+  async listProblemReports(limit = 100): Promise<(ProblemReport & { userName: string | null })[]> {
+    return db
+      .select({
+        id: problemReports.id,
+        userId: problemReports.userId,
+        message: problemReports.message,
+        imageUrl: problemReports.imageUrl,
+        path: problemReports.path,
+        createdAt: problemReports.createdAt,
+        userName: users.name,
+      })
+      .from(problemReports)
+      .leftJoin(users, eq(problemReports.userId, users.id))
+      .orderBy(desc(problemReports.createdAt))
       .limit(limit);
   },
 

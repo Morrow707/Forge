@@ -78,6 +78,7 @@ const AdminAiKnowledge = lazy(() => import("@/pages/admin/ai-knowledge"));
 const ForgeAi = lazy(() => import("@/pages/admin/forge-ai"));
 const AdminLegalAgreement = lazy(() => import("@/pages/admin/legal-agreement"));
 const AdminDocuments = lazy(() => import("@/pages/admin/documents"));
+const AdminProblemReports = lazy(() => import("@/pages/admin/problem-reports"));
 const AdminNutritionKnowledge = lazy(() => import("@/pages/admin/nutrition-knowledge"));
 const AdminMyCalendar = lazy(() => import("@/pages/admin/my-calendar"));
 const AdminMyWorkout = lazy(() => import("@/pages/admin/my-workout"));
@@ -375,6 +376,9 @@ function Router() {
         </Route>
         <Route path="/admin/documents">
           <ProtectedRoute role="admin" component={AdminDocuments} />
+        </Route>
+        <Route path="/admin/problem-reports">
+          <ProtectedRoute role="admin" component={AdminProblemReports} />
         </Route>
         <Route path="/admin/nutrition-knowledge">
           <ProtectedRoute role="admin" component={AdminNutritionKnowledge} />

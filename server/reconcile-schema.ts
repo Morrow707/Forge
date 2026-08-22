@@ -1596,6 +1596,16 @@ CREATE TABLE IF NOT EXISTS "billing_audit_log" (
   "created_at" timestamp NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS "billing_audit_log_user_idx" ON "billing_audit_log" ("user_id", "created_at");
+
+CREATE TABLE IF NOT EXISTS "problem_reports" (
+  "id" serial PRIMARY KEY,
+  "user_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "message" text NOT NULL,
+  "image_url" text,
+  "path" text,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "problem_reports_created_idx" ON "problem_reports" ("created_at");
 `;
 
 async function main() {

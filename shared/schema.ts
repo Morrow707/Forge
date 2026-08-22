@@ -3676,6 +3676,39 @@ export const recordAccessAuditLogs = pgTable(
 );
 export type RecordAccessAuditLog = typeof recordAccessAuditLogs.$inferSelect;
 
+// ---------- Problem reports ----------
+// A coach/athlete tapping "Report a problem" from the account menu -- free
+// text plus an optional screenshot, reviewed by an admin. Deliberately
+// simple (no status/priority workflow): this is a lightweight inbox, not a
+// ticketing system. The screenshot can easily contain the same PII a video
+// can (an athlete's page, a roster view), so its imageUrl is gated through
+// the same signed-URL scheme as athlete video (see media-url-signing.ts's
+// GATED_UPLOAD_DIRS) rather than left as a plain public file.
+export const problemReports = pgTable(
+  "problem_reports",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    message: text("message").notNull(),
+    imageUrl: text("image_url"),
+    // Which page they were on when they reported it -- free text from the
+    // client's own route (e.g. "/coach/roster/42"), just a debugging aid.
+    path: text("path"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    createdIdx: index("problem_reports_created_idx").on(table.createdAt),
+  }),
+);
+export type ProblemReport = typeof problemReports.$inferSelect;
+
+export const createProblemReportSchema = z.object({
+  message: z.string().trim().min(1, "Describe the problem").max(2000),
+  path: z.string().trim().max(300).optional(),
+});
+
 // ---------- Legal documents (draft, admin-editable) ----------
 // A real Terms of Service and Privacy Policy, kept separate from
 // legalAgreement above -- that table is specifically the short clickwrap

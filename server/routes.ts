@@ -87,6 +87,7 @@ import {
   classCoachSettingsInputSchema,
   academyTrackStructureSchema,
   updateCoachBrandingSchema,
+  createProblemReportSchema,
   updateCoachFeaturesSchema,
   adminAthleteQueryFiltersSchema,
   createAdminSavedViewSchema,
@@ -289,6 +290,30 @@ const uploadTeamLogo = multer({
     },
   }),
   limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (!TEAM_LOGO_EXTENSION_BY_MIME[file.mimetype.split(";")[0].trim().toLowerCase()]) {
+      return cb(new Error("Unsupported image format -- use PNG, JPEG, or WebP"));
+    }
+    cb(null, true);
+  },
+});
+
+// "Report a problem" screenshot -- same rasterized-formats-only reasoning
+// as team logos above, gated behind media-url-signing.ts's signed-URL
+// scheme (see its GATED_UPLOAD_DIRS) rather than left public, since a
+// screenshot of "here's the bug" can just as easily show an athlete's page.
+const PROBLEM_REPORTS_DIR = path.join(process.cwd(), "server", "uploads", "problem-reports");
+fs.mkdirSync(PROBLEM_REPORTS_DIR, { recursive: true });
+
+const uploadProblemReportPhoto = multer({
+  storage: multer.diskStorage({
+    destination: PROBLEM_REPORTS_DIR,
+    filename: (_req, file, cb) => {
+      const ext = TEAM_LOGO_EXTENSION_BY_MIME[file.mimetype.split(";")[0].trim().toLowerCase()];
+      cb(null, `${crypto.randomUUID()}${ext ?? ""}`);
+    },
+  }),
+  limits: { fileSize: 8 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     if (!TEAM_LOGO_EXTENSION_BY_MIME[file.mimetype.split(";")[0].trim().toLowerCase()]) {
       return cb(new Error("Unsupported image format -- use PNG, JPEG, or WebP"));
@@ -3479,6 +3504,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const user = currentUser(req);
     const branding = await storage.updateCoachLogo(user.id, null);
     res.json(branding);
+  });
+
+  // "Report a problem" -- available to every role from the account menu
+  // (see ReportProblemDialog), not just coaches/athletes, so this is
+  // requireAuth rather than requireRole. Single-step: the photo (if any)
+  // and the message land together, no separate upload-then-attach dance
+  // like the video routes need.
+  app.post("/api/report-problem", requireAuth, (req, res) => {
+    uploadProblemReportPhoto.single("photo")(req, res, async (err: unknown) => {
+      if (err) {
+        const message = err instanceof Error ? err.message : "Upload failed";
+        return res.status(400).json({ message });
+      }
+      const parsed = createProblemReportSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      const user = currentUser(req);
+      const imageUrl = req.file ? `/uploads/problem-reports/${req.file.filename}` : null;
+      const report = await storage.createProblemReport(user.id, {
+        message: parsed.data.message,
+        imageUrl,
+        path: parsed.data.path,
+      });
+      res.status(201).json(report);
+    });
+  });
+
+  app.get("/api/admin/problem-reports", requireRole("admin"), async (_req, res) => {
+    const reports = await storage.listProblemReports();
+    res.json(reports);
   });
 
   app.put("/api/coach/features", requireRole("coach"), async (req, res) => {

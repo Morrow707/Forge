@@ -3,10 +3,11 @@ import crypto from "crypto";
 // Closes the gap where /uploads was served as fully public, unauthenticated
 // static files -- anyone with a video's URL (leaked link, screenshot,
 // browser history, referrer) could view it forever, regardless of whether
-// they were ever the athlete, their coach, or an admin. The three
-// directories below hold actual filmed athlete footage (form-check clips,
-// skill-session clips, and coach annotations drawn directly on frames of
-// those clips) -- lesson-videos/attachments/images and team-logos are
+// they were ever the athlete, their coach, or an admin. The directories
+// below hold actual filmed athlete footage or screenshots that can just as
+// easily contain someone's PII (form-check clips, skill-session clips,
+// coach annotations drawn on frames of those clips, and problem-report
+// screenshots) -- lesson-videos/attachments/images and team-logos are
 // coach/org-authored content, not footage of an identifiable person, so
 // they're deliberately left out of this and stay plain public files, same
 // as before.
@@ -33,7 +34,10 @@ const MEDIA_URL_SECRET = process.env.SESSION_SECRET || "forge-dev-secret";
 // within the day rather than forever.
 const TTL_MS = 6 * 60 * 60 * 1000;
 
-const GATED_UPLOAD_DIRS = new Set(["form-videos", "skill-videos", "annotations"]);
+// problem-reports: a "report a problem" screenshot can just as easily show
+// an athlete's page/roster/video as any of the other three -- same
+// treatment, same reasoning.
+const GATED_UPLOAD_DIRS = new Set(["form-videos", "skill-videos", "annotations", "problem-reports"]);
 
 // Matches only a bare, freshly-stored path with no query string yet --
 // exactly the shape every one of these URLs has in the database. Deliberately
