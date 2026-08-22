@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import path from "path";
 import fs from "fs";
 import multer from "multer";
+import rateLimit from "express-rate-limit";
 import { setupAuth, requireAuth, requireRole, attachNativeTokenAuth } from "./auth";
 import { storage } from "./storage";
 import { buildIcsFeed } from "./ics";
@@ -320,6 +321,19 @@ const uploadProblemReportPhoto = multer({
     }
     cb(null, true);
   },
+});
+
+// Every submitter here is already authenticated (requireAuth on the route
+// below), so this bounds a compromised/scripted account from flooding the
+// admin inbox or filling disk with junk uploads -- same shape as auth.ts's
+// login/signup limiters, just keyed by IP since there's no separate
+// per-account concern the way credential-stuffing has.
+const reportProblemLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many reports submitted. Please try again later." },
 });
 
 function currentUser(req: any) {
@@ -3511,7 +3525,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // requireAuth rather than requireRole. Single-step: the photo (if any)
   // and the message land together, no separate upload-then-attach dance
   // like the video routes need.
-  app.post("/api/report-problem", requireAuth, (req, res) => {
+  app.post("/api/report-problem", requireAuth, reportProblemLimiter, (req, res) => {
     uploadProblemReportPhoto.single("photo")(req, res, async (err: unknown) => {
       if (err) {
         const message = err instanceof Error ? err.message : "Upload failed";

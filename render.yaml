@@ -25,6 +25,14 @@ services:
         value: production
       - key: SESSION_SECRET
         generateValue: true
+      # Signs the short-lived /uploads access tokens (server/media-url-signing.ts)
+      # -- its own key, separate from SESSION_SECRET, so rotating one for a
+      # real reason (a leak, a scheduled rotation) never silently invalidates
+      # the other. Falls back to SESSION_SECRET if this is ever unset, so
+      # nothing breaks without it, but Render auto-generates a real, distinct
+      # value on every deploy going forward.
+      - key: MEDIA_URL_SECRET
+        generateValue: true
       # Master switch for every "no real billing yet" paywall stub in
       # server/routes.ts (testingUnlockAllPaywalls) -- Free Agent AI access
       # (strengthAi/skillsAi entitlements), Coaches Corner content, and Class

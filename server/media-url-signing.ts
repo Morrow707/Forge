@@ -26,7 +26,16 @@ import crypto from "crypto";
 // etc.). No new per-request ownership lookup needed; this just lets an
 // authorization decision the app already makes travel into a plain media
 // URL a <video> tag can load unmodified.
-const MEDIA_URL_SECRET = process.env.SESSION_SECRET || "forge-dev-secret";
+// Its own dedicated secret rather than reusing SESSION_SECRET (which also
+// signs the session cookie) or auth.ts's native-token secret -- three
+// different cryptographic purposes sharing one key is a real, if minor,
+// key-separation weakness: rotating one for a real reason (a leak, a
+// scheduled rotation) would silently invalidate the other two along with
+// it. Falls back to SESSION_SECRET, then the same dev-only placeholder
+// auth.ts uses, so this never breaks an environment that hasn't set
+// MEDIA_URL_SECRET yet -- but a real, separate value should be set in
+// Render (Dashboard -> Environment) once this ships.
+const MEDIA_URL_SECRET = process.env.MEDIA_URL_SECRET || process.env.SESSION_SECRET || "forge-dev-secret";
 
 // Long enough that a single open session/tab never sees a video 403 out
 // from under it (queries refetch on focus/remount well inside this
