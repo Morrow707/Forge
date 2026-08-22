@@ -5287,6 +5287,39 @@ Forge stores the training, health-status, and performance data you provide in or
     );
   }
 
+  // Healthcare-provider HIPAA-transparency notice -- appended to whatever
+  // legalAgreement content is currently live (the placeholder above, or an
+  // admin's own edit) rather than only seeded on a fresh install, since
+  // this needs to reach real users today, not just future signups. Marker
+  // string makes this idempotent across every redeploy: runs once, then a
+  // permanent no-op, and never touches anything else in the document. Full
+  // and honest by design -- lists what Forge actually does to secure data
+  // (real, checkable mechanisms, not marketing language) alongside what it
+  // does not yet have, exactly as it would be described to a lawyer.
+  const HEALTHCARE_NOTICE_MARKER = "A note for physical therapists, physicians, and other licensed clinicians";
+  const currentAgreement = await storage.getLegalAgreement();
+  if (!currentAgreement.includes(HEALTHCARE_NOTICE_MARKER)) {
+    const healthcareNotice = `${HEALTHCARE_NOTICE_MARKER}:
+
+Forge is built for athletic training and coaching, not clinical care -- it is not currently HIPAA compliant. If you're a physical therapist, physician, athletic trainer, or other licensed clinician considering using Forge with patients: please don't enter Protected Health Information (PHI) or treat Forge as your system of record for patient care. Forge has not signed a Business Associate Agreement (BAA) with any vendor, has not completed a formal HIPAA Security Risk Assessment, and has not been independently audited for HIPAA compliance.
+
+Here's what Forge does do to protect the data it holds, in full:
+- All traffic runs over HTTPS, and login sessions use signed, expiring cookies.
+- Uploaded videos (form-check and skill clips) and coach-drawn annotations on them are protected by short-lived, cryptographically signed links, not public URLs -- a link expires within hours and only ever reaches someone the app already verified was allowed to see that specific person's video.
+- For users under 18, raw video is automatically deleted after a set window (30 days under age 13, 90 days ages 13-17); performance numbers derived from that video are kept, but the footage itself is not retained indefinitely.
+- Every terms-of-service acceptance is written to an immutable, insert-only audit log (timestamp, IP address, the exact document version shown).
+- Any user can permanently delete their own account and every video tied to it themselves, at any time.
+- Forge does not send user data to any third-party analytics or error-tracking service -- there is no Google Analytics, Meta Pixel, Sentry, Mixpanel, or similar tool anywhere in the app.
+- The only feature that reports on athletes in aggregate strips names, emails, and team affiliation, and refuses to display any group smaller than five people.
+
+And what we don't have yet, stated plainly: no signed BAAs with our hosting or infrastructure vendors, no completed HIPAA Security Risk Assessment, no PHI-grade audit logging across the whole app (today that level of logging only covers video access), and no outside compliance certification. If your use case involves documenting patient assessments, diagnoses, or treatment plans, Forge is not yet the right tool for that -- we'd rather tell you now than have you find out later.`;
+    await storage.updateLegalAgreement(
+      currentAgreement === "No agreement has been configured yet."
+        ? healthcareNotice
+        : `${currentAgreement}\n\n${healthcareNotice}`,
+    );
+  }
+
   // Draft Terms of Service / Privacy Policy -- same "only if not already
   // there" guard as the legalAgreement placeholder above, so a redeploy
   // never overwrites an admin's edits to either document.
