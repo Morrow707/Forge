@@ -1719,6 +1719,23 @@ export const storage = {
     return true;
   },
 
+  // Escape hatch for a coach/admin locked out of their own account -- lost
+  // their authenticator device AND all their backup codes, so they can't
+  // reach disableMfa above (that requires being logged in, which they
+  // can't do). An admin clears it after verifying the person's identity
+  // out of band (phone call, known email thread, whatever the org's
+  // process is) -- this route has no way to verify that itself, so who's
+  // allowed to call it (requireRole("admin")) is the only real gate.
+  async adminResetMfa(userId: number): Promise<boolean> {
+    const user = await this.getUser(userId);
+    if (!user) return false;
+    await db
+      .update(users)
+      .set({ mfaEnabled: false, mfaSecret: null, mfaBackupCodeHashes: null })
+      .where(eq(users.id, userId));
+    return true;
+  },
+
   async updateUserPreferences(userId: number, input: UpdatePreferencesInput) {
     const [row] = await db
       .update(users)

@@ -25,6 +25,7 @@ import { startDataRetentionJob } from "./data-retention-job";
 import { startFreeAgentVideoCapJob } from "./free-agent-video-cap-job";
 import { verifyStripeWebhook, handleStripeWebhookEvent } from "./billing";
 import { signMediaUrlsDeep } from "./media-url-signing";
+import { verifyRequestOrigin } from "./csrf-protection";
 
 const app = express();
 // contentSecurityPolicy and crossOriginEmbedderPolicy are both off --
@@ -62,6 +63,10 @@ app.use(
     credentials: true,
   }),
 );
+// See csrf-protection.ts -- blocks a cross-site form/fetch from riding a
+// logged-in user's session cookie into a state-changing request. Reuses
+// the same native-app allowlist CORS does above.
+app.use(verifyRequestOrigin(NATIVE_APP_ORIGINS));
 // Registered BEFORE express.json() below -- Stripe's webhook signature
 // check needs the exact raw request bytes, which a JSON-parsed body no
 // longer is by the time a route handler sees it. Framework only (see

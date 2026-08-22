@@ -3551,6 +3551,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(reports);
   });
 
+  // Escape hatch for a coach/admin locked out by MFA (lost their
+  // authenticator device and all their backup codes) -- see
+  // storage.adminResetMfa's own comment. No dedicated admin UI for this
+  // yet; it's meant to be rare enough that a direct call is fine until
+  // there's a real admin user-management page to hang a button on.
+  app.post("/api/admin/users/:id/reset-mfa", requireRole("admin"), async (req, res) => {
+    const userId = Number(req.params.id);
+    if (!Number.isInteger(userId)) return res.status(400).json({ message: "Invalid user id" });
+    const ok = await storage.adminResetMfa(userId);
+    if (!ok) return res.status(404).json({ message: "User not found" });
+    res.json({ ok: true });
+  });
+
   app.put("/api/coach/features", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     const parsed = updateCoachFeaturesSchema.safeParse(req.body);
