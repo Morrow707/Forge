@@ -24,6 +24,7 @@ import { startReflectionJob } from "./reflection-job";
 import { startDataRetentionJob } from "./data-retention-job";
 import { startFreeAgentVideoCapJob } from "./free-agent-video-cap-job";
 import { verifyStripeWebhook, handleStripeWebhookEvent } from "./billing";
+import { signMediaUrlsDeep } from "./media-url-signing";
 
 const app = express();
 // contentSecurityPolicy and crossOriginEmbedderPolicy are both off --
@@ -109,6 +110,22 @@ app.use((req, res, next) => {
     }
   });
 
+  next();
+});
+
+// See media-url-signing.ts -- swept last (after the logging wrapper above)
+// so whatever a route handler passes to res.json() gets its /uploads URLs
+// re-signed with a fresh expiry right before it goes out, no matter which
+// route or how deeply nested. res.locals.skipMediaSign is set by the
+// handful of upload-confirmation routes that return a bare, freshly-created
+// path meant to be echoed back into a later write (see routes.ts) -- those
+// must stay unsigned so the database only ever stores plain paths.
+app.use((req, res, next) => {
+  const originalJson = res.json.bind(res);
+  res.json = ((body: any) => {
+    if (res.locals.skipMediaSign) return originalJson(body);
+    return originalJson(signMediaUrlsDeep(body));
+  }) as typeof res.json;
   next();
 });
 

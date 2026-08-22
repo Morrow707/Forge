@@ -20,6 +20,7 @@ import { buildComplianceReportPdf } from "./compliance-report";
 import { buildLegalDocumentPdf } from "./legal-document-export";
 import { GUARDIAN_NOTICE_LIVE } from "@shared/privacy-tiers";
 import { BILLING_LIVE } from "./billing";
+import { verifyMediaUrl } from "./media-url-signing";
 import { COACH_SECTIONS } from "@shared/coach-sections";
 import { notifyUser } from "./notify";
 import {
@@ -545,6 +546,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
+  // Gates the three directories that hold actual filmed athlete footage
+  // (form-check clips, skill-session clips, coach annotations drawn on
+  // frames of those clips) behind the short-lived signed-URL scheme in
+  // media-url-signing.ts -- every JSON response already re-signs these
+  // paths fresh, so a request only gets through here if it's carrying a
+  // signature minted within the last few hours by a route that already
+  // passed its own ownership check. lesson-videos/attachments/images and
+  // team-logos are coach/org content, not footage of a person, and stay
+  // exactly as before: plain public files, no signature required.
+  app.use("/uploads", (req, res, next) => {
+    const pathname = `/uploads${req.path}`;
+    if (!verifyMediaUrl(pathname, req.query.exp, req.query.sig)) {
+      return res.status(403).json({ message: "This link has expired. Reload the page and try again." });
+    }
+    next();
+  });
   app.use("/uploads", express.static(path.join(process.cwd(), "server", "uploads")));
   // express.static calls next() rather than responding when a file isn't
   // found, so a missing upload (a video whose row survived some past
@@ -4395,6 +4412,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     const filename = `${crypto.randomUUID()}.png`;
     fs.writeFileSync(path.join(ANNOTATIONS_DIR, filename), buffer);
+    // Bare path, deliberately unsigned -- see the matching comment on the
+    // form-video upload route above.
+    res.locals.skipMediaSign = true;
     res.status(201).json({ url: `/uploads/annotations/${filename}` });
   });
 
@@ -5296,6 +5316,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (!req.file) {
           return res.status(400).json({ message: "No video file provided" });
         }
+        // Bare path, deliberately unsigned -- see the matching comment on
+        // the form-video upload route above.
+        res.locals.skipMediaSign = true;
         res.status(201).json({ url: `/uploads/skill-videos/${req.file.filename}` });
       });
     },
@@ -5473,6 +5496,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (!req.file) {
           return res.status(400).json({ message: "No video file provided" });
         }
+        // Bare path, deliberately unsigned -- this is what the client saves
+        // verbatim as formCheckVideoUrl on a later write (see
+        // media-url-signing.ts); every subsequent read re-signs it fresh.
+        res.locals.skipMediaSign = true;
         res.status(201).json({ url: `/uploads/form-videos/${req.file.filename}` });
       });
     },
