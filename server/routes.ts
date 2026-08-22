@@ -19,6 +19,7 @@ import { buildMovementScreenSheetPdf } from "./movement-screen-export";
 import { buildComplianceReportPdf } from "./compliance-report";
 import { buildLegalDocumentPdf } from "./legal-document-export";
 import { GUARDIAN_NOTICE_LIVE } from "@shared/privacy-tiers";
+import { BILLING_LIVE } from "./billing";
 import { COACH_SECTIONS } from "@shared/coach-sections";
 import { notifyUser } from "./notify";
 import {
@@ -351,11 +352,21 @@ const COMPED_FREE_AGENT_ENTITLEMENTS: Record<string, Set<AiEntitlement>> = {
 // swap-exercise routes below) so a Free Agent keeps that one AI feature
 // even while everything requiring a paid entitlement is paywalled.
 async function hasAthletePaidForAiAccess(
-  _athleteId: number,
+  athleteId: number,
   email: string,
   entitlement: AiEntitlement,
 ): Promise<boolean> {
   if (testingUnlockAllPaywalls) return true;
+  if (BILLING_LIVE) {
+    // "strengthAi" needs any paid tier; "skillsAi" specifically needs Pro
+    // (see PRICING in billing.ts -- Skills/FMS-style features are a Pro-
+    // tier feature, Strength AI is included in Base). Trialing counts as
+    // paid -- the whole point of the trial is full Pro access.
+    const sub = await storage.getSubscriptionForUser(athleteId);
+    if (!sub || sub.accountType !== "free_agent") return false;
+    if (!["trialing", "active", "past_due"].includes(sub.status)) return false;
+    return entitlement === "strengthAi" ? true : sub.tier === "pro";
+  }
   return COMPED_FREE_AGENT_ENTITLEMENTS[email]?.has(entitlement) ?? false;
 }
 
@@ -400,7 +411,12 @@ const COMPED_COACHES_CORNER_COACHES = new Set(["coach@forge.app"]);
 // coach sees the locked teaser catalog until this is wired to real billing.
 // Admins bypass since they're the ones curating the content. Change only
 // this function once real billing exists -- every route below reads
-// through it, never a role check of its own.
+// through it, never a role check of its own. Unlike
+// hasAthletePaidForAiAccess/hasRosterSeatAvailable above, this one isn't
+// yet wired to BILLING_LIVE -- it's synchronous and called from several
+// places that would all need updating to await a real subscription
+// lookup. Left as a known follow-up rather than risking those call sites
+// on an unverified signature change in the same pass as everything else.
 function hasCoachesCornerAccess(user: { role: string; email: string }) {
   if (testingUnlockAllPaywalls) return true;
   return user.role === "admin" || COMPED_COACHES_CORNER_COACHES.has(user.email);
@@ -4526,6 +4542,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const messages = {
           not_found: "That invite isn't available anymore.",
           already_coached: "You already have a coach, so this invite was declined.",
+          coach_seat_limit: "That coach's roster is full -- ask them to upgrade or free up a seat first.",
         };
         return res.status(400).json({ message: messages[result.reason] });
       }

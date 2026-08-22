@@ -16,6 +16,9 @@ import {
   Bot,
   Activity,
   Mail,
+  Check,
+  Snowflake,
+  DollarSign,
 } from "lucide-react";
 import { ForgeMark } from "@/components/forge-mark";
 
@@ -119,6 +122,38 @@ const AUDIENCES = [
     title: "Free Agents",
     body: "Training on your own? Forge's AI becomes your coach -- building programs, answering questions, and adjusting based on how you're actually recovering.",
   },
+];
+
+const FREE_AGENT_TIERS = [
+  {
+    name: "Base",
+    webPrice: "$29.99",
+    iosPrice: "$39.99",
+    features: [
+      "Camera-based bar velocity tracking",
+      "Sprint & jump tracking",
+      "Form-check video logging",
+      "AI program builder",
+    ],
+  },
+  {
+    name: "Pro",
+    webPrice: "$39.99",
+    iosPrice: "$49.99",
+    features: [
+      "Everything in Base",
+      "Apple Health sync & recovery trends",
+      "Digital goniometer",
+      "Nutrition AI Q&A",
+    ],
+  },
+];
+
+const COACH_SEAT_TIERS = [
+  { seats: "Up to 15", base: "$49.99", pro: "$79.99" },
+  { seats: "Up to 50", base: "$99.99", pro: "$149.99" },
+  { seats: "Up to 100", base: "$149.99", pro: "$249.99" },
+  { seats: "Up to 250", base: "$299.99", pro: "$499.99" },
 ];
 
 export default function LandingPage() {
@@ -394,6 +429,116 @@ export default function LandingPage() {
               </div>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* ---------------- Pricing ---------------- */}
+      <section className="bg-surface px-4 py-20 md:px-8 md:py-28">
+        <div className="mx-auto max-w-6xl">
+          <div className="mx-auto max-w-2xl text-center">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-primary">
+              <DollarSign className="h-3.5 w-3.5" />
+              Pricing
+            </span>
+            <h2 className="mt-4 font-display text-4xl font-bold uppercase tracking-wide md:text-5xl">
+              No hidden fees. Ever.
+            </h2>
+            <p className="mt-4 text-muted-foreground">
+              One price, shown up front, for exactly what's included -- whether you're training
+              on your own or running a whole program. Every plan starts with a 14-day free trial
+              of Pro, no credit card required.
+            </p>
+          </div>
+
+          <div className="mt-12 grid gap-6 lg:grid-cols-2">
+            {/* Free Agent */}
+            <div className="rounded-xl border border-border bg-background p-6 md:p-8">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-primary" />
+                <h3 className="font-display text-xl font-bold uppercase tracking-wide">
+                  Free Agent
+                </h3>
+              </div>
+              <p className="mt-2 text-sm text-muted-foreground">Training on your own.</p>
+              <div className="mt-6 grid gap-4 sm:grid-cols-2">
+                {FREE_AGENT_TIERS.map((t) => (
+                  <div key={t.name} className="rounded-lg border border-border p-5">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-primary">
+                      {t.name}
+                    </p>
+                    <p className="mt-1 font-display text-3xl font-extrabold">
+                      {t.webPrice}
+                      <span className="text-sm font-normal text-muted-foreground">/mo</span>
+                    </p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {t.iosPrice}/mo via the iOS App
+                    </p>
+                    <ul className="mt-4 space-y-2">
+                      {t.features.map((f) => (
+                        <li key={f} className="flex items-start gap-2 text-sm">
+                          <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+                          <span className="text-muted-foreground">{f}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Coach / Team */}
+            <div className="rounded-xl border border-border bg-background p-6 md:p-8">
+              <div className="flex items-center gap-2">
+                <Dumbbell className="h-5 w-5 text-primary" />
+                <h3 className="font-display text-xl font-bold uppercase tracking-wide">
+                  Coach / Team
+                </h3>
+              </div>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Priced by roster size -- pay for the athletes you actually coach.
+              </p>
+              <div className="mt-6 overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
+                      <th className="pb-2 font-semibold">Roster</th>
+                      <th className="pb-2 font-semibold">Base</th>
+                      <th className="pb-2 font-semibold">Pro</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {COACH_SEAT_TIERS.map((row) => (
+                      <tr key={row.seats} className="border-b border-border last:border-0">
+                        <td className="py-3 text-muted-foreground">{row.seats}</td>
+                        <td className="py-3 font-display font-bold">{row.base}<span className="text-xs font-normal text-muted-foreground">/mo</span></td>
+                        <td className="py-3 font-display font-bold">{row.pro}<span className="text-xs font-normal text-muted-foreground">/mo</span></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="mt-4 text-xs text-muted-foreground">
+                Base covers the AI program builder and camera tracking for your whole roster; Pro
+                adds Health sync, recovery trends, and the full analytics suite.
+              </p>
+            </div>
+          </div>
+
+          <div className="mx-auto mt-6 flex max-w-3xl items-start gap-3 rounded-xl border border-primary/20 bg-primary/5 p-5">
+            <Snowflake className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+            <p className="text-sm text-muted-foreground">
+              <span className="font-semibold text-foreground">Off-season is free.</span> Pause
+              any plan and your dashboards, videos, and history stay exactly as you left them --
+              no charge while you're not actively training or coaching. Resume whenever you're
+              back.
+            </p>
+          </div>
+
+          <p className="mx-auto mt-6 max-w-3xl text-center text-xs text-muted-foreground">
+            Pricing reflects our launch plan and isn't live for billing yet -- signing up today
+            is free either way. No add-on fees, no surprise charges, no fine print: this is the
+            whole price.
+          </p>
         </div>
       </section>
 

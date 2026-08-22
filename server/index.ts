@@ -23,6 +23,7 @@ import { setupVite, serveStatic, log } from "./vite";
 import { startReflectionJob } from "./reflection-job";
 import { startDataRetentionJob } from "./data-retention-job";
 import { startFreeAgentVideoCapJob } from "./free-agent-video-cap-job";
+import { verifyStripeWebhook, handleStripeWebhookEvent } from "./billing";
 
 const app = express();
 // contentSecurityPolicy and crossOriginEmbedderPolicy are both off --
@@ -60,6 +61,23 @@ app.use(
     credentials: true,
   }),
 );
+// Registered BEFORE express.json() below -- Stripe's webhook signature
+// check needs the exact raw request bytes, which a JSON-parsed body no
+// longer is by the time a route handler sees it. Framework only (see
+// billing.ts's own comment): verifyStripeWebhook returns null whenever
+// STRIPE_SECRET_KEY/STRIPE_WEBHOOK_SECRET aren't set, which is every
+// environment today, so this 400s harmlessly if anything ever hits it.
+app.post(
+  "/api/billing/webhook",
+  express.raw({ type: "application/json" }),
+  async (req, res) => {
+    const event = verifyStripeWebhook(req.body, req.headers["stripe-signature"] as string | undefined);
+    if (!event) return res.status(400).send("Invalid signature");
+    await handleStripeWebhookEvent(event);
+    res.json({ received: true });
+  },
+);
+
 // Raised from Express's 100kb default -- the AI form-check route accepts a
 // handful of base64-encoded JPEG frames per request, which clears 100kb
 // easily even resized down.

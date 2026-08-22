@@ -1546,6 +1546,43 @@ ALTER TABLE "wellness_checkins" ADD COLUMN IF NOT EXISTS "heart_rate_recovery" r
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "is_pr" boolean NOT NULL DEFAULT false;
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "favorited" boolean NOT NULL DEFAULT false;
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "pending_deletion_at" date;
+
+-- Billing framework -- see shared/schema.ts's own comment above the
+-- subscriptions table for why this exists with nothing wired to real
+-- money yet.
+DO $$ BEGIN
+  CREATE TYPE "subscription_status" AS ENUM ('trialing', 'active', 'past_due', 'canceled', 'hibernating');
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END $$;
+
+CREATE TABLE IF NOT EXISTS "subscriptions" (
+  "id" serial PRIMARY KEY,
+  "user_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "account_type" text NOT NULL,
+  "tier" text NOT NULL,
+  "seat_cap" integer,
+  "status" subscription_status NOT NULL DEFAULT 'trialing',
+  "trial_ends_at" timestamp,
+  "current_period_end" timestamp,
+  "cancel_at_period_end" boolean NOT NULL DEFAULT false,
+  "stripe_customer_id" text,
+  "stripe_subscription_id" text,
+  "apple_original_transaction_id" text,
+  "created_at" timestamp NOT NULL DEFAULT now(),
+  "updated_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "subscriptions_user_idx" ON "subscriptions" ("user_id");
+CREATE INDEX IF NOT EXISTS "subscriptions_stripe_subscription_idx" ON "subscriptions" ("stripe_subscription_id");
+
+CREATE TABLE IF NOT EXISTS "billing_audit_log" (
+  "id" serial PRIMARY KEY,
+  "user_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "event" text NOT NULL,
+  "detail" json,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "billing_audit_log_user_idx" ON "billing_audit_log" ("user_id", "created_at");
 `;
 
 async function main() {

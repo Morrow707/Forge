@@ -286,6 +286,17 @@ export function setupAuth(app: Express) {
         }
       }
 
+      // Framework only -- see billing.ts's own comment. Harmless to create
+      // unconditionally: nothing reads this row for gating anything until
+      // BILLING_LIVE is set, but a real trial needs the row to already
+      // exist the moment that flag flips, not retrofitted onto every
+      // account that signed up before it did. A coached athlete (role
+      // "athlete" with a coach linked above) is never billed directly, so
+      // gets no subscription row of their own.
+      if (role === "coach" || (role === "athlete" && !coach)) {
+        await storage.createTrialSubscription(user.id, role === "coach" ? "coach" : "free_agent");
+      }
+
       req.login(user, async (err) => {
         if (err) return next(err);
         // Fire-and-forget: sendEmail never throws (see email.ts) and a slow

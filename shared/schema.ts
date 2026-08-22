@@ -1430,6 +1430,90 @@ export const workoutComments = pgTable(
 // coach when an athlete comments or attaches a video, never for program
 // completions or team-wide events -- see the notification-creation call
 // sites in routes.ts for the full (short) list of triggers.
+// ---------- Billing (framework only -- see server/billing.ts's own
+// comment. Nothing here is wired to real money yet: BILLING_LIVE stays
+// unset until a real Stripe account/App Store subscription group exists,
+// so every paywall keeps using the exact hardcoded-allowlist behavior it
+// uses today until that flag flips. Same "build it all, hold it off"
+// pattern as shared/privacy-tiers.ts's GUARDIAN_NOTICE_LIVE.) ----------
+
+export const subscriptionStatusEnum = pgEnum("subscription_status", [
+  "trialing",
+  "active",
+  "past_due",
+  "canceled",
+  // Free, not a paid add-on (see server/billing.ts's PRICING table comment
+  // for why the original off-season-hibernation-fee idea got dropped) --
+  // read-only preservation of a coach's or Free Agent's existing history
+  // (dashboards, PR videos, past programs) with new logging paused. Either
+  // side can enter/exit this manually; nothing about it involves Stripe.
+  "hibernating",
+]);
+
+// One row per paying account (a coach or a Free Agent -- never a coached
+// athlete, who is never billed directly). accountType/tier/seatCap
+// together describe which of the published tiers this is; seatCap is null
+// for a Free Agent (no roster) and 15/50/100/250 for a coach, matching the
+// roster-scaling tiers on the landing page's pricing section.
+export const subscriptions = pgTable(
+  "subscriptions",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" })
+      .unique(),
+    accountType: text("account_type").notNull(), // "free_agent" | "coach"
+    tier: text("tier").notNull(), // "base" | "pro"
+    seatCap: integer("seat_cap"),
+    status: subscriptionStatusEnum("status").notNull().default("trialing"),
+    trialEndsAt: timestamp("trial_ends_at"),
+    currentPeriodEnd: timestamp("current_period_end"),
+    cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),
+    // Exactly one of the next two is ever set -- which channel originated
+    // this subscription (Stripe web checkout vs. StoreKit 2 IAP). Neither
+    // is populated by anything today; see server/billing.ts/apple-iap.ts.
+    stripeCustomerId: text("stripe_customer_id"),
+    stripeSubscriptionId: text("stripe_subscription_id"),
+    appleOriginalTransactionId: text("apple_original_transaction_id"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    // userId's own .unique() above is what actually enforces one
+    // subscription per account; this index just needs to exist to back
+    // that constraint the same way it will once reconcile-schema.ts's
+    // CREATE UNIQUE INDEX runs on the live database.
+    userIdx: uniqueIndex("subscriptions_user_idx").on(table.userId),
+    stripeSubscriptionIdx: index("subscriptions_stripe_subscription_idx").on(
+      table.stripeSubscriptionId,
+    ),
+  }),
+);
+
+// Immutable record of every billing event this account has ever received
+// (a webhook firing, a manual admin override) -- separate from
+// record_access_audit_logs (that one is about who viewed an athlete's
+// data, this one is about money/entitlement state), but the same
+// "never delete, always append" posture.
+export const billingAuditLog = pgTable(
+  "billing_audit_log",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    event: text("event").notNull(), // e.g. "subscription.updated", "invoice.payment_failed"
+    detail: json("detail"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    userIdx: index("billing_audit_log_user_idx").on(table.userId, table.createdAt),
+  }),
+);
+
+export type Subscription = typeof subscriptions.$inferSelect;
+
 export const notifications = pgTable(
   "notifications",
   {

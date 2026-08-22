@@ -36,6 +36,8 @@ import {
   exerciseReports,
   apnsDeviceTokens,
   notifications,
+  subscriptions,
+  billingAuditLog,
   passwordResetTokens,
   pushSubscriptions,
   teamPosts,
@@ -1705,6 +1707,78 @@ export const storage = {
     return row;
   },
 
+  // ---------- Billing (framework only -- see server/billing.ts's own
+  // comment; nothing here is reachable by real money yet) ----------
+
+  async getSubscriptionForUser(userId: number) {
+    return db.query.subscriptions.findFirst({ where: eq(subscriptions.userId, userId) });
+  },
+
+  async createTrialSubscription(userId: number, accountType: "free_agent" | "coach") {
+    const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+    const [row] = await db
+      .insert(subscriptions)
+      .values({
+        userId,
+        accountType,
+        tier: "base",
+        seatCap: accountType === "coach" ? 15 : null,
+        status: "trialing",
+        trialEndsAt,
+      })
+      .onConflictDoNothing({ target: subscriptions.userId })
+      .returning();
+    return row ?? (await db.query.subscriptions.findFirst({ where: eq(subscriptions.userId, userId) }))!;
+  },
+
+  async updateSubscriptionByStripeId(
+    stripeSubscriptionId: string,
+    patch: Partial<typeof subscriptions.$inferInsert>,
+  ) {
+    const [row] = await db
+      .update(subscriptions)
+      .set({ ...patch, updatedAt: new Date() })
+      .where(eq(subscriptions.stripeSubscriptionId, stripeSubscriptionId))
+      .returning();
+    return row ?? null;
+  },
+
+  async logBillingEvent(userId: number, event: string, detail?: unknown) {
+    await db.insert(billingAuditLog).values({ userId, event, detail: (detail ?? null) as any });
+  },
+
+  // Every athlete currently on this coach's roster -- there's no "archived
+  // athlete" concept in the schema yet, so a real launch of roster-seat
+  // guardrails would want that distinction before this number means "seats
+  // actually in use" the way the pricing page's tiers imply. Good enough
+  // for a framework that isn't gating anything live yet.
+  async getRosterSeatCountForCoach(coachId: number): Promise<number> {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    const rows = await db
+      .select({ athleteId: coachAthletes.athleteId })
+      .from(coachAthletes)
+      .where(inArray(coachAthletes.coachId, coachIds));
+    return new Set(rows.map((r) => r.athleteId)).size;
+  },
+
+  // The actual roster-seat guardrail -- always true (unlimited roster,
+  // today's real behavior) unless BILLING_LIVE is set AND this coach has a
+  // real subscription row with a seatCap. No subscription row yet (every
+  // coach today) also means unlimited, same as BILLING_LIVE being off --
+  // this never has to distinguish "no billing configured" from "billing
+  // configured, unlimited plan," because neither exists as a real state
+  // yet either.
+  async hasRosterSeatAvailable(coachId: number): Promise<boolean> {
+    // Inlined rather than imported from billing.ts -- that module already
+    // imports `storage` from here, and a reverse import back would make
+    // the two files circularly dependent over what's just one env check.
+    if (process.env.BILLING_LIVE !== "true") return true;
+    const sub = await this.getSubscriptionForUser(coachId);
+    if (!sub || sub.seatCap == null) return true;
+    const current = await this.getRosterSeatCountForCoach(coachId);
+    return current < sub.seatCap;
+  },
+
   // Resolves the full set of coach ids that should see identical data --
   // this coach's own id, plus every other coach sharing the same staff (see
   // coachStaff in shared/schema.ts, and the "Coaching staff" section below).
@@ -1976,6 +2050,13 @@ export const storage = {
           .set({ status: "declined", respondedAt: new Date() })
           .where(eq(coachAthleteRequests.id, requestId));
         return { ok: false as const, reason: "already_coached" as const };
+      }
+      // Framework only -- BILLING_LIVE is unset in every environment
+      // today, so hasRosterSeatAvailable always returns true and this
+      // never actually blocks anyone yet. See server/billing.ts's own
+      // comment.
+      if (!(await this.hasRosterSeatAvailable(request.coachId))) {
+        return { ok: false as const, reason: "coach_seat_limit" as const };
       }
       await this.linkAthleteToCoach(request.coachId, athleteId);
     }
