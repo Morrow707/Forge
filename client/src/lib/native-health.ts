@@ -28,6 +28,11 @@ const READ_TYPES = [
   "vo2Max",
   "respiratoryRate",
   "weight",
+  // Not read as a daily snapshot value like the rest of this list -- only
+  // ever queried around a specific workout's end time, to derive heart
+  // rate recovery below. Still needs its own authorization entry, since
+  // HealthKit scopes read access per data type.
+  "heartRate",
 ] as const;
 // Read-only for the same reason as the rest of this file's own comment --
 // workouts aren't part of the daily check-in snapshot (they don't have a
@@ -230,6 +235,96 @@ export async function fetchRecentWorkouts(days = 14): Promise<HealthWorkoutSumma
     }));
   } catch {
     return [];
+  }
+}
+
+// A HRR reading below this workout length isn't trustworthy -- a 2-minute
+// warmup that got logged as its own workout, or a dog-walk the Watch
+// auto-detected, doesn't put the athlete anywhere near the heart rate
+// they'd be at after real training, so the "recovery" number would just be
+// noise. Real lifting/conditioning sessions clear this easily.
+const MIN_HRR_WORKOUT_MINUTES = 5;
+// How far past the workout's end to look for the "recovery" reading --
+// wider than the clinical 60s target because a Watch that stops recording
+// high-frequency samples the moment a workout ends may not have *any*
+// sample exactly at +60s.
+const HRR_SEARCH_WINDOW_SECONDS = 90;
+const HRR_TARGET_OFFSET_SECONDS = 60;
+
+export type HeartRateRecoverySample = {
+  workoutType: string;
+  workoutEndDate: string;
+  hrrBpm: number;
+};
+
+/** Heart rate recovery (HRR): how many bpm the heart rate drops in the
+ * minute after training stops -- higher is better-conditioned, and a
+ * declining trend over a season is an early flag for illness or injury
+ * outrunning recovery, not just "less improvement." HealthKit has no
+ * direct data type for this (unlike restingHeartRate/hrv/vo2Max above), so
+ * it's derived here from two raw heartRate reads: the last sample before
+ * the workout ended, and the sample closest to 60s after. Picks the
+ * longest qualifying workout that ended today, since a single day rarely
+ * has more than one real training session worth measuring. Null if no
+ * workout qualifies, or if either read comes back empty (a Watch that
+ * stopped recording right at "End Workout" is a real, common gap -- this
+ * is expected to fill in and get more reliable as more sessions land). */
+export async function fetchTodaysHeartRateRecovery(): Promise<HeartRateRecoverySample | null> {
+  if (!isNativeHealthSupported() || !isHealthSyncEnabled()) return null;
+  try {
+    const workouts = await fetchRecentWorkouts(1);
+    const todayLabel = new Date().toDateString();
+    const candidates = workouts.filter(
+      (w) => w.durationMinutes >= MIN_HRR_WORKOUT_MINUTES && new Date(w.endDate).toDateString() === todayLabel,
+    );
+    if (candidates.length === 0) return null;
+    const longest = candidates.reduce((best, w) => (w.durationMinutes > best.durationMinutes ? w : best));
+    return await computeHeartRateRecovery(longest);
+  } catch {
+    return null;
+  }
+}
+
+async function computeHeartRateRecovery(
+  workout: HealthWorkoutSummary,
+): Promise<HeartRateRecoverySample | null> {
+  try {
+    const endMs = new Date(workout.endDate).getTime();
+    const [duringWorkout, afterWorkout] = await Promise.all([
+      Health.readSamples({
+        dataType: "heartRate",
+        startDate: workout.startDate,
+        endDate: workout.endDate,
+        limit: 1,
+        ascending: false,
+      }),
+      Health.readSamples({
+        dataType: "heartRate",
+        startDate: workout.endDate,
+        endDate: new Date(endMs + HRR_SEARCH_WINDOW_SECONDS * 1000).toISOString(),
+        limit: 20,
+        ascending: true,
+      }),
+    ]);
+
+    const hrAtEnd = duringWorkout.samples[0]?.value;
+    if (hrAtEnd == null || afterWorkout.samples.length === 0) return null;
+
+    const targetMs = endMs + HRR_TARGET_OFFSET_SECONDS * 1000;
+    const nearest = afterWorkout.samples.reduce((best, s) =>
+      Math.abs(new Date(s.startDate).getTime() - targetMs) <
+      Math.abs(new Date(best.startDate).getTime() - targetMs)
+        ? s
+        : best,
+    );
+
+    return {
+      workoutType: workout.workoutType,
+      workoutEndDate: workout.endDate,
+      hrrBpm: Math.round(hrAtEnd - nearest.value),
+    };
+  } catch {
+    return null;
   }
 }
 

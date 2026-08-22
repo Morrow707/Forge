@@ -33,6 +33,7 @@ type WellnessEntry = {
   vo2Max: number | null;
   respiratoryRate: number | null;
   bodyMass: number | null;
+  heartRateRecovery: number | null;
 };
 
 // Season-length window -- long enough for the slow movers (VO2 Max, body
@@ -41,7 +42,14 @@ type WellnessEntry = {
 // for the cap this is validated against.
 const HISTORY_DAYS = 90;
 
-type MetricKey = "sleepHours" | "restingHeartRate" | "hrv" | "vo2Max" | "respiratoryRate" | "bodyMass";
+type MetricKey =
+  | "sleepHours"
+  | "restingHeartRate"
+  | "hrv"
+  | "vo2Max"
+  | "respiratoryRate"
+  | "bodyMass"
+  | "heartRateRecovery";
 
 type MetricDef = {
   key: MetricKey;
@@ -95,6 +103,14 @@ const METRICS: MetricDef[] = [
     unit: "lbs",
     decimals: 1,
     caption: "Also shown on the Nutrition page -- useful context for a nutritionist reviewing targets.",
+  },
+  {
+    key: "heartRateRecovery",
+    label: "HRR",
+    unit: "bpm",
+    decimals: 0,
+    caption:
+      "How many bpm the heart rate drops in the first minute after training -- only fills in on days with a workout logged to Health. A steady rise over the season means better conditioning; a decline usually means illness or injury outrunning recovery, not just \"less improvement,\" and is worth flagging to a coach.",
   },
 ];
 

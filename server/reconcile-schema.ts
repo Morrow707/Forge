@@ -1535,6 +1535,11 @@ ALTER TABLE "wellness_checkins" ADD COLUMN IF NOT EXISTS "hrv" real;
 ALTER TABLE "wellness_checkins" ADD COLUMN IF NOT EXISTS "vo2_max" real;
 ALTER TABLE "wellness_checkins" ADD COLUMN IF NOT EXISTS "respiratory_rate" real;
 ALTER TABLE "wellness_checkins" ADD COLUMN IF NOT EXISTS "body_mass" real;
+
+-- Heart rate recovery, derived client-side from raw heart-rate samples
+-- rather than read directly from Health (shared/schema.ts
+-- wellnessCheckins.heartRateRecovery).
+ALTER TABLE "wellness_checkins" ADD COLUMN IF NOT EXISTS "heart_rate_recovery" real;
 `;
 
 async function main() {

@@ -7,7 +7,19 @@ import { Label } from "@/components/ui/label";
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { Moon, Activity, Brain, Droplets, Focus, Pencil, X, HeartPulse, Watch, RefreshCw } from "lucide-react";
+import {
+  Moon,
+  Activity,
+  Brain,
+  Droplets,
+  Focus,
+  Pencil,
+  X,
+  HeartPulse,
+  Watch,
+  RefreshCw,
+  Gauge,
+} from "lucide-react";
 import {
   SORENESS_SCALE,
   STRESS_SCALE,
@@ -23,6 +35,7 @@ import {
   enableHealthSync,
   promptHealthSyncOnce,
   fetchLatestHealthSnapshot,
+  fetchTodaysHeartRateRecovery,
 } from "@/lib/native-health";
 
 type WellnessCheckin = {
@@ -39,6 +52,7 @@ type WellnessCheckin = {
   vo2Max: number | null;
   respiratoryRate: number | null;
   bodyMass: number | null;
+  heartRateRecovery: number | null;
 } | null;
 
 /** Inline, always-editable check-in card for today's training session --
@@ -68,6 +82,7 @@ export function WellnessGate() {
   const [vo2Max, setVo2Max] = useState<number | null>(null);
   const [respiratoryRate, setRespiratoryRate] = useState<number | null>(null);
   const [bodyMass, setBodyMass] = useState<number | null>(null);
+  const [heartRateRecovery, setHeartRateRecovery] = useState<number | null>(null);
 
   // Re-sync the editable fields from whatever's on file whenever it
   // changes (first load, or right after a save) so opening the editor
@@ -85,6 +100,7 @@ export function WellnessGate() {
       setVo2Max(data.vo2Max);
       setRespiratoryRate(data.respiratoryRate);
       setBodyMass(data.bodyMass);
+      setHeartRateRecovery(data.heartRateRecovery);
     }
   }, [data]);
 
@@ -106,7 +122,10 @@ export function WellnessGate() {
 
   async function syncFromHealth() {
     if (!isHealthSyncEnabled()) return;
-    const snapshot = await fetchLatestHealthSnapshot();
+    const [snapshot, hrr] = await Promise.all([
+      fetchLatestHealthSnapshot(),
+      fetchTodaysHeartRateRecovery(),
+    ]);
     if (
       snapshot.sleepHours != null &&
       (lastSyncedSleep.current == null || sleepHoursRef.current === lastSyncedSleep.current)
@@ -119,6 +138,7 @@ export function WellnessGate() {
     if (snapshot.vo2Max != null) setVo2Max(snapshot.vo2Max);
     if (snapshot.respiratoryRate != null) setRespiratoryRate(snapshot.respiratoryRate);
     if (snapshot.bodyMass != null) setBodyMass(snapshot.bodyMass);
+    if (hrr != null) setHeartRateRecovery(hrr.hrrBpm);
   }
 
   // Explicit "Sync" tap -- unlike the automatic pull above, this works
@@ -185,6 +205,7 @@ export function WellnessGate() {
         vo2Max,
         respiratoryRate,
         bodyMass,
+        heartRateRecovery,
       });
       return res.json();
     },
@@ -240,6 +261,12 @@ export function WellnessGate() {
             {data.hrv != null && (
               <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
                 <Watch className="h-3.5 w-3.5 shrink-0" /> {Math.round(data.hrv)}ms HRV
+              </span>
+            )}
+            {data.heartRateRecovery != null && (
+              <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+                <Gauge className="h-3.5 w-3.5 shrink-0" /> {Math.round(data.heartRateRecovery)} bpm
+                HRR
               </span>
             )}
             <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
@@ -366,7 +393,7 @@ export function WellnessGate() {
           onChange={setMentalFocus}
         />
       </div>
-      {(restingHeartRate != null || hrv != null) && (
+      {(restingHeartRate != null || hrv != null || heartRateRecovery != null) && (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-md bg-background px-2.5 py-2">
           <span className="flex items-center gap-1 text-[11px] font-semibold text-muted-foreground">
             <Watch className="h-3 w-3" /> From your watch:
@@ -379,6 +406,11 @@ export function WellnessGate() {
           )}
           {hrv != null && (
             <span className="text-xs font-semibold text-foreground">{Math.round(hrv)}ms HRV</span>
+          )}
+          {heartRateRecovery != null && (
+            <span className="text-xs font-semibold text-foreground">
+              {Math.round(heartRateRecovery)} bpm HRR
+            </span>
           )}
         </div>
       )}

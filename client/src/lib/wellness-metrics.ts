@@ -48,4 +48,5 @@ export const METRIC_BETTER_DIRECTION: Record<string, TrendDirection | null> = {
   vo2Max: "up",
   respiratoryRate: "down",
   bodyMass: null,
+  heartRateRecovery: "up",
 };

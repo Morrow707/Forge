@@ -80,6 +80,7 @@ type WellnessEntry = {
   hrv: number | null;
   vo2Max: number | null;
   respiratoryRate: number | null;
+  heartRateRecovery: number | null;
 };
 
 const RECOVERY_HISTORY_DAYS = 90;
@@ -359,7 +360,12 @@ export default function AthleteProgress() {
           </Card>
 
           {!!wellnessHistory?.some(
-            (w) => w.restingHeartRate != null || w.hrv != null || w.vo2Max != null || w.respiratoryRate != null,
+            (w) =>
+              w.restingHeartRate != null ||
+              w.hrv != null ||
+              w.vo2Max != null ||
+              w.respiratoryRate != null ||
+              w.heartRateRecovery != null,
           ) && (
             <Card className="mt-4">
               <CardHeader className="flex flex-row items-start justify-between gap-2">
@@ -377,13 +383,14 @@ export default function AthleteProgress() {
                   <Link href="/athlete/recovery">View Trends</Link>
                 </Button>
               </CardHeader>
-              <CardContent className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+              <CardContent className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
                 {(
                   [
                     { key: "restingHeartRate", label: "Resting HR", unit: "bpm", decimals: 0 },
                     { key: "hrv", label: "HRV", unit: "ms", decimals: 0 },
                     { key: "vo2Max", label: "VO2 Max", unit: "", decimals: 1 },
                     { key: "respiratoryRate", label: "Resp. Rate", unit: "br/min", decimals: 1 },
+                    { key: "heartRateRecovery", label: "HRR", unit: "bpm", decimals: 0 },
                   ] as const
                 ).map((m) => {
                   const avg = average((wellnessHistory ?? []).map((w) => w[m.key]));

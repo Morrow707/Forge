@@ -2073,6 +2073,13 @@ export const wellnessCheckins = pgTable(
     vo2Max: real("vo2_max"),
     respiratoryRate: real("respiratory_rate"),
     bodyMass: real("body_mass"),
+    // How many bpm the heart rate drops in the minute after a workout ends
+    // -- unlike the fields above, HealthKit has no direct data type for
+    // this, so it's derived client-side from raw heart-rate samples around
+    // the day's longest qualifying workout (see native-health.ts's
+    // fetchTodaysHeartRateRecovery). Same opt-in, null-unless-synced story;
+    // additionally null on any day with no workout logged to Health.
+    heartRateRecovery: real("heart_rate_recovery"),
     // Which body parts the athlete flagged as hurting today -- only ever
     // shown/edited in the expanded check-in form, never the collapsed
     // one-line summary. Empty array is the common case (nothing hurts).
@@ -2102,6 +2109,7 @@ export const submitWellnessCheckinSchema = z.object({
   vo2Max: z.number().min(10).max(90).nullish(),
   respiratoryRate: z.number().min(4).max(60).nullish(),
   bodyMass: z.number().min(20).max(400).nullish(),
+  heartRateRecovery: z.number().min(0).max(100).nullish(),
 });
 
 // Self-reported by the athlete (or logged by a coach for a roster athlete),

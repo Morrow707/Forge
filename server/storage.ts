@@ -3321,6 +3321,7 @@ Based on this athlete's actual rate of improvement, suggest a realistic target v
       vo2Max?: number | null;
       respiratoryRate?: number | null;
       bodyMass?: number | null;
+      heartRateRecovery?: number | null;
     },
   ) {
     const [row] = await db
