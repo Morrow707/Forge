@@ -49,6 +49,14 @@ app.use(
     contentSecurityPolicy: {
       reportOnly: true,
       directives: {
+        // upgrade-insecure-requests is an active behavior (upgrade the
+        // connection), not a restriction that can be violated -- browsers
+        // correctly no-op it under a report-only policy and log a console
+        // warning every single time, which is pure noise (confirmed by
+        // actually loading the app: ~15 of these per page). Helmet's own
+        // default directives include it; explicitly unset it here rather
+        // than let it ride along doing nothing but spamming the console.
+        upgradeInsecureRequests: null,
         // No inline <script> tags and no third-party script host anywhere
         // in client/src or index.html -- the single script is the app's
         // own Vite-built bundle.
