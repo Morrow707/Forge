@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, type ReactNode } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, useIsRestoring } from "@tanstack/react-query";
 import { apiRequest, ApiError, getQueryFn, setNativeToken } from "@/lib/queryClient";
 import { savePasswordToKeychain } from "@/lib/native-auth";
 import { logDebug } from "@/lib/debug-console";
@@ -169,7 +169,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // stays undefined) and stop short of a wrong redirect in the second case.
   const {
     data: user,
-    isLoading,
+    isLoading: isFetching,
     isError,
   } = useQuery<PublicUser | null>({
     queryKey: ["/api/auth/me"],
@@ -177,6 +177,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     retry: 3,
     retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
   });
+  // PersistQueryClientProvider (App.tsx) restores this query's last-known
+  // value from localStorage asynchronously on every fresh page load --
+  // useQuery's own isLoading only reflects whether ITS fetch has resolved,
+  // not whether that restore has finished, so a hard reload/deep link
+  // straight into a protected route had a real window where isLoading was
+  // already false with user still undefined. ProtectedRoute saw that as
+  // "confirmed logged out," redirected to /login, and login.tsx's own
+  // already-logged-in redirect then bounced to the role's default home the
+  // instant the real session data arrived a moment later -- losing
+  // whatever nested route was actually being loaded. useIsRestoring folded
+  // into isLoading closes that window.
+  const isRestoring = useIsRestoring();
+  const isLoading = isFetching || isRestoring;
 
   const loginMutation = useLoginMutation();
   const mfaVerifyMutation = useMfaVerifyMutation();
