@@ -3,6 +3,8 @@ import {
   users,
   coachAthletes,
   coachAthleteRequests,
+  guardianLinks,
+  guardianInvites,
   coachStaff,
   teams,
   teamMembers,
@@ -5875,6 +5877,11 @@ ${athleteContext}
     dateOverrides?: Record<string, string>,
     durationWeeks = 1,
   ) {
+    // Same gate as createAssignment -- see assertMinorHasActiveGuardian.
+    for (const a of athletes) {
+      await this.assertMinorHasActiveGuardian(a.athleteId);
+    }
+
     const created = athletes.length
       ? await db
           .insert(skillAssignments)
@@ -10850,6 +10857,15 @@ ${entriesText}`;
     dateOverrides?: Record<string, string>,
     durationWeeks = 1,
   ) {
+    // See assertMinorHasActiveGuardian's own comment -- a known-minor
+    // athlete with no active guardian link can't have new content pushed
+    // onto them. Checked for every athlete in the batch before any insert
+    // happens, so a batch assignment either fully succeeds or fails closed
+    // with a clear reason rather than silently skipping some athletes.
+    for (const a of athletes) {
+      await this.assertMinorHasActiveGuardian(a.athleteId);
+    }
+
     // Re-assigning a program an athlete already has (or has finished) is
     // intentional -- e.g. running the same block again -- so every request
     // creates a fresh assignment. The newest one wins on any calendar date
@@ -15230,6 +15246,16 @@ ${catalog}`;
       return { error: "A date of birth is required to finish creating this account." as const };
     }
     const tier: PrivacyTier = derivePrivacyTier(dateOfBirth);
+    // Same "needs an active guardian or the profile is dead information"
+    // reasoning as the direct-signup route -- enforced here (not in the
+    // zod schema) since the schema alone can't know the tier until the
+    // date of birth -- whichever of the two sources supplied it -- is
+    // resolved, just above.
+    if (tier !== "tier3_adult_18plus" && !input.guardianEmail) {
+      return {
+        error: "A parent or guardian's email is required to finish creating this account." as const,
+      };
+    }
     const passwordHash = await hashPassword(input.password);
     const user = await this.createUser({
       email: input.email,
@@ -15280,7 +15306,214 @@ ${catalog}`;
       );
     }
     await this.deleteProvisionalAthlete(provisional.coachId, provisional.id);
-    return { user, coachId: provisional.coachId };
+    return { user, coachId: provisional.coachId, tier };
+  },
+
+  // ---------- Guardian accounts ----------
+  // A permanently-linked, read-mostly login for a minor athlete's
+  // parent/guardian -- see guardianLinks' own schema comment for the
+  // one-guardian-per-athlete rule this whole section enforces.
+
+  // Issues (or re-issues) the invite that turns into a guardian account once
+  // claimed. Any prior unclaimed invite for this athlete is cleared first --
+  // same "delete then insert" shape as createPasswordResetToken -- so a
+  // mistyped email doesn't leave a dead row sitting around forever.
+  async createGuardianInvite(
+    athleteId: number,
+    email: string,
+  ): Promise<{ token: string } | { error: string }> {
+    const existingLink = await db.query.guardianLinks.findFirst({
+      where: eq(guardianLinks.athleteId, athleteId),
+    });
+    if (existingLink) {
+      return { error: "This athlete already has a guardian account linked." };
+    }
+    await db
+      .delete(guardianInvites)
+      .where(and(eq(guardianInvites.athleteId, athleteId), isNull(guardianInvites.claimedAt)));
+    const token = generateResetToken();
+    // A week, not the hour a password reset gets -- this is going to a
+    // parent's inbox, not someone actively sitting at the reset-password
+    // screen waiting for it.
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    await db.insert(guardianInvites).values({
+      athleteId,
+      email,
+      tokenHash: hashResetToken(token),
+      expiresAt,
+    });
+    return { token };
+  },
+
+  async getGuardianInvitePreview(
+    rawToken: string,
+  ): Promise<{ athleteName: string; email: string } | null> {
+    const invite = await db.query.guardianInvites.findFirst({
+      where: and(
+        eq(guardianInvites.tokenHash, hashResetToken(rawToken)),
+        isNull(guardianInvites.claimedAt),
+        gt(guardianInvites.expiresAt, new Date()),
+      ),
+    });
+    if (!invite) return null;
+    const athlete = await this.getUser(invite.athleteId);
+    return { athleteName: athlete?.name ?? "this athlete", email: invite.email };
+  },
+
+  // Creates the guardian's users row and the permanent guardianLinks row
+  // together, and marks the invite used -- the three only ever happen as a
+  // unit. Re-checks the one-guardian-per-athlete rule here too (not just at
+  // invite-creation time): two invites for the same athlete can't normally
+  // coexist (createGuardianInvite clears the old one first), but this is
+  // the actual point where the permanent row gets created, so it's the
+  // right place to fail closed if that ever changes.
+  async claimGuardianInvite(
+    rawToken: string,
+    password: string,
+    agreedToTermsText: string,
+    consentContext?: { ipAddress?: string; userAgent?: string },
+  ) {
+    const invite = await db.query.guardianInvites.findFirst({
+      where: and(
+        eq(guardianInvites.tokenHash, hashResetToken(rawToken)),
+        isNull(guardianInvites.claimedAt),
+        gt(guardianInvites.expiresAt, new Date()),
+      ),
+    });
+    if (!invite) return { error: "This invite link is invalid or has expired." as const };
+    const existingUser = await this.getUserByEmail(invite.email);
+    if (existingUser) {
+      return { error: "An account with this email already exists -- log in instead." as const };
+    }
+    const existingLink = await db.query.guardianLinks.findFirst({
+      where: eq(guardianLinks.athleteId, invite.athleteId),
+    });
+    if (existingLink) return { error: "This athlete already has a guardian account linked." as const };
+
+    const athlete = await this.getUser(invite.athleteId);
+    if (!athlete) return { error: "This athlete's account no longer exists." as const };
+
+    const passwordHash = await hashPassword(password);
+    const guardian = await db.transaction(async (tx) => {
+      const [user] = await tx
+        .insert(users)
+        .values({
+          email: invite.email.toLowerCase(),
+          passwordHash,
+          name: `${athlete.name}'s guardian`,
+          role: "guardian",
+          emailVerified: true, // clicking the emailed invite link already proves inbox control
+          agreedToTermsAt: new Date(),
+          agreedToTermsText,
+        })
+        .returning();
+      await tx.insert(guardianLinks).values({ athleteId: invite.athleteId, guardianId: user.id });
+      await tx
+        .update(guardianInvites)
+        .set({ claimedAt: new Date() })
+        .where(eq(guardianInvites.id, invite.id));
+      return user;
+    });
+
+    await this.logConsentRecord({
+      userId: guardian.id,
+      consentType: "terms_of_service",
+      documentText: agreedToTermsText,
+      ipAddress: consentContext?.ipAddress,
+      userAgent: consentContext?.userAgent,
+    });
+
+    return { user: guardian, athleteId: invite.athleteId };
+  },
+
+  async getAthleteForGuardian(guardianId: number) {
+    const [row] = await db
+      .select({
+        id: users.id,
+        name: users.name,
+        email: users.email,
+        createdAt: users.createdAt,
+        age: users.age,
+        dateOfBirth: users.dateOfBirth,
+        gender: users.gender,
+        heightIn: users.heightIn,
+        bodyWeightLbs: users.bodyWeightLbs,
+        sport: users.sport,
+        position: users.position,
+        seasonPhase: users.seasonPhase,
+        trainingStylePreference: users.trainingStylePreference,
+        fortyYardDash: users.fortyYardDash,
+        verticalJumpIn: users.verticalJumpIn,
+        broadJumpIn: users.broadJumpIn,
+        proAgilitySeconds: users.proAgilitySeconds,
+        benchMaxLbs: users.benchMaxLbs,
+        squatMaxLbs: users.squatMaxLbs,
+        deadliftMaxLbs: users.deadliftMaxLbs,
+      })
+      .from(guardianLinks)
+      .innerJoin(users, eq(guardianLinks.athleteId, users.id))
+      .where(eq(guardianLinks.guardianId, guardianId));
+    return row ?? null;
+  },
+
+  async getGuardianLinkForAthlete(athleteId: number) {
+    const link = await db.query.guardianLinks.findFirst({ where: eq(guardianLinks.athleteId, athleteId) });
+    return link ?? null;
+  },
+
+  // The permanence rule: while a linked athlete is a known minor, this
+  // link can only be removed by the guardian themself giving up access
+  // voluntarily -- never by the athlete, and never by a coach/admin. Once
+  // derivePrivacyTier reports tier3_adult_18plus (or the athlete has no
+  // dateOfBirth on file, which fails closed rather than guessing), the
+  // athlete can remove it too. Row deletion IS the unlink; see
+  // guardianLinks' own schema comment for why there's no separate status.
+  async removeGuardianLink(
+    requesterId: number,
+    requesterRole: "athlete" | "guardian",
+    linkId: number,
+  ): Promise<{ ok: true } | { ok: false; error: string }> {
+    const link = await db.query.guardianLinks.findFirst({ where: eq(guardianLinks.id, linkId) });
+    if (!link) return { ok: false, error: "Not found." };
+
+    if (requesterRole === "guardian") {
+      if (link.guardianId !== requesterId) return { ok: false, error: "Not found." };
+    } else {
+      if (link.athleteId !== requesterId) return { ok: false, error: "Not found." };
+      const athlete = await this.getUser(link.athleteId);
+      if (!athlete?.dateOfBirth) {
+        return {
+          ok: false,
+          error: "Add your date of birth before guardian access can be removed.",
+        };
+      }
+      if (derivePrivacyTier(athlete.dateOfBirth) !== "tier3_adult_18plus") {
+        return { ok: false, error: "Guardian access can't be removed until you turn 18." };
+      }
+    }
+
+    await db.delete(guardianLinks).where(eq(guardianLinks.id, linkId));
+    return { ok: true };
+  },
+
+  // The other half of "a minor's profile needs both logins active, or it's
+  // dead information" -- called before any new content gets pushed onto an
+  // athlete (see createAssignment below). Only fires when we affirmatively
+  // know the athlete is a minor: a known dateOfBirth resolving to Tier 1 or
+  // Tier 2. An athlete with no dateOfBirth on file is "tier unknown," and
+  // this never guesses at that, same as every other tier-gated check in
+  // this codebase -- it would otherwise silently block every pre-existing
+  // account that predates dateOfBirth collection. Adults are never gated
+  // here, regardless of whether a guardian link exists.
+  async assertMinorHasActiveGuardian(athleteId: number): Promise<void> {
+    const athlete = await this.getUser(athleteId);
+    if (!athlete?.dateOfBirth) return;
+    if (derivePrivacyTier(athlete.dateOfBirth) === "tier3_adult_18plus") return;
+    const link = await this.getGuardianLinkForAthlete(athleteId);
+    if (link) return;
+    throw new ForbiddenReferenceError(
+      `${athlete.name} needs an active guardian account linked before anything new can be assigned to them.`,
+    );
   },
 
   // Insert-only -- see consentRecords' own schema comment for why nothing

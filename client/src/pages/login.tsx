@@ -38,7 +38,15 @@ export default function LoginPage() {
   if (!isLoading && user) {
     return (
       <Redirect
-        to={user.role === "coach" ? "/coach" : user.role === "admin" ? "/admin" : "/athlete"}
+        to={
+          user.role === "coach"
+            ? "/coach"
+            : user.role === "admin"
+              ? "/admin"
+              : user.role === "guardian"
+                ? "/guardian"
+                : "/athlete"
+        }
       />
     );
   }

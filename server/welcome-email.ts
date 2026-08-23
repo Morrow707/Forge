@@ -3,7 +3,10 @@
 // clients.
 import { escapeHtml } from "./email";
 
-export function buildWelcomeEmail(user: { name: string; role: "coach" | "athlete" | "admin" }, coachName: string | null) {
+export function buildWelcomeEmail(
+  user: { name: string; role: "coach" | "athlete" | "admin" | "guardian" },
+  coachName: string | null,
+) {
   const firstName = escapeHtml(user.name.split(" ")[0] || user.name);
 
   const body =

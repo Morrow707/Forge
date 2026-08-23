@@ -14,6 +14,7 @@ import { buildPasswordResetEmail } from "./password-reset-email";
 import { buildNewDeviceLoginEmail } from "./new-device-login-email";
 import { buildPasswordChangedEmail } from "./password-changed-email";
 import { buildVerifyEmailEmail } from "./verify-email-email";
+import { buildGuardianInviteEmail } from "./guardian-invite-email";
 import { totpOtpauthUri } from "./mfa";
 import { isNativeAppRequest, normalizeIp, resolveLocation, shouldTouchLastSeen, type SessionKind } from "./session-tracking";
 import {
@@ -23,9 +24,10 @@ import {
   changePasswordSchema,
   backfillDateOfBirthSchema,
   claimProvisionalAthleteSchema,
+  claimGuardianInviteSchema,
   type PublicUser,
 } from "@shared/schema";
-import { derivePrivacyTier, GUARDIAN_NOTICE_LIVE } from "@shared/privacy-tiers";
+import { derivePrivacyTier, GUARDIAN_NOTICE_LIVE, type PrivacyTier } from "@shared/privacy-tiers";
 import { notifyUser } from "./notify";
 
 const PgStore = connectPgSimple(session);
@@ -318,7 +320,7 @@ export function setupAuth(app: Express) {
       if (!parsed.success) {
         return res.status(400).json({ message: parsed.error.issues[0]?.message });
       }
-      const { email, password, name, role, coachCode, phone, dateOfBirth } = parsed.data;
+      const { email, password, name, role, coachCode, phone, dateOfBirth, guardianEmail } = parsed.data;
       const existing = await storage.getUserByEmail(email);
       if (existing) {
         return res.status(409).json({ message: "Email already in use" });
@@ -336,6 +338,18 @@ export function setupAuth(app: Express) {
           message:
             "Athletes under 13 can't create their own account. Ask your coach or program to set one up for you.",
           code: "coach_provisioning_required",
+        });
+      }
+
+      // A minor athlete's profile needs an active guardian account before
+      // anything new can be assigned to them (see
+      // storage.assertMinorHasActiveGuardian) -- collecting the email now,
+      // required, is what makes that reachable at all instead of a
+      // permanent dead end. In practice only tier2 reaches this: tier1 is
+      // already rejected above.
+      if (role === "athlete" && tier !== "tier3_adult_18plus" && !guardianEmail) {
+        return res.status(400).json({
+          message: "A parent or guardian's email is required for an athlete under 18.",
         });
       }
 
@@ -432,6 +446,7 @@ export function setupAuth(app: Express) {
           html: buildWelcomeEmail(user, coach?.name ?? null),
         });
         sendVerificationEmail(req, user);
+        issueGuardianInviteIfNeeded(req, user, guardianEmail, tier);
         const { nativeToken } = await trackNewSession(req, user.id);
         res.status(201).json({ ...(await toPublicUserWithSections(user)), nativeToken });
       });
@@ -449,8 +464,20 @@ export function setupAuth(app: Express) {
     if (!provisional) return res.status(404).json({ message: "This claim link isn't valid." });
     const { name, sport, position } = provisional;
     // Never sends the actual date back on this unauthenticated preview --
-    // just whether the claim-signup form still needs to ask for one.
-    res.json({ name, sport, position, needsDateOfBirth: !provisional.dateOfBirth });
+    // just whether the claim-signup form still needs to ask for one. Same
+    // reasoning for needsGuardianEmail: if the tier isn't known yet either
+    // (dateOfBirth still missing), this defaults to true rather than
+    // guessing -- an unnecessary field beats a confusing rejection on submit.
+    const needsGuardianEmail = provisional.dateOfBirth
+      ? derivePrivacyTier(provisional.dateOfBirth) !== "tier3_adult_18plus"
+      : true;
+    res.json({
+      name,
+      sport,
+      position,
+      needsDateOfBirth: !provisional.dateOfBirth,
+      needsGuardianEmail,
+    });
   });
 
   // Finishes a player-inflow-sheet import (see provisionalAthletes' schema
@@ -471,7 +498,7 @@ export function setupAuth(app: Express) {
         { ipAddress: req.ip, userAgent: req.get("user-agent") ?? undefined },
       );
       if ("error" in result) return res.status(400).json({ message: result.error });
-      const { user, coachId } = result;
+      const { user, coachId, tier } = result;
       // Same gate as the direct-signup route above -- see
       // GUARDIAN_NOTICE_LIVE's own comment.
       if (GUARDIAN_NOTICE_LIVE && user.requiresGuardianNotice) {
@@ -491,6 +518,44 @@ export function setupAuth(app: Express) {
           html: buildWelcomeEmail(user, null),
         });
         sendVerificationEmail(req, user);
+        issueGuardianInviteIfNeeded(req, user, parsed.data.guardianEmail, tier);
+        const { nativeToken } = await trackNewSession(req, user.id);
+        res.status(201).json({ ...(await toPublicUserWithSections(user)), nativeToken });
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // Public/unauthenticated preview -- same reasoning as GET /api/claim/:code
+  // above: whoever has the emailed link needs to see whose invite this is
+  // before they've ever logged in.
+  app.get("/api/guardian-invites/:token", async (req, res) => {
+    const preview = await storage.getGuardianInvitePreview(String(req.params.token));
+    if (!preview) return res.status(404).json({ message: "This invite link isn't valid or has expired." });
+    res.json(preview);
+  });
+
+  // Claiming is what actually creates the guardian's account (see
+  // storage.claimGuardianInvite) -- same shape as the two signup routes
+  // above: create, log in, track the session, return the public user.
+  app.post("/api/guardian-invites/:token/claim", signupLimiter, async (req, res, next) => {
+    try {
+      const parsed = claimGuardianInviteSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      const agreedToTermsText = await storage.getLegalAgreement();
+      const result = await storage.claimGuardianInvite(
+        String(req.params.token),
+        parsed.data.password,
+        agreedToTermsText,
+        { ipAddress: req.ip, userAgent: req.get("user-agent") ?? undefined },
+      );
+      if ("error" in result) return res.status(400).json({ message: result.error });
+      const { user } = result;
+      req.login(user, async (err) => {
+        if (err) return next(err);
         const { nativeToken } = await trackNewSession(req, user.id);
         res.status(201).json({ ...(await toPublicUserWithSections(user)), nativeToken });
       });
@@ -537,6 +602,34 @@ export function setupAuth(app: Express) {
         });
       })
       .catch((err) => console.error("sendVerificationEmail failed:", err));
+  }
+
+  // Fire-and-forget, same reasoning as sendVerificationEmail above --
+  // issuing the invite (and the email carrying it) is never a reason to
+  // hold up the signup response. No-ops for an adult; guardianEmail is
+  // already required (and validated) for a minor by the time this is
+  // called, so an absent email here only ever happens for an adult.
+  function issueGuardianInviteIfNeeded(
+    req: any,
+    athlete: { id: number; name: string },
+    guardianEmail: string | undefined,
+    tier: PrivacyTier,
+  ) {
+    if (tier === "tier3_adult_18plus" || !guardianEmail) return;
+    storage
+      .createGuardianInvite(athlete.id, guardianEmail)
+      .then(async (invite) => {
+        if (!("token" in invite)) return;
+        const origin = process.env.RENDER_EXTERNAL_URL ?? `${req.protocol}://${req.get("host")}`;
+        const claimLink = `${origin}/guardian/claim?token=${invite.token}`;
+        const parentalNotice = await storage.getLegalDocument("parental_notice");
+        return sendEmail({
+          to: guardianEmail,
+          subject: `You've been listed as ${athlete.name}'s guardian on Forge`,
+          html: buildGuardianInviteEmail(athlete.name, claimLink, parentalNotice?.content ?? ""),
+        });
+      })
+      .catch((err) => console.error("issueGuardianInviteIfNeeded failed:", err));
   }
 
   async function trackNewSession(
@@ -942,7 +1035,7 @@ export const requireAuth: RequestHandler = (req, res, next) => {
   next();
 };
 
-type Role = "coach" | "athlete" | "admin";
+type Role = "coach" | "athlete" | "admin" | "guardian";
 
 export const requireRole =
   (role: Role | Role[]): RequestHandler =>

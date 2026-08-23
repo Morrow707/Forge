@@ -45,7 +45,11 @@ export const session = pgTable(
   }),
 );
 
-export const roleEnum = pgEnum("role", ["coach", "athlete", "admin"]);
+// "guardian" is a permanently-linked, read-mostly account for a minor
+// athlete's parent/guardian (see guardianLinks below) -- never self-
+// registers through /api/auth/signup, only ever created by claiming a
+// guardianInvites token.
+export const roleEnum = pgEnum("role", ["coach", "athlete", "admin", "guardian"]);
 export const weightUnitEnum = pgEnum("weight_unit", ["lbs", "kg"]);
 export const weightModeEnum = pgEnum("weight_mode", [
   "numeric",
@@ -384,6 +388,60 @@ export const coachAthleteRequests = pgTable(
     athleteIdx: index("coach_athlete_requests_athlete_idx").on(table.athleteId),
   }),
 );
+
+// One guardian per athlete, ever -- both columns are unique (not just the
+// pair), so a guardian account is single-purpose (one linked athlete) and an
+// athlete can't accumulate more than one guardian. Deliberately no "revoked"
+// status column: while the athlete is under 18 this row simply isn't
+// deletable (see storage.removeGuardianLink), so its mere existence already
+// means "active." Row deletion IS the unlink -- there's nothing else to model.
+export const guardianLinks = pgTable(
+  "guardian_links",
+  {
+    id: serial("id").primaryKey(),
+    athleteId: integer("athlete_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    guardianId: integer("guardian_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    athleteIdx: uniqueIndex("guardian_links_athlete_idx").on(table.athleteId),
+    guardianIdx: uniqueIndex("guardian_links_guardian_idx").on(table.guardianId),
+  }),
+);
+
+// The gap between "an athlete's guardian email was captured at signup" and
+// "the guardian actually has an account" -- exact mirror of
+// passwordResetTokens' hashed/single-use/expiring shape, just anchored to
+// athleteId instead of an existing userId, since the invitee has no account
+// yet. Claiming one is what creates the guardian's users row + the
+// guardianLinks row together (see storage.claimGuardianInvite).
+export const guardianInvites = pgTable(
+  "guardian_invites",
+  {
+    id: serial("id").primaryKey(),
+    athleteId: integer("athlete_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    email: text("email").notNull(),
+    tokenHash: text("token_hash").notNull(),
+    expiresAt: timestamp("expires_at").notNull(),
+    claimedAt: timestamp("claimed_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    athleteIdx: index("guardian_invites_athlete_idx").on(table.athleteId),
+  }),
+);
+export type GuardianInvite = typeof guardianInvites.$inferSelect;
+
+export const claimGuardianInviteSchema = z.object({
+  password: z.string().min(6, "Password must be at least 6 characters"),
+});
+export type ClaimGuardianInviteInput = z.infer<typeof claimGuardianInviteSchema>;
 
 export const teams = pgTable(
   "teams",
@@ -2430,6 +2488,10 @@ export const claimProvisionalAthleteSchema = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD")
     .refine((v) => new Date(v) <= new Date(), "Date of birth can't be in the future")
     .optional(),
+  // Same "required only if actually a minor" reasoning as signupSchema's own
+  // guardianEmail field -- enforced in storage.claimProvisionalAthlete once
+  // the tier is known, not here.
+  guardianEmail: z.string().trim().email().optional(),
   agreedToTerms: z.literal(true, {
     errorMap: () => ({ message: "You must agree to the terms to create an account" }),
   }),
@@ -4397,6 +4459,10 @@ export const signupSchema = z.object({
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD")
     .refine((v) => new Date(v) <= new Date(), "Date of birth can't be in the future"),
+  // Required by the route (not here -- the route needs the derived tier,
+  // not just role, to know whether to enforce this) whenever the account
+  // being created is a minor. See server/auth.ts's signup handler.
+  guardianEmail: z.string().trim().email().optional(),
   agreedToTerms: z.literal(true, {
     errorMap: () => ({ message: "You must agree to the terms to create an account" }),
   }),

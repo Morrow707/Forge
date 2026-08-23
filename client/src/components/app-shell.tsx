@@ -42,6 +42,7 @@ import { cn } from "@/lib/utils";
 import { ForgeMark } from "@/components/forge-mark";
 import { EditMyProfileDialog } from "@/components/edit-my-profile-dialog";
 import { DeleteAccountDialog } from "@/components/delete-account-dialog";
+import { GuardianAccessDialog } from "@/components/guardian-access-dialog";
 import { ReportProblemDialog } from "@/components/report-problem-dialog";
 import { MfaSettingsDialog } from "@/components/mfa-settings-dialog";
 import { ActiveSessionsDialog } from "@/components/active-sessions-dialog";
@@ -171,6 +172,7 @@ export function AppShell({
   const [teamBrandingOpen, setTeamBrandingOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
+  const [guardianAccessOpen, setGuardianAccessOpen] = useState(false);
   const [reportProblemOpen, setReportProblemOpen] = useState(false);
   const [mfaSettingsOpen, setMfaSettingsOpen] = useState(false);
   const [activeSessionsOpen, setActiveSessionsOpen] = useState(false);
@@ -627,6 +629,20 @@ export function AppShell({
                     <LogOut className="h-4 w-4" />
                     Log out
                   </button>
+                  {user?.role === "athlete" && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setGuardianAccessOpen(true);
+                        setAccountMenuOpen(false);
+                      }}
+                      className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-foreground hover:bg-surface-elevated"
+                    >
+                      <ShieldCheck className="h-4 w-4" />
+                      Guardian access
+                    </button>
+                  )}
                   <button
                     type="button"
                     role="menuitem"
@@ -817,6 +833,19 @@ export function AppShell({
                   <LogOut className="h-4 w-4" />
                   Log out
                 </button>
+                {user?.role === "athlete" && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGuardianAccessOpen(true);
+                      setMobileNavOpen(false);
+                    }}
+                    className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground"
+                  >
+                    <ShieldCheck className="h-4 w-4" />
+                    Guardian access
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => {
@@ -887,6 +916,9 @@ export function AppShell({
         <TeamBrandingDialog open={teamBrandingOpen} onOpenChange={setTeamBrandingOpen} />
       )}
       {user && <DeleteAccountDialog open={deleteAccountOpen} onOpenChange={setDeleteAccountOpen} />}
+      {user?.role === "athlete" && (
+        <GuardianAccessDialog open={guardianAccessOpen} onOpenChange={setGuardianAccessOpen} />
+      )}
       {user && <ReportProblemDialog open={reportProblemOpen} onOpenChange={setReportProblemOpen} />}
       {(user?.role === "coach" || user?.role === "admin") && (
         <MfaSettingsDialog open={mfaSettingsOpen} onOpenChange={setMfaSettingsOpen} />

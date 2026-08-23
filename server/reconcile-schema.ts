@@ -31,6 +31,7 @@ DO $$ BEGIN
   CREATE TYPE "role" AS ENUM ('coach', 'athlete');
 EXCEPTION WHEN duplicate_object THEN null; END $$;
 ALTER TYPE "role" ADD VALUE IF NOT EXISTS 'admin';
+ALTER TYPE "role" ADD VALUE IF NOT EXISTS 'guardian';
 
 DO $$ BEGIN
   CREATE TYPE "weight_unit" AS ENUM ('lbs', 'kg');
@@ -1666,6 +1667,26 @@ CREATE TABLE IF NOT EXISTS "user_sessions" (
   "revoked_at" timestamp
 );
 CREATE INDEX IF NOT EXISTS "user_sessions_user_idx" ON "user_sessions" ("user_id");
+
+-- One guardian per athlete, ever -- both FKs are unique, not just the pair
+-- (shared/schema.ts guardianLinks' own comment explains why).
+CREATE TABLE IF NOT EXISTS "guardian_links" (
+  "id" serial PRIMARY KEY,
+  "athlete_id" integer NOT NULL UNIQUE REFERENCES "users"("id") ON DELETE CASCADE,
+  "guardian_id" integer NOT NULL UNIQUE REFERENCES "users"("id") ON DELETE CASCADE,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS "guardian_invites" (
+  "id" serial PRIMARY KEY,
+  "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "email" text NOT NULL,
+  "token_hash" text NOT NULL,
+  "expires_at" timestamp NOT NULL,
+  "claimed_at" timestamp,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "guardian_invites_athlete_idx" ON "guardian_invites" ("athlete_id");
 `;
 
 async function main() {

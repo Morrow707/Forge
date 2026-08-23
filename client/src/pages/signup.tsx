@@ -21,6 +21,7 @@ import { Dumbbell, ClipboardList, Sparkles, Check, Lock } from "lucide-react";
 import { ForgeMark } from "@/components/forge-mark";
 import { getJson, resolveApiUrl } from "@/lib/queryClient";
 import { hexToHslTriplet, contrastForegroundHsl } from "@/lib/color";
+import { derivePrivacyTier } from "@shared/privacy-tiers";
 
 type PublicBranding = {
   teamName: string | null;
@@ -64,6 +65,12 @@ export default function SignupPage() {
   })();
   const [phone, setPhone] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState("");
+  const [guardianEmail, setGuardianEmail] = useState("");
+  // A signed-up-under-18 athlete needs a guardian's email collected right
+  // here -- see storage.assertMinorHasActiveGuardian's own comment for why
+  // an account with nobody linked can't have anything assigned to it later.
+  const isMinorAthlete =
+    role === "athlete" && !!dateOfBirth && derivePrivacyTier(dateOfBirth) !== "tier3_adult_18plus";
   // Whether the in-flight/just-submitted signup is a no-code athlete
   // signup -- set synchronously on submit (a ref, not state, so it's
   // already correct by the time the mutation's success re-render happens,
@@ -110,6 +117,7 @@ export default function SignupPage() {
       coachCode: role === "athlete" ? coachCode || undefined : undefined,
       phone: phone.trim() || undefined,
       dateOfBirth,
+      guardianEmail: isMinorAthlete ? guardianEmail.trim() || undefined : undefined,
       agreedToTerms: true,
     });
   }
@@ -235,6 +243,24 @@ export default function SignupPage() {
                   </p>
                 )}
               </div>
+              {isMinorAthlete && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="guardianEmail">Parent/guardian email</Label>
+                  <Input
+                    id="guardianEmail"
+                    type="email"
+                    autoComplete="email"
+                    required
+                    value={guardianEmail}
+                    onChange={(e) => setGuardianEmail(e.target.value)}
+                    placeholder="parent@example.com"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Required under 18 -- we'll email them to set up a linked account before a coach
+                    can assign you anything.
+                  </p>
+                </div>
+              )}
               <div className="space-y-1.5">
                 <Label htmlFor="phone">Phone number (optional)</Label>
                 <Input
@@ -280,7 +306,11 @@ export default function SignupPage() {
                 type="submit"
                 size="lg"
                 className="w-full"
-                disabled={signupMutation.isPending || !agreedToTerms}
+                disabled={
+                  signupMutation.isPending ||
+                  !agreedToTerms ||
+                  (isMinorAthlete && !guardianEmail.trim())
+                }
               >
                 {signupMutation.isPending ? "Creating account…" : "Create Account"}
               </Button>

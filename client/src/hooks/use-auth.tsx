@@ -15,6 +15,7 @@ type SignupPayload = {
   coachCode?: string;
   phone?: string;
   dateOfBirth: string;
+  guardianEmail?: string;
   agreedToTerms: true;
 };
 

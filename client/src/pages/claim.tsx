@@ -19,6 +19,7 @@ type ProvisionalPreview = {
   sport: string | null;
   position: string | null;
   needsDateOfBirth: boolean;
+  needsGuardianEmail: boolean;
 };
 
 /** Where a player-inflow-sheet claim code lands (see PlayerIntakeImportDialog
@@ -35,6 +36,7 @@ export default function ClaimPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState("");
+  const [guardianEmail, setGuardianEmail] = useState("");
   const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   const { data: preview, isLoading: previewLoading, isError: previewError } = useQuery<ProvisionalPreview>({
@@ -48,6 +50,7 @@ export default function ClaimPage() {
         email,
         password,
         dateOfBirth: dateOfBirth || undefined,
+        guardianEmail: guardianEmail.trim() || undefined,
         agreedToTerms: true,
       });
       return (await res.json()) as PublicUser & { nativeToken?: string };
@@ -124,6 +127,23 @@ export default function ClaimPage() {
                   onChange={(e) => setDateOfBirth(e.target.value)}
                   autoComplete="bday"
                 />
+              </div>
+            )}
+            {(preview?.needsDateOfBirth || preview?.needsGuardianEmail) && (
+              <div className="space-y-1.5">
+                <Label htmlFor="claim-guardian-email">Parent/guardian email</Label>
+                <Input
+                  id="claim-guardian-email"
+                  type="email"
+                  required
+                  value={guardianEmail}
+                  onChange={(e) => setGuardianEmail(e.target.value)}
+                  autoComplete="email"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Athletes under 18 need a parent or guardian's account linked before a coach can
+                  assign anything. We'll email them to set it up.
+                </p>
               </div>
             )}
             <div className="space-y-1.5">

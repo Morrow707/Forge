@@ -19,7 +19,7 @@ import { buildTrainingHistoryCsv, buildTrainingHistoryPdf, csvField } from "./tr
 import { buildMovementScreenSheetPdf } from "./movement-screen-export";
 import { buildComplianceReportPdf } from "./compliance-report";
 import { buildLegalDocumentPdf } from "./legal-document-export";
-import { GUARDIAN_NOTICE_LIVE } from "@shared/privacy-tiers";
+import { GUARDIAN_NOTICE_LIVE, derivePrivacyTier } from "@shared/privacy-tiers";
 import { BILLING_LIVE } from "./billing";
 import { verifyAppleTransaction } from "./apple-iap";
 import { verifyMediaUrl } from "./media-url-signing";
@@ -339,7 +339,12 @@ const reportProblemLimiter = rateLimit({
 });
 
 function currentUser(req: any) {
-  return req.user as { id: number; role: "coach" | "athlete" | "admin"; name: string; email: string };
+  return req.user as {
+    id: number;
+    role: "coach" | "athlete" | "admin" | "guardian";
+    name: string;
+    email: string;
+  };
 }
 
 // Fans a notification out to a list of recipients with each delivery
@@ -6533,6 +6538,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const user = currentUser(req);
     cancelRestOverPush(user.id);
     res.status(204).end();
+  });
+
+  // ---------- Guardian dashboard ----------
+  // Read-mostly by design -- a guardian can view the linked athlete's
+  // profile/activity and edit their own profile info (see updateProfileSchema,
+  // the same whitelist a coach edits with), but has no route anywhere that
+  // logs a workout, uploads a video, or posts a comment. That's enforced by
+  // omission: these are the only routes role "guardian" can reach at all.
+
+  app.get("/api/guardian/athlete", requireRole("guardian"), async (req, res) => {
+    const user = currentUser(req);
+    const athlete = await storage.getAthleteForGuardian(user.id);
+    if (!athlete) return res.status(404).json({ message: "No athlete linked to this account." });
+    res.json(athlete);
+  });
+
+  // Same calendar an athlete/coach sees -- workouts, completion status,
+  // whatever videos/exercises are attached -- just scoped to the one
+  // athlete this guardian is linked to instead of "self."
+  app.get("/api/guardian/athlete/calendar", requireRole("guardian"), async (req, res) => {
+    const user = currentUser(req);
+    const athlete = await storage.getAthleteForGuardian(user.id);
+    if (!athlete) return res.status(404).json({ message: "No athlete linked to this account." });
+    const schema = z.object({ start: z.string(), end: z.string() });
+    const parsed = schema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "start and end query params required" });
+    }
+    const entries = await storage.getCalendarForAthlete(athlete.id, parsed.data.start, parsed.data.end);
+    res.json(entries);
+  });
+
+  app.patch("/api/guardian/athlete/profile", requireRole("guardian"), async (req, res) => {
+    const user = currentUser(req);
+    const athlete = await storage.getAthleteForGuardian(user.id);
+    if (!athlete) return res.status(404).json({ message: "No athlete linked to this account." });
+    const parsed = updateProfileSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const updated = await storage.updateUserProfile(athlete.id, parsed.data);
+    const { passwordHash, ...publicAthlete } = updated;
+    res.json(publicAthlete);
+  });
+
+  // Shared by both sides of the link -- a guardian can always give up their
+  // own access; an athlete can only remove it once storage.removeGuardianLink
+  // says they're allowed to (18+, or DOB unknown fails closed). See that
+  // function's own comment for the full rule.
+  app.delete("/api/guardian-links/:id", requireRole(["athlete", "guardian"]), async (req, res) => {
+    const user = currentUser(req);
+    const linkId = Number(req.params.id);
+    const result = await storage.removeGuardianLink(user.id, user.role as "athlete" | "guardian", linkId);
+    if (!result.ok) return res.status(400).json({ message: result.error });
+    res.status(204).end();
+  });
+
+  app.get("/api/account/guardian-link", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const link = await storage.getGuardianLinkForAthlete(user.id);
+    if (!link) return res.json(null);
+    const fullUser = await storage.getUser(user.id);
+    const tier = fullUser?.dateOfBirth ? derivePrivacyTier(fullUser.dateOfBirth) : null;
+    res.json({ id: link.id, removable: tier === "tier3_adult_18plus" });
   });
 
   const httpServer = createServer(app);

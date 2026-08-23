@@ -19,6 +19,7 @@ import LoginPage from "@/pages/login";
 import AdminLoginPage from "@/pages/admin-login";
 import SignupPage from "@/pages/signup";
 import ClaimPage from "@/pages/claim";
+import GuardianClaimPage from "@/pages/guardian-claim";
 import ForgotPasswordPage from "@/pages/forgot-password";
 import ResetPasswordPage from "@/pages/reset-password";
 import VerifyEmailPage from "@/pages/verify-email";
@@ -50,6 +51,7 @@ const CoachAnalytics = lazy(() => import("@/pages/coach/analytics"));
 const CoachLeaderboard = lazy(() => import("@/pages/coach/leaderboard"));
 const CoachTeamBoard = lazy(() => import("@/pages/coach/team-board"));
 const AthleteDashboard = lazy(() => import("@/pages/athlete/dashboard"));
+const GuardianDashboard = lazy(() => import("@/pages/guardian-dashboard"));
 const AthleteCalendar = lazy(() => import("@/pages/athlete/calendar"));
 const AthleteProgress = lazy(() => import("@/pages/athlete/progress"));
 const AthleteLiftHistory = lazy(() => import("@/pages/athlete/lift-history"));
@@ -119,9 +121,10 @@ function ConnectionProblem() {
   );
 }
 
-function homeFor(role: "coach" | "athlete" | "admin") {
+function homeFor(role: "coach" | "athlete" | "admin" | "guardian") {
   if (role === "coach") return "/coach";
   if (role === "admin") return "/admin";
+  if (role === "guardian") return "/guardian";
   return "/athlete";
 }
 
@@ -129,7 +132,7 @@ function ProtectedRoute({
   role,
   component: Component,
 }: {
-  role: "coach" | "athlete" | "admin";
+  role: "coach" | "athlete" | "admin" | "guardian";
   component: ComponentType;
 }) {
   const { user, isLoading, isError } = useAuth();
@@ -197,6 +200,7 @@ function Router() {
         <Route path="/admin/login" component={AdminLoginPage} />
         <Route path="/signup" component={SignupPage} />
         <Route path="/claim/:code" component={ClaimPage} />
+        <Route path="/guardian/claim" component={GuardianClaimPage} />
         <Route path="/forgot-password" component={ForgotPasswordPage} />
         <Route path="/reset-password" component={ResetPasswordPage} />
         <Route path="/verify-email" component={VerifyEmailPage} />
@@ -270,6 +274,9 @@ function Router() {
         </Route>
         <Route path="/athlete">
           <ProtectedRoute role="athlete" component={AthleteDashboard} />
+        </Route>
+        <Route path="/guardian">
+          <ProtectedRoute role="guardian" component={GuardianDashboard} />
         </Route>
         <Route path="/athlete/calendar">
           <ProtectedRoute role="athlete" component={AthleteCalendar} />
