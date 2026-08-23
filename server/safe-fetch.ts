@@ -146,16 +146,28 @@ function fetchOnce(urlStr: string): Promise<{ status: number; location?: string;
 
 function extractReadableText(html: string): string {
   const text = html
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    // \s* before the closing '>' -- real browsers still treat
+    // "</script >" (or any whitespace before the bracket) as a valid
+    // closing tag, so a plain "</script>" literal here would leave that
+    // variant's actual script content sitting in what's supposed to be
+    // stripped, plain-text HTML handed to an LLM prompt.
+    .replace(/<script[\s\S]*?<\/script\s*>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style\s*>/gi, " ")
     .replace(/<!--[\s\S]*?-->/g, " ")
     .replace(/<[^>]+>/g, " ")
     .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
+    // &amp; unescapes last, not first -- it has to run after &lt;/&gt;/
+    // &quot;/&#39; or a double-encoded literal like "&amp;lt;" (meant to
+    // display as the literal text "&lt;") gets unescaped twice: the &amp;
+    // pass alone turns it into "&lt;", which is already correct, but
+    // running the &lt; replace afterward would incorrectly turn that into
+    // a bare "<". Doing &amp; last means &lt;/&gt;/etc. only ever see
+    // single-encoded entities, exactly as originally written.
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, "&")
     .replace(/\s+/g, " ")
     .trim();
   return text.slice(0, MAX_TEXT_CHARS);

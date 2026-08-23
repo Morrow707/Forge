@@ -1,4 +1,4 @@
-import { scrypt, randomBytes, timingSafeEqual, createHash } from "crypto";
+import { scrypt, randomBytes, randomInt, timingSafeEqual, createHash } from "crypto";
 import { promisify } from "util";
 
 const scryptAsync = promisify(scrypt);
@@ -39,7 +39,10 @@ export function generateCoachCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let code = "";
   for (let i = 0; i < 6; i++) {
-    code += chars[Math.floor(Math.random() * chars.length)];
+    // randomInt, not Math.random -- this code is a real access-control
+    // credential (it's what lets an athlete join a coach's roster), and
+    // Math.random's PRNG carries no guarantee of being unpredictable.
+    code += chars[randomInt(chars.length)];
   }
   return code;
 }
@@ -52,7 +55,7 @@ export function generateClaimCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let code = "";
   for (let i = 0; i < 8; i++) {
-    code += chars[Math.floor(Math.random() * chars.length)];
+    code += chars[randomInt(chars.length)];
   }
   return code;
 }

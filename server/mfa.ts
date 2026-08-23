@@ -1,3 +1,4 @@
+import { randomInt } from "crypto";
 import { generateSecret, generateURI, verify } from "otplib";
 import { hashPassword, comparePasswords } from "./auth-utils";
 
@@ -34,7 +35,10 @@ export async function verifyTotpCode(secret: string, code: string): Promise<bool
 function generateBackupCode(): string {
   let code = "";
   for (let i = 0; i < 8; i++) {
-    code += BACKUP_CODE_ALPHABET[Math.floor(Math.random() * BACKUP_CODE_ALPHABET.length)];
+    // randomInt, not Math.random -- these bypass 2FA entirely if guessed,
+    // same "not lower-stakes than a password" bar this file's own comment
+    // above already holds them to.
+    code += BACKUP_CODE_ALPHABET[randomInt(BACKUP_CODE_ALPHABET.length)];
   }
   return `${code.slice(0, 4)}-${code.slice(4)}`;
 }
