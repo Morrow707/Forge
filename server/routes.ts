@@ -2508,7 +2508,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // the athlete-scoped pair of routes below so the two can't drift.
   app.get("/api/coach/widget-prefs", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
-    const layout = await storage.getWidgetLayoutForCoach(user.id);
+    const layout = await storage.getWidgetLayoutForUser(user.id);
     res.json({ layout });
   });
   app.patch("/api/coach/widget-prefs", requireRole("coach"), async (req, res) => {
@@ -2517,7 +2517,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!parsed.success) {
       return res.status(400).json({ message: "layout must be a list of {id, hidden} entries" });
     }
-    const layout = await storage.setWidgetLayoutForCoach(user.id, parsed.data.layout);
+    const layout = await storage.setWidgetLayoutForUser(user.id, parsed.data.layout);
+    res.json({ layout });
+  });
+
+  // Same shape/mechanism as the coach pair above, just for the athlete
+  // Dashboard's own Edit button (see athlete/dashboard.tsx).
+  app.get("/api/athlete/widget-prefs", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const layout = await storage.getWidgetLayoutForUser(user.id);
+    res.json({ layout });
+  });
+  app.patch("/api/athlete/widget-prefs", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = widgetLayoutSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "layout must be a list of {id, hidden} entries" });
+    }
+    const layout = await storage.setWidgetLayoutForUser(user.id, parsed.data.layout);
     res.json({ layout });
   });
 

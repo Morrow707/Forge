@@ -4,17 +4,18 @@ import { Link } from "wouter";
 import { AppShell } from "@/components/app-shell";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { EntryPill, type CalendarEntry } from "@/components/calendar-view";
+import type { CalendarEntry } from "@/components/calendar-view";
 import { CoachDayEditDialog } from "@/components/coach-day-edit-dialog";
 import { SkillDayViewDialog } from "@/components/skill-day-view-dialog";
 import { CoachDigestBanner } from "@/components/coach-digest-banner";
 import { ReengagementBanner } from "@/components/reengagement-banner";
 import { HideableWidget } from "@/components/hideable-widget";
+import { NextThreeDaysCard } from "@/components/next-three-days-card";
+import { StatTile } from "@/components/stat-tile";
 import { useWidgetVisibility } from "@/hooks/use-widget-visibility";
 import { Pencil, Check } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { apiRequest } from "@/lib/queryClient";
-import { cn } from "@/lib/utils";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
@@ -37,13 +38,12 @@ import {
   Users,
   ArrowRight,
   Copy,
-  CalendarDays,
   Mail,
   QrCode,
   HeartPulse,
 } from "lucide-react";
 import { toast } from "sonner";
-import { addDays, format, formatISO, isToday } from "date-fns";
+import { addDays, formatISO } from "date-fns";
 
 type ProgramSummary = {
   id: number;
@@ -60,7 +60,7 @@ type TeamSummary = { id: number; name: string; code: string | null };
 
 export default function CoachDashboard() {
   const { user } = useAuth();
-  const widgetVisibility = useWidgetVisibility();
+  const widgetVisibility = useWidgetVisibility("coach");
   const { data: programs = [] } = useQuery<ProgramSummary[]>({
     queryKey: ["/api/coach/programs"],
   });
@@ -130,83 +130,27 @@ export default function CoachDashboard() {
           isHidden={widgetVisibility.hidden.has("next-3-days")}
           onToggle={widgetVisibility.setHidden}
         >
-        <Card className="shrink-0">
-          <CardHeader className="flex-row items-center justify-between space-y-0 p-3 md:p-4">
-            <div>
-              <CardTitle className="text-base md:text-lg">Next 3 Days</CardTitle>
-              <CardDescription className="hidden sm:block">
-                Quick look across your roster — synced with the full calendar.
-              </CardDescription>
-            </div>
-            <Link href="/coach/calendar">
-              <Button variant="outline" size="sm">
-                Full Calendar
-              </Button>
-            </Link>
-          </CardHeader>
-          <CardContent className="p-3 pt-0 md:p-4 md:pt-0">
-            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
-              {days.map((day) => {
-                const dateStr = formatISO(day, { representation: "date" });
-                const dayEntries = upcoming.filter((e) => e.date === dateStr);
-                const shown = dayEntries.slice(0, 3);
-                const overflow = dayEntries.length - shown.length;
-                return (
-                  <div key={dateStr} className="rounded-md border border-border p-2">
-                    <div className="mb-1.5 flex items-baseline justify-between">
-                      <span
-                        className={cn(
-                          "text-xs font-semibold uppercase text-muted-foreground",
-                          isToday(day) && "text-primary",
-                        )}
-                      >
-                        {isToday(day) ? "Today" : format(day, "EEEE")}
-                      </span>
-                      <span className={cn("text-sm font-bold", isToday(day) && "text-primary")}>
-                        {format(day, "MMM d")}
-                      </span>
-                    </div>
-                    <div className="space-y-1">
-                      {shown.length === 0 && (
-                        <p className="flex items-center justify-center gap-1.5 py-2 text-center text-xs text-muted-foreground">
-                          <CalendarDays className="h-3.5 w-3.5" />
-                          Nothing scheduled
-                        </p>
-                      )}
-                      {shown.map((e) => (
-                        <EntryPill
-                          key={`${e.assignmentId}-${e.programDayId}`}
-                          entry={e}
-                          onClick={() =>
-                            e.kind === "skill"
-                              ? setViewingSkill({
-                                  skillProgramId: e.programId,
-                                  skillProgramDayId: e.programDayId,
-                                  athleteName: e.athleteName!,
-                                })
-                              : setEditing({
-                                  programDayId: e.programDayId,
-                                  assignmentId: e.assignmentId,
-                                  athleteId: e.athleteId!,
-                                  athleteName: e.athleteName!,
-                                })
-                          }
-                        />
-                      ))}
-                      {overflow > 0 && (
-                        <Link href="/coach/calendar">
-                          <span className="block px-1.5 text-[11px] font-semibold text-primary hover:underline">
-                            +{overflow} more
-                          </span>
-                        </Link>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
+          <NextThreeDaysCard
+            days={days}
+            entries={upcoming}
+            calendarHref="/coach/calendar"
+            description="Quick look across your roster — synced with the full calendar."
+            compact
+            onEntryClick={(e) =>
+              e.kind === "skill"
+                ? setViewingSkill({
+                    skillProgramId: e.programId,
+                    skillProgramDayId: e.programDayId,
+                    athleteName: e.athleteName!,
+                  })
+                : setEditing({
+                    programDayId: e.programDayId,
+                    assignmentId: e.assignmentId,
+                    athleteId: e.athleteId!,
+                    athleteName: e.athleteName!,
+                  })
+            }
+          />
         </HideableWidget>
 
         <HideableWidget
@@ -217,20 +161,20 @@ export default function CoachDashboard() {
           onToggle={widgetVisibility.setHidden}
         >
         <div className="grid grid-cols-1 shrink-0 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard icon={Users} label="Athletes" value={roster.length} href="/coach/roster" />
-          <StatCard
+          <StatTile icon={Users} label="Athletes" value={roster.length} href="/coach/roster" />
+          <StatTile
             icon={ListChecks}
             label="Programs"
             value={programs.length}
             href="/coach/programs"
           />
-          <StatCard
+          <StatTile
             icon={Dumbbell}
             label="Exercises in bank"
             value={exercises.length}
             href="/coach/exercises"
           />
-          <StatCard
+          <StatTile
             icon={HeartPulse}
             label="Flagged today"
             value={flaggedToday}
@@ -463,33 +407,5 @@ function TeamInviteCard({
         </DialogContent>
       </Dialog>
     </Card>
-  );
-}
-
-function StatCard({
-  icon: Icon,
-  label,
-  value,
-  href,
-}: {
-  icon: typeof Dumbbell;
-  label: string;
-  value: number;
-  href: string;
-}) {
-  return (
-    <Link href={href}>
-      <Card className="cursor-pointer transition-colors hover:border-primary/50">
-        <CardContent className="flex items-center gap-3 p-3 md:p-4">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary/15 text-primary">
-            <Icon className="h-5 w-5" />
-          </div>
-          <div className="min-w-0">
-            <p className="font-display text-2xl font-bold md:text-3xl">{value}</p>
-            <p className="truncate text-sm text-muted-foreground">{label}</p>
-          </div>
-        </CardContent>
-      </Card>
-    </Link>
   );
 }

@@ -544,7 +544,7 @@ export default function CoachAnalytics() {
   const [athleteSearch, setAthleteSearch] = useState("");
   const [exerciseId, setExerciseId] = useState<string>(initialParams.get("exerciseId") ?? "");
   const [hiddenCharts, setHiddenCharts] = useState<Set<ChartKey>>(() => loadHiddenCharts());
-  const widgetVisibility = useWidgetVisibility();
+  const widgetVisibility = useWidgetVisibility("coach");
   // Three ways to look at the same exercise history: a quick per-set,
   // per-rep breakdown for one workout ("byDate", the default -- a coach
   // opening this page wants to see today's numbers at a glance, not parse a

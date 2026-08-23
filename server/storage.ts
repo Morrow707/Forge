@@ -5432,16 +5432,17 @@ ${athleteContext}
   },
 
   // Per-account, not resolved through the staff -- unlike hiddenSections
-  // above (set BY the primary coach FOR a staff member), this is a coach's
+  // above (set BY the primary coach FOR a staff member), this is a user's
   // own personal "which cards on my Dashboard/Analytics do I not want to
-  // see, and in what order" preference, so two coaches on the same staff
-  // can each arrange their own view without stepping on each other.
-  // Coerces a pre-drag-and-drop row (a bare string[] of hidden ids, no
-  // order) into the current WidgetLayoutEntry[] shape on read -- an
-  // existing coach's already-hidden cards survive the upgrade with no
-  // migration script, they just start out in default order.
-  async getWidgetLayoutForCoach(coachId: number): Promise<WidgetLayoutEntry[]> {
-    const user = await db.query.users.findFirst({ where: eq(users.id, coachId) });
+  // see, and in what order" preference (coach and athlete dashboards
+  // alike -- hence "ForUser," not "ForCoach"), so two people on the same
+  // staff, or any two athletes, each arrange their own view without
+  // stepping on each other. Coerces a pre-drag-and-drop row (a bare
+  // string[] of hidden ids, no order) into the current WidgetLayoutEntry[]
+  // shape on read -- an existing user's already-hidden cards survive the
+  // upgrade with no migration script, they just start out in default order.
+  async getWidgetLayoutForUser(userId: number): Promise<WidgetLayoutEntry[]> {
+    const user = await db.query.users.findFirst({ where: eq(users.id, userId) });
     const raw = user?.hiddenWidgets;
     if (!raw) return [];
     if (raw.length > 0 && typeof raw[0] === "string") {
@@ -5449,8 +5450,8 @@ ${athleteContext}
     }
     return raw;
   },
-  async setWidgetLayoutForCoach(coachId: number, layout: WidgetLayoutEntry[]) {
-    await db.update(users).set({ hiddenWidgets: layout }).where(eq(users.id, coachId));
+  async setWidgetLayoutForUser(userId: number, layout: WidgetLayoutEntry[]) {
+    await db.update(users).set({ hiddenWidgets: layout }).where(eq(users.id, userId));
     return layout;
   },
 
