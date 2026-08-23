@@ -1163,11 +1163,13 @@ export function WorkoutPage({
   }, []);
 
   function updateItem(key: string, patch: Partial<ItemState>) {
+    // Same "keep the updater pure" reasoning as updateSet below.
+    let nextItems: ItemState[] = [];
     setItems((prev) => {
-      const next = prev.map((it) => (it.key === key ? { ...it, ...patch } : it));
-      scheduleAutosave(next);
-      return next;
+      nextItems = prev.map((it) => (it.key === key ? { ...it, ...patch } : it));
+      return nextItems;
     });
+    scheduleAutosave(nextItems);
   }
 
   // `immediate` bypasses the debounce for data that's expensive to redo (a
@@ -1179,9 +1181,22 @@ export function WorkoutPage({
   // route change doesn't fire the pagehide/visibilitychange flush), so a
   // finished set can never be left sitting in the debounce window.
   function updateSet(key: string, setNumber: number, patch: Partial<SetRow>, options?: { immediate?: boolean }) {
+    // The updater passed to setItems below has to stay pure -- no calls out
+    // to another component's state (restTimerRef.current.autoStart ends up
+    // calling RestTimerControl's own setRemaining) or side effects like the
+    // autosave calls belong inside it. React warns about exactly this
+    // ("Cannot update a component while rendering a different component")
+    // since an updater can run more than once for a single logical update,
+    // which would double-fire a network save or restart the rest timer.
+    // restOnComplete/becameComplete/nextItems are just plain closure
+    // variables, not observable to React -- computed inside the updater,
+    // acted on only after setItems returns.
+    let restOnComplete: number | null = null;
+    let becameComplete = false;
+    let nextItems: ItemState[] = [];
     setItems((prev) => {
-      let restOnComplete: number | null = null;
-      let becameComplete = false;
+      restOnComplete = null;
+      becameComplete = false;
       const next = prev.map((it) => {
         if (it.key !== key) return it;
         return {
@@ -1198,11 +1213,12 @@ export function WorkoutPage({
           }),
         };
       });
-      if (restOnComplete !== null) restTimerRef.current?.autoStart(restOnComplete);
-      if (options?.immediate || becameComplete) autosaveNow(next);
-      else scheduleAutosave(next);
+      nextItems = next;
       return next;
     });
+    if (restOnComplete !== null) restTimerRef.current?.autoStart(restOnComplete);
+    if (options?.immediate || becameComplete) autosaveNow(nextItems);
+    else scheduleAutosave(nextItems);
   }
 
   // Picks up a video that finished a deferred (queued-for-Wi-Fi) upload and
@@ -1235,6 +1251,8 @@ export function WorkoutPage({
   }, [assignmentId, programDayId, date]);
 
   function addSet(key: string) {
+    // Same "keep the updater pure" reasoning as updateSet above.
+    let nextItems: ItemState[] = [];
     setItems((prev) => {
       const next = prev.map((it) => {
         if (it.key !== key) return it;
@@ -1285,19 +1303,21 @@ export function WorkoutPage({
           ],
         };
       });
-      scheduleAutosave(next);
+      nextItems = next;
       return next;
     });
+    scheduleAutosave(nextItems);
   }
 
   function removeSet(key: string) {
+    let nextItems: ItemState[] = [];
     setItems((prev) => {
-      const next = prev.map((it) =>
+      nextItems = prev.map((it) =>
         it.key === key && it.sets.length > 1 ? { ...it, sets: it.sets.slice(0, -1) } : it,
       );
-      scheduleAutosave(next);
-      return next;
+      return nextItems;
     });
+    scheduleAutosave(nextItems);
   }
 
   if (isLoading || !data) {
