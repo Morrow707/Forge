@@ -338,6 +338,30 @@ const reportProblemLimiter = rateLimit({
   message: { message: "Too many reports submitted. Please try again later." },
 });
 
+// General backstop under every route in the app -- CodeQL's
+// js/missing-rate-limiting flagged this at scale (~200+ authenticated route
+// handlers, only a handful of which had their own purpose-specific limiter
+// in auth.ts: login, signup, password reset, MFA, change-password). Rather
+// than bolting a bespoke limiter onto every one of them, this covers all of
+// /api/* as a floor; the tighter limiters already guarding the sensitive
+// auth endpoints still apply on top of it, unaffected.
+//
+// Keyed by user id when a session already resolved one, not just IP -- a
+// team practice routinely has a dozen-plus athletes on the same gym wifi
+// NAT IP at once, and a pure per-IP limit would let one misbehaving client
+// throttle everyone else on the same network. Falls back to IP for the
+// much smaller unauthenticated surface, which is exactly what the
+// login/signup/reset limiters already key on.
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 600,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) =>
+    req.isAuthenticated?.() && (req.user as any)?.id ? `user:${(req.user as any).id}` : (req.ip ?? "unknown"),
+  message: { message: "Too many requests. Please try again shortly." },
+});
+
 function currentUser(req: any) {
   return req.user as {
     id: number;
@@ -604,6 +628,9 @@ async function notifyNewlyUnlockedLessons(
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
   app.use(attachNativeTokenAuth);
+  // After both of the above so req.isAuthenticated()/req.user are already
+  // resolved -- see apiLimiter's own comment for why that matters.
+  app.use("/api", apiLimiter);
   // Keeps "see who's logged in"'s lastSeenAt reasonably fresh -- reads
   // whichever session id the request is actually using (native, set by
   // attachNativeTokenAuth just above; web, set on req.session at login --
