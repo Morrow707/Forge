@@ -38,7 +38,7 @@ function ClassFunnelRow({ row }: { row: ClassAnalyticsRow }) {
         className="flex w-full items-center justify-between gap-3 p-3 text-left"
       >
         <div className="min-w-0">
-          <p className="flex items-center gap-1.5 text-sm font-semibold">
+          <div className="flex items-center gap-1.5 text-sm font-semibold">
             <span className="truncate">{row.name}</span>
             {row.isDraft && (
               <Badge variant="secondary" className="shrink-0 text-[10px]">
@@ -50,7 +50,7 @@ function ClassFunnelRow({ row }: { row: ClassAnalyticsRow }) {
                 FORGE
               </Badge>
             )}
-          </p>
+          </div>
           <p className="text-xs text-muted-foreground">
             {row.lessonCount} lesson{row.lessonCount === 1 ? "" : "s"}
           </p>
