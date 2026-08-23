@@ -50,3 +50,17 @@ export async function statUploadedFile(url: string | null | undefined): Promise<
     return null;
   }
 }
+
+// Same null-safe, non-throwing contract as the two above -- reads an
+// uploaded file's bytes for embedding elsewhere (e.g. a coach's brand logo
+// into a PDF export), rather than serving it back over HTTP.
+export async function readUploadedFile(url: string | null | undefined): Promise<Buffer | null> {
+  if (!url || !url.startsWith("/uploads/")) return null;
+  const resolved = path.join(UPLOADS_ROOT, url.slice("/uploads/".length));
+  if (!resolved.startsWith(UPLOADS_ROOT + path.sep)) return null;
+  try {
+    return await fs.readFile(resolved);
+  } catch {
+    return null;
+  }
+}

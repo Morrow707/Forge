@@ -18,6 +18,7 @@ import { buildProgressReportEmail } from "./progress-report";
 import { buildRecruitingProfilePdf } from "./recruiting-profile";
 import { buildTrainingHistoryCsv, buildTrainingHistoryPdf, csvField } from "./training-history-export";
 import { buildMovementScreenSheetPdf } from "./movement-screen-export";
+import { readUploadedFile } from "./uploaded-files";
 import { buildComplianceReportPdf } from "./compliance-report";
 import { buildLegalDocumentPdf } from "./legal-document-export";
 import { GUARDIAN_NOTICE_LIVE, derivePrivacyTier } from "@shared/privacy-tiers";
@@ -2961,7 +2962,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const user = currentUser(req);
     const detail = await storage.getMovementScreenBatteryDetail(user.id, Number(req.params.id));
     if (!detail) return res.status(404).json({ message: "Battery not found" });
-    const pdf = await buildMovementScreenSheetPdf(detail.battery.name, detail.tests);
+    const branding = await storage.getCoachBranding(user.id);
+    const logoBuffer = await readUploadedFile(branding.logoUrl);
+    const pdf = await buildMovementScreenSheetPdf(detail.battery.name, detail.tests, {
+      teamName: branding.teamName,
+      primaryColor: branding.primaryColor,
+      logoBuffer,
+    });
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="${detail.battery.name.replace(/[^a-z0-9]+/gi, "-")}.pdf"`);
     res.send(pdf);
