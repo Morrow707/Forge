@@ -637,6 +637,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
+  // Where the report-only CSP in index.ts's helmet config sends violation
+  // reports -- unauthenticated by necessity (a browser sends these on its
+  // own, with no session context) and typed to accept whatever
+  // content-type a browser actually uses for it (still
+  // application/csp-report in most browsers despite the spec's own move
+  // toward the newer Reporting API's application/reports+json). Already
+  // covered by the general /api rate limiter mounted in setupAuth.
+  // Logged, not stored -- there's no error-tracking service wired up yet,
+  // so console output is genuinely the best visibility available right
+  // now; this is meant to be read while deciding what the directives in
+  // index.ts still need before it's safe to flip reportOnly off.
+  app.post(
+    "/api/csp-report",
+    express.json({ type: ["application/json", "application/csp-report", "application/reports+json"] }),
+    (req, res) => {
+      console.warn("CSP violation report:", JSON.stringify(req.body));
+      res.status(204).end();
+    },
+  );
+
   // Gates the three directories that hold actual filmed athlete footage
   // (form-check clips, skill-session clips, coach annotations drawn on
   // frames of those clips) behind the short-lived signed-URL scheme in

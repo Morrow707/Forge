@@ -30,21 +30,60 @@ import { verifyRequestOrigin } from "./csrf-protection";
 import { NATIVE_APP_ORIGINS } from "./native-app-origins";
 
 const app = express();
-// contentSecurityPolicy and crossOriginEmbedderPolicy are both off --
-// this app already serves cross-origin video/image sources (uploaded
-// clips, external lesson video links) and registers its own service
-// worker (client/src/sw.ts) for push + offline; a default-on CSP or COEP
-// would need to be hand-tuned against every one of those before it's safe
-// to ship, which isn't something to guess at blind. crossOriginResourcePolicy
-// is also off -- helmet's "same-origin" default is a separate browser-level
-// block from CORS above, and WebKit (the native app's WKWebView) is known
-// to enforce it independently, which would silently defeat the CORS
-// allowlist above for exactly the requests it exists to permit. Everything
-// else here (nosniff, frameguard, HSTS, referrer policy, etc.) is a pure
-// hardening default with no behavior change for a same-origin request.
+// contentSecurityPolicy is report-only, not enforcing -- see its own
+// directives below for why. crossOriginEmbedderPolicy stays off -- this
+// app already serves cross-origin video/image sources (uploaded clips,
+// external lesson video links) and registers its own service worker
+// (client/src/sw.ts) for push + offline; a default-on COEP would need to
+// be hand-tuned against every one of those before it's safe to enforce,
+// which isn't something to guess at blind the way CSP's report-only mode
+// lets you. crossOriginResourcePolicy is also off -- helmet's "same-origin"
+// default is a separate browser-level block from CORS above, and WebKit
+// (the native app's WKWebView) is known to enforce it independently, which
+// would silently defeat the CORS allowlist above for exactly the requests
+// it exists to permit. Everything else here (nosniff, frameguard, HSTS,
+// referrer policy, etc.) is a pure hardening default with no behavior
+// change for a same-origin request.
 app.use(
   helmet({
-    contentSecurityPolicy: false,
+    contentSecurityPolicy: {
+      reportOnly: true,
+      directives: {
+        // No inline <script> tags and no third-party script host anywhere
+        // in client/src or index.html -- the single script is the app's
+        // own Vite-built bundle.
+        scriptSrc: ["'self'"],
+        // React's style={{...}} prop renders as a literal inline
+        // style="..." attribute (41 call sites across the client) -- CSP's
+        // style-src governs that the same as a <style> tag, and a
+        // nonce-based rewrite isn't realistic to retrofit right now.
+        // Inline styles can't execute script, so this is a much narrower
+        // relaxation than script-src 'unsafe-inline' would be.
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        // 'self' for /uploads (signed-URL gated, see media-url-signing.ts)
+        // and the app's own bundled images; img.youtube.com for exercise/
+        // skill video thumbnails (exercise-video.tsx); blob: for local
+        // file previews (report-problem-dialog.tsx's screenshot preview);
+        // data: for canvas-generated frames (photo-capture.ts,
+        // video-frames.ts, video-watermark.ts).
+        imgSrc: ["'self'", "https://img.youtube.com", "blob:", "data:"],
+        // Uploaded form-check/skill videos -- same-origin only, nothing
+        // external is ever assigned to a <video> element.
+        mediaSrc: ["'self'"],
+        // The only external frame this app ever embeds -- YouTube exercise/
+        // skill demo videos (exercise-video.tsx, exercise-detail.tsx,
+        // skill-detail.tsx all build youtube.com/embed/... URLs directly).
+        frameSrc: ["https://www.youtube.com"],
+        connectSrc: ["'self'"],
+        workerSrc: ["'self'"],
+        manifestSrc: ["'self'"],
+        // Where violation reports land -- see the /api/csp-report route
+        // in routes.ts. Nothing is blocked yet (reportOnly above), so this
+        // is purely collecting real-traffic signal on what the directives
+        // above still need before it's safe to flip to enforcing.
+        reportUri: ["/api/csp-report"],
+      },
+    },
     crossOriginEmbedderPolicy: false,
     crossOriginResourcePolicy: false,
   }),
