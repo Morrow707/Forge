@@ -13,17 +13,30 @@ import { notifyUser } from "./notify";
 export async function runFreeAgentVideoCapSweep() {
   try {
     const { warned, purged } = await storage.sweepFreeAgentVideoCap();
+    let notified = 0;
     for (const w of warned) {
-      await notifyUser(
-        w.athleteId,
-        "video_cap_warning",
-        `A ${w.exerciseName} video is about to be removed`,
-        "You've got more than 10 saved for this exercise -- tap the heart on this one within 7 days to keep it, or it'll be automatically removed to save space.",
-        w.link,
-      );
+      // Each warning is independent -- one athlete's bad/expired push
+      // token shouldn't stop everyone after them in this list from being
+      // notified. And the grace clock (markVideoPendingDeletion) only
+      // starts once notifyUser actually succeeds for this one, so a
+      // failure here just means it's retried on tomorrow's sweep instead
+      // of the video silently sliding toward deletion unwarned.
+      try {
+        await notifyUser(
+          w.athleteId,
+          "video_cap_warning",
+          `A ${w.exerciseName} video is about to be removed`,
+          "You've got more than 10 saved for this exercise -- tap the heart on this one within 7 days to keep it, or it'll be automatically removed to save space.",
+          w.link,
+        );
+        await storage.markVideoPendingDeletion(w.id);
+        notified++;
+      } catch (err) {
+        console.error(`Free Agent video cap: failed to notify athlete ${w.athleteId} about set ${w.id}:`, err);
+      }
     }
-    if (warned.length > 0 || purged > 0) {
-      console.log(`Free Agent video cap sweep: warned ${warned.length}, purged ${purged}.`);
+    if (notified > 0 || purged > 0) {
+      console.log(`Free Agent video cap sweep: warned ${notified}, purged ${purged}.`);
     }
   } catch (err) {
     console.error("Free Agent video cap sweep failed:", err);

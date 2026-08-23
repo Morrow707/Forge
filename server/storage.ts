@@ -15286,17 +15286,27 @@ ${catalog}`;
     const graceMs = FREE_AGENT_VIDEO_GRACE_DAYS * 24 * 60 * 60 * 1000;
 
     for (const group of groups.values()) {
-      group.sort((a, b) => a.date.localeCompare(b.date));
+      // Tiebreak on id, not just date: workoutLogs.date has no time
+      // component, so same-day sets compare equal on date alone, and
+      // without a deterministic tiebreak the query's row order (which SQL
+      // makes no guarantee about across runs) decides which one lands in
+      // "excess" -- one run flags set A as at-risk, the next flags set B
+      // instead and un-flags A, flip-flopping which video gets warned/
+      // reprieved from one sweep to the next for no reason a user could see.
+      group.sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
       const excess = group.slice(0, Math.max(0, group.length - FREE_AGENT_VIDEO_CAP));
       const excessIds = new Set(excess.map((r) => r.id));
 
       for (const row of group) {
         if (excessIds.has(row.id)) {
           if (row.pendingDeletionAt == null) {
-            await db
-              .update(workoutSetEntries)
-              .set({ pendingDeletionAt: new Date().toISOString().slice(0, 10) })
-              .where(eq(workoutSetEntries.id, row.id));
+            // Deliberately doesn't write pendingDeletionAt here. That only
+            // happens once the caller confirms the warning notification
+            // actually went out (see markVideoPendingDeletion below) --
+            // otherwise a notification failure would still start the
+            // 7-day grace clock on a video the athlete was never actually
+            // told about, and it'd get silently deleted with no warning
+            // ever having reached them.
             warned.push({
               id: row.id,
               athleteId: row.athleteId,
@@ -15319,6 +15329,17 @@ ${catalog}`;
     }
 
     return { warned, purged };
+  },
+
+  // Starts a video's 7-day deletion grace window -- split out from
+  // sweepFreeAgentVideoCap itself so the caller only calls this once the
+  // cap-warning notification has actually been delivered (see that
+  // function's comment on the "warned" list).
+  async markVideoPendingDeletion(setEntryId: number) {
+    await db
+      .update(workoutSetEntries)
+      .set({ pendingDeletionAt: new Date().toISOString().slice(0, 10) })
+      .where(eq(workoutSetEntries.id, setEntryId));
   },
 
   // Verbatim program transcription -- see programPhotoDraftSchema's own
