@@ -3733,6 +3733,37 @@ export const recordAccessAuditLogs = pgTable(
 );
 export type RecordAccessAuditLog = typeof recordAccessAuditLogs.$inferSelect;
 
+// ---------- Uploaded file ownership ----------
+// One row per file created by any of the raw upload routes that hand a
+// bare, unsigned /uploads/... path straight back to the client for reuse
+// elsewhere (annotations, skill-video, form-video -- see each route's own
+// "skipMediaSign" comment in routes.ts). Everywhere else in this app that
+// accepts a client-supplied gated video/image URL (comments, workout-set
+// submission, skill-session-log submission, the deferred-upload-reattach
+// flow) was trusting that string outright: nothing stopped a request from
+// naming a DIFFERENT user's already-uploaded path, and the global signed-
+// URL re-signer (media-url-signing.ts) would happily mint a fresh, working
+// signature for it on the next response, bypassing the entire point of
+// gating that content behind a signature -- real exploitability was low
+// (paths are random UUIDs, never shown to anyone but the uploader), but it
+// was still a real hole. This table is what closes it: every gated-path
+// write path now verifies the path exists here AND was uploaded by the
+// same user submitting it, via storage.assertUploadedFileOwnedBy.
+export const uploadedFiles = pgTable(
+  "uploaded_files",
+  {
+    id: serial("id").primaryKey(),
+    path: text("path").notNull().unique(),
+    uploadedBy: integer("uploaded_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    uploadedByIdx: index("uploaded_files_uploaded_by_idx").on(table.uploadedBy),
+  }),
+);
+
 // ---------- Problem reports ----------
 // A coach/athlete tapping "Report a problem" from the account menu -- free
 // text plus an optional screenshot, reviewed by an admin. Deliberately

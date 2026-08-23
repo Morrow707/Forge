@@ -1628,6 +1628,14 @@ CREATE TABLE IF NOT EXISTS "billing_audit_log" (
 ALTER TABLE "billing_audit_log" ADD COLUMN IF NOT EXISTS "stripe_event_id" text UNIQUE;
 CREATE INDEX IF NOT EXISTS "billing_audit_log_user_idx" ON "billing_audit_log" ("user_id", "created_at");
 
+CREATE TABLE IF NOT EXISTS "uploaded_files" (
+  "id" serial PRIMARY KEY,
+  "path" text NOT NULL UNIQUE,
+  "uploaded_by" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "uploaded_files_uploaded_by_idx" ON "uploaded_files" ("uploaded_by");
+
 CREATE TABLE IF NOT EXISTS "problem_reports" (
   "id" serial PRIMARY KEY,
   "user_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,

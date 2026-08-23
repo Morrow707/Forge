@@ -55,7 +55,12 @@ const GATED_UPLOAD_DIRS = new Set(["form-videos", "skill-videos", "annotations",
 // always replaces it with a fresh one rather than silently declining to
 // touch it (which would leave a stale, expired signature stuck in a
 // response body).
-function isGatedUploadPath(pathname: string): boolean {
+// Exported for storage.ts's assertUploadedFileOwnedBy -- the ownership
+// check below only needs to run against a path that's gated in the first
+// place; a public path (lesson-videos, team-logos) never goes through the
+// signed-URL scheme at all, so there's nothing to protect by tracking who
+// uploaded it.
+export function isGatedUploadPath(pathname: string): boolean {
   const match = /^\/uploads\/([^/]+)\/[^/]+$/.exec(pathname);
   return !!match && GATED_UPLOAD_DIRS.has(match[1]);
 }

@@ -4545,7 +4545,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // produces a PNG data URL, decoded and written to disk here -- the
   // resulting /uploads/annotations/... URL is then posted as imageUrl on a
   // normal comment via the route above.
-  app.post("/api/coach/annotations", requireRole("coach"), (req, res) => {
+  app.post("/api/coach/annotations", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
     const parsed = createAnnotationSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
@@ -4557,10 +4558,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     const filename = `${crypto.randomUUID()}.png`;
     fs.writeFileSync(path.join(ANNOTATIONS_DIR, filename), buffer);
+    const url = `/uploads/annotations/${filename}`;
+    await storage.recordUploadedFile(url, user.id);
     // Bare path, deliberately unsigned -- see the matching comment on the
     // form-video upload route above.
     res.locals.skipMediaSign = true;
-    res.status(201).json({ url: `/uploads/annotations/${filename}` });
+    res.status(201).json({ url });
   });
 
   // ---------------- Coach: Analytics ----------------
@@ -5453,7 +5456,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "/api/athlete/skill-video",
     requireRole("athlete"),
     (req, res) => {
-      uploadSkillVideo.single("video")(req, res, (err: unknown) => {
+      const user = currentUser(req);
+      uploadSkillVideo.single("video")(req, res, async (err: unknown) => {
         if (err) {
           const message = err instanceof Error ? err.message : "Upload failed";
           return res.status(400).json({ message });
@@ -5461,10 +5465,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (!req.file) {
           return res.status(400).json({ message: "No video file provided" });
         }
+        const url = `/uploads/skill-videos/${req.file.filename}`;
+        await storage.recordUploadedFile(url, user.id);
         // Bare path, deliberately unsigned -- see the matching comment on
         // the form-video upload route above.
         res.locals.skipMediaSign = true;
-        res.status(201).json({ url: `/uploads/skill-videos/${req.file.filename}` });
+        res.status(201).json({ url });
       });
     },
   );
@@ -5633,7 +5639,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "/api/athlete/form-video",
     requireRole("athlete"),
     (req, res) => {
-      uploadFormVideo.single("video")(req, res, (err: unknown) => {
+      const user = currentUser(req);
+      uploadFormVideo.single("video")(req, res, async (err: unknown) => {
         if (err) {
           const message = err instanceof Error ? err.message : "Upload failed";
           return res.status(400).json({ message });
@@ -5641,11 +5648,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (!req.file) {
           return res.status(400).json({ message: "No video file provided" });
         }
+        const url = `/uploads/form-videos/${req.file.filename}`;
+        await storage.recordUploadedFile(url, user.id);
         // Bare path, deliberately unsigned -- this is what the client saves
         // verbatim as formCheckVideoUrl on a later write (see
         // media-url-signing.ts); every subsequent read re-signs it fresh.
         res.locals.skipMediaSign = true;
-        res.status(201).json({ url: `/uploads/form-videos/${req.file.filename}` });
+        res.status(201).json({ url });
       });
     },
   );

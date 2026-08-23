@@ -98,6 +98,7 @@ import {
   recordAccessAuditLogs,
   legalDocuments,
   problemReports,
+  uploadedFiles,
   type ProblemReport,
   userSessions,
   type UserSession,
@@ -181,6 +182,7 @@ import type { CoachSection } from "@shared/coach-sections";
 import { askClaude, askClaudeStructured, askClaudeWithTools, askClaudeVision, askClaudeVisionStructured, aiEnabled, fastModel, type SystemPrompt } from "./ai";
 import { fetchUrlSafely, UnsafeUrlError } from "./safe-fetch";
 import { deleteUploadedFile, statUploadedFile } from "./uploaded-files";
+import { isGatedUploadPath } from "./media-url-signing";
 import {
   eq,
   and,
@@ -2072,6 +2074,35 @@ export const storage = {
       const [row] = await tx.insert(coachAthletes).values({ coachId, athleteId }).returning();
       return { ok: true as const, athlete: row };
     });
+  },
+
+  // Called by every raw upload route that hands a bare, unsigned
+  // /uploads/... path back to the client for reuse elsewhere (annotations,
+  // skill-video, form-video) -- see uploadedFiles' own schema comment for
+  // why this exists. onConflictDoNothing rather than a plain insert: a
+  // filename collision is already astronomically unlikely (every one of
+  // these routes names its file with crypto.randomUUID()), but this is
+  // pure bookkeeping, not the thing enforcing uniqueness of the actual
+  // file on disk, so there's no reason to fail the request over it.
+  async recordUploadedFile(path: string, uploadedBy: number): Promise<void> {
+    await db.insert(uploadedFiles).values({ path, uploadedBy }).onConflictDoNothing({ target: uploadedFiles.path });
+  },
+
+  // The other half of uploadedFiles: called by every write path that
+  // accepts a client-supplied video/image URL and persists it (comments,
+  // workout-set submission, skill-session-log submission, the deferred-
+  // upload-reattach flow) -- rejects a gated path that either was never
+  // recorded as an upload at all, or was uploaded by someone else. A
+  // non-gated path (lesson-videos, team-logos) is a no-op here, same as
+  // isGatedUploadPath's own callers in media-url-signing.ts -- those were
+  // never signed in the first place, so there's nothing to protect.
+  async assertUploadedFileOwnedBy(path: string, userId: number): Promise<void> {
+    const pathname = path.split("?")[0];
+    if (!isGatedUploadPath(pathname)) return;
+    const [row] = await db.select().from(uploadedFiles).where(eq(uploadedFiles.path, pathname));
+    if (!row || row.uploadedBy !== userId) {
+      throw new ForbiddenReferenceError("That file isn't available to reference here.");
+    }
   },
 
   // Resolves the full set of coach ids that should see identical data --
@@ -5828,6 +5859,7 @@ ${athleteContext}
   // deliberately minimal (one row per capture, no completion/logging
   // system around it yet).
   async createSkillSessionLog(athleteId: number, input: CreateSkillSessionLogInput) {
+    if (input.videoUrl) await this.assertUploadedFileOwnedBy(input.videoUrl, athleteId);
     const [row] = await db
       .insert(skillSessionLogs)
       .values({
@@ -11114,6 +11146,8 @@ ${entriesText}`;
     authorId: number,
     input: CreateWorkoutCommentInput,
   ) {
+    if (input.videoUrl) await this.assertUploadedFileOwnedBy(input.videoUrl, authorId);
+    if (input.imageUrl) await this.assertUploadedFileOwnedBy(input.imageUrl, authorId);
     const [row] = await db
       .insert(workoutComments)
       .values({
@@ -11934,6 +11968,8 @@ ${entriesText}`;
     authorId: number,
     input: CreateSkillDayCommentInput,
   ) {
+    if (input.videoUrl) await this.assertUploadedFileOwnedBy(input.videoUrl, authorId);
+    if (input.imageUrl) await this.assertUploadedFileOwnedBy(input.imageUrl, authorId);
     const [row] = await db
       .insert(skillDayComments)
       .values({
@@ -12376,6 +12412,16 @@ ${catalog}`;
       where: and(eq(assignments.id, input.assignmentId), eq(assignments.athleteId, athleteId)),
     });
     if (!assignment) return null;
+    // Every set's formCheckVideoUrl is a raw, client-supplied string --
+    // reject up front, before touching any row, if one names a gated path
+    // this athlete didn't actually upload (see uploadedFiles' own schema
+    // comment). Checked before the transaction below rather than inline in
+    // its insert loop so a bad reference never leaves a half-applied save.
+    for (const entry of input.entries) {
+      for (const s of entry.sets) {
+        if (s.formCheckVideoUrl) await this.assertUploadedFileOwnedBy(s.formCheckVideoUrl, athleteId);
+      }
+    }
     const athlete = await db.query.users.findFirst({ where: eq(users.id, athleteId) });
     const weightUnit = athlete?.preferredWeightUnit ?? "lbs";
     // This whole save is a delete-then-reinsert of every set entry (see the
@@ -12570,6 +12616,15 @@ ${catalog}`;
   // the set already has a different video, so a caller always has a clear
   // "queue it as a standalone clip instead" fallback.
   async attachVideoToLoggedSet(athleteId: number, input: AttachVideoToSetInput): Promise<boolean> {
+    // assertUploadedFileOwnedBy throws (see uploadedFiles' own schema
+    // comment) -- caught here rather than left to propagate, matching this
+    // function's own "never throws, false is the whole failure signal"
+    // contract described above.
+    try {
+      await this.assertUploadedFileOwnedBy(input.videoUrl, athleteId);
+    } catch {
+      return false;
+    }
     const assignment = await db.query.assignments.findFirst({
       where: and(eq(assignments.id, input.assignmentId), eq(assignments.athleteId, athleteId)),
     });
@@ -13787,6 +13842,7 @@ ${catalog}`;
   // VideoAnnotationDialog/its PNG-decode route as-is; this just persists the
   // resulting imageUrl onto the Skills-side row.
   async setSkillSessionAnnotation(coachId: number, skillSessionLogId: number, imageUrl: string) {
+    await this.assertUploadedFileOwnedBy(imageUrl, coachId);
     const coachIds = await this.getEffectiveCoachIds(coachId);
     const [owned] = await db
       .select({ id: skillSessionLogs.id })
