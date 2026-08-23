@@ -15,7 +15,7 @@ import {
 } from "@shared/schema";
 import { eq, isNull, and, asc } from "drizzle-orm";
 import { AMERICAN_HITTING_CHAPTERS } from "./seed-data/american-hitting-content";
-import { TERMS_OF_SERVICE_DRAFT, PRIVACY_POLICY_DRAFT, BIOMETRIC_WAIVER_DRAFT } from "./seed-data/legal-documents-draft";
+import { TERMS_OF_SERVICE_DRAFT, PRIVACY_POLICY_DRAFT, BIOMETRIC_WAIVER_DRAFT, PARENTAL_NOTICE_DRAFT } from "./seed-data/legal-documents-draft";
 
 // We don't have live web access from this environment to verify specific
 // YouTube video IDs are real and still online, so hand-picking exact links
@@ -5331,6 +5331,9 @@ And what we don't have yet, stated plainly: no signed BAAs with our hosting or i
   }
   if (!(await storage.getLegalDocument("biometric_waiver"))) {
     await storage.updateLegalDocument("biometric_waiver", BIOMETRIC_WAIVER_DRAFT);
+  }
+  if (!(await storage.getLegalDocument("parental_notice"))) {
+    await storage.updateLegalDocument("parental_notice", PARENTAL_NOTICE_DRAFT);
   }
 
   console.log("Seed complete.");

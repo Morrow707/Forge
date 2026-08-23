@@ -9,7 +9,7 @@ import { apiRequest, resolveApiUrl, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { Download, ShieldAlert, Save, Mail } from "lucide-react";
 
-type LegalDocType = "terms_of_service" | "privacy_policy" | "biometric_waiver";
+type LegalDocType = "terms_of_service" | "privacy_policy" | "biometric_waiver" | "parental_notice";
 type LegalDocument = { docType: LegalDocType; content: string; updatedAt: string };
 
 type ComplianceReportData = {
@@ -237,6 +237,22 @@ export default function AdminDocuments() {
           </CardHeader>
           <CardContent>
             <LegalDocEditor docType="biometric_waiver" />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Notice to Parent or Guardian (Draft)</CardTitle>
+            <CardDescription>
+              Addressed to a parent, not the athlete -- what a Tier 2 (13-17, self-registering)
+              athlete's parent/guardian would actually receive. This is the content half of the
+              guardian-notice system (see users.requiresGuardianNotice and GUARDIAN_NOTICE_LIVE in
+              shared/privacy-tiers.ts); the delivery channel (email at signup? something else?)
+              still doesn't exist. Not reviewed by counsel, not sent to anyone yet.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <LegalDocEditor docType="parental_notice" />
           </CardContent>
         </Card>
       </div>

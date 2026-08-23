@@ -1,16 +1,17 @@
 // First-pass draft text for the admin-editable Terms of Service, Privacy
-// Policy, and Biometric Waiver (see shared/schema.ts legalDocuments).
-// Grounded in what Forge actually does today -- camera-based tracking, the
-// AI features, the wellness/nutrition/injury data it collects, the age-tier
-// system built alongside this -- not generic boilerplate. Still explicitly
-// a draft: nothing here has been reviewed by a lawyer, and none of it is
-// wired into any live signup or consent-collection flow (that's
-// legalAgreement's job, a separate, shorter document actually shown at
-// signup). See getComplianceReportData's own "not yet reviewed" list for
-// the same caveat stated as structured data, not just a comment here --
-// the biometric_waiver consent_type it references has been unwritten until
-// now, and this is that first pass, not a decision that it's ready to
-// collect real signatures against.
+// Policy, Biometric Waiver, and Parental Notice (see shared/schema.ts
+// legalDocuments). Grounded in what Forge actually does today --
+// camera-based tracking, the AI features, the wellness/nutrition/injury
+// data it collects, the age-tier system built alongside this -- not
+// generic boilerplate. Still explicitly a draft: nothing here has been
+// reviewed by a lawyer, and none of it is wired into any live signup or
+// delivery flow (that's legalAgreement's job, a separate, shorter document
+// actually shown at signup). See getComplianceReportData's own "not yet
+// reviewed"/"not yet built" list for the same caveats stated as structured
+// data, not just a comment here -- both the biometric_waiver consent_type
+// and the parental-notice delivery this file's PARENTAL_NOTICE_DRAFT is
+// for were unwritten until now, and this is a first pass, not a decision
+// that either is ready to go live.
 
 const DRAFT_NOTICE =
   "DRAFT -- not reviewed by a lawyer. This document is a starting point for legal review, not a finished, reliable Terms of Service. Do not treat it as legally sufficient until counsel has reviewed and approved it.";
@@ -145,3 +146,42 @@ You (or, for a minor, their parent/guardian) may ask what biometric data Forge h
 By signing, you confirm you've read and understood this release and consent to the collection, use, and retention described above, for as long as the associated Forge account remains active or until consent is withdrawn by deleting the account.
 
 [Placeholder -- signature/date capture, and the specific state-law citations this release is meant to satisfy, need to be finalized with counsel before this is used to collect a real signature.]`;
+
+// Addressed to a parent/guardian, not the athlete -- distinct from every
+// other document in this file, which speaks to whoever's using the app.
+// This is what shared/privacy-tiers.ts's GUARDIAN_NOTICE_LIVE flag and
+// users.requiresGuardianNotice exist to eventually deliver: real content
+// for the "notice" half of "parental notice," which the compliance report
+// has flagged as unwritten until now. Scoped to Tier 2 (13-17, who can
+// self-register today) -- Tier 1 (under 13) never reaches this document at
+// all, since that tier can't self-register in the first place and goes
+// through coach_coppa_consent instead, given by the registering coach as
+// the athlete's agent. [Placeholder -- confirm with counsel that Tier 2
+// even needs a document called a "parental notice" in the first place, as
+// opposed to just the existing self-registration flow; the age at which a
+// state expects parental involvement for a minor's data varies, and this
+// draft assumes 13-17 warrants one without that having been confirmed
+// against real law.]
+export const PARENTAL_NOTICE_DRAFT = `${DRAFT_NOTICE}
+
+FORGE -- NOTICE TO PARENT OR GUARDIAN (DRAFT)
+
+1. WHY YOU'RE SEEING THIS
+Your teen (age 13-17) created their own Forge account, using either a coach's invite code or a direct signup -- at this age, Forge lets a teen register themselves rather than requiring a parent to do it for them. This notice is what a parent or guardian would receive as a result, so you know the account exists and what it involves before you'd normally need to ask.
+
+2. WHAT FORGE IS
+Forge is an athletic performance platform coaches and athletes use for training programs, wellness check-ins, and camera-based movement tracking (bar-path velocity, jump height, sprint times, and similar metrics computed from video captured on your teen's own device). See the Privacy Policy for the full description of what it collects and why.
+
+3. WHAT'S COLLECTED ABOUT YOUR TEEN
+Account/profile information (name, email, sport, position, age), training data their coach assigns and they log, wellness self-reports (sleep, soreness, stress), and -- only when your teen explicitly chooses to save a clip -- video captured during a tracked movement. See the Privacy Policy's "Biometric Information" section for what's collected from that video specifically.
+
+4. WHO CAN SEE IT
+Your teen's own coach can see their training data and tracked metrics, the same way a coach would see it on a clipboard or a whiteboard. Forge staff can access it only as described in the Privacy Policy (support, legal compliance, or safety review). Nobody else -- not other athletes, not other coaches outside your teen's own -- can see it.
+
+5. YOUR ROLE AND YOUR OPTIONS
+You don't need to do anything for the account to keep working. If you'd rather review what's on file, ask questions, or have the account deleted, you (or your teen) can do that -- see Section 9 of the Privacy Policy ("Your Rights and Choices") for how. Deleting the account removes it and any saved video permanently.
+
+6. QUESTIONS
+[Placeholder -- add a real contact email once one exists, the same one referenced in the Terms of Service and Privacy Policy.]
+
+[Placeholder -- how and when this notice is actually delivered to a parent (email at signup? a coach-relayed message? something else) is exactly what GUARDIAN_NOTICE_LIVE and the "not yet built" delivery channel in the compliance report refer to -- this is the content that channel would send, not a decision that the channel itself is ready.]`;

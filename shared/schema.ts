@@ -3852,6 +3852,7 @@ export const legalDocumentTypeEnum = pgEnum("legal_document_type", [
   "terms_of_service",
   "privacy_policy",
   "biometric_waiver",
+  "parental_notice",
 ]);
 
 export const legalDocuments = pgTable("legal_documents", {

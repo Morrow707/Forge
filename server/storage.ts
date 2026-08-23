@@ -9613,14 +9613,14 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
   },
 
   async getLegalDocument(
-    docType: "terms_of_service" | "privacy_policy" | "biometric_waiver",
+    docType: "terms_of_service" | "privacy_policy" | "biometric_waiver" | "parental_notice",
   ): Promise<LegalDocument | null> {
     const [row] = await db.select().from(legalDocuments).where(eq(legalDocuments.docType, docType));
     return row ?? null;
   },
 
   async updateLegalDocument(
-    docType: "terms_of_service" | "privacy_policy" | "biometric_waiver",
+    docType: "terms_of_service" | "privacy_policy" | "biometric_waiver" | "parental_notice",
     content: string,
   ): Promise<LegalDocument> {
     const [row] = await db

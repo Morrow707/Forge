@@ -2183,19 +2183,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ content });
   });
 
-  // Draft Terms of Service / Privacy Policy / Biometric Waiver -- see
-  // legalDocuments' own schema comment: separate from legalAgreement above,
-  // not wired into signup or any live consent-collection flow, purely for
-  // admin editing/printing/emailing pending real legal review. docType is
-  // validated against the enum's literal values directly rather than a
-  // full zod schema, same weight as validating any other route param.
-  const LEGAL_DOC_TYPES = ["terms_of_service", "privacy_policy", "biometric_waiver"] as const;
+  // Draft Terms of Service / Privacy Policy / Biometric Waiver / Parental
+  // Notice -- see legalDocuments' own schema comment: separate from
+  // legalAgreement above, not wired into signup or any live consent-
+  // collection/delivery flow, purely for admin editing/printing/emailing
+  // pending real legal review. docType is validated against the enum's
+  // literal values directly rather than a full zod schema, same weight as
+  // validating any other route param.
+  const LEGAL_DOC_TYPES = [
+    "terms_of_service",
+    "privacy_policy",
+    "biometric_waiver",
+    "parental_notice",
+  ] as const;
   type LegalDocType = (typeof LEGAL_DOC_TYPES)[number];
   const isLegalDocType = (v: string): v is LegalDocType => (LEGAL_DOC_TYPES as readonly string[]).includes(v);
   const LEGAL_DOC_TITLES: Record<LegalDocType, string> = {
     terms_of_service: "Terms of Service",
     privacy_policy: "Privacy Policy",
     biometric_waiver: "Biometric Information Consent and Release",
+    parental_notice: "Notice to Parent or Guardian",
   };
 
   // Publicly browsable (App Store Connect and any visitor need a working
