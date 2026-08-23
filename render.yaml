@@ -3,7 +3,18 @@ services:
     name: forge
     env: node
     plan: starter
-    buildCommand: npm install --include=dev && npm run build && npm run db:reconcile && npm run db:seed
+    # db:reconcile runs twice: the first pass creates/migrates tables (seed
+    # needs those to exist), the second picks up any of reconcile's own
+    # admin-dependent one-time seeds (e.g. the "Forge Standard Screen"
+    # movement-screen battery in reconcile-schema.ts) that can only fire
+    # once db:seed has created the admin account -- on a brand-new database
+    # the admin doesn't exist yet on the first pass, so without this a
+    # first-ever deploy would permanently skip that seed (there's no admin
+    # account yet until *after* db:seed runs, and the one-time INSERT never
+    # gets a second chance). Both scripts are idempotent/additive-only, so
+    # re-running reconcile here is a safe no-op on every deploy after the
+    # first.
+    buildCommand: npm install --include=dev && npm run build && npm run db:reconcile && npm run db:seed && npm run db:reconcile
     startCommand: npm start
     healthCheckPath: /
     # Coach/athlete-uploaded form-check and skill videos, plus coach-drawn
