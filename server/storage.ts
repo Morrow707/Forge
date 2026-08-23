@@ -1702,6 +1702,27 @@ export const storage = {
     return { ok: true };
   },
 
+  // One-time fill for an account whose dateOfBirth predates that field
+  // existing at all -- see backfillDateOfBirthSchema's own comment. Never
+  // overwrites an existing value (the guard below), and recomputes
+  // requiresGuardianNotice from the newly-known tier since that flag was
+  // never correctly set at signup for an account that had no dateOfBirth
+  // to derive a tier from in the first place -- every OTHER tier-dependent
+  // thing in this app (video retention, signup gating) derives its tier
+  // fresh from dateOfBirth on every use, so filling in the date alone is
+  // enough to fix those automatically.
+  async backfillDateOfBirth(userId: number, dateOfBirth: string): Promise<{ ok: true } | { error: string }> {
+    const user = await this.getUser(userId);
+    if (!user) return { error: "Account not found." };
+    if (user.dateOfBirth) return { error: "Date of birth is already on file." };
+    const tier = derivePrivacyTier(dateOfBirth);
+    await db
+      .update(users)
+      .set({ dateOfBirth, requiresGuardianNotice: tier === "tier2_teen_13_17" })
+      .where(eq(users.id, userId));
+    return { ok: true };
+  },
+
   // ---------- Two-factor auth (coach/admin only, see requireRole on the
   // /api/auth/mfa/* routes in auth.ts) ----------
 

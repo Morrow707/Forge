@@ -4423,6 +4423,17 @@ export const changePasswordSchema = z.object({
 });
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 
+// One-time backfill for an account created before dateOfBirth existed as a
+// field at all -- see shared/privacy-tiers.ts's own comment on the
+// "unknown" tier this leaves an athlete in until it's filled. Deliberately
+// separate from updateProfileSchema (which excludes dateOfBirth on
+// purpose): this only ever fills a currently-null value, never overwrites
+// an existing one -- see storage.backfillDateOfBirth's own guard.
+export const backfillDateOfBirthSchema = z.object({
+  dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date"),
+});
+export type BackfillDateOfBirthInput = z.infer<typeof backfillDateOfBirthSchema>;
+
 export const updatePreferencesSchema = z.object({
   preferredWeightUnit: z.enum(["lbs", "kg"]),
 });

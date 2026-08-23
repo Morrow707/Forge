@@ -21,6 +21,7 @@ import {
   requestPasswordResetSchema,
   resetPasswordSchema,
   changePasswordSchema,
+  backfillDateOfBirthSchema,
   claimProvisionalAthleteSchema,
   type PublicUser,
 } from "@shared/schema";
@@ -843,6 +844,27 @@ export function setupAuth(app: Express) {
         html: buildPasswordChangedEmail(user.name),
       });
       res.status(204).end();
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // One-time fill for an account old enough to predate dateOfBirth as a
+  // signup field at all -- see backfillDateOfBirthSchema's own comment.
+  // requireAuth rather than requireRole("athlete") since a pre-dateOfBirth
+  // coach account is just as real a case; the compliance-relevant
+  // population (privacy tiers) is athlete-only, but there's no reason to
+  // block a coach from fixing the same gap on their own profile.
+  app.post("/api/account/backfill-date-of-birth", requireAuth, async (req, res, next) => {
+    try {
+      const parsed = backfillDateOfBirthSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      const user = req.user as any;
+      const result = await storage.backfillDateOfBirth(user.id, parsed.data.dateOfBirth);
+      if ("error" in result) return res.status(400).json({ message: result.error });
+      res.json(await toPublicUserWithSections(await storage.getUser(user.id)));
     } catch (err) {
       next(err);
     }
