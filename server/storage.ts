@@ -2689,7 +2689,11 @@ export const storage = {
     });
     return {
       primaryCoachId: primaryId,
-      staff: rows.map((r) => ({ ...r.staffCoach, hiddenSections: r.hiddenSections })),
+      staff: rows.map((r) => ({
+        ...r.staffCoach,
+        hiddenSections: r.hiddenSections,
+        staffTitle: r.staffTitle,
+      })),
     };
   },
 
@@ -2715,6 +2719,23 @@ export const storage = {
     return row;
   },
 
+  // Primary-only, same shape/guard as setStaffHiddenSections above -- "" is
+  // treated as clearing back to the default "Coach" label, same "empty
+  // string clears" convention updateCoachBranding already uses.
+  async setStaffTitle(primaryCoachId: number, staffCoachId: number, title: string) {
+    const [row] = await db
+      .update(coachStaff)
+      .set({ staffTitle: title || null })
+      .where(
+        and(
+          eq(coachStaff.primaryCoachId, primaryCoachId),
+          eq(coachStaff.staffCoachId, staffCoachId),
+        ),
+      )
+      .returning();
+    return row;
+  },
+
   // Empty for a primary coach or anyone not on a staff at all -- only a
   // joined staff member can have anything hidden. Read on every
   // /api/auth/me call (see toPublicUser's caller in auth.ts), so this stays
@@ -2724,6 +2745,18 @@ export const storage = {
       where: eq(coachStaff.staffCoachId, coachId),
     });
     return asStaff?.hiddenSections ?? [];
+  },
+
+  // Same shape/reasoning as getHiddenSectionsForCoach above -- null for a
+  // primary coach or anyone not on a staff, since only a joined staff
+  // member's own row can carry a title. This is what lets a staff coach's
+  // OWN account menu show "Nutritionist" instead of "Coach" once their
+  // primary sets it, not just the primary's staff-list view of them.
+  async getStaffTitleForCoach(coachId: number): Promise<string | null> {
+    const asStaff = await db.query.coachStaff.findFirst({
+      where: eq(coachStaff.staffCoachId, coachId),
+    });
+    return asStaff?.staffTitle ?? null;
   },
 
   // The primary removes a specific staff member. No-op (not an error) if

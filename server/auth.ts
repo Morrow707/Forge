@@ -114,6 +114,7 @@ async function toPublicUserWithSections(user: any): Promise<PublicUser> {
   const publicUser = toPublicUser(user);
   if (user.role === "coach") {
     (publicUser as any).hiddenSections = await storage.getHiddenSectionsForCoach(user.id);
+    (publicUser as any).staffTitle = await storage.getStaffTitleForCoach(user.id);
   }
   return publicUser;
 }

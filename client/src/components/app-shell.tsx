@@ -54,6 +54,8 @@ import { NotificationSettingsDialog } from "@/components/notification-settings-d
 import { CoachingStaffDialog } from "@/components/coaching-staff-dialog";
 import { TeamBrandingDialog } from "@/components/team-branding-dialog";
 import { NonIosTrackingNotice } from "@/components/non-ios-tracking-warning";
+import { PoweredByFooter } from "@/components/powered-by-footer";
+import { POWERED_BY_FORGE_LABEL } from "@/lib/branding-copy";
 import { hexToHslTriplet, contrastForegroundHsl } from "@/lib/color";
 import { COACH_FEATURE_FIELDS, type CoachFeature } from "@shared/team-features";
 import { COACH_SECTION_NAV_HREFS } from "@shared/coach-sections";
@@ -152,6 +154,7 @@ export function AppShell({
   actions,
   subheader,
   fitScreen,
+  showWatermark = true,
 }: {
   children: ReactNode;
   title: ReactNode;
@@ -162,6 +165,11 @@ export function AppShell({
   subheader?: ReactNode;
   /** Constrains content to the viewport instead of letting the page scroll -- opt in per page. */
   fitScreen?: boolean;
+  /** Small "Powered by Forge" mark under a page's own content -- on by
+   * default, opt OUT per page (a still-rough page, a fitScreen page where it
+   * would sit oddly against a pinned bottom bar, etc.) rather than opt in,
+   * so new pages get it automatically. See PoweredByFooter's own comment. */
+  showWatermark?: boolean;
 }) {
   const { user, logoutMutation } = useAuth();
   const [location] = useLocation();
@@ -328,7 +336,7 @@ export function AppShell({
               </span>
               {(branding?.teamName || branding?.logoUrl) && (
                 <span className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Powered by Forge Performance
+                  {POWERED_BY_FORGE_LABEL}
                 </span>
               )}
             </div>
@@ -482,7 +490,7 @@ export function AppShell({
                 <span className="min-w-0 text-right">
                   <span className="block truncate text-sm font-semibold">{user?.name}</span>
                   <span className="block truncate text-xs capitalize text-muted-foreground">
-                    {isFreeAgent ? "Free Agent" : user?.role}
+                    {user?.staffTitle || (isFreeAgent ? "Free Agent" : user?.role)}
                   </span>
                 </span>
                 <ChevronDown
@@ -679,7 +687,7 @@ export function AppShell({
             <div className="mb-3 min-w-0">
               <p className="truncate text-sm font-semibold">{user?.name}</p>
               <p className="truncate text-xs capitalize text-muted-foreground">
-                {isFreeAgent ? "Free Agent" : user?.role}
+                {user?.staffTitle || (isFreeAgent ? "Free Agent" : user?.role)}
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -896,6 +904,7 @@ export function AppShell({
           )}
         >
           {children}
+          {showWatermark && <PoweredByFooter />}
         </main>
       </div>
 

@@ -2547,6 +2547,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
+  // Same ownership-via-WHERE-clause reasoning as the permissions route
+  // above -- a cosmetic label, not an access-control change, so it's its
+  // own narrow route rather than folded into /permissions.
+  app.patch(
+    "/api/coach/staff/:staffCoachId/title",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const schema = z.object({ title: z.string().trim().max(40) });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Title must be 40 characters or fewer" });
+      }
+      const row = await storage.setStaffTitle(
+        user.id,
+        Number(req.params.staffCoachId),
+        parsed.data.title,
+      );
+      if (!row) return res.status(404).json({ message: "Not one of your staff members" });
+      res.json({ staffTitle: row.staffTitle });
+    },
+  );
+
   app.post("/api/coach/staff/leave", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     await storage.leaveCoachStaff(user.id);

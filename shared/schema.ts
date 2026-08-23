@@ -603,6 +603,13 @@ export const coachStaff = pgTable(
     // the primary coach themself -- there's no row here for their own
     // account to restrict.
     hiddenSections: coachSectionEnum("hidden_sections").array().notNull().default([]),
+    // Free-text label shown in place of "Coach" wherever this staff
+    // member's name renders (roster, chat, team-board posts) -- e.g.
+    // "Nutritionist" or "Athletic Trainer". Deliberately free text, not an
+    // enum: the point is a school can label a staff seat however they
+    // actually use it without Forge having to anticipate every title.
+    // Null means "just show Coach," same as before this column existed.
+    staffTitle: text("staff_title"),
   },
   (table) => ({
     pairIdx: uniqueIndex("coach_staff_pair_idx").on(
@@ -5071,6 +5078,12 @@ export type PublicUser = Omit<
   // /api/auth/me. Always [] for a primary/non-staff coach, and absent
   // entirely for an athlete/admin.
   hiddenSections?: CoachSection[];
+  // Same computed-per-request pattern as hiddenSections, from the same row
+  // (see getStaffTitleForCoach) -- null for a primary/non-staff coach, and
+  // absent entirely for an athlete/admin. Lets AppShell's account menu show
+  // this staff coach's own title ("Nutritionist") instead of the generic
+  // "Coach" role label.
+  staffTitle?: string | null;
 };
 
 export const updateHealthStatusSchema = z.object({

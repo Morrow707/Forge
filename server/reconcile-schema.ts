@@ -1687,6 +1687,12 @@ CREATE TABLE IF NOT EXISTS "guardian_invites" (
   "created_at" timestamp NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS "guardian_invites_athlete_idx" ON "guardian_invites" ("athlete_id");
+
+-- Free-text display title for a staff coach (shared/schema.ts
+-- coachStaff.staffTitle) -- e.g. "Nutritionist" or "Strength Coach" shown
+-- in place of the generic "Coach" label wherever this staff member's name
+-- renders, without needing a whole separate account type/role.
+ALTER TABLE "coach_staff" ADD COLUMN IF NOT EXISTS "staff_title" text;
 `;
 
 async function main() {

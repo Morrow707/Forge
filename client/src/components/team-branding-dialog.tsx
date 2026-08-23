@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { ImagePlus, Trash2, Palette } from "lucide-react";
 import { COACH_FEATURE_FIELDS, type CoachFeature } from "@shared/team-features";
 import { contrastForegroundHsl } from "@/lib/color";
+import { POWERED_BY_FORGE_LABEL } from "@/lib/branding-copy";
 
 const QUERY_KEY = ["/api/coach/branding"];
 
@@ -267,7 +268,7 @@ export function TeamBrandingDialog({
                     </span>
                     {(teamName || data?.logoUrl) && (
                       <span className="text-[8px] font-medium uppercase tracking-wide text-muted-foreground">
-                        Powered by Forge Performance
+                        {POWERED_BY_FORGE_LABEL}
                       </span>
                     )}
                   </div>

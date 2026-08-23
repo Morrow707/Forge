@@ -21,6 +21,7 @@ import { Dumbbell, ClipboardList, Sparkles, Check, Lock } from "lucide-react";
 import { ForgeMark } from "@/components/forge-mark";
 import { getJson, resolveApiUrl } from "@/lib/queryClient";
 import { hexToHslTriplet, contrastForegroundHsl } from "@/lib/color";
+import { POWERED_BY_FORGE_LABEL } from "@/lib/branding-copy";
 import { derivePrivacyTier } from "@shared/privacy-tiers";
 
 type PublicBranding = {
@@ -147,7 +148,7 @@ export default function SignupPage() {
           </h1>
           {branding?.teamName || branding?.logoUrl ? (
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Powered by Forge Performance
+              {POWERED_BY_FORGE_LABEL}
             </p>
           ) : (
             <p className="text-sm text-muted-foreground">Coach. Program. Perform.</p>

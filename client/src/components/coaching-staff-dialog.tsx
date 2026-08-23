@@ -18,8 +18,19 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { COACH_SECTIONS, COACH_SECTION_LABEL, type CoachSection } from "@shared/coach-sections";
 import { cn } from "@/lib/utils";
 
-type StaffMember = { id: number; name: string; email: string; hiddenSections: CoachSection[] };
+type StaffMember = {
+  id: number;
+  name: string;
+  email: string;
+  hiddenSections: CoachSection[];
+  staffTitle: string | null;
+};
 type StaffResponse = { primaryCoachId: number; staff: StaffMember[] };
+
+// Free-form is the point (see staffTitle's own comment in schema.ts) -- these
+// are just one-tap starting points for the common cases, not an exhaustive
+// or enforced list.
+const STAFF_TITLE_PRESETS = ["Nutritionist", "Strength Coach", "Athletic Trainer", "Sports Psych"];
 
 /** Lets a whole coaching staff (assistant/position coaches) share one
  * roster/programs/exercises/analytics instead of one coach owning
@@ -38,6 +49,7 @@ export function CoachingStaffDialog({
   const qc = useQueryClient();
   const [joinCode, setJoinCode] = useState("");
   const [editingPermissionsFor, setEditingPermissionsFor] = useState<number | null>(null);
+  const [titleDraft, setTitleDraft] = useState("");
 
   const { data, isLoading } = useQuery<StaffResponse>({
     queryKey: ["/api/coach/staff"],
@@ -69,6 +81,14 @@ export function CoachingStaffDialog({
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/coach/staff"] }),
     onError: (err: ApiError) => toast.error(err.message || "Couldn't update their access"),
+  });
+
+  const titleMutation = useMutation({
+    mutationFn: async ({ staffCoachId, title }: { staffCoachId: number; title: string }) => {
+      await apiRequest("PATCH", `/api/coach/staff/${staffCoachId}/title`, { title });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/coach/staff"] }),
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't update their title"),
   });
 
   const removeMutation = useMutation({
@@ -151,7 +171,14 @@ export function CoachingStaffDialog({
                       <div key={s.id} className="rounded-md border border-border">
                         <div className="flex items-center justify-between p-2.5 text-sm">
                           <div className="min-w-0">
-                            <p className="truncate font-medium">{s.name}</p>
+                            <p className="flex items-center gap-1.5 truncate font-medium">
+                              {s.name}
+                              {s.staffTitle && (
+                                <span className="shrink-0 rounded-full border border-border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                  {s.staffTitle}
+                                </span>
+                              )}
+                            </p>
                             <p className="truncate text-xs text-muted-foreground">{s.email}</p>
                             {s.hiddenSections.length > 0 && (
                               <p className="mt-0.5 text-[11px] text-muted-foreground">
@@ -166,7 +193,10 @@ export function CoachingStaffDialog({
                                 variant="ghost"
                                 size="icon"
                                 aria-label={isEditingThis ? `Close ${s.name}'s access settings` : `Edit ${s.name}'s access`}
-                                onClick={() => setEditingPermissionsFor(isEditingThis ? null : s.id)}
+                                onClick={() => {
+                                  setEditingPermissionsFor(isEditingThis ? null : s.id);
+                                  setTitleDraft(isEditingThis ? "" : (s.staffTitle ?? ""));
+                                }}
                               >
                                 {isEditingThis ? (
                                   <ChevronDown className="h-4 w-4" />
@@ -189,7 +219,45 @@ export function CoachingStaffDialog({
                         </div>
                         {isEditingThis && (
                           <div className="space-y-2 border-t border-border p-2.5">
-                            <p className="text-xs text-muted-foreground">
+                            <div className="space-y-1.5">
+                              <p className="text-xs text-muted-foreground">
+                                Display title -- shown instead of "Coach" wherever {s.name.split(" ")[0]}'s
+                                name appears. Leave blank to keep the default.
+                              </p>
+                              <div className="flex items-center gap-2">
+                                <Input
+                                  value={titleDraft}
+                                  onChange={(e) => setTitleDraft(e.target.value)}
+                                  onBlur={() => {
+                                    if (titleDraft !== (s.staffTitle ?? "")) {
+                                      titleMutation.mutate({ staffCoachId: s.id, title: titleDraft });
+                                    }
+                                  }}
+                                  placeholder="e.g. Nutritionist"
+                                  maxLength={40}
+                                  className="h-8 text-xs"
+                                />
+                              </div>
+                              <div className="flex flex-wrap gap-1.5">
+                                {STAFF_TITLE_PRESETS.map((preset) => (
+                                  <button
+                                    key={preset}
+                                    type="button"
+                                    onClick={() => {
+                                      setTitleDraft(preset);
+                                      titleMutation.mutate({ staffCoachId: s.id, title: preset });
+                                    }}
+                                    className={cn(
+                                      "rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary",
+                                      s.staffTitle === preset && "border-primary/50 text-primary",
+                                    )}
+                                  >
+                                    {preset}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                            <p className="pt-1 text-xs text-muted-foreground">
                               What {s.name.split(" ")[0]} can see -- unchecked sections stay hidden from
                               their nav until you turn them back on.
                             </p>
