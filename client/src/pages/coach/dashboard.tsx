@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { AppShell } from "@/components/app-shell";
@@ -9,10 +9,20 @@ import { CoachDayEditDialog } from "@/components/coach-day-edit-dialog";
 import { SkillDayViewDialog } from "@/components/skill-day-view-dialog";
 import { CoachDigestBanner } from "@/components/coach-digest-banner";
 import { ReengagementBanner } from "@/components/reengagement-banner";
-import { HideableWidget } from "@/components/hideable-widget";
+import { SortableHideableWidget } from "@/components/sortable-hideable-widget";
 import { NextThreeDaysCard } from "@/components/next-three-days-card";
 import { StatTile } from "@/components/stat-tile";
 import { useWidgetVisibility } from "@/hooks/use-widget-visibility";
+import { resolveWidgetOrder } from "@/lib/widget-layout";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import { SortableContext, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
 import { Pencil, Check } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { apiRequest } from "@/lib/queryClient";
@@ -105,61 +115,61 @@ export default function CoachDashboard() {
     athleteName: string;
   } | null>(null);
 
-  return (
-    <AppShell
-      title={`Welcome, ${user?.name?.split(" ")[0] ?? "Coach"}`}
-      actions={
-        <Button
-          size="sm"
-          variant={widgetVisibility.editMode ? "default" : "outline"}
-          onClick={() => widgetVisibility.setEditMode((v) => !v)}
-        >
-          {widgetVisibility.editMode ? <Check className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
-          {widgetVisibility.editMode ? "Done" : "Edit"}
-        </Button>
-      }
-    >
-      <div className="flex flex-col gap-3">
-        <CoachDigestBanner />
-        <ReengagementBanner />
+  const WIDGET_IDS = ["next-3-days", "stat-tiles", "recent-programs", "invite-athletes"];
+  const widgetOrder = resolveWidgetOrder(widgetVisibility.layout, WIDGET_IDS);
+  const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = widgetOrder.indexOf(String(active.id));
+    const newIndex = widgetOrder.indexOf(String(over.id));
+    widgetVisibility.setOrder(arrayMove(widgetOrder, oldIndex, newIndex));
+  }
 
-        <HideableWidget
-          id="next-3-days"
-          label="Next 3 Days"
-          editMode={widgetVisibility.editMode}
-          isHidden={widgetVisibility.hidden.has("next-3-days")}
-          onToggle={widgetVisibility.setHidden}
-        >
-          <NextThreeDaysCard
-            days={days}
-            entries={upcoming}
-            calendarHref="/coach/calendar"
-            description="Quick look across your roster — synced with the full calendar."
-            compact
-            onEntryClick={(e) =>
-              e.kind === "skill"
-                ? setViewingSkill({
-                    skillProgramId: e.programId,
-                    skillProgramDayId: e.programDayId,
-                    athleteName: e.athleteName!,
-                  })
-                : setEditing({
-                    programDayId: e.programDayId,
-                    assignmentId: e.assignmentId,
-                    athleteId: e.athleteId!,
-                    athleteName: e.athleteName!,
-                  })
-            }
-          />
-        </HideableWidget>
-
-        <HideableWidget
-          id="stat-tiles"
-          label="Stat Tiles"
-          editMode={widgetVisibility.editMode}
-          isHidden={widgetVisibility.hidden.has("stat-tiles")}
-          onToggle={widgetVisibility.setHidden}
-        >
+  // Keyed by widget id so the drag-and-drop order below can render each
+  // one in whatever position the coach last dragged it to -- the "which
+  // widgets exist and what's in each" part stays exactly the same JSX as
+  // before, just addressed by id instead of appearing in fixed order.
+  const widgetsById: Record<string, ReactNode> = {
+    "next-3-days": (
+      <SortableHideableWidget
+        id="next-3-days"
+        label="Next 3 Days"
+        editMode={widgetVisibility.editMode}
+        isHidden={widgetVisibility.hidden.has("next-3-days")}
+        onToggle={widgetVisibility.setHidden}
+      >
+        <NextThreeDaysCard
+          days={days}
+          entries={upcoming}
+          calendarHref="/coach/calendar"
+          description="Quick look across your roster — synced with the full calendar."
+          compact
+          onEntryClick={(e) =>
+            e.kind === "skill"
+              ? setViewingSkill({
+                  skillProgramId: e.programId,
+                  skillProgramDayId: e.programDayId,
+                  athleteName: e.athleteName!,
+                })
+              : setEditing({
+                  programDayId: e.programDayId,
+                  assignmentId: e.assignmentId,
+                  athleteId: e.athleteId!,
+                  athleteName: e.athleteName!,
+                })
+          }
+        />
+      </SortableHideableWidget>
+    ),
+    "stat-tiles": (
+      <SortableHideableWidget
+        id="stat-tiles"
+        label="Stat Tiles"
+        editMode={widgetVisibility.editMode}
+        isHidden={widgetVisibility.hidden.has("stat-tiles")}
+        onToggle={widgetVisibility.setHidden}
+      >
         <div className="grid grid-cols-1 shrink-0 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <StatTile icon={Users} label="Athletes" value={roster.length} href="/coach/roster" />
           <StatTile
@@ -181,70 +191,99 @@ export default function CoachDashboard() {
             href="/coach/roster"
           />
         </div>
-        </HideableWidget>
-
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-          <HideableWidget
-            id="recent-programs"
-            label="Recent Programs"
-            editMode={widgetVisibility.editMode}
-            isHidden={widgetVisibility.hidden.has("recent-programs")}
-            onToggle={widgetVisibility.setHidden}
-            className="lg:col-span-2"
-          >
-          <Card className="flex flex-col lg:col-span-2">
-            <CardHeader className="flex-row shrink-0 items-center justify-between space-y-0 p-3 md:p-4">
-              <div>
-                <CardTitle className="text-base md:text-lg">Recent Programs</CardTitle>
-                <CardDescription className="hidden sm:block">
-                  Your most recently created training blocks.
-                </CardDescription>
-              </div>
-              <Link href="/coach/programs">
-                <Button variant="outline" size="sm">
-                  View all
-                </Button>
-              </Link>
-            </CardHeader>
-            <CardContent className="space-y-2 p-3 pt-0 md:p-4 md:pt-0">
-              {programs.length === 0 && (
-                <p className="py-6 text-center text-sm text-muted-foreground">
-                  No programs yet. Build your first one to start assigning workouts.
-                </p>
-              )}
-              {programs.slice(0, 5).map((p) => (
-                <Link key={p.id} href={`/coach/programs/${p.id}`}>
-                  <div className="flex cursor-pointer items-center justify-between rounded-md border border-border p-2.5 transition-colors hover:bg-surface-elevated">
-                    <div className="min-w-0">
-                      <p className="truncate font-semibold">{p.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {p.weekCount} weeks · {p.dayCount} days · {p.assignedAthleteCount}{" "}
-                        athlete{p.assignedAthleteCount === 1 ? "" : "s"} assigned
-                      </p>
-                    </div>
-                    <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+      </SortableHideableWidget>
+    ),
+    "recent-programs": (
+      <SortableHideableWidget
+        id="recent-programs"
+        label="Recent Programs"
+        editMode={widgetVisibility.editMode}
+        isHidden={widgetVisibility.hidden.has("recent-programs")}
+        onToggle={widgetVisibility.setHidden}
+      >
+        <Card className="flex flex-col">
+          <CardHeader className="flex-row shrink-0 items-center justify-between space-y-0 p-3 md:p-4">
+            <div>
+              <CardTitle className="text-base md:text-lg">Recent Programs</CardTitle>
+              <CardDescription className="hidden sm:block">
+                Your most recently created training blocks.
+              </CardDescription>
+            </div>
+            <Link href="/coach/programs">
+              <Button variant="outline" size="sm">
+                View all
+              </Button>
+            </Link>
+          </CardHeader>
+          <CardContent className="space-y-2 p-3 pt-0 md:p-4 md:pt-0">
+            {programs.length === 0 && (
+              <p className="py-6 text-center text-sm text-muted-foreground">
+                No programs yet. Build your first one to start assigning workouts.
+              </p>
+            )}
+            {programs.slice(0, 5).map((p) => (
+              <Link key={p.id} href={`/coach/programs/${p.id}`}>
+                <div className="flex cursor-pointer items-center justify-between rounded-md border border-border p-2.5 transition-colors hover:bg-surface-elevated">
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold">{p.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {p.weekCount} weeks · {p.dayCount} days · {p.assignedAthleteCount}{" "}
+                      athlete{p.assignedAthleteCount === 1 ? "" : "s"} assigned
+                    </p>
                   </div>
-                </Link>
-              ))}
-              <Link href="/coach/programs">
-                <Button variant="secondary" className="w-full">
-                  + New Program
-                </Button>
+                  <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                </div>
               </Link>
-            </CardContent>
-          </Card>
-          </HideableWidget>
+            ))}
+            <Link href="/coach/programs">
+              <Button variant="secondary" className="w-full">
+                + New Program
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </SortableHideableWidget>
+    ),
+    "invite-athletes": (
+      <SortableHideableWidget
+        id="invite-athletes"
+        label="Invite Athletes"
+        editMode={widgetVisibility.editMode}
+        isHidden={widgetVisibility.hidden.has("invite-athletes")}
+        onToggle={widgetVisibility.setHidden}
+      >
+        <TeamInviteCard teams={teams} coachCode={user?.coachCode ?? null} />
+      </SortableHideableWidget>
+    ),
+  };
 
-          <HideableWidget
-            id="invite-athletes"
-            label="Invite Athletes"
-            editMode={widgetVisibility.editMode}
-            isHidden={widgetVisibility.hidden.has("invite-athletes")}
-            onToggle={widgetVisibility.setHidden}
-          >
-            <TeamInviteCard teams={teams} coachCode={user?.coachCode ?? null} />
-          </HideableWidget>
-        </div>
+  return (
+    <AppShell
+      title={`Welcome, ${user?.name?.split(" ")[0] ?? "Coach"}`}
+      actions={
+        <Button
+          size="sm"
+          variant={widgetVisibility.editMode ? "default" : "outline"}
+          onClick={() => widgetVisibility.setEditMode((v) => !v)}
+        >
+          {widgetVisibility.editMode ? <Check className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
+          {widgetVisibility.editMode ? "Done" : "Edit"}
+        </Button>
+      }
+    >
+      <div className="flex flex-col gap-3">
+        <CoachDigestBanner />
+        <ReengagementBanner />
+
+        <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={widgetOrder} strategy={verticalListSortingStrategy}>
+            {widgetOrder.map((id) => (
+              <div key={id} style={{ display: "contents" }}>
+                {widgetsById[id]}
+              </div>
+            ))}
+          </SortableContext>
+        </DndContext>
       </div>
 
       <CoachDayEditDialog

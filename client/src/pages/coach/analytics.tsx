@@ -45,7 +45,18 @@ import {
 } from "lucide-react";
 import { VideoAnalysisDialog } from "@/components/video-analysis-dialog";
 import { HideableWidget } from "@/components/hideable-widget";
+import { SortableHideableWidget } from "@/components/sortable-hideable-widget";
 import { useWidgetVisibility } from "@/hooks/use-widget-visibility";
+import { resolveWidgetOrder } from "@/lib/widget-layout";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import { SortableContext, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
 import { Pencil, Check } from "lucide-react";
 import { SkillsTrendsPanel } from "@/components/skills-trends-panel";
 import {
@@ -545,6 +556,29 @@ export default function CoachAnalytics() {
   const [exerciseId, setExerciseId] = useState<string>(initialParams.get("exerciseId") ?? "");
   const [hiddenCharts, setHiddenCharts] = useState<Set<ChartKey>>(() => loadHiddenCharts());
   const widgetVisibility = useWidgetVisibility("coach");
+  // setOrder rewrites the ENTIRE stored layout from whatever ids it's
+  // given, so this has to carry all three widget ids -- not just the two
+  // that are actually adjacent/draggable below -- or reordering the top
+  // two would silently drop acwr-trend's stored hidden flag. Only
+  // weekly-load-trend/muscle-heat-map ever sit next to each other with no
+  // fixed anchor (Goals, Recent Sessions) pinned between them; acwr-trend
+  // renders below both of those regardless of its position in this array
+  // (see its own plain, non-draggable HideableWidget below), so reordering
+  // never needs to move IT, only preserve its hidden flag.
+  const fullWidgetOrder = resolveWidgetOrder(widgetVisibility.layout, [
+    "weekly-load-trend",
+    "muscle-heat-map",
+    "acwr-trend",
+  ]);
+  const topWidgetOrder = fullWidgetOrder.filter((id) => id !== "acwr-trend");
+  const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+  function handleTopWidgetDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = fullWidgetOrder.indexOf(String(active.id));
+    const newIndex = fullWidgetOrder.indexOf(String(over.id));
+    widgetVisibility.setOrder(arrayMove(fullWidgetOrder, oldIndex, newIndex));
+  }
   // Three ways to look at the same exercise history: a quick per-set,
   // per-rep breakdown for one workout ("byDate", the default -- a coach
   // opening this page wants to see today's numbers at a glance, not parse a
@@ -798,24 +832,35 @@ export default function CoachAnalytics() {
 
       {athleteId && !exerciseId && (
         <div className="space-y-4">
-          <HideableWidget
-            id="weekly-load-trend"
-            label="Weekly Load Trend"
-            editMode={widgetVisibility.editMode}
-            isHidden={widgetVisibility.hidden.has("weekly-load-trend")}
-            onToggle={widgetVisibility.setHidden}
-          >
-            <WeeklyLoadTrendCard athleteId={athleteId} />
-          </HideableWidget>
-          <HideableWidget
-            id="muscle-heat-map"
-            label="Muscle Heat Map"
-            editMode={widgetVisibility.editMode}
-            isHidden={widgetVisibility.hidden.has("muscle-heat-map")}
-            onToggle={widgetVisibility.setHidden}
-          >
-            <MuscleHeatMap athleteId={athleteId} />
-          </HideableWidget>
+          <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleTopWidgetDragEnd}>
+            <SortableContext items={topWidgetOrder} strategy={verticalListSortingStrategy}>
+              {topWidgetOrder.map((id) => (
+                <div key={id} style={{ display: "contents" }}>
+                  {id === "weekly-load-trend" ? (
+                    <SortableHideableWidget
+                      id="weekly-load-trend"
+                      label="Weekly Load Trend"
+                      editMode={widgetVisibility.editMode}
+                      isHidden={widgetVisibility.hidden.has("weekly-load-trend")}
+                      onToggle={widgetVisibility.setHidden}
+                    >
+                      <WeeklyLoadTrendCard athleteId={athleteId} />
+                    </SortableHideableWidget>
+                  ) : (
+                    <SortableHideableWidget
+                      id="muscle-heat-map"
+                      label="Muscle Heat Map"
+                      editMode={widgetVisibility.editMode}
+                      isHidden={widgetVisibility.hidden.has("muscle-heat-map")}
+                      onToggle={widgetVisibility.setHidden}
+                    >
+                      <MuscleHeatMap athleteId={athleteId} />
+                    </SortableHideableWidget>
+                  )}
+                </div>
+              ))}
+            </SortableContext>
+          </DndContext>
 
           <Card>
             <CardHeader>

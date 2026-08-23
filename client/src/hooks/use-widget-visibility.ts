@@ -44,5 +44,18 @@ export function useWidgetVisibility(scope: "coach" | "athlete") {
     mutation.mutate(next);
   }
 
-  return { layout, hidden, editMode, setEditMode, setHidden };
+  // Called with the page's full resolved order after a drag (see
+  // resolveWidgetOrder in lib/widget-layout.ts) -- rebuilds the stored
+  // layout in that exact order, carrying over each id's existing hidden
+  // flag (false for one that's never been in the stored layout before,
+  // same "unknown means visible" default as everywhere else here).
+  function setOrder(orderedIds: string[]) {
+    const next = orderedIds.map((id) => ({
+      id,
+      hidden: layout.find((w) => w.id === id)?.hidden ?? false,
+    }));
+    mutation.mutate(next);
+  }
+
+  return { layout, hidden, editMode, setEditMode, setHidden, setOrder };
 }

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, Link } from "wouter";
 import { AppShell } from "@/components/app-shell";
@@ -12,10 +12,20 @@ import { NutritionQuickSummary } from "@/components/nutrition-quick-summary";
 import { TeamChatQuickSummary } from "@/components/team-chat-quick-summary";
 import { DigestBanner } from "@/components/digest-banner";
 import { PendingVideosBanner } from "@/components/pending-videos-banner";
-import { HideableWidget } from "@/components/hideable-widget";
+import { SortableHideableWidget } from "@/components/sortable-hideable-widget";
 import { NextThreeDaysCard } from "@/components/next-three-days-card";
 import { StatTile } from "@/components/stat-tile";
 import { useWidgetVisibility } from "@/hooks/use-widget-visibility";
+import { resolveWidgetOrder } from "@/lib/widget-layout";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import { SortableContext, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
 import { useAuth } from "@/hooks/use-auth";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
@@ -75,6 +85,113 @@ export default function AthleteDashboard() {
     },
   });
 
+  // Team Chat only ever renders for a coached athlete (a Free Agent has no
+  // team) -- excluded from the sortable set entirely when it wouldn't
+  // render at all, rather than showing a drag handle for a widget that can
+  // never actually appear.
+  const hasTeamChat = !coachesLoading && coaches.length > 0;
+  const WIDGET_IDS = [
+    "next-3-days",
+    "nutrition-summary",
+    "stat-tiles",
+    ...(hasTeamChat ? ["team-chat"] : []),
+  ];
+  const widgetOrder = resolveWidgetOrder(widgetVisibility.layout, WIDGET_IDS);
+  const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = widgetOrder.indexOf(String(active.id));
+    const newIndex = widgetOrder.indexOf(String(over.id));
+    widgetVisibility.setOrder(arrayMove(widgetOrder, oldIndex, newIndex));
+  }
+
+  const widgetsById: Record<string, ReactNode> = {
+    "next-3-days": (
+      <SortableHideableWidget
+        id="next-3-days"
+        label="Next 3 Days"
+        editMode={widgetVisibility.editMode}
+        isHidden={widgetVisibility.hidden.has("next-3-days")}
+        onToggle={widgetVisibility.setHidden}
+      >
+        <NextThreeDaysCard
+          days={days}
+          entries={upcoming}
+          calendarHref="/athlete/calendar"
+          description="Quick look at what's coming up -- synced with the full calendar."
+          onEntryClick={(e) =>
+            e.kind === "skill"
+              ? setViewingSkill({
+                  skillAssignmentId: e.assignmentId,
+                  skillProgramDayId: e.programDayId,
+                  date: e.date,
+                })
+              : navigate(`/athlete/day/${e.assignmentId}/${e.programDayId}/${e.date}`)
+          }
+        />
+      </SortableHideableWidget>
+    ),
+    "nutrition-summary": (
+      <SortableHideableWidget
+        id="nutrition-summary"
+        label="Today's Nutrition"
+        editMode={widgetVisibility.editMode}
+        isHidden={widgetVisibility.hidden.has("nutrition-summary")}
+        onToggle={widgetVisibility.setHidden}
+      >
+        <NutritionQuickSummary />
+      </SortableHideableWidget>
+    ),
+    "stat-tiles": (
+      <SortableHideableWidget
+        id="stat-tiles"
+        label="Stat Tiles"
+        editMode={widgetVisibility.editMode}
+        isHidden={widgetVisibility.hidden.has("stat-tiles")}
+        onToggle={widgetVisibility.setHidden}
+      >
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <StatTile
+            icon={Flame}
+            label="Day streak"
+            value={progress?.currentStreak ?? 0}
+            href="/athlete/progress"
+          />
+          <StatTile
+            icon={CalendarCheck}
+            label="Workouts this month"
+            value={progress?.workoutsThisMonth ?? 0}
+            href="/athlete/progress"
+          />
+          <StatTile
+            icon={ListChecks}
+            label="Total completed"
+            value={progress?.totalCompleted ?? 0}
+            href="/athlete/progress"
+          />
+          <StatTile
+            icon={Trophy}
+            label="Recent PRs"
+            value={progress?.recentPRs?.length ?? 0}
+            href="/athlete/progress"
+          />
+        </div>
+      </SortableHideableWidget>
+    ),
+    "team-chat": (
+      <SortableHideableWidget
+        id="team-chat"
+        label="Team Chat"
+        editMode={widgetVisibility.editMode}
+        isHidden={widgetVisibility.hidden.has("team-chat")}
+        onToggle={widgetVisibility.setHidden}
+      >
+        <TeamChatQuickSummary />
+      </SortableHideableWidget>
+    ),
+  };
+
   return (
     <AppShell
       title={`Welcome, ${user?.name?.split(" ")[0] ?? "Athlete"}`}
@@ -94,91 +211,19 @@ export default function AthleteDashboard() {
         <PendingVideosBanner />
         <DigestBanner />
 
-        <HideableWidget
-          id="next-3-days"
-          label="Next 3 Days"
-          editMode={widgetVisibility.editMode}
-          isHidden={widgetVisibility.hidden.has("next-3-days")}
-          onToggle={widgetVisibility.setHidden}
-        >
-          <NextThreeDaysCard
-            days={days}
-            entries={upcoming}
-            calendarHref="/athlete/calendar"
-            description="Quick look at what's coming up -- synced with the full calendar."
-            onEntryClick={(e) =>
-              e.kind === "skill"
-                ? setViewingSkill({
-                    skillAssignmentId: e.assignmentId,
-                    skillProgramDayId: e.programDayId,
-                    date: e.date,
-                  })
-                : navigate(`/athlete/day/${e.assignmentId}/${e.programDayId}/${e.date}`)
-            }
-          />
-        </HideableWidget>
-
-        {/* Today's nutrition sits right under the calendar -- it's the one
-            thing on this page an athlete plausibly checks/updates several
-            times a day, unlike the stat tiles and team chat below it. */}
-        <HideableWidget
-          id="nutrition-summary"
-          label="Today's Nutrition"
-          editMode={widgetVisibility.editMode}
-          isHidden={widgetVisibility.hidden.has("nutrition-summary")}
-          onToggle={widgetVisibility.setHidden}
-        >
-          <NutritionQuickSummary />
-        </HideableWidget>
-
-        <HideableWidget
-          id="stat-tiles"
-          label="Stat Tiles"
-          editMode={widgetVisibility.editMode}
-          isHidden={widgetVisibility.hidden.has("stat-tiles")}
-          onToggle={widgetVisibility.setHidden}
-        >
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <StatTile
-              icon={Flame}
-              label="Day streak"
-              value={progress?.currentStreak ?? 0}
-              href="/athlete/progress"
-            />
-            <StatTile
-              icon={CalendarCheck}
-              label="Workouts this month"
-              value={progress?.workoutsThisMonth ?? 0}
-              href="/athlete/progress"
-            />
-            <StatTile
-              icon={ListChecks}
-              label="Total completed"
-              value={progress?.totalCompleted ?? 0}
-              href="/athlete/progress"
-            />
-            <StatTile
-              icon={Trophy}
-              label="Recent PRs"
-              value={progress?.recentPRs?.length ?? 0}
-              href="/athlete/progress"
-            />
-          </div>
-        </HideableWidget>
-
-        {/* Team chat quick view -- coached athletes only, a Free Agent has
-            no team. */}
-        {!coachesLoading && coaches.length > 0 && (
-          <HideableWidget
-            id="team-chat"
-            label="Team Chat"
-            editMode={widgetVisibility.editMode}
-            isHidden={widgetVisibility.hidden.has("team-chat")}
-            onToggle={widgetVisibility.setHidden}
-          >
-            <TeamChatQuickSummary />
-          </HideableWidget>
-        )}
+        {/* Today's nutrition sits right under the calendar in default order
+            -- it's the one thing on this page an athlete plausibly checks/
+            updates several times a day, unlike the stat tiles and team chat
+            below it (see WIDGET_IDS above for the default order itself). */}
+        <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={widgetOrder} strategy={verticalListSortingStrategy}>
+            {widgetOrder.map((id) => (
+              <div key={id} style={{ display: "contents" }}>
+                {widgetsById[id]}
+              </div>
+            ))}
+          </SortableContext>
+        </DndContext>
 
         {/* Free Agent status is purely derived (zero rows in coachAthletes
             for this athlete, nothing stored) -- see app-shell.tsx's own nav
