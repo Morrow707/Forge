@@ -5,6 +5,7 @@ import fs from "fs";
 import multer from "multer";
 import rateLimit from "express-rate-limit";
 import { setupAuth, requireAuth, requireRole, attachNativeTokenAuth } from "./auth";
+import { uploadsLimiter } from "./rate-limiters";
 import { storage } from "./storage";
 import { buildIcsFeed } from "./ics";
 import { getVapidPublicKey, pushEnabled } from "./push";
@@ -338,51 +339,6 @@ const reportProblemLimiter = rateLimit({
   message: { message: "Too many reports submitted. Please try again later." },
 });
 
-// Shared by every general (non-auth-specific) limiter below -- keyed by
-// user id when a session already resolved one, not just IP. A team
-// practice routinely has a dozen-plus athletes on the same gym wifi NAT IP
-// at once, and a pure per-IP limit would let one misbehaving client
-// throttle everyone else on the same network. Falls back to IP for the
-// much smaller unauthenticated surface, which is exactly what the
-// login/signup/reset limiters in auth.ts already key on.
-function rateLimitKey(req: any): string {
-  return req.isAuthenticated?.() && req.user?.id ? `user:${req.user.id}` : (req.ip ?? "unknown");
-}
-
-// General backstop under every JSON route in the app -- CodeQL's
-// js/missing-rate-limiting flagged this at scale (~200+ authenticated route
-// handlers, only a handful of which had their own purpose-specific limiter
-// in auth.ts: login, signup, password reset, MFA, change-password). Rather
-// than bolting a bespoke limiter onto every one of them, this covers all of
-// /api/* as a floor; the tighter limiters already guarding the sensitive
-// auth endpoints still apply on top of it, unaffected.
-const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: 600,
-  standardHeaders: true,
-  legacyHeaders: false,
-  keyGenerator: rateLimitKey,
-  message: { message: "Too many requests. Please try again shortly." },
-});
-
-// Separate budget from apiLimiter, not a shared one -- /uploads serves the
-// actual video/image bytes behind the signed-URL check just below (see its
-// own comment), and a single roster or calendar page can legitimately fire
-// far more of these in a burst than it does JSON API calls (every visible
-// thumbnail is its own request). Sharing apiLimiter's counter would let a
-// media-heavy page exhaust the same budget a user's actual API calls need.
-// Still a real ceiling, not just theater: it's the backstop CodeQL flagged
-// here too, against someone hammering this endpoint trying to replay or
-// brute-force a signature rather than a legitimate page load.
-const uploadsLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: 2000,
-  standardHeaders: true,
-  legacyHeaders: false,
-  keyGenerator: rateLimitKey,
-  message: { message: "Too many requests. Please try again shortly." },
-});
-
 function currentUser(req: any) {
   return req.user as {
     id: number;
@@ -649,9 +605,6 @@ async function notifyNewlyUnlockedLessons(
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
   app.use(attachNativeTokenAuth);
-  // After both of the above so req.isAuthenticated()/req.user are already
-  // resolved -- see apiLimiter's own comment for why that matters.
-  app.use("/api", apiLimiter);
   // Keeps "see who's logged in"'s lastSeenAt reasonably fresh -- reads
   // whichever session id the request is actually using (native, set by
   // attachNativeTokenAuth just above; web, set on req.session at login --

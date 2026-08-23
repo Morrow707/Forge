@@ -18,6 +18,7 @@ import "express-async-errors";
 import express, { type Request, Response, NextFunction } from "express";
 import helmet from "helmet";
 import cors from "cors";
+import rateLimit from "express-rate-limit";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { startReflectionJob } from "./reflection-job";
@@ -67,6 +68,20 @@ app.use(
 // logged-in user's session cookie into a state-changing request. Reuses
 // the same native-app allowlist CORS does above.
 app.use(verifyRequestOrigin(NATIVE_APP_ORIGINS));
+// Registered before registerRoutes(app) runs, so it's outside the general
+// /api limiter mounted in routes.ts -- needs its own. Keyed by IP only (no
+// session exists for a server-to-server webhook call); generous relative
+// to anything Stripe's own retry behavior would ever produce, just a
+// backstop against someone hammering this with forged payloads, each of
+// which is cheap to reject (verifyStripeWebhook below) but not free.
+const webhookLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many requests. Please try again shortly." },
+});
+
 // Registered BEFORE express.json() below -- Stripe's webhook signature
 // check needs the exact raw request bytes, which a JSON-parsed body no
 // longer is by the time a route handler sees it. Framework only (see
@@ -75,6 +90,7 @@ app.use(verifyRequestOrigin(NATIVE_APP_ORIGINS));
 // environment today, so this 400s harmlessly if anything ever hits it.
 app.post(
   "/api/billing/webhook",
+  webhookLimiter,
   express.raw({ type: "application/json" }),
   async (req, res) => {
     const event = verifyStripeWebhook(req.body, req.headers["stripe-signature"] as string | undefined);

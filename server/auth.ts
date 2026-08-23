@@ -15,6 +15,7 @@ import { buildNewDeviceLoginEmail } from "./new-device-login-email";
 import { buildPasswordChangedEmail } from "./password-changed-email";
 import { buildVerifyEmailEmail } from "./verify-email-email";
 import { buildGuardianInviteEmail } from "./guardian-invite-email";
+import { apiLimiter } from "./rate-limiters";
 import { totpOtpauthUri } from "./mfa";
 import { isNativeAppRequest, normalizeIp, resolveLocation, shouldTouchLastSeen, type SessionKind } from "./session-tracking";
 import {
@@ -268,6 +269,12 @@ export function setupAuth(app: Express) {
   );
   app.use(passport.initialize());
   app.use(passport.session());
+  // Has to sit right here -- after session/passport are wired up (so its
+  // own keying can call req.isAuthenticated) but before every route below,
+  // including the ones in this very function. See apiLimiter's own comment
+  // in rate-limiters.ts for why mounting it any later (routes.ts, after
+  // setupAuth returns) would silently cover none of these.
+  app.use("/api", apiLimiter);
 
   // Any validly-shaped hash.salt string -- see the timing-safety comment
   // at its use below. Its own "password" is never checked against
