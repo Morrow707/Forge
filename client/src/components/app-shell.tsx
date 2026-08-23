@@ -68,8 +68,8 @@ type NavItem = {
   matchPrefixes?: string[];
   /** Tucked into the "More" dropdown instead of sitting inline in the top
    * bar -- for a role whose full nav is wide enough to force horizontal
-   * scrolling (coach today: 9 items plus Coaches Corner, the account
-   * button, and the bell). Unused by roles with fewer items. */
+   * scrolling (coach: 9 items plus Coaches Corner, the account button, and
+   * the bell; admin: 14 items). Unused by roles with fewer items. */
   overflow?: boolean;
 };
 
@@ -130,15 +130,18 @@ const adminNav: NavItem[] = [
   { href: "/admin/exercises", label: "Forge Library", icon: Dumbbell },
   { href: "/admin/programs", label: "Forge Programs", icon: CalendarRange },
   { href: "/admin/classes", label: "Forge Classes", icon: GraduationCap },
-  { href: "/admin/classes-analytics", label: "Class Analytics", icon: TrendingUp },
-  { href: "/admin/coaches-corner", label: "Coaches Corner", icon: BookOpen },
-  { href: "/admin/review", label: "Review Queue", icon: ClipboardCheck },
-  { href: "/admin/forge-ai", label: "Forge AI", icon: Sparkles },
-  { href: "/admin/platform-trends", label: "Platform Trends", icon: BarChart3 },
-  { href: "/admin/videos", label: "Video Storage", icon: HardDrive },
-  { href: "/admin/legal-agreement", label: "Legal Agreement", icon: FileText },
-  { href: "/admin/documents", label: "Documents", icon: ShieldCheck },
-  { href: "/admin/problem-reports", label: "Problem Reports", icon: Flag },
+  // Same overflow treatment as coachNav above -- at 14 items, admin's full
+  // nav was the one role actually forced into horizontal scroll instead of
+  // getting the "More" dropdown this exact problem already has a fix for.
+  { href: "/admin/classes-analytics", label: "Class Analytics", icon: TrendingUp, overflow: true },
+  { href: "/admin/coaches-corner", label: "Coaches Corner", icon: BookOpen, overflow: true },
+  { href: "/admin/review", label: "Review Queue", icon: ClipboardCheck, overflow: true },
+  { href: "/admin/forge-ai", label: "Forge AI", icon: Sparkles, overflow: true },
+  { href: "/admin/platform-trends", label: "Platform Trends", icon: BarChart3, overflow: true },
+  { href: "/admin/videos", label: "Video Storage", icon: HardDrive, overflow: true },
+  { href: "/admin/legal-agreement", label: "Legal Agreement", icon: FileText, overflow: true },
+  { href: "/admin/documents", label: "Documents", icon: ShieldCheck, overflow: true },
+  { href: "/admin/problem-reports", label: "Problem Reports", icon: Flag, overflow: true },
 ];
 
 export function AppShell({

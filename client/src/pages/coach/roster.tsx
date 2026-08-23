@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { AssignProgramDialog } from "@/components/assign-program-dialog";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CaraCompliancePanel } from "@/components/cara-compliance-panel";
 import { TeamChallengesSection } from "@/components/team-challenges-panel";
 import { GameDaysSection } from "@/components/game-days-panel";
@@ -212,8 +213,16 @@ export default function CoachRoster() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/coach/teams"] });
+      setRemoveTarget(null);
     },
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't remove that athlete"),
   });
+  const [removeTarget, setRemoveTarget] = useState<{
+    teamId: number;
+    teamName: string;
+    athleteId: number;
+    athleteName: string;
+  } | null>(null);
 
   function openAssignFor(athleteIds: number[]) {
     setAssignAthleteIds(athleteIds);
@@ -457,11 +466,14 @@ export default function CoachRoster() {
                           )}
                         </div>
                         <button
+                          type="button"
                           aria-label={`Remove ${m.athlete.name} from ${team.name}`}
                           onClick={() =>
-                            removeFromTeamMutation.mutate({
+                            setRemoveTarget({
                               teamId: team.id,
+                              teamName: team.name,
                               athleteId: m.athlete.id,
+                              athleteName: m.athlete.name,
                             })
                           }
                           className="shrink-0 text-muted-foreground hover:text-destructive"
@@ -648,6 +660,20 @@ export default function CoachRoster() {
       <PlayerIntakeImportDialog
         open={activePhotoImport === "player-intake"}
         onOpenChange={(o) => setActivePhotoImport(o ? "player-intake" : null)}
+      />
+
+      <ConfirmDialog
+        open={removeTarget !== null}
+        onOpenChange={(o) => !o && setRemoveTarget(null)}
+        title="Remove from team?"
+        description={
+          removeTarget
+            ? `${removeTarget.athleteName} will be removed from ${removeTarget.teamName}. They'll stay on your overall roster.`
+            : ""
+        }
+        confirmLabel="Remove"
+        isPending={removeFromTeamMutation.isPending}
+        onConfirm={() => removeTarget && removeFromTeamMutation.mutate(removeTarget)}
       />
       </AppShell>
     </Tabs>

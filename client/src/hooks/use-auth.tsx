@@ -128,21 +128,7 @@ function useSignupMutation() {
     },
     onSuccess: ({ nativeToken, ...user }, variables) => {
       logDebug("AUTH", `signup succeeded, nativeToken=${nativeToken ? "present" : "absent"}`);
-      setNativeToken(nativeToken);
-      qc.setQueryData(["/api/auth/me"], user);
-      logDebug("AUTH", "calling savePasswordToKeychain()...");
-      // Temporary visible surfacing while this is being debugged on-device
-      // (see native-auth.ts's own comment) -- a TestFlight tester has no
-      // way to see the console.error there, and this has been silently
-      // failing, so a toast is the only way to find out why without a
-      // Mac/Xcode in hand.
-      savePasswordToKeychain(variables.email, variables.password)
-        .then(() => logDebug("AUTH", "savePasswordToKeychain() resolved"))
-        .catch((err) => {
-          const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
-          logDebug("AUTH", `savePasswordToKeychain() rejected: ${detail}`);
-          toast.error(err instanceof Error ? `Couldn't save password: ${err.message}` : "Couldn't save password");
-        });
+      applyLoginSuccess(qc, nativeToken, user, variables);
     },
     onError: (err: ApiError) => {
       logDebug("AUTH", `signup failed: ${err.status} ${err.message}`);
