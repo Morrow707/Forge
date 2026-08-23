@@ -1,4 +1,4 @@
-import rateLimit from "express-rate-limit";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 
 // Shared by every general (non-purpose-specific) limiter below -- keyed by
 // user id when a session already resolved one, not just IP. A team
@@ -7,8 +7,19 @@ import rateLimit from "express-rate-limit";
 // throttle everyone else on the same network. Falls back to IP for the
 // much smaller unauthenticated surface, which is exactly what the
 // login/signup/reset limiters in auth.ts already key on.
+//
+// ipKeyGenerator, not a bare req.ip -- caught by actually running the
+// server locally, not by typecheck/tests/build (express-rate-limit
+// validates custom keyGenerators at startup and logs a ValidationError
+// otherwise). A raw IPv6 address is far more than one client: without
+// normalizing to a /56 subnet the way ipKeyGenerator does, anyone with a
+// single ISP-allocated IPv6 block can mint an unlimited number of distinct
+// keys and never hit this limiter at all, on top of legitimate IPv6 users
+// sharing one NAT IP the same way a IPv4 gym-wifi client would.
 export function rateLimitKey(req: any): string {
-  return req.isAuthenticated?.() && req.user?.id ? `user:${req.user.id}` : (req.ip ?? "unknown");
+  return req.isAuthenticated?.() && req.user?.id
+    ? `user:${req.user.id}`
+    : ipKeyGenerator(req.ip ?? "unknown");
 }
 
 // General backstop under every JSON route in the app -- CodeQL's
