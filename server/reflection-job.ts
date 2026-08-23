@@ -1,6 +1,3 @@
-import { db } from "./db";
-import { users } from "@shared/schema";
-import { eq } from "drizzle-orm";
 import { storage } from "./storage";
 import { notifyUser } from "./notify";
 
@@ -21,7 +18,7 @@ export async function runReflectionJob() {
   try {
     const findings = await storage.generateReflectionFindings();
     if (findings.length === 0) return;
-    const admins = await db.query.users.findMany({ where: eq(users.role, "admin") });
+    const admins = await storage.getAdmins();
     for (const finding of findings) {
       for (const admin of admins) {
         // Each admin's delivery is independent -- generateReflectionFindings

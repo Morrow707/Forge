@@ -1,6 +1,9 @@
+import { escapeHtml } from "./email";
+
 // Same plain-inline-style-HTML approach as the other transactional emails
 // in this codebase.
 export function buildVerifyEmailEmail(verifyLink: string) {
+  const safeLink = escapeHtml(verifyLink);
   return `
     <div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;color:#111;">
       <div style="background:#F65B23;padding:20px 24px;">
@@ -13,13 +16,13 @@ export function buildVerifyEmailEmail(verifyLink: string) {
           hours.
         </p>
         <a
-          href="${verifyLink}"
+          href="${safeLink}"
           style="display:inline-block;background:#F65B23;color:#fff;text-decoration:none;font-weight:bold;padding:12px 24px;border-radius:6px;margin-bottom:20px;"
         >
           Confirm Email
         </a>
         <p style="color:#777;font-size:13px;margin:0 0 4px;">Or paste this link into your browser:</p>
-        <p style="color:#555;font-size:12px;word-break:break-all;margin:0 0 20px;">${verifyLink}</p>
+        <p style="color:#555;font-size:12px;word-break:break-all;margin:0 0 20px;">${safeLink}</p>
         <p style="color:#999;font-size:12px;margin-top:24px;">
           If you didn't create a Forge account, you can safely ignore this email.
         </p>

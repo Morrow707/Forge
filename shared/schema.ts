@@ -1622,6 +1622,11 @@ export const apnsDeviceTokens = pgTable(
   },
   (table) => ({
     userIdx: index("apns_device_tokens_user_idx").on(table.userId),
+    // deviceToken's own .unique() above is what actually enforces
+    // uniqueness; this index just needs to exist to back that constraint
+    // the same way it will once reconcile-schema.ts's CREATE UNIQUE INDEX
+    // runs on the live database (same pattern as subscriptions.userId).
+    deviceTokenIdx: uniqueIndex("apns_device_tokens_device_token_idx").on(table.deviceToken),
   }),
 );
 
@@ -2141,18 +2146,24 @@ export type WeaknessDeficit = z.infer<typeof weaknessDeficitSchema>;
 // actually improved. deficits stays a snapshot even if the underlying
 // goniometer/asymmetry/ACWR data it was built from is edited or deleted
 // afterward -- re-generating produces a new row, it never mutates this one.
-export const weaknessReports = pgTable("weakness_reports", {
-  id: serial("id").primaryKey(),
-  athleteId: integer("athlete_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  generatedBy: integer("generated_by")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  summary: text("summary").notNull(),
-  deficits: json("deficits").$type<WeaknessDeficit[]>().notNull(),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+export const weaknessReports = pgTable(
+  "weakness_reports",
+  {
+    id: serial("id").primaryKey(),
+    athleteId: integer("athlete_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    generatedBy: integer("generated_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    summary: text("summary").notNull(),
+    deficits: json("deficits").$type<WeaknessDeficit[]>().notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    athleteIdx: index("weakness_reports_athlete_idx").on(table.athleteId),
+  }),
+);
 
 export type WeaknessReport = typeof weaknessReports.$inferSelect;
 
@@ -2460,7 +2471,7 @@ export const caraSessions = pgTable(
     // Set only for non-training activities a coach logs by hand -- a team
     // meeting or film session has no "reps" to detect idleness from, so
     // those get manual start/end times instead of the auto-tracked flow.
-    loggedByCoachId: integer("logged_by_coach_id").references(() => users.id),
+    loggedByCoachId: integer("logged_by_coach_id").references(() => users.id, { onDelete: "set null" }),
     note: text("note"),
   },
   (table) => ({
@@ -4836,7 +4847,7 @@ export const logEntryInputSchema = z
   .object({
     programExerciseId: z.number().optional(),
     correctiveId: z.number().optional(),
-    weightMode: z.enum(["numeric", "bodyweight", "band"]).default("numeric"),
+    weightMode: z.enum(["numeric", "bodyweight", "band", "box"]).default("numeric"),
     rpe: z.number().optional().nullable(),
     notes: z.string().optional().nullable(),
     sets: z.array(setLogInputSchema).default([]),

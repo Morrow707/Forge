@@ -565,6 +565,14 @@ export function setupAuth(app: Express) {
       return { nativeToken: signNativeToken(userId, record.id) };
     }
     req.session.sessionRecordId = record.id;
+    // Without this, revokeSession/revokeAllOtherSessions (storage.ts) have
+    // no webSessionId to look up -- express-session's own row in the
+    // "session" table never gets deleted, so "log out this device" marks
+    // the user_sessions row revoked but the actual browser cookie session
+    // keeps working. req.sessionID is stable here (never regenerated
+    // anywhere in this codebase) and is already assigned by express-session
+    // before any route handler runs, so it's safe to read synchronously.
+    await storage.setSessionWebId(record.id, req.sessionID);
     return {};
   }
 

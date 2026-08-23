@@ -2038,6 +2038,41 @@ export const storage = {
     return Array.from(new Set([primaryId, ...staffRows.map((r) => r.staffCoachId)]));
   },
 
+  async getAdmins() {
+    return db.query.users.findMany({ where: eq(users.role, "admin") });
+  },
+
+  // Shared by every "this coach's own bank/library + every Forge-official
+  // one" visibility query in this file (exercises, skill exercises,
+  // programs, skill programs, classes, movement-screen batteries) -- this
+  // exact coachIds-plus-admins union used to be copy-pasted at each call
+  // site. Returns coachIds separately too, since several callers also need
+  // it on its own afterward (e.g. withOwnership, or an isDraft filter that
+  // only a coach's own staff should see).
+  async getCoachAndAdminOwnerIds(coachId: number): Promise<{ coachIds: number[]; ownerIds: number[] }> {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    const admins = await this.getAdmins();
+    return { coachIds, ownerIds: Array.from(new Set([...coachIds, ...admins.map((a) => a.id)])) };
+  },
+
+  // Athlete-side mirror of getCoachAndAdminOwnerIds above -- an athlete's
+  // own coach(es) plus every admin, for the same "what am I allowed to see/
+  // reference" question asked from the athlete's side instead of a coach's.
+  // ownerIds also includes the athlete's own id -- today a Free Agent has no
+  // route to create their own exercises/skill exercises, so this never
+  // actually matches anything real, but it keeps this helper correct rather
+  // than relying on that being true forever (see assertExerciseIdsVisibleTo's
+  // use of this for the defense-in-depth reasoning).
+  async getAthleteAndAdminOwnerIds(athleteId: number): Promise<{ coachIds: number[]; ownerIds: number[] }> {
+    const coaches = await this.getCoachesForAthlete(athleteId);
+    const coachIds = coaches.map((c) => c.id);
+    const admins = await this.getAdmins();
+    return {
+      coachIds,
+      ownerIds: Array.from(new Set([athleteId, ...coachIds, ...admins.map((a) => a.id)])),
+    };
+  },
+
   // Same staff resolution as getEffectiveCoachIds, but just the primary id --
   // team branding/feature-toggles are a whole-staff concept (a school's
   // colors don't change depending on which assistant coach is logged in),
@@ -2942,9 +2977,7 @@ export const storage = {
   async getMovementScreenBatteries(
     coachId: number,
   ): Promise<(MovementScreenBattery & { editable: boolean })[]> {
-    const coachIds = await this.getEffectiveCoachIds(coachId);
-    const admins = await db.query.users.findMany({ where: eq(users.role, "admin") });
-    const ownerIds = Array.from(new Set([...coachIds, ...admins.map((a) => a.id)]));
+    const { coachIds, ownerIds } = await this.getCoachAndAdminOwnerIds(coachId);
     const rows = await db.query.movementScreenBatteries.findMany({
       where: inArray(movementScreenBatteries.coachId, ownerIds),
       orderBy: [desc(movementScreenBatteries.isForgeOfficial), asc(movementScreenBatteries.name)],
@@ -3334,34 +3367,6 @@ export const storage = {
       .where(and(eq(injuryHistory.id, id), eq(injuryHistory.athleteId, athleteId)))
       .returning();
     return row ?? null;
-  },
-
-  // Everything the athlete logged (workout sets, RPE, tonnage) within an
-  // injury's actual window -- from when it occurred through when it
-  // resolved (or through now, if still active) -- so a later evidence-loop
-  // pass can ask "what training happened during recovery" instead of only
-  // ever seeing the injury record in isolation. Mirrors the athleteId+date
-  // access pattern getWorkoutLogsForAthlete already uses elsewhere in this
-  // file, just bounded to this specific window.
-  async getTrainingDuringInjuryWindow(athleteId: number, injuryId: number) {
-    const [injury] = await db
-      .select()
-      .from(injuryHistory)
-      .where(and(eq(injuryHistory.id, injuryId), eq(injuryHistory.athleteId, athleteId)));
-    if (!injury) return null;
-    const windowEnd = injury.resolvedOn ?? new Date().toISOString().slice(0, 10);
-    const logs = await db
-      .select()
-      .from(workoutLogs)
-      .where(
-        and(
-          eq(workoutLogs.athleteId, athleteId),
-          gte(workoutLogs.date, injury.occurredOn),
-          lte(workoutLogs.date, windowEnd),
-        ),
-      )
-      .orderBy(workoutLogs.date);
-    return { injury, logs };
   },
 
   async deleteInjuryHistoryEntry(athleteId: number, id: number) {
@@ -5219,9 +5224,7 @@ ${athleteContext}
   // exercise -- what a coach sees in their exercise bank and the
   // program-builder picker.
   async getVisibleExercisesForCoach(coachId: number) {
-    const coachIds = await this.getEffectiveCoachIds(coachId);
-    const admins = await db.query.users.findMany({ where: eq(users.role, "admin") });
-    const ownerIds = Array.from(new Set([...coachIds, ...admins.map((a) => a.id)]));
+    const { coachIds, ownerIds } = await this.getCoachAndAdminOwnerIds(coachId);
     const [rows, favorites] = await Promise.all([
       db.query.exercises.findMany({
         where: inArray(exercises.coachId, ownerIds),
@@ -5252,13 +5255,10 @@ ${athleteContext}
     const user = await this.getUser(userId);
     if (!user) return [];
     if (user.role === "admin") return null;
-    const admins = await db.query.users.findMany({ where: eq(users.role, "admin") });
     if (user.role === "coach") {
-      const coachIds = await this.getEffectiveCoachIds(userId);
-      return Array.from(new Set([...coachIds, ...admins.map((a) => a.id)]));
+      return (await this.getCoachAndAdminOwnerIds(userId)).ownerIds;
     }
-    const coaches = await this.getCoachesForAthlete(userId);
-    return Array.from(new Set([userId, ...coaches.map((c) => c.id), ...admins.map((a) => a.id)]));
+    return (await this.getAthleteAndAdminOwnerIds(userId)).ownerIds;
   },
 
   async assertExerciseIdsVisibleTo(userId: number, exerciseIds: number[]): Promise<void> {
@@ -5308,9 +5308,7 @@ ${athleteContext}
     const keywords = FAULT_CORRECTIVE_KEYWORDS[faultCode];
     if (!keywords || keywords.length === 0) return [];
 
-    const coaches = await this.getCoachesForAthlete(athleteId);
-    const admins = await db.query.users.findMany({ where: eq(users.role, "admin") });
-    const ownerIds = Array.from(new Set([...coaches.map((c) => c.id), ...admins.map((a) => a.id)]));
+    const { ownerIds } = await this.getAthleteAndAdminOwnerIds(athleteId);
     if (ownerIds.length === 0) return [];
 
     const rows = await db.query.exercises.findMany({
@@ -5448,9 +5446,7 @@ ${athleteContext}
   },
 
   async getVisibleSkillExercisesForCoach(coachId: number) {
-    const coachIds = await this.getEffectiveCoachIds(coachId);
-    const admins = await db.query.users.findMany({ where: eq(users.role, "admin") });
-    const ownerIds = Array.from(new Set([...coachIds, ...admins.map((a) => a.id)]));
+    const { coachIds, ownerIds } = await this.getCoachAndAdminOwnerIds(coachId);
     const [rows, favorites] = await Promise.all([
       db.query.skillExercises.findMany({
         where: inArray(skillExercises.coachId, ownerIds),
@@ -5518,9 +5514,7 @@ ${athleteContext}
   // create/update-with-structure, delete, assign) but against its own set
   // of tables -- see the comment on skillPrograms in shared/schema.ts.
   async getVisibleSkillProgramsForCoach(coachId: number) {
-    const coachIds = await this.getEffectiveCoachIds(coachId);
-    const admins = await db.query.users.findMany({ where: eq(users.role, "admin") });
-    const ownerIds = Array.from(new Set([...coachIds, ...admins.map((a) => a.id)]));
+    const { coachIds, ownerIds } = await this.getCoachAndAdminOwnerIds(coachId);
     const progs = await db.query.skillPrograms.findMany({
       where: inArray(skillPrograms.coachId, ownerIds),
       with: {
@@ -5849,9 +5843,7 @@ ${athleteContext}
   // but only PUBLISHED Forge classes; an admin's in-progress draft simply
   // doesn't show up for them to browse/assign yet.
   async getVisibleClassesForCoach(coachId: number, isAdminCaller = false) {
-    const coachIds = await this.getEffectiveCoachIds(coachId);
-    const admins = await db.query.users.findMany({ where: eq(users.role, "admin") });
-    const ownerIds = Array.from(new Set([...coachIds, ...admins.map((a) => a.id)]));
+    const { coachIds, ownerIds } = await this.getCoachAndAdminOwnerIds(coachId);
     const rows = await db.query.classes.findMany({
       where: inArray(classes.coachId, ownerIds),
       with: { lessons: true, enrollments: true, coach: true },
@@ -7839,9 +7831,7 @@ ${athleteContext}
   // A coach's own programs plus every Forge-official (admin-created) one --
   // same Forge-tagging model as getVisibleExercisesForCoach.
   async getVisibleProgramsForCoach(coachId: number) {
-    const coachIds = await this.getEffectiveCoachIds(coachId);
-    const admins = await db.query.users.findMany({ where: eq(users.role, "admin") });
-    const ownerIds = Array.from(new Set([...coachIds, ...admins.map((a) => a.id)]));
+    const { coachIds, ownerIds } = await this.getCoachAndAdminOwnerIds(coachId);
     const progs = await db.query.programs.findMany({
       where: inArray(programs.coachId, ownerIds),
       with: {
@@ -10784,15 +10774,6 @@ ${entriesText}`;
     });
   },
 
-  async getAssignmentFull(id: number) {
-    const assignment = await db.query.assignments.findFirst({
-      where: eq(assignments.id, id),
-    });
-    if (!assignment) return undefined;
-    const program = await this.getProgramFull(assignment.programId);
-    return { assignment, program };
-  },
-
   // ---------- Correctives ----------
   async getCorrectivesForAssignmentDay(assignmentId: number, programDayId: number) {
     return db.query.assignmentCorrectives.findMany({
@@ -11745,24 +11726,6 @@ ${entriesText}`;
         },
       },
     });
-  },
-
-  // Most recent prior time this athlete logged this specific exercise
-  // (across any program/day) for the "LAST: 4x3 @ 415lb" reference line, plus
-  // a flat history of every individual set ever logged for it so the UI can
-  // show "what did I get last time at THIS rep count" per set rather than
-  // one summary for the whole exercise -- a pyramid scheme (8/5/3/1) should
-  // compare each set against its own rep count, not the first set overall.
-  // Single-exercise convenience wrapper -- getWorkoutDayDetail below fetches
-  // the logs itself once and calls extractPerformanceHistory directly for
-  // each exercise instead of using this, to avoid re-fetching per exercise.
-  async getPerformanceHistoryForAthlete(
-    athleteId: number,
-    exerciseId: number,
-    beforeDate: string,
-  ) {
-    const logs = await this.getRecentWorkoutLogsForAthlete(athleteId, beforeDate);
-    return extractPerformanceHistory(logs, exerciseId);
   },
 
   // Read-only skill-day view for an athlete's own calendar, scoped to an

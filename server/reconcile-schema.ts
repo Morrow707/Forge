@@ -874,11 +874,20 @@ CREATE TABLE IF NOT EXISTS "cara_sessions" (
   "last_activity_at" timestamp NOT NULL DEFAULT now(),
   "ended_at" timestamp,
   "end_reason" cara_end_reason,
-  "logged_by_coach_id" integer REFERENCES "users"("id"),
+  "logged_by_coach_id" integer REFERENCES "users"("id") ON DELETE SET NULL,
   "note" text
 );
 CREATE INDEX IF NOT EXISTS "cara_sessions_athlete_idx" ON "cara_sessions" ("athlete_id");
 CREATE INDEX IF NOT EXISTS "cara_sessions_open_idx" ON "cara_sessions" ("athlete_id", "ended_at");
+-- logged_by_coach_id originally had no ON DELETE behavior at all (the
+-- Postgres default, RESTRICT), the only FK in this file that was missing
+-- one -- would have blocked deleting a coach's account if they ever
+-- manually logged a CARA activity themselves. Re-points an already-live
+-- table's constraint at ON DELETE SET NULL to match; a no-op on a fresh
+-- database, which already gets it from the CREATE TABLE above.
+ALTER TABLE "cara_sessions" DROP CONSTRAINT IF EXISTS "cara_sessions_logged_by_coach_id_fkey";
+ALTER TABLE "cara_sessions" ADD CONSTRAINT "cara_sessions_logged_by_coach_id_fkey"
+  FOREIGN KEY ("logged_by_coach_id") REFERENCES "users"("id") ON DELETE SET NULL;
 
 CREATE TABLE IF NOT EXISTS "athlete_trophies" (
   "id" serial PRIMARY KEY,

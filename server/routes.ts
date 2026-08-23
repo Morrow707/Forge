@@ -341,6 +341,24 @@ function currentUser(req: any) {
   return req.user as { id: number; role: "coach" | "athlete" | "admin"; name: string; email: string };
 }
 
+// Fans a notification out to a list of recipients with each delivery
+// isolated -- one recipient's failure (bad push token, a transient DB
+// error) shouldn't reject the whole Promise.all and 500 the request after
+// the thing being announced (a post, an assignment) has already been
+// saved. Same per-recipient isolation the background job files use for
+// their own notify loops.
+async function notifyEach<T>(items: T[], deliver: (item: T) => Promise<void>): Promise<void> {
+  await Promise.all(
+    items.map(async (item) => {
+      try {
+        await deliver(item);
+      } catch (err) {
+        console.error("Notification fan-out failed for one recipient:", err);
+      }
+    }),
+  );
+}
+
 // The single gate for every Free Agent AI route below (program building AND
 // the general AI chat coach) -- true iff this athlete currently has zero
 // coaches. Once they join a team, the coach is their guidance now, not the
@@ -4021,16 +4039,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // it only fires when the coach explicitly opts a post in (default off).
     if (parsed.data.isAnnouncement) {
       const roster = await storage.getRosterForCoach(user.id);
-      await Promise.all(
-        roster.map((athlete) =>
-          notifyUser(
-            athlete.id,
-            "announcement",
-            `📢 Announcement from ${user.name}`,
-            parsed.data.body,
-            "/athlete/team-board",
-            { bypassEmailPref: true },
-          ),
+      await notifyEach(roster, (athlete) =>
+        notifyUser(
+          athlete.id,
+          "announcement",
+          `📢 Announcement from ${user.name}`,
+          parsed.data.body,
+          "/athlete/team-board",
+          { bypassEmailPref: true },
         ),
       );
     } else {
@@ -4038,16 +4054,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // else on the shared board -- just never by email, since a post here
       // is routine, not urgent, unlike an announcement.
       const roster = await storage.getRosterForCoach(user.id);
-      await Promise.all(
-        roster.map((athlete) =>
-          notifyUser(
-            athlete.id,
-            "team_board",
-            `New Team Board post from ${user.name}`,
-            parsed.data.body,
-            "/athlete/team-board",
-            { skipEmail: true },
-          ),
+      await notifyEach(roster, (athlete) =>
+        notifyUser(
+          athlete.id,
+          "team_board",
+          `New Team Board post from ${user.name}`,
+          parsed.data.body,
+          "/athlete/team-board",
+          { skipEmail: true },
         ),
       );
     }
@@ -4096,16 +4110,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       { id: coach.id, link: "/coach/team-board" },
       ...roster.filter((a) => a.id !== user.id).map((a) => ({ id: a.id, link: "/athlete/team-board" })),
     ];
-    await Promise.all(
-      otherRecipients.map((r) =>
-        notifyUser(
-          r.id,
-          "team_board",
-          `New Team Board post from ${user.name}`,
-          parsed.data.body,
-          r.link,
-          { skipEmail: true },
-        ),
+    await notifyEach(otherRecipients, (r) =>
+      notifyUser(
+        r.id,
+        "team_board",
+        `New Team Board post from ${user.name}`,
+        parsed.data.body,
+        r.link,
+        { skipEmail: true },
       ),
     );
 
@@ -5448,7 +5460,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         programDayId,
         parsed.data.date,
       );
-      if ("error" in result) return res.status(400).json(result);
+      if ("error" in result) return res.status(422).json({ message: result.error });
       res.json(result);
     },
   );

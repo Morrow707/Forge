@@ -21,12 +21,21 @@ export async function runDataRetentionJob() {
     }
     let purged = 0;
     for (const row of eligible) {
-      // deleteAdminVideo always resolves to a (truthy) object, never
-      // rejects -- checking the object itself instead of its .deleted
-      // field meant this counted every eligible row as purged regardless
-      // of whether the delete actually found and removed anything.
-      const result = await storage.deleteAdminVideo(row.source, row.id);
-      if (result.deleted) purged += 1;
+      // Each row is independent -- one failed delete (a bad file path, a
+      // transient DB error) shouldn't abort the rest of this run and leave
+      // every other eligible minor's video unpurged until tomorrow. Same
+      // per-item isolation as the video-cap and reflection jobs' notify loops.
+      try {
+        // deleteAdminVideo always resolves to a (truthy) object, never
+        // rejects on its own -- checking the object itself instead of its
+        // .deleted field meant this counted every eligible row as purged
+        // regardless of whether the delete actually found and removed
+        // anything.
+        const result = await storage.deleteAdminVideo(row.source, row.id);
+        if (result.deleted) purged += 1;
+      } catch (err) {
+        console.error(`Data retention job: failed to purge ${row.source} video ${row.id}:`, err);
+      }
     }
     console.log(`Data retention job: purged ${purged}/${eligible.length} eligible video(s).`);
   } catch (err) {
