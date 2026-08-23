@@ -1,12 +1,16 @@
-// First-pass draft text for the admin-editable Terms of Service and Privacy
-// Policy (see shared/schema.ts legalDocuments). Grounded in what Forge
-// actually does today -- camera-based tracking, the AI features, the
-// wellness/nutrition/injury data it collects, the age-tier system built
-// alongside this -- not generic boilerplate. Still explicitly a draft:
-// nothing here has been reviewed by a lawyer, and it is not wired into the
-// signup flow (that's legalAgreement's job, a separate, shorter document).
-// See getComplianceReportData's own "not yet reviewed" list for the same
-// caveat stated as structured data, not just a comment here.
+// First-pass draft text for the admin-editable Terms of Service, Privacy
+// Policy, and Biometric Waiver (see shared/schema.ts legalDocuments).
+// Grounded in what Forge actually does today -- camera-based tracking, the
+// AI features, the wellness/nutrition/injury data it collects, the age-tier
+// system built alongside this -- not generic boilerplate. Still explicitly
+// a draft: nothing here has been reviewed by a lawyer, and none of it is
+// wired into any live signup or consent-collection flow (that's
+// legalAgreement's job, a separate, shorter document actually shown at
+// signup). See getComplianceReportData's own "not yet reviewed" list for
+// the same caveat stated as structured data, not just a comment here --
+// the biometric_waiver consent_type it references has been unwritten until
+// now, and this is that first pass, not a decision that it's ready to
+// collect real signatures against.
 
 const DRAFT_NOTICE =
   "DRAFT -- not reviewed by a lawyer. This document is a starting point for legal review, not a finished, reliable Terms of Service. Do not treat it as legally sufficient until counsel has reviewed and approved it.";
@@ -105,3 +109,39 @@ We may update this Policy as the Service changes; material changes will be refle
 
 11. CONTACT
 [Placeholder -- add a real privacy-contact email once one exists.]`;
+
+// A biometric waiver is its own legal instrument, separate from the general
+// Privacy Policy section that just mentions this data exists (see Section 4
+// above) -- most state biometric laws (Illinois' BIPA is the model this
+// draft follows most closely, since it's the most specific and the most
+// litigated) expect a standalone written release naming exactly what's
+// collected, why, how long it's kept, and an explicit "I consent," not a
+// clause buried in a longer privacy policy. consentRecords.consentType
+// already has "biometric_waiver" as a real value (see shared/schema.ts) --
+// this is the document text that type has never had until now.
+export const BIOMETRIC_WAIVER_DRAFT = `${DRAFT_NOTICE}
+
+FORGE -- BIOMETRIC INFORMATION CONSENT AND RELEASE (DRAFT)
+
+1. WHAT THIS IS
+This is a release specifically for the biometric and biometric-adjacent information described below, separate from and in addition to Forge's general Terms of Service and Privacy Policy. Signing (or, for an athlete under 18, a parent/guardian or coach-as-agent signing on the athlete's behalf) means you understand and consent to the collection described here.
+
+2. WHAT'S COLLECTED
+Forge's camera-based tracking (ARKit on iOS, MediaPipe on web/Android) processes video of the athlete's body in motion, captured on the athlete's own device, to compute: joint angles and body-segment positions, bar-path/barbell velocity, jump height and ground-contact time, sprint splits, and similar movement-mechanics metrics. Some of this processing is a form of biometric identifier or biometric information under laws like Illinois' Biometric Information Privacy Act (BIPA) and comparable state statutes. Raw video is stored only when the athlete (or their coach, recording on their behalf) explicitly chooses to save a clip -- tracking metrics are computed whether or not the clip itself is kept.
+
+3. WHY IT'S COLLECTED
+Solely to provide the Service: showing an athlete and their coach tracked performance metrics and trends, flagging movement-mechanics faults for coaching purposes, and (only for saved clips) letting an athlete or coach review the footage itself. This data is not used for facial recognition, identity verification, or any purpose other than athletic performance tracking as described here.
+
+4. RETENTION AND DESTRUCTION
+Raw video for Tier 1 (under 13) and Tier 2 (13-17) accounts is automatically deleted after a configured retention window (see the Privacy Policy); numeric metrics derived from it are kept as ordinary performance history, the same as a hand-recorded stopwatch time would be. Adult (Tier 3) accounts have no automatic video deletion. [Placeholder -- a specific, published retention schedule and destruction procedure for every tier, stated in the precise terms BIPA requires, is legal work that hasn't happened yet.]
+
+5. NO SALE, NO UNRELATED DISCLOSURE
+Forge does not sell, lease, trade, or otherwise profit from this data. It is shared only with the athlete's own coach (as the core function of the Service) and with the service providers named in the Privacy Policy's "How We Share Information" section, solely to operate the Service.
+
+6. YOUR RIGHTS
+You (or, for a minor, their parent/guardian) may ask what biometric data Forge holds for that athlete, and may request its deletion by deleting the athlete's account, which removes stored video immediately -- tracked numeric metrics already logged as part of training history are retained the same way any other workout record is, unless a specific request for further deletion is made. [Placeholder -- confirm this matches what BIPA and any other applicable state law actually requires before this is treated as a complete rights statement.]
+
+7. CONSENT
+By signing, you confirm you've read and understood this release and consent to the collection, use, and retention described above, for as long as the associated Forge account remains active or until consent is withdrawn by deleting the account.
+
+[Placeholder -- signature/date capture, and the specific state-law citations this release is meant to satisfy, need to be finalized with counsel before this is used to collect a real signature.]`;

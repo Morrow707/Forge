@@ -9,7 +9,7 @@ import { apiRequest, resolveApiUrl, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { Download, ShieldAlert, Save, Mail } from "lucide-react";
 
-type LegalDocType = "terms_of_service" | "privacy_policy";
+type LegalDocType = "terms_of_service" | "privacy_policy" | "biometric_waiver";
 type LegalDocument = { docType: LegalDocType; content: string; updatedAt: string };
 
 type ComplianceReportData = {
@@ -220,6 +220,23 @@ export default function AdminDocuments() {
           </CardHeader>
           <CardContent>
             <LegalDocEditor docType="privacy_policy" />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Biometric Waiver (Draft)</CardTitle>
+            <CardDescription>
+              A standalone release for the camera-tracked movement data Forge collects (see
+              Section 4 of the Privacy Policy) -- separate from it on purpose, since laws like
+              Illinois' BIPA expect a dedicated written release, not a clause inside a longer
+              policy. Same "not wired into any live consent flow, not reviewed by counsel"
+              treatment as the two documents above; nothing collects a real signature against
+              this yet.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <LegalDocEditor docType="biometric_waiver" />
           </CardContent>
         </Card>
       </div>

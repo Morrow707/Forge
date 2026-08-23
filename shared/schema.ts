@@ -1550,6 +1550,13 @@ export const billingAuditLog = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     event: text("event").notNull(), // e.g. "subscription.updated", "invoice.payment_failed"
     detail: json("detail"),
+    // Stripe's own event id (e.g. "evt_..."), null for anything that isn't
+    // a Stripe webhook delivery. Stripe redelivers events at-least-once, so
+    // handleStripeWebhookEvent (server/billing.ts) checks this for an
+    // existing row before processing one -- unique, not just indexed, so a
+    // race between two near-simultaneous redeliveries of the same event
+    // can't both win the "is this new?" check and double-apply it.
+    stripeEventId: text("stripe_event_id").unique(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({
@@ -3810,7 +3817,11 @@ export type UserSession = typeof userSessions.$inferSelect;
 // against current beta accounts. Seeded once with real starting draft text
 // (see server/seed.ts) via onConflictDoNothing, so re-seeding never
 // clobbers an admin's edits.
-export const legalDocumentTypeEnum = pgEnum("legal_document_type", ["terms_of_service", "privacy_policy"]);
+export const legalDocumentTypeEnum = pgEnum("legal_document_type", [
+  "terms_of_service",
+  "privacy_policy",
+  "biometric_waiver",
+]);
 
 export const legalDocuments = pgTable("legal_documents", {
   id: serial("id").primaryKey(),

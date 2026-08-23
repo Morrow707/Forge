@@ -15,7 +15,7 @@ import {
 } from "@shared/schema";
 import { eq, isNull, and, asc } from "drizzle-orm";
 import { AMERICAN_HITTING_CHAPTERS } from "./seed-data/american-hitting-content";
-import { TERMS_OF_SERVICE_DRAFT, PRIVACY_POLICY_DRAFT } from "./seed-data/legal-documents-draft";
+import { TERMS_OF_SERVICE_DRAFT, PRIVACY_POLICY_DRAFT, BIOMETRIC_WAIVER_DRAFT } from "./seed-data/legal-documents-draft";
 
 // We don't have live web access from this environment to verify specific
 // YouTube video IDs are real and still online, so hand-picking exact links
@@ -5320,14 +5320,17 @@ And what we don't have yet, stated plainly: no signed BAAs with our hosting or i
     );
   }
 
-  // Draft Terms of Service / Privacy Policy -- same "only if not already
-  // there" guard as the legalAgreement placeholder above, so a redeploy
-  // never overwrites an admin's edits to either document.
+  // Draft Terms of Service / Privacy Policy / Biometric Waiver -- same
+  // "only if not already there" guard as the legalAgreement placeholder
+  // above, so a redeploy never overwrites an admin's edits to any of them.
   if (!(await storage.getLegalDocument("terms_of_service"))) {
     await storage.updateLegalDocument("terms_of_service", TERMS_OF_SERVICE_DRAFT);
   }
   if (!(await storage.getLegalDocument("privacy_policy"))) {
     await storage.updateLegalDocument("privacy_policy", PRIVACY_POLICY_DRAFT);
+  }
+  if (!(await storage.getLegalDocument("biometric_waiver"))) {
+    await storage.updateLegalDocument("biometric_waiver", BIOMETRIC_WAIVER_DRAFT);
   }
 
   console.log("Seed complete.");

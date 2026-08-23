@@ -468,17 +468,29 @@ const COMPED_COACHES_CORNER_COACHES = new Set(["coach@forge.app"]);
 // (see the two stubs above), so this is intentionally admin-only for now,
 // plus whichever coaches are explicitly comped above -- every other regular
 // coach sees the locked teaser catalog until this is wired to real billing.
-// Admins bypass since they're the ones curating the content. Change only
-// this function once real billing exists -- every route below reads
-// through it, never a role check of its own. Unlike
-// hasAthletePaidForAiAccess/hasRosterSeatAvailable above, this one isn't
-// yet wired to BILLING_LIVE -- it's synchronous and called from several
-// places that would all need updating to await a real subscription
-// lookup. Left as a known follow-up rather than risking those call sites
-// on an unverified signature change in the same pass as everything else.
-function hasCoachesCornerAccess(user: { role: string; email: string }) {
+// Admins bypass since they're the ones curating the content. Every route
+// below reads through this, never a role check of its own.
+//
+// Once BILLING_LIVE, this stops being a standalone "unlock" purchase and
+// becomes a Pro-tier perk instead -- same pattern hasAthletePaidForAiAccess
+// already uses for a Free Agent's skillsAi entitlement (gated on
+// sub.tier === "pro", not a separate one-time charge). That's a deliberate
+// simplification, not an oversight: it reuses the subscriptions table's
+// existing accountType/tier/status fields with no new schema or payment
+// flow, rather than building a whole separate one-time-purchase Stripe
+// integration for a single add-on. A coach's own /api/coach/academy/unlock
+// button already only shows when this returns false, so a Pro coach just
+// sees every track unlocked automatically once they have a real
+// subscription -- no explicit "purchase" step needed on their end.
+async function hasCoachesCornerAccess(user: { id: number; role: string; email: string }): Promise<boolean> {
   if (testingUnlockAllPaywalls) return true;
-  return user.role === "admin" || COMPED_COACHES_CORNER_COACHES.has(user.email);
+  if (user.role === "admin") return true;
+  if (BILLING_LIVE) {
+    const sub = await storage.getSubscriptionForUser(user.id);
+    if (!sub || sub.accountType !== "coach") return false;
+    return sub.tier === "pro" && ["trialing", "active", "past_due"].includes(sub.status);
+  }
+  return COMPED_COACHES_CORNER_COACHES.has(user.email);
 }
 
 function todayIso() {
@@ -1223,7 +1235,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // hasCoachesCornerAccess is true for this coach.
   app.get("/api/coach/academy/tracks", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
-    const unlocked = hasCoachesCornerAccess(user);
+    const unlocked = await hasCoachesCornerAccess(user);
     const tracks = await storage.getAllAcademyTracks();
     res.json(
       tracks.map((t) => ({
@@ -1241,7 +1253,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const id = Number(req.params.id);
     const track = await storage.getAcademyTrackFull(id);
     if (!track) return res.status(404).json({ message: "Track not found" });
-    const unlocked = hasCoachesCornerAccess(user);
+    const unlocked = await hasCoachesCornerAccess(user);
     if (!unlocked) {
       return res.json({
         id: track.id,
@@ -1267,7 +1279,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     requireRole("coach"),
     async (req, res) => {
       const user = currentUser(req);
-      if (!hasCoachesCornerAccess(user)) {
+      if (!(await hasCoachesCornerAccess(user))) {
         return res.status(402).json({ message: "Coaches Corner isn't open for purchase yet." });
       }
       const id = Number(req.params.id);
@@ -1281,16 +1293,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
-  // No real billing exists yet (see hasCoachesCornerAccess) -- this always
-  // 402s so the client's paywall UX has a real endpoint to hit, the same
-  // "Payments aren't live yet" stub shape as the Class lesson-purchase route.
-  // (In practice this route is unreachable during the testingUnlockAllPaywalls
-  // window -- the client only ever shows an "Unlock" button when
-  // hasCoachesCornerAccess said no, and that already returns true for
-  // everyone in that window -- but it's gated the same way anyway so every
-  // 402 in the app answers to the one flag, not most of them.)
+  // There's no standalone "purchase" for Coaches Corner once BILLING_LIVE --
+  // see hasCoachesCornerAccess's own comment for why it's a Pro-tier perk
+  // instead of a separate one-time charge. A Pro coach never actually hits
+  // this route (the client only shows the "Unlock" button when
+  // hasCoachesCornerAccess already said no), so this stays a dead end
+  // either way: pre-billing it's the same "not live yet" stub every other
+  // paywall stub uses, post-billing it points a non-Pro coach at the real
+  // fix (upgrade) instead of a message that would otherwise claim this can
+  // never be purchased even once it actually can.
   app.post("/api/coach/academy/unlock", requireRole("coach"), async (_req, res) => {
     if (testingUnlockAllPaywalls) return res.status(204).end();
+    if (BILLING_LIVE) {
+      return res
+        .status(402)
+        .json({ message: "Coaches Corner is included with a Pro coaching plan -- upgrade to unlock it." });
+    }
     res.status(402).json({ message: "Coaches Corner isn't open for purchase yet." });
   });
 
@@ -2164,15 +2182,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ content });
   });
 
-  // Draft Terms of Service / Privacy Policy -- see legalDocuments' own
-  // schema comment: separate from legalAgreement above, not wired into
-  // signup, purely for admin editing/printing/emailing pending real legal
-  // review. docType is validated against the enum's two literal values
-  // directly rather than a full zod schema, same weight as validating any
-  // other route param.
-  const LEGAL_DOC_TYPES = ["terms_of_service", "privacy_policy"] as const;
+  // Draft Terms of Service / Privacy Policy / Biometric Waiver -- see
+  // legalDocuments' own schema comment: separate from legalAgreement above,
+  // not wired into signup or any live consent-collection flow, purely for
+  // admin editing/printing/emailing pending real legal review. docType is
+  // validated against the enum's literal values directly rather than a
+  // full zod schema, same weight as validating any other route param.
+  const LEGAL_DOC_TYPES = ["terms_of_service", "privacy_policy", "biometric_waiver"] as const;
   type LegalDocType = (typeof LEGAL_DOC_TYPES)[number];
   const isLegalDocType = (v: string): v is LegalDocType => (LEGAL_DOC_TYPES as readonly string[]).includes(v);
+  const LEGAL_DOC_TITLES: Record<LegalDocType, string> = {
+    terms_of_service: "Terms of Service",
+    privacy_policy: "Privacy Policy",
+    biometric_waiver: "Biometric Information Consent and Release",
+  };
+
+  // Publicly browsable (App Store Connect and any visitor need a working
+  // unauthenticated URL for these two -- see the public route below). The
+  // biometric waiver is deliberately NOT in this set: it's a signable
+  // release, not a general policy page, and nothing collects a real
+  // signature against it yet -- see BIOMETRIC_WAIVER_DRAFT's own comment.
+  const PUBLIC_LEGAL_DOC_TYPES = ["terms_of_service", "privacy_policy"] as const;
+  const isPublicLegalDocType = (v: string): v is (typeof PUBLIC_LEGAL_DOC_TYPES)[number] =>
+    (PUBLIC_LEGAL_DOC_TYPES as readonly string[]).includes(v);
 
   app.get("/api/admin/legal-documents", requireRole("admin"), async (_req, res) => {
     res.json(await storage.listLegalDocuments());
@@ -2192,7 +2224,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!isLegalDocType(type)) return res.status(400).json({ message: "Invalid document type" });
     const doc = await storage.getLegalDocument(type);
     if (!doc) return res.status(404).json({ message: "Not found" });
-    const title = type === "terms_of_service" ? "Forge -- Terms of Service (Draft)" : "Forge -- Privacy Policy (Draft)";
+    const title = `Forge -- ${LEGAL_DOC_TITLES[type]} (Draft)`;
     const pdf = await buildLegalDocumentPdf(title, doc.content);
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="forge-${type}.pdf"`);
@@ -2206,7 +2238,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
     const doc = await storage.getLegalDocument(type);
     if (!doc) return res.status(404).json({ message: "Not found" });
-    const title = type === "terms_of_service" ? "Forge Terms of Service (Draft)" : "Forge Privacy Policy (Draft)";
+    const title = `Forge ${LEGAL_DOC_TITLES[type]} (Draft)`;
     const html = `<h2>${title}</h2><p style="white-space:pre-wrap;font-family:sans-serif;">${doc.content
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")}</p>`;
@@ -2221,9 +2253,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // signup clickwrap GET /api/legal-agreement serves. Same "there" vs "not
   // there" distinction, 404s on an unknown type rather than silently
   // returning empty so a typo'd URL doesn't quietly render a blank page.
+  // Scoped to PUBLIC_LEGAL_DOC_TYPES, not every isLegalDocType -- see that
+  // set's own comment for why the biometric waiver isn't in it.
   app.get("/api/legal-documents/:type", async (req, res) => {
     const type = String(req.params.type);
-    if (!isLegalDocType(type)) return res.status(404).json({ message: "Unknown document type" });
+    if (!isPublicLegalDocType(type)) return res.status(404).json({ message: "Unknown document type" });
     const doc = await storage.getLegalDocument(type);
     res.json({ content: doc?.content ?? "", updatedAt: doc?.updatedAt ?? null });
   });

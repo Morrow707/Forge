@@ -1983,8 +1983,26 @@ export const storage = {
     return row ?? null;
   },
 
-  async logBillingEvent(userId: number, event: string, detail?: unknown) {
-    await db.insert(billingAuditLog).values({ userId, event, detail: (detail ?? null) as any });
+  async logBillingEvent(userId: number, event: string, detail?: unknown, stripeEventId?: string) {
+    await db
+      .insert(billingAuditLog)
+      .values({ userId, event, detail: (detail ?? null) as any, stripeEventId: stripeEventId ?? null });
+  },
+
+  // Stripe redelivers webhook events at-least-once -- handleStripeWebhookEvent
+  // (server/billing.ts) calls this before doing anything else, and skips
+  // the whole event if it's already been recorded. Keyed off billingAuditLog
+  // rather than a dedicated table since every mutating branch in
+  // handleStripeWebhookEvent already calls logBillingEvent with the event's
+  // real Stripe id -- reusing that as the dedupe ledger means there's still
+  // exactly one place billing events ever get written, not two.
+  async wasStripeEventProcessed(stripeEventId: string): Promise<boolean> {
+    const [row] = await db
+      .select({ id: billingAuditLog.id })
+      .from(billingAuditLog)
+      .where(eq(billingAuditLog.stripeEventId, stripeEventId))
+      .limit(1);
+    return !!row;
   },
 
   // Every athlete currently on this coach's roster -- there's no "archived
@@ -2017,6 +2035,43 @@ export const storage = {
     if (!sub || sub.seatCap == null) return true;
     const current = await this.getRosterSeatCountForCoach(coachId);
     return current < sub.seatCap;
+  },
+
+  // The actual fix for hasRosterSeatAvailable's own TOCTOU gap: checking
+  // the seat count and inserting the roster row as two separate calls
+  // leaves a window where two concurrent claims for the same coach's last
+  // open seat can both pass the check before either insert lands, letting
+  // a coach end up with more athletes than their seatCap allows. Every
+  // real "add this athlete to this coach's roster" path should call this
+  // instead of hasRosterSeatAvailable + linkAthleteToCoach separately --
+  // linkAthleteToCoach itself is left as-is for seed.ts's bulk demo-data
+  // inserts, where there's no concurrency and BILLING_LIVE is never true.
+  //
+  // pg_advisory_xact_lock is keyed on the coach's own id and held only for
+  // this transaction's lifetime (auto-released on commit or rollback) --
+  // it serializes concurrent claims against the SAME coach without
+  // touching any other coach's roster, and is cheap since real contention
+  // on one coach's last seat, at the exact same instant, is rare.
+  async claimRosterSeat(
+    coachId: number,
+    athleteId: number,
+  ): Promise<{ ok: true; athlete: typeof coachAthletes.$inferSelect } | { ok: false; error: string }> {
+    return db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(${coachId})`);
+
+      const coachIds = await this.getEffectiveCoachIds(coachId);
+      const existing = await db.query.coachAthletes.findFirst({
+        where: and(inArray(coachAthletes.coachId, coachIds), eq(coachAthletes.athleteId, athleteId)),
+      });
+      if (existing) return { ok: true as const, athlete: existing };
+
+      if (!(await this.hasRosterSeatAvailable(coachId))) {
+        return { ok: false as const, error: "This coach's roster is full -- ask them to upgrade their plan." };
+      }
+
+      const [row] = await tx.insert(coachAthletes).values({ coachId, athleteId }).returning();
+      return { ok: true as const, athlete: row };
+    });
   },
 
   // Resolves the full set of coach ids that should see identical data --
@@ -2329,11 +2384,13 @@ export const storage = {
       // Framework only -- BILLING_LIVE is unset in every environment
       // today, so hasRosterSeatAvailable always returns true and this
       // never actually blocks anyone yet. See server/billing.ts's own
-      // comment.
-      if (!(await this.hasRosterSeatAvailable(request.coachId))) {
+      // comment. claimRosterSeat (not hasRosterSeatAvailable +
+      // linkAthleteToCoach separately) is what actually closes the seat-
+      // count TOCTOU race once billing is live -- see its own comment.
+      const claimed = await this.claimRosterSeat(request.coachId, athleteId);
+      if (!claimed.ok) {
         return { ok: false as const, reason: "coach_seat_limit" as const };
       }
-      await this.linkAthleteToCoach(request.coachId, athleteId);
     }
     await db
       .update(coachAthleteRequests)
@@ -9471,13 +9528,15 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
     return db.query.legalDocuments.findMany();
   },
 
-  async getLegalDocument(docType: "terms_of_service" | "privacy_policy"): Promise<LegalDocument | null> {
+  async getLegalDocument(
+    docType: "terms_of_service" | "privacy_policy" | "biometric_waiver",
+  ): Promise<LegalDocument | null> {
     const [row] = await db.select().from(legalDocuments).where(eq(legalDocuments.docType, docType));
     return row ?? null;
   },
 
   async updateLegalDocument(
-    docType: "terms_of_service" | "privacy_policy",
+    docType: "terms_of_service" | "privacy_policy" | "biometric_waiver",
     content: string,
   ): Promise<LegalDocument> {
     const [row] = await db
@@ -14547,7 +14606,7 @@ ${catalog}`;
       requiresGuardianNoticeCount: guardianNoticeCount,
       notYetBuilt: [
         "Parental-notice delivery content and channel for Tier 2 accounts (requiresGuardianNotice is tracked; nothing sends or shows a notice yet).",
-        "Biometric waiver consent copy (the consent_type exists in the schema; no document text has been written).",
+        "Biometric waiver consent copy exists as a draft now (see /admin/documents), but hasn't been reviewed by counsel and isn't wired into any live consent-collection flow yet -- consentRecords has no real rows of this type until both of those happen.",
         "Legal review confirming the tier thresholds, retention windows, and coach-consent mechanism actually satisfy COPPA, any state Age-Appropriate Design Code, BIPA, or other applicable law.",
         "Any accounts created before dateOfBirth existed remain tier \"unknown\" until that field is backfilled.",
       ],
@@ -15098,7 +15157,20 @@ ${catalog}`;
       ipAddress: consentContext?.ipAddress,
       userAgent: consentContext?.userAgent,
     });
-    await this.linkAthleteToCoach(provisional.coachId, user.id);
+    // The hasRosterSeatAvailable check above is a fast, non-atomic early
+    // exit (avoids creating an account when the roster is already
+    // obviously full) -- claimRosterSeat here is the real, race-safe
+    // enforcement point. By this point the account already exists, so a
+    // failure here (only possible from a genuine last-seat race, given how
+    // much human-paced form-filling separates the two checks) can't cleanly
+    // roll back the signup -- logged for a human to reconcile rather than
+    // silently letting the coach exceed their seat cap.
+    const claimed = await this.claimRosterSeat(provisional.coachId, user.id);
+    if (!claimed.ok) {
+      console.error(
+        `claimProvisionalAthlete: roster seat claim failed after account creation (user ${user.id}, coach ${provisional.coachId}): ${claimed.error}`,
+      );
+    }
     await this.deleteProvisionalAthlete(provisional.coachId, provisional.id);
     return { user, coachId: provisional.coachId };
   },

@@ -48,6 +48,12 @@ jobs:
       - name: Typecheck
         run: npm run check
 
+      # No DATABASE_URL needed for these -- server/billing.test.ts mocks
+      # ./storage rather than importing the real thing, so this can run
+      # before the Postgres-dependent steps below, not after.
+      - name: Test
+        run: npm test
+
       - name: Build (web + server)
         run: npm run build
 

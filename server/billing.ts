@@ -149,6 +149,19 @@ function mapStripeStatus(status: Stripe.Subscription.Status): "trialing" | "acti
 }
 
 export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<void> {
+  // Stripe's own delivery guarantee is at-least-once, not exactly-once --
+  // a redelivered event (a slow response, a retry after a transient 5xx,
+  // Stripe's own dashboard "resend" button) would otherwise re-apply
+  // whatever that event does. Every mutating branch below already calls
+  // logBillingEvent with event.id, so checking for a prior row with this
+  // exact id is enough to make every case here effectively run-once. The
+  // stripeEventId column's own UNIQUE constraint is what actually closes
+  // the race if two redeliveries of the same event land at nearly the same
+  // instant -- both could pass this check, but only one of the two inserts
+  // in the block that follows can win, and the loser is a UNIQUE violation
+  // Stripe will simply see as an error and retry.
+  if (await storage.wasStripeEventProcessed(event.id)) return;
+
   switch (event.type) {
     case "checkout.session.completed": {
       const session = event.data.object as Stripe.Checkout.Session;
@@ -164,7 +177,7 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
         stripeSubscriptionId: session.subscription,
         status: "active",
       });
-      await storage.logBillingEvent(userId, event.type, { sessionId: session.id });
+      await storage.logBillingEvent(userId, event.type, { sessionId: session.id }, event.id);
       break;
     }
     case "customer.subscription.updated": {
@@ -175,13 +188,13 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
         cancelAtPeriodEnd: sub.cancel_at_period_end,
         currentPeriodEnd: currentPeriodEndSec != null ? new Date(currentPeriodEndSec * 1000) : undefined,
       });
-      if (updated) await storage.logBillingEvent(updated.userId, event.type, { subscriptionId: sub.id });
+      if (updated) await storage.logBillingEvent(updated.userId, event.type, { subscriptionId: sub.id }, event.id);
       break;
     }
     case "customer.subscription.deleted": {
       const sub = event.data.object as Stripe.Subscription;
       const updated = await storage.updateSubscriptionByStripeId(sub.id, { status: "canceled" });
-      if (updated) await storage.logBillingEvent(updated.userId, event.type, { subscriptionId: sub.id });
+      if (updated) await storage.logBillingEvent(updated.userId, event.type, { subscriptionId: sub.id }, event.id);
       break;
     }
     case "invoice.payment_failed": {
@@ -192,7 +205,7 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
       const subId = invoice.parent?.subscription_details?.subscription;
       if (!subId || typeof subId !== "string") break;
       const updated = await storage.updateSubscriptionByStripeId(subId, { status: "past_due" });
-      if (updated) await storage.logBillingEvent(updated.userId, event.type, { invoiceId: invoice.id });
+      if (updated) await storage.logBillingEvent(updated.userId, event.type, { invoiceId: invoice.id }, event.id);
       break;
     }
     default:

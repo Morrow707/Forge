@@ -381,7 +381,19 @@ export function setupAuth(app: Express) {
       });
 
       if (coach) {
-        await storage.linkAthleteToCoach(coach.id, user.id);
+        // claimRosterSeat (not a bare linkAthleteToCoach) closes the seat-
+        // count TOCTOU race once billing is live -- see its own comment.
+        // On the rare failure (roster genuinely full, or lost a race for
+        // the last seat), fall back to treating this signup as coachless
+        // rather than failing the whole signup after the account already
+        // exists -- every check below already branches on `coach` being
+        // set, so clearing it here is enough to get consistent Free-Agent
+        // treatment (own trial subscription, no coach name in the welcome
+        // email) without duplicating that logic here.
+        const claimed = await storage.claimRosterSeat(coach.id, user.id);
+        if (!claimed.ok) coach = null;
+      }
+      if (coach) {
         if (team) await storage.addAthleteToTeam(team.id, user.id);
         // Gated off for now -- see GUARDIAN_NOTICE_LIVE's own comment.
         // Flip that one constant when this is ready to actually reach a
@@ -887,7 +899,12 @@ export function setupAuth(app: Express) {
       if (!coach) {
         return res.status(400).json({ message: "Invalid invite code" });
       }
-      await storage.linkAthleteToCoach(coach.id, user.id);
+      // claimRosterSeat (not a bare linkAthleteToCoach) closes the seat-
+      // count TOCTOU race once billing is live -- see its own comment.
+      const claimed = await storage.claimRosterSeat(coach.id, user.id);
+      if (!claimed.ok) {
+        return res.status(422).json({ message: claimed.error });
+      }
       if (team) await storage.addAthleteToTeam(team.id, user.id);
       res.json({ coachId: coach.id, coachName: coach.name });
     } catch (err) {

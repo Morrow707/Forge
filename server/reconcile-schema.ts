@@ -1512,8 +1512,9 @@ CREATE INDEX IF NOT EXISTS "record_access_audit_logs_user_idx" ON "record_access
 -- document is much safer to insert via a parameterized Drizzle query than
 -- hand-escaped into a raw SQL string literal.
 DO $$ BEGIN
-  CREATE TYPE "legal_document_type" AS ENUM ('terms_of_service', 'privacy_policy');
+  CREATE TYPE "legal_document_type" AS ENUM ('terms_of_service', 'privacy_policy', 'biometric_waiver');
 EXCEPTION WHEN duplicate_object THEN null; END $$;
+ALTER TYPE "legal_document_type" ADD VALUE IF NOT EXISTS 'biometric_waiver';
 
 CREATE TABLE IF NOT EXISTS "legal_documents" (
   "id" serial PRIMARY KEY,
@@ -1621,8 +1622,10 @@ CREATE TABLE IF NOT EXISTS "billing_audit_log" (
   "user_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
   "event" text NOT NULL,
   "detail" json,
+  "stripe_event_id" text UNIQUE,
   "created_at" timestamp NOT NULL DEFAULT now()
 );
+ALTER TABLE "billing_audit_log" ADD COLUMN IF NOT EXISTS "stripe_event_id" text UNIQUE;
 CREATE INDEX IF NOT EXISTS "billing_audit_log_user_idx" ON "billing_audit_log" ("user_id", "created_at");
 
 CREATE TABLE IF NOT EXISTS "problem_reports" (
