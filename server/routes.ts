@@ -2592,9 +2592,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(summary);
   });
 
+  // Has to be registered BEFORE the /:athleteId wildcard below -- Express
+  // matches routes in registration order, and :athleteId matches any
+  // single path segment, including the literal string "provisional".
+  // Found by actually running the app and hitting a real 500 (a raw
+  // Postgres "invalid input syntax for type integer" error, since
+  // Number("provisional") is NaN) instead of ever reaching this handler --
+  // this route had never actually been reachable.
+  app.get("/api/coach/roster/provisional", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const rows = await storage.getProvisionalAthletesForCoach(user.id);
+    res.json(rows);
+  });
+
   app.get("/api/coach/roster/:athleteId", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     const athleteId = Number(req.params.athleteId);
+    // Defense in depth alongside the ordering fix above -- any future
+    // literal route added under /api/coach/roster/ without noticing this
+    // wildcard sits here would otherwise hit the exact same NaN-into-SQL
+    // crash instead of a clean 404.
+    if (!Number.isInteger(athleteId)) return res.status(404).json({ message: "Athlete not found" });
     const athlete = await storage.getRosterAthleteForCoach(user.id, athleteId);
     if (!athlete) return res.status(404).json({ message: "Athlete not found" });
     res.json(athlete);
@@ -2617,6 +2635,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/coach/roster/:athleteId", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     const athleteId = Number(req.params.athleteId);
+    if (!Number.isInteger(athleteId)) return res.status(404).json({ message: "Athlete not found" });
     const removed = await storage.removeAthleteFromCoach(user.id, athleteId);
     if (!removed) return res.status(404).json({ message: "Athlete not found" });
     res.status(204).end();
@@ -3201,12 +3220,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
     const created = await storage.createProvisionalAthletes(user.id, parsed.data.rows);
     res.status(201).json(created);
-  });
-
-  app.get("/api/coach/roster/provisional", requireRole("coach"), async (req, res) => {
-    const user = currentUser(req);
-    const rows = await storage.getProvisionalAthletesForCoach(user.id);
-    res.json(rows);
   });
 
   app.delete("/api/coach/roster/provisional/:id", requireRole("coach"), async (req, res) => {
