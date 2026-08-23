@@ -187,6 +187,17 @@ export const users = pgTable(
     mfaEnabled: boolean("mfa_enabled").notNull().default(false),
     mfaSecret: text("mfa_secret"),
     mfaBackupCodeHashes: json("mfa_backup_code_hashes").$type<string[]>(),
+    // Nothing in the app is actually gated on this yet (no route checks
+    // it, no feature is blocked by it) -- same "flag, don't decide"
+    // philosophy as healthStatus/requiresGuardianNotice elsewhere in this
+    // table. A signup gets emailVerified: false and a verification email
+    // (see auth.ts); clicking the link is the only thing that flips it.
+    // Defaults to true at the column level (see reconcile-schema.ts's own
+    // comment) purely so the one-time migration backfills every
+    // pre-existing account as already-verified instead of retroactively
+    // nagging them -- every real signup path explicitly overrides this to
+    // false at insert time.
+    emailVerified: boolean("email_verified").notNull().default(true),
     name: text("name").notNull(),
     role: roleEnum("role").notNull(),
     coachCode: text("coach_code"),
@@ -1618,6 +1629,21 @@ export const apnsDeviceTokens = pgTable(
 // token is stored -- same reasoning as password hashing -- so a database
 // leak alone can't be used to reset anyone's password.
 export const passwordResetTokens = pgTable("password_reset_tokens", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  tokenHash: text("token_hash").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  usedAt: timestamp("used_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Exact mirror of passwordResetTokens above -- same single-use, hashed,
+// expiring-token shape, just for confirming email ownership at signup
+// instead of a password reset. See users.emailVerified's own comment for
+// why nothing in the app is actually gated on this yet.
+export const emailVerificationTokens = pgTable("email_verification_tokens", {
   id: serial("id").primaryKey(),
   userId: integer("user_id")
     .notNull()

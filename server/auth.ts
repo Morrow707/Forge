@@ -13,6 +13,7 @@ import { buildWelcomeEmail } from "./welcome-email";
 import { buildPasswordResetEmail } from "./password-reset-email";
 import { buildNewDeviceLoginEmail } from "./new-device-login-email";
 import { buildPasswordChangedEmail } from "./password-changed-email";
+import { buildVerifyEmailEmail } from "./verify-email-email";
 import { totpOtpauthUri } from "./mfa";
 import { isNativeAppRequest, normalizeIp, resolveLocation, shouldTouchLastSeen, type SessionKind } from "./session-tracking";
 import {
@@ -77,6 +78,13 @@ const changePasswordLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: "Too many attempts. Please try again in a few minutes." },
+});
+const resendVerificationLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many requests. Please try again later." },
 });
 
 function toPublicUser(user: any): PublicUser {
@@ -357,6 +365,7 @@ export function setupAuth(app: Express) {
         passwordHash,
         name,
         role,
+        emailVerified: false,
         phone: phone || null,
         dateOfBirth,
         requiresGuardianNotice: role === "athlete" && tier === "tier2_teen_13_17",
@@ -409,6 +418,7 @@ export function setupAuth(app: Express) {
           subject: "Welcome to Forge",
           html: buildWelcomeEmail(user, coach?.name ?? null),
         });
+        sendVerificationEmail(req, user);
         const { nativeToken } = await trackNewSession(req, user.id);
         res.status(201).json({ ...(await toPublicUserWithSections(user)), nativeToken });
       });
@@ -467,6 +477,7 @@ export function setupAuth(app: Express) {
           subject: "Welcome to Forge",
           html: buildWelcomeEmail(user, null),
         });
+        sendVerificationEmail(req, user);
         const { nativeToken } = await trackNewSession(req, user.id);
         res.status(201).json({ ...(await toPublicUserWithSections(user)), nativeToken });
       });
@@ -494,6 +505,27 @@ export function setupAuth(app: Express) {
   // login (completeLogin below) -- a brand-new signup's very first session
   // is never "a new device someone should be alerted about," it's just the
   // account being created.
+  // Fire-and-forget, called from both signup routes right after
+  // storage.createUser -- a slow/failed verification email is never a
+  // reason to hold up the signup response, same reasoning as the welcome
+  // email it's sent alongside. See request-password-reset's own comment
+  // for why RENDER_EXTERNAL_URL takes priority over the request's own
+  // Host header (Host-header link-poisoning).
+  function sendVerificationEmail(req: any, user: { id: number; email: string }) {
+    storage
+      .createEmailVerificationToken(user.id)
+      .then((token) => {
+        const origin = process.env.RENDER_EXTERNAL_URL ?? `${req.protocol}://${req.get("host")}`;
+        const verifyLink = `${origin}/verify-email?token=${token}`;
+        return sendEmail({
+          to: user.email,
+          subject: "Confirm your Forge email",
+          html: buildVerifyEmailEmail(verifyLink),
+        });
+      })
+      .catch((err) => console.error("sendVerificationEmail failed:", err));
+  }
+
   async function trackNewSession(
     req: any,
     userId: number,
@@ -794,6 +826,31 @@ export function setupAuth(app: Express) {
     } catch (err) {
       next(err);
     }
+  });
+
+  // Deliberately unauthenticated -- the link a user clicks from their inbox
+  // may well be opened in a different browser/session than the one they
+  // signed up in (a phone's default mail app, say). client/src/pages/
+  // verify-email.tsx reads ?token= from the URL and POSTs it here.
+  app.post("/api/auth/verify-email", async (req, res, next) => {
+    try {
+      const token = typeof req.body?.token === "string" ? req.body.token : "";
+      const record = await storage.getValidEmailVerificationToken(token);
+      if (!record) {
+        return res.status(400).json({ message: "This verification link is invalid or has expired." });
+      }
+      await storage.consumeEmailVerificationToken(record.id, record.userId);
+      res.status(204).end();
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.post("/api/auth/resend-verification", requireAuth, resendVerificationLimiter, async (req, res) => {
+    const user = req.user as any;
+    if (user.emailVerified) return res.json({ ok: true });
+    sendVerificationEmail(req, user);
+    res.json({ ok: true });
   });
 
   app.get("/api/auth/me", async (req, res) => {

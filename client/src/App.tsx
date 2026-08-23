@@ -21,6 +21,7 @@ import SignupPage from "@/pages/signup";
 import ClaimPage from "@/pages/claim";
 import ForgotPasswordPage from "@/pages/forgot-password";
 import ResetPasswordPage from "@/pages/reset-password";
+import VerifyEmailPage from "@/pages/verify-email";
 import LegalPage from "@/pages/legal";
 import { TermsOfServicePage, PrivacyPolicyPage } from "@/pages/legal-document";
 import DeleteAccountPage from "@/pages/delete-account";
@@ -198,6 +199,7 @@ function Router() {
         <Route path="/claim/:code" component={ClaimPage} />
         <Route path="/forgot-password" component={ForgotPasswordPage} />
         <Route path="/reset-password" component={ResetPasswordPage} />
+        <Route path="/verify-email" component={VerifyEmailPage} />
         <Route path="/legal" component={LegalPage} />
         <Route path="/terms" component={TermsOfServicePage} />
         <Route path="/privacy" component={PrivacyPolicyPage} />

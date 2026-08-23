@@ -46,6 +46,7 @@ import { ReportProblemDialog } from "@/components/report-problem-dialog";
 import { MfaSettingsDialog } from "@/components/mfa-settings-dialog";
 import { ActiveSessionsDialog } from "@/components/active-sessions-dialog";
 import { ChangePasswordDialog } from "@/components/change-password-dialog";
+import { EmailVerificationBanner } from "@/components/email-verification-banner";
 import { NotificationBell } from "@/components/notification-bell";
 import { NotificationSettingsDialog } from "@/components/notification-settings-dialog";
 import { CoachingStaffDialog } from "@/components/coaching-staff-dialog";
@@ -849,6 +850,8 @@ export function AppShell({
           <div className="border-t border-border bg-background px-4 py-2 md:px-8">{subheader}</div>
         )}
       </div>
+
+      {user && !user.emailVerified && <EmailVerificationBanner />}
 
       <div className={cn("flex w-full flex-col", fitScreen ? "flex-1 md:min-h-0" : "flex-1")}>
         <main

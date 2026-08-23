@@ -207,6 +207,13 @@ ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "skill_fault_thresholds" json;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "mfa_enabled" boolean NOT NULL DEFAULT false;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "mfa_secret" text;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "mfa_backup_code_hashes" json;
+-- DEFAULT true here (not false) is deliberate and only affects this ALTER's
+-- one-time backfill of EXISTING rows -- every account created before this
+-- feature existed becomes retroactively "verified" rather than suddenly
+-- getting a verification nag it never had. New signups explicitly insert
+-- emailVerified: false (see auth.ts), overriding this column default for
+-- every row inserted after.
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "email_verified" boolean NOT NULL DEFAULT true;
 CREATE UNIQUE INDEX IF NOT EXISTS "users_email_idx" ON "users" ("email");
 CREATE UNIQUE INDEX IF NOT EXISTS "users_coach_code_idx" ON "users" ("coach_code");
 CREATE UNIQUE INDEX IF NOT EXISTS "users_calendar_token_idx" ON "users" ("calendar_token");
@@ -664,6 +671,15 @@ CREATE TABLE IF NOT EXISTS "notifications" (
 );
 
 CREATE TABLE IF NOT EXISTS "password_reset_tokens" (
+  "id" serial PRIMARY KEY,
+  "user_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "token_hash" text NOT NULL,
+  "expires_at" timestamp NOT NULL,
+  "used_at" timestamp,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS "email_verification_tokens" (
   "id" serial PRIMARY KEY,
   "user_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
   "token_hash" text NOT NULL,

@@ -39,6 +39,7 @@ import {
   subscriptions,
   billingAuditLog,
   passwordResetTokens,
+  emailVerificationTokens,
   pushSubscriptions,
   teamPosts,
   bodyMetrics,
@@ -11021,6 +11022,45 @@ ${entriesText}`;
     });
   },
 
+  // Exact mirror of the three password-reset-token functions above --
+  // same single-use, hashed, expiring-token shape (reuses
+  // generateResetToken/hashResetToken as-is; there's nothing
+  // password-specific about either), for confirming email ownership
+  // instead of a password reset.
+  async createEmailVerificationToken(userId: number) {
+    await db.delete(emailVerificationTokens).where(eq(emailVerificationTokens.userId, userId));
+    const token = generateResetToken();
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    await db.insert(emailVerificationTokens).values({
+      userId,
+      tokenHash: hashResetToken(token),
+      expiresAt,
+    });
+    return token;
+  },
+
+  async getValidEmailVerificationToken(rawToken: string) {
+    const tokenHash = hashResetToken(rawToken);
+    const row = await db.query.emailVerificationTokens.findFirst({
+      where: and(
+        eq(emailVerificationTokens.tokenHash, tokenHash),
+        isNull(emailVerificationTokens.usedAt),
+        gt(emailVerificationTokens.expiresAt, new Date()),
+      ),
+    });
+    return row ?? null;
+  },
+
+  async consumeEmailVerificationToken(tokenId: number, userId: number) {
+    await db.transaction(async (tx) => {
+      await tx.update(users).set({ emailVerified: true }).where(eq(users.id, userId));
+      await tx
+        .update(emailVerificationTokens)
+        .set({ usedAt: new Date() })
+        .where(eq(emailVerificationTokens.id, tokenId));
+    });
+  },
+
   // ---------- Notifications ----------
   // Deliberately narrow: only ever created for a coach when an athlete
   // comments or attaches a video (see the call site in routes.ts) -- never
@@ -14934,6 +14974,7 @@ ${catalog}`;
       passwordHash,
       name: provisional.name,
       role: "athlete",
+      emailVerified: false,
       dateOfBirth,
       // A claim code only ever exists because a coach created this
       // provisional slot -- that coach is acting as the provisioning agent
