@@ -34,6 +34,7 @@ import {
   ShieldCheck,
   Trash2,
   Flag,
+  MonitorSmartphone,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -42,6 +43,7 @@ import { EditMyProfileDialog } from "@/components/edit-my-profile-dialog";
 import { DeleteAccountDialog } from "@/components/delete-account-dialog";
 import { ReportProblemDialog } from "@/components/report-problem-dialog";
 import { MfaSettingsDialog } from "@/components/mfa-settings-dialog";
+import { ActiveSessionsDialog } from "@/components/active-sessions-dialog";
 import { NotificationBell } from "@/components/notification-bell";
 import { NotificationSettingsDialog } from "@/components/notification-settings-dialog";
 import { CoachingStaffDialog } from "@/components/coaching-staff-dialog";
@@ -164,6 +166,7 @@ export function AppShell({
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
   const [reportProblemOpen, setReportProblemOpen] = useState(false);
   const [mfaSettingsOpen, setMfaSettingsOpen] = useState(false);
+  const [activeSessionsOpen, setActiveSessionsOpen] = useState(false);
   const [moreNavOpen, setMoreNavOpen] = useState(false);
 
   // Resolved server-side: a coach's own team settings, or their athlete's
@@ -530,6 +533,18 @@ export function AppShell({
                     <Flag className="h-4 w-4" />
                     Report a problem
                   </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setActiveSessionsOpen(true);
+                      setAccountMenuOpen(false);
+                    }}
+                    className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-foreground hover:bg-surface-elevated"
+                  >
+                    <MonitorSmartphone className="h-4 w-4" />
+                    Where you're logged in
+                  </button>
                   {(user?.role === "coach" || user?.role === "admin") && (
                     <button
                       type="button"
@@ -713,6 +728,17 @@ export function AppShell({
                   <Flag className="h-4 w-4" />
                   Report a problem
                 </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveSessionsOpen(true);
+                    setMobileNavOpen(false);
+                  }}
+                  className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground"
+                >
+                  <MonitorSmartphone className="h-4 w-4" />
+                  Devices
+                </button>
                 {(user?.role === "coach" || user?.role === "admin") && (
                   <button
                     type="button"
@@ -831,6 +857,7 @@ export function AppShell({
       {(user?.role === "coach" || user?.role === "admin") && (
         <MfaSettingsDialog open={mfaSettingsOpen} onOpenChange={setMfaSettingsOpen} />
       )}
+      {user && <ActiveSessionsDialog open={activeSessionsOpen} onOpenChange={setActiveSessionsOpen} />}
       <NonIosTrackingNotice />
     </div>
   );

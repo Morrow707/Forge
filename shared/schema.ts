@@ -3722,6 +3722,48 @@ export const createProblemReportSchema = z.object({
   path: z.string().trim().max(300).optional(),
 });
 
+// ---------- Sessions (see who's logged in / log out other devices) ----------
+// One row per login/signup, web or native -- available to every role, not
+// just coach/admin (unlike MFA), since this is a general account-security
+// feature anyone benefits from. "web" and "native" are revoked
+// differently (see storage.revokeSession's own comment): a web row's
+// webSessionId points at connect-pg-simple's own "session" table, and
+// deleting that row IS the actual logout -- webSessionId here just lets
+// the UI list/target it. A native row has no separate backing store; its
+// own revokedAt below is the real, sole revocation mechanism, checked
+// directly by auth.ts's attachNativeTokenAuth on every native request
+// (the reason the previously-stateless, unrevocable native Bearer token
+// now carries this row's id in its signed payload -- see
+// auth.ts's signNativeToken).
+export const sessionKindEnum = pgEnum("session_kind", ["web", "native"]);
+
+export const userSessions = pgTable(
+  "user_sessions",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    kind: sessionKindEnum("kind").notNull(),
+    webSessionId: text("web_session_id"),
+    deviceLabel: text("device_label"),
+    ipAddress: text("ip_address"),
+    // Best-effort, IP-based, approximate -- see resolveLocation in
+    // session-tracking.ts. Resolved asynchronously right after login
+    // (never blocks the login response on an external geolocation
+    // lookup); stays null until that resolves, and stays null forever if
+    // it fails or the IP is private/unresolvable.
+    location: text("location"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    lastSeenAt: timestamp("last_seen_at").notNull().defaultNow(),
+    revokedAt: timestamp("revoked_at"),
+  },
+  (table) => ({
+    userIdx: index("user_sessions_user_idx").on(table.userId),
+  }),
+);
+export type UserSession = typeof userSessions.$inferSelect;
+
 // ---------- Legal documents (draft, admin-editable) ----------
 // A real Terms of Service and Privacy Policy, kept separate from
 // legalAgreement above -- that table is specifically the short clickwrap

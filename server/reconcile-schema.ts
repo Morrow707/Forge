@@ -1609,6 +1609,26 @@ CREATE TABLE IF NOT EXISTS "problem_reports" (
   "created_at" timestamp NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS "problem_reports_created_idx" ON "problem_reports" ("created_at");
+
+DO $$ BEGIN
+  CREATE TYPE "session_kind" AS ENUM ('web', 'native');
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END $$;
+
+CREATE TABLE IF NOT EXISTS "user_sessions" (
+  "id" serial PRIMARY KEY,
+  "user_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "kind" session_kind NOT NULL,
+  "web_session_id" text,
+  "device_label" text,
+  "ip_address" text,
+  "location" text,
+  "created_at" timestamp NOT NULL DEFAULT now(),
+  "last_seen_at" timestamp NOT NULL DEFAULT now(),
+  "revoked_at" timestamp
+);
+CREATE INDEX IF NOT EXISTS "user_sessions_user_idx" ON "user_sessions" ("user_id");
 `;
 
 async function main() {

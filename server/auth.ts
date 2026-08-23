@@ -11,7 +11,9 @@ import { pool } from "./db";
 import { sendEmail } from "./email";
 import { buildWelcomeEmail } from "./welcome-email";
 import { buildPasswordResetEmail } from "./password-reset-email";
+import { buildNewDeviceLoginEmail } from "./new-device-login-email";
 import { totpOtpauthUri } from "./mfa";
+import { isNativeAppRequest, normalizeIp, resolveLocation, shouldTouchLastSeen, type SessionKind } from "./session-tracking";
 import {
   signupSchema,
   requestPasswordResetSchema,
@@ -104,27 +106,36 @@ async function toPublicUserWithSections(user: any): Promise<PublicUser> {
 // classes, roster, calendar...) silently 401's, and the UI's `data ?? []`
 // fallbacks render that identically to genuinely empty data. A signed,
 // stateless token sent back as an ordinary response body field and replayed
-// as an Authorization header sidesteps cookies (and ITP) entirely; it needs
-// no server-side storage/revocation list since it's no more sensitive than
-// the session cookie it stands in for, and it's silently ignored by the web
-// client, which keeps using the cookie exactly as before.
+// as an Authorization header sidesteps cookies (and ITP) entirely, and it's
+// silently ignored by the web client, which keeps using the cookie exactly
+// as before.
+//
+// The token now carries a sessionRecordId (a user_sessions row -- see
+// session-tracking.ts/storage.ts) and IS checked against server-side
+// revocation on every request (attachNativeTokenAuth below) -- it used to
+// be a pure stateless signature check with no DB involved at all, which
+// meant a native login could never actually be revoked before its own
+// 30-day expiry. That's the whole point of "log out other devices"
+// actually working for the native app, not just the web cookie session
+// (which was always revocable, by deleting its row from connect-pg-simple's
+// own session table).
 const NATIVE_TOKEN_SECRET = process.env.SESSION_SECRET || "forge-dev-secret";
 const NATIVE_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // matches the cookie session's own maxAge
 
-function signNativeToken(userId: number): string {
+function signNativeToken(userId: number, sessionRecordId: number): string {
   const expiresAt = Date.now() + NATIVE_TOKEN_TTL_MS;
-  const payload = `${userId}.${expiresAt}`;
+  const payload = `${userId}.${sessionRecordId}.${expiresAt}`;
   const sig = crypto.createHmac("sha256", NATIVE_TOKEN_SECRET).update(payload).digest("hex");
   return `${payload}.${sig}`;
 }
 
-function verifyNativeToken(token: string): number | null {
+function verifyNativeToken(token: string): { userId: number; sessionRecordId: number } | null {
   const parts = token.split(".");
-  if (parts.length !== 3) return null;
-  const [userIdStr, expiresAtStr, sig] = parts;
+  if (parts.length !== 4) return null;
+  const [userIdStr, sessionRecordIdStr, expiresAtStr, sig] = parts;
   const expected = crypto
     .createHmac("sha256", NATIVE_TOKEN_SECRET)
-    .update(`${userIdStr}.${expiresAtStr}`)
+    .update(`${userIdStr}.${sessionRecordIdStr}.${expiresAtStr}`)
     .digest("hex");
   const sigBuf = Buffer.from(sig, "hex");
   const expectedBuf = Buffer.from(expected, "hex");
@@ -134,7 +145,9 @@ function verifyNativeToken(token: string): number | null {
   const expiresAt = Number(expiresAtStr);
   if (!Number.isFinite(expiresAt) || expiresAt < Date.now()) return null;
   const userId = Number(userIdStr);
-  return Number.isInteger(userId) ? userId : null;
+  const sessionRecordId = Number(sessionRecordIdStr);
+  if (!Number.isInteger(userId) || !Number.isInteger(sessionRecordId)) return null;
+  return { userId, sessionRecordId };
 }
 
 // Identifies who's mid-login between the password check succeeding and the
@@ -181,15 +194,23 @@ function verifyMfaPendingToken(token: string): number | null {
 // req.login(), since req.isAuthenticated() (which requireAuth/requireRole
 // below both gate on) just checks `!!req.user` -- no session write, no
 // cookie, nothing left behind for a request that's over in one round trip.
+// isNativeSessionValid is the actual revocation check -- see storage.ts's
+// own comment on why a native session's revokedAt is checked directly here
+// rather than through some other mechanism.
 export const attachNativeTokenAuth: RequestHandler = async (req, res, next) => {
   if (req.isAuthenticated()) return next();
   const header = req.headers.authorization;
   if (!header?.startsWith("Bearer ")) return next();
-  const userId = verifyNativeToken(header.slice(7));
-  if (userId === null) return next();
+  const decoded = verifyNativeToken(header.slice(7));
+  if (decoded === null) return next();
   try {
-    const user = await storage.getUser(userId);
-    if (user) (req as any).user = user;
+    const valid = await storage.isNativeSessionValid(decoded.sessionRecordId);
+    if (!valid) return next();
+    const user = await storage.getUser(decoded.userId);
+    if (user) {
+      (req as any).user = user;
+      (req as any).nativeSessionRecordId = decoded.sessionRecordId;
+    }
     next();
   } catch (err) {
     next(err);
@@ -358,9 +379,8 @@ export function setupAuth(app: Express) {
           subject: "Welcome to Forge",
           html: buildWelcomeEmail(user, coach?.name ?? null),
         });
-        res
-          .status(201)
-          .json({ ...(await toPublicUserWithSections(user)), nativeToken: signNativeToken(user.id) });
+        const { nativeToken } = await trackNewSession(req, user.id);
+        res.status(201).json({ ...(await toPublicUserWithSections(user)), nativeToken });
       });
     } catch (err) {
       next(err);
@@ -417,9 +437,8 @@ export function setupAuth(app: Express) {
           subject: "Welcome to Forge",
           html: buildWelcomeEmail(user, null),
         });
-        res
-          .status(201)
-          .json({ ...(await toPublicUserWithSections(user)), nativeToken: signNativeToken(user.id) });
+        const { nativeToken } = await trackNewSession(req, user.id);
+        res.status(201).json({ ...(await toPublicUserWithSections(user)), nativeToken });
       });
     } catch (err) {
       next(err);
@@ -433,12 +452,67 @@ export function setupAuth(app: Express) {
   // site for why the try/catch around the async work inside req.login's
   // callback matters (its callback isn't promise-aware, so an unhandled
   // rejection in here would otherwise never reach Express's error middleware).
+  //
+  // Shared by every place that establishes a real session (login, signup,
+  // the claim-provisional-athlete signup, MFA-verified login) -- creates
+  // the user_sessions row "see who's logged in" reads from, and either
+  // signs a real native token against it (native) or stashes the row's id
+  // on req.session for connect-pg-simple's own table to carry along (web).
+  // Geolocation is deliberately never awaited here -- see resolveLocation's
+  // own comment on why an external lookup must never sit in a login's
+  // critical path. notifyIfNewDevice is only ever passed true from a real
+  // login (completeLogin below) -- a brand-new signup's very first session
+  // is never "a new device someone should be alerted about," it's just the
+  // account being created.
+  async function trackNewSession(
+    req: any,
+    userId: number,
+    options: { notifyIfNewDevice?: boolean } = {},
+  ): Promise<{ nativeToken?: string }> {
+    const kind: SessionKind = isNativeAppRequest(req) ? "native" : "web";
+    const ip = normalizeIp(req.ip);
+    const { session: record, isNewDevice } = await storage.createSessionRecord(userId, kind, {
+      userAgent: req.headers["user-agent"],
+      ipAddress: ip,
+    });
+    // Fire-and-forget, chained after the (also fire-and-forget) location
+    // lookup so the alert email -- if one goes out -- includes an actual
+    // location rather than always saying "Unknown." Never awaited by this
+    // function itself; the login response doesn't wait on any of this.
+    resolveLocation(ip)
+      .then(async (location) => {
+        if (location) await storage.setSessionLocation(record.id, location).catch(() => {});
+        if (options.notifyIfNewDevice && isNewDevice) {
+          const user = await storage.getUser(userId);
+          if (user) {
+            await sendEmail({
+              to: user.email,
+              subject: "New login to your Forge account",
+              html: buildNewDeviceLoginEmail({
+                name: user.name,
+                deviceLabel: record.deviceLabel ?? "Unknown device",
+                location,
+                when: record.createdAt,
+              }),
+            });
+          }
+        }
+      })
+      .catch((err) => console.error("trackNewSession follow-up failed:", err));
+    if (kind === "native") {
+      return { nativeToken: signNativeToken(userId, record.id) };
+    }
+    req.session.sessionRecordId = record.id;
+    return {};
+  }
+
   function completeLogin(req: any, res: any, next: any, user: any) {
     req.login(user, async (err2: any) => {
       if (err2) return next(err2);
       try {
         await storage.touchUserActivity(user.id);
-        res.json({ ...(await toPublicUserWithSections(user)), nativeToken: signNativeToken(user.id) });
+        const { nativeToken } = await trackNewSession(req, user.id, { notifyIfNewDevice: true });
+        res.json({ ...(await toPublicUserWithSections(user)), nativeToken });
       } catch (err3) {
         next(err3);
       }
@@ -512,6 +586,46 @@ export function setupAuth(app: Express) {
     const ok = await storage.disableMfa(user.id, password);
     if (!ok) return res.status(400).json({ message: "Incorrect password" });
     res.json({ ok: true });
+  });
+
+  // Set by attachNativeTokenAuth (native) or trackNewSession (web, on
+  // req.session) -- absent for a session that predates this feature (a
+  // cookie/token minted before user_sessions existed), in which case
+  // nothing gets marked "current" and revoke-others simply revokes
+  // everything trackable, which is the right behavior for that edge case.
+  function currentSessionRecordId(req: any): number | null {
+    return (req as any).nativeSessionRecordId ?? (req.session as any)?.sessionRecordId ?? null;
+  }
+
+  app.get("/api/auth/sessions", requireAuth, async (req, res) => {
+    const user = req.user as any;
+    const sessions = await storage.listUserSessions(user.id);
+    const currentId = currentSessionRecordId(req);
+    res.json(
+      sessions.map(({ webSessionId: _webSessionId, ...s }) => ({ ...s, isCurrent: s.id === currentId })),
+    );
+  });
+
+  app.post("/api/auth/sessions/:id/revoke", requireAuth, async (req, res) => {
+    const user = req.user as any;
+    const sessionRecordId = Number(req.params.id);
+    if (!Number.isInteger(sessionRecordId)) return res.status(400).json({ message: "Invalid session id" });
+    const result = await storage.revokeSession(user.id, sessionRecordId);
+    if (!result) return res.status(404).json({ message: "Session not found" });
+    if (result.webSessionId) {
+      await pool.query('DELETE FROM "session" WHERE sid = $1', [result.webSessionId]);
+    }
+    res.json({ ok: true });
+  });
+
+  app.post("/api/auth/sessions/revoke-others", requireAuth, async (req, res) => {
+    const user = req.user as any;
+    const currentId = currentSessionRecordId(req);
+    const result = await storage.revokeAllOtherSessions(user.id, currentId);
+    if (result.webSessionIds.length > 0) {
+      await pool.query('DELETE FROM "session" WHERE sid = ANY($1)', [result.webSessionIds]);
+    }
+    res.json({ ok: true, revokedCount: result.revokedCount });
   });
 
   app.post("/api/auth/logout", (req, res, next) => {

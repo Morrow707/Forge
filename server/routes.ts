@@ -22,6 +22,7 @@ import { buildLegalDocumentPdf } from "./legal-document-export";
 import { GUARDIAN_NOTICE_LIVE } from "@shared/privacy-tiers";
 import { BILLING_LIVE } from "./billing";
 import { verifyMediaUrl } from "./media-url-signing";
+import { shouldTouchLastSeen } from "./session-tracking";
 import { COACH_SECTIONS } from "@shared/coach-sections";
 import { notifyUser } from "./notify";
 import {
@@ -567,6 +568,20 @@ async function notifyNewlyUnlockedLessons(
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
   app.use(attachNativeTokenAuth);
+  // Keeps "see who's logged in"'s lastSeenAt reasonably fresh -- reads
+  // whichever session id the request is actually using (native, set by
+  // attachNativeTokenAuth just above; web, set on req.session at login --
+  // see auth.ts's trackNewSession) and, throttled, fires an un-awaited
+  // update. Never blocks the request on it: a session's "last active"
+  // display lagging by up to shouldTouchLastSeen's own window is a
+  // cosmetic gap, not a correctness one.
+  app.use((req, res, next) => {
+    const sessionRecordId = (req as any).nativeSessionRecordId ?? (req.session as any)?.sessionRecordId;
+    if (typeof sessionRecordId === "number" && shouldTouchLastSeen(sessionRecordId)) {
+      storage.touchSessionLastSeen(sessionRecordId).catch((err) => console.error("touchSessionLastSeen failed:", err));
+    }
+    next();
+  });
 
   // Apple's Shared Web Credentials verification -- fetched by iOS itself
   // (not the app) over HTTPS on install/first launch, cached on-device, and

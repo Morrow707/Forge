@@ -26,6 +26,7 @@ import { startFreeAgentVideoCapJob } from "./free-agent-video-cap-job";
 import { verifyStripeWebhook, handleStripeWebhookEvent } from "./billing";
 import { signMediaUrlsDeep } from "./media-url-signing";
 import { verifyRequestOrigin } from "./csrf-protection";
+import { NATIVE_APP_ORIGINS } from "./native-app-origins";
 
 const app = express();
 // contentSecurityPolicy and crossOriginEmbedderPolicy are both off --
@@ -56,7 +57,6 @@ app.use(
 // the session cookie those requests carry (see cookie.sameSite below,
 // which is the other half of making that same cookie flow work
 // cross-origin in the first place).
-const NATIVE_APP_ORIGINS = ["capacitor://localhost", "https://localhost"];
 app.use(
   cors({
     origin: NATIVE_APP_ORIGINS,

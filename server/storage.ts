@@ -98,6 +98,8 @@ import {
   legalDocuments,
   problemReports,
   type ProblemReport,
+  userSessions,
+  type UserSession,
   type InsertUser,
 } from "@shared/schema";
 import { derivePrivacyTier, videoRetentionDaysForTier, type PrivacyTier } from "@shared/privacy-tiers";
@@ -208,6 +210,7 @@ import {
   comparePasswords,
 } from "./auth-utils";
 import { generateTotpSecret, verifyTotpCode, generateBackupCodes, consumeBackupCode } from "./mfa";
+import { formatDeviceLabel, type SessionKind } from "./session-tracking";
 import {
   addDays,
   subDays,
@@ -1734,6 +1737,121 @@ export const storage = {
       .set({ mfaEnabled: false, mfaSecret: null, mfaBackupCodeHashes: null })
       .where(eq(users.id, userId));
     return true;
+  },
+
+  // ---------- Sessions (see who's logged in / log out other devices) ----------
+
+  // isNewDevice powers the "new login" email alert (see auth.ts's
+  // trackNewSession) -- true iff this user has no PRIOR row (revoked or
+  // not; a device they've logged out of before still counts as "seen")
+  // with this exact deviceLabel string. Honest limitation, not hidden: a
+  // device label is a coarse User-Agent-derived fingerprint (e.g. "iPhone
+  // · iOS 17.5"), so two different physical devices of the same
+  // model/OS/browser are indistinguishable by this check alone -- there's
+  // no persistent per-device identifier here to do better than that.
+  async createSessionRecord(
+    userId: number,
+    kind: SessionKind,
+    input: { userAgent: string | undefined; ipAddress: string | undefined },
+  ): Promise<{ session: UserSession; isNewDevice: boolean }> {
+    const deviceLabel = formatDeviceLabel(input.userAgent, kind);
+    const [existing] = await db
+      .select({ id: userSessions.id })
+      .from(userSessions)
+      .where(and(eq(userSessions.userId, userId), eq(userSessions.deviceLabel, deviceLabel)))
+      .limit(1);
+    const [row] = await db
+      .insert(userSessions)
+      .values({ userId, kind, deviceLabel, ipAddress: input.ipAddress ?? null })
+      .returning();
+    return { session: row, isNewDevice: !existing };
+  },
+
+  async setSessionWebId(sessionRecordId: number, webSessionId: string): Promise<void> {
+    await db.update(userSessions).set({ webSessionId }).where(eq(userSessions.id, sessionRecordId));
+  },
+
+  // Fire-and-forget from the caller (auth.ts's completeLogin) -- never
+  // awaited as part of the login response, since an external geolocation
+  // lookup must never be in that critical path. No-ops silently if the
+  // lookup never resolved to anything (see resolveLocation's own comment).
+  async setSessionLocation(sessionRecordId: number, location: string | null): Promise<void> {
+    if (!location) return;
+    await db.update(userSessions).set({ location }).where(eq(userSessions.id, sessionRecordId));
+  },
+
+  async touchSessionLastSeen(sessionRecordId: number): Promise<void> {
+    await db.update(userSessions).set({ lastSeenAt: new Date() }).where(eq(userSessions.id, sessionRecordId));
+  },
+
+  // The actual revocation check for a native Bearer token -- called on
+  // every native-authenticated request (see auth.ts's
+  // attachNativeTokenAuth). A web session's equivalent check is simpler
+  // and doesn't need this: deleting its row from connect-pg-simple's own
+  // "session" table (see revokeSession below) makes the cookie stop
+  // authenticating on its very next use, no separate flag to check.
+  async isNativeSessionValid(sessionRecordId: number): Promise<boolean> {
+    const [row] = await db
+      .select({ revokedAt: userSessions.revokedAt })
+      .from(userSessions)
+      .where(eq(userSessions.id, sessionRecordId));
+    return !!row && row.revokedAt === null;
+  },
+
+  async listUserSessions(userId: number): Promise<UserSession[]> {
+    return db
+      .select()
+      .from(userSessions)
+      .where(and(eq(userSessions.userId, userId), isNull(userSessions.revokedAt)))
+      .orderBy(desc(userSessions.lastSeenAt));
+  },
+
+  // Returns the target row's webSessionId (if it's a "web" session) so the
+  // caller (the /api/auth/sessions/:id/revoke route in auth.ts, which
+  // already has direct pool access) can also delete the matching
+  // connect-pg-simple row -- storage.ts only touches Drizzle-managed
+  // tables, so that cleanup deliberately lives in the caller, not here.
+  async revokeSession(userId: number, sessionRecordId: number): Promise<{ webSessionId: string | null } | null> {
+    const [row] = await db
+      .select()
+      .from(userSessions)
+      .where(and(eq(userSessions.id, sessionRecordId), eq(userSessions.userId, userId)));
+    if (!row || row.revokedAt !== null) return null;
+    await db.update(userSessions).set({ revokedAt: new Date() }).where(eq(userSessions.id, sessionRecordId));
+    return { webSessionId: row.webSessionId };
+  },
+
+  // "Log out of all other devices" -- everything except whichever session
+  // the caller says is the current one (null for a caller with no
+  // trackable current session, e.g. a pre-this-feature login that never
+  // got a sessionRecordId -- in which case nothing is excluded).
+  async revokeAllOtherSessions(
+    userId: number,
+    currentSessionRecordId: number | null,
+  ): Promise<{ revokedCount: number; webSessionIds: string[] }> {
+    const rows = await db
+      .select()
+      .from(userSessions)
+      .where(and(eq(userSessions.userId, userId), isNull(userSessions.revokedAt)));
+    const targets = rows.filter((r) => r.id !== currentSessionRecordId);
+    if (targets.length === 0) return { revokedCount: 0, webSessionIds: [] };
+    await db
+      .update(userSessions)
+      .set({ revokedAt: new Date() })
+      .where(
+        and(
+          eq(userSessions.userId, userId),
+          isNull(userSessions.revokedAt),
+          inArray(
+            userSessions.id,
+            targets.map((t) => t.id),
+          ),
+        ),
+      );
+    return {
+      revokedCount: targets.length,
+      webSessionIds: targets.map((t) => t.webSessionId).filter((id): id is string => !!id),
+    };
   },
 
   async updateUserPreferences(userId: number, input: UpdatePreferencesInput) {
