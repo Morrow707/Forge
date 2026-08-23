@@ -1578,6 +1578,16 @@ type AdminVideoRow = {
   sizeBytes: number;
 };
 
+// Thrown when a request references an exercise/skill-exercise id that
+// exists but isn't in the requester's visible set (their own bank, their
+// coach(es)', or Forge-official) -- e.g. a coach or athlete guessing another
+// coach's private exercise id into a program/goal/corrective payload. The
+// global error handler in index.ts reads `.status` off any thrown Error, so
+// this doesn't need per-route try/catch to produce a clean 400.
+export class ForbiddenReferenceError extends Error {
+  status = 400;
+}
+
 export const storage = {
   // ---------- Users ----------
   async getUser(id: number) {
@@ -3401,6 +3411,11 @@ export const storage = {
   },
 
   async createGoal(athleteId: number, createdBy: number, input: CreateGoalInput) {
+    if (input.type === "exercise" && input.exerciseId != null) {
+      await this.assertExerciseIdsVisibleTo(athleteId, [input.exerciseId]);
+    } else if (input.type === "skill" && input.skillExerciseId != null) {
+      await this.assertSkillExerciseIdsVisibleTo(athleteId, [input.skillExerciseId]);
+    }
     const [row] = await db
       .insert(goals)
       .values({
@@ -3529,6 +3544,7 @@ export const storage = {
     let trendDescription: string;
 
     if (input.type === "exercise") {
+      await this.assertExerciseIdsVisibleTo(athleteId, [input.exerciseId]);
       const exercise = await db.query.exercises.findFirst({
         where: eq(exercises.id, input.exerciseId),
       });
@@ -5209,6 +5225,61 @@ ${athleteContext}
       .sort((a, b) => Number(b.isFavorite) - Number(a.isFavorite));
   },
 
+  // The set of exercise/skill-exercise owner ids a given user is allowed to
+  // reference -- their own coach network (or, for an athlete/Free Agent,
+  // their coach(es)') plus every admin (Forge-official content). Returns
+  // null for admins, meaning "unrestricted" (they can reference anything).
+  // Shared by assertExerciseIdsVisibleTo/assertSkillExerciseIdsVisibleTo
+  // below so every write path that accepts a raw exercise id from the
+  // client -- goals, program/skill-program structures, correctives -- can
+  // reject ids from another coach's private bank instead of trusting them.
+  async getVisibleExerciseOwnerIdsFor(userId: number): Promise<number[] | null> {
+    const user = await this.getUser(userId);
+    if (!user) return [];
+    if (user.role === "admin") return null;
+    const admins = await db.query.users.findMany({ where: eq(users.role, "admin") });
+    if (user.role === "coach") {
+      const coachIds = await this.getEffectiveCoachIds(userId);
+      return Array.from(new Set([...coachIds, ...admins.map((a) => a.id)]));
+    }
+    const coaches = await this.getCoachesForAthlete(userId);
+    return Array.from(new Set([userId, ...coaches.map((c) => c.id), ...admins.map((a) => a.id)]));
+  },
+
+  async assertExerciseIdsVisibleTo(userId: number, exerciseIds: number[]): Promise<void> {
+    const unique = Array.from(new Set(exerciseIds));
+    if (unique.length === 0) return;
+    const ownerIds = await this.getVisibleExerciseOwnerIdsFor(userId);
+    if (ownerIds === null) return;
+    if (ownerIds.length === 0) {
+      throw new ForbiddenReferenceError("One or more exercises aren't available to you.");
+    }
+    const visible = await db
+      .select({ id: exercises.id })
+      .from(exercises)
+      .where(and(inArray(exercises.id, unique), inArray(exercises.coachId, ownerIds)));
+    if (visible.length !== unique.length) {
+      throw new ForbiddenReferenceError("One or more exercises aren't available to you.");
+    }
+  },
+
+  async assertSkillExerciseIdsVisibleTo(userId: number, skillExerciseIds: number[]): Promise<void> {
+    const unique = Array.from(new Set(skillExerciseIds));
+    if (unique.length === 0) return;
+    const ownerIds = await this.getVisibleExerciseOwnerIdsFor(userId);
+    if (ownerIds === null) return;
+    if (ownerIds.length === 0) {
+      throw new ForbiddenReferenceError("One or more skill exercises aren't available to you.");
+    }
+    const visible = await db
+      .select({ id: skillExercises.id })
+      .from(skillExercises)
+      .where(and(inArray(skillExercises.id, unique), inArray(skillExercises.coachId, ownerIds)));
+    if (visible.length !== unique.length) {
+      throw new ForbiddenReferenceError("One or more skill exercises aren't available to you.");
+    }
+  },
+
   // Suggests an existing corrective exercise for a camera-tracking fault
   // flagged in a Skills sprint/mechanics capture (see FAULT_CORRECTIVE_KEYWORDS).
   // Pulls from the athlete's own coach(es)' correctives plus every
@@ -5529,6 +5600,10 @@ ${athleteContext}
   },
 
   async createSkillProgramWithStructure(coachId: number, structure: SkillProgramStructureInput) {
+    await this.assertSkillExerciseIdsVisibleTo(
+      coachId,
+      structure.weeks.flatMap((w) => w.days.flatMap((d) => d.exercises.map((ex) => ex.skillExerciseId))),
+    );
     return db.transaction(async (tx) => {
       const [program] = await tx
         .insert(skillPrograms)
@@ -5579,7 +5654,15 @@ ${athleteContext}
     });
   },
 
-  async updateSkillProgramStructure(programId: number, structure: SkillProgramStructureInput) {
+  async updateSkillProgramStructure(
+    programId: number,
+    structure: SkillProgramStructureInput,
+    requesterId: number,
+  ) {
+    await this.assertSkillExerciseIdsVisibleTo(
+      requesterId,
+      structure.weeks.flatMap((w) => w.days.flatMap((d) => d.exercises.map((ex) => ex.skillExerciseId))),
+    );
     return db.transaction(async (tx) => {
       await tx
         .update(skillPrograms)
@@ -7840,6 +7923,10 @@ ${athleteContext}
     coachId: number,
     structure: ProgramStructureInput,
   ) {
+    await this.assertExerciseIdsVisibleTo(
+      coachId,
+      structure.weeks.flatMap((w) => w.days.flatMap((d) => d.exercises.map((ex) => ex.exerciseId))),
+    );
     return db.transaction(async (tx) => {
       const [program] = await tx
         .insert(programs)
@@ -8495,7 +8582,7 @@ Respond to the user's latest message by calling ask_question or update_program.`
       ),
     };
 
-    await this.updateSkillProgramStructure(skillProgramId, structure);
+    await this.updateSkillProgramStructure(skillProgramId, structure, authorId);
     // Marks the program as AI-authored permanently -- see the schema
     // comment on skillPrograms.aiAuthored for why this never gets cleared.
     await db.update(skillPrograms).set({ aiAuthored: true }).where(eq(skillPrograms.id, skillProgramId));
@@ -8516,7 +8603,12 @@ Respond to the user's latest message by calling ask_question or update_program.`
   async updateProgramStructure(
     programId: number,
     structure: ProgramStructureInput,
+    requesterId: number,
   ) {
+    await this.assertExerciseIdsVisibleTo(
+      requesterId,
+      structure.weeks.flatMap((w) => w.days.flatMap((d) => d.exercises.map((ex) => ex.exerciseId))),
+    );
     return db.transaction(async (tx) => {
       await tx
         .update(programs)
@@ -8945,7 +9037,7 @@ Respond to the user's latest message by calling ask_question or update_program.`
       }) as ProgramStructureInput["weeks"],
     };
 
-    await this.updateProgramStructure(programId, structure);
+    await this.updateProgramStructure(programId, structure, authorId);
     // Marks the program as AI-authored permanently -- see the schema
     // comment on programs.aiAuthored for why this never gets cleared.
     await db.update(programs).set({ aiAuthored: true }).where(eq(programs.id, programId));
@@ -10702,7 +10794,12 @@ ${entriesText}`;
     assignmentId: number,
     programDayId: number,
     input: UpdateCorrectivesInput,
+    requesterId: number,
   ) {
+    await this.assertExerciseIdsVisibleTo(
+      requesterId,
+      input.correctives.map((c) => c.exerciseId),
+    );
     return db.transaction(async (tx) => {
       await tx
         .delete(assignmentCorrectives)
@@ -10804,7 +10901,12 @@ ${entriesText}`;
     assignmentId: number,
     programDayIds: number[],
     correctives: UpdateCorrectivesInput["correctives"],
+    requesterId: number,
   ) {
+    await this.assertExerciseIdsVisibleTo(
+      requesterId,
+      correctives.map((c) => c.exerciseId),
+    );
     const assignment = await db.query.assignments.findFirst({
       where: eq(assignments.id, assignmentId),
     });

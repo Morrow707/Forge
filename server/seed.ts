@@ -4885,7 +4885,7 @@ async function main() {
             reps: "10 each side",
           },
         ],
-      });
+      }, coach.id);
     }
     if (assignment && upperBodyDay) {
       await storage.updateCorrectivesForAssignmentDay(assignment.id, upperBodyDay.id, {
@@ -4897,7 +4897,7 @@ async function main() {
             reps: "15",
           },
         ],
-      });
+      }, coach.id);
     }
 
     // Log a completed Back Squat session from a week ago so the athlete's
@@ -5114,7 +5114,7 @@ async function main() {
             { exerciseId: testExerciseId("World's Greatest Stretch"), orderIndex: 1, sets: 2, reps: "6/side", weight: null },
             { exerciseId: testExerciseId("Band External Rotation"), orderIndex: 2, sets: 2, reps: "15/side", weight: null },
           ],
-        });
+        }, coach.id);
       }
 
       console.log(`Created "Test Program" (id ${testProgram.id}), owned by Forge identity ${forgeIdentity.id}.`);

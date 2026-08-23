@@ -861,7 +861,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
-    await storage.updateSkillProgramStructure(id, parsed.data);
+    await storage.updateSkillProgramStructure(id, parsed.data, user.id);
     const updated = await storage.getSkillProgramFull(id);
     res.json(updated);
   });
@@ -1438,7 +1438,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
-    await storage.updateProgramStructure(id, parsed.data);
+    await storage.updateProgramStructure(id, parsed.data, user.id);
     const updated = await storage.getProgramFull(id);
     res.json(updated);
   });
@@ -2339,7 +2339,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
-    await storage.updateProgramStructure(id, parsed.data);
+    await storage.updateProgramStructure(id, parsed.data, user.id);
     const updated = await storage.getProgramFull(id);
     res.json(updated);
   });
@@ -4344,7 +4344,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!parsed.success) {
         return res.status(400).json({ message: parsed.error.issues[0]?.message });
       }
-      await storage.updateCorrectivesForAssignmentDay(assignmentId, programDayId, parsed.data);
+      await storage.updateCorrectivesForAssignmentDay(assignmentId, programDayId, parsed.data, user.id);
       const correctives = await storage.getCorrectivesForAssignmentDay(
         assignmentId,
         programDayId,
@@ -4392,6 +4392,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         assignmentId,
         parsed.data.programDayIds,
         parsed.data.correctives,
+        user.id,
       );
       res.status(204).end();
     },
@@ -5745,7 +5746,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
-    await storage.updateProgramStructure(id, parsed.data);
+    await storage.updateProgramStructure(id, parsed.data, user.id);
     const updated = await storage.getProgramFull(id);
     res.json(updated);
   });
@@ -6003,7 +6004,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
-    await storage.updateSkillProgramStructure(id, parsed.data);
+    await storage.updateSkillProgramStructure(id, parsed.data, user.id);
     const updated = await storage.getSkillProgramFull(id);
     res.json(updated);
   });
