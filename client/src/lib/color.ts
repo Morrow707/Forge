@@ -85,3 +85,87 @@ export function meetsWcagAA(hex1: string, hex2: string): boolean {
   const ratio = contrastRatio(hex1, hex2);
   return ratio !== null && ratio >= 4.5;
 }
+
+function hexToRgb(hex: string): [number, number, number] | null {
+  const match = /^#([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!match) return null;
+  return [
+    parseInt(match[1].slice(0, 2), 16),
+    parseInt(match[1].slice(2, 4), 16),
+    parseInt(match[1].slice(4, 6), 16),
+  ];
+}
+
+function rgbToHex(r: number, g: number, b: number): string {
+  const clamp = (n: number) => Math.max(0, Math.min(255, Math.round(n)));
+  return `#${[clamp(r), clamp(g), clamp(b)].map((n) => n.toString(16).padStart(2, "0")).join("")}`;
+}
+
+// h in [0,360), s/l in [0,1] -- standard HSL->RGB, kept separate from
+// hexToHslTriplet's own math above since that one returns the CSS-variable
+// string shape, not numbers a caller can do arithmetic on.
+function hslToRgb(h: number, s: number, l: number): [number, number, number] {
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const hh = h / 60;
+  const x = c * (1 - Math.abs((hh % 2) - 1));
+  let [r, g, b] = [0, 0, 0];
+  if (hh < 1) [r, g, b] = [c, x, 0];
+  else if (hh < 2) [r, g, b] = [x, c, 0];
+  else if (hh < 3) [r, g, b] = [0, c, x];
+  else if (hh < 4) [r, g, b] = [0, x, c];
+  else if (hh < 5) [r, g, b] = [x, 0, c];
+  else [r, g, b] = [c, 0, x];
+  const m = l - c / 2;
+  return [(r + m) * 255, (g + m) * 255, (b + m) * 255];
+}
+
+function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
+  const [rn, gn, bn] = [r / 255, g / 255, b / 255];
+  const max = Math.max(rn, gn, bn);
+  const min = Math.min(rn, gn, bn);
+  const l = (max + min) / 2;
+  if (max === min) return [0, 0, l];
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h: number;
+  switch (max) {
+    case rn:
+      h = ((gn - bn) / d + (gn < bn ? 6 : 0)) * 60;
+      break;
+    case gn:
+      h = ((bn - rn) / d + 2) * 60;
+      break;
+    default:
+      h = ((rn - gn) / d + 4) * 60;
+  }
+  return [h, s, l];
+}
+
+// Nudges a color's lightness (hue/saturation held constant, so it still
+// reads as "the same color," just a shade darker/lighter) until its
+// auto-picked foreground text (contrastForegroundHsl's black-or-white pick)
+// clears WCAG AA against it -- the fix for the branding dialog's live
+// contrast guardrail. Tries darkening and lightening in parallel and
+// returns whichever direction gets there first with the smaller nudge;
+// null if the input hex is invalid, or in the (practically unreachable
+// for a real color) case neither direction clears it within the full
+// lightness range.
+export function nearestAccessibleColor(hex: string): string | null {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return null;
+  if (meetsWcagAA(hex, `#${contrastForegroundHsl(hex).endsWith("100%") ? "ffffff" : "000000"}`)) {
+    return hex;
+  }
+  const [h, s, l] = rgbToHsl(...rgb);
+  const STEPS = 40;
+  for (let i = 1; i <= STEPS; i++) {
+    const delta = i / STEPS / 2; // walk from current lightness to 0 or 1 over STEPS steps
+    for (const candidateL of [l - delta, l + delta]) {
+      if (candidateL < 0 || candidateL > 1) continue;
+      const candidateHex = rgbToHex(...hslToRgb(h, s, candidateL));
+      const fg = contrastForegroundHsl(candidateHex).endsWith("100%") ? "#ffffff" : "#000000";
+      if (meetsWcagAA(candidateHex, fg)) return candidateHex;
+    }
+  }
+  return null;
+}

@@ -14,12 +14,72 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { apiRequest, getJson, resolveApiUrl, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { ImagePlus, Trash2, Palette } from "lucide-react";
+import { ImagePlus, Trash2, Palette, Pipette, AlertTriangle } from "lucide-react";
 import { COACH_FEATURE_FIELDS, type CoachFeature } from "@shared/team-features";
-import { contrastForegroundHsl } from "@/lib/color";
+import { contrastForegroundHsl, meetsWcagAA, nearestAccessibleColor } from "@/lib/color";
 import { POWERED_BY_FORGE_LABEL } from "@/lib/branding-copy";
+import { cn } from "@/lib/utils";
+
+// Not yet in TypeScript's own DOM lib -- Chromium-family browsers ship the
+// real API; everywhere else this whole capability is feature-detected via
+// `"EyeDropper" in window` before ever touching this type, so an absent
+// implementation never matters at runtime, only at the type level here.
+declare global {
+  interface Window {
+    EyeDropper?: new () => { open(): Promise<{ sRGBHex: string }> };
+  }
+}
 
 const QUERY_KEY = ["/api/coach/branding"];
+
+// Samples the uploaded logo's actual pixels for one-click "exact color"
+// swatches (see nearestAccessibleColor's neighbor comment on why a coach
+// picking off a color wheel can't promise an exact brand hex) -- downscales
+// to a small canvas first since only the color mix matters, not per-pixel
+// precision, then buckets by a coarse quantization so near-identical
+// anti-aliased pixels collapse into one swatch instead of dozens. Filters
+// out near-white/near-black/near-transparent, which are almost always
+// background fill on a logo file, not a color anyone actually wants a
+// one-click swatch for.
+function extractDominantColors(img: HTMLImageElement, max = 5): string[] {
+  const canvas = document.createElement("canvas");
+  const size = 48;
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return [];
+  ctx.drawImage(img, 0, 0, size, size);
+  let data: Uint8ClampedArray;
+  try {
+    data = ctx.getImageData(0, 0, size, size).data;
+  } catch {
+    return []; // tainted canvas (shouldn't happen for a same-origin upload, but never crash the dialog over it)
+  }
+  const buckets = new Map<string, { count: number; r: number; g: number; b: number }>();
+  const QUANT = 24; // bucket width -- collapses anti-aliasing noise into one swatch per real color
+  for (let i = 0; i < data.length; i += 4) {
+    const [r, g, b, a] = [data[i], data[i + 1], data[i + 2], data[i + 3]];
+    if (a < 200) continue; // mostly-transparent pixel
+    const maxc = Math.max(r, g, b);
+    const minc = Math.min(r, g, b);
+    if (maxc > 240 && minc > 225) continue; // near-white
+    if (maxc < 20) continue; // near-black
+    const key = `${Math.round(r / QUANT)}-${Math.round(g / QUANT)}-${Math.round(b / QUANT)}`;
+    const bucket = buckets.get(key) ?? { count: 0, r: 0, g: 0, b: 0 };
+    bucket.count += 1;
+    bucket.r += r;
+    bucket.g += g;
+    bucket.b += b;
+    buckets.set(key, bucket);
+  }
+  return [...buckets.values()]
+    .sort((a, b) => b.count - a.count)
+    .slice(0, max)
+    .map(({ count, r, g, b }) => {
+      const clamp = (n: number) => Math.max(0, Math.min(255, Math.round(n / count)));
+      return `#${[clamp(r), clamp(g), clamp(b)].map((n) => n.toString(16).padStart(2, "0")).join("")}`;
+    });
+}
 
 // Only the visible swatch's fallback -- shown in the <input type="color">
 // itself when nothing's set yet, since that control always needs a valid
@@ -62,6 +122,8 @@ export function TeamBrandingDialog({
   const [teamName, setTeamName] = useState("");
   const [primaryColor, setPrimaryColor] = useState("");
   const [secondaryColor, setSecondaryColor] = useState("");
+  const [logoSwatches, setLogoSwatches] = useState<string[]>([]);
+  const eyedropperSupported = typeof window !== "undefined" && "EyeDropper" in window;
 
   useEffect(() => {
     if (!data) return;
@@ -69,6 +131,43 @@ export function TeamBrandingDialog({
     setPrimaryColor(data.primaryColor ?? "");
     setSecondaryColor(data.secondaryColor ?? "");
   }, [data]);
+
+  // Re-extracts every time the logo itself changes (upload/replace/remove),
+  // not on every render -- an <img> load event, not a dependency on
+  // anything that changes per-keystroke.
+  useEffect(() => {
+    if (!data?.logoUrl) {
+      setLogoSwatches([]);
+      return;
+    }
+    let cancelled = false;
+    const img = new Image();
+    img.onload = () => {
+      if (!cancelled) setLogoSwatches(extractDominantColors(img));
+    };
+    img.onerror = () => {
+      if (!cancelled) setLogoSwatches([]);
+    };
+    img.src = resolveApiUrl(data.logoUrl);
+    return () => {
+      cancelled = true;
+    };
+  }, [data?.logoUrl]);
+
+  async function pickWithEyedropper(onPicked: (hex: string) => void) {
+    if (!window.EyeDropper) return;
+    try {
+      const result = await new window.EyeDropper().open();
+      onPicked(result.sRGBHex);
+    } catch {
+      // Coach hit Escape or clicked away -- not an error worth a toast.
+    }
+  }
+
+  const primaryForeground = primaryColor ? contrastForegroundHsl(primaryColor) : null;
+  const primaryContrastOk =
+    !primaryColor || meetsWcagAA(primaryColor, primaryForeground?.endsWith("100%") ? "#ffffff" : "#000000");
+  const primaryAccessibleFix = !primaryContrastOk ? nearestAccessibleColor(primaryColor) : null;
 
   function invalidateBranding() {
     qc.invalidateQueries({ queryKey: QUERY_KEY });
@@ -204,40 +303,111 @@ export function TeamBrandingDialog({
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="primary-color">Primary color</Label>
-                <div className="flex items-center gap-2">
-                  <input
-                    id="primary-color"
-                    type="color"
-                    value={primaryColor || SWATCH_FALLBACK_PRIMARY}
-                    onChange={(e) => setPrimaryColor(e.target.value)}
-                    className="h-9 w-9 shrink-0 cursor-pointer rounded-md border border-border bg-transparent p-0.5"
-                  />
+                {/* Hex is the primary affordance -- a program with an actual
+                    brand guide has an exact value to type, not a color to
+                    eyeball on a wheel. The wheel and eyedropper are the
+                    secondary, quick-pick paths. */}
+                <div className="flex items-center gap-1.5">
                   <Input
+                    id="primary-color"
                     value={primaryColor}
                     onChange={(e) => setPrimaryColor(e.target.value)}
                     placeholder="#RRGGBB"
                     className="font-mono text-xs"
                   />
+                  <input
+                    type="color"
+                    aria-label="Pick primary color from a wheel"
+                    value={primaryColor || SWATCH_FALLBACK_PRIMARY}
+                    onChange={(e) => setPrimaryColor(e.target.value)}
+                    className="h-9 w-9 shrink-0 cursor-pointer rounded-md border border-border bg-transparent p-0.5"
+                  />
+                  {eyedropperSupported && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="h-9 w-9 shrink-0"
+                      aria-label="Sample primary color with the eyedropper"
+                      onClick={() => pickWithEyedropper(setPrimaryColor)}
+                    >
+                      <Pipette className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
+                {!primaryContrastOk && (
+                  <div className="flex items-start gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-[11px] text-amber-600 dark:text-amber-400">
+                    <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+                    <span className="flex-1">
+                      This color is too close to its own button text to read clearly (fails WCAG
+                      AA).
+                      {primaryAccessibleFix && (
+                        <button
+                          type="button"
+                          onClick={() => setPrimaryColor(primaryAccessibleFix)}
+                          className="ml-1 font-semibold underline underline-offset-2"
+                        >
+                          Use a readable version
+                        </button>
+                      )}
+                    </span>
+                  </div>
+                )}
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="secondary-color">Secondary color</Label>
-                <div className="flex items-center gap-2">
-                  <input
-                    id="secondary-color"
-                    type="color"
-                    value={secondaryColor || SWATCH_FALLBACK_SECONDARY}
-                    onChange={(e) => setSecondaryColor(e.target.value)}
-                    className="h-9 w-9 shrink-0 cursor-pointer rounded-md border border-border bg-transparent p-0.5"
-                  />
+                <div className="flex items-center gap-1.5">
                   <Input
+                    id="secondary-color"
                     value={secondaryColor}
                     onChange={(e) => setSecondaryColor(e.target.value)}
                     placeholder="#RRGGBB"
                     className="font-mono text-xs"
                   />
+                  <input
+                    type="color"
+                    aria-label="Pick secondary color from a wheel"
+                    value={secondaryColor || SWATCH_FALLBACK_SECONDARY}
+                    onChange={(e) => setSecondaryColor(e.target.value)}
+                    className="h-9 w-9 shrink-0 cursor-pointer rounded-md border border-border bg-transparent p-0.5"
+                  />
+                  {eyedropperSupported && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="h-9 w-9 shrink-0"
+                      aria-label="Sample secondary color with the eyedropper"
+                      onClick={() => pickWithEyedropper(setSecondaryColor)}
+                    >
+                      <Pipette className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
               </div>
+              {logoSwatches.length > 0 && (
+                <div className="col-span-2 space-y-1.5">
+                  <p className="text-[11px] text-muted-foreground">
+                    Pulled straight from your logo's own pixels -- tap to set as your primary
+                    color.
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {logoSwatches.map((hex) => (
+                      <button
+                        key={hex}
+                        type="button"
+                        title={hex}
+                        onClick={() => setPrimaryColor(hex)}
+                        className={cn(
+                          "h-7 w-7 rounded-full border-2 border-background shadow-[0_0_0_1px_hsl(var(--border))] transition-transform hover:scale-110",
+                          primaryColor.toLowerCase() === hex.toLowerCase() && "ring-2 ring-primary ring-offset-2 ring-offset-background",
+                        )}
+                        style={{ backgroundColor: hex }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="space-y-1.5">
