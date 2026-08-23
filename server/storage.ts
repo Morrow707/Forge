@@ -1968,6 +1968,21 @@ export const storage = {
     return row ?? null;
   },
 
+  // checkout.session.completed is the one event that attaches
+  // stripeSubscriptionId to a row in the first place -- looking it up by
+  // that same id (as every later event does) can never find anything,
+  // since the row doesn't have it yet. This matches by userId instead,
+  // via client_reference_id, which is set at checkout-session creation
+  // specifically so this first event has a way back to a Forge account.
+  async updateSubscriptionByUserId(userId: number, patch: Partial<typeof subscriptions.$inferInsert>) {
+    const [row] = await db
+      .update(subscriptions)
+      .set({ ...patch, updatedAt: new Date() })
+      .where(eq(subscriptions.userId, userId))
+      .returning();
+    return row ?? null;
+  },
+
   async logBillingEvent(userId: number, event: string, detail?: unknown) {
     await db.insert(billingAuditLog).values({ userId, event, detail: (detail ?? null) as any });
   },
@@ -15059,6 +15074,15 @@ ${catalog}`;
   ) {
     const provisional = await this.getProvisionalAthleteByClaimCode(claimCode);
     if (!provisional) return { error: "This claim link isn't valid -- ask your coach for a new one." as const };
+    // The other onboarding path onto a coach's roster (the athlete-request
+    // approval flow) already checks this -- claim links skipped it
+    // entirely, so a coach at their seat cap could still be handed a new
+    // roster spot through a claim link even with BILLING_LIVE on. Checked
+    // before creating the account, not after, so a full roster fails
+    // cleanly instead of leaving an orphaned, unlinked user row behind.
+    if (!(await this.hasRosterSeatAvailable(provisional.coachId))) {
+      return { error: "This coach's roster is full -- ask them to free up a spot or upgrade their plan." as const };
+    }
     const existing = await this.getUserByEmail(input.email);
     if (existing) return { error: "That email is already in use." as const };
     // Whichever of the two actually has one -- the coach's intake sheet, or

@@ -119,13 +119,47 @@ export function verifyStripeWebhook(rawBody: Buffer, signature: string | undefin
  * (set in createCheckoutSession above) is how a checkout.session.completed
  * event maps back to a Forge userId in the first place; every later event
  * for that subscription is found by stripeSubscriptionId instead. */
+// Stripe's subscription.status has a few values this app's own
+// subscriptionStatusEnum (shared/schema.ts) has no matching state for --
+// "hibernating" is Forge-only and never set by Stripe, and Stripe's
+// "incomplete"/"incomplete_expired"/"paused" don't map cleanly onto any of
+// the four Stripe-facing values. Those return null here, which the caller
+// below turns into undefined -- drizzle's .set() drops undefined keys from
+// the update entirely (leaving the column as-is), whereas a literal null
+// would try to write SQL NULL and fail the column's NOT NULL constraint.
+// Previously this was a two-way ternary that fell through to `undefined`
+// for anything besides exactly "past_due"/"active" -- including Stripe's
+// "canceled", which meant a subscription Stripe canceled via an *updated*
+// event (rather than a separate deleted event) never had its status column
+// updated at all and stayed stuck on whatever it was before.
+function mapStripeStatus(status: Stripe.Subscription.Status): "trialing" | "active" | "past_due" | "canceled" | null {
+  switch (status) {
+    case "trialing":
+      return "trialing";
+    case "active":
+      return "active";
+    case "past_due":
+    case "unpaid":
+      return "past_due";
+    case "canceled":
+      return "canceled";
+    default:
+      return null;
+  }
+}
+
 export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<void> {
   switch (event.type) {
     case "checkout.session.completed": {
       const session = event.data.object as Stripe.Checkout.Session;
-      const userId = Number(session.client_reference_id);
-      if (!Number.isInteger(userId) || typeof session.subscription !== "string") break;
-      await storage.updateSubscriptionByStripeId(session.subscription, {
+      // Number(null) is 0, not NaN -- an isInteger check alone would let a
+      // session with no client_reference_id through as "user 0", which
+      // then throws a foreign-key violation on the billingAuditLog insert
+      // below instead of failing this one event cleanly. Real user ids
+      // start at 1, so requiring userId > 0 closes that off directly.
+      const userId = session.client_reference_id ? Number(session.client_reference_id) : NaN;
+      if (!Number.isInteger(userId) || userId <= 0 || typeof session.subscription !== "string") break;
+      await storage.updateSubscriptionByUserId(userId, {
         stripeCustomerId: typeof session.customer === "string" ? session.customer : null,
         stripeSubscriptionId: session.subscription,
         status: "active",
@@ -135,10 +169,11 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
     }
     case "customer.subscription.updated": {
       const sub = event.data.object as Stripe.Subscription;
+      const currentPeriodEndSec = sub.items.data[0]?.current_period_end;
       const updated = await storage.updateSubscriptionByStripeId(sub.id, {
-        status: sub.status === "past_due" ? "past_due" : sub.status === "active" ? "active" : undefined,
+        status: mapStripeStatus(sub.status) ?? undefined,
         cancelAtPeriodEnd: sub.cancel_at_period_end,
-        currentPeriodEnd: new Date(sub.items.data[0]?.current_period_end * 1000),
+        currentPeriodEnd: currentPeriodEndSec != null ? new Date(currentPeriodEndSec * 1000) : undefined,
       });
       if (updated) await storage.logBillingEvent(updated.userId, event.type, { subscriptionId: sub.id });
       break;
