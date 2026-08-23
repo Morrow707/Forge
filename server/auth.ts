@@ -12,6 +12,7 @@ import { sendEmail } from "./email";
 import { buildWelcomeEmail } from "./welcome-email";
 import { buildPasswordResetEmail } from "./password-reset-email";
 import { buildNewDeviceLoginEmail } from "./new-device-login-email";
+import { buildPasswordChangedEmail } from "./password-changed-email";
 import { totpOtpauthUri } from "./mfa";
 import { isNativeAppRequest, normalizeIp, resolveLocation, shouldTouchLastSeen, type SessionKind } from "./session-tracking";
 import {
@@ -709,6 +710,27 @@ export function setupAuth(app: Express) {
       }
       const passwordHash = await hashPassword(parsed.data.password);
       await storage.consumePasswordResetToken(record.id, record.userId, passwordHash);
+      // Log out everywhere -- if someone reset this password because an
+      // attacker had it, leaving the attacker's existing session/native
+      // token alive would defeat the whole point. Awaited (unlike the
+      // confirmation email below): a security side effect, not a courtesy
+      // notification, so the response shouldn't say "done" before it's
+      // actually happened. revokeAllOtherSessions(userId, null) revokes
+      // everything -- null never matches a real session id, so nothing is
+      // excluded (there's no "current session" here; this request isn't
+      // authenticated as anyone).
+      const revoked = await storage.revokeAllOtherSessions(record.userId, null);
+      if (revoked.webSessionIds.length > 0) {
+        await pool.query('DELETE FROM "session" WHERE sid = ANY($1)', [revoked.webSessionIds]);
+      }
+      const user = await storage.getUser(record.userId);
+      if (user) {
+        sendEmail({
+          to: user.email,
+          subject: "Your Forge password was changed",
+          html: buildPasswordChangedEmail(user.name),
+        });
+      }
       res.status(204).end();
     } catch (err) {
       next(err);
