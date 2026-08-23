@@ -26,6 +26,7 @@ import { verifyAppleTransaction } from "./apple-iap";
 import { verifyMediaUrl } from "./media-url-signing";
 import { shouldTouchLastSeen } from "./session-tracking";
 import { COACH_SECTIONS } from "@shared/coach-sections";
+import { widgetLayoutSchema } from "@shared/dashboard-widgets";
 import { notifyUser } from "./notify";
 import {
   insertExerciseSchema,
@@ -2501,22 +2502,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // solo coach. See coachStaff in shared/schema.ts and getEffectiveCoachIds
   // in storage.ts for how membership propagates everywhere else.
 
-  // Which Dashboard/Analytics cards this coach personally hid via the Edit
-  // button on those pages -- see hiddenWidgets' own comment in schema.ts.
+  // Which Dashboard/Analytics cards this coach personally hid or reordered
+  // via the Edit button on those pages -- see hiddenWidgets' own comment in
+  // schema.ts. widgetLayoutEntrySchema/widgetLayoutSchema are shared with
+  // the athlete-scoped pair of routes below so the two can't drift.
   app.get("/api/coach/widget-prefs", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
-    const hidden = await storage.getHiddenWidgetsForCoach(user.id);
-    res.json({ hidden });
+    const layout = await storage.getWidgetLayoutForCoach(user.id);
+    res.json({ layout });
   });
   app.patch("/api/coach/widget-prefs", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
-    const schema = z.object({ hidden: z.array(z.string()) });
-    const parsed = schema.safeParse(req.body);
+    const parsed = widgetLayoutSchema.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({ message: "hidden must be a list of widget ids" });
+      return res.status(400).json({ message: "layout must be a list of {id, hidden} entries" });
     }
-    const hidden = await storage.setHiddenWidgetsForCoach(user.id, parsed.data.hidden);
-    res.json({ hidden });
+    const layout = await storage.setWidgetLayoutForCoach(user.id, parsed.data.layout);
+    res.json({ layout });
   });
 
   app.get("/api/coach/staff", requireRole("coach"), async (req, res) => {

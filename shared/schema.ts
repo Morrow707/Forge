@@ -24,6 +24,7 @@ import type { CoachFeature } from "./team-features";
 import { COACH_FEATURES } from "./team-features";
 import type { CoachSection } from "./coach-sections";
 import { COACH_SECTIONS } from "./coach-sections";
+import type { WidgetLayoutEntry } from "./dashboard-widgets";
 
 // Owned and populated by connect-pg-simple at runtime, not by our own code --
 // declared here purely so drizzle-kit's live-diff sees it as an already-
@@ -322,14 +323,18 @@ export const users = pgTable(
     // the field list and "missing means on" resolution. Same primary-coach
     // resolution as the branding fields above.
     enabledFeatures: json("enabled_features").$type<Partial<Record<CoachFeature, boolean>>>(),
-    // Individual-coach, individual-card preference -- unlike enabledFeatures
-    // above (whole nav tabs, team-wide, primary-coach-controlled), this is
-    // "which cards on MY OWN Dashboard/Analytics do I personally not want
-    // to see," so it lives per-account rather than resolving through the
-    // staff. Each entry is a stable widget id (see WIDGET_LABEL client-side)
-    // -- missing/empty means every widget shows, same "unset means on"
-    // convention as everything else here.
-    hiddenWidgets: json("hidden_widgets").$type<string[]>(),
+    // Individual-coach (or, once athlete dashboards get this too, individual-
+    // athlete), individual-card preference -- unlike enabledFeatures above
+    // (whole nav tabs, team-wide, primary-coach-controlled), this is "which
+    // cards on MY OWN Dashboard/Analytics do I personally not want to see,
+    // and in what order," so it lives per-account rather than resolving
+    // through the staff. See WidgetLayoutEntry's own comment in
+    // shared/dashboard-widgets.ts -- missing/empty means every widget
+    // shows, in its default order, same "unset means on" convention as
+    // everything else here. Was a flat string[] of hidden ids (no order)
+    // before the drag-and-drop layout editor; getWidgetLayoutForCoach in
+    // storage.ts coerces an old-shape row on read.
+    hiddenWidgets: json("hidden_widgets").$type<WidgetLayoutEntry[]>(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({

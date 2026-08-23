@@ -181,6 +181,7 @@ import { FAULT_CORRECTIVE_KEYWORDS } from "@shared/fault-correctives";
 import { resolveSkillFaultThresholds, type SkillFaultThresholds } from "@shared/skill-fault-thresholds";
 import { resolveCoachFeatures, type CoachFeature } from "@shared/team-features";
 import type { CoachSection } from "@shared/coach-sections";
+import type { WidgetLayoutEntry } from "@shared/dashboard-widgets";
 import { askClaude, askClaudeStructured, askClaudeWithTools, askClaudeVision, askClaudeVisionStructured, aiEnabled, fastModel, type SystemPrompt } from "./ai";
 import { fetchUrlSafely, UnsafeUrlError } from "./safe-fetch";
 import { deleteUploadedFile, statUploadedFile } from "./uploaded-files";
@@ -5433,15 +5434,24 @@ ${athleteContext}
   // Per-account, not resolved through the staff -- unlike hiddenSections
   // above (set BY the primary coach FOR a staff member), this is a coach's
   // own personal "which cards on my Dashboard/Analytics do I not want to
-  // see" preference, so two coaches on the same staff can each hide
-  // different cards without stepping on each other.
-  async getHiddenWidgetsForCoach(coachId: number) {
+  // see, and in what order" preference, so two coaches on the same staff
+  // can each arrange their own view without stepping on each other.
+  // Coerces a pre-drag-and-drop row (a bare string[] of hidden ids, no
+  // order) into the current WidgetLayoutEntry[] shape on read -- an
+  // existing coach's already-hidden cards survive the upgrade with no
+  // migration script, they just start out in default order.
+  async getWidgetLayoutForCoach(coachId: number): Promise<WidgetLayoutEntry[]> {
     const user = await db.query.users.findFirst({ where: eq(users.id, coachId) });
-    return user?.hiddenWidgets ?? [];
+    const raw = user?.hiddenWidgets;
+    if (!raw) return [];
+    if (raw.length > 0 && typeof raw[0] === "string") {
+      return (raw as unknown as string[]).map((id) => ({ id, hidden: true }));
+    }
+    return raw;
   },
-  async setHiddenWidgetsForCoach(coachId: number, hidden: string[]) {
-    await db.update(users).set({ hiddenWidgets: hidden }).where(eq(users.id, coachId));
-    return hidden;
+  async setWidgetLayoutForCoach(coachId: number, layout: WidgetLayoutEntry[]) {
+    await db.update(users).set({ hiddenWidgets: layout }).where(eq(users.id, coachId));
+    return layout;
   },
 
   // A coach's own (and their staff's) bank plus every Forge-official
