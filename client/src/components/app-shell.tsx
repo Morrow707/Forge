@@ -1,4 +1,4 @@
-import { type ReactNode, type CSSProperties, useState } from "react";
+import { type ReactNode, type CSSProperties, useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { Capacitor } from "@capacitor/core";
 import { useQuery } from "@tanstack/react-query";
@@ -224,6 +224,26 @@ export function AppShell({
       "--accent-foreground": fg,
     } as CSSProperties;
   })();
+
+  // Best-effort branded icon: swaps the browser tab favicon and (in
+  // practice) iOS's "Add to Home Screen" icon, since Safari reads these
+  // <link> tags from the live DOM at the moment someone saves the page --
+  // not a snapshot taken at some earlier load. This does NOT reach
+  // Android/Chrome's home-screen icon, which instead comes from the
+  // build-time manifest.webmanifest (see vite.config.ts's VitePWA config)
+  // and is fetched once per origin, not re-read per session -- a real
+  // platform limitation, not a bug, and a deliberate scope decision (full
+  // per-tenant manifest generation is its own, much larger project).
+  // Reverts to the static Forge defaults the moment branding clears
+  // (logo removed, or an unbranded user's session loads), rather than
+  // leaving a previous session's icon stuck.
+  useEffect(() => {
+    const logoHref = branding?.logoUrl ? resolveApiUrl(branding.logoUrl) : null;
+    const favicon = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+    const appleTouchIcon = document.querySelector<HTMLLinkElement>('link[rel="apple-touch-icon"]');
+    if (favicon) favicon.href = logoHref ?? "/favicon-32.png";
+    if (appleTouchIcon) appleTouchIcon.href = logoHref ?? "/apple-touch-icon.png";
+  }, [branding?.logoUrl]);
 
   const disabledNavHrefs = new Set<string>();
   if (branding?.features) {
