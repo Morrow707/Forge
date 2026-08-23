@@ -338,27 +338,48 @@ const reportProblemLimiter = rateLimit({
   message: { message: "Too many reports submitted. Please try again later." },
 });
 
-// General backstop under every route in the app -- CodeQL's
+// Shared by every general (non-auth-specific) limiter below -- keyed by
+// user id when a session already resolved one, not just IP. A team
+// practice routinely has a dozen-plus athletes on the same gym wifi NAT IP
+// at once, and a pure per-IP limit would let one misbehaving client
+// throttle everyone else on the same network. Falls back to IP for the
+// much smaller unauthenticated surface, which is exactly what the
+// login/signup/reset limiters in auth.ts already key on.
+function rateLimitKey(req: any): string {
+  return req.isAuthenticated?.() && req.user?.id ? `user:${req.user.id}` : (req.ip ?? "unknown");
+}
+
+// General backstop under every JSON route in the app -- CodeQL's
 // js/missing-rate-limiting flagged this at scale (~200+ authenticated route
 // handlers, only a handful of which had their own purpose-specific limiter
 // in auth.ts: login, signup, password reset, MFA, change-password). Rather
 // than bolting a bespoke limiter onto every one of them, this covers all of
 // /api/* as a floor; the tighter limiters already guarding the sensitive
 // auth endpoints still apply on top of it, unaffected.
-//
-// Keyed by user id when a session already resolved one, not just IP -- a
-// team practice routinely has a dozen-plus athletes on the same gym wifi
-// NAT IP at once, and a pure per-IP limit would let one misbehaving client
-// throttle everyone else on the same network. Falls back to IP for the
-// much smaller unauthenticated surface, which is exactly what the
-// login/signup/reset limiters already key on.
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 600,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) =>
-    req.isAuthenticated?.() && (req.user as any)?.id ? `user:${(req.user as any).id}` : (req.ip ?? "unknown"),
+  keyGenerator: rateLimitKey,
+  message: { message: "Too many requests. Please try again shortly." },
+});
+
+// Separate budget from apiLimiter, not a shared one -- /uploads serves the
+// actual video/image bytes behind the signed-URL check just below (see its
+// own comment), and a single roster or calendar page can legitimately fire
+// far more of these in a burst than it does JSON API calls (every visible
+// thumbnail is its own request). Sharing apiLimiter's counter would let a
+// media-heavy page exhaust the same budget a user's actual API calls need.
+// Still a real ceiling, not just theater: it's the backstop CodeQL flagged
+// here too, against someone hammering this endpoint trying to replay or
+// brute-force a signature rather than a legitimate page load.
+const uploadsLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 2000,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: rateLimitKey,
   message: { message: "Too many requests. Please try again shortly." },
 });
 
@@ -672,6 +693,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // passed its own ownership check. lesson-videos/attachments/images and
   // team-logos are coach/org content, not footage of a person, and stay
   // exactly as before: plain public files, no signature required.
+  app.use("/uploads", uploadsLimiter);
   app.use("/uploads", (req, res, next) => {
     const pathname = `/uploads${req.path}`;
     if (!verifyMediaUrl(pathname, req.query.exp, req.query.sig)) {
