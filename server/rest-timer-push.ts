@@ -21,13 +21,25 @@ export function scheduleRestOverPush(athleteId: number, seconds: number, url?: s
   cancelRestOverPush(athleteId);
   const timeout = setTimeout(async () => {
     pending.delete(athleteId);
-    const badge = await storage.getUnreadNotificationCount(athleteId);
-    sendPushToUser(athleteId, {
-      title: "Rest Over",
-      body: "Time to get back to it",
-      url: url || "/",
-      badge,
-    });
+    // Nothing awaits this callback's own promise (setTimeout can't), and
+    // there's no global unhandledRejection handler in this app -- Node's
+    // default since v15 is to crash the whole process on one. A transient
+    // DB hiccup on getUnreadNotificationCount (the exact kind db.ts's own
+    // 'error' listener exists to survive for idle clients) would otherwise
+    // take the entire server down over one missed rest-timer push, which
+    // is a wildly disproportionate failure mode -- worst case here should
+    // be exactly that, one missed notification, never a full outage.
+    try {
+      const badge = await storage.getUnreadNotificationCount(athleteId);
+      await sendPushToUser(athleteId, {
+        title: "Rest Over",
+        body: "Time to get back to it",
+        url: url || "/",
+        badge,
+      });
+    } catch (err) {
+      console.error(`Rest-over push failed for athlete ${athleteId}:`, err);
+    }
   }, seconds * 1000);
   pending.set(athleteId, timeout);
 }

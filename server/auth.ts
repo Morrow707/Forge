@@ -19,6 +19,7 @@ import {
   signupSchema,
   requestPasswordResetSchema,
   resetPasswordSchema,
+  changePasswordSchema,
   claimProvisionalAthleteSchema,
   type PublicUser,
 } from "@shared/schema";
@@ -61,6 +62,16 @@ const passwordResetLimiter = rateLimit({
 // second-factor login step, setup confirmation, and disabling, all of
 // which boil down to "guess a code," so all three get the same limiter.
 const mfaCodeLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 15,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many attempts. Please try again in a few minutes." },
+});
+// Guards repeated wrong-current-password guesses against
+// /api/account/change-password -- same shape as mfaCodeLimiter, just for a
+// different secret being guessed.
+const changePasswordLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 15,
   standardHeaders: true,
@@ -247,13 +258,31 @@ export function setupAuth(app: Express) {
   app.use(passport.initialize());
   app.use(passport.session());
 
+  // Any validly-shaped hash.salt string -- see the timing-safety comment
+  // at its use below. Its own "password" is never checked against
+  // anything real.
+  const DUMMY_PASSWORD_HASH =
+    "0d72ca9628774094eb327bbd9d59b234559ef66e2e3e5fd4addf4c172c00cf3722a89d721a23a5191cbb5b95847ebf1efd945399284a55fec3bfd44bca226b81.a66cb4a6906024aa9ec0fd879ed89a68";
+
   passport.use(
     new LocalStrategy(
       { usernameField: "email", passwordField: "password" },
       async (email, password, done) => {
         try {
           const user = await storage.getUserByEmail(email);
-          if (!user || !(await comparePasswords(password, user.passwordHash))) {
+          // Always runs one real scrypt comparison, real user or not --
+          // comparePasswords does genuine, measurable work (that's the
+          // whole point of scrypt), and short-circuiting on "no such
+          // user" before ever calling it means a real account responds
+          // measurably slower than a nonexistent one. That's a timing
+          // side channel an attacker can use to enumerate which emails
+          // have Forge accounts without the response ever saying so --
+          // DUMMY_PASSWORD_HASH is just any validly-shaped hash.salt
+          // string so the same code path and cost runs either way; its
+          // own password is never used for anything.
+          const hashToCheck = user?.passwordHash ?? DUMMY_PASSWORD_HASH;
+          const passwordOk = await comparePasswords(password, hashToCheck);
+          if (!user || !passwordOk) {
             return done(null, false, { message: "Invalid email or password" });
           }
           return done(null, user);
@@ -731,6 +760,36 @@ export function setupAuth(app: Express) {
           html: buildPasswordChangedEmail(user.name),
         });
       }
+      res.status(204).end();
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // Self-service change while already logged in -- see
+  // storage.changeOwnPassword's own comment. Revokes every OTHER session
+  // (not this one -- the caller is actively using it right now) the same
+  // way "log out of other devices" does, and sends the same "your
+  // password was changed" confirmation email the reset flow does.
+  app.post("/api/account/change-password", requireAuth, changePasswordLimiter, async (req, res, next) => {
+    try {
+      const parsed = changePasswordSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      const user = req.user as any;
+      const result = await storage.changeOwnPassword(user.id, parsed.data.currentPassword, parsed.data.newPassword);
+      if ("error" in result) return res.status(400).json({ message: result.error });
+      const currentId = currentSessionRecordId(req);
+      const revoked = await storage.revokeAllOtherSessions(user.id, currentId);
+      if (revoked.webSessionIds.length > 0) {
+        await pool.query('DELETE FROM "session" WHERE sid = ANY($1)', [revoked.webSessionIds]);
+      }
+      sendEmail({
+        to: user.email,
+        subject: "Your Forge password was changed",
+        html: buildPasswordChangedEmail(user.name),
+      });
       res.status(204).end();
     } catch (err) {
       next(err);

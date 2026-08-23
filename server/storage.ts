@@ -1667,6 +1667,27 @@ export const storage = {
     return { ok: true };
   },
 
+  // Self-service change while already logged in -- the only OTHER way to
+  // change a password before this was the forgot-password email flow,
+  // which meant logging out just to change a password you already knew.
+  // Current-password re-entry gates it the same way deleteOwnAccount's
+  // does, so a session left open on a shared device can't be used to
+  // silently take over the account by changing its password.
+  async changeOwnPassword(
+    userId: number,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<{ ok: true } | { error: string }> {
+    const user = await this.getUser(userId);
+    if (!user) return { error: "Account not found." };
+    if (!(await comparePasswords(currentPassword, user.passwordHash))) {
+      return { error: "Incorrect current password." };
+    }
+    const passwordHash = await hashPassword(newPassword);
+    await db.update(users).set({ passwordHash }).where(eq(users.id, userId));
+    return { ok: true };
+  },
+
   // ---------- Two-factor auth (coach/admin only, see requireRole on the
   // /api/auth/mfa/* routes in auth.ts) ----------
 
