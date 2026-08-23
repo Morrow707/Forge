@@ -55,7 +55,9 @@ import {
   Stethoscope,
   Gauge,
   UserPlus2,
+  Palette,
 } from "lucide-react";
+import { TeamBrandingDialog } from "@/components/team-branding-dialog";
 
 type PhotoImportKind = "testing-day" | "weigh-in" | "nutrition" | "injury" | "testing-data" | "player-intake";
 
@@ -97,7 +99,15 @@ type RosterEntry = {
   healthStatus?: HealthStatus;
 };
 type TeamMember = { athlete: RosterEntry };
-type TeamEntry = { id: number; name: string; code: string | null; members: TeamMember[] };
+type TeamEntry = {
+  id: number;
+  name: string;
+  code: string | null;
+  members: TeamMember[];
+  brandLogoUrl: string | null;
+  brandPrimaryColor: string | null;
+  brandSecondaryColor: string | null;
+};
 type ProgramSummary = { id: number; name: string };
 
 export default function CoachRoster() {
@@ -136,6 +146,7 @@ export default function CoachRoster() {
 
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignAthleteIds, setAssignAthleteIds] = useState<number[]>([]);
+  const [brandingForTeam, setBrandingForTeam] = useState<TeamEntry | null>(null);
 
   const [teamDialogOpen, setTeamDialogOpen] = useState(false);
   const [newTeamName, setNewTeamName] = useState("");
@@ -414,15 +425,25 @@ export default function CoachRoster() {
                       </p>
                     )}
                   </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => openAssignFor(team.members.map((m) => m.athlete.id))}
-                    disabled={team.members.length === 0}
-                  >
-                    <Send className="h-3.5 w-3.5" />
-                    Assign to Team
-                  </Button>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      aria-label={`Edit ${team.name}'s branding`}
+                      onClick={() => setBrandingForTeam(team)}
+                    >
+                      <Palette className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => openAssignFor(team.members.map((m) => m.athlete.id))}
+                      disabled={team.members.length === 0}
+                    >
+                      <Send className="h-3.5 w-3.5" />
+                      Assign to Team
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <div className="mb-3 space-y-1.5">
@@ -524,6 +545,21 @@ export default function CoachRoster() {
         <TabsContent value="compliance">
           <CaraCompliancePanel roster={roster} />
         </TabsContent>
+
+      {brandingForTeam && (
+        <TeamBrandingDialog
+          open={!!brandingForTeam}
+          onOpenChange={(open) => !open && setBrandingForTeam(null)}
+          scope={{
+            kind: "team",
+            teamId: brandingForTeam.id,
+            teamName: brandingForTeam.name,
+            initialLogoUrl: brandingForTeam.brandLogoUrl,
+            initialPrimaryColor: brandingForTeam.brandPrimaryColor,
+            initialSecondaryColor: brandingForTeam.brandSecondaryColor,
+          }}
+        />
+      )}
 
       <Dialog open={teamDialogOpen} onOpenChange={setTeamDialogOpen}>
         <DialogContent>

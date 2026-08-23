@@ -30,7 +30,7 @@ declare global {
   }
 }
 
-const QUERY_KEY = ["/api/coach/branding"];
+const ORG_QUERY_KEY = ["/api/coach/branding"];
 
 // Samples the uploaded logo's actual pixels for one-click "exact color"
 // swatches (see nearestAccessibleColor's neighbor comment on why a coach
@@ -89,7 +89,7 @@ function extractDominantColors(img: HTMLImageElement, max = 5): string[] {
 const SWATCH_FALLBACK_PRIMARY = "#e2521a";
 const SWATCH_FALLBACK_SECONDARY = "#0b0b0f";
 
-type BrandingResponse = {
+type OrgBrandingResponse = {
   teamName: string | null;
   logoUrl: string | null;
   primaryColor: string | null;
@@ -97,46 +97,113 @@ type BrandingResponse = {
   features: Record<CoachFeature, boolean>;
 };
 
+// Org scope (default) edits the whole coaching staff's branding
+// (users.brand*, shared across getPrimaryCoachId). Team scope edits one
+// team's override on top of that (teams.brand*) -- no team-name field (the
+// team already has its own `name`) and no nav-section toggles (those are
+// org-wide only). The initial* fields come from whatever list the caller
+// already fetched (e.g. /api/coach/teams) since there's no standalone
+// single-team-branding GET endpoint -- one doesn't need to exist when the
+// list view already has every field this dialog needs to seed itself.
+type Scope =
+  | { kind: "org" }
+  | {
+      kind: "team";
+      teamId: number;
+      teamName: string;
+      initialLogoUrl: string | null;
+      initialPrimaryColor: string | null;
+      initialSecondaryColor: string | null;
+    };
+
 /** Lets a coach/program white-label their own corner of the app -- a team
  * name, logo, and two brand colors shown in the header and throughout their
  * own and their athletes' views (see AppShell), plus which optional nav
  * sections (Nutrition, Analytics, etc.) their program actually uses. Shared
  * across a whole coaching staff (see getPrimaryCoachId in storage.ts) --
- * a school's colors don't change depending on which assistant is logged in. */
+ * a school's colors don't change depending on which assistant is logged in.
+ * Pass `scope={{ kind: "team", ... }}` to instead edit one team's own
+ * override on top of that org-wide branding (see Scope's own comment). */
 export function TeamBrandingDialog({
   open,
   onOpenChange,
+  scope = { kind: "org" },
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  scope?: Scope;
 }) {
   const qc = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const isTeamScope = scope.kind === "team";
 
-  const { data, isLoading } = useQuery<BrandingResponse>({
-    queryKey: QUERY_KEY,
+  // Fetched even in team scope -- not for team scope's own fields (those
+  // come from its initial* props below), but because the header's actual
+  // displayed team NAME always comes from the org's own branding (a team
+  // override only ever touches logo/colors, never the name -- see
+  // getEffectiveBrandingForUser) and the live preview below needs the real
+  // value to stay honest about what will actually show.
+  const { data: orgData, isLoading: orgLoading } = useQuery<OrgBrandingResponse>({
+    queryKey: ORG_QUERY_KEY,
     queryFn: () => getJson("/api/coach/branding"),
     enabled: open,
   });
+  const isLoading = isTeamScope ? false : orgLoading;
 
   const [teamName, setTeamName] = useState("");
   const [primaryColor, setPrimaryColor] = useState("");
   const [secondaryColor, setSecondaryColor] = useState("");
+  // Tracked locally (not derived from orgData) so team scope -- which has no
+  // GET to refetch from -- can update it directly from a mutation's own
+  // response, the same way org scope's query invalidation effectively does.
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [logoSwatches, setLogoSwatches] = useState<string[]>([]);
   const eyedropperSupported = typeof window !== "undefined" && "EyeDropper" in window;
 
+  // Seeds the EDITABLE fields exactly once per "dialog opens" -- not on
+  // every parent re-render. The caller constructs `scope` as a fresh object
+  // literal on every render (see roster.tsx's usage), so depending on
+  // `scope` itself here would re-run this on any unrelated parent state
+  // change (the roster page polls wellness/ACWR every 60s) and silently
+  // wipe out whatever a coach had already typed before they got to Save.
+  // teamId/isTeamScope are primitives -- safe to depend on directly.
+  const teamId = scope.kind === "team" ? scope.teamId : null;
+  const seededRef = useRef(false);
   useEffect(() => {
-    if (!data) return;
-    setTeamName(data.teamName ?? "");
-    setPrimaryColor(data.primaryColor ?? "");
-    setSecondaryColor(data.secondaryColor ?? "");
-  }, [data]);
+    if (!open) {
+      seededRef.current = false;
+      return;
+    }
+    if (seededRef.current) return;
+    if (isTeamScope && scope.kind === "team") {
+      setPrimaryColor(scope.initialPrimaryColor ?? "");
+      setSecondaryColor(scope.initialSecondaryColor ?? "");
+      setLogoUrl(scope.initialLogoUrl);
+      seededRef.current = true;
+      return;
+    }
+    if (!orgData) return; // retries automatically once the fetch resolves (still in the dep array)
+    setTeamName(orgData.teamName ?? "");
+    setPrimaryColor(orgData.primaryColor ?? "");
+    setSecondaryColor(orgData.secondaryColor ?? "");
+    setLogoUrl(orgData.logoUrl);
+    seededRef.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, isTeamScope, teamId, orgData]);
+
+  // Team scope's `teamName` is read-only preview text (see its own comment
+  // below), never something a coach edits here -- safe to keep it synced
+  // to the org's latest value on every render, unlike the editable fields
+  // seeded just once above.
+  useEffect(() => {
+    if (open && isTeamScope) setTeamName(orgData?.teamName ?? "");
+  }, [open, isTeamScope, orgData]);
 
   // Re-extracts every time the logo itself changes (upload/replace/remove),
   // not on every render -- an <img> load event, not a dependency on
   // anything that changes per-keystroke.
   useEffect(() => {
-    if (!data?.logoUrl) {
+    if (!logoUrl) {
       setLogoSwatches([]);
       return;
     }
@@ -148,11 +215,11 @@ export function TeamBrandingDialog({
     img.onerror = () => {
       if (!cancelled) setLogoSwatches([]);
     };
-    img.src = resolveApiUrl(data.logoUrl);
+    img.src = resolveApiUrl(logoUrl);
     return () => {
       cancelled = true;
     };
-  }, [data?.logoUrl]);
+  }, [logoUrl]);
 
   async function pickWithEyedropper(onPicked: (hex: string) => void) {
     if (!window.EyeDropper) return;
@@ -170,15 +237,22 @@ export function TeamBrandingDialog({
   const primaryAccessibleFix = !primaryContrastOk ? nearestAccessibleColor(primaryColor) : null;
 
   function invalidateBranding() {
-    qc.invalidateQueries({ queryKey: QUERY_KEY });
-    // AppShell (and any athlete under this coach) reads this one -- has to
-    // refresh too or the header/nav won't pick up the change until reload.
+    if (isTeamScope) {
+      qc.invalidateQueries({ queryKey: ["/api/coach/teams"] });
+    } else {
+      qc.invalidateQueries({ queryKey: ORG_QUERY_KEY });
+    }
+    // AppShell (and any athlete under this coach/team) reads this one --
+    // has to refresh too or the header/nav won't pick up the change until
+    // reload.
     qc.invalidateQueries({ queryKey: ["/api/branding/me"] });
   }
 
   const saveMutation = useMutation({
     mutationFn: () =>
-      apiRequest("PUT", "/api/coach/branding", { teamName, primaryColor, secondaryColor }),
+      isTeamScope
+        ? apiRequest("PATCH", `/api/coach/teams/${scope.teamId}/branding`, { primaryColor, secondaryColor })
+        : apiRequest("PUT", "/api/coach/branding", { teamName, primaryColor, secondaryColor }),
     onSuccess: () => {
       invalidateBranding();
       toast.success("Branding updated");
@@ -187,12 +261,18 @@ export function TeamBrandingDialog({
   });
 
   const uploadLogoMutation = useMutation({
-    mutationFn: (file: File) => {
+    mutationFn: async (file: File) => {
       const form = new FormData();
       form.append("logo", file);
-      return apiRequest("POST", "/api/coach/branding/logo", form);
+      const res = await apiRequest(
+        "POST",
+        isTeamScope ? `/api/coach/teams/${scope.teamId}/branding/logo` : "/api/coach/branding/logo",
+        form,
+      );
+      return res.json() as Promise<{ logoUrl?: string; brandLogoUrl?: string }>;
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
+      setLogoUrl(result.logoUrl ?? result.brandLogoUrl ?? null);
       invalidateBranding();
       toast.success("Logo updated");
     },
@@ -200,8 +280,13 @@ export function TeamBrandingDialog({
   });
 
   const removeLogoMutation = useMutation({
-    mutationFn: () => apiRequest("DELETE", "/api/coach/branding/logo"),
+    mutationFn: () =>
+      apiRequest(
+        "DELETE",
+        isTeamScope ? `/api/coach/teams/${scope.teamId}/branding/logo` : "/api/coach/branding/logo",
+      ),
     onSuccess: () => {
+      setLogoUrl(null);
       invalidateBranding();
       toast.success("Logo removed");
     },
@@ -221,12 +306,21 @@ export function TeamBrandingDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Palette className="h-5 w-5 text-teal-400" />
-            Team Branding &amp; Features
+            {isTeamScope ? `${scope.teamName} Branding` : "Team Branding & Features"}
           </DialogTitle>
           <DialogDescription>
-            Your logo, team name, and colors show in the header and throughout the app for you
-            and your athletes -- a "Powered by Forge Performance" line always stays underneath.
-            Turn off any nav sections your program doesn't use to keep the app simpler.
+            {isTeamScope ? (
+              <>
+                Override your org-wide logo/colors for just this team -- leave a field blank to
+                keep using the org's own.
+              </>
+            ) : (
+              <>
+                Your logo, team name, and colors show in the header and throughout the app for you
+                and your athletes -- a "Powered by Forge Performance" line always stays underneath.
+                Turn off any nav sections your program doesn't use to keep the app simpler.
+              </>
+            )}
           </DialogDescription>
         </DialogHeader>
 
@@ -238,9 +332,9 @@ export function TeamBrandingDialog({
               <Label>Logo</Label>
               <div className="flex items-center gap-3">
                 <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-surface">
-                  {data?.logoUrl ? (
+                  {logoUrl ? (
                     <img
-                      src={resolveApiUrl(data.logoUrl)}
+                      src={resolveApiUrl(logoUrl)}
                       alt="Team logo"
                       className="h-full w-full object-contain"
                     />
@@ -267,9 +361,9 @@ export function TeamBrandingDialog({
                     onClick={() => fileInputRef.current?.click()}
                     disabled={uploadLogoMutation.isPending}
                   >
-                    {uploadLogoMutation.isPending ? "Uploading…" : data?.logoUrl ? "Replace" : "Upload"}
+                    {uploadLogoMutation.isPending ? "Uploading…" : logoUrl ? "Replace" : "Upload"}
                   </Button>
-                  {data?.logoUrl && (
+                  {logoUrl && (
                     <Button
                       type="button"
                       variant="ghost"
@@ -286,19 +380,21 @@ export function TeamBrandingDialog({
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="team-name">Team name</Label>
-              <Input
-                id="team-name"
-                value={teamName}
-                onChange={(e) => setTeamName(e.target.value)}
-                placeholder="e.g. Notre Dame Volleyball"
-                maxLength={60}
-              />
-              <p className="text-xs text-muted-foreground">
-                Shows next to your logo in place of "Forge" -- leave blank to keep the default.
-              </p>
-            </div>
+            {!isTeamScope && (
+              <div className="space-y-1.5">
+                <Label htmlFor="team-name">Team name</Label>
+                <Input
+                  id="team-name"
+                  value={teamName}
+                  onChange={(e) => setTeamName(e.target.value)}
+                  placeholder="e.g. Notre Dame Volleyball"
+                  maxLength={60}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Shows next to your logo in place of "Forge" -- leave blank to keep the default.
+                </p>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
@@ -422,9 +518,9 @@ export function TeamBrandingDialog({
                   style={{ borderBottom: `3px solid ${secondaryColor || SWATCH_FALLBACK_SECONDARY}` }}
                 >
                   <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-md">
-                    {data?.logoUrl ? (
+                    {logoUrl ? (
                       <img
-                        src={resolveApiUrl(data.logoUrl)}
+                        src={resolveApiUrl(logoUrl)}
                         alt=""
                         className="h-full w-full object-contain"
                       />
@@ -436,7 +532,7 @@ export function TeamBrandingDialog({
                     <span className="font-display text-sm font-extrabold uppercase tracking-wider">
                       {teamName || "Forge"}
                     </span>
-                    {(teamName || data?.logoUrl) && (
+                    {(teamName || logoUrl) && (
                       <span className="text-[8px] font-medium uppercase tracking-wide text-muted-foreground">
                         {POWERED_BY_FORGE_LABEL}
                       </span>
@@ -458,32 +554,34 @@ export function TeamBrandingDialog({
               </div>
             </div>
 
-            <div className="space-y-2 border-t border-border pt-4">
-              <Label>Nav sections</Label>
-              <div className="space-y-2.5">
-                {COACH_FEATURE_FIELDS.map((field) => (
-                  <label
-                    key={field.key}
-                    className="flex cursor-pointer items-start gap-2.5 text-sm"
-                  >
-                    <Checkbox
-                      className="mt-0.5"
-                      checked={data?.features[field.key] ?? true}
-                      disabled={featureMutation.isPending}
-                      onCheckedChange={(checked) =>
-                        featureMutation.mutate({ [field.key]: checked === true })
-                      }
-                    />
-                    <span>
-                      <span className="font-medium">{field.label}</span>
-                      <span className="block text-xs text-muted-foreground">
-                        {field.description}
+            {!isTeamScope && (
+              <div className="space-y-2 border-t border-border pt-4">
+                <Label>Nav sections</Label>
+                <div className="space-y-2.5">
+                  {COACH_FEATURE_FIELDS.map((field) => (
+                    <label
+                      key={field.key}
+                      className="flex cursor-pointer items-start gap-2.5 text-sm"
+                    >
+                      <Checkbox
+                        className="mt-0.5"
+                        checked={orgData?.features[field.key] ?? true}
+                        disabled={featureMutation.isPending}
+                        onCheckedChange={(checked) =>
+                          featureMutation.mutate({ [field.key]: checked === true })
+                        }
+                      />
+                      <span>
+                        <span className="font-medium">{field.label}</span>
+                        <span className="block text-xs text-muted-foreground">
+                          {field.description}
+                        </span>
                       </span>
-                    </span>
-                  </label>
-                ))}
+                    </label>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         )}
 

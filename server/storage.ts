@@ -2320,10 +2320,27 @@ export const storage = {
       const coaches = await this.getCoachesForAthlete(userId);
       const coachId = coaches[0]?.id;
       if (coachId) {
-        const [branding, features] = await Promise.all([
+        const [branding, features, athleteTeams] = await Promise.all([
           this.getCoachBranding(coachId),
           this.getCoachFeatures(coachId),
+          this.getTeamsForAthlete(userId),
         ]);
+        // First team (of possibly several) that's actually set anything of
+        // its own -- resolved field-by-field against the org branding
+        // above, per teams.brandLogoUrl's own comment, so a team that's
+        // only picked a color doesn't lose the org's logo underneath it.
+        const brandedTeam = athleteTeams.find(
+          (t) => t.brandLogoUrl || t.brandPrimaryColor || t.brandSecondaryColor,
+        );
+        if (brandedTeam) {
+          return {
+            ...branding,
+            logoUrl: brandedTeam.brandLogoUrl ?? branding.logoUrl,
+            primaryColor: brandedTeam.brandPrimaryColor ?? branding.primaryColor,
+            secondaryColor: brandedTeam.brandSecondaryColor ?? branding.secondaryColor,
+            features,
+          };
+        }
         return { ...branding, features };
       }
     }
@@ -4990,6 +5007,38 @@ ${athleteContext}
 
   async deleteTeam(teamId: number) {
     await db.delete(teams).where(eq(teams.id, teamId));
+  },
+
+  // A team's own override of the org-wide branding -- see
+  // updateTeamBrandingSchema's own comment for why there's no teamName
+  // field here (the team's `name` column already covers that). Same "" ->
+  // null clearing convention as updateCoachBranding.
+  async updateTeamBranding(
+    teamId: number,
+    values: { primaryColor?: string; secondaryColor?: string },
+  ) {
+    const patch: Record<string, string | null> = {};
+    if (values.primaryColor !== undefined) patch.brandPrimaryColor = values.primaryColor || null;
+    if (values.secondaryColor !== undefined) patch.brandSecondaryColor = values.secondaryColor || null;
+    if (Object.keys(patch).length === 0) return db.query.teams.findFirst({ where: eq(teams.id, teamId) });
+    const [team] = await db.update(teams).set(patch).where(eq(teams.id, teamId)).returning();
+    return team;
+  },
+
+  async updateTeamLogo(teamId: number, logoUrl: string | null) {
+    const previous = await db.query.teams.findFirst({ where: eq(teams.id, teamId) });
+    const [team] = await db
+      .update(teams)
+      .set({ brandLogoUrl: logoUrl })
+      .where(eq(teams.id, teamId))
+      .returning();
+    // Same cleanup-on-replace reasoning as updateCoachLogo above -- a team
+    // logo lives in its own uploads subdirectory specifically so it can
+    // never collide with (or get deleted alongside) the org-wide logo.
+    if (previous?.brandLogoUrl && previous.brandLogoUrl !== logoUrl) {
+      await deleteUploadedFile(previous.brandLogoUrl);
+    }
+    return team;
   },
 
   // ---------- Team challenges (monthly squad quests) ----------

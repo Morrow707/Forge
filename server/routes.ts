@@ -91,6 +91,7 @@ import {
   classCoachSettingsInputSchema,
   academyTrackStructureSchema,
   updateCoachBrandingSchema,
+  updateTeamBrandingSchema,
   createProblemReportSchema,
   updateCoachFeaturesSchema,
   adminAthleteQueryFiltersSchema,
@@ -288,6 +289,30 @@ fs.mkdirSync(TEAM_LOGOS_DIR, { recursive: true });
 const uploadTeamLogo = multer({
   storage: multer.diskStorage({
     destination: TEAM_LOGOS_DIR,
+    filename: (_req, file, cb) => {
+      const ext = TEAM_LOGO_EXTENSION_BY_MIME[file.mimetype.split(";")[0].trim().toLowerCase()];
+      cb(null, `${crypto.randomUUID()}${ext ?? ""}`);
+    },
+  }),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (!TEAM_LOGO_EXTENSION_BY_MIME[file.mimetype.split(";")[0].trim().toLowerCase()]) {
+      return cb(new Error("Unsupported image format -- use PNG, JPEG, or WebP"));
+    }
+    cb(null, true);
+  },
+});
+
+// A single team's own logo override (teams.brandLogoUrl) -- its own
+// subdirectory, not TEAM_LOGOS_DIR, so a team's file can be replaced/deleted
+// independently of the org-wide logo without any risk of the two colliding
+// on disk. Same rasterized-only policy/size limit as the org logo above.
+const TEAM_BRANDING_DIR = path.join(process.cwd(), "server", "uploads", "team-branding");
+fs.mkdirSync(TEAM_BRANDING_DIR, { recursive: true });
+
+const uploadTeamBrandingLogo = multer({
+  storage: multer.diskStorage({
+    destination: TEAM_BRANDING_DIR,
     filename: (_req, file, cb) => {
       const ext = TEAM_LOGO_EXTENSION_BY_MIME[file.mimetype.split(";")[0].trim().toLowerCase()];
       cb(null, `${crypto.randomUUID()}${ext ?? ""}`);
@@ -3984,6 +4009,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     await storage.deleteTeam(teamId);
     res.status(204).end();
+  });
+
+  // A single team's own branding override -- see teams.brand* columns'
+  // own comment for the field-by-field fallback to the org-wide branding.
+  // Same assertOwnsTeam guard as every other team-scoped route above.
+  app.patch("/api/coach/teams/:id/branding", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const teamId = Number(req.params.id);
+    if (!(await assertOwnsTeam(user.id, teamId))) {
+      return res.status(404).json({ message: "Team not found" });
+    }
+    const parsed = updateTeamBrandingSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const team = await storage.updateTeamBranding(teamId, parsed.data);
+    res.json(team);
+  });
+
+  app.post("/api/coach/teams/:id/branding/logo", requireRole("coach"), (req, res) => {
+    uploadTeamBrandingLogo.single("logo")(req, res, async (err: unknown) => {
+      if (err) {
+        const message = err instanceof Error ? err.message : "Upload failed";
+        return res.status(400).json({ message });
+      }
+      const user = currentUser(req);
+      const teamId = Number(req.params.id);
+      if (!(await assertOwnsTeam(user.id, teamId))) {
+        return res.status(404).json({ message: "Team not found" });
+      }
+      if (!req.file) return res.status(400).json({ message: "No image file provided" });
+      const team = await storage.updateTeamLogo(teamId, `/uploads/team-branding/${req.file.filename}`);
+      res.status(201).json(team);
+    });
+  });
+
+  app.delete("/api/coach/teams/:id/branding/logo", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const teamId = Number(req.params.id);
+    if (!(await assertOwnsTeam(user.id, teamId))) {
+      return res.status(404).json({ message: "Team not found" });
+    }
+    const team = await storage.updateTeamLogo(teamId, null);
+    res.json(team);
   });
 
   // ---------------- Coach & Athlete: Team challenges (squad quests) ----------------

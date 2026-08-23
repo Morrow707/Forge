@@ -455,6 +455,17 @@ export const teams = pgTable(
     // with it links to the team's coach AND is added straight to the team,
     // unlike the coach's personal code which only links the coach.
     code: text("code"),
+    // Optional override of the coach/org-wide branding (users.brand* --
+    // see getEffectiveBrandingForUser) for this one team specifically --
+    // e.g. an athletic department's own colors school-wide, with one sport
+    // picking its own accent on top. Resolved field-by-field, not
+    // all-or-nothing: a team that's only set its own primary color still
+    // shows the org's logo underneath it, rather than losing the logo the
+    // moment it sets anything of its own. Null on any one field means
+    // "fall through to the org's value for that field."
+    brandLogoUrl: text("brand_logo_url"),
+    brandPrimaryColor: text("brand_primary_color"),
+    brandSecondaryColor: text("brand_secondary_color"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({
@@ -5106,6 +5117,15 @@ export const updateCoachBrandingSchema = z.object({
   secondaryColor: hexColor.optional(),
 });
 export type UpdateCoachBrandingInput = z.infer<typeof updateCoachBrandingSchema>;
+
+// A specific team's own override of the org-wide branding above -- no
+// teamName field, since a team already has its own `name` column (this
+// only ever touches the visual identity, not what it's called).
+export const updateTeamBrandingSchema = z.object({
+  primaryColor: hexColor.optional(),
+  secondaryColor: hexColor.optional(),
+});
+export type UpdateTeamBrandingInput = z.infer<typeof updateTeamBrandingSchema>;
 
 export const updateCoachFeaturesSchema = z.object(
   Object.fromEntries(COACH_FEATURES.map((key) => [key, z.boolean().optional()])) as Record<

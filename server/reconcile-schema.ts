@@ -1693,6 +1693,13 @@ CREATE INDEX IF NOT EXISTS "guardian_invites_athlete_idx" ON "guardian_invites" 
 -- in place of the generic "Coach" label wherever this staff member's name
 -- renders, without needing a whole separate account type/role.
 ALTER TABLE "coach_staff" ADD COLUMN IF NOT EXISTS "staff_title" text;
+
+-- Per-team branding override (shared/schema.ts teams.brand*) -- optional,
+-- falls back to the org-wide users.brand* columns when unset (see
+-- getEffectiveBrandingForUser in storage.ts).
+ALTER TABLE "teams" ADD COLUMN IF NOT EXISTS "brand_logo_url" text;
+ALTER TABLE "teams" ADD COLUMN IF NOT EXISTS "brand_primary_color" text;
+ALTER TABLE "teams" ADD COLUMN IF NOT EXISTS "brand_secondary_color" text;
 `;
 
 async function main() {
