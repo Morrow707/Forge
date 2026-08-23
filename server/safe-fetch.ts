@@ -146,13 +146,15 @@ function fetchOnce(urlStr: string): Promise<{ status: number; location?: string;
 
 function extractReadableText(html: string): string {
   const text = html
-    // \s* before the closing '>' -- real browsers still treat
-    // "</script >" (or any whitespace before the bracket) as a valid
-    // closing tag, so a plain "</script>" literal here would leave that
-    // variant's actual script content sitting in what's supposed to be
-    // stripped, plain-text HTML handed to an LLM prompt.
-    .replace(/<script[\s\S]*?<\/script\s*>/gi, " ")
-    .replace(/<style[\s\S]*?<\/style\s*>/gi, " ")
+    // [^>]* between the tag name and '>', not just \s* -- a real HTML
+    // parser treats anything up to the next '>' as part of the closing
+    // tag regardless of what it is ("</script foo="bar">",
+    // "</script\t\n bar>", stray junk, not just whitespace), so requiring
+    // an exact "</script>" (or even just whitespace before '>') would
+    // still leave that variant's actual script content sitting in what's
+    // supposed to be stripped, plain-text HTML handed to an LLM prompt.
+    .replace(/<script[\s\S]*?<\/script[^>]*>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style[^>]*>/gi, " ")
     .replace(/<!--[\s\S]*?-->/g, " ")
     .replace(/<[^>]+>/g, " ")
     .replace(/&nbsp;/g, " ")
