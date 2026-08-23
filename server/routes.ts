@@ -21,6 +21,7 @@ import { buildComplianceReportPdf } from "./compliance-report";
 import { buildLegalDocumentPdf } from "./legal-document-export";
 import { GUARDIAN_NOTICE_LIVE } from "@shared/privacy-tiers";
 import { BILLING_LIVE } from "./billing";
+import { verifyAppleTransaction } from "./apple-iap";
 import { verifyMediaUrl } from "./media-url-signing";
 import { shouldTouchLastSeen } from "./session-tracking";
 import { COACH_SECTIONS } from "@shared/coach-sections";
@@ -4682,6 +4683,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ---------------- Athlete ----------------
+
+  // The whole server-side job for a StoreKit 2 purchase, unlike Stripe
+  // Checkout: there's no separate "start checkout" route to build here
+  // (that happens entirely client-side via StoreKit itself) -- the app
+  // just needs to verify the signed transaction the purchase produced and
+  // record it. requireFreeAgent since IAP is a Free Agent's own
+  // subscription, same restriction Stripe's paywalls already apply.
+  // verifyAppleTransaction always returns null today (see its own
+  // comment), so this route is fully wired but genuinely inert until
+  // that's implemented against a real App Store Connect subscription
+  // group -- exactly the same "ready, not live" posture BILLING_LIVE
+  // gives the Stripe side.
+  app.post(
+    "/api/athlete/apple-iap/verify",
+    requireRole("athlete"),
+    requireFreeAgent,
+    async (req, res) => {
+      const user = currentUser(req);
+      const schema = z.object({ signedTransactionInfo: z.string().min(1) });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      const verified = await verifyAppleTransaction(parsed.data.signedTransactionInfo);
+      if (!verified) {
+        return res.status(502).json({ message: "Apple In-App Purchase isn't set up yet." });
+      }
+      const result = await storage.applyAppleIapVerification(user.id, verified);
+      if (!result.ok) return res.status(422).json({ message: result.error });
+      res.status(204).end();
+    },
+  );
 
   app.get("/api/athlete/coaches", requireRole("athlete"), async (req, res) => {
     const user = currentUser(req);

@@ -183,6 +183,7 @@ import { askClaude, askClaudeStructured, askClaudeWithTools, askClaudeVision, as
 import { fetchUrlSafely, UnsafeUrlError } from "./safe-fetch";
 import { deleteUploadedFile, statUploadedFile } from "./uploaded-files";
 import { isGatedUploadPath } from "./media-url-signing";
+import { tierForAppleProductId, type VerifiedAppleTransaction } from "./apple-iap";
 import {
   eq,
   and,
@@ -1989,6 +1990,36 @@ export const storage = {
     await db
       .insert(billingAuditLog)
       .values({ userId, event, detail: (detail ?? null) as any, stripeEventId: stripeEventId ?? null });
+  },
+
+  // Applies a StoreKit 2 transaction verifyAppleTransaction has already
+  // confirmed is real (see that function's own comment -- it always
+  // returns null today, so this never actually runs against unverified
+  // data). Every Free Agent already has a trial subscription row from
+  // signup (createTrialSubscription in auth.ts), so this is always an
+  // update, never an insert -- same shape as the Stripe checkout.session.completed
+  // handler in billing.ts, just keyed by userId directly since Apple's IAP
+  // flow has no separate "start checkout" step that needs a
+  // client_reference_id to bridge back to a Forge account.
+  async applyAppleIapVerification(
+    userId: number,
+    verified: VerifiedAppleTransaction,
+  ): Promise<{ ok: true } | { ok: false; error: string }> {
+    const tier = tierForAppleProductId(verified.productId);
+    if (!tier) return { ok: false, error: "Unrecognized product." };
+    const updated = await this.updateSubscriptionByUserId(userId, {
+      accountType: "free_agent",
+      tier,
+      status: "active",
+      appleOriginalTransactionId: verified.originalTransactionId,
+      currentPeriodEnd: verified.expiresAt,
+    });
+    if (!updated) return { ok: false, error: "No subscription found for this account." };
+    await this.logBillingEvent(userId, "apple_iap.verified", {
+      originalTransactionId: verified.originalTransactionId,
+      productId: verified.productId,
+    });
+    return { ok: true };
   },
 
   // Stripe redelivers webhook events at-least-once -- handleStripeWebhookEvent

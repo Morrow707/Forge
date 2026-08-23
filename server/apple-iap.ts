@@ -38,8 +38,28 @@ export type VerifiedAppleTransaction = {
 };
 
 /** Not implemented -- see this file's own comment for exactly what real
- * verification requires. Always returns null so any caller (none exist
- * yet) fails closed rather than silently trusting an unverified receipt. */
+ * verification requires. Always returns null so the one real caller
+ * (POST /api/athlete/apple-iap/verify in routes.ts) fails closed rather
+ * than silently trusting an unverified receipt -- the route itself is
+ * fully wired (StoreKit purchases happen entirely client-side, so there's
+ * no separate "start checkout" step to build the way Stripe Checkout
+ * needs; verifying the resulting transaction is the whole server-side job),
+ * it just can't do anything useful until this function has a real body. */
 export async function verifyAppleTransaction(_signedTransactionInfo: string): Promise<VerifiedAppleTransaction | null> {
   return null;
+}
+
+// Maps a StoreKit 2 productId to this app's own tier concept. Placeholder
+// naming convention -- "<bundle id>.freeagent.<tier>", matching
+// PRICING.free_agent in billing.ts -- update once real Products exist in
+// App Store Connect (this file's step 1) and their actual identifiers are
+// known. Returns null for anything unrecognized so applyAppleIapVerification
+// fails closed instead of guessing a tier for a product it's never heard of.
+const PRODUCT_ID_TIER: Record<string, "base" | "pro"> = {
+  "com.foreperformancesystems.forge.freeagent.base": "base",
+  "com.foreperformancesystems.forge.freeagent.pro": "pro",
+};
+
+export function tierForAppleProductId(productId: string): "base" | "pro" | null {
+  return PRODUCT_ID_TIER[productId] ?? null;
 }
