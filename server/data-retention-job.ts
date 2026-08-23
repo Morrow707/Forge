@@ -11,11 +11,22 @@ import { storage } from "./storage";
 export async function runDataRetentionJob() {
   try {
     const eligible = await storage.getVideosEligibleForRetentionPurge();
-    if (eligible.length === 0) return;
+    // Logged even at zero -- this job deletes minor athletes' video data on
+    // a compliance-driven schedule, so a run that silently no-ops looks
+    // identical to one that never started (a crashed boot, a bad deploy)
+    // without some periodic evidence it actually executed.
+    if (eligible.length === 0) {
+      console.log("Data retention job: no eligible videos.");
+      return;
+    }
     let purged = 0;
     for (const row of eligible) {
-      const ok = await storage.deleteAdminVideo(row.source, row.id);
-      if (ok) purged += 1;
+      // deleteAdminVideo always resolves to a (truthy) object, never
+      // rejects -- checking the object itself instead of its .deleted
+      // field meant this counted every eligible row as purged regardless
+      // of whether the delete actually found and removed anything.
+      const result = await storage.deleteAdminVideo(row.source, row.id);
+      if (result.deleted) purged += 1;
     }
     console.log(`Data retention job: purged ${purged}/${eligible.length} eligible video(s).`);
   } catch (err) {

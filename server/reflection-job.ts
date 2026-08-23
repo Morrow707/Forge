@@ -24,18 +24,28 @@ export async function runReflectionJob() {
     const admins = await db.query.users.findMany({ where: eq(users.role, "admin") });
     for (const finding of findings) {
       for (const admin of admins) {
-        if (finding.tier === "safety") {
-          await notifyUser(admin.id, "reflection_safety", finding.summary, finding.detail, "/admin/forge-ai", {
-            bypassEmailPref: true,
-          });
-        } else {
-          await storage.createNotification(
-            admin.id,
-            "reflection_info",
-            finding.summary,
-            finding.detail,
-            "/admin/forge-ai",
-          );
+        // Each admin's delivery is independent -- generateReflectionFindings
+        // already inserted this finding's row before we get here (that's
+        // what starts its 7-day recentlyFlagged cooldown), so one admin's
+        // bad push token throwing here shouldn't also cost every admin
+        // after them in this loop their notification for a finding that
+        // won't be regenerated again this week.
+        try {
+          if (finding.tier === "safety") {
+            await notifyUser(admin.id, "reflection_safety", finding.summary, finding.detail, "/admin/forge-ai", {
+              bypassEmailPref: true,
+            });
+          } else {
+            await storage.createNotification(
+              admin.id,
+              "reflection_info",
+              finding.summary,
+              finding.detail,
+              "/admin/forge-ai",
+            );
+          }
+        } catch (err) {
+          console.error(`Reflection job: failed to notify admin ${admin.id} of finding ${finding.id}:`, err);
         }
       }
     }

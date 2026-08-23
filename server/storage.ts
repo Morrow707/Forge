@@ -13569,7 +13569,13 @@ ${catalog}`;
         .set({
           formCheckVideoUrl: null,
           formCheckFlag: null,
-          isPr: false,
+          // isPr deliberately left untouched -- see its own schema comment:
+          // "deliberately immutable once true... it really was a milestone
+          // at the time." Purging the video is about the raw footage, not
+          // the numeric fact that this set was a PR; clearing it here
+          // erased that record every time a video aged out or was purged
+          // for a Free Agent's storage cap, contradicting the flag's own
+          // documented invariant.
           favorited: false,
           pendingDeletionAt: null,
         })
@@ -15221,7 +15227,12 @@ ${catalog}`;
 
     const results: { source: "set" | "skill"; id: number; tier: PrivacyTier }[] = [];
     const setRows = await db
-      .select({ id: workoutSetEntries.id, athleteId: workoutLogs.athleteId, date: workoutLogs.date })
+      .select({
+        id: workoutSetEntries.id,
+        athleteId: workoutLogs.athleteId,
+        date: workoutLogs.date,
+        completedAt: workoutLogs.completedAt,
+      })
       .from(workoutSetEntries)
       .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
       .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
@@ -15230,7 +15241,14 @@ ${catalog}`;
       const tier = eligibleByAthlete.get(row.athleteId);
       if (!tier) continue;
       const days = videoRetentionDaysForTier(tier)!;
-      const ageMs = Date.now() - new Date(row.date).getTime();
+      // completedAt (set at actual submission time -- see submitWorkoutLog)
+      // is when the video was really uploaded; date is just the calendar
+      // day the workout was FOR, which a backfilled or edited log can put
+      // well before the video actually existed. Only falls back to date
+      // for rows saved before completedAt existed, or an in-progress
+      // autosave that hasn't completed yet.
+      const reference = row.completedAt ?? row.date;
+      const ageMs = Date.now() - new Date(reference).getTime();
       if (ageMs > days * 24 * 60 * 60 * 1000) results.push({ source: "set", id: row.id, tier });
     }
 
