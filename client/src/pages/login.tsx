@@ -98,6 +98,11 @@ export default function LoginPage() {
                 Log in here
               </Link>
             </p>
+            <p className="mt-2 text-center text-sm text-muted-foreground">
+              <Link href="/pricing" className="font-semibold text-primary hover:underline">
+                View pricing
+              </Link>
+            </p>
           </CardContent>
         </Card>
 

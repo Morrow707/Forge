@@ -14,6 +14,7 @@ import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import LoginPage from "@/pages/login";
 import AdminLoginPage from "@/pages/admin-login";
 import SignupPage from "@/pages/signup";
+import PricingPage from "@/pages/pricing";
 import ForgotPasswordPage from "@/pages/forgot-password";
 import ResetPasswordPage from "@/pages/reset-password";
 import NotFound from "@/pages/not-found";
@@ -153,6 +154,7 @@ function Router() {
         <Route path="/login" component={LoginPage} />
         <Route path="/admin/login" component={AdminLoginPage} />
         <Route path="/signup" component={SignupPage} />
+        <Route path="/pricing" component={PricingPage} />
         <Route path="/forgot-password" component={ForgotPasswordPage} />
         <Route path="/reset-password" component={ResetPasswordPage} />
         <Route path="/coach">
