@@ -134,12 +134,19 @@ export function AppShell({
     enabled: !!user,
   });
 
-  const { data: navPrefs } = useQuery<{ hiddenNavSections: string[] }>({
+  const { data: navPrefs } = useQuery<{
+    hiddenNavSections: string[];
+    navLabelOverrides: Record<string, string>;
+  }>({
     queryKey: ["/api/coach/nav-prefs"],
     queryFn: () => getJson("/api/coach/nav-prefs"),
     enabled: user?.role === "coach",
   });
   const hiddenNavSections = new Set(navPrefs?.hiddenNavSections ?? []);
+  const navLabelOverrides = navPrefs?.navLabelOverrides ?? {};
+  function navLabel(item: NavItem) {
+    return navLabelOverrides[item.href] || item.label;
+  }
 
   const brandingStyle = computeBrandingStyle(
     branding,
@@ -250,7 +257,7 @@ export function AppShell({
                   )}
                 >
                   <Icon className="h-4 w-4" />
-                  {item.label}
+                  {navLabel(item)}
                   {showUnreadDot && (
                     <span className="rounded-full bg-amber-400 px-1.5 py-0.5 text-[9px] font-bold uppercase leading-none text-black">
                       New
@@ -428,7 +435,7 @@ export function AppShell({
                     )}
                   >
                     <Icon className="h-3.5 w-3.5" />
-                    {item.label}
+                    {navLabel(item)}
                     {showUnreadDot && (
                       <span className="rounded-full bg-amber-400 px-1.5 py-0.5 text-[9px] font-bold uppercase leading-none text-black">
                         New
