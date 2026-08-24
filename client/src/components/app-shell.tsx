@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
@@ -24,6 +24,8 @@ import {
   Apple,
   BarChart3,
   ChevronDown,
+  Palette,
+  SlidersHorizontal,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -31,6 +33,17 @@ import { EditMyProfileDialog } from "@/components/edit-my-profile-dialog";
 import { NotificationBell } from "@/components/notification-bell";
 import { NotificationSettingsDialog } from "@/components/notification-settings-dialog";
 import { CoachingStaffDialog } from "@/components/coaching-staff-dialog";
+import { TeamBrandingDialog } from "@/components/team-branding-dialog";
+import { NavCustomizeDialog } from "@/components/nav-customize-dialog";
+import { PoweredByFooter } from "@/components/powered-by-footer";
+import { hexToHslTriplet } from "@/lib/color";
+
+type EffectiveBranding = {
+  brandTeamName?: string | null;
+  brandLogoUrl: string | null;
+  brandPrimaryColor: string | null;
+  brandSecondaryColor: string | null;
+};
 
 type NavItem = {
   href: string;
@@ -86,6 +99,7 @@ export function AppShell({
   actions,
   subheader,
   fitScreen,
+  showWatermark = true,
 }: {
   children: ReactNode;
   title: ReactNode;
@@ -96,6 +110,10 @@ export function AppShell({
   subheader?: ReactNode;
   /** Constrains content to the viewport instead of letting the page scroll -- opt in per page. */
   fitScreen?: boolean;
+  /** Small translucent "Powered by Forge" mark at the bottom of the page
+   * content -- on by default; a handful of secondary/embedded views can
+   * opt out so it doesn't show up on every single screen. */
+  showWatermark?: boolean;
 }) {
   const { user, logoutMutation } = useAuth();
   const [location] = useLocation();
@@ -103,7 +121,56 @@ export function AppShell({
   const [profileOpen, setProfileOpen] = useState(false);
   const [notifSettingsOpen, setNotifSettingsOpen] = useState(false);
   const [coachingStaffOpen, setCoachingStaffOpen] = useState(false);
+  const [brandingOpen, setBrandingOpen] = useState(false);
+  const [navCustomizeOpen, setNavCustomizeOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+
+  // Any authenticated role can be on the receiving end of someone else's
+  // branding (an athlete wearing their coach's colors) even though only a
+  // coach can edit it -- see storage.ts's getEffectiveBrandingForUser for
+  // how this resolves per role.
+  const { data: branding } = useQuery<EffectiveBranding>({
+    queryKey: ["/api/branding/me"],
+    queryFn: () => getJson("/api/branding/me"),
+    enabled: !!user,
+  });
+
+  const { data: navPrefs } = useQuery<{ hiddenNavSections: string[] }>({
+    queryKey: ["/api/coach/nav-prefs"],
+    queryFn: () => getJson("/api/coach/nav-prefs"),
+    enabled: user?.role === "coach",
+  });
+  const hiddenNavSections = new Set(navPrefs?.hiddenNavSections ?? []);
+
+  const brandingStyle = (() => {
+    const vars: Record<string, string> = {};
+    if (branding?.brandPrimaryColor) {
+      const hsl = hexToHslTriplet(branding.brandPrimaryColor);
+      if (hsl) {
+        vars["--primary"] = hsl;
+        vars["--ring"] = hsl;
+        vars["--accent"] = hsl;
+      }
+    }
+    if (branding?.brandSecondaryColor) {
+      const hsl = hexToHslTriplet(branding.brandSecondaryColor);
+      if (hsl) vars["--secondary"] = hsl;
+    }
+    return Object.keys(vars).length > 0 ? (vars as React.CSSProperties) : undefined;
+  })();
+
+  // Runtime favicon/home-screen-icon swap -- covers the browser tab icon
+  // and, in practice, iOS's "Add to Home Screen" (which reads these DOM
+  // link tags at save time). Android/Chrome's home-screen icon comes from
+  // the build-time manifest.webmanifest instead, fetched once per origin,
+  // so it will NOT pick this up -- a known, accepted gap, not a bug.
+  useEffect(() => {
+    const iconLink = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+    const appleLink = document.querySelector<HTMLLinkElement>('link[rel="apple-touch-icon"]');
+    const href = branding?.brandLogoUrl || null;
+    if (iconLink) iconLink.href = href || "/favicon-32.png";
+    if (appleLink) appleLink.href = href || "/apple-touch-icon.png";
+  }, [branding?.brandLogoUrl]);
 
   // Same query (and cache) the athlete dashboard's empty-state uses to
   // decide Free Agent status -- zero coaches linked. The "My Programs" and
@@ -120,7 +187,7 @@ export function AppShell({
 
   const nav =
     user?.role === "coach"
-      ? coachNav
+      ? coachNav.filter((item) => !hiddenNavSections.has(item.href))
       : user?.role === "admin"
         ? adminNav
         : isFreeAgent
@@ -151,15 +218,24 @@ export function AppShell({
         "min-h-screen bg-background",
         fitScreen && "flex flex-col md:h-screen md:overflow-hidden",
       )}
+      style={brandingStyle}
     >
       <div className="sticky top-0 z-30 shrink-0 border-b border-border bg-surface">
         <div className="flex items-center justify-between gap-3 px-4 py-3 md:px-8">
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
-              <Flame className="h-4.5 w-4.5" />
-            </div>
+            {branding?.brandLogoUrl ? (
+              <img
+                src={branding.brandLogoUrl}
+                alt={branding.brandTeamName || "Team logo"}
+                className="h-8 w-8 shrink-0 rounded-md object-contain"
+              />
+            ) : (
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
+                <Flame className="h-4.5 w-4.5" />
+              </div>
+            )}
             <span className="font-display text-xl font-extrabold uppercase tracking-wider">
-              Forge
+              {branding?.brandTeamName || "Forge"}
             </span>
           </div>
 
@@ -221,7 +297,7 @@ export function AppShell({
                 <span className="min-w-0 text-right">
                   <span className="block truncate text-sm font-semibold">{user?.name}</span>
                   <span className="block truncate text-xs capitalize text-muted-foreground">
-                    {isFreeAgent ? "Free Agent" : user?.role}
+                    {user?.staffTitle || (isFreeAgent ? "Free Agent" : user?.role)}
                   </span>
                 </span>
                 <ChevronDown
@@ -276,6 +352,34 @@ export function AppShell({
                     >
                       <UserPlus className="h-4 w-4" />
                       Coaching staff
+                    </button>
+                  )}
+                  {user?.role === "coach" && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setBrandingOpen(true);
+                        setAccountMenuOpen(false);
+                      }}
+                      className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-foreground hover:bg-surface-elevated"
+                    >
+                      <Palette className="h-4 w-4" />
+                      Branding
+                    </button>
+                  )}
+                  {user?.role === "coach" && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setNavCustomizeOpen(true);
+                        setAccountMenuOpen(false);
+                      }}
+                      className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-foreground hover:bg-surface-elevated"
+                    >
+                      <SlidersHorizontal className="h-4 w-4" />
+                      Customize navigation
                     </button>
                   )}
                   <button
@@ -337,7 +441,7 @@ export function AppShell({
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold">{user?.name}</p>
                 <p className="truncate text-xs capitalize text-muted-foreground">
-                  {isFreeAgent ? "Free Agent" : user?.role}
+                  {user?.staffTitle || (isFreeAgent ? "Free Agent" : user?.role)}
                 </p>
               </div>
               <div className="flex items-center gap-3">
@@ -380,6 +484,19 @@ export function AppShell({
                     Staff
                   </button>
                 )}
+                {user?.role === "coach" && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBrandingOpen(true);
+                      setMobileNavOpen(false);
+                    }}
+                    className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground"
+                  >
+                    <Palette className="h-4 w-4" />
+                    Brand
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => logoutMutation.mutate()}
@@ -415,6 +532,11 @@ export function AppShell({
         >
           {children}
         </main>
+        {showWatermark && (
+          <div className="shrink-0 px-4 md:px-8">
+            <PoweredByFooter />
+          </div>
+        )}
       </div>
 
       {user?.role === "athlete" && (
@@ -429,6 +551,16 @@ export function AppShell({
       )}
       {user?.role === "coach" && (
         <CoachingStaffDialog open={coachingStaffOpen} onOpenChange={setCoachingStaffOpen} />
+      )}
+      {user?.role === "coach" && (
+        <TeamBrandingDialog open={brandingOpen} onOpenChange={setBrandingOpen} scope={{ type: "org" }} />
+      )}
+      {user?.role === "coach" && (
+        <NavCustomizeDialog
+          open={navCustomizeOpen}
+          onOpenChange={setNavCustomizeOpen}
+          items={coachNav.filter((item) => item.href !== "/coach")}
+        />
       )}
     </div>
   );

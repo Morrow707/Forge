@@ -86,6 +86,18 @@ function hslToHex(h: number, s: number, l: number): string {
   return rgbToHex(f(0) * 255, f(8) * 255, f(4) * 255);
 }
 
+/** Converts a #RRGGBB hex color to this app's "H S% L%" CSS custom
+ * property format (see index.css's --primary etc) -- every themed token
+ * here is a raw space-separated HSL triplet consumed via hsl(var(--x)),
+ * not a literal color, so a branding override has to match that shape
+ * rather than just writing the hex straight into the variable. */
+export function hexToHslTriplet(hex: string): string | null {
+  const hsl = hexToHsl(hex);
+  if (!hsl) return null;
+  const [h, s, l] = hsl;
+  return `${Math.round(h)} ${Math.round(s)}% ${Math.round(l)}%`;
+}
+
 /** Nudges a color's lightness (hue/saturation preserved) toward black or
  * white, one step at a time, until its auto-picked text color
  * (contrastForegroundHsl) would clear WCAG AA against it. Returns the
