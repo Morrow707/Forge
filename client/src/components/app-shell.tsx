@@ -29,6 +29,7 @@ import {
   UserCog,
   Info,
   CreditCard,
+  Camera,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -90,6 +91,7 @@ const adminNav: NavItem[] = [
   { href: "/admin/review", label: "Review Queue", icon: ClipboardCheck },
   { href: "/admin/ai-knowledge", label: "Teach AI", icon: Sparkles },
   { href: "/admin/nutrition-knowledge", label: "Teach Nutrition AI", icon: Apple },
+  { href: "/admin/movement-knowledge", label: "Teach Movement AI", icon: Camera },
   { href: "/admin/platform-trends", label: "Platform Trends", icon: BarChart3 },
   { href: "/admin/billing", label: "Billing", icon: CreditCard },
 ];

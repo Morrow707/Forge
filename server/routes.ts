@@ -938,8 +938,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // movementType, not a single global one, since a squat and a med ball throw
   // are unrelated knowledge domains. GET /api/movement-profiles/active/:type
   // (any authenticated role) is what the tracker itself reads.
+  // Cast to string at each handler below, not a runtime coercion: a plain
+  // :name path segment is always a single string at runtime (Express only
+  // produces string[] for a `*` wildcard segment, unused here) -- the
+  // wider inferred type is this repo's installed @types/express (^5.0.0)
+  // not lining up with its express runtime (^4.21.2).
   app.get("/api/admin/movement-knowledge/:movementType", requireRole("admin"), async (req, res) => {
-    const result = await storage.getMovementKnowledgeChat(req.params.movementType);
+    const result = await storage.getMovementKnowledgeChat(req.params.movementType as string);
     res.json(result);
   });
 
@@ -947,7 +952,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const user = currentUser(req);
     const parsed = sendMovementKnowledgeChatMessageSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message || "Invalid message" });
-    const result = await storage.updateMovementKnowledgeFromChat(user.id, req.params.movementType, parsed.data);
+    const result = await storage.updateMovementKnowledgeFromChat(
+      user.id,
+      req.params.movementType as string,
+      parsed.data,
+    );
     res.status(201).json(result);
   });
 
@@ -958,7 +967,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const user = currentUser(req);
     const parsed = applyMovementProfileProposalSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: "Invalid profile" });
-    const result = await storage.applyMovementProfileProposal(user.id, req.params.movementType, parsed.data);
+    const result = await storage.applyMovementProfileProposal(
+      user.id,
+      req.params.movementType as string,
+      parsed.data,
+    );
     res.status(201).json(result);
   });
 
@@ -3386,7 +3399,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // routes for how a profile gets taught and applied in the first place.
 
   app.get("/api/movement-profiles/active/:movementType", requireAuth, async (req, res) => {
-    const movementType = req.params.movementType.trim();
+    // Cast, not a runtime coercion: a plain :name path segment is always a
+    // single string at runtime (Express only produces string[] for a `*`
+    // wildcard segment, which this route doesn't use) -- the wider type
+    // here is this repo's installed @types/express (^5.0.0) not lining up
+    // with its express runtime (^4.21.2), not anything this route does.
+    const movementType = (req.params.movementType as string).trim();
     if (!movementType) {
       return res.status(400).json({ message: "movementType is required" });
     }
