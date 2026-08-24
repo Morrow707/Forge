@@ -66,6 +66,7 @@ import type {
   UpdateBrandingInput,
   UpdateTeamBrandingInput,
   UpdateNavPrefsInput,
+  UpdateCoachBillingInput,
 } from "@shared/schema";
 import type { WidgetLayoutEntry } from "@shared/dashboard-widgets";
 import { deleteUploadedFile } from "./uploaded-files";
@@ -1012,6 +1013,27 @@ export const storage = {
     return db.query.users.findFirst({
       where: eq(users.email, email.toLowerCase()),
     });
+  },
+
+  // Admin-only (see /api/admin/coaches* in routes.ts) -- the only way a
+  // real billingTier/billingAddOns/isBetaAccount gets set anywhere in this
+  // codebase right now, since there's no self-serve checkout yet.
+  async updateCoachBilling(coachId: number, values: UpdateCoachBillingInput) {
+    const [row] = await db
+      .update(users)
+      .set({
+        ...(values.billingTier !== undefined && { billingTier: values.billingTier }),
+        ...(values.billingAddOns !== undefined && { billingAddOns: values.billingAddOns }),
+        ...(values.isBetaAccount !== undefined && { isBetaAccount: values.isBetaAccount }),
+      })
+      .where(eq(users.id, coachId))
+      .returning({
+        id: users.id,
+        billingTier: users.billingTier,
+        billingAddOns: users.billingAddOns,
+        isBetaAccount: users.isBetaAccount,
+      });
+    return row ?? null;
   },
 
   async getUserByCoachCode(code: string) {

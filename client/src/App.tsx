@@ -49,6 +49,7 @@ const AdminNutritionKnowledge = lazy(() => import("@/pages/admin/nutrition-knowl
 const AdminMyCalendar = lazy(() => import("@/pages/admin/my-calendar"));
 const AdminMyWorkout = lazy(() => import("@/pages/admin/my-workout"));
 const AdminPlatformTrends = lazy(() => import("@/pages/admin/platform-trends"));
+const AdminBilling = lazy(() => import("@/pages/admin/billing"));
 
 function FullScreenSpinner() {
   return (
@@ -249,6 +250,9 @@ function Router() {
         </Route>
         <Route path="/admin/platform-trends">
           <ProtectedRoute role="admin" component={AdminPlatformTrends} />
+        </Route>
+        <Route path="/admin/billing">
+          <ProtectedRoute role="admin" component={AdminBilling} />
         </Route>
         <Route component={NotFound} />
       </Switch>

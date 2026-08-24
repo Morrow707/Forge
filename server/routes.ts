@@ -42,6 +42,7 @@ import {
   updateAccountEmailSchema,
   updateAccountPasswordSchema,
   updatePersonalAccentSchema,
+  updateCoachBillingSchema,
   createBodyMetricSchema,
   createAnnotationSchema,
   testingTrendsQuerySchema,
@@ -579,6 +580,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/admin/platform-trends", requireRole("admin"), async (_req, res) => {
     const trends = await storage.getPlatformTrends();
     res.json(trends);
+  });
+
+  // ---------------- Admin: billing/pricing assignment ----------------
+  // No self-serve checkout exists yet (see shared/billing-tiers.ts,
+  // server/billing.ts) -- an admin manually assigning a tier here is the
+  // only way a real coach account ever gets billingTier/billingAddOns set,
+  // matching the pilot-program/manual-sales approach for now.
+
+  app.get("/api/admin/coaches/lookup", requireRole("admin"), async (req, res) => {
+    const email = typeof req.query.email === "string" ? req.query.email.trim() : "";
+    if (!email) {
+      return res.status(400).json({ message: "email is required" });
+    }
+    const coach = await storage.getUserByEmail(email);
+    if (!coach || coach.role !== "coach") {
+      return res.status(404).json({ message: "No coach with that email" });
+    }
+    const coachIds = await storage.getEffectiveCoachIds(coach.id);
+    const isPrimary = coachIds[0] === coach.id;
+    const roster = await storage.getRosterForCoach(coach.id);
+    res.json({
+      id: coach.id,
+      name: coach.name,
+      email: coach.email,
+      isPrimary,
+      rosterCount: roster.length,
+      billingTier: coach.billingTier,
+      billingAddOns: coach.billingAddOns ?? [],
+      isBetaAccount: coach.isBetaAccount,
+    });
+  });
+
+  app.patch("/api/admin/coaches/:id/billing", requireRole("admin"), async (req, res) => {
+    const coachId = Number(req.params.id);
+    const target = await storage.getUser(coachId);
+    if (!target || target.role !== "coach") {
+      return res.status(404).json({ message: "Coach not found" });
+    }
+    const coachIds = await storage.getEffectiveCoachIds(coachId);
+    if (coachIds[0] !== coachId) {
+      return res.status(400).json({ message: "Billing is assigned to the primary coach of an org, not a staff member" });
+    }
+    const parsed = updateCoachBillingSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const updated = await storage.updateCoachBilling(coachId, parsed.data);
+    res.json(updated);
   });
 
   // Self-assignment: coachId and athleteId are both the admin's own id.
