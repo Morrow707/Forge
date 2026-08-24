@@ -270,6 +270,28 @@ export function TeamBrandingDialog({
     },
   });
 
+  // Clears everything this dialog can set -- name/colors via the same
+  // PATCH the null-able schema already accepts, plus the logo file, so
+  // "reset" is one action instead of a coach having to null out each
+  // field by hand and separately remember to hit Remove on the logo.
+  const resetMutation = useMutation({
+    mutationFn: async () => {
+      const body = scope.type === "org" ? { teamName: null, primaryColor: null, secondaryColor: null } : { primaryColor: null, secondaryColor: null };
+      await apiRequest("PATCH", endpoints.patch, body);
+      if (branding?.brandLogoUrl) {
+        await apiRequest("DELETE", endpoints.logo);
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [endpoints.get] });
+      qc.invalidateQueries({ queryKey: ["/api/branding/me"] });
+      qc.invalidateQueries({ queryKey: ["/api/coach/teams"] });
+      toast.success(isTeamScope ? "Team override removed -- back to inheriting the org's branding" : "Branding reset to Forge defaults");
+      onOpenChange(false);
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't reset branding"),
+  });
+
   async function handleFile(file: File) {
     if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
       toast.error("Use a PNG, JPEG, or WebP image");
@@ -280,6 +302,13 @@ export function TeamBrandingDialog({
   }
 
   const primaryContrastOk = meetsWcagAA(primaryColor, contrastForegroundHsl(primaryColor));
+  const secondaryContrastOk = meetsWcagAA(secondaryColor, contrastForegroundHsl(secondaryColor));
+  const hasAnyBranding = !!(
+    branding?.brandTeamName ||
+    branding?.brandLogoUrl ||
+    branding?.brandPrimaryColor ||
+    branding?.brandSecondaryColor
+  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -397,6 +426,23 @@ export function TeamBrandingDialog({
             </div>
           )}
 
+          {!secondaryContrastOk && (
+            <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+              <div className="space-y-1.5">
+                <p>This secondary color is too light/dark to read clearly as text.</p>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setSecondaryColor(nearestAccessibleColor(secondaryColor))}
+                >
+                  Use a readable version of this color
+                </Button>
+              </div>
+            </div>
+          )}
+
           <div
             className="flex items-center gap-2 rounded-md border border-border p-3"
             style={{ backgroundColor: secondaryColor }}
@@ -412,14 +458,26 @@ export function TeamBrandingDialog({
             </span>
           </div>
 
-          <Button
-            type="button"
-            className="w-full"
-            onClick={() => saveMutation.mutate()}
-            disabled={saveMutation.isPending}
-          >
-            Save branding
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              className="flex-1"
+              onClick={() => saveMutation.mutate()}
+              disabled={saveMutation.isPending}
+            >
+              Save branding
+            </Button>
+            {hasAnyBranding && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => resetMutation.mutate()}
+                disabled={resetMutation.isPending}
+              >
+                {isTeamScope ? "Remove override" : "Reset to defaults"}
+              </Button>
+            )}
+          </div>
         </div>
       </DialogContent>
     </Dialog>
