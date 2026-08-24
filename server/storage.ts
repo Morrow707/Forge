@@ -1307,7 +1307,7 @@ export const storage = {
     });
     return {
       primaryCoachId: primaryId,
-      staff: rows.map((r) => r.staffCoach),
+      staff: rows.map((r) => ({ ...r.staffCoach, staffTitle: r.staffTitle })),
     };
   },
 

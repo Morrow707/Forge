@@ -15,8 +15,55 @@ import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import { UserMinus, Copy } from "lucide-react";
 
-type StaffMember = { id: number; name: string; email: string };
+type StaffMember = { id: number; name: string; email: string; staffTitle: string | null };
 type StaffResponse = { primaryCoachId: number; staff: StaffMember[] };
+
+const TITLE_PRESETS = ["Nutritionist", "Strength Coach", "Athletic Trainer", "Sports Psych"];
+
+function StaffTitleField({ staffCoachId, initialTitle }: { staffCoachId: number; initialTitle: string | null }) {
+  const qc = useQueryClient();
+  const [title, setTitle] = useState(initialTitle ?? "");
+
+  const saveMutation = useMutation({
+    mutationFn: async (next: string) => {
+      await apiRequest("PATCH", `/api/coach/staff/${staffCoachId}/title`, {
+        staffTitle: next.trim() || null,
+      });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/coach/staff"] }),
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't save title"),
+  });
+
+  function save(next: string) {
+    setTitle(next);
+    saveMutation.mutate(next);
+  }
+
+  return (
+    <div className="mt-2 space-y-1.5">
+      <Input
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        onBlur={() => save(title)}
+        placeholder="Display label (e.g. Nutritionist) -- defaults to Coach"
+        className="h-8 text-xs"
+        maxLength={40}
+      />
+      <div className="flex flex-wrap gap-1.5">
+        {TITLE_PRESETS.map((preset) => (
+          <button
+            key={preset}
+            type="button"
+            onClick={() => save(preset)}
+            className="rounded-full border border-border px-2 py-0.5 text-[11px] text-muted-foreground hover:border-primary/50 hover:text-foreground"
+          >
+            {preset}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 /** Lets a whole coaching staff (assistant/position coaches) share one
  * roster/programs/exercises/analytics instead of one coach owning
@@ -134,26 +181,33 @@ export function CoachingStaffDialog({
                 <Label>Staff members</Label>
                 <div className="space-y-2">
                   {data.staff.map((s) => (
-                    <div
-                      key={s.id}
-                      className="flex items-center justify-between rounded-md border border-border p-2.5 text-sm"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate font-medium">{s.name}</p>
-                        <p className="truncate text-xs text-muted-foreground">{s.email}</p>
+                    <div key={s.id} className="rounded-md border border-border p-2.5 text-sm">
+                      <div className="flex items-center justify-between">
+                        <div className="min-w-0">
+                          <p className="truncate font-medium">
+                            {s.name}
+                            {s.staffTitle && (
+                              <span className="ml-1.5 text-xs font-normal text-muted-foreground">
+                                · {s.staffTitle}
+                              </span>
+                            )}
+                          </p>
+                          <p className="truncate text-xs text-muted-foreground">{s.email}</p>
+                        </div>
+                        {isPrimary && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            aria-label={`Remove ${s.name}`}
+                            onClick={() => removeMutation.mutate(s.id)}
+                            disabled={removeMutation.isPending}
+                          >
+                            <UserMinus className="h-4 w-4" />
+                          </Button>
+                        )}
                       </div>
-                      {isPrimary && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          aria-label={`Remove ${s.name}`}
-                          onClick={() => removeMutation.mutate(s.id)}
-                          disabled={removeMutation.isPending}
-                        >
-                          <UserMinus className="h-4 w-4" />
-                        </Button>
-                      )}
+                      {isPrimary && <StaffTitleField staffCoachId={s.id} initialTitle={s.staffTitle} />}
                     </div>
                   ))}
                 </div>
