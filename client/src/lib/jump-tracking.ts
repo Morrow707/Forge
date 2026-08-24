@@ -9,11 +9,43 @@
 // ground-contact time). A level-crossing state machine fires exactly once at
 // the true landing moment regardless of how long the athlete stands still
 // afterward.
-import { movingAverage, buildPathTrace, type TrackedPoint, type PathTracePoint } from "./bar-tracking";
-import type { FormFault } from "./pose-tracking";
+import {
+  movingAverage,
+  buildPathTrace,
+  heightScaledAmplitudeCm,
+  framesForDuration,
+  type TrackedPoint,
+  type PathTracePoint,
+} from "./bar-tracking";
+import type { FormFault, LandingAsymmetryEntry } from "./pose-tracking";
 
 const GRAVITY_MPS2 = 9.81;
-const SMOOTHING_WINDOW = 5;
+// A flat frame count here would describe half as much real-world smoothing
+// once a device grants the 60fps bar-tracker-dialog.tsx now requests
+// instead of the ~30fps this was tuned around -- see bar-tracking.ts's own
+// comment on TARGET_SMOOTHING_MS/framesForDuration, which this reuses so a
+// jump's ankle trace gets the same fps-independent smoothing strength a
+// lift's bar-path trace does.
+const TARGET_SMOOTHING_MS = 165;
+// Same reasoning, for how many consecutive near-still SAMPLES count as
+// "landed" -- see its own comment further down where it's turned into an
+// actual frame count via framesForDuration.
+const TARGET_SETTLE_MS = 100;
+
+// No standing vertical jump, broad jump, or box jump for any real athlete
+// has flight time anywhere near this, even at an elite level (well under a
+// second for all three) -- this is purely a sanity ceiling against the
+// state machine mistaking a tracking dropout for a very long "flight."
+// A broad jump in particular can send the ankle point out of a tightly
+// framed shot for a moment; if pose tracking loses (and later reacquires)
+// the athlete mid-air, nothing in the trace between those two points flags
+// the gap, so the state machine's next "settled" frame gets read as a
+// real landing arbitrarily far downstream in time. Since jumpHeightCm
+// grows with the SQUARE of flightSeconds, that turns a several-second
+// tracking gap into a physically impossible triple-digit "jump height"
+// instead of a merely-wrong one -- worth rejecting outright rather than
+// reporting.
+const MAX_FLIGHT_SECONDS = 1.2;
 
 export type JumpRep = {
   repNumber: number;
@@ -39,6 +71,13 @@ export type JumpRep = {
   // logic: a number this module can't verify against ground truth doesn't
   // get silently "corrected," it gets surfaced so a human can look at it.
   likelyTrackingGlitch: boolean;
+  // Same clock as TrackedPoint.t (ms since tracking started) -- lift mode's
+  // RepBreakdown has always carried startT/endT for exactly this reason
+  // (video-overlay.ts locating which rep a given video timestamp falls
+  // in); this is the jump-mode equivalent so that code doesn't need two
+  // different lookup strategies per mode.
+  takeoffT: number;
+  landingT: number;
 };
 
 export type JumpSetMetrics = {
@@ -57,14 +96,36 @@ export type JumpSetMetrics = {
   // this module only has the ankle trace, not the full landmark history
   // fault detection needs.
   formFaults: FormFault[];
+  // Filled in by the caller from pose-tracking.ts's computeLandingAsymmetry
+  // -- same "this module only has the ankle trace" reasoning as formFaults
+  // above. One entry per rep in repBreakdown (null for a rep without
+  // enough clean per-foot data), undefined when the caller never populates
+  // it at all (a MediaPipe caller with only 2D landmarks and no real depth
+  // to trust the timing signal from).
+  landingAsymmetry?: (LandingAsymmetryEntry | null)[];
 };
+
+const BASE_MIN_FLIGHT_AMPLITUDE_CM = 15;
 
 // loadKg has no equivalent here (jumps have no external load to base power
 // on the way summarizeTrackedSet's does) -- this is display of body-flight
 // kinematics, not force or power.
+//
+// heightIn (the athlete's stored height, when on file) scales
+// BASE_MIN_FLIGHT_AMPLITUDE_CM via bar-tracking.ts's heightScaledAmplitudeCm
+// -- the smallest ankle-height rise the state machine above will trust as
+// a real takeoff rather than standing sway or a weight-shift between
+// reps. 8cm (the original flat floor before this existed) is barely above
+// ordinary in-place wobble, so a moment of resettling footing on top of a
+// box (or even just breathing/postural sway) could cross it and register
+// as its own jump on top of the real one. A genuine vertical or broad
+// jump -- box jump included -- clears well over 15cm of ankle travel for
+// an average-height athlete, so that floor costs nothing on real reps
+// while cutting out the sway-driven ones; the height scaling shifts it
+// proportionally for anyone far from average.
 export function summarizeJumpSet(
   rawPoints: TrackedPoint[],
-  minFlightAmplitudeCm = 8,
+  heightIn?: number | null,
   // How far a rep's jumpHeightCm can deviate from the set's median before
   // it's flagged as a likely tracking glitch -- from the active
   // MovementProfile's jumpHeightOutlierPercent when one exists (see
@@ -75,14 +136,22 @@ export function summarizeJumpSet(
   outlierPercent = 35,
 ): JumpSetMetrics | null {
   if (rawPoints.length < 6) return null;
+  const minFlightAmplitudeCm = heightScaledAmplitudeCm(BASE_MIN_FLIGHT_AMPLITUDE_CM, heightIn);
 
-  const ySmoothed = movingAverage(rawPoints.map((p) => p.y), SMOOTHING_WINDOW);
+  const ySmoothed = movingAverage(rawPoints.map((p) => p.y), framesForDuration(rawPoints, TARGET_SMOOTHING_MS));
   const minAmplitudeM = minFlightAmplitudeCm / 100;
   // A fraction of the minimum flight amplitude, used both as the
   // takeoff/landing trigger threshold and as the jitter tolerance the
   // baseline is allowed to drift by while grounded -- small enough to catch
   // a real push-off promptly, large enough to ignore pose-noise sway.
   const triggerM = minAmplitudeM * 0.3;
+
+  // How many consecutive near-still SAMPLES count as "landed" rather than a
+  // single noisy one -- long enough (in real time, via framesForDuration)
+  // to reject jitter, short enough not to eat into the next rep's
+  // ground-contact time.
+  const SETTLE_FRAMES = framesForDuration(rawPoints, TARGET_SETTLE_MS);
+  const settleToleranceM = triggerM;
 
   const reps: JumpRep[] = [];
   let previousLandingT: number | null = null;
@@ -113,51 +182,68 @@ export function summarizeJumpSet(
       // keep waiting rather than resetting the baseline off a noisy frame.
     } else {
       if (ySmoothed[i] < ySmoothed[peakIdx]) peakIdx = i;
-      if (ySmoothed[i] >= baseline) {
-        // Level-crossing back to (or past) the pre-jump baseline: this
-        // fires exactly once, at the true landing frame, no matter how long
-        // the athlete then stands still -- unlike a retrace-from-extreme
-        // check, a flat post-landing period can't drag this boundary.
-        const landingIdx = i;
-        const takeoffT = rawPoints[takeoffIdx].t;
-        const landingT = rawPoints[landingIdx].t;
-        const flightSeconds = (landingT - takeoffT) / 1000;
 
-        if (flightSeconds > 0) {
-          const jumpHeightCm = (GRAVITY_MPS2 * flightSeconds * flightSeconds * 100) / 8;
+      // Landing doesn't have to return to the pre-jump baseline -- a box
+      // jump lands higher (on the box), a depth jump lands lower. So
+      // instead of waiting for a specific return height, this watches for
+      // the flight simply stopping: near-zero vertical movement sustained
+      // for SETTLE_FRAMES, once we're clearly past the apex (not just
+      // pausing at the top of the arc, which also has near-zero velocity
+      // for an instant but keeps falling afterward).
+      const amplitudeSoFar = baseline - ySmoothed[peakIdx];
+      const pastApex = ySmoothed[i] - ySmoothed[peakIdx] >= triggerM;
+      if (amplitudeSoFar >= minAmplitudeM && pastApex && i - (SETTLE_FRAMES - 1) > peakIdx) {
+        const window = ySmoothed.slice(i - SETTLE_FRAMES + 1, i + 1);
+        const settled = Math.max(...window) - Math.min(...window) < settleToleranceM;
+        if (settled) {
+          // First frame of the settled window -- the actual touchdown
+          // moment, not the frame settling was confirmed on.
+          const landingIdx = i - SETTLE_FRAMES + 1;
+          const takeoffT = rawPoints[takeoffIdx].t;
+          const landingT = rawPoints[landingIdx].t;
+          const flightSeconds = (landingT - takeoffT) / 1000;
 
-          const peakHeightCm = Math.max(0, (baseline - ySmoothed[peakIdx]) * 100);
+          if (flightSeconds > 0 && flightSeconds <= MAX_FLIGHT_SECONDS) {
+            const jumpHeightCm = (GRAVITY_MPS2 * flightSeconds * flightSeconds * 100) / 8;
 
-          // Below ~5cm is just normal in-place sway, not an intentional
-          // broad jump -- reporting a noisy "distance" on a vertical-only
-          // jump would be misleading, so this stays null rather than a
-          // small stray number.
-          const horizontalM = Math.abs(rawPoints[landingIdx].x - rawPoints[takeoffIdx].x);
-          const horizontalDistanceCmRaw = horizontalM * 100;
-          const horizontalDistanceCm =
-            horizontalDistanceCmRaw >= 5 ? Math.round(horizontalDistanceCmRaw * 10) / 10 : null;
+            const peakHeightCm = Math.max(0, amplitudeSoFar * 100);
 
-          const groundContactSeconds =
-            previousLandingT != null
-              ? Math.round(((takeoffT - previousLandingT) / 1000) * 1000) / 1000
-              : null;
+            // Below ~5cm is just normal in-place sway, not an intentional
+            // broad jump -- reporting a noisy "distance" on a vertical-only
+            // jump would be misleading, so this stays null rather than a
+            // small stray number.
+            const horizontalM = Math.abs(rawPoints[landingIdx].x - rawPoints[takeoffIdx].x);
+            const horizontalDistanceCmRaw = horizontalM * 100;
+            const horizontalDistanceCm =
+              horizontalDistanceCmRaw >= 5 ? Math.round(horizontalDistanceCmRaw * 10) / 10 : null;
 
-          reps.push({
-            repNumber: reps.length + 1,
-            flightSeconds: Math.round(flightSeconds * 1000) / 1000,
-            jumpHeightCm: Math.round(jumpHeightCm * 10) / 10,
-            peakHeightCm: Math.round(peakHeightCm * 10) / 10,
-            horizontalDistanceCm,
-            groundContactSeconds,
-            likelyTrackingGlitch: false,
-          });
+            const groundContactSeconds =
+              previousLandingT != null
+                ? Math.round(((takeoffT - previousLandingT) / 1000) * 1000) / 1000
+                : null;
 
-          previousLandingT = landingT;
+            reps.push({
+              repNumber: reps.length + 1,
+              flightSeconds: Math.round(flightSeconds * 1000) / 1000,
+              jumpHeightCm: Math.round(jumpHeightCm * 10) / 10,
+              peakHeightCm: Math.round(peakHeightCm * 10) / 10,
+              horizontalDistanceCm,
+              groundContactSeconds,
+              likelyTrackingGlitch: false,
+              takeoffT,
+              landingT,
+            });
+
+            previousLandingT = landingT;
+          }
+
+          // The new stand height -- wherever that turned out to be (back on
+          // the ground, up on a box, down off one) -- becomes the baseline
+          // the next rep's takeoff is measured from.
+          state = "grounded";
+          baseline = window.reduce((a, b) => a + b, 0) / window.length;
+          baselineIdx = i;
         }
-
-        state = "grounded";
-        baseline = ySmoothed[i];
-        baselineIdx = i;
       }
     }
   }

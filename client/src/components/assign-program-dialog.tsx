@@ -20,11 +20,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ExercisePickerDialog } from "@/components/exercise-picker-dialog";
+import { RadioChipGroup } from "@/components/filter-chip-group";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { Stethoscope, Plus, Trash2, Clock, CalendarCog, ChevronDown } from "lucide-react";
+import { Stethoscope, Plus, Trash2, Clock, CalendarCog, ChevronDown, Repeat } from "lucide-react";
 import type { Exercise } from "@shared/schema";
+
+const DURATION_OPTIONS = Array.from({ length: 12 }, (_, i) => String(i + 1));
 
 type RosterEntry = { id: number; name: string; email: string };
 type ProgramSummary = { id: number; name: string };
@@ -72,6 +75,7 @@ export function AssignProgramDialog({
     programId ? String(programId) : "",
   );
   const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [durationWeeks, setDurationWeeks] = useState(1);
   const [correctivesQueue, setCorrectivesQueue] = useState<CorrectivesQueueItem[] | null>(null);
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [dateOverrides, setDateOverrides] = useState<Map<number, string>>(new Map());
@@ -81,6 +85,7 @@ export function AssignProgramDialog({
       setAssignAthletes(new Map(initialAthleteIds.map((id) => [id, true])));
       setSelectedProgramId(programId ? String(programId) : "");
       setStartDate(new Date().toISOString().slice(0, 10));
+      setDurationWeeks(1);
       setScheduleOpen(false);
       setDateOverrides(new Map());
     }
@@ -122,6 +127,7 @@ export function AssignProgramDialog({
       const res = await apiRequest("POST", "/api/coach/assignments", {
         programId: Number(selectedProgramId),
         startDate,
+        durationWeeks,
         dateOverrides:
           dateOverrides.size > 0 ? Object.fromEntries(dateOverrides) : undefined,
         athletes: Array.from(assignAthletes.entries()).map(([athleteId, correctivesEnabled]) => ({
@@ -179,6 +185,10 @@ export function AssignProgramDialog({
   const lockedProgramName = programId
     ? (programs.find((p) => p.id === programId)?.name ?? "This program")
     : null;
+  const programWeekCount = schedule.length
+    ? Math.max(...schedule.map((d) => d.weekNumber))
+    : 1;
+  const totalWeeks = programWeekCount * durationWeeks;
 
   return (
     <>
@@ -236,6 +246,25 @@ export function AssignProgramDialog({
               </p>
             </div>
 
+            <div className="space-y-1.5">
+              <Label className="flex items-center gap-1.5">
+                <Repeat className="h-3.5 w-3.5 text-muted-foreground" />
+                {programWeekCount > 1 ? "Repeat" : "Duration"}
+              </Label>
+              <RadioChipGroup
+                label=""
+                className="[&>p]:hidden"
+                options={DURATION_OPTIONS}
+                value={String(durationWeeks)}
+                onChange={(v) => setDurationWeeks(Number(v) || 1)}
+              />
+              <p className="text-xs text-muted-foreground">
+                {programWeekCount > 1
+                  ? `Runs this program's own ${programWeekCount}-week pattern ${durationWeeks} time${durationWeeks === 1 ? "" : "s"} — ${totalWeeks} weeks total.`
+                  : `${totalWeeks} week${totalWeeks === 1 ? "" : "s"} total.`}
+              </p>
+            </div>
+
             {schedule.length > 0 && (
               <div className="rounded-md border border-border">
                 <button
@@ -280,7 +309,7 @@ export function AssignProgramDialog({
                                   return next;
                                 })
                               }
-                              className="h-7 w-36 text-xs"
+                              className="h-7 w-auto text-xs"
                             />
                             {changed && (
                               <button

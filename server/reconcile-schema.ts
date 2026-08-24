@@ -12,11 +12,26 @@ import { pool } from "./db";
 // build. Since this script never asks Postgres to reconcile two structures
 // it can't tell apart, it can't hit that failure mode, regardless of
 // exactly what state the database is currently in.
-const SQL = `
+// Split into two statements run as two separate pool.query() calls (see
+// main() below), not one -- Postgres's simple query protocol treats a
+// multi-statement string as a single implicit transaction, and a value
+// added by ALTER TYPE ... ADD VALUE can't be read by a later statement in
+// that same transaction ("unsafe use of new value" / hint: "New enum
+// values must be committed before they can be used"). On a database that's
+// already been through an earlier deploy, this never bites -- 'admin' (and
+// every other ADD VALUE below) was already committed by a previous,
+// separate process run. It DOES bite a genuinely from-scratch database
+// (a fresh CI run, a disaster-recovery restore, a brand-new environment),
+// which is exactly what surfaced it: SQL_PART_2's movement-screen-battery
+// seed reads role = 'admin' in the same breath SQL_PART_1 would have just
+// added that value. If a future edit adds another ALTER TYPE ... ADD VALUE
+// followed by a same-run read of that value, split it the same way.
+const SQL_PART_1 = `
 DO $$ BEGIN
   CREATE TYPE "role" AS ENUM ('coach', 'athlete');
 EXCEPTION WHEN duplicate_object THEN null; END $$;
 ALTER TYPE "role" ADD VALUE IF NOT EXISTS 'admin';
+ALTER TYPE "role" ADD VALUE IF NOT EXISTS 'guardian';
 
 DO $$ BEGIN
   CREATE TYPE "weight_unit" AS ENUM ('lbs', 'kg');
@@ -43,6 +58,16 @@ DO $$ BEGIN
   CREATE TYPE "tracking_level" AS ENUM ('none', 'bar_path', 'full');
 EXCEPTION WHEN duplicate_object THEN null; END $$;
 ALTER TYPE "tracking_level" ADD VALUE IF NOT EXISTS 'jump';
+-- 'sprint' and 'mechanics' are Skills' own signals (see the comment on
+-- trackingLevelEnum in shared/schema.ts) -- share this enum type as a
+-- vocabulary convenience, skill_program_exercises stays a wholly separate
+-- table either way.
+ALTER TYPE "tracking_level" ADD VALUE IF NOT EXISTS 'sprint';
+ALTER TYPE "tracking_level" ADD VALUE IF NOT EXISTS 'mechanics';
+-- Rotation-engine modes (hip/shoulder separation, swing tempo, head sway)
+-- -- see the comment on trackingLevelEnum in shared/schema.ts.
+ALTER TYPE "tracking_level" ADD VALUE IF NOT EXISTS 'golf_swing';
+ALTER TYPE "tracking_level" ADD VALUE IF NOT EXISTS 'baseball_swing';
 
 DO $$ BEGIN
   CREATE TYPE "health_status" AS ENUM ('healthy', 'hurt');
@@ -55,6 +80,10 @@ EXCEPTION WHEN duplicate_object THEN null; END $$;
 DO $$ BEGIN
   CREATE TYPE "goal_type" AS ENUM ('exercise', 'testing');
 EXCEPTION WHEN duplicate_object THEN null; END $$;
+-- 'skill' targets a best sprint-timing elapsedSeconds off skillSessionLogs
+-- (see the comment on goalTypeEnum in shared/schema.ts) -- goals stays a
+-- wholly strength-side table otherwise.
+ALTER TYPE "goal_type" ADD VALUE IF NOT EXISTS 'skill';
 
 DO $$ BEGIN
   CREATE TYPE "challenge_metric" AS ENUM ('workouts_completed', 'total_reps', 'total_volume');
@@ -71,6 +100,10 @@ EXCEPTION WHEN duplicate_object THEN null; END $$;
 DO $$ BEGIN
   CREATE TYPE "trophy_category" AS ENUM ('workout_count', 'streak', 'pr_count');
 EXCEPTION WHEN duplicate_object THEN null; END $$;
+-- 'speed' counts sprint-timing captures (skillSessionLogs rows with
+-- tracking_level 'sprint') -- see the comment on trophyCategoryEnum in
+-- shared/schema.ts.
+ALTER TYPE "trophy_category" ADD VALUE IF NOT EXISTS 'speed';
 
 DO $$ BEGIN
   CREATE TYPE "trophy_tier" AS ENUM ('bronze', 'silver', 'gold');
@@ -171,6 +204,17 @@ ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "calendar_token" text;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "team_board_read_at" timestamp;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "cara_weekly_cap_minutes" integer;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "last_activity_at" timestamp;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "skill_fault_thresholds" json;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "mfa_enabled" boolean NOT NULL DEFAULT false;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "mfa_secret" text;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "mfa_backup_code_hashes" json;
+-- DEFAULT true here (not false) is deliberate and only affects this ALTER's
+-- one-time backfill of EXISTING rows -- every account created before this
+-- feature existed becomes retroactively "verified" rather than suddenly
+-- getting a verification nag it never had. New signups explicitly insert
+-- emailVerified: false (see auth.ts), overriding this column default for
+-- every row inserted after.
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "email_verified" boolean NOT NULL DEFAULT true;
 CREATE UNIQUE INDEX IF NOT EXISTS "users_email_idx" ON "users" ("email");
 CREATE UNIQUE INDEX IF NOT EXISTS "users_coach_code_idx" ON "users" ("coach_code");
 CREATE UNIQUE INDEX IF NOT EXISTS "users_calendar_token_idx" ON "users" ("calendar_token");
@@ -182,6 +226,20 @@ CREATE TABLE IF NOT EXISTS "coach_athletes" (
   "created_at" timestamp NOT NULL DEFAULT now()
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "coach_athlete_pair_idx" ON "coach_athletes" ("coach_id", "athlete_id");
+
+DO $$ BEGIN
+  CREATE TYPE "coach_athlete_request_status" AS ENUM ('pending', 'accepted', 'declined');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+CREATE TABLE IF NOT EXISTS "coach_athlete_requests" (
+  "id" serial PRIMARY KEY,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "status" coach_athlete_request_status NOT NULL DEFAULT 'pending',
+  "created_at" timestamp NOT NULL DEFAULT now(),
+  "responded_at" timestamp
+);
+CREATE INDEX IF NOT EXISTS "coach_athlete_requests_athlete_idx" ON "coach_athlete_requests" ("athlete_id");
 
 CREATE TABLE IF NOT EXISTS "teams" (
   "id" serial PRIMARY KEY,
@@ -240,6 +298,8 @@ CREATE TABLE IF NOT EXISTS "exercises" (
   "equipment" text NOT NULL DEFAULT 'Barbell',
   "movement_type" text,
   "laterality" laterality,
+  "body_region" text,
+  "plane" text,
   "is_corrective" boolean NOT NULL DEFAULT false,
   "video_url" text,
   "instructions" text,
@@ -247,6 +307,9 @@ CREATE TABLE IF NOT EXISTS "exercises" (
 );
 ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "movement_type" text;
 ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "laterality" laterality;
+ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "body_region" text;
+ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "plane" text;
+ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "movement_complexity" text;
 ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "is_corrective" boolean NOT NULL DEFAULT false;
 ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "uses_weight" boolean NOT NULL DEFAULT true;
 ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "uses_bodyweight" boolean NOT NULL DEFAULT false;
@@ -254,6 +317,119 @@ ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "uses_band" boolean NOT NULL DE
 ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "uses_box" boolean NOT NULL DEFAULT false;
 ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "secondary_muscles" json;
 ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "sports" json;
+
+-- Fully separate from "exercises" -- see the comment on skillExercises in
+-- shared/schema.ts for why this isn't just a category on the same table.
+CREATE TABLE IF NOT EXISTS "skill_exercises" (
+  "id" serial PRIMARY KEY,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "name" text NOT NULL,
+  "skill_type" text NOT NULL DEFAULT 'Hitting',
+  "sports" json,
+  "equipment" text,
+  "video_url" text,
+  "instructions" text,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "skill_exercises_coach_idx" ON "skill_exercises" ("coach_id");
+
+-- Mirrors programs -> program_weeks -> program_days -> program_exercises ->
+-- assignments, but referencing skill_exercises and dropping the
+-- strength-specific concepts (blocks/phases, supersets, tracking level,
+-- video-check, correctives) that don't apply to a skill drill.
+CREATE TABLE IF NOT EXISTS "skill_programs" (
+  "id" serial PRIMARY KEY,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "name" text NOT NULL,
+  "description" text,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS "skill_program_chat_messages" (
+  "id" serial PRIMARY KEY,
+  "skill_program_id" integer NOT NULL REFERENCES "skill_programs"("id") ON DELETE CASCADE,
+  "author_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "role" program_chat_role NOT NULL,
+  "content" text NOT NULL,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "skill_program_chat_messages_program_idx" ON "skill_program_chat_messages" ("skill_program_id", "created_at");
+
+CREATE TABLE IF NOT EXISTS "skill_program_weeks" (
+  "id" serial PRIMARY KEY,
+  "program_id" integer NOT NULL REFERENCES "skill_programs"("id") ON DELETE CASCADE,
+  "week_number" integer NOT NULL,
+  "name" text
+);
+CREATE INDEX IF NOT EXISTS "skill_program_weeks_program_idx" ON "skill_program_weeks" ("program_id");
+
+CREATE TABLE IF NOT EXISTS "skill_program_days" (
+  "id" serial PRIMARY KEY,
+  "week_id" integer NOT NULL REFERENCES "skill_program_weeks"("id") ON DELETE CASCADE,
+  "day_number" integer NOT NULL,
+  "title" text NOT NULL DEFAULT 'Skill Session',
+  "is_rest_day" boolean NOT NULL DEFAULT false
+);
+CREATE INDEX IF NOT EXISTS "skill_program_days_week_idx" ON "skill_program_days" ("week_id");
+
+CREATE TABLE IF NOT EXISTS "skill_program_exercises" (
+  "id" serial PRIMARY KEY,
+  "day_id" integer NOT NULL REFERENCES "skill_program_days"("id") ON DELETE CASCADE,
+  "skill_exercise_id" integer NOT NULL REFERENCES "skill_exercises"("id") ON DELETE CASCADE,
+  "order_index" integer NOT NULL DEFAULT 0,
+  "sets" integer NOT NULL DEFAULT 3,
+  "reps" text NOT NULL DEFAULT '10',
+  "rest_seconds" integer,
+  "notes" text,
+  "tracking_level" tracking_level NOT NULL DEFAULT 'none'
+);
+CREATE INDEX IF NOT EXISTS "skill_program_exercises_day_idx" ON "skill_program_exercises" ("day_id");
+ALTER TABLE "skill_program_exercises" ADD COLUMN IF NOT EXISTS "tracking_level" tracking_level NOT NULL DEFAULT 'none';
+
+CREATE TABLE IF NOT EXISTS "skill_assignments" (
+  "id" serial PRIMARY KEY,
+  "skill_program_id" integer NOT NULL REFERENCES "skill_programs"("id") ON DELETE CASCADE,
+  "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "start_date" date NOT NULL,
+  "duration_weeks" integer NOT NULL DEFAULT 1,
+  "date_overrides" json,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "skill_assignments_athlete_idx" ON "skill_assignments" ("athlete_id");
+CREATE INDEX IF NOT EXISTS "skill_assignments_coach_idx" ON "skill_assignments" ("coach_id");
+
+CREATE TABLE IF NOT EXISTS "skill_session_logs" (
+  "id" serial PRIMARY KEY,
+  "skill_assignment_id" integer NOT NULL REFERENCES "skill_assignments"("id") ON DELETE CASCADE,
+  "skill_program_day_id" integer NOT NULL REFERENCES "skill_program_days"("id") ON DELETE CASCADE,
+  "skill_program_exercise_id" integer NOT NULL REFERENCES "skill_program_exercises"("id") ON DELETE CASCADE,
+  "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "tracking_level" tracking_level NOT NULL,
+  "elapsed_seconds" real,
+  "distance_yards" real,
+  "camera_angle" text,
+  "faults" json,
+  "hip_shoulder_separation_deg" real,
+  "weight_transfer_pct" real,
+  "hip_rotation_deg" real,
+  "arm_slot_deg" real,
+  "arm_slot_label" text,
+  "well_sequenced" boolean,
+  "video_url" text,
+  "coach_annotation_url" text,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "hip_shoulder_separation_deg" real;
+ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "weight_transfer_pct" real;
+ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "hip_rotation_deg" real;
+ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "video_url" text;
+ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "coach_annotation_url" text;
+ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "arm_slot_deg" real;
+ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "arm_slot_label" text;
+ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "well_sequenced" boolean;
+CREATE INDEX IF NOT EXISTS "skill_session_logs_athlete_idx" ON "skill_session_logs" ("athlete_id");
+CREATE INDEX IF NOT EXISTS "skill_session_logs_assignment_idx" ON "skill_session_logs" ("skill_assignment_id");
 
 DO $$ BEGIN
   CREATE TYPE "exercise_submission_status" AS ENUM ('pending', 'approved', 'rejected');
@@ -338,10 +514,12 @@ CREATE TABLE IF NOT EXISTS "program_exercises" (
   "rest_seconds" integer,
   "notes" text,
   "superset_group" text,
+  "rest_after_group_only" boolean NOT NULL DEFAULT false,
   "tracking_level" tracking_level NOT NULL DEFAULT 'none',
   "video_check_enabled" boolean NOT NULL DEFAULT false
 );
 ALTER TABLE "program_exercises" ADD COLUMN IF NOT EXISTS "superset_group" text;
+ALTER TABLE "program_exercises" ADD COLUMN IF NOT EXISTS "rest_after_group_only" boolean NOT NULL DEFAULT false;
 ALTER TABLE "program_exercises" ADD COLUMN IF NOT EXISTS "tracking_level" tracking_level NOT NULL DEFAULT 'none';
 ALTER TABLE "program_exercises" ADD COLUMN IF NOT EXISTS "video_check_enabled" boolean NOT NULL DEFAULT false;
 
@@ -352,10 +530,12 @@ CREATE TABLE IF NOT EXISTS "assignments" (
   "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
   "start_date" date NOT NULL,
   "correctives_enabled" boolean NOT NULL DEFAULT true,
+  "duration_weeks" integer NOT NULL DEFAULT 1,
   "date_overrides" json,
   "created_at" timestamp NOT NULL DEFAULT now()
 );
 ALTER TABLE "assignments" ADD COLUMN IF NOT EXISTS "correctives_enabled" boolean NOT NULL DEFAULT true;
+ALTER TABLE "assignments" ADD COLUMN IF NOT EXISTS "duration_weeks" integer NOT NULL DEFAULT 1;
 ALTER TABLE "assignments" ADD COLUMN IF NOT EXISTS "date_overrides" json;
 
 CREATE TABLE IF NOT EXISTS "assignment_correctives" (
@@ -463,6 +643,8 @@ ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "ground_contact_secon
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "reactive_strength_index" real;
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "jump_breakdown" json;
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "leg_drive_asymmetry" json;
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "arm_drive_asymmetry" json;
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "trust_scores" json;
 
 CREATE TABLE IF NOT EXISTS "workout_comments" (
   "id" serial PRIMARY KEY,
@@ -472,9 +654,11 @@ CREATE TABLE IF NOT EXISTS "workout_comments" (
   "body" text NOT NULL,
   "video_url" text,
   "image_url" text,
+  "date" text,
   "created_at" timestamp NOT NULL DEFAULT now()
 );
 ALTER TABLE "workout_comments" ADD COLUMN IF NOT EXISTS "image_url" text;
+ALTER TABLE "workout_comments" ADD COLUMN IF NOT EXISTS "date" text;
 
 CREATE TABLE IF NOT EXISTS "notifications" (
   "id" serial PRIMARY KEY,
@@ -496,6 +680,15 @@ CREATE TABLE IF NOT EXISTS "password_reset_tokens" (
   "created_at" timestamp NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS "email_verification_tokens" (
+  "id" serial PRIMARY KEY,
+  "user_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "token_hash" text NOT NULL,
+  "expires_at" timestamp NOT NULL,
+  "used_at" timestamp,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS "push_subscriptions" (
   "id" serial PRIMARY KEY,
   "user_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
@@ -504,6 +697,21 @@ CREATE TABLE IF NOT EXISTS "push_subscriptions" (
   "auth" text NOT NULL,
   "created_at" timestamp NOT NULL DEFAULT now()
 );
+
+-- Native-app twin of push_subscriptions above (APNs device tokens instead
+-- of a Web Push endpoint) -- added to shared/schema.ts when native push
+-- shipped, but never added here, so it never existed on the live database
+-- at all: every APNs subscribe/lookup hit "relation does not exist"
+-- instead of just returning empty. Same missing-reconcile-line class of
+-- bug as arm_drive_asymmetry/trust_scores below.
+CREATE TABLE IF NOT EXISTS "apns_device_tokens" (
+  "id" serial PRIMARY KEY,
+  "user_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "device_token" text NOT NULL,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "apns_device_tokens_device_token_idx" ON "apns_device_tokens" ("device_token");
+CREATE INDEX IF NOT EXISTS "apns_device_tokens_user_idx" ON "apns_device_tokens" ("user_id");
 
 CREATE TABLE IF NOT EXISTS "team_posts" (
   "id" serial PRIMARY KEY,
@@ -563,10 +771,24 @@ CREATE TABLE IF NOT EXISTS "food_log_entries" (
   "fat_g" real,
   "fiber_g" real,
   "sodium_mg" real,
+  "calcium_mg" real,
+  "iron_mg" real,
+  "vitamin_d_mcg" real,
+  "potassium_mg" real,
+  "magnesium_mg" real,
+  "vitamin_b12_mcg" real,
+  "zinc_mg" real,
   "source" food_log_source NOT NULL,
   "barcode" text,
   "logged_at" timestamp NOT NULL DEFAULT now()
 );
+ALTER TABLE "food_log_entries" ADD COLUMN IF NOT EXISTS "calcium_mg" real;
+ALTER TABLE "food_log_entries" ADD COLUMN IF NOT EXISTS "iron_mg" real;
+ALTER TABLE "food_log_entries" ADD COLUMN IF NOT EXISTS "vitamin_d_mcg" real;
+ALTER TABLE "food_log_entries" ADD COLUMN IF NOT EXISTS "potassium_mg" real;
+ALTER TABLE "food_log_entries" ADD COLUMN IF NOT EXISTS "magnesium_mg" real;
+ALTER TABLE "food_log_entries" ADD COLUMN IF NOT EXISTS "vitamin_b12_mcg" real;
+ALTER TABLE "food_log_entries" ADD COLUMN IF NOT EXISTS "zinc_mg" real;
 CREATE INDEX IF NOT EXISTS "food_log_entries_athlete_date_idx" ON "food_log_entries" ("athlete_id", "date");
 
 CREATE TABLE IF NOT EXISTS "testing_results" (
@@ -585,6 +807,30 @@ CREATE TABLE IF NOT EXISTS "testing_results" (
 CREATE INDEX IF NOT EXISTS "testing_results_athlete_idx" ON "testing_results" ("athlete_id");
 CREATE UNIQUE INDEX IF NOT EXISTS "testing_results_athlete_date_idx" ON "testing_results" ("athlete_id", "date");
 
+CREATE TABLE IF NOT EXISTS "goniometer_readings" (
+  "id" serial PRIMARY KEY,
+  "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "recorded_by" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "date" date NOT NULL,
+  "joint" text NOT NULL,
+  "movement" text NOT NULL,
+  "angle_degrees" real NOT NULL,
+  "notes" text,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "goniometer_readings_athlete_idx" ON "goniometer_readings" ("athlete_id");
+CREATE INDEX IF NOT EXISTS "goniometer_readings_athlete_joint_idx" ON "goniometer_readings" ("athlete_id", "joint");
+
+CREATE TABLE IF NOT EXISTS "weakness_reports" (
+  "id" serial PRIMARY KEY,
+  "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "generated_by" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "summary" text NOT NULL,
+  "deficits" json NOT NULL,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "weakness_reports_athlete_idx" ON "weakness_reports" ("athlete_id");
+
 CREATE TABLE IF NOT EXISTS "goals" (
   "id" serial PRIMARY KEY,
   "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
@@ -592,11 +838,15 @@ CREATE TABLE IF NOT EXISTS "goals" (
   "type" goal_type NOT NULL,
   "exercise_id" integer REFERENCES "exercises"("id") ON DELETE CASCADE,
   "testing_metric" text,
+  "skill_exercise_id" integer REFERENCES "skill_exercises"("id") ON DELETE CASCADE,
   "target_value" real NOT NULL,
   "target_unit" text NOT NULL,
   "target_date" date,
   "created_at" timestamp NOT NULL DEFAULT now()
 );
+ALTER TABLE "goals" ADD COLUMN IF NOT EXISTS "skill_exercise_id" integer REFERENCES "skill_exercises"("id") ON DELETE CASCADE;
+ALTER TABLE "goals" ADD COLUMN IF NOT EXISTS "achieved_at" timestamp;
+ALTER TABLE "goals" ADD COLUMN IF NOT EXISTS "archived_at" timestamp;
 CREATE INDEX IF NOT EXISTS "goals_athlete_idx" ON "goals" ("athlete_id");
 
 CREATE TABLE IF NOT EXISTS "wellness_checkins" (
@@ -625,11 +875,20 @@ CREATE TABLE IF NOT EXISTS "cara_sessions" (
   "last_activity_at" timestamp NOT NULL DEFAULT now(),
   "ended_at" timestamp,
   "end_reason" cara_end_reason,
-  "logged_by_coach_id" integer REFERENCES "users"("id"),
+  "logged_by_coach_id" integer REFERENCES "users"("id") ON DELETE SET NULL,
   "note" text
 );
 CREATE INDEX IF NOT EXISTS "cara_sessions_athlete_idx" ON "cara_sessions" ("athlete_id");
 CREATE INDEX IF NOT EXISTS "cara_sessions_open_idx" ON "cara_sessions" ("athlete_id", "ended_at");
+-- logged_by_coach_id originally had no ON DELETE behavior at all (the
+-- Postgres default, RESTRICT), the only FK in this file that was missing
+-- one -- would have blocked deleting a coach's account if they ever
+-- manually logged a CARA activity themselves. Re-points an already-live
+-- table's constraint at ON DELETE SET NULL to match; a no-op on a fresh
+-- database, which already gets it from the CREATE TABLE above.
+ALTER TABLE "cara_sessions" DROP CONSTRAINT IF EXISTS "cara_sessions_logged_by_coach_id_fkey";
+ALTER TABLE "cara_sessions" ADD CONSTRAINT "cara_sessions_logged_by_coach_id_fkey"
+  FOREIGN KEY ("logged_by_coach_id") REFERENCES "users"("id") ON DELETE SET NULL;
 
 CREATE TABLE IF NOT EXISTS "athlete_trophies" (
   "id" serial PRIMARY KEY,
@@ -745,6 +1004,239 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN null; END $$;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "gender" gender;
 
+DO $$ BEGIN
+  CREATE TYPE "training_style_preference" AS ENUM ('traditional', 'combination_circuit');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "training_style_preference" training_style_preference;
+
+CREATE TABLE IF NOT EXISTS "classes" (
+  "id" serial PRIMARY KEY,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "name" text NOT NULL,
+  "description" text,
+  "is_forge_official" boolean NOT NULL DEFAULT false,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+ALTER TABLE "classes" ADD COLUMN IF NOT EXISTS "category" text;
+ALTER TABLE "classes" ADD COLUMN IF NOT EXISTS "prerequisite_class_id" integer REFERENCES "classes"("id") ON DELETE SET NULL;
+ALTER TABLE "classes" ADD COLUMN IF NOT EXISTS "is_draft" boolean NOT NULL DEFAULT false;
+
+DO $$ BEGIN
+  CREATE TYPE "class_unlock_rule" AS ENUM ('immediate', 'time_elapsed', 'sessions_logged', 'reps_logged', 'manual');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+CREATE TABLE IF NOT EXISTS "class_lessons" (
+  "id" serial PRIMARY KEY,
+  "class_id" integer NOT NULL REFERENCES "classes"("id") ON DELETE CASCADE,
+  "lesson_number" integer NOT NULL,
+  "title" text NOT NULL,
+  "description" text,
+  "skill_program_id" integer NOT NULL REFERENCES "skill_programs"("id") ON DELETE CASCADE,
+  "unlock_rule" class_unlock_rule NOT NULL DEFAULT 'immediate',
+  "unlock_threshold" integer,
+  "price_cents" integer,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "class_lessons_class_idx" ON "class_lessons" ("class_id");
+ALTER TABLE "class_lessons" ADD COLUMN IF NOT EXISTS "content" json NOT NULL DEFAULT '[]';
+
+CREATE TABLE IF NOT EXISTS "class_lesson_quiz_questions" (
+  "id" serial PRIMARY KEY,
+  "class_lesson_id" integer NOT NULL REFERENCES "class_lessons"("id") ON DELETE CASCADE,
+  "order_index" integer NOT NULL DEFAULT 0,
+  "question_text" text NOT NULL,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "class_lesson_quiz_questions_lesson_idx" ON "class_lesson_quiz_questions" ("class_lesson_id");
+
+CREATE TABLE IF NOT EXISTS "class_lesson_quiz_answers" (
+  "id" serial PRIMARY KEY,
+  "question_id" integer NOT NULL REFERENCES "class_lesson_quiz_questions"("id") ON DELETE CASCADE,
+  "order_index" integer NOT NULL DEFAULT 0,
+  "answer_text" text NOT NULL,
+  "is_correct" boolean NOT NULL DEFAULT false,
+  "explanation" text NOT NULL
+);
+CREATE INDEX IF NOT EXISTS "class_lesson_quiz_answers_question_idx" ON "class_lesson_quiz_answers" ("question_id");
+
+CREATE TABLE IF NOT EXISTS "class_coach_settings" (
+  "id" serial PRIMARY KEY,
+  "class_id" integer NOT NULL REFERENCES "classes"("id") ON DELETE CASCADE,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "min_sessions_required" integer,
+  "min_days_elapsed" integer,
+  "created_at" timestamp NOT NULL DEFAULT now(),
+  "updated_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "class_coach_settings_class_coach_idx" ON "class_coach_settings" ("class_id", "coach_id");
+
+CREATE TABLE IF NOT EXISTS "class_enrollments" (
+  "id" serial PRIMARY KEY,
+  "class_id" integer NOT NULL REFERENCES "classes"("id") ON DELETE CASCADE,
+  "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "start_date" date NOT NULL,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+ALTER TABLE "class_enrollments" ADD COLUMN IF NOT EXISTS "completed_at" timestamp;
+CREATE INDEX IF NOT EXISTS "class_enrollments_athlete_idx" ON "class_enrollments" ("athlete_id");
+CREATE INDEX IF NOT EXISTS "class_enrollments_class_idx" ON "class_enrollments" ("class_id");
+
+CREATE TABLE IF NOT EXISTS "class_lesson_progress" (
+  "id" serial PRIMARY KEY,
+  "enrollment_id" integer NOT NULL REFERENCES "class_enrollments"("id") ON DELETE CASCADE,
+  "class_lesson_id" integer NOT NULL REFERENCES "class_lessons"("id") ON DELETE CASCADE,
+  "skill_assignment_id" integer REFERENCES "skill_assignments"("id") ON DELETE SET NULL,
+  "unlocked_at" timestamp,
+  "purchased_at" timestamp,
+  "manually_unlocked" boolean NOT NULL DEFAULT false,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "class_lesson_progress_enrollment_idx" ON "class_lesson_progress" ("enrollment_id");
+ALTER TABLE "class_lesson_progress" ADD COLUMN IF NOT EXISTS "content_completed_at" timestamp;
+ALTER TABLE "class_lesson_progress" ADD COLUMN IF NOT EXISTS "quiz_passed_at" timestamp;
+ALTER TABLE "class_lesson_progress" ADD COLUMN IF NOT EXISTS "quiz_perfect_at" timestamp;
+ALTER TABLE "class_lesson_progress" ADD COLUMN IF NOT EXISTS "quiz_fail_count" integer NOT NULL DEFAULT 0;
+ALTER TABLE "class_lesson_progress" ADD COLUMN IF NOT EXISTS "coach_notified_stuck_at" timestamp;
+
+CREATE TABLE IF NOT EXISTS "academy_tracks" (
+  "id" serial PRIMARY KEY,
+  "title" text NOT NULL,
+  "description" text NOT NULL,
+  "key_principles_for_ai" text NOT NULL,
+  "order_index" integer NOT NULL DEFAULT 0,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS "academy_lessons" (
+  "id" serial PRIMARY KEY,
+  "track_id" integer NOT NULL REFERENCES "academy_tracks"("id") ON DELETE CASCADE,
+  "lesson_number" integer NOT NULL,
+  "title" text NOT NULL,
+  "content" text NOT NULL,
+  "est_minutes" integer,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "academy_lessons_track_idx" ON "academy_lessons" ("track_id");
+
+CREATE TABLE IF NOT EXISTS "academy_lesson_completions" (
+  "id" serial PRIMARY KEY,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "lesson_id" integer NOT NULL REFERENCES "academy_lessons"("id") ON DELETE CASCADE,
+  "completed_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "academy_lesson_completions_coach_lesson_idx" ON "academy_lesson_completions" ("coach_id", "lesson_id");
+
+CREATE TABLE IF NOT EXISTS "academy_quiz_questions" (
+  "id" serial PRIMARY KEY,
+  "track_id" integer NOT NULL REFERENCES "academy_tracks"("id") ON DELETE CASCADE,
+  "order_index" integer NOT NULL DEFAULT 0,
+  "question_text" text NOT NULL,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "academy_quiz_questions_track_idx" ON "academy_quiz_questions" ("track_id");
+
+CREATE TABLE IF NOT EXISTS "academy_quiz_answers" (
+  "id" serial PRIMARY KEY,
+  "question_id" integer NOT NULL REFERENCES "academy_quiz_questions"("id") ON DELETE CASCADE,
+  "order_index" integer NOT NULL DEFAULT 0,
+  "answer_text" text NOT NULL,
+  "is_correct" boolean NOT NULL DEFAULT false,
+  "explanation" text NOT NULL
+);
+CREATE INDEX IF NOT EXISTS "academy_quiz_answers_question_idx" ON "academy_quiz_answers" ("question_id");
+
+DO $$ BEGIN
+  CREATE TYPE "nutrition_goal" AS ENUM ('build_muscle', 'lose_fat', 'improve_performance', 'general_health');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "nutrition_goal" nutrition_goal;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "nutrition_goal_note" text;
+
+CREATE TABLE IF NOT EXISTS "injury_history" (
+  "id" serial PRIMARY KEY,
+  "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "body_part" text NOT NULL,
+  "occurred_on" date NOT NULL,
+  "description" text,
+  "resolved" boolean NOT NULL DEFAULT false,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "injury_history_athlete_idx" ON "injury_history" ("athlete_id", "occurred_on");
+
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "agreed_to_terms_at" timestamp;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "agreed_to_terms_text" text;
+
+CREATE TABLE IF NOT EXISTS "legal_agreement" (
+  "id" integer PRIMARY KEY,
+  "content" text NOT NULL DEFAULT '',
+  "updated_at" timestamp NOT NULL DEFAULT now()
+);
+
+ALTER TABLE "skill_programs" ADD COLUMN IF NOT EXISTS "ai_authored" boolean NOT NULL DEFAULT false;
+
+CREATE TABLE IF NOT EXISTS "skill_day_logs" (
+  "id" serial PRIMARY KEY,
+  "skill_assignment_id" integer NOT NULL REFERENCES "skill_assignments"("id") ON DELETE CASCADE,
+  "skill_program_day_id" integer NOT NULL REFERENCES "skill_program_days"("id") ON DELETE CASCADE,
+  "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "date" date NOT NULL,
+  "completed" boolean NOT NULL DEFAULT false,
+  "completed_at" timestamp
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "skill_day_log_day_instance_idx" ON "skill_day_logs" ("skill_assignment_id", "skill_program_day_id", "date");
+
+CREATE TABLE IF NOT EXISTS "skill_day_comments" (
+  "id" serial PRIMARY KEY,
+  "skill_assignment_id" integer NOT NULL REFERENCES "skill_assignments"("id") ON DELETE CASCADE,
+  "skill_program_day_id" integer NOT NULL REFERENCES "skill_program_days"("id") ON DELETE CASCADE,
+  "author_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "body" text NOT NULL,
+  "video_url" text,
+  "image_url" text,
+  "date" text,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "skill_day_comments_assignment_day_idx" ON "skill_day_comments" ("skill_assignment_id", "skill_program_day_id");
+
+ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "peak_wrist_speed_mps" real;
+ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "stride_length_m" real;
+ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "elbow_extension_deg" real;
+ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "release_height_m" real;
+ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "set_point_pause_seconds" real;
+ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "knee_bend_depth_deg" real;
+
+CREATE TABLE IF NOT EXISTS "imported_testing_data" (
+  "id" serial PRIMARY KEY,
+  "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "imported_by_user_id" integer REFERENCES "users"("id") ON DELETE SET NULL,
+  "date" date NOT NULL,
+  "exercise_name" text NOT NULL,
+  "set_number" integer,
+  "load_lbs" real,
+  "velocity_mps" real,
+  "power_watts" real,
+  "source" text NOT NULL DEFAULT 'photo import',
+  "notes" text,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "imported_testing_data_athlete_idx" ON "imported_testing_data" ("athlete_id", "date");
+
+CREATE TABLE IF NOT EXISTS "provisional_athletes" (
+  "id" serial PRIMARY KEY,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "claim_code" text NOT NULL,
+  "name" text NOT NULL,
+  "height_in" integer,
+  "body_weight_lbs" real,
+  "age" integer,
+  "gender" gender,
+  "sport" text,
+  "position" text,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "provisional_athletes_claim_code_idx" ON "provisional_athletes" ("claim_code");
+CREATE INDEX IF NOT EXISTS "provisional_athletes_coach_idx" ON "provisional_athletes" ("coach_id");
+
 -- White-label branding + dashboard/nav personalization (org-wide on
 -- users, per-team override, per-staff-member display title).
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "brand_team_name" text;
@@ -838,6 +1330,71 @@ CREATE TABLE IF NOT EXISTS "movement_knowledge_messages" (
 );
 CREATE INDEX IF NOT EXISTS "movement_knowledge_messages_type_created_idx" ON "movement_knowledge_messages" ("movement_type", "created_at");
 
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "enabled_features" json;
+
+ALTER TABLE "injury_history" ADD COLUMN IF NOT EXISTS "resolved_on" date;
+
+DO $$ BEGIN
+  CREATE TYPE "ai_knowledge_maturity" AS ENUM ('established', 'experimental');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE "ai_knowledge_source_type" AS ENUM ('chat', 'url', 'image', 'pasted_text');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE "ai_knowledge_change_type" AS ENUM ('created', 'updated', 'corrected', 'deactivated');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+-- Forge AI's central knowledge base -- one row per taught fact/rule,
+-- superseding the single-document ai_knowledge/nutrition_knowledge tables
+-- above (kept in place, not dropped, until the teaching chat itself is
+-- migrated to write here).
+CREATE TABLE IF NOT EXISTS "ai_knowledge_entries" (
+  "id" serial PRIMARY KEY,
+  "content" text NOT NULL,
+  "category" text,
+  "position" text,
+  "gender" gender,
+  "age_min" integer,
+  "age_max" integer,
+  "maturity" ai_knowledge_maturity NOT NULL DEFAULT 'established',
+  "source_type" ai_knowledge_source_type NOT NULL DEFAULT 'chat',
+  "source_excerpt" text,
+  "taught_by" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "active" boolean NOT NULL DEFAULT true,
+  "created_at" timestamp NOT NULL DEFAULT now(),
+  "updated_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "ai_knowledge_entries_active_idx" ON "ai_knowledge_entries" ("active");
+
+CREATE TABLE IF NOT EXISTS "ai_knowledge_changelog" (
+  "id" serial PRIMARY KEY,
+  "entry_id" integer NOT NULL REFERENCES "ai_knowledge_entries"("id") ON DELETE CASCADE,
+  "previous_content" text,
+  "new_content" text NOT NULL,
+  "reason" text NOT NULL,
+  "change_type" ai_knowledge_change_type NOT NULL DEFAULT 'updated',
+  "changed_by" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "ai_knowledge_changelog_entry_idx" ON "ai_knowledge_changelog" ("entry_id", "created_at");
+
+CREATE TABLE IF NOT EXISTS "aggregate_data_access_log" (
+  "id" serial PRIMARY KEY,
+  "admin_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "viewed_at" timestamp NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS "forge_ai_messages" (
+  "id" serial PRIMARY KEY,
+  "author_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "role" ai_knowledge_chat_role NOT NULL,
+  "content" text NOT NULL,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "forge_ai_messages_created_idx" ON "forge_ai_messages" ("created_at");
+
 DO $$ BEGIN
   CREATE TYPE "movement_profile_status" AS ENUM ('active', 'archived');
 EXCEPTION WHEN duplicate_object THEN null; END $$;
@@ -859,11 +1416,410 @@ CREATE TABLE IF NOT EXISTS "movement_profiles" (
   "created_at" timestamp NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS "movement_profiles_type_status_idx" ON "movement_profiles" ("movement_type", "status");
+
+CREATE TABLE IF NOT EXISTS "ai_knowledge_usage_log" (
+  "id" serial PRIMARY KEY,
+  "entry_id" integer NOT NULL REFERENCES "ai_knowledge_entries"("id") ON DELETE CASCADE,
+  "context" text NOT NULL,
+  "called_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "ai_knowledge_usage_log_entry_idx" ON "ai_knowledge_usage_log" ("entry_id", "called_at");
+
+CREATE TABLE IF NOT EXISTS "ai_knowledge_gap_log" (
+  "id" serial PRIMARY KEY,
+  "context" text NOT NULL,
+  "position" text,
+  "gender" gender,
+  "age" integer,
+  "called_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "ai_knowledge_gap_log_context_idx" ON "ai_knowledge_gap_log" ("context", "called_at");
+
+DO $$ BEGIN
+  CREATE TYPE "reflection_finding_tier" AS ENUM ('safety', 'informational');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE "reflection_confidence" AS ENUM ('low', 'moderate', 'high');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+CREATE TABLE IF NOT EXISTS "ai_reflection_findings" (
+  "id" serial PRIMARY KEY,
+  "tier" reflection_finding_tier NOT NULL,
+  "category" text NOT NULL,
+  "summary" text NOT NULL,
+  "detail" text NOT NULL,
+  "sample_size" integer NOT NULL,
+  "confidence" reflection_confidence NOT NULL,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "ai_reflection_findings_category_idx" ON "ai_reflection_findings" ("category", "created_at");
+
+DO $$ BEGIN
+  CREATE TYPE "movement_screen_score_type" AS ENUM ('grade_0_3', 'distance_in', 'time_sec', 'asymmetry_pct');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE "movement_screen_capture_method" AS ENUM ('manual', 'photo_import', 'camera_assisted');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE "body_side" AS ENUM ('left', 'right');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+CREATE TABLE IF NOT EXISTS "movement_screen_batteries" (
+  "id" serial PRIMARY KEY,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "is_forge_official" boolean NOT NULL DEFAULT false,
+  "name" text NOT NULL,
+  "description" text,
+  "forked_from_id" integer,
+  "created_at" timestamp NOT NULL DEFAULT now(),
+  "updated_at" timestamp NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS "movement_screen_battery_tests" (
+  "id" serial PRIMARY KEY,
+  "battery_id" integer NOT NULL REFERENCES "movement_screen_batteries"("id") ON DELETE CASCADE,
+  "test_key" text NOT NULL,
+  "label" text NOT NULL,
+  "category" text NOT NULL,
+  "score_type" movement_screen_score_type NOT NULL,
+  "unit_label" text,
+  "side" laterality NOT NULL,
+  "instructions" text,
+  "sort_order" integer NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS "movement_screen_battery_tests_battery_idx" ON "movement_screen_battery_tests" ("battery_id", "sort_order");
+-- category started as an enum before it was loosened to free text so a
+-- coach could type their own grouping label instead of picking from a
+-- fixed list -- these are no-ops once already migrated, safe to re-run.
+ALTER TABLE "movement_screen_battery_tests" ALTER COLUMN "category" TYPE text USING "category"::text;
+ALTER TABLE "movement_screen_battery_tests" ADD COLUMN IF NOT EXISTS "unit_label" text;
+
+CREATE TABLE IF NOT EXISTS "movement_screens" (
+  "id" serial PRIMARY KEY,
+  "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "battery_id" integer REFERENCES "movement_screen_batteries"("id") ON DELETE SET NULL,
+  "date" date NOT NULL,
+  "capture_method" movement_screen_capture_method NOT NULL DEFAULT 'manual',
+  "notes" text,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "movement_screens_athlete_idx" ON "movement_screens" ("athlete_id", "date");
+
+CREATE TABLE IF NOT EXISTS "movement_screen_results" (
+  "id" serial PRIMARY KEY,
+  "screen_id" integer NOT NULL REFERENCES "movement_screens"("id") ON DELETE CASCADE,
+  "test_key" text NOT NULL,
+  "label" text NOT NULL,
+  "category" text NOT NULL,
+  "score_type" movement_screen_score_type NOT NULL,
+  "unit_label" text,
+  "side" body_side,
+  "score_value" real NOT NULL,
+  "flagged" boolean NOT NULL DEFAULT false,
+  "notes" text
+);
+CREATE INDEX IF NOT EXISTS "movement_screen_results_screen_idx" ON "movement_screen_results" ("screen_id");
+ALTER TABLE "movement_screen_results" ALTER COLUMN "category" TYPE text USING "category"::text;
+ALTER TABLE "movement_screen_results" ADD COLUMN IF NOT EXISTS "unit_label" text;
+
+`;
+
+// See SQL_PART_1's own comment above for why this is a second, separate
+// pool.query() call rather than one continuous string with the block
+// above -- this half reads the 'admin' role value SQL_PART_1 just added.
+const SQL_PART_2 = `
+-- Seeds the Forge-official "Forge Standard Screen" battery once an admin
+-- account exists to own it -- a no-op (and safe to re-run every deploy)
+-- once it's already been inserted, or if no admin exists yet.
+DO $$
+DECLARE
+  admin_id integer;
+  battery_id integer;
+BEGIN
+  SELECT id INTO admin_id FROM "users" WHERE "role" = 'admin' ORDER BY id LIMIT 1;
+  IF admin_id IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM "movement_screen_batteries" WHERE "is_forge_official" = true AND "name" = 'Forge Standard Screen'
+  ) THEN
+    INSERT INTO "movement_screen_batteries" ("coach_id", "is_forge_official", "name", "description")
+    VALUES (admin_id, true, 'Forge Standard Screen', 'Forge''s default functional-movement screen -- postural, mobility, power, and balance tests. Fork it to customize for your team.')
+    RETURNING id INTO battery_id;
+
+    INSERT INTO "movement_screen_battery_tests" ("battery_id", "test_key", "label", "category", "score_type", "side", "instructions", "sort_order") VALUES
+      (battery_id, 'overhead_squat', 'Overhead Squat', 'postural', 'grade_0_3', 'bilateral', 'Feet shoulder-width, arms overhead, descend as far as comfortable. Watch for heel rise, knee valgus, excessive forward lean, or arms falling forward. 3 = clean depth with no compensation, 2 = one compensation, 1 = multiple compensations, 0 = pain.', 0),
+      (battery_id, 'inline_lunge', 'In-Line Lunge', 'postural', 'grade_0_3', 'unilateral', 'Heel-to-toe stance on a line, back knee lowers to touch the floor. Watch for loss of balance, torso lean, or the front knee drifting off the line.', 1),
+      (battery_id, 'single_leg_squat', 'Single-Leg Squat', 'postural', 'grade_0_3', 'unilateral', 'Single-leg stance, squat to ~60 degrees of knee flexion. Watch for hip drop, knee valgus, or excessive trunk lean.', 2),
+      (battery_id, 'ankle_dorsiflexion', 'Ankle Dorsiflexion (Weight-Bearing Lunge)', 'mobility', 'distance_in', 'unilateral', 'Knee-to-wall lunge test -- record the farthest distance (inches) from the wall the big toe can be while the knee still touches the wall, heel flat.', 3),
+      (battery_id, 'shoulder_mobility_reach', 'Shoulder Mobility Reach', 'mobility', 'distance_in', 'unilateral', 'One hand reaches over the shoulder, the other up the back -- record the gap (inches) between fingertips. Smaller is better.', 4),
+      (battery_id, 'trunk_stability_pushup', 'Trunk Stability Push-Up', 'power', 'grade_0_3', 'bilateral', 'From a push-up position, the whole body rises as one unit with no lag in the spine. Watch for hips sagging or hiking before the chest clears the floor.', 5),
+      (battery_id, 'rotary_stability', 'Rotary Stability', 'power', 'grade_0_3', 'unilateral', 'Quadruped position, opposite hand/knee extend and touch together underneath. Watch for loss of balance or an inability to keep the spine neutral.', 6),
+      (battery_id, 'y_balance_anterior', 'Y-Balance -- Anterior Reach', 'balance', 'distance_in', 'unilateral', 'Single-leg stance, reach the free foot as far forward as possible without losing balance or touching down. Record the reach distance in inches.', 7),
+      (battery_id, 'y_balance_posteromedial', 'Y-Balance -- Posteromedial Reach', 'balance', 'distance_in', 'unilateral', 'Same setup as the anterior reach, reaching diagonally back and toward the midline.', 8),
+      (battery_id, 'y_balance_posterolateral', 'Y-Balance -- Posterolateral Reach', 'balance', 'distance_in', 'unilateral', 'Same setup as the anterior reach, reaching diagonally back and away from the midline.', 9);
+  END IF;
+END $$;
+
+-- Age-tier scaffolding (see shared/privacy-tiers.ts) -- real date of birth,
+-- separate from the self-reported "age" snapshot above, plus provenance/
+-- notice flags used by the signup and claim-code routes.
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "date_of_birth" date;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "provisioned_via_coach_consent" boolean NOT NULL DEFAULT false;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "requires_guardian_notice" boolean NOT NULL DEFAULT false;
+ALTER TABLE "provisional_athletes" ADD COLUMN IF NOT EXISTS "date_of_birth" date;
+
+-- Admin Query Engine saved filter presets (shared/schema.ts adminSavedViews).
+CREATE TABLE IF NOT EXISTS "admin_saved_views" (
+  "id" serial PRIMARY KEY,
+  "name" text NOT NULL,
+  "filters" json NOT NULL,
+  "created_by_admin_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+
+-- Immutable consent audit log (shared/schema.ts consentRecords).
+DO $$ BEGIN
+  CREATE TYPE "consent_type" AS ENUM ('terms_of_service', 'biometric_waiver', 'coach_coppa_consent', 'parental_notice_ack');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+CREATE TABLE IF NOT EXISTS "consent_records" (
+  "id" serial PRIMARY KEY,
+  "user_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "consent_type" consent_type NOT NULL,
+  "document_text" text NOT NULL,
+  "document_version" text NOT NULL,
+  "given_by_user_id" integer REFERENCES "users"("id") ON DELETE SET NULL,
+  "ip_address" text,
+  "user_agent" text,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "consent_records_user_idx" ON "consent_records" ("user_id", "created_at");
+
+-- Immutable per-record access audit log (shared/schema.ts recordAccessAuditLogs).
+DO $$ BEGIN
+  CREATE TYPE "record_access_action" AS ENUM ('viewed', 'streamed', 'downloaded', 'exported', 'deleted');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+CREATE TABLE IF NOT EXISTS "record_access_audit_logs" (
+  "id" serial PRIMARY KEY,
+  "user_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "target_athlete_id" integer REFERENCES "users"("id") ON DELETE SET NULL,
+  "action_type" record_access_action NOT NULL,
+  "resource_type" text NOT NULL,
+  "resource_id" text,
+  "detail" text,
+  "justification" text,
+  "ip_address" text,
+  "user_agent" text,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "record_access_audit_logs_target_idx" ON "record_access_audit_logs" ("target_athlete_id", "created_at");
+CREATE INDEX IF NOT EXISTS "record_access_audit_logs_user_idx" ON "record_access_audit_logs" ("user_id", "created_at");
+
+-- Draft Terms of Service / Privacy Policy documents (shared/schema.ts
+-- legalDocuments) -- structure only, content is seeded idempotently by
+-- server/seed.ts (onConflictDoNothing), not here, since a multi-paragraph
+-- document is much safer to insert via a parameterized Drizzle query than
+-- hand-escaped into a raw SQL string literal.
+DO $$ BEGIN
+  CREATE TYPE "legal_document_type" AS ENUM ('terms_of_service', 'privacy_policy', 'biometric_waiver', 'parental_notice');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+ALTER TYPE "legal_document_type" ADD VALUE IF NOT EXISTS 'biometric_waiver';
+ALTER TYPE "legal_document_type" ADD VALUE IF NOT EXISTS 'parental_notice';
+
+CREATE TABLE IF NOT EXISTS "legal_documents" (
+  "id" serial PRIMARY KEY,
+  "doc_type" legal_document_type NOT NULL UNIQUE,
+  "content" text NOT NULL DEFAULT '',
+  "updated_at" timestamp NOT NULL DEFAULT now()
+);
+
+-- Coach-personal widget visibility (shared/schema.ts users.hiddenWidgets).
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "hidden_widgets" json;
+
+-- Per-staff granular section permissions (shared/coach-sections.ts,
+-- shared/schema.ts coachSectionEnum + coachStaff.hiddenSections). Same
+-- missing-reconcile-line class of bug as apns_device_tokens above: added to
+-- shared/schema.ts but never added here, so the column/type never existed
+-- on the live database at all.
+DO $$ BEGIN
+  CREATE TYPE "coach_section" AS ENUM (
+    'calendar', 'programs', 'exercises', 'skillPrograms', 'skillBank',
+    'classes', 'roster', 'movementScreens', 'nutrition', 'analytics',
+    'leaderboard', 'teamBoard'
+  );
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+ALTER TABLE "coach_staff" ADD COLUMN IF NOT EXISTS "hidden_sections" coach_section[] NOT NULL DEFAULT '{}';
+
+-- Coach exercise/skill favoriting (shared/schema.ts favoriteExercises,
+-- favoriteSkillExercises).
+CREATE TABLE IF NOT EXISTS "favorite_exercises" (
+  "id" serial PRIMARY KEY,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "exercise_id" integer NOT NULL REFERENCES "exercises"("id") ON DELETE CASCADE,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "favorite_exercises_pair_idx" ON "favorite_exercises" ("coach_id", "exercise_id");
+
+CREATE TABLE IF NOT EXISTS "favorite_skill_exercises" (
+  "id" serial PRIMARY KEY,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "skill_exercise_id" integer NOT NULL REFERENCES "skill_exercises"("id") ON DELETE CASCADE,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "favorite_skill_exercises_pair_idx" ON "favorite_skill_exercises" ("coach_id", "skill_exercise_id");
+
+-- Optional wearable-sourced recovery metrics on the daily check-in
+-- (shared/schema.ts wellnessCheckins.restingHeartRate/hrv).
+ALTER TABLE "wellness_checkins" ADD COLUMN IF NOT EXISTS "resting_heart_rate" real;
+ALTER TABLE "wellness_checkins" ADD COLUMN IF NOT EXISTS "hrv" real;
+
+-- Same wearable-sourced, opt-in story, three more Health-derived metrics
+-- (shared/schema.ts wellnessCheckins.vo2Max/respiratoryRate/bodyMass).
+ALTER TABLE "wellness_checkins" ADD COLUMN IF NOT EXISTS "vo2_max" real;
+ALTER TABLE "wellness_checkins" ADD COLUMN IF NOT EXISTS "respiratory_rate" real;
+ALTER TABLE "wellness_checkins" ADD COLUMN IF NOT EXISTS "body_mass" real;
+
+-- Heart rate recovery, derived client-side from raw heart-rate samples
+-- rather than read directly from Health (shared/schema.ts
+-- wellnessCheckins.heartRateRecovery).
+ALTER TABLE "wellness_checkins" ADD COLUMN IF NOT EXISTS "heart_rate_recovery" real;
+
+-- PR-badge/Free-Agent rolling-cap purge (shared/schema.ts
+-- workoutSetEntries.isPr/pendingDeletionAt -- videoFavorited/video_favorited
+-- already added above).
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "is_pr" boolean NOT NULL DEFAULT false;
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "pending_deletion_at" date;
+
+-- Golf/baseball swing tracking (shared/schema.ts workoutSetEntries's
+-- swingSeparationDeg/swingTempoRatio/swingBackswingMs/swingDownswingMs/
+-- swingHeadSwayCm).
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "swing_separation_deg" real;
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "swing_tempo_ratio" real;
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "swing_backswing_ms" integer;
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "swing_downswing_ms" integer;
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "swing_head_sway_cm" real;
+
+-- Billing framework -- see shared/schema.ts's own comment above the
+-- subscriptions table for why this exists with nothing wired to real
+-- money yet.
+DO $$ BEGIN
+  CREATE TYPE "subscription_status" AS ENUM ('trialing', 'active', 'past_due', 'canceled', 'hibernating');
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END $$;
+
+CREATE TABLE IF NOT EXISTS "subscriptions" (
+  "id" serial PRIMARY KEY,
+  "user_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "account_type" text NOT NULL,
+  "tier" text NOT NULL,
+  "seat_cap" integer,
+  "status" subscription_status NOT NULL DEFAULT 'trialing',
+  "trial_ends_at" timestamp,
+  "current_period_end" timestamp,
+  "cancel_at_period_end" boolean NOT NULL DEFAULT false,
+  "stripe_customer_id" text,
+  "stripe_subscription_id" text,
+  "apple_original_transaction_id" text,
+  "created_at" timestamp NOT NULL DEFAULT now(),
+  "updated_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "subscriptions_user_idx" ON "subscriptions" ("user_id");
+CREATE INDEX IF NOT EXISTS "subscriptions_stripe_subscription_idx" ON "subscriptions" ("stripe_subscription_id");
+
+CREATE TABLE IF NOT EXISTS "billing_audit_log" (
+  "id" serial PRIMARY KEY,
+  "user_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "event" text NOT NULL,
+  "detail" json,
+  "stripe_event_id" text UNIQUE,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+ALTER TABLE "billing_audit_log" ADD COLUMN IF NOT EXISTS "stripe_event_id" text UNIQUE;
+CREATE INDEX IF NOT EXISTS "billing_audit_log_user_idx" ON "billing_audit_log" ("user_id", "created_at");
+
+CREATE TABLE IF NOT EXISTS "uploaded_files" (
+  "id" serial PRIMARY KEY,
+  "path" text NOT NULL UNIQUE,
+  "uploaded_by" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "uploaded_files_uploaded_by_idx" ON "uploaded_files" ("uploaded_by");
+
+CREATE TABLE IF NOT EXISTS "problem_reports" (
+  "id" serial PRIMARY KEY,
+  "user_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "message" text NOT NULL,
+  "image_url" text,
+  "path" text,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "problem_reports_created_idx" ON "problem_reports" ("created_at");
+
+DO $$ BEGIN
+  CREATE TYPE "session_kind" AS ENUM ('web', 'native');
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END $$;
+
+CREATE TABLE IF NOT EXISTS "user_sessions" (
+  "id" serial PRIMARY KEY,
+  "user_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "kind" session_kind NOT NULL,
+  "web_session_id" text,
+  "device_label" text,
+  "ip_address" text,
+  "location" text,
+  "created_at" timestamp NOT NULL DEFAULT now(),
+  "last_seen_at" timestamp NOT NULL DEFAULT now(),
+  "revoked_at" timestamp
+);
+CREATE INDEX IF NOT EXISTS "user_sessions_user_idx" ON "user_sessions" ("user_id");
+
+-- One guardian per athlete, ever -- both FKs are unique, not just the pair
+-- (shared/schema.ts guardianLinks' own comment explains why).
+CREATE TABLE IF NOT EXISTS "guardian_links" (
+  "id" serial PRIMARY KEY,
+  "athlete_id" integer NOT NULL UNIQUE REFERENCES "users"("id") ON DELETE CASCADE,
+  "guardian_id" integer NOT NULL UNIQUE REFERENCES "users"("id") ON DELETE CASCADE,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS "guardian_invites" (
+  "id" serial PRIMARY KEY,
+  "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "email" text NOT NULL,
+  "token_hash" text NOT NULL,
+  "expires_at" timestamp NOT NULL,
+  "claimed_at" timestamp,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "guardian_invites_athlete_idx" ON "guardian_invites" ("athlete_id");
+
+-- Free-text display title for a staff coach (shared/schema.ts
+-- coachStaff.staffTitle) -- e.g. "Nutritionist" or "Strength Coach" shown
+-- in place of the generic "Coach" label wherever this staff member's name
+-- renders, without needing a whole separate account type/role.
+ALTER TABLE "coach_staff" ADD COLUMN IF NOT EXISTS "staff_title" text;
+
+-- Per-team branding override (shared/schema.ts teams.brand*) -- optional,
+-- falls back to the org-wide users.brand* columns when unset (see
+-- getEffectiveBrandingForUser in storage.ts).
+ALTER TABLE "teams" ADD COLUMN IF NOT EXISTS "brand_logo_url" text;
+ALTER TABLE "teams" ADD COLUMN IF NOT EXISTS "brand_primary_color" text;
+ALTER TABLE "teams" ADD COLUMN IF NOT EXISTS "brand_secondary_color" text;
 `;
 
 async function main() {
   console.log("Reconciling schema (idempotent, additive-only)...");
-  await pool.query(SQL);
+  // Two separate calls, two separate implicit transactions -- see
+  // SQL_PART_1's own comment for why that matters on a from-scratch
+  // database.
+  await pool.query(SQL_PART_1);
+  await pool.query(SQL_PART_2);
   console.log("Schema reconciliation complete.");
   await pool.end();
 }

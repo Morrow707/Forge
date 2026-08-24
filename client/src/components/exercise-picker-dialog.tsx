@@ -12,7 +12,14 @@ import { cn } from "@/lib/utils";
 import { Search, Dumbbell, Stethoscope } from "lucide-react";
 import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
 import type { ExerciseWithOwnership as Exercise } from "@/lib/exercise-types";
-import { MOVEMENT_TYPES, MUSCLE_GROUPS, SPORTS } from "@/lib/exercise-taxonomy";
+import {
+  MOVEMENT_TYPES,
+  MUSCLE_GROUPS,
+  SPORTS,
+  BODY_REGIONS,
+  PLANES,
+  MOVEMENT_COMPLEXITIES,
+} from "@/lib/exercise-taxonomy";
 import { FilterChipGroup, toggleInSet } from "@/components/filter-chip-group";
 import {
   CATEGORY_FILTER_ACTIVE_CLASS,
@@ -21,6 +28,9 @@ import {
   MUSCLE_FILTER_ACTIVE_CLASS,
   SPORT_FILTER_ACTIVE_CLASS,
   OWNER_FILTER_ACTIVE_CLASS,
+  BODY_REGION_FILTER_ACTIVE_CLASS,
+  PLANE_FILTER_ACTIVE_CLASS,
+  MOVEMENT_COMPLEXITY_FILTER_ACTIVE_CLASS,
 } from "@/lib/exercise-colors";
 
 const CATEGORIES = ["strength", "conditioning", "olympic", "accessory", "mobility", "plyometric"];
@@ -49,6 +59,9 @@ export function ExercisePickerDialog({
   const [movementFilter, setMovementFilter] = useState<Set<string>>(new Set());
   const [muscleGroupFilter, setMuscleGroupFilter] = useState<Set<string>>(new Set());
   const [lateralityFilter, setLateralityFilter] = useState<Set<string>>(new Set());
+  const [bodyRegionFilter, setBodyRegionFilter] = useState<Set<string>>(new Set());
+  const [planeFilter, setPlaneFilter] = useState<Set<string>>(new Set());
+  const [complexityFilter, setComplexityFilter] = useState<Set<string>>(new Set());
   const [sportFilter, setSportFilter] = useState<Set<string>>(new Set());
   const [ownerFilter, setOwnerFilter] = useState<Set<string>>(new Set());
   const [onlyCorrectives, setOnlyCorrectives] = useState(correctivesOnly);
@@ -93,6 +106,14 @@ export function ExercisePickerDialog({
         const matchesLaterality =
           lateralityFilter.size === 0 ||
           (ex.laterality != null && lateralityFilter.has(ex.laterality));
+        const matchesBodyRegion =
+          bodyRegionFilter.size === 0 ||
+          (ex.bodyRegion != null && bodyRegionFilter.has(ex.bodyRegion));
+        const matchesPlane =
+          planeFilter.size === 0 || (ex.plane != null && planeFilter.has(ex.plane));
+        const matchesComplexity =
+          complexityFilter.size === 0 ||
+          (ex.movementComplexity != null && complexityFilter.has(ex.movementComplexity));
         const matchesSport =
           sportFilter.size === 0 || (ex.sports ?? []).some((s) => sportFilter.has(s));
         const matchesOwner = ownerFilter.size === 0 || ownerFilter.has(ex.ownerLabel);
@@ -103,6 +124,9 @@ export function ExercisePickerDialog({
           matchesMovement &&
           matchesMuscleGroup &&
           matchesLaterality &&
+          matchesBodyRegion &&
+          matchesPlane &&
+          matchesComplexity &&
           matchesSport &&
           matchesOwner &&
           matchesCorrective
@@ -115,6 +139,9 @@ export function ExercisePickerDialog({
       movementFilter,
       muscleGroupFilter,
       lateralityFilter,
+      bodyRegionFilter,
+      planeFilter,
+      complexityFilter,
       sportFilter,
       ownerFilter,
       onlyCorrectives,
@@ -127,7 +154,7 @@ export function ExercisePickerDialog({
           packs a search box, five filter groups, and a scrollable results
           list, which felt cramped at the default max-w-lg/85vh size,
           especially on a desktop with plenty of unused space around it. */}
-      <DialogContent className="inset-0 top-0 left-0 flex h-screen w-screen max-w-none max-h-none translate-x-0 translate-y-0 flex-col gap-0 rounded-none border-0 p-0">
+      <DialogContent className="inset-0 top-0 left-0 flex h-screen w-screen max-w-none max-h-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 p-0">
         <div className="shrink-0 space-y-4 border-b border-border p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle>{title ?? (correctivesOnly ? "Add Corrective" : "Add Exercise")}</DialogTitle>
@@ -142,6 +169,20 @@ export function ExercisePickerDialog({
               className="pl-9"
             />
           </div>
+        </div>
+        {/* Filters and results now share ONE scrollable region instead of
+            two (a fixed-height filter panel above a separately-scrolling
+            results list) -- with nine filter groups (Sport alone runs 30+
+            chips), the filter panel alone can be taller than a phone's
+            viewport, and since the panel was shrink-0 inside an
+            overflow-hidden dialog, whatever didn't fit was simply clipped:
+            invisible AND unreachable, taking the results list under it
+            down with it. Only the title/search stays pinned above this,
+            since re-introducing a second independently-scrolling sibling
+            here is exactly what the PREVIOUS mobile-scroll fix (see git
+            blame) had to undo -- two nested/stacked scroll containers make
+            it ambiguous which one a touch-scroll gesture should hit. */}
+        <div className="flex-1 space-y-4 overflow-y-auto p-4 sm:p-6">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <FilterChipGroup
               label="Category"
@@ -188,6 +229,27 @@ export function ExercisePickerDialog({
               colorClass={OWNER_FILTER_ACTIVE_CLASS}
             />
             <FilterChipGroup
+              label="Body Region"
+              options={BODY_REGIONS}
+              selected={bodyRegionFilter}
+              onToggle={(v) => toggleInSet(setBodyRegionFilter, v)}
+              colorClass={BODY_REGION_FILTER_ACTIVE_CLASS}
+            />
+            <FilterChipGroup
+              label="Plane"
+              options={PLANES}
+              selected={planeFilter}
+              onToggle={(v) => toggleInSet(setPlaneFilter, v)}
+              colorClass={PLANE_FILTER_ACTIVE_CLASS}
+            />
+            <FilterChipGroup
+              label="Complexity"
+              options={MOVEMENT_COMPLEXITIES}
+              selected={complexityFilter}
+              onToggle={(v) => toggleInSet(setComplexityFilter, v)}
+              colorClass={MOVEMENT_COMPLEXITY_FILTER_ACTIVE_CLASS}
+            />
+            <FilterChipGroup
               label="Muscle"
               options={bodyParts}
               selected={muscleGroupFilter}
@@ -204,44 +266,44 @@ export function ExercisePickerDialog({
               className="col-span-2 sm:col-span-4"
             />
           </div>
-        </div>
-        <div className="flex-1 space-y-1 overflow-y-auto p-4 sm:p-6">
-          {filtered.length === 0 && (
-            <div className="flex flex-col items-center gap-2 py-10 text-center text-sm text-muted-foreground">
-              <Dumbbell className="h-8 w-8" />
-              No exercises found matching these filters.
-            </div>
-          )}
-          {filtered.map((ex) => (
-            <button
-              key={ex.id}
-              type="button"
-              onClick={() => {
-                onSelect(ex);
-                onOpenChange(false);
-                setSearch("");
-              }}
-              className="flex w-full items-center justify-between rounded-md px-3 py-2.5 text-left transition-colors hover:bg-surface-elevated"
-            >
-              <div>
-                <p className="text-sm font-semibold">{ex.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {ex.muscleGroup} · {ex.equipment}
-                  {ex.movementType ? ` · ${ex.movementType}` : ""}
-                </p>
+          <div className="space-y-1 border-t border-border pt-4">
+            {filtered.length === 0 && (
+              <div className="flex flex-col items-center gap-2 py-10 text-center text-sm text-muted-foreground">
+                <Dumbbell className="h-8 w-8" />
+                No exercises found matching these filters.
               </div>
-              <div className="flex shrink-0 items-center gap-1">
-                {ex.isCorrective && <Stethoscope className="h-3.5 w-3.5 text-cyan-400" />}
-                <ExerciseOwnershipBadge
-                  isForgeOfficial={ex.isForgeOfficial}
-                  ownerLabel={ex.ownerLabel}
-                />
-                <Badge variant="secondary" className="capitalize">
-                  {ex.category}
-                </Badge>
-              </div>
-            </button>
-          ))}
+            )}
+            {filtered.map((ex) => (
+              <button
+                key={ex.id}
+                type="button"
+                onClick={() => {
+                  onSelect(ex);
+                  onOpenChange(false);
+                  setSearch("");
+                }}
+                className="flex w-full items-center justify-between rounded-md px-3 py-2.5 text-left transition-colors hover:bg-surface-elevated"
+              >
+                <div>
+                  <p className="text-sm font-semibold">{ex.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {ex.muscleGroup} · {ex.equipment}
+                    {ex.movementType ? ` · ${ex.movementType}` : ""}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-1">
+                  {ex.isCorrective && <Stethoscope className="h-3.5 w-3.5 text-cyan-400" />}
+                  <ExerciseOwnershipBadge
+                    isForgeOfficial={ex.isForgeOfficial}
+                    ownerLabel={ex.ownerLabel}
+                  />
+                  <Badge variant="secondary" className="capitalize">
+                    {ex.category}
+                  </Badge>
+                </div>
+              </button>
+            ))}
+          </div>
         </div>
       </DialogContent>
     </Dialog>

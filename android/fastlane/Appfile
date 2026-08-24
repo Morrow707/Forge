@@ -1,0 +1,14 @@
+# See ios/fastlane/Appfile's comment on env_or -- GitHub Actions sets an
+# env var to "" rather than leaving it unset when the underlying repo
+# variable/secret was never configured, and Ruby's `||`/truthiness only
+# treats nil/false as falsy. The workflow itself already works around this
+# for ANDROID_PACKAGE_NAME by re-exporting a resolved value before
+# invoking fastlane, but fixing it here too means this file is correct on
+# its own, not just when called exactly the way the workflow calls it.
+def env_or(key, default = nil)
+  val = ENV[key]
+  (val.nil? || val.empty?) ? default : val
+end
+
+json_key_file(env_or("GOOGLE_PLAY_JSON_KEY_PATH")) if env_or("GOOGLE_PLAY_JSON_KEY_PATH")
+package_name(env_or("ANDROID_PACKAGE_NAME", "com.foreperformancesystems.forge"))

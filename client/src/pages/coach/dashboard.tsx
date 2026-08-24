@@ -1,20 +1,31 @@
-import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState, type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { AppShell } from "@/components/app-shell";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { EntryPill, type CalendarEntry } from "@/components/calendar-view";
+import type { CalendarEntry } from "@/components/calendar-view";
 import { CoachDayEditDialog } from "@/components/coach-day-edit-dialog";
+import { SkillDayViewDialog } from "@/components/skill-day-view-dialog";
 import { CoachDigestBanner } from "@/components/coach-digest-banner";
 import { ReengagementBanner } from "@/components/reengagement-banner";
-import { useAuth } from "@/hooks/use-auth";
-import { apiRequest, getJson } from "@/lib/queryClient";
+import { SortableHideableWidget } from "@/components/sortable-hideable-widget";
+import { NextThreeDaysCard } from "@/components/next-three-days-card";
+import { StatTile } from "@/components/stat-tile";
+import { useWidgetVisibility } from "@/hooks/use-widget-visibility";
 import { resolveWidgetOrder } from "@/lib/widget-layout";
-import type { WidgetLayoutEntry } from "@shared/dashboard-widgets";
-import { cn } from "@/lib/utils";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import { SortableContext, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
+import { Pencil, Check } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
+import { apiRequest } from "@/lib/queryClient";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
@@ -37,59 +48,12 @@ import {
   Users,
   ArrowRight,
   Copy,
-  CalendarDays,
   Mail,
   QrCode,
   HeartPulse,
-  SlidersHorizontal,
 } from "lucide-react";
 import { toast } from "sonner";
-import { addDays, format, formatISO, isToday } from "date-fns";
-
-// The dashboard's 4 top-level boxes, in their default (and currently only
-// supported) render order -- see CustomizeDashboardPopover for the show/
-// hide UI. Kept as an ordered {id,hidden}[] in storage (not a flat hidden-
-// id list) so real drag-to-reorder can build on this later without
-// another migration, even though today's control is hide-only.
-const DASHBOARD_WIDGETS: { id: string; label: string }[] = [
-  { id: "next-3-days", label: "Next 3 Days" },
-  { id: "stat-cards", label: "Stat Cards" },
-  { id: "recent-programs", label: "Recent Programs" },
-  { id: "team-invite", label: "Invite Athletes" },
-];
-
-function CustomizeDashboardPopover({
-  hidden,
-  onToggle,
-}: {
-  hidden: Set<string>;
-  onToggle: (id: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button type="button" variant="outline" size="sm" className="gap-1.5">
-          <SlidersHorizontal className="h-3.5 w-3.5" />
-          Customize
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-64" align="end">
-        <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
-          Show / hide dashboard boxes
-        </p>
-        <div className="space-y-2">
-          {DASHBOARD_WIDGETS.map((w) => (
-            <label key={w.id} className="flex items-center gap-2 text-sm hover:cursor-pointer">
-              <Checkbox checked={!hidden.has(w.id)} onCheckedChange={() => onToggle(w.id)} />
-              {w.label}
-            </label>
-          ))}
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-}
+import { addDays, formatISO } from "date-fns";
 
 type ProgramSummary = {
   id: number;
@@ -106,27 +70,7 @@ type TeamSummary = { id: number; name: string; code: string | null };
 
 export default function CoachDashboard() {
   const { user } = useAuth();
-  const qc = useQueryClient();
-  const { data: widgetPrefs } = useQuery<{ layout: WidgetLayoutEntry[] }>({
-    queryKey: ["/api/coach/widget-prefs"],
-    queryFn: () => getJson("/api/coach/widget-prefs"),
-  });
-  const widgetLayout = resolveWidgetOrder(
-    widgetPrefs?.layout,
-    DASHBOARD_WIDGETS.map((w) => w.id),
-  );
-  const hiddenWidgets = new Set(widgetLayout.filter((e) => e.hidden).map((e) => e.id));
-  const widgetPrefsMutation = useMutation({
-    mutationFn: async (layout: WidgetLayoutEntry[]) => {
-      await apiRequest("PATCH", "/api/coach/widget-prefs", { layout });
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/coach/widget-prefs"] }),
-  });
-  function toggleWidget(id: string) {
-    const next = widgetLayout.map((e) => (e.id === id ? { ...e, hidden: !e.hidden } : e));
-    widgetPrefsMutation.mutate(next);
-  }
-
+  const widgetVisibility = useWidgetVisibility("coach");
   const { data: programs = [] } = useQuery<ProgramSummary[]>({
     queryKey: ["/api/coach/programs"],
   });
@@ -165,166 +109,181 @@ export default function CoachDashboard() {
     athleteId: number;
     athleteName: string;
   } | null>(null);
+  const [viewingSkill, setViewingSkill] = useState<{
+    skillProgramId: number;
+    skillProgramDayId: number;
+    athleteName: string;
+  } | null>(null);
 
-  return (
-    <AppShell
-      title={`Welcome, ${user?.name?.split(" ")[0] ?? "Coach"}`}
-      fitScreen
-      actions={<CustomizeDashboardPopover hidden={hiddenWidgets} onToggle={toggleWidget} />}
-    >
-      <div className="flex h-full min-h-0 flex-col gap-3">
-        <CoachDigestBanner />
-        <ReengagementBanner />
+  const WIDGET_IDS = ["next-3-days", "stat-tiles", "recent-programs", "invite-athletes"];
+  const widgetOrder = resolveWidgetOrder(widgetVisibility.layout, WIDGET_IDS);
+  const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = widgetOrder.indexOf(String(active.id));
+    const newIndex = widgetOrder.indexOf(String(over.id));
+    widgetVisibility.setOrder(arrayMove(widgetOrder, oldIndex, newIndex));
+  }
 
-        {!hiddenWidgets.has("next-3-days") && (
-        <Card className="shrink-0">
-          <CardHeader className="flex-row items-center justify-between space-y-0 p-3 md:p-4">
-            <div>
-              <CardTitle className="text-base md:text-lg">Next 3 Days</CardTitle>
-              <CardDescription className="hidden sm:block">
-                Quick look across your roster — synced with the full calendar.
-              </CardDescription>
-            </div>
-            <Link href="/coach/calendar">
-              <Button variant="outline" size="sm">
-                Full Calendar
-              </Button>
-            </Link>
-          </CardHeader>
-          <CardContent className="p-3 pt-0 md:p-4 md:pt-0">
-            <div className="grid gap-2.5 sm:grid-cols-3">
-              {days.map((day) => {
-                const dateStr = formatISO(day, { representation: "date" });
-                const dayEntries = upcoming.filter((e) => e.date === dateStr);
-                const shown = dayEntries.slice(0, 3);
-                const overflow = dayEntries.length - shown.length;
-                return (
-                  <div key={dateStr} className="rounded-md border border-border p-2">
-                    <div className="mb-1.5 flex items-baseline justify-between">
-                      <span
-                        className={cn(
-                          "text-xs font-semibold uppercase text-muted-foreground",
-                          isToday(day) && "text-primary",
-                        )}
-                      >
-                        {isToday(day) ? "Today" : format(day, "EEEE")}
-                      </span>
-                      <span className={cn("text-sm font-bold", isToday(day) && "text-primary")}>
-                        {format(day, "MMM d")}
-                      </span>
-                    </div>
-                    <div className="space-y-1">
-                      {shown.length === 0 && (
-                        <p className="flex items-center justify-center gap-1.5 py-2 text-center text-xs text-muted-foreground">
-                          <CalendarDays className="h-3.5 w-3.5" />
-                          Nothing scheduled
-                        </p>
-                      )}
-                      {shown.map((e) => (
-                        <EntryPill
-                          key={`${e.assignmentId}-${e.programDayId}`}
-                          entry={e}
-                          onClick={() =>
-                            setEditing({
-                              programDayId: e.programDayId,
-                              assignmentId: e.assignmentId,
-                              athleteId: e.athleteId!,
-                              athleteName: e.athleteName!,
-                            })
-                          }
-                        />
-                      ))}
-                      {overflow > 0 && (
-                        <Link href="/coach/calendar">
-                          <span className="block px-1.5 text-[11px] font-semibold text-primary hover:underline">
-                            +{overflow} more
-                          </span>
-                        </Link>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-        )}
-
-        {!hiddenWidgets.has("stat-cards") && (
-        <div className="grid shrink-0 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard icon={Users} label="Athletes" value={roster.length} href="/coach/roster" />
-          <StatCard
+  // Keyed by widget id so the drag-and-drop order below can render each
+  // one in whatever position the coach last dragged it to -- the "which
+  // widgets exist and what's in each" part stays exactly the same JSX as
+  // before, just addressed by id instead of appearing in fixed order.
+  const widgetsById: Record<string, ReactNode> = {
+    "next-3-days": (
+      <SortableHideableWidget
+        id="next-3-days"
+        label="Next 3 Days"
+        editMode={widgetVisibility.editMode}
+        isHidden={widgetVisibility.hidden.has("next-3-days")}
+        onToggle={widgetVisibility.setHidden}
+      >
+        <NextThreeDaysCard
+          days={days}
+          entries={upcoming}
+          calendarHref="/coach/calendar"
+          description="Quick look across your roster — synced with the full calendar."
+          compact
+          onEntryClick={(e) =>
+            e.kind === "skill"
+              ? setViewingSkill({
+                  skillProgramId: e.programId,
+                  skillProgramDayId: e.programDayId,
+                  athleteName: e.athleteName!,
+                })
+              : setEditing({
+                  programDayId: e.programDayId,
+                  assignmentId: e.assignmentId,
+                  athleteId: e.athleteId!,
+                  athleteName: e.athleteName!,
+                })
+          }
+        />
+      </SortableHideableWidget>
+    ),
+    "stat-tiles": (
+      <SortableHideableWidget
+        id="stat-tiles"
+        label="Stat Tiles"
+        editMode={widgetVisibility.editMode}
+        isHidden={widgetVisibility.hidden.has("stat-tiles")}
+        onToggle={widgetVisibility.setHidden}
+      >
+        <div className="grid grid-cols-1 shrink-0 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <StatTile icon={Users} label="Athletes" value={roster.length} href="/coach/roster" />
+          <StatTile
             icon={ListChecks}
             label="Programs"
             value={programs.length}
             href="/coach/programs"
           />
-          <StatCard
+          <StatTile
             icon={Dumbbell}
             label="Exercises in bank"
             value={exercises.length}
             href="/coach/exercises"
           />
-          <StatCard
+          <StatTile
             icon={HeartPulse}
             label="Flagged today"
             value={flaggedToday}
             href="/coach/roster"
           />
         </div>
-        )}
-
-        {(!hiddenWidgets.has("recent-programs") || !hiddenWidgets.has("team-invite")) && (
-        <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-3">
-          {!hiddenWidgets.has("recent-programs") && (
-          <Card className="flex min-h-0 flex-col lg:col-span-2">
-            <CardHeader className="flex-row shrink-0 items-center justify-between space-y-0 p-3 md:p-4">
-              <div>
-                <CardTitle className="text-base md:text-lg">Recent Programs</CardTitle>
-                <CardDescription className="hidden sm:block">
-                  Your most recently created training blocks.
-                </CardDescription>
-              </div>
-              <Link href="/coach/programs">
-                <Button variant="outline" size="sm">
-                  View all
-                </Button>
-              </Link>
-            </CardHeader>
-            <CardContent className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3 pt-0 md:p-4 md:pt-0">
-              {programs.length === 0 && (
-                <p className="py-6 text-center text-sm text-muted-foreground">
-                  No programs yet. Build your first one to start assigning workouts.
-                </p>
-              )}
-              {programs.slice(0, 5).map((p) => (
-                <Link key={p.id} href={`/coach/programs/${p.id}`}>
-                  <div className="flex cursor-pointer items-center justify-between rounded-md border border-border p-2.5 transition-colors hover:bg-surface-elevated">
-                    <div className="min-w-0">
-                      <p className="truncate font-semibold">{p.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {p.weekCount} weeks · {p.dayCount} days · {p.assignedAthleteCount}{" "}
-                        athlete{p.assignedAthleteCount === 1 ? "" : "s"} assigned
-                      </p>
-                    </div>
-                    <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+      </SortableHideableWidget>
+    ),
+    "recent-programs": (
+      <SortableHideableWidget
+        id="recent-programs"
+        label="Recent Programs"
+        editMode={widgetVisibility.editMode}
+        isHidden={widgetVisibility.hidden.has("recent-programs")}
+        onToggle={widgetVisibility.setHidden}
+      >
+        <Card className="flex flex-col">
+          <CardHeader className="flex-row shrink-0 items-center justify-between space-y-0 p-3 md:p-4">
+            <div>
+              <CardTitle className="text-base md:text-lg">Recent Programs</CardTitle>
+              <CardDescription className="hidden sm:block">
+                Your most recently created training blocks.
+              </CardDescription>
+            </div>
+            <Link href="/coach/programs">
+              <Button variant="outline" size="sm">
+                View all
+              </Button>
+            </Link>
+          </CardHeader>
+          <CardContent className="space-y-2 p-3 pt-0 md:p-4 md:pt-0">
+            {programs.length === 0 && (
+              <p className="py-6 text-center text-sm text-muted-foreground">
+                No programs yet. Build your first one to start assigning workouts.
+              </p>
+            )}
+            {programs.slice(0, 5).map((p) => (
+              <Link key={p.id} href={`/coach/programs/${p.id}`}>
+                <div className="flex cursor-pointer items-center justify-between rounded-md border border-border p-2.5 transition-colors hover:bg-surface-elevated">
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold">{p.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {p.weekCount} weeks · {p.dayCount} days · {p.assignedAthleteCount}{" "}
+                      athlete{p.assignedAthleteCount === 1 ? "" : "s"} assigned
+                    </p>
                   </div>
-                </Link>
-              ))}
-              <Link href="/coach/programs">
-                <Button variant="secondary" className="w-full">
-                  + New Program
-                </Button>
+                  <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                </div>
               </Link>
-            </CardContent>
-          </Card>
-          )}
+            ))}
+            <Link href="/coach/programs">
+              <Button variant="secondary" className="w-full">
+                + New Program
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </SortableHideableWidget>
+    ),
+    "invite-athletes": (
+      <SortableHideableWidget
+        id="invite-athletes"
+        label="Invite Athletes"
+        editMode={widgetVisibility.editMode}
+        isHidden={widgetVisibility.hidden.has("invite-athletes")}
+        onToggle={widgetVisibility.setHidden}
+      >
+        <TeamInviteCard teams={teams} coachCode={user?.coachCode ?? null} />
+      </SortableHideableWidget>
+    ),
+  };
 
-          {!hiddenWidgets.has("team-invite") && (
-          <TeamInviteCard teams={teams} coachCode={user?.coachCode ?? null} />
-          )}
-        </div>
-        )}
+  return (
+    <AppShell
+      title={`Welcome, ${user?.name?.split(" ")[0] ?? "Coach"}`}
+      actions={
+        <Button
+          size="sm"
+          variant={widgetVisibility.editMode ? "default" : "outline"}
+          onClick={() => widgetVisibility.setEditMode((v) => !v)}
+        >
+          {widgetVisibility.editMode ? <Check className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
+          {widgetVisibility.editMode ? "Done" : "Edit"}
+        </Button>
+      }
+    >
+      <div className="flex flex-col gap-3">
+        <CoachDigestBanner />
+        <ReengagementBanner />
+
+        <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={widgetOrder} strategy={verticalListSortingStrategy}>
+            {widgetOrder.map((id) => (
+              <div key={id} style={{ display: "contents" }}>
+                {widgetsById[id]}
+              </div>
+            ))}
+          </SortableContext>
+        </DndContext>
       </div>
 
       <CoachDayEditDialog
@@ -335,6 +294,19 @@ export default function CoachDashboard() {
         open={editing !== null}
         onOpenChange={(open) => !open && setEditing(null)}
       />
+
+      {viewingSkill && (
+        <SkillDayViewDialog
+          open
+          onOpenChange={(open) => !open && setViewingSkill(null)}
+          athleteName={viewingSkill.athleteName}
+          source={{
+            kind: "coach",
+            skillProgramId: viewingSkill.skillProgramId,
+            skillProgramDayId: viewingSkill.skillProgramDayId,
+          }}
+        />
+      )}
     </AppShell>
   );
 }
@@ -372,14 +344,14 @@ function TeamInviteCard({
   }
 
   return (
-    <Card className="flex min-h-0 flex-col">
+    <Card className="flex flex-col">
       <CardHeader className="shrink-0 p-3 md:p-4">
         <CardTitle className="text-base md:text-lg">Invite Athletes</CardTitle>
         <CardDescription className="hidden sm:block">
           Each team has its own code -- athletes who use it join that team automatically.
         </CardDescription>
       </CardHeader>
-      <CardContent className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3 pt-0 md:p-4 md:pt-0">
+      <CardContent className="space-y-2 p-3 pt-0 md:p-4 md:pt-0">
         {codeOptions.length === 0 && (
           <p className="text-sm text-muted-foreground">
             Create a team on the Roster page to get a shareable code.
@@ -474,33 +446,5 @@ function TeamInviteCard({
         </DialogContent>
       </Dialog>
     </Card>
-  );
-}
-
-function StatCard({
-  icon: Icon,
-  label,
-  value,
-  href,
-}: {
-  icon: typeof Dumbbell;
-  label: string;
-  value: number;
-  href: string;
-}) {
-  return (
-    <Link href={href}>
-      <Card className="cursor-pointer transition-colors hover:border-primary/50">
-        <CardContent className="flex items-center gap-3 p-3 md:p-4">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary/15 text-primary">
-            <Icon className="h-5 w-5" />
-          </div>
-          <div className="min-w-0">
-            <p className="font-display text-2xl font-bold md:text-3xl">{value}</p>
-            <p className="truncate text-sm text-muted-foreground">{label}</p>
-          </div>
-        </CardContent>
-      </Card>
-    </Link>
   );
 }

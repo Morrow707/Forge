@@ -55,11 +55,40 @@
 
 html {
   color-scheme: dark;
+  /* Without this, WKWebView's native rubber-band bounce on overscroll can
+     reveal a gap above/below fixed-position bars (app header, active-workout
+     bottom nav) since those don't move with the bounce the way normal
+     scrolled content does. No effect on desktop/Android. */
+  overscroll-behavior-y: none;
 }
 
 body {
   @apply bg-background text-foreground font-sans antialiased;
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+}
+
+/* An AR tracker dialog (see setArCameraActive in native-ar-preview.ts)
+   needs its camera container to be a genuine hole all the way down to
+   ArCameraPreviewPlugin's native view sitting behind the WKWebView --
+   painting is back-to-front, so a transparent dialog on its own only
+   reveals whatever's rendered BEHIND it in the same page: the app's own
+   route content (AppShell and everything inside it -- the page's cards,
+   buttons, text, every one of which paints its own opaque background
+   independently, not just AppShell's own root div). Clearing only the
+   root's flat background (an earlier attempt at this) left every one of
+   those descendants still fully rendered and still opaque -- confirmed
+   on-device, the exact page content showed through, not a flat color.
+   visibility: hidden suppresses an element's ENTIRE paint, itself and
+   every descendant, while it's set -- exactly what's needed here, for
+   only as long as the camera is actually open. The dialog itself is
+   portalled outside .app-shell-root (a sibling of it in the DOM, not a
+   descendant), so hiding this never touches the dialog's own UI. */
+html.ar-camera-active,
+html.ar-camera-active body {
+  background: transparent !important;
+}
+html.ar-camera-active .app-shell-root {
+  visibility: hidden !important;
 }
 
 .font-display {

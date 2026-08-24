@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import {
   Dialog,
@@ -16,9 +17,12 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { getJson } from "@/lib/queryClient";
+import { Dumbbell, ClipboardList, Sparkles, Check, Lock } from "lucide-react";
+import { ForgeMark } from "@/components/forge-mark";
+import { getJson, resolveApiUrl } from "@/lib/queryClient";
 import { computeBrandingStyle, type EffectiveBranding } from "@/lib/branding-style";
-import { Flame, Dumbbell, ClipboardList, Sparkles, Check, Lock } from "lucide-react";
+import { POWERED_BY_FORGE_LABEL } from "@/lib/branding-copy";
+import { derivePrivacyTier } from "@shared/privacy-tiers";
 
 /** Debounces a fast-changing value (here, the invite-code input) so a
  * lookup only fires once someone pauses typing, not on every keystroke. */
@@ -50,6 +54,9 @@ export default function SignupPage() {
   // they're joining, not a detour through plain Forge. Debounced so it
   // doesn't fire on every keystroke; a short/empty code just skips the
   // lookup rather than round-tripping for something that can't resolve.
+  // Seeded from prefilledCode (a QR/shared-link ?code=) via coachCode's own
+  // initial state above, so a scanned invite re-skins the page immediately
+  // without a separate, redundant lookup.
   const debouncedCode = useDebounced(coachCode.trim(), 400);
   const { data: inviteBranding } = useQuery<EffectiveBranding | null>({
     queryKey: ["/api/public/branding", debouncedCode],
@@ -57,6 +64,13 @@ export default function SignupPage() {
     enabled: role === "athlete" && debouncedCode.length >= 4,
   });
   const brandingStyle = computeBrandingStyle(inviteBranding);
+  const [dateOfBirth, setDateOfBirth] = useState("");
+  const [guardianEmail, setGuardianEmail] = useState("");
+  // A signed-up-under-18 athlete needs a guardian's email collected right
+  // here -- see storage.assertMinorHasActiveGuardian's own comment for why
+  // an account with nobody linked can't have anything assigned to it later.
+  const isMinorAthlete =
+    role === "athlete" && !!dateOfBirth && derivePrivacyTier(dateOfBirth) !== "tier3_adult_18plus";
   // Whether the in-flight/just-submitted signup is a no-code athlete
   // signup -- set synchronously on submit (a ref, not state, so it's
   // already correct by the time the mutation's success re-render happens,
@@ -69,6 +83,16 @@ export default function SignupPage() {
   // instead of it only ever coming up later as a surprise 402 on some AI
   // feature.
   const [welcomeDismissed, setWelcomeDismissed] = useState(false);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
+
+  // Public, unauthenticated -- has to be, since there's no account yet to
+  // authenticate as. Shown inline (not behind a "view terms" link most
+  // people would never click) so the checkbox below actually means someone
+  // saw this, not just that they trust there's something reasonable behind
+  // a link.
+  const { data: agreement } = useQuery<{ content: string }>({
+    queryKey: ["/api/legal-agreement"],
+  });
 
   if (!isLoading && user) {
     if (isFreeAgentAttemptRef.current && !welcomeDismissed) {
@@ -83,6 +107,7 @@ export default function SignupPage() {
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    if (!agreedToTerms) return;
     isFreeAgentAttemptRef.current = role === "athlete" && !coachCode.trim();
     signupMutation.mutate({
       name,
@@ -91,32 +116,41 @@ export default function SignupPage() {
       role,
       coachCode: role === "athlete" ? coachCode || undefined : undefined,
       phone: phone.trim() || undefined,
+      dateOfBirth,
+      guardianEmail: isMinorAthlete ? guardianEmail.trim() || undefined : undefined,
+      agreedToTerms: true,
     });
   }
 
   return (
     <div
       className="flex min-h-screen items-center justify-center bg-background px-4 py-10"
-      style={brandingStyle}
+      style={{
+        paddingTop: "max(env(safe-area-inset-top), 2.5rem)",
+        paddingBottom: "max(env(safe-area-inset-bottom), 2.5rem)",
+        ...brandingStyle,
+      }}
     >
       <div className="w-full max-w-md">
         <div className="mb-8 flex flex-col items-center gap-3">
           {inviteBranding?.brandLogoUrl ? (
             <img
-              src={inviteBranding.brandLogoUrl}
+              src={resolveApiUrl(inviteBranding.brandLogoUrl)}
               alt={inviteBranding.brandTeamName || "Team logo"}
               className="h-14 w-14 rounded-xl object-contain"
             />
           ) : (
-            <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-              <Flame className="h-8 w-8" />
-            </div>
+            <ForgeMark className="h-14 w-14 rounded-xl" />
           )}
           <h1 className="font-display text-4xl font-extrabold uppercase tracking-wider">
             {inviteBranding?.brandTeamName || "Forge"}
           </h1>
-          {inviteBranding ? (
-            <p className="text-sm text-muted-foreground">You're joining {inviteBranding.brandTeamName || "this program"}</p>
+          {inviteBranding?.brandTeamName ? (
+            <p className="text-sm text-muted-foreground">You're joining {inviteBranding.brandTeamName}</p>
+          ) : inviteBranding?.brandLogoUrl ? (
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              {POWERED_BY_FORGE_LABEL}
+            </p>
           ) : (
             <p className="text-sm text-muted-foreground">Coach. Program. Perform.</p>
           )}
@@ -157,11 +191,12 @@ export default function SignupPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} noValidate className="space-y-4">
               <div className="space-y-1.5">
                 <Label htmlFor="name">Full name</Label>
                 <Input
                   id="name"
+                  autoComplete="name"
                   required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
@@ -173,7 +208,7 @@ export default function SignupPage() {
                 <Input
                   id="email"
                   type="email"
-                  autoComplete="email"
+                  autoComplete="username"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -192,6 +227,42 @@ export default function SignupPage() {
                   placeholder="At least 6 characters"
                 />
               </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="dateOfBirth">Date of birth</Label>
+                <Input
+                  id="dateOfBirth"
+                  type="date"
+                  autoComplete="bday"
+                  required
+                  max={new Date().toISOString().slice(0, 10)}
+                  value={dateOfBirth}
+                  onChange={(e) => setDateOfBirth(e.target.value)}
+                />
+                {role === "athlete" && (
+                  <p className="text-xs text-muted-foreground">
+                    Athletes under 13 can't self-register -- ask your coach or program to set up
+                    your account instead.
+                  </p>
+                )}
+              </div>
+              {isMinorAthlete && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="guardianEmail">Parent/guardian email</Label>
+                  <Input
+                    id="guardianEmail"
+                    type="email"
+                    autoComplete="email"
+                    required
+                    value={guardianEmail}
+                    onChange={(e) => setGuardianEmail(e.target.value)}
+                    placeholder="parent@example.com"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Required under 18 -- we'll email them to set up a linked account before a coach
+                    can assign you anything.
+                  </p>
+                </div>
+              )}
               <div className="space-y-1.5">
                 <Label htmlFor="phone">Phone number (optional)</Label>
                 <Input
@@ -219,11 +290,29 @@ export default function SignupPage() {
                   </p>
                 </div>
               )}
+              <div className="space-y-2">
+                <Label>Terms</Label>
+                <div className="max-h-32 overflow-y-auto whitespace-pre-line rounded-md border border-border bg-surface p-3 text-xs text-muted-foreground">
+                  {agreement?.content ?? "Loading…"}
+                </div>
+                <label className="flex items-start gap-2 text-sm">
+                  <Checkbox
+                    checked={agreedToTerms}
+                    onCheckedChange={(c) => setAgreedToTerms(c === true)}
+                    className="mt-0.5"
+                  />
+                  I've read and agree to the terms above.
+                </label>
+              </div>
               <Button
                 type="submit"
                 size="lg"
                 className="w-full"
-                disabled={signupMutation.isPending}
+                disabled={
+                  signupMutation.isPending ||
+                  !agreedToTerms ||
+                  (isMinorAthlete && !guardianEmail.trim())
+                }
               >
                 {signupMutation.isPending ? "Creating account…" : "Create Account"}
               </Button>

@@ -30,6 +30,8 @@ type WellnessEntry = {
   hydration: number;
   mentalFocus: number;
   bodyPainMap: string[];
+  restingHeartRate: number | null;
+  hrv: number | null;
   score: number;
   level: ReadinessLevel;
 };
@@ -127,8 +129,10 @@ export function WellnessHistoryDialog({
                       {e.score}/100 · {READINESS_LABEL[e.level]}
                     </span>
                     <span className="text-xs text-muted-foreground">
-                      {e.sleepHours}h sleep · Soreness {e.soreness}/5 · Stress {e.stress}/5 ·
-                      Hydration {e.hydration}/5 · Focus {e.mentalFocus}/5
+                      {e.sleepHours}h sleep
+                      {e.restingHeartRate != null && ` · ${Math.round(e.restingHeartRate)}bpm RHR`}
+                      {e.hrv != null && ` · ${Math.round(e.hrv)}ms HRV`} · Soreness {e.soreness}/5 ·
+                      Stress {e.stress}/5 · Hydration {e.hydration}/5 · Focus {e.mentalFocus}/5
                       {e.bodyPainMap.length > 0 &&
                         ` · Pain: ${e.bodyPainMap
                           .map((k) => BODY_PAIN_PARTS.find((p) => p.key === k)?.label ?? k)

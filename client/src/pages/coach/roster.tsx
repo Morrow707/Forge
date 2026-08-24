@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
@@ -15,25 +16,27 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { AssignProgramDialog } from "@/components/assign-program-dialog";
-import { AthleteProfileDialog } from "@/components/athlete-profile-dialog";
-import { CalendarLinkDialog } from "@/components/calendar-link-dialog";
-import { BodyMetricsDialog } from "@/components/body-metrics-dialog";
-import { TestingHistoryDialog } from "@/components/testing-history-dialog";
-import { GoalsDialog } from "@/components/goals-dialog";
-import { NutritionDialog } from "@/components/nutrition-dialog";
-import { WellnessHistoryDialog, READINESS_CLASSNAME } from "@/components/wellness-history-dialog";
-import { AcwrHistoryDialog, ACWR_RISK_CLASSNAME } from "@/components/acwr-history-dialog";
-import { ChatHistoryDialog } from "@/components/chat-history-dialog";
-import { TrophyCaseDialog } from "@/components/trophy-case-dialog";
-import { TrainingHistoryExportDialog } from "@/components/training-history-export-dialog";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CaraCompliancePanel } from "@/components/cara-compliance-panel";
 import { TeamChallengesSection } from "@/components/team-challenges-panel";
 import { GameDaysSection } from "@/components/game-days-panel";
 import { TeamBrandingDialog } from "@/components/team-branding-dialog";
-import { READINESS_LABEL, type ReadinessLevel } from "@shared/wellness";
-import { ACWR_RISK_LABEL, type AcwrRiskLevel } from "@shared/load";
+import { TestingDayImportDialog } from "@/components/testing-day-import-dialog";
+import { WeighInImportDialog } from "@/components/weigh-in-import-dialog";
+import { NutritionSheetImportDialog } from "@/components/nutrition-sheet-import-dialog";
+import { InjuryIntakeImportDialog } from "@/components/injury-intake-import-dialog";
+import { TestingDataImportDialog } from "@/components/testing-data-import-dialog";
+import { PlayerIntakeImportDialog } from "@/components/player-intake-import-dialog";
+import { ProvisionalRosterPanel } from "@/components/provisional-roster-panel";
+import {
+  HealthStatusToggle,
+  WellnessBadge,
+  AcwrBadge,
+  type HealthStatus,
+} from "@/components/athlete-status-badges";
+import type { ReadinessLevel } from "@shared/wellness";
+import type { AcwrRiskLevel } from "@shared/load";
 import { apiRequest, ApiError } from "@/lib/queryClient";
-import { shareOrDownloadFile } from "@/lib/share-file";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
@@ -46,39 +49,53 @@ import {
   Copy,
   HeartPulse,
   HeartCrack,
-  Gauge,
-  CalendarDays,
+  Camera,
+  ClipboardList,
   Scale,
-  Timer,
-  Mail,
-  Share2,
-  Target,
-  Sparkles,
-  Activity,
   Apple,
-  Trophy,
-  FileDown,
+  Stethoscope,
+  Gauge,
+  UserPlus2,
+  Palette,
 } from "lucide-react";
 
-type HealthStatus = "healthy" | "hurt";
+type PhotoImportKind = "testing-day" | "weigh-in" | "nutrition" | "injury" | "testing-data" | "player-intake";
+
+const PHOTO_IMPORT_OPTIONS: { kind: PhotoImportKind; label: string; description: string; icon: typeof Camera }[] = [
+  {
+    kind: "testing-day",
+    label: "Testing Day Results",
+    description: "40yd, vertical, broad jump, bench/squat/deadlift maxes",
+    icon: ClipboardList,
+  },
+  { kind: "weigh-in", label: "Weigh-In Sheet", description: "Team body weights, all at once", icon: Scale },
+  { kind: "nutrition", label: "Nutrition Sheet", description: "Macro/target sheet from a coach or RD", icon: Apple },
+  {
+    kind: "injury",
+    label: "Injury History Intake",
+    description: "Pre-participation physical / injury form",
+    icon: Stethoscope,
+  },
+  {
+    kind: "testing-data",
+    label: "OVR / Perch Printout",
+    description: "Velocity-based training device output",
+    icon: Gauge,
+  },
+  {
+    kind: "player-intake",
+    label: "Player Intake Sheet",
+    description: "New tryout/sign-up sheet -- creates claim codes",
+    icon: UserPlus2,
+  },
+];
 
 type RosterEntry = {
   id: number;
   name: string;
   email: string;
-  age?: number | null;
-  heightIn?: number | null;
-  bodyWeightLbs?: number | null;
   sport?: string | null;
   position?: string | null;
-  seasonPhase?: string | null;
-  fortyYardDash?: number | null;
-  verticalJumpIn?: number | null;
-  broadJumpIn?: number | null;
-  proAgilitySeconds?: number | null;
-  benchMaxLbs?: number | null;
-  squatMaxLbs?: number | null;
-  deadliftMaxLbs?: number | null;
   healthStatus?: HealthStatus;
 };
 type TeamMember = { athlete: RosterEntry };
@@ -95,6 +112,7 @@ type ProgramSummary = { id: number; name: string };
 
 export default function CoachRoster() {
   const qc = useQueryClient();
+  const [, navigate] = useLocation();
   const { data: roster = [] } = useQuery<RosterEntry[]>({
     queryKey: ["/api/coach/roster"],
   });
@@ -133,36 +151,24 @@ export default function CoachRoster() {
   const [brandingTeamId, setBrandingTeamId] = useState<number | null>(null);
   const [newTeamName, setNewTeamName] = useState("");
 
-  const [rosterSearch, setRosterSearch] = useState("");
-  const [profileAthlete, setProfileAthlete] = useState<RosterEntry | null>(null);
-  const [calendarAthlete, setCalendarAthlete] = useState<RosterEntry | null>(null);
-  const [metricsAthlete, setMetricsAthlete] = useState<RosterEntry | null>(null);
-  const [testingAthlete, setTestingAthlete] = useState<RosterEntry | null>(null);
-  const [goalsAthlete, setGoalsAthlete] = useState<RosterEntry | null>(null);
-  const [nutritionAthlete, setNutritionAthlete] = useState<RosterEntry | null>(null);
-  const [wellnessAthlete, setWellnessAthlete] = useState<RosterEntry | null>(null);
-  const [trophyAthlete, setTrophyAthlete] = useState<RosterEntry | null>(null);
-  const [acwrAthlete, setAcwrAthlete] = useState<RosterEntry | null>(null);
-  const [chatAthlete, setChatAthlete] = useState<RosterEntry | null>(null);
-  const [sharingProfileId, setSharingProfileId] = useState<number | null>(null);
-  const [exportAthlete, setExportAthlete] = useState<RosterEntry | null>(null);
+  const [addFreeAgentOpen, setAddFreeAgentOpen] = useState(false);
+  const [freeAgentEmail, setFreeAgentEmail] = useState("");
 
-  async function handleShareRecruitingProfile(athlete: RosterEntry) {
-    setSharingProfileId(athlete.id);
-    try {
-      await shareOrDownloadFile(
-        `/api/coach/roster/${athlete.id}/recruiting-profile.pdf`,
-        `${athlete.name}-recruiting-profile.pdf`,
-        `${athlete.name}'s Forge Recruiting Profile`,
-      );
-    } catch {
-      toast.error("Couldn't generate that recruiting profile");
-    } finally {
-      setSharingProfileId(null);
-    }
-  }
+  // Which photo-import dialog is open, if any -- one launcher picker
+  // instead of six separate toolbar buttons. See PHOTO_IMPORT_OPTIONS
+  // below the component for the picker's own list.
+  const [photoImportPickerOpen, setPhotoImportPickerOpen] = useState(false);
+  const [activePhotoImport, setActivePhotoImport] = useState<PhotoImportKind | null>(null);
+
+  const [rosterSearch, setRosterSearch] = useState("");
+  const [healthFilter, setHealthFilter] = useState<"all" | HealthStatus>("all");
+  const [activeTab, setActiveTab] = useState<"roster" | "teams" | "compliance">("roster");
+
+  const healthyCount = roster.filter((a) => (a.healthStatus ?? "healthy") === "healthy").length;
+  const hurtCount = roster.filter((a) => a.healthStatus === "hurt").length;
 
   const filteredRoster = roster.filter((a) => {
+    if (healthFilter !== "all" && (a.healthStatus ?? "healthy") !== healthFilter) return false;
     const q = rosterSearch.trim().toLowerCase();
     if (!q) return true;
     return (
@@ -187,6 +193,21 @@ export default function CoachRoster() {
     onError: (err: ApiError) => toast.error(err.message || "Could not create team"),
   });
 
+  const addFreeAgentMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/coach/roster/add-free-agent", {
+        email: freeAgentEmail,
+      });
+      return res.json();
+    },
+    onSuccess: (result: { athleteName: string }) => {
+      setAddFreeAgentOpen(false);
+      setFreeAgentEmail("");
+      toast.success(`Invite sent to ${result.athleteName} -- they'll show up on your roster once they accept`);
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Could not send that invite"),
+  });
+
   const addToTeamMutation = useMutation({
     mutationFn: async ({ teamId, athleteId }: { teamId: number; athleteId: number }) => {
       await apiRequest("POST", `/api/coach/teams/${teamId}/members`, { athleteId });
@@ -203,25 +224,16 @@ export default function CoachRoster() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/coach/teams"] });
+      setRemoveTarget(null);
     },
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't remove that athlete"),
   });
-
-  const sendReportMutation = useMutation({
-    mutationFn: async (athleteId: number) => {
-      const res = await apiRequest("POST", `/api/coach/roster/${athleteId}/progress-report`);
-      return res.json() as Promise<{ sent: boolean; error?: string }>;
-    },
-    onSuccess: (result) => {
-      if (result.sent) {
-        toast.success("Progress report emailed");
-      } else if (result.error === "not_configured") {
-        toast.info("Email sending isn't set up yet -- ask your Forge admin to configure it.");
-      } else {
-        toast.error("Couldn't send that report -- try again in a bit.");
-      }
-    },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't send that report"),
-  });
+  const [removeTarget, setRemoveTarget] = useState<{
+    teamId: number;
+    teamName: string;
+    athleteId: number;
+    athleteName: string;
+  } | null>(null);
 
   function openAssignFor(athleteIds: number[]) {
     setAssignAthleteIds(athleteIds);
@@ -229,23 +241,81 @@ export default function CoachRoster() {
   }
 
   return (
-    <AppShell
-      title="Roster & Teams"
-      actions={
-        <Button onClick={() => openAssignFor([])}>
-          <Send className="h-4 w-4" />
-          Assign Program
-        </Button>
-      }
-    >
-      <Tabs defaultValue="roster">
-        <TabsList>
-          <TabsTrigger value="roster">Roster ({roster.length})</TabsTrigger>
-          <TabsTrigger value="teams">Teams ({teams.length})</TabsTrigger>
-          <TabsTrigger value="compliance">Compliance</TabsTrigger>
-        </TabsList>
-
+    <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
+      <AppShell
+        title="Roster & Teams"
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" onClick={() => setAddFreeAgentOpen(true)}>
+              <UserPlus className="h-3.5 w-3.5" />
+              Add Free Agent
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setPhotoImportPickerOpen(true)}>
+              <Camera className="h-3.5 w-3.5" />
+              Import Photo
+            </Button>
+            <Button size="sm" onClick={() => openAssignFor([])}>
+              <Send className="h-3.5 w-3.5" />
+              Assign Program
+            </Button>
+          </div>
+        }
+        subheader={
+          <div className="flex flex-wrap items-center gap-2">
+            <TabsList>
+              <TabsTrigger value="roster">Roster ({roster.length})</TabsTrigger>
+              <TabsTrigger value="teams">Teams ({teams.length})</TabsTrigger>
+              <TabsTrigger value="compliance">Compliance</TabsTrigger>
+            </TabsList>
+            {activeTab === "roster" && roster.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setHealthFilter("all")}
+                  className={cn(
+                    "rounded-full border px-2 py-0.5 text-xs font-medium transition-colors",
+                    healthFilter === "all"
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  All ({roster.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHealthFilter("healthy")}
+                  className={cn(
+                    "flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium transition-colors",
+                    healthFilter === "healthy"
+                      ? "border-success bg-success/10 text-success"
+                      : "border-border text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  <HeartPulse className="h-3 w-3" />
+                  Healthy ({healthyCount})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHealthFilter("hurt")}
+                  className={cn(
+                    "flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium transition-colors",
+                    healthFilter === "hurt"
+                      ? "border-destructive bg-destructive/10 text-destructive"
+                      : "border-border text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  <HeartCrack className="h-3 w-3" />
+                  Hurt ({hurtCount})
+                </button>
+              </div>
+            )}
+          </div>
+        }
+      >
         <TabsContent value="roster">
+          <div className="mb-4">
+            <ProvisionalRosterPanel />
+          </div>
           {roster.length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
@@ -269,142 +339,52 @@ export default function CoachRoster() {
               </div>
               {filteredRoster.length === 0 ? (
                 <p className="py-8 text-center text-sm text-muted-foreground">
-                  No athletes match "{rosterSearch}".
+                  {healthFilter === "all"
+                    ? `No athletes match "${rosterSearch}".`
+                    : `No ${healthFilter} athletes match your search.`}
                 </p>
               ) : (
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
                   {filteredRoster.map((a) => (
-                    <Card key={a.id}>
-                      <CardContent className="flex flex-col gap-3 p-4">
+                    <Card
+                      key={a.id}
+                      className="cursor-pointer transition-colors hover:border-primary/50"
+                      onClick={() => navigate(`/coach/roster/${a.id}`)}
+                    >
+                      <CardContent className="flex flex-col gap-2 p-3">
                         <div className="min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => setProfileAthlete(a)}
-                              className="truncate text-left font-semibold hover:underline"
-                            >
-                              {a.name}
-                            </button>
-                            <HealthStatusToggle athleteId={a.id} status={a.healthStatus ?? "healthy"} />
-                            <WellnessBadge
-                              entry={wellnessByAthlete.get(a.id)}
-                              onClick={() => setWellnessAthlete(a)}
-                            />
-                            <AcwrBadge
-                              entry={acwrByAthlete.get(a.id)}
-                              onClick={() => setAcwrAthlete(a)}
-                            />
+                          <div className="flex items-center gap-1">
+                            <span className="truncate text-sm font-semibold">{a.name}</span>
                           </div>
-                          <p className="truncate text-xs text-muted-foreground">{a.email}</p>
+                          <HealthStatusToggle athleteId={a.id} status={a.healthStatus ?? "healthy"} />
+                          <p className="mt-1 truncate text-[11px] text-muted-foreground">{a.email}</p>
                           {(a.sport || a.position) && (
-                            <div className="mt-1.5 flex flex-wrap gap-1">
-                              {a.sport && <Badge variant="secondary">{a.sport}</Badge>}
-                              {a.position && <Badge variant="outline">{a.position}</Badge>}
+                            <div className="mt-1 flex flex-wrap gap-1">
+                              {a.sport && (
+                                <Badge variant="secondary" className="text-[10px]">
+                                  {a.sport}
+                                </Badge>
+                              )}
+                              {a.position && (
+                                <Badge variant="outline" className="text-[10px]">
+                                  {a.position}
+                                </Badge>
+                              )}
                             </div>
                           )}
                         </div>
-                        <div className="flex flex-wrap items-center gap-1 border-t border-border pt-2">
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            aria-label={`View ${a.name}'s body metrics`}
-                            title="Body metrics"
-                            onClick={() => setMetricsAthlete(a)}
-                          >
-                            <Scale className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            aria-label={`View ${a.name}'s testing history`}
-                            title="Testing history"
-                            onClick={() => setTestingAthlete(a)}
-                          >
-                            <Timer className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            aria-label={`View ${a.name}'s goals`}
-                            title="Goals"
-                            onClick={() => setGoalsAthlete(a)}
-                          >
-                            <Target className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            aria-label={`View ${a.name}'s nutrition targets`}
-                            title="Nutrition"
-                            onClick={() => setNutritionAthlete(a)}
-                          >
-                            <Apple className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            aria-label={`View ${a.name}'s trophy case`}
-                            title="Trophy case"
-                            onClick={() => setTrophyAthlete(a)}
-                          >
-                            <Trophy className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            aria-label={`View ${a.name}'s AI chat`}
-                            title="AI chat"
-                            onClick={() => setChatAthlete(a)}
-                          >
-                            <Sparkles className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            aria-label={`Export ${a.name}'s calendar`}
-                            title="Export calendar (.ics)"
-                            onClick={() => setCalendarAthlete(a)}
-                          >
-                            <CalendarDays className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            aria-label={`Email ${a.name} a progress report`}
-                            title="Email progress report"
-                            disabled={sendReportMutation.isPending}
-                            onClick={() => sendReportMutation.mutate(a.id)}
-                          >
-                            <Mail className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            aria-label={`Share ${a.name}'s recruiting profile`}
-                            title="Share recruiting profile"
-                            disabled={sharingProfileId === a.id}
-                            onClick={() => handleShareRecruitingProfile(a)}
-                          >
-                            <Share2 className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            aria-label={`Export ${a.name}'s full training history`}
-                            title="Export training history"
-                            onClick={() => setExportAthlete(a)}
-                          >
-                            <FileDown className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="ml-auto"
-                            onClick={() => openAssignFor([a.id])}
-                          >
-                            Assign
-                          </Button>
-                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="self-start"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openAssignFor([a.id]);
+                          }}
+                        >
+                          <Send className="h-3.5 w-3.5" />
+                          Assign
+                        </Button>
                       </CardContent>
                     </Card>
                   ))}
@@ -421,30 +401,54 @@ export default function CoachRoster() {
               New Team
             </Button>
           </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            {teams.map((team) => (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {teams.map((team) => {
+              const teamHurtCount = team.members.filter(
+                (m) => m.athlete.healthStatus === "hurt",
+              ).length;
+              const teamHealthyCount = team.members.length - teamHurtCount;
+              return (
               <Card key={team.id}>
                 <CardHeader className="flex-row items-center justify-between space-y-0">
-                  <div className="flex min-w-0 items-center gap-2">
-                    {team.brandLogoUrl && (
-                      <img
-                        src={team.brandLogoUrl}
-                        alt=""
-                        className="h-6 w-6 shrink-0 rounded object-contain"
-                      />
-                    )}
-                    <CardTitle className="truncate">{team.name}</CardTitle>
-                    {(team.brandPrimaryColor || team.brandSecondaryColor) && (
-                      <span
-                        title="This team has its own branding override"
-                        className="h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-border"
-                        style={{ backgroundColor: team.brandPrimaryColor || team.brandSecondaryColor! }}
-                      />
+                  <div className="min-w-0">
+                    <div className="flex min-w-0 items-center gap-2">
+                      {team.brandLogoUrl && (
+                        <img
+                          src={team.brandLogoUrl}
+                          alt=""
+                          className="h-6 w-6 shrink-0 rounded object-contain"
+                        />
+                      )}
+                      <CardTitle className="truncate">{team.name}</CardTitle>
+                      {(team.brandPrimaryColor || team.brandSecondaryColor) && (
+                        <span
+                          title="This team has its own branding override"
+                          className="h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-border"
+                          style={{ backgroundColor: team.brandPrimaryColor || team.brandSecondaryColor! }}
+                        />
+                      )}
+                    </div>
+                    {team.members.length > 0 && (
+                      <p className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1 text-success">
+                          <HeartPulse className="h-3 w-3" />
+                          {teamHealthyCount}
+                        </span>
+                        <span className="flex items-center gap-1 text-destructive">
+                          <HeartCrack className="h-3 w-3" />
+                          {teamHurtCount}
+                        </span>
+                      </p>
                     )}
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
-                    <Button size="sm" variant="ghost" onClick={() => setBrandingTeamId(team.id)}>
-                      Brand
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      aria-label={`Edit ${team.name}'s branding`}
+                      onClick={() => setBrandingTeamId(team.id)}
+                    >
+                      <Palette className="h-3.5 w-3.5" />
                     </Button>
                     <Button
                       size="sm"
@@ -470,7 +474,7 @@ export default function CoachRoster() {
                         <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                           <button
                             type="button"
-                            onClick={() => setProfileAthlete(m.athlete)}
+                            onClick={() => navigate(`/coach/roster/${m.athlete.id}`)}
                             className="truncate font-medium hover:underline"
                           >
                             {m.athlete.name}
@@ -481,11 +485,11 @@ export default function CoachRoster() {
                           />
                           <WellnessBadge
                             entry={wellnessByAthlete.get(m.athlete.id)}
-                            onClick={() => setWellnessAthlete(m.athlete)}
+                            onClick={() => navigate(`/coach/roster/${m.athlete.id}`)}
                           />
                           <AcwrBadge
                             entry={acwrByAthlete.get(m.athlete.id)}
-                            onClick={() => setAcwrAthlete(m.athlete)}
+                            onClick={() => navigate(`/coach/roster/${m.athlete.id}`)}
                           />
                           {m.athlete.sport && (
                             <Badge variant="secondary" className="text-[10px]">
@@ -499,11 +503,14 @@ export default function CoachRoster() {
                           )}
                         </div>
                         <button
+                          type="button"
                           aria-label={`Remove ${m.athlete.name} from ${team.name}`}
                           onClick={() =>
-                            removeFromTeamMutation.mutate({
+                            setRemoveTarget({
                               teamId: team.id,
+                              teamName: team.name,
                               athleteId: m.athlete.id,
+                              athleteName: m.athlete.name,
                             })
                           }
                           className="shrink-0 text-muted-foreground hover:text-destructive"
@@ -546,14 +553,14 @@ export default function CoachRoster() {
                   <GameDaysSection teamId={team.id} teamName={team.name} />
                 </CardContent>
               </Card>
-            ))}
+              );
+            })}
           </div>
         </TabsContent>
 
         <TabsContent value="compliance">
           <CaraCompliancePanel roster={roster} />
         </TabsContent>
-      </Tabs>
 
       <Dialog open={teamDialogOpen} onOpenChange={setTeamDialogOpen}>
         <DialogContent>
@@ -582,6 +589,45 @@ export default function CoachRoster() {
               </Button>
               <Button type="submit" disabled={createTeamMutation.isPending}>
                 Create
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={addFreeAgentOpen} onOpenChange={setAddFreeAgentOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Free Agent</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Send an existing athlete account an invite by email -- they have to accept it before
+            they show up on your roster, and it only works for athletes who aren't already
+            coached by someone else.
+          </p>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              addFreeAgentMutation.mutate();
+            }}
+            className="space-y-4"
+          >
+            <div className="space-y-1.5">
+              <Label>Athlete's email</Label>
+              <Input
+                required
+                type="email"
+                value={freeAgentEmail}
+                onChange={(e) => setFreeAgentEmail(e.target.value)}
+                placeholder="athlete@example.com"
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setAddFreeAgentOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={addFreeAgentMutation.isPending}>
+                {addFreeAgentMutation.isPending ? "Sending..." : "Send Invite"}
               </Button>
             </DialogFooter>
           </form>
@@ -618,212 +664,78 @@ export default function CoachRoster() {
           );
         })()}
 
-      <AthleteProfileDialog
-        athlete={profileAthlete}
-        onOpenChange={(open) => {
-          if (!open) setProfileAthlete(null);
-        }}
+      <Dialog open={photoImportPickerOpen} onOpenChange={setPhotoImportPickerOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Import from Photo</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            {PHOTO_IMPORT_OPTIONS.map(({ kind, label, description, icon: Icon }) => (
+              <button
+                key={kind}
+                type="button"
+                onClick={() => {
+                  setPhotoImportPickerOpen(false);
+                  setActivePhotoImport(kind);
+                }}
+                className="flex w-full items-center gap-3 rounded-md border border-border p-3 text-left hover:border-primary"
+              >
+                <Icon className="h-5 w-5 shrink-0 text-primary" />
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">{label}</p>
+                  <p className="truncate text-xs text-muted-foreground">{description}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <TestingDayImportDialog
+        open={activePhotoImport === "testing-day"}
+        onOpenChange={(o) => setActivePhotoImport(o ? "testing-day" : null)}
+        roster={roster}
+      />
+      <WeighInImportDialog
+        open={activePhotoImport === "weigh-in"}
+        onOpenChange={(o) => setActivePhotoImport(o ? "weigh-in" : null)}
+        roster={roster}
+      />
+      <NutritionSheetImportDialog
+        open={activePhotoImport === "nutrition"}
+        onOpenChange={(o) => setActivePhotoImport(o ? "nutrition" : null)}
+        roster={roster}
+      />
+      <InjuryIntakeImportDialog
+        open={activePhotoImport === "injury"}
+        onOpenChange={(o) => setActivePhotoImport(o ? "injury" : null)}
+        roster={roster}
+      />
+      <TestingDataImportDialog
+        open={activePhotoImport === "testing-data"}
+        onOpenChange={(o) => setActivePhotoImport(o ? "testing-data" : null)}
+        roster={roster}
+      />
+      <PlayerIntakeImportDialog
+        open={activePhotoImport === "player-intake"}
+        onOpenChange={(o) => setActivePhotoImport(o ? "player-intake" : null)}
       />
 
-      {calendarAthlete && (
-        <CalendarLinkDialog
-          open={calendarAthlete !== null}
-          onOpenChange={(open) => !open && setCalendarAthlete(null)}
-          title={`${calendarAthlete.name}'s Calendar`}
-          fetchUrl={`/api/coach/roster/${calendarAthlete.id}/calendar-link`}
-        />
-      )}
-
-      {metricsAthlete && (
-        <BodyMetricsDialog
-          open={metricsAthlete !== null}
-          onOpenChange={(open) => !open && setMetricsAthlete(null)}
-          athleteName={metricsAthlete.name}
-          fetchUrl={`/api/coach/roster/${metricsAthlete.id}/body-metrics`}
-        />
-      )}
-
-      {testingAthlete && (
-        <TestingHistoryDialog
-          open={testingAthlete !== null}
-          onOpenChange={(open) => !open && setTestingAthlete(null)}
-          athleteName={testingAthlete.name}
-          fetchUrl={`/api/coach/roster/${testingAthlete.id}/testing-history`}
-        />
-      )}
-
-      {goalsAthlete && (
-        <GoalsDialog
-          open={goalsAthlete !== null}
-          onOpenChange={(open) => !open && setGoalsAthlete(null)}
-          athleteName={goalsAthlete.name}
-          goalsUrl={`/api/coach/roster/${goalsAthlete.id}/goals`}
-          exercisesUrl={`/api/coach/analytics/exercises?athleteId=${goalsAthlete.id}`}
-        />
-      )}
-
-      {nutritionAthlete && (
-        <NutritionDialog
-          open={nutritionAthlete !== null}
-          onOpenChange={(open) => !open && setNutritionAthlete(null)}
-          athleteName={nutritionAthlete.name}
-          nutritionUrl={`/api/coach/roster/${nutritionAthlete.id}/nutrition`}
-        />
-      )}
-
-      {wellnessAthlete && (
-        <WellnessHistoryDialog
-          open={wellnessAthlete !== null}
-          onOpenChange={(open) => !open && setWellnessAthlete(null)}
-          athleteName={wellnessAthlete.name}
-          fetchUrl={`/api/coach/roster/${wellnessAthlete.id}/wellness-history`}
-        />
-      )}
-
-      {acwrAthlete && (
-        <AcwrHistoryDialog
-          open={acwrAthlete !== null}
-          onOpenChange={(open) => !open && setAcwrAthlete(null)}
-          athleteName={acwrAthlete.name}
-          fetchUrl={`/api/coach/roster/${acwrAthlete.id}/acwr-history`}
-        />
-      )}
-
-      {trophyAthlete && (
-        <TrophyCaseDialog
-          open={trophyAthlete !== null}
-          onOpenChange={(open) => !open && setTrophyAthlete(null)}
-          athleteName={trophyAthlete.name}
-          fetchUrl={`/api/coach/roster/${trophyAthlete.id}/trophies`}
-        />
-      )}
-
-      <ChatHistoryDialog
-        open={chatAthlete !== null}
-        onOpenChange={(open) => !open && setChatAthlete(null)}
-        athleteId={chatAthlete?.id ?? null}
-        athleteName={chatAthlete?.name ?? ""}
+      <ConfirmDialog
+        open={removeTarget !== null}
+        onOpenChange={(o) => !o && setRemoveTarget(null)}
+        title="Remove from team?"
+        description={
+          removeTarget
+            ? `${removeTarget.athleteName} will be removed from ${removeTarget.teamName}. They'll stay on your overall roster.`
+            : ""
+        }
+        confirmLabel="Remove"
+        isPending={removeFromTeamMutation.isPending}
+        onConfirm={() => removeTarget && removeFromTeamMutation.mutate(removeTarget)}
       />
-
-      {exportAthlete && (
-        <TrainingHistoryExportDialog
-          open={exportAthlete !== null}
-          onOpenChange={(open) => !open && setExportAthlete(null)}
-          athleteName={exportAthlete.name}
-          csvUrl={`/api/coach/roster/${exportAthlete.id}/training-history.csv`}
-          pdfUrl={`/api/coach/roster/${exportAthlete.id}/training-history.pdf`}
-        />
-      )}
-    </AppShell>
-  );
-}
-
-// Read-only -- reflects the athlete's own mandatory daily check-in. Absent
-// entirely (not "red") when they haven't checked in yet today, since that's
-// a different fact than a real low score.
-function WellnessBadge({
-  entry,
-  onClick,
-}: {
-  entry?: { score: number; level: ReadinessLevel };
-  onClick: () => void;
-}) {
-  if (!entry) return null;
-  return (
-    <button
-      type="button"
-      onClick={(e) => {
-        e.stopPropagation();
-        onClick();
-      }}
-      aria-label={`Readiness ${entry.score}/100, ${READINESS_LABEL[entry.level]} -- view wellness history`}
-      className={cn(
-        "flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold transition-opacity hover:opacity-80",
-        READINESS_CLASSNAME[entry.level],
-      )}
-    >
-      <Gauge className="h-3 w-3" />
-      {entry.score} · {READINESS_LABEL[entry.level]}
-    </button>
-  );
-}
-
-// Coach-only -- flags when an athlete's recent training load has spiked (or
-// crashed) relative to what they've been adapting to. Absent entirely when
-// they haven't logged enough training yet to compute a ratio, same "absent
-// means no data, not a real reading" convention as the wellness badge.
-function AcwrBadge({
-  entry,
-  onClick,
-}: {
-  entry?: { ratio: number | null; level: AcwrRiskLevel };
-  onClick: () => void;
-}) {
-  if (!entry || entry.ratio == null) return null;
-  return (
-    <button
-      type="button"
-      onClick={(e) => {
-        e.stopPropagation();
-        onClick();
-      }}
-      aria-label={`Training load: ${ACWR_RISK_LABEL[entry.level]} -- view load history`}
-      className={cn(
-        "flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold transition-opacity hover:opacity-80",
-        ACWR_RISK_CLASSNAME[entry.level],
-      )}
-    >
-      <Activity className="h-3 w-3" />
-      {ACWR_RISK_LABEL[entry.level]}
-    </button>
-  );
-}
-
-// Coach-only quick-glance status -- never shown to the athlete themselves
-// (the backend strips it from any athlete-facing response). Icon + text
-// label so the signal isn't color-only.
-function HealthStatusToggle({
-  athleteId,
-  status,
-}: {
-  athleteId: number;
-  status: HealthStatus;
-}) {
-  const qc = useQueryClient();
-  const isHealthy = status === "healthy";
-
-  const mutation = useMutation({
-    mutationFn: async (next: HealthStatus) => {
-      await apiRequest("PATCH", `/api/coach/roster/${athleteId}/health-status`, {
-        healthStatus: next,
-      });
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["/api/coach/roster"] });
-      qc.invalidateQueries({ queryKey: ["/api/coach/teams"] });
-    },
-    onError: (err: ApiError) => toast.error(err.message || "Could not update status"),
-  });
-
-  return (
-    <button
-      type="button"
-      onClick={(e) => {
-        e.stopPropagation();
-        mutation.mutate(isHealthy ? "hurt" : "healthy");
-      }}
-      disabled={mutation.isPending}
-      aria-label={`${isHealthy ? "Healthy" : "Hurt"} -- click to mark ${isHealthy ? "hurt" : "healthy"}`}
-      className={cn(
-        "flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold transition-colors",
-        isHealthy
-          ? "bg-success/15 text-success hover:bg-success/25"
-          : "bg-destructive/15 text-destructive hover:bg-destructive/25",
-      )}
-    >
-      {isHealthy ? <HeartPulse className="h-3 w-3" /> : <HeartCrack className="h-3 w-3" />}
-      {isHealthy ? "Healthy" : "Hurt"}
-    </button>
+      </AppShell>
+    </Tabs>
   );
 }
 

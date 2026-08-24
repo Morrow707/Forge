@@ -26,6 +26,18 @@ export type FoodCandidate = {
   fatG: number | null;
   fiberG: number | null;
   sodiumMg: number | null;
+  // Populated by both lookups below on a best-effort basis -- either
+  // source can simply not have a given micro for a given product, same
+  // "absent means not provided, not zero" convention as everywhere else
+  // these are handled (see foodLogEntries' schema comment). Also always
+  // fillable/correctable via the athlete's own manual entry or edit.
+  calciumMg: number | null;
+  ironMg: number | null;
+  vitaminDMcg: number | null;
+  potassiumMg: number | null;
+  magnesiumMg: number | null;
+  vitaminB12Mcg: number | null;
+  zincMg: number | null;
   barcode: string | null;
 };
 
@@ -33,6 +45,26 @@ function round(n: number | null | undefined, digits = 1): number | null {
   if (n == null || Number.isNaN(n)) return null;
   const factor = 10 ** digits;
   return Math.round(n * factor) / factor;
+}
+
+// Open Food Facts' nutriments object stores most nutrients pre-normalized
+// to a taxonomy-defined default unit per nutrient, not uniformly in grams --
+// sodium above is the existing proof of this (its raw _100g/_serving value
+// is grams, hence the *1000 to mg). The mineral fields below (calcium, iron,
+// potassium, magnesium, zinc) follow that same grams-by-default convention;
+// vitamin D and B12 are the opposite case -- OFF's default unit for those is
+// already micrograms, so no conversion. NOTE: this mapping is based on
+// Open Food Facts' documented nutrient taxonomy, not a live-verified API
+// response -- outbound access to openfoodfacts.org was blocked by this
+// sandbox's egress policy while this was written. Spot-check a few real
+// barcode scans against known label values before trusting this fully.
+function offMicrosMg(n: Record<string, number | undefined>, key: string): number | null {
+  const raw = n[`${key}_serving`] ?? n[`${key}_100g`];
+  return raw == null ? null : round(raw * 1000, 1);
+}
+function offMicrosMcg(n: Record<string, number | undefined>, key: string): number | null {
+  const raw = n[`${key}_serving`] ?? n[`${key}_100g`];
+  return raw == null ? null : round(raw, 1);
 }
 
 async function lookupBarcodeOpenFoodFacts(barcode: string): Promise<FoodCandidate | null> {
@@ -57,6 +89,13 @@ async function lookupBarcodeOpenFoodFacts(barcode: string): Promise<FoodCandidat
       fatG: round(n["fat_serving"] ?? n["fat_100g"]),
       fiberG: round(n["fiber_serving"] ?? n["fiber_100g"]),
       sodiumMg: round((n["sodium_serving"] ?? n["sodium_100g"]) * 1000, 0),
+      calciumMg: offMicrosMg(n, "calcium"),
+      ironMg: offMicrosMg(n, "iron"),
+      vitaminDMcg: offMicrosMcg(n, "vitamin-d"),
+      potassiumMg: offMicrosMg(n, "potassium"),
+      magnesiumMg: offMicrosMg(n, "magnesium"),
+      vitaminB12Mcg: offMicrosMcg(n, "vitamin-b12"),
+      zincMg: offMicrosMg(n, "zinc"),
       barcode,
     };
   } catch (err) {
@@ -65,6 +104,14 @@ async function lookupBarcodeOpenFoodFacts(barcode: string): Promise<FoodCandidat
   }
 }
 
+// USDA FoodData Central reports each nutrient in its own practical unit
+// already (nutrientName here is what to look up; sodium's existing
+// unconverted mapping below is the proof -- USDA's "Sodium, Na" is already
+// mg, unlike Open Food Facts' gram-default). Same caveat as
+// offMicrosMg/offMicrosMcg above: nutrient names below are FDC's documented
+// standard names, not verified against a live response in this sandbox
+// (api.nal.usda.gov was also unreachable here) -- spot-check before
+// trusting fully.
 function usdaFoodToCandidate(food: any, barcode: string | null): FoodCandidate {
   const nutrientValue = (name: string) =>
     food.foodNutrients?.find((n: any) => n.nutrientName === name)?.value ?? null;
@@ -81,6 +128,13 @@ function usdaFoodToCandidate(food: any, barcode: string | null): FoodCandidate {
     fatG: round(nutrientValue("Total lipid (fat)")),
     fiberG: round(nutrientValue("Fiber, total dietary")),
     sodiumMg: round(nutrientValue("Sodium, Na"), 0),
+    calciumMg: round(nutrientValue("Calcium, Ca"), 0),
+    ironMg: round(nutrientValue("Iron, Fe")),
+    vitaminDMcg: round(nutrientValue("Vitamin D (D2 + D3)")),
+    potassiumMg: round(nutrientValue("Potassium, K"), 0),
+    magnesiumMg: round(nutrientValue("Magnesium, Mg"), 0),
+    vitaminB12Mcg: round(nutrientValue("Vitamin B-12")),
+    zincMg: round(nutrientValue("Zinc, Zn")),
     barcode,
   };
 }

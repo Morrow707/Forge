@@ -41,7 +41,13 @@ export default function AdminMyCalendar() {
       <CalendarView
         entries={entries}
         onRangeChange={(start, end) => setRange({ start, end })}
-        onEntryClick={(e) => navigate(`/admin/my/day/${e.assignmentId}/${e.programDayId}/${e.date}`)}
+        onEntryClick={(e) => {
+          // Admins have no roster to assign skill programs to yet, so this
+          // branch is unreachable today -- guarded anyway since this route
+          // wouldn't understand a skill day's IDs if it ever were.
+          if (e.kind === "skill") return;
+          navigate(`/admin/my/day/${e.assignmentId}/${e.programDayId}/${e.date}`);
+        }}
       />
 
       {entries.length === 0 && (

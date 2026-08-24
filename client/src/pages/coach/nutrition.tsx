@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { AppShell } from "@/components/app-shell";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { NutritionDialog } from "@/components/nutrition-dialog";
-import { Apple, Search } from "lucide-react";
+import { ProgressBar } from "@/components/food-log-panel";
+import { Search } from "lucide-react";
 
 type RosterEntry = {
   id: number;
@@ -16,18 +16,28 @@ type RosterEntry = {
   position?: string | null;
 };
 
-/** Dedicated Nutrition tab for a coach -- the roster page still has its own
- * quick-access Nutrition icon button per athlete, this just gives coaches a
- * top-level home for the same NutritionDialog when nutrition (not workouts)
- * is what they're there to manage. Full read-write, same as the roster
- * entry point -- see NutritionDialog's own comment on why the AI never
- * touches these numbers. */
+type NutritionSummary = {
+  athleteId: number;
+  targets: { caloriesKcal: number | null; proteinG: number | null } | null;
+  totals: { caloriesKcal: number; proteinG: number };
+};
+
+/** Dedicated Nutrition tab for a coach -- at-a-glance "goal vs hit today"
+ * for the whole roster, so a coach doesn't have to open every athlete
+ * individually just to see who's on track. Click an athlete to land on
+ * their full nutrition tab (targets + food-log history) on their own
+ * profile page -- see the ?tab=nutrition handling in athlete-detail.tsx. */
 export default function CoachNutrition() {
+  const [, navigate] = useLocation();
   const { data: roster = [] } = useQuery<RosterEntry[]>({
     queryKey: ["/api/coach/roster"],
   });
+  const { data: summaries = [] } = useQuery<NutritionSummary[]>({
+    queryKey: ["/api/coach/nutrition-summary"],
+  });
   const [search, setSearch] = useState("");
-  const [nutritionAthlete, setNutritionAthlete] = useState<RosterEntry | null>(null);
+
+  const summaryByAthlete = new Map(summaries.map((s) => [s.athleteId, s]));
 
   const filtered = roster.filter((a) => {
     const q = search.trim().toLowerCase();
@@ -43,9 +53,9 @@ export default function CoachNutrition() {
   return (
     <AppShell title="Nutrition">
       <p className="mb-6 text-sm text-muted-foreground">
-        Set macro and micro targets for each athlete on your roster -- ideally from a real
-        nutritionist's plan. The AI never generates these numbers, it only answers general
-        questions for athletes managing their own.
+        Today's macro goals vs. what each athlete has actually logged. Click an athlete to see
+        their full targets and food-log history -- set targets there too, ideally from a real
+        nutritionist's plan. The AI never generates these numbers.
       </p>
 
       {roster.length === 0 ? (
@@ -71,44 +81,56 @@ export default function CoachNutrition() {
               No athletes match "{search}".
             </p>
           ) : (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {filtered.map((a) => (
-                <Card key={a.id}>
-                  <CardContent className="flex flex-col gap-3 p-4">
-                    <div className="min-w-0">
-                      <p className="truncate font-semibold">{a.name}</p>
-                      <p className="truncate text-xs text-muted-foreground">{a.email}</p>
-                      {(a.sport || a.position) && (
-                        <div className="mt-1.5 flex flex-wrap gap-1">
-                          {a.sport && <Badge variant="secondary">{a.sport}</Badge>}
-                          {a.position && <Badge variant="outline">{a.position}</Badge>}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {filtered.map((a) => {
+                const summary = summaryByAthlete.get(a.id);
+                const hasTargets =
+                  summary?.targets &&
+                  (summary.targets.caloriesKcal != null || summary.targets.proteinG != null);
+                return (
+                  <Card
+                    key={a.id}
+                    className="cursor-pointer transition-colors hover:border-primary/50"
+                    onClick={() => navigate(`/coach/roster/${a.id}?tab=nutrition`)}
+                  >
+                    <CardContent className="flex flex-col gap-3 p-4">
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold">{a.name}</p>
+                        <p className="truncate text-xs text-muted-foreground">{a.email}</p>
+                        {(a.sport || a.position) && (
+                          <div className="mt-1.5 flex flex-wrap gap-1">
+                            {a.sport && <Badge variant="secondary">{a.sport}</Badge>}
+                            {a.position && <Badge variant="outline">{a.position}</Badge>}
+                          </div>
+                        )}
+                      </div>
+                      {hasTargets ? (
+                        <div className="space-y-2 border-t border-border pt-3">
+                          <ProgressBar
+                            label="Calories"
+                            value={summary!.totals.caloriesKcal}
+                            target={summary!.targets!.caloriesKcal}
+                            unit="kcal"
+                          />
+                          <ProgressBar
+                            label="Protein"
+                            value={summary!.totals.proteinG}
+                            target={summary!.targets!.proteinG}
+                            unit="g"
+                          />
                         </div>
+                      ) : (
+                        <p className="border-t border-border pt-3 text-xs text-muted-foreground">
+                          No targets set yet
+                        </p>
                       )}
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="w-full"
-                      onClick={() => setNutritionAthlete(a)}
-                    >
-                      <Apple className="h-4 w-4" />
-                      Nutrition Targets
-                    </Button>
-                  </CardContent>
-                </Card>
-              ))}
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           )}
         </>
-      )}
-
-      {nutritionAthlete && (
-        <NutritionDialog
-          open={nutritionAthlete !== null}
-          onOpenChange={(open) => !open && setNutritionAthlete(null)}
-          athleteName={nutritionAthlete.name}
-          nutritionUrl={`/api/coach/roster/${nutritionAthlete.id}/nutrition`}
-        />
       )}
     </AppShell>
   );

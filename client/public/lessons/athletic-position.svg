@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 420" font-family="Arial, Helvetica, sans-serif">
+  <rect x="0" y="0" width="700" height="420" fill="#ffffff"/>
+  <text x="350" y="34" text-anchor="middle" font-size="20" font-weight="700" fill="#0f172a" letter-spacing="1">THE ATHLETIC POSITION</text>
+
+  <!-- ground line -->
+  <line x1="60" y1="360" x2="480" y2="360" stroke="#cbd5e1" stroke-width="3"/>
+
+  <!-- simple side-view athletic stance figure -->
+  <g stroke="#0f766e" stroke-width="7" stroke-linecap="round" fill="none">
+    <!-- head -->
+    <circle cx="270" cy="120" r="20" fill="#f0fdfa" stroke="#0f766e" stroke-width="6"/>
+    <!-- spine, tilted forward slightly -->
+    <line x1="270" y1="140" x2="255" y2="225"/>
+    <!-- hips to knee -->
+    <line x1="255" y1="225" x2="290" y2="300"/>
+    <!-- knee to ground (flexed) -->
+    <line x1="290" y1="300" x2="250" y2="358"/>
+    <!-- back leg -->
+    <line x1="255" y1="225" x2="190" y2="300"/>
+    <line x1="190" y1="300" x2="230" y2="358"/>
+    <!-- arms, relaxed and out in front -->
+    <line x1="262" y1="170" x2="320" y2="210"/>
+    <line x1="320" y1="210" x2="360" y2="195"/>
+  </g>
+
+  <!-- eye level marker -->
+  <line x1="150" y1="120" x2="410" y2="120" stroke="#f97316" stroke-width="2" stroke-dasharray="4 5"/>
+  <text x="415" y="125" font-size="13" fill="#c2410c" font-weight="600">Eyes level</text>
+
+  <!-- balance / center of mass marker -->
+  <circle cx="262" cy="220" r="5" fill="#f97316"/>
+  <text x="415" y="220" font-size="13" fill="#c2410c" font-weight="600">Balanced over</text>
+  <text x="415" y="237" font-size="13" fill="#c2410c" font-weight="600">both feet</text>
+
+  <!-- knee flex marker -->
+  <text x="415" y="300" font-size="13" fill="#c2410c" font-weight="600">Knees softly flexed,</text>
+  <text x="415" y="317" font-size="13" fill="#c2410c" font-weight="600">not locked or sunk</text>
+
+  <!-- spine angle marker -->
+  <text x="415" y="165" font-size="13" fill="#c2410c" font-weight="600">Athletic spine angle</text>
+  <text x="415" y="182" font-size="13" fill="#c2410c" font-weight="600">-- tall, not rounded</text>
+
+  <text x="350" y="400" text-anchor="middle" font-size="12" fill="#64748b">The position that creates the highest combination of speed, power, and control.</text>
+</svg>

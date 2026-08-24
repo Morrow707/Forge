@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
@@ -15,6 +16,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { ExercisePickerDialog } from "@/components/exercise-picker-dialog";
 import { WorkoutCommentThread } from "@/components/workout-comment-thread";
+import { RadioChipGroup } from "@/components/filter-chip-group";
 import { ProgressionButton } from "@/components/progression-button";
 import { VideoTrackingToggle } from "@/components/video-tracking-toggle";
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
@@ -26,10 +28,10 @@ import {
   colorForLabel,
 } from "@/lib/supersets";
 import { toast } from "sonner";
-import { Plus, Trash2, MoonStar, Link2, Stethoscope, Copy, Clock } from "lucide-react";
+import { Plus, Trash2, MoonStar, Link2, Stethoscope, Copy, Clock, Repeat, LineChart } from "lucide-react";
 import type { Exercise } from "@shared/schema";
 
-type TrackingLevel = "none" | "bar_path" | "full" | "jump";
+type TrackingLevel = "none" | "bar_path" | "full" | "jump" | "golf_swing" | "baseball_swing";
 
 type LocalExercise = {
   key: string;
@@ -41,6 +43,9 @@ type LocalExercise = {
   restSeconds: string;
   notes: string;
   linkedToNext: boolean;
+  // Only meaningful for 2+ exercises chained via linkedToNext -- see the
+  // matching field/comment in program-builder.tsx's LocalExercise.
+  restAfterGroupOnly: boolean;
   trackingLevel: TrackingLevel;
   videoCheckEnabled: boolean;
   // Drives which camera pipeline "Video" turns on for this exercise (see
@@ -74,6 +79,7 @@ type DayDetail = {
     restSeconds: number | null;
     notes: string | null;
     supersetGroup: string | null;
+    restAfterGroupOnly: boolean;
     trackingLevel: TrackingLevel;
     videoCheckEnabled: boolean;
     exercise: Exercise;
@@ -96,6 +102,18 @@ type ProgramDayOption = {
   label: string;
 };
 
+// See the matching helpers in program-builder.tsx for what these do.
+function isEndOfLinkedGroup(exercises: LocalExercise[], i: number): boolean {
+  if (exercises[i].linkedToNext) return false;
+  return i > 0 && exercises[i - 1].linkedToNext;
+}
+
+function startOfLinkedGroup(exercises: LocalExercise[], endIndex: number): number {
+  let start = endIndex;
+  while (start > 0 && exercises[start - 1].linkedToNext) start--;
+  return start;
+}
+
 export function CoachDayEditDialog({
   programDayId,
   assignmentId,
@@ -112,6 +130,7 @@ export function CoachDayEditDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const qc = useQueryClient();
+  const [, navigate] = useLocation();
   const { data, isLoading } = useQuery<DayDetail>({
     queryKey: ["/api/coach/program-days", programDayId],
     queryFn: () => getJson(`/api/coach/program-days/${programDayId}`),
@@ -142,6 +161,12 @@ export function CoachDayEditDialog({
     enabled: open && data != null,
   });
 
+  const { data: assignment } = useQuery<{ id: number; durationWeeks: number }>({
+    queryKey: ["/api/coach/assignments", assignmentId],
+    queryFn: () => getJson(`/api/coach/assignments/${assignmentId}`),
+    enabled: open && assignmentId != null,
+  });
+
   const [title, setTitle] = useState("");
   const [isRestDay, setIsRestDay] = useState(false);
   const [exercises, setExercises] = useState<LocalExercise[]>([]);
@@ -169,6 +194,7 @@ export function CoachDayEditDialog({
             restSeconds: pe.restSeconds != null ? String(pe.restSeconds) : "",
             notes: pe.notes ?? "",
             supersetGroup: pe.supersetGroup,
+            restAfterGroupOnly: pe.restAfterGroupOnly ?? false,
             trackingLevel: pe.trackingLevel ?? "none",
             videoCheckEnabled: pe.videoCheckEnabled ?? false,
             category: pe.exercise.category ?? null,
@@ -231,6 +257,7 @@ export function CoachDayEditDialog({
           restSeconds: ex.restSeconds ? Number(ex.restSeconds) : null,
           notes: ex.notes || null,
           supersetGroup: ex.supersetGroup,
+          restAfterGroupOnly: ex.restAfterGroupOnly,
           trackingLevel: ex.trackingLevel,
           videoCheckEnabled: ex.videoCheckEnabled,
         })),
@@ -260,6 +287,21 @@ export function CoachDayEditDialog({
       onOpenChange(false);
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not delete workout"),
+  });
+
+  const updateDurationMutation = useMutation({
+    mutationFn: async (durationWeeks: number) => {
+      const res = await apiRequest("PATCH", `/api/coach/assignments/${assignmentId}`, {
+        durationWeeks,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/coach/assignments", assignmentId] });
+      invalidateCalendars();
+      toast.success(`Duration updated for ${athleteName ?? "this athlete"}`);
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Could not update duration"),
   });
 
   const enableCorrectivesMutation = useMutation({
@@ -455,16 +497,32 @@ export function CoachDayEditDialog({
                               />
                             )}
                           </div>
-                          <div className="mt-1.5">
+                          <div className="mt-1.5 flex items-center gap-2">
                             <VideoTrackingToggle
                               trackingLevel={ex.trackingLevel}
                               category={ex.category}
+                              exerciseName={ex.exerciseName}
                               onChange={(patch) =>
                                 setExercises((prev) =>
                                   prev.map((e) => (e.key === ex.key ? { ...e, ...patch } : e)),
                                 )
                               }
                             />
+                            {ex.trackingLevel !== "none" && athleteId != null && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  onOpenChange(false);
+                                  navigate(
+                                    `/coach/analytics?athleteId=${athleteId}&exerciseId=${ex.exerciseId}`,
+                                  );
+                                }}
+                                className="flex shrink-0 items-center gap-1 text-xs font-semibold text-primary hover:underline"
+                              >
+                                <LineChart className="h-3.5 w-3.5" />
+                                View Analytics
+                              </button>
+                            )}
                           </div>
                         </div>
                         {i < exercises.length - 1 && (
@@ -499,6 +557,24 @@ export function CoachDayEditDialog({
                             </button>
                           </div>
                         )}
+                        {isEndOfLinkedGroup(exercises, i) && (
+                          <div className="py-1 pl-3">
+                            <RadioChipGroup
+                              label="Rest"
+                              options={["Between each", "After the group"]}
+                              value={ex.restAfterGroupOnly ? "After the group" : "Between each"}
+                              onChange={(v) => {
+                                const groupStart = startOfLinkedGroup(exercises, i);
+                                const restAfterGroupOnly = v === "After the group";
+                                setExercises((prev) =>
+                                  prev.map((e, idx) =>
+                                    idx >= groupStart && idx <= i ? { ...e, restAfterGroupOnly } : e,
+                                  ),
+                                );
+                              }}
+                            />
+                          </div>
+                        )}
                       </div>
                   ))}
                   {exercises.length === 0 && (
@@ -515,6 +591,32 @@ export function CoachDayEditDialog({
                     <Plus className="h-3.5 w-3.5" />
                     Add Exercise
                   </Button>
+                </div>
+              )}
+
+              {assignmentId != null && assignment != null && (
+                <div className="space-y-1.5 border-t border-border pt-4">
+                  <Label className="flex items-center gap-1.5">
+                    <Repeat className="h-3.5 w-3.5 text-muted-foreground" />
+                    Duration for {athleteName ?? "this athlete"}
+                  </Label>
+                  <RadioChipGroup
+                    label=""
+                    className="[&>p]:hidden"
+                    options={Array.from({ length: 12 }, (_, i) => String(i + 1))}
+                    value={String(assignment.durationWeeks)}
+                    onChange={(v) => {
+                      const weeks = Number(v) || 1;
+                      if (weeks !== assignment.durationWeeks) updateDurationMutation.mutate(weeks);
+                    }}
+                  />
+                  {program?.weeks?.length > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      {program.weeks.length > 1
+                        ? `Runs this program's own ${program.weeks.length}-week pattern ${assignment.durationWeeks} time${assignment.durationWeeks === 1 ? "" : "s"} — ${program.weeks.length * assignment.durationWeeks} weeks total.`
+                        : `${assignment.durationWeeks} week${assignment.durationWeeks === 1 ? "" : "s"} total.`}
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -591,8 +693,25 @@ export function CoachDayEditDialog({
                       </div>
                       <Button
                         size="sm"
-                        disabled={copyTargets.size === 0 || copyCorrectivesMutation.isPending}
-                        onClick={() => copyCorrectivesMutation.mutate(Array.from(copyTargets))}
+                        disabled={
+                          copyTargets.size === 0 ||
+                          copyCorrectivesMutation.isPending ||
+                          saveCorrectivesMutation.isPending
+                        }
+                        onClick={async () => {
+                          // The copy endpoint duplicates whatever's already
+                          // PERSISTED for this day, not anything from the
+                          // request body -- without saving first, copying
+                          // right after adding/editing a corrective here
+                          // would silently propagate the OLD list to the
+                          // target days instead of what's actually on screen.
+                          try {
+                            await saveCorrectivesMutation.mutateAsync(correctives);
+                          } catch {
+                            return;
+                          }
+                          copyCorrectivesMutation.mutate(Array.from(copyTargets));
+                        }}
                       >
                         Copy to {copyTargets.size || ""} day{copyTargets.size === 1 ? "" : "s"}
                       </Button>
@@ -748,7 +867,19 @@ export function CoachDayEditDialog({
                 Cancel
               </Button>
               <Button
-                onClick={() => saveMutation.mutate({ title, isRestDay, exercises })}
+                onClick={() => {
+                  saveMutation.mutate({ title, isRestDay, exercises });
+                  // Correctives persist through their own PUT (see "Save
+                  // Correctives" below), but read as one form with
+                  // everything above -- without this, a coach who edits
+                  // both sections and taps the one Save button they can
+                  // see would have their corrective edits silently
+                  // discarded, since saveMutation's own onSuccess closes
+                  // the whole dialog right after.
+                  if (assignmentId != null && correctivesData?.correctivesEnabled) {
+                    saveCorrectivesMutation.mutate(correctives);
+                  }
+                }}
                 disabled={!data || saveMutation.isPending}
               >
                 {saveMutation.isPending ? "Saving…" : "Save Changes"}
@@ -774,6 +905,7 @@ export function CoachDayEditDialog({
               restSeconds: "",
               notes: "",
               linkedToNext: false,
+              restAfterGroupOnly: false,
               trackingLevel: "none",
               videoCheckEnabled: false,
               category: exercise.category ?? null,

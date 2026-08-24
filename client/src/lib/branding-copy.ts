@@ -1,4 +1,5 @@
-// One shared copy of the small attribution mark shown when a page isn't
-// (or doesn't need to be) fully re-skinned -- kept here so the header
-// caption and the footer watermark can't drift out of sync with each other.
-export const POWERED_BY_FORGE_LABEL = "Powered by Forge";
+// Shared copy for Forge's own attribution, wherever a coach's white-label
+// branding is shown alongside it -- previously hand-typed independently in
+// app-shell.tsx, team-branding-dialog.tsx, and signup.tsx, which meant three
+// places to keep in sync for one line of text.
+export const POWERED_BY_FORGE_LABEL = "Powered by Forge Performance";

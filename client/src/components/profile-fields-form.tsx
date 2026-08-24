@@ -21,6 +21,11 @@ export type ProfileFieldsValue = {
   // matching the DB) -- fed straight to the AI so it doesn't have to guess
   // or ask where in the season this athlete currently is.
   seasonPhase: string;
+  // "" means no preference; otherwise one of trainingStylePreferenceEnum's
+  // values -- fed to the AI program builder as a standing instruction (see
+  // COMBINATION_EXERCISE_TRAINING_PRINCIPLES in storage.ts) so it doesn't
+  // have to be re-asked for on every single program request.
+  trainingStylePreference: string;
   fortyYardDash: string;
   verticalJumpIn: string;
   broadJumpIn: string;
@@ -40,6 +45,7 @@ export const emptyProfileFields: ProfileFieldsValue = {
   sport: "",
   position: "",
   seasonPhase: "",
+  trainingStylePreference: "",
   fortyYardDash: "",
   verticalJumpIn: "",
   broadJumpIn: "",
@@ -57,6 +63,11 @@ const SEASON_PHASE_OPTIONS = [
   { value: "taper", label: "Taper / playoffs" },
 ];
 
+const TRAINING_STYLE_OPTIONS = [
+  { value: "traditional", label: "Traditional (compound + isolation)" },
+  { value: "combination_circuit", label: "Combination / circuit-style" },
+];
+
 const GENDER_OPTIONS = [
   { value: "male", label: "Male" },
   { value: "female", label: "Female" },
@@ -70,6 +81,7 @@ export function ProfileFieldsForm({
   idPrefix,
   showName = true,
   showBio = false,
+  dateOfBirth,
 }: {
   value: ProfileFieldsValue;
   onChange: (next: ProfileFieldsValue) => void;
@@ -83,10 +95,17 @@ export function ProfileFieldsForm({
    * shared form for the performance fields below, but a coach writing an
    * athlete's own bio for them defeats the point of it). Defaults off. */
   showBio?: boolean;
+  /** Read-only for now -- collected once at signup (see signup.tsx/claim.tsx)
+   * for age-tier purposes (shared/privacy-tiers.ts), not yet editable here.
+   * Deliberately not reconciled with the Age field above, which stays its
+   * own separately-entered value; unifying them is a follow-up, not this
+   * change. Omitted entirely (not even an empty row) when the account
+   * predates this field. */
+  dateOfBirth?: string | null;
 }) {
   return (
     <div className="space-y-5">
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {showName && (
           <div className="space-y-1.5 sm:col-span-2">
             <Label htmlFor={`${idPrefix}-name`}>Name</Label>
@@ -149,6 +168,32 @@ export function ProfileFieldsForm({
             </SelectContent>
           </Select>
         </div>
+        <div className="space-y-1.5 sm:col-span-2">
+          <Label htmlFor={`${idPrefix}-training-style`}>Training style preference</Label>
+          <Select
+            value={value.trainingStylePreference || "unset"}
+            onValueChange={(v) =>
+              onChange({ ...value, trainingStylePreference: v === "unset" ? "" : v })
+            }
+          >
+            <SelectTrigger id={`${idPrefix}-training-style`}>
+              <SelectValue placeholder="No preference" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="unset">No preference</SelectItem>
+              {TRAINING_STYLE_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value}>
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            Tells the AI program builder whether to lean on standard compound lifts and isolation
+            accessories, or prioritize combination/circuit-style exercises that chain multiple
+            movements together to keep the heart rate up in less time.
+          </p>
+        </div>
         <div className="space-y-1.5">
           <Label htmlFor={`${idPrefix}-age`}>Age</Label>
           <Input
@@ -161,6 +206,18 @@ export function ProfileFieldsForm({
             onChange={(e) => onChange({ ...value, age: e.target.value })}
           />
         </div>
+        {dateOfBirth && (
+          <div className="space-y-1.5">
+            <Label>Date of birth</Label>
+            <p className="flex h-9 items-center rounded-md border border-transparent px-3 text-sm text-muted-foreground">
+              {new Date(`${dateOfBirth}T00:00:00`).toLocaleDateString(undefined, {
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+              })}
+            </p>
+          </div>
+        )}
         <div className="space-y-1.5">
           <Label htmlFor={`${idPrefix}-gender`}>Gender</Label>
           <Select
@@ -211,7 +268,7 @@ export function ProfileFieldsForm({
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Testing / Combine
         </p>
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label htmlFor={`${idPrefix}-forty`}>40-Yard Dash (sec)</Label>
             <Input

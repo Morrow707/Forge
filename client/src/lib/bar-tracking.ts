@@ -6,7 +6,13 @@
 // origin), not pixels -- no pixelsPerMeter calibration needed to interpret
 // them. y follows pose-tracking.ts's worldVerticalSign convention (smaller y
 // = higher), applied by the caller before points ever reach this module.
-export type TrackedPoint = { t: number; x: number; y: number; z: number };
+// confidence (0-1) is optional -- only the primary trace's caller currently
+// sets it (the same wristConfidence+barConfidence fusion weight that already
+// decided this point's x/y), so movingAverage can weight the smoothing pass
+// by it; a point with no confidence set (an interpolated occlusion-gap
+// filler, a trace built before this field existed) is treated as neutral
+// rather than untrustworthy -- see movingAverage's own comment.
+export type TrackedPoint = { t: number; x: number; y: number; z: number; confidence?: number };
 
 // One entry per rep that had enough clean per-side pose data to trust a
 // left/right comparison -- see pose-tracking.ts's computeLegDriveAsymmetry.
@@ -19,6 +25,29 @@ export type LegDriveAsymmetryEntry = {
   rightDriveDegPerSec: number;
   asymmetryPercent: number;
   dominantSide: "left" | "right";
+};
+
+// Same idea as LegDriveAsymmetryEntry above, but for a press/pull's two
+// arms instead of a squat's two legs -- see computeArmDriveAsymmetry
+// further down for how this gets built from the same left/right
+// implement-tracker data bar tilt and grip width already use.
+export type ArmDriveAsymmetryEntry = {
+  repNumber: number;
+  leftVelocityMps: number;
+  rightVelocityMps: number;
+  asymmetryPercent: number;
+  dominantSide: "left" | "right";
+};
+
+// See computeRepTrustScores further down -- one entry per rep, folding
+// several separate accuracy signals into a single number/label instead of
+// leaving the athlete to weigh a handful of indicator pills against each
+// other themselves.
+export type RepTrustScore = {
+  repNumber: number;
+  score: number;
+  label: "high" | "medium" | "low";
+  notes: string[];
 };
 
 const LBS_PER_KG = 2.20462;
@@ -40,16 +69,23 @@ export type RepBreakdown = {
   peakVelocityMps: number;
   meanVelocityMps: number;
   concentricSeconds: number;
+  // How long into the concentric phase peak velocity was reached -- a
+  // standard VBT metric distinct from concentricSeconds (the whole phase's
+  // duration): a rep that reaches its peak early and decelerates for the
+  // rest of the lift reads very differently from one that's still
+  // accelerating right up to lockout, even at the same total duration.
+  timeToPeakVelocitySeconds: number;
   startT: number;
   endT: number;
   depthDeg?: number | null;
   velocityCurve?: { positionCm: number; velocityMps: number }[];
   // Vertical range of motion for this rep's concentric phase, in cm.
   romCm: number;
-  // Peak concentric power for this rep -- null whenever the caller didn't
-  // supply a load (summarizeTrackedSet's loadKg), same as the whole-set
-  // power fields below being null in that case.
+  // Peak and mean concentric power for this rep -- null whenever the
+  // caller didn't supply a load (summarizeTrackedSet's loadKg), same as
+  // the whole-set power fields below being null in that case.
   peakPowerWatts: number | null;
+  meanPowerWatts: number | null;
   // The eccentric (lowering) phase immediately before this rep's lift --
   // null for rep 1 when the set starts from a dead stop, since there's
   // nothing to lower first.
@@ -81,6 +117,18 @@ export type RepMetrics = {
   // armPathTrace above. Null when the movement doesn't apply or no rep had
   // enough clean data.
   legDriveAsymmetry?: LegDriveAsymmetryEntry[] | null;
+  // Populated by the caller from this module's own computeArmDriveAsymmetry
+  // -- only for a shared-bar press/pull (see bar-tracker-dialog.tsx's gate),
+  // same "caller fills it in" pattern as legDriveAsymmetry above. Null when
+  // the equipment doesn't apply or no rep had enough clean left/right data.
+  armDriveAsymmetry?: ArmDriveAsymmetryEntry[] | null;
+  // Populated by the caller from this module's own computeRepTrustScores --
+  // one entry per rep in repBreakdown, folding position-fusion confidence,
+  // tracker-disagreement rejections, and the whole set's movement-mismatch/
+  // camera-alignment status into a single trust indicator. Null when there
+  // weren't enough reps/samples to say anything (mirrors the other optional
+  // caller-populated fields above).
+  trustScores?: RepTrustScore[] | null;
   // Populated by the caller from pose-tracking.ts's detectFormFaults --
   // kept as a plain field here (rather than computed inside
   // summarizeTrackedSet) since fault detection needs the full per-frame
@@ -145,9 +193,13 @@ const OCCLUSION_STEP_MS = 33;
 // the gap between them looks like a brief dropout rather than real motion
 // -- empty array (nothing to insert) otherwise. Caller pushes these before
 // pushing `curr` itself; `prev`/`curr` are never duplicated or altered.
-export function interpolateOcclusionGap(prev: TrackedPoint, curr: TrackedPoint): TrackedPoint[] {
+export function interpolateOcclusionGap(
+  prev: TrackedPoint,
+  curr: TrackedPoint,
+  maxGapMs = OCCLUSION_MAX_GAP_MS,
+): TrackedPoint[] {
   const gap = curr.t - prev.t;
-  if (gap < OCCLUSION_MIN_GAP_MS || gap > OCCLUSION_MAX_GAP_MS) return [];
+  if (gap < OCCLUSION_MIN_GAP_MS || gap > maxGapMs) return [];
   const steps = Math.floor(gap / OCCLUSION_STEP_MS);
   if (steps < 2) return [];
   const points: TrackedPoint[] = [];
@@ -163,19 +215,134 @@ export function interpolateOcclusionGap(prev: TrackedPoint, curr: TrackedPoint):
   return points;
 }
 
-const SMOOTHING_WINDOW = 5;
+// 5 samples was tuned back when every device was assumed to feed ~30fps --
+// at 30fps that's ~165ms of averaging, enough to steady position jitter
+// without smearing a fast rep. Left as a flat frame count, the same "5
+// frames" describes half as much real-world smoothing once a device
+// actually grants the 60fps bar-tracker-dialog.tsx now requests (see its
+// getUserMedia constraints) -- framesForDuration below converts a fixed
+// TIME target into however many frames that takes on THIS trace's own
+// measured sample rate, so smoothing strength stays consistent in
+// wall-clock terms regardless of what frame rate a given device actually
+// negotiated.
+const TARGET_SMOOTHING_MS = 165;
+
+// Exported for jump-tracking.ts, which needs the same fps-independent
+// window sizing for its own smoothing pass and landing-settle detection.
+export function framesForDuration(points: { t: number }[], durationMs: number): number {
+  if (points.length < 2) return 1;
+  const avgIntervalMs = (points[points.length - 1].t - points[0].t) / (points.length - 1);
+  if (avgIntervalMs <= 0) return 1;
+  return Math.max(1, Math.round(durationMs / avgIntervalMs));
+}
 
 // Exported for jump-tracking.ts, which reuses this same smoothing +
 // phase-segmentation pipeline on an ankle trace instead of a wrist/bar
 // trace -- the zigzag logic below has no idea what it's tracking, so
 // there's no reason to duplicate it for a second signal source.
-export function movingAverage(values: number[], window: number): number[] {
+//
+// weights, when given, must be the same length as values -- one confidence
+// (0-1) per sample -- and turns the plain average within each window into a
+// confidence-weighted one: a frame the position fusion barely trusted (a
+// misdetected wrist, a rejected tracker lock) contributes less to the
+// smoothed value than a frame it trusted fully, rather than every frame in
+// the window counting equally regardless of how good a reading it actually
+// was. Omitting weights (every other caller -- jump-tracking.ts's ankle
+// trace has no per-frame confidence to weight by) keeps the exact plain
+// average this function always computed.
+export function movingAverage(values: number[], window: number, weights?: number[]): number[] {
   const out: number[] = [];
   for (let i = 0; i < values.length; i++) {
     const start = Math.max(0, i - Math.floor(window / 2));
     const end = Math.min(values.length, i + Math.ceil(window / 2));
-    const slice = values.slice(start, end);
-    out.push(slice.reduce((a, b) => a + b, 0) / slice.length);
+    if (!weights) {
+      const slice = values.slice(start, end);
+      out.push(slice.reduce((a, b) => a + b, 0) / slice.length);
+      continue;
+    }
+    let weightedSum = 0;
+    let weightTotal = 0;
+    for (let j = start; j < end; j++) {
+      weightedSum += values[j] * weights[j];
+      weightTotal += weights[j];
+    }
+    // Every weight in the window happened to be 0 (every sample fully
+    // distrusted) -- fall back to this frame's own raw value rather than
+    // dividing by zero or silently reporting 0.
+    out.push(weightTotal > 0 ? weightedSum / weightTotal : values[i]);
+  }
+  return out;
+}
+
+// Kalman-filtered alternative to movingAverage for the primary saved-trace
+// position signal. A moving average has no model of the bar's own motion --
+// every sample in its window is just averaged together, blind to how much
+// time actually separates them (a real problem across an occlusion gap,
+// where framesForDuration's fixed frame-count window spans a much longer,
+// unevenly-spaced stretch of wall-clock time than it does through a clean
+// run of frames). A constant-velocity Kalman filter instead predicts
+// forward from the bar's last known position+velocity using each frame's
+// actual dt, then blends that prediction against the new measurement --
+// weighted by how much this exact frame is trusted (same confidence input
+// movingAverage's weights arg takes), rather than every frame in a window
+// counting equally regardless of how good a reading it actually was.
+// Forward-pass only (not a two-pass RTS smoother) -- still applied as a
+// full post-hoc pass over the whole captured trace, same as
+// movingAverage, just processed in time order.
+export function kalmanSmooth(values: number[], times: number[], weights?: number[]): number[] {
+  if (values.length === 0) return [];
+  const out: number[] = new Array(values.length);
+  let pos = values[0];
+  let vel = 0;
+  // Covariance for state [pos, vel] -- starts wide (the first sample is a
+  // guess with no velocity information yet) and converges within a few
+  // frames once real measurements start arriving.
+  let pPos = 1;
+  let pPosVel = 0;
+  let pVel = 1;
+  out[0] = pos;
+
+  // How much the bar's velocity is allowed to drift per second ((m/s)^2 per
+  // second) -- loose enough that a rep's real direction change (the top/
+  // bottom of a rep) isn't lagged out by the model insisting on constant
+  // velocity, tight enough that frame-to-frame position jitter still gets
+  // smoothed away. Same qualitative trade-off TARGET_SMOOTHING_MS's window
+  // duration makes for movingAverage, just expressed as an acceleration
+  // variance instead of a window size.
+  const processNoise = 4;
+  // Position measurement noise (m^2) at full confidence -- roughly a 2cm
+  // standard deviation, in line with typical pose-landmark position noise
+  // in world-space meters. Scaled up (never down) as confidence drops, so a
+  // barely-trusted frame pulls the filtered position only a little rather
+  // than snapping to a misdetection the way an unweighted measurement
+  // update would.
+  const baseMeasurementNoise = 0.0004;
+
+  for (let i = 1; i < values.length; i++) {
+    const dt = Math.max((times[i] - times[i - 1]) / 1000, 1e-3);
+
+    // Predict: F = [[1, dt], [0, 1]], process noise from a discretized
+    // white-noise-acceleration model.
+    pos += vel * dt;
+    const q = processNoise;
+    const predPPos = pPos + 2 * dt * pPosVel + dt * dt * pVel + (q * dt ** 3) / 3;
+    const predPPosVel = pPosVel + dt * pVel + (q * dt * dt) / 2;
+    const predPVel = pVel + q * dt;
+
+    // Update: measurement is position only (H = [1, 0]).
+    const confidence = weights ? Math.max(weights[i], 0.001) : 1;
+    const measurementNoise = baseMeasurementNoise / confidence;
+    const innovation = values[i] - pos;
+    const s = predPPos + measurementNoise;
+    const k0 = predPPos / s;
+    const k1 = predPPosVel / s;
+    pos += k0 * innovation;
+    vel += k1 * innovation;
+    pPos = (1 - k0) * predPPos;
+    pPosVel = (1 - k0) * predPPosVel;
+    pVel = predPVel - k1 * predPPosVel;
+
+    out[i] = pos;
   }
   return out;
 }
@@ -276,8 +443,7 @@ export function savitzkyGolay(values: number[], window: number): number[] {
 // discount. MAX_PLAUSIBLE_ACCEL_G is deliberately generous (well above even
 // an aggressive Olympic-lift pull's turnaround) so this only ever catches a
 // genuine glitch, never a real explosive rep -- untuned against real footage
-// (this sandbox has no camera to test against), same caveat as
-// bar-edge-detection.ts's own thresholds.
+// (this sandbox has no camera to test against).
 const MAX_PLAUSIBLE_ACCEL_G = 6;
 
 export function rejectImplausibleAccelerationSpikes(points: TrackedPoint[]): TrackedPoint[] {
@@ -352,6 +518,97 @@ function computeSpeeds(points: TrackedPoint[], positions: number[]): number[] {
   return speeds;
 }
 
+// Same failure mode barPathDeviationCm's own comment describes below for
+// position -- a wrist/bar briefly misdetected for one frame (occlusion
+// recovery, the implement tracker latching onto the wrong point) -- hits
+// velocity even harder: velocity is a rate, so one bad position reading
+// turns into one absurd single-frame speed spike, and a raw Math.max
+// reports that spike as if it were the athlete's real peak effort. The 95th
+// percentile of a phase's speed samples is unmoved by the one or two worst
+// frames in an otherwise clean phase (a concentric phase is comfortably
+// more than 20 frames at 30fps), while still tracking genuine peak effort
+// -- true peak velocity is reached over several consecutive frames, not a
+// single isolated one, so trimming just the extreme tail costs nothing on a
+// clean rep. peakIdx (for "time to peak velocity") lands on the first frame
+// that actually reaches this robust peak, not necessarily the single
+// highest raw sample -- that sample may be exactly the outlier the trim
+// excluded.
+//
+// No loaded barbell squat/deadlift/press/row/curl in this feature's target
+// population reaches anywhere near this in real concentric bar speed --
+// published VBT data tops out around 1.5-2.2 m/s even for deliberately fast
+// empty-bar/speed work. A reading above this is categorically a tracking
+// artifact (a smoothing-window edge effect at the very start of a trace, a
+// misdetected wrist for one frame), not a real rep -- excluded from both the
+// peak and mean calculations below the same way an implausible single-frame
+// POSITION jump is already rejected in bar-tracker-dialog.tsx, rather than
+// being averaged in or reported as the set's peak effort.
+export const MAX_PLAUSIBLE_LIFT_VELOCITY_MPS = 3;
+
+function robustPeakSpeed(
+  speedsMps: number[],
+  startIdx: number,
+  endIdx: number,
+): { peak: number; peakIdx: number } {
+  const samples: { v: number; idx: number }[] = [];
+  for (let i = startIdx; i <= endIdx; i++) samples.push({ v: speedsMps[i], idx: i });
+  if (samples.length === 0) return { peak: 0, peakIdx: startIdx };
+  // Filtered out BEFORE the percentile trim runs -- the 95th-percentile trim
+  // alone assumes only a handful of frames are bad, which doesn't hold when a
+  // contiguous smoothing-window edge effect corrupts several consecutive
+  // frames near the start of a trace (worst exactly where robustPeakSpeed's
+  // own moving-average edge-effect note above applies hardest). Falls back
+  // to every sample only if the whole phase is somehow above the ceiling --
+  // an even worse case this ceiling can't rescue, but reporting SOMETHING
+  // consistent with the rest of this function's "never just report zero"
+  // stance beats silently zeroing out a whole rep.
+  const plausible = samples.filter((s) => s.v <= MAX_PLAUSIBLE_LIFT_VELOCITY_MPS);
+  const pool = plausible.length > 0 ? plausible : samples;
+  const sorted = [...pool].sort((a, b) => a.v - b.v);
+  const peak = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))].v;
+  const peakIdx = pool.find((s) => s.v >= peak)?.idx ?? startIdx;
+  return { peak, peakIdx };
+}
+
+// Same outlier-exclusion reasoning as robustPeakSpeed's own comment -- a
+// single physically-impossible frame shouldn't get to drag a phase's MEAN
+// speed off just because it wasn't extreme enough to be the reported peak.
+// Shared by summarizeTrackedSet's phaseStats and velocityForWindow below so
+// both mean calculations get the same protection robustPeakSpeed already
+// gives peak.
+function plausibleMean(speeds: number[]): number {
+  if (speeds.length === 0) return 0;
+  const plausible = speeds.filter((v) => v <= MAX_PLAUSIBLE_LIFT_VELOCITY_MPS);
+  const pool = plausible.length > 0 ? plausible : speeds;
+  return pool.reduce((a, b) => a + b, 0) / pool.length;
+}
+
+// Peak speed (m/s) over a short live segment -- e.g. the trace since the
+// previous rep boundary -- for bar-tracker-dialog.tsx's live spoken
+// velocity cue (see its own comment on why this exists alongside the
+// precise batch pipeline: same "cheap live estimate now, precise pass at
+// Stop" split the live rep counter above it already uses). Deliberately
+// simpler than robustPeakSpeed's percentile trim: a live segment is only
+// ~10-40 samples (one rep's worth at typical frame rates), too few for a
+// stable 95th-percentile cut to mean anything, so this instead just
+// excludes anything past the same physically-implausible ceiling
+// robustPeakSpeed uses and reports the max of what's left -- a single bad
+// frame skews a max more than a percentile would, but a live cue calling
+// out an occasional slightly-high number is a much smaller cost than the
+// latency a steadier estimator would add before it could speak at all.
+// Null when there's too little data in the segment to say anything.
+export function estimateLiveRepVelocityMps(segment: { t: number; y: number }[]): number | null {
+  if (segment.length < 4) return null;
+  let peak = 0;
+  for (let i = 1; i < segment.length - 1; i++) {
+    const dt = (segment[i + 1].t - segment[i - 1].t) / 1000;
+    if (dt <= 0) continue;
+    const speed = Math.abs(segment[i + 1].y - segment[i - 1].y) / dt;
+    if (speed <= MAX_PLAUSIBLE_LIFT_VELOCITY_MPS && speed > peak) peak = speed;
+  }
+  return peak > 0 ? Math.round(peak * 100) / 100 : null;
+}
+
 // Splits a continuous vertical-position trace into alternating up/down
 // phases using a running-extreme zigzag: a phase only ends once the
 // position has retraced by minAmplitude from its peak/trough so far, not
@@ -411,6 +668,34 @@ export function segmentPhases(
 
 const GRAVITY_MPS2 = 9.81;
 
+// Reference height (5'9", a common adult-average baseline) the flat
+// per-movement minimum amplitudes below are calibrated around -- a
+// meaningfully shorter or taller athlete moves proportionally less or
+// more through the same exercise (a 5'6" squat's absolute depth isn't a
+// 6'3" squat's), so a single flat cm threshold either lets a tall
+// athlete's genuine partial rep through as "big enough motion," or risks
+// reading a short athlete's full-depth rep as barely-there movement by
+// comparison. This is a coarse linear nudge, not a real biomechanical
+// model of how limb length actually maps to range of motion (which varies
+// by exercise and by individual proportions, not just height) -- clamped
+// to +/-25% so an unusually short or tall entry doesn't overcorrect into
+// a threshold that's worse than the flat one it's replacing.
+const REFERENCE_HEIGHT_IN = 69;
+const MIN_HEIGHT_SCALE = 0.75;
+const MAX_HEIGHT_SCALE = 1.25;
+
+// Exported for jump-tracking.ts, which applies the same height nudge to
+// its own flight-amplitude floor. Returns baseCm unscaled when heightIn
+// isn't on file -- an athlete who hasn't filled in their profile gets
+// exactly today's flat behavior, not a guess.
+export function heightScaledAmplitudeCm(baseCm: number, heightIn?: number | null): number {
+  if (!heightIn || heightIn <= 0) return baseCm;
+  const scale = Math.min(MAX_HEIGHT_SCALE, Math.max(MIN_HEIGHT_SCALE, heightIn / REFERENCE_HEIGHT_IN));
+  return baseCm * scale;
+}
+
+const BASE_MIN_REP_AMPLITUDE_CM = 20;
+
 // Turns a raw pixel-space trace for one set into real-world metrics. Returns
 // null when there isn't enough signal to say anything meaningful (marker
 // lost for most of the take, or the athlete stopped before moving).
@@ -418,12 +703,46 @@ const GRAVITY_MPS2 = 9.81;
 // entered weight, converted to kg by the caller) -- power is mass * g *
 // velocity, so it's left null throughout whenever there's no load to use
 // as mass (bodyweight-only sets have no well-defined external load here).
+//
+// heightIn (the athlete's stored height, when on file) scales
+// BASE_MIN_REP_AMPLITUDE_CM via heightScaledAmplitudeCm above -- the
+// smallest vertical reversal segmentPhases will treat as a real rep
+// boundary rather than noise. 5cm (the original flat default before this
+// existed) was well within pose-jitter and incidental-motion range
+// (settling under the bar, a grip adjustment, unracking/reracking at the
+// start and end of the set), so a set tracked start-to-finish could
+// segment several extra "reps" out of motion that was never a rep at all.
+// Every exercise this tracks -- squat, deadlift, press, row, curl --
+// moves the bar/wrist well over 15cm through a genuine rep for an
+// average-height athlete, so 20cm (~8in) comfortably clears real reps of
+// any of them while sitting well above ordinary rack noise; the height
+// scaling shifts that floor proportionally for anyone far from average.
+// The exercise's known starting posture, when the caller can say so safely
+// (see bar-tracker-dialog.tsx's inferFirstPhaseHint) -- "concentric" means
+// the very first phase of the trace is known to be the lift itself (a
+// conventional deadlift dead-stops on the floor each rep, a row's handle
+// starts at arm's length), "eccentric" means it's known to be a controlled
+// descent first (a squat/lunge starts standing or racked). Deliberately
+// only ever used as a TIE-BREAKER (see FIRST_PHASE_AMBIGUITY_THRESHOLD
+// below), never a hard override of what the trace's own speed actually
+// shows -- the caller's knowledge of the exercise is a helpful prior on an
+// otherwise-close call, not a substitute for what was actually measured.
+export type FirstPhaseHint = "concentric" | "eccentric" | null;
+
 export function summarizeTrackedSet(
   rawPoints: TrackedPoint[],
   loadKg?: number,
-  minRepAmplitudeCm = 5,
+  heightIn?: number | null,
+  firstPhaseHint?: FirstPhaseHint,
+  // Timestamps where a frame-to-frame reading got thrown out as physically
+  // implausible (see isPlausibleVelocity's callers) -- optional and
+  // additive so every existing caller keeps working unchanged with none of
+  // this filtering applied. See the phantomPhase comment below for what it
+  // actually gates.
+  rejectionEvents: number[] = [],
 ): RepMetrics | null {
   if (rawPoints.length < 6) return null;
+  const minRepAmplitudeCm = heightScaledAmplitudeCm(BASE_MIN_REP_AMPLITUDE_CM, heightIn);
 
   // Repair single-frame implausible-acceleration glitches before anything
   // downstream (smoothing, phase segmentation, bar-path deviation) ever
@@ -431,11 +750,11 @@ export function summarizeTrackedSet(
   // used everywhere below instead of the raw parameter.
   const points = rejectImplausibleAccelerationSpikes(rawPoints);
 
-  // Savitzky-Golay, not a flat moving average, for the position trace that
-  // feeds peak/mean velocity -- see savitzkyGolay's own comment for why a
-  // flat mean systematically blunts a real velocity peak in a way a local
-  // quadratic fit doesn't.
-  const ySmoothed = savitzkyGolay(points.map((p) => p.y), SMOOTHING_WINDOW);
+  const ySmoothed = kalmanSmooth(
+    points.map((p) => p.y),
+    points.map((p) => p.t),
+    points.map((p) => p.confidence ?? 1),
+  );
   const speedsMps = computeSpeeds(points, ySmoothed);
 
   const minAmplitudeM = minRepAmplitudeCm / 100;
@@ -445,22 +764,75 @@ export function summarizeTrackedSet(
   const phaseStats = phases.map((phase) => {
     const slice = speedsMps.slice(phase.startIdx, phase.endIdx + 1);
     const duration = (points[phase.endIdx].t - points[phase.startIdx].t) / 1000;
-    const peak = slice.length ? Math.max(...slice) : 0;
-    const mean = slice.length ? slice.reduce((a, b) => a + b, 0) / slice.length : 0;
-    return { peak, mean, duration, startIdx: phase.startIdx, endIdx: phase.endIdx };
+    const mean = plausibleMean(slice);
+    // peak/peakIdx (index within the whole trace, used to report how long
+    // it took to reach peak velocity, a standard VBT metric) come from
+    // robustPeakSpeed rather than a raw max -- see its own comment above.
+    const { peak, peakIdx } = robustPeakSpeed(speedsMps, phase.startIdx, phase.endIdx);
+    return { peak, mean, duration, startIdx: phase.startIdx, endIdx: phase.endIdx, peakIdx };
   });
 
   // Heuristic: of each pair of adjacent phases, the one with the higher
   // average speed is concentric (the explosive half of a rep) and the
   // other is eccentric -- there's no way to know "up" vs "down" in image
   // space without knowing the exercise, but concentric-is-faster holds
-  // for the compound lifts this feature targets.
+  // for the compound lifts this feature targets. This is reliable enough on
+  // every phase that has two clearly-different-speed neighbors to compare;
+  // the one place it can genuinely misfire is the very first phase of the
+  // whole trace, which sometimes isn't a real rep at all yet (settling into
+  // position, a first partial movement) and can end up close in speed to
+  // the phase right after it -- exactly where firstPhaseHint, when the
+  // caller could safely infer one, gets a say.
+  const FIRST_PHASE_AMBIGUITY_THRESHOLD = 0.15;
   const isConcentric = phaseStats.map((phase, i) => {
     const neighbor = phaseStats[i + 1] ?? phaseStats[i - 1];
+    if (i === 0 && firstPhaseHint) {
+      if (!neighbor) return firstPhaseHint === "concentric";
+      const maxMean = Math.max(phase.mean, neighbor.mean);
+      const tooCloseToCall = maxMean > 0 && Math.abs(phase.mean - neighbor.mean) / maxMean < FIRST_PHASE_AMBIGUITY_THRESHOLD;
+      if (tooCloseToCall) return firstPhaseHint === "concentric";
+    }
     return !neighbor || phase.mean >= neighbor.mean;
   });
   const concentric = phaseStats.filter((_, i) => isConcentric[i]);
   const eccentric = phaseStats.filter((_, i) => !isConcentric[i]);
+
+  // segmentPhases counts ANY retrace past minAmplitude as a real rep
+  // boundary, with no way to tell "the athlete actually moved the bar back
+  // up 20cm+" apart from "tracking briefly lost the bar/wrist, jumped to a
+  // wrong position, and recovered" -- both cross the same threshold. The
+  // second case is exactly what isPlausibleVelocity's per-frame rejection
+  // (rejectionEvents) already exists to flag, but until now nothing fed
+  // that back into the count itself -- it only ever showed up afterward as
+  // a lower trust score on a rep that was already counted. That's the
+  // mechanism behind a set logging more reps than were actually performed:
+  // a lock-loss-and-recover blip mid-set can register as one or two extra
+  // phantom phases.
+  //
+  // Deliberately conservative about which phases this excludes -- an
+  // athlete's own logged workout history is worse off under-counted (a
+  // real rep silently vanishing with no explanation) than over-counted (a
+  // spurious one, at least flagged "shaky" today). Only a phase that's
+  // BOTH unusually short next to this same set's other reps AND directly
+  // overlaps a rejection event gets dropped; either signal alone isn't
+  // enough -- a genuinely fast rep with clean tracking has no rejection
+  // events near it, and a slower rep that happens to have one incidental
+  // rejection elsewhere in a long phase isn't anomalously short.
+  const concentricDurations = concentric.map((p) => p.duration).sort((a, b) => a - b);
+  const medianConcentricDuration =
+    concentricDurations.length > 0 ? concentricDurations[Math.floor(concentricDurations.length / 2)] : 0;
+  const PHANTOM_DURATION_RATIO = 0.4;
+  function isPhantomPhase(phase: (typeof phaseStats)[number]): boolean {
+    // Fewer than 3 concentric phases isn't enough of a sample to call
+    // anything "anomalously short" relative to the rest of the set with
+    // any confidence -- skip the filter entirely rather than risk a bad
+    // call on a single- or double-rep set.
+    if (concentric.length < 3 || medianConcentricDuration <= 0) return false;
+    if (phase.duration >= medianConcentricDuration * PHANTOM_DURATION_RATIO) return false;
+    const startT = points[phase.startIdx].t;
+    const endT = points[phase.endIdx].t;
+    return rejectionEvents.some((t) => t >= startT && t <= endT);
+  }
 
   // One entry per concentric phase, in chronological order -- rep 1, 2, 3...
   // Each rep's window starts at the beginning of the phase before it (the
@@ -469,13 +841,19 @@ export function summarizeTrackedSet(
   const repBreakdown: RepBreakdown[] = [];
   phaseStats.forEach((phase, i) => {
     if (!isConcentric[i]) return;
+    if (isPhantomPhase(phase)) return;
     const repStartIdx = i > 0 ? phaseStats[i - 1].startIdx : phase.startIdx;
     const curveStride = Math.max(1, Math.floor((phase.endIdx - phase.startIdx) / 20));
     const velocityCurve: { positionCm: number; velocityMps: number }[] = [];
     for (let idx = phase.startIdx; idx <= phase.endIdx; idx += curveStride) {
+      // Clamped, not excluded -- the sticking-point chart needs one point
+      // per sampled position to stay continuous, so an implausible single
+      // frame here is capped at the ceiling rather than dropped, same
+      // "never report a physically impossible number" stance as
+      // MAX_PLAUSIBLE_LIFT_VELOCITY_MPS's other two call sites above.
       velocityCurve.push({
         positionCm: Math.round((points[idx].y - points[phase.startIdx].y) * -1000) / 10,
-        velocityMps: Math.round(speedsMps[idx] * 100) / 100,
+        velocityMps: Math.round(Math.min(speedsMps[idx], MAX_PLAUSIBLE_LIFT_VELOCITY_MPS) * 100) / 100,
       });
     }
     // The phase right before this one always alternates direction by
@@ -485,17 +863,23 @@ export function summarizeTrackedSet(
     const pairedEccentric = i > 0 ? phaseStats[i - 1] : null;
     const romCm = Math.round(Math.abs(points[phase.endIdx].y - points[phase.startIdx].y) * 1000) / 10;
 
+    const timeToPeakVelocitySeconds =
+      Math.round(((points[phase.peakIdx].t - points[phase.startIdx].t) / 1000) * 100) / 100;
+
     repBreakdown.push({
       repNumber: repBreakdown.length + 1,
       peakVelocityMps: Math.round(phase.peak * 100) / 100,
       meanVelocityMps: Math.round(phase.mean * 100) / 100,
       concentricSeconds: Math.round(phase.duration * 100) / 100,
+      timeToPeakVelocitySeconds,
       startT: points[repStartIdx].t,
       endT: points[phase.endIdx].t,
       velocityCurve,
       romCm,
       peakPowerWatts:
         loadKg && loadKg > 0 ? Math.round(loadKg * GRAVITY_MPS2 * phase.peak) : null,
+      meanPowerWatts:
+        loadKg && loadKg > 0 ? Math.round(loadKg * GRAVITY_MPS2 * phase.mean) : null,
       eccentricSeconds: pairedEccentric ? Math.round(pairedEccentric.duration * 100) / 100 : null,
       eccentricVelocityMps: pairedEccentric ? Math.round(pairedEccentric.mean * 100) / 100 : null,
     });
@@ -516,10 +900,25 @@ export function summarizeTrackedSet(
   // in the full horizontal plane (x and z, i.e. side-to-side AND
   // forward/backward drift from a straight vertical line) now that real
   // depth is available -- 2D pixel tracking could only ever see x drift.
+  // points spans the whole Start Set-to-Stop Set window, not just the
+  // reps themselves -- it includes stepping back out of the rack before the
+  // first rep and stepping/bending back in to re-rack after the last one.
+  // Both are real, correctly-tracked motion, not noise, but neither is bar
+  // drift: a 2m step back out of a rack reads as a bigger "deviation from
+  // center" than any real rep's bar path ever would, and dominates the
+  // median/percentile below if left in. Scoping to repBreakdown's own
+  // windows (each already spans its full rep, per RepBreakdown's own
+  // comment) keeps the deviation measurement to motion that was actually
+  // part of a rep. Falls back to the full trace when repBreakdown is empty
+  // (e.g. every phase got filtered as phantom) rather than computing
+  // deviation over nothing.
+  const activePoints = points.filter((p) => repBreakdown.some((r) => p.t >= r.startT && p.t <= r.endT));
+  const driftPoints = activePoints.length > 0 ? activePoints : points;
+
   const medianOf = (values: number[]) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
-  const medianX = medianOf(points.map((p) => p.x));
-  const medianZ = medianOf(points.map((p) => p.z));
-  const sortedDeviations = points
+  const medianX = medianOf(driftPoints.map((p) => p.x));
+  const medianZ = medianOf(driftPoints.map((p) => p.z));
+  const sortedDeviations = driftPoints
     .map((p) => Math.hypot(p.x - medianX, p.z - medianZ))
     .sort((a, b) => a - b);
   const p90Idx = Math.min(sortedDeviations.length - 1, Math.floor(sortedDeviations.length * 0.9));
@@ -578,5 +977,275 @@ export function summarizeTrackedSet(
           ) / 10
         : null,
   };
+}
+
+// One reading of a second, independently-tracked position source --
+// bar-tracker-dialog.tsx averages its left and right implement trackers'
+// fused grip points into this every frame (see leftImplementTrackerRef's
+// own comment for why those are independent of the primary trace this
+// whole file otherwise works with). confidence carries that frame's own
+// wrist+bar-track blend weight, same scale as everywhere else this
+// session's fusion work uses it (0 = no signal at all, 1 = fully trusted).
+export type VelocitySample = { t: number; y: number; confidence: number };
+
+// computeArmDriveAsymmetry's own return shape, further down -- repNumber-
+// free the same way pose-tracking.ts's LegDriveAsymmetry is (the caller
+// zips repNumber back in when building ArmDriveAsymmetryEntry above, same
+// pattern bar-tracker-dialog.tsx already uses for legs).
+export type ArmDriveAsymmetry = {
+  leftVelocityMps: number;
+  rightVelocityMps: number;
+  asymmetryPercent: number;
+  dominantSide: "left" | "right";
+};
+
+// Confidence-weighted fusion of the primary trace's per-rep velocity
+// (source A -- summarizeTrackedSet's own output, computed above) against
+// this second source (source B). Not an override, a blend: source A keeps
+// a fixed baseline weight of 1 -- it's the more mature pipeline, with its
+// own internal wrist+bar fusion already built in -- while source B is
+// computed the same way (moving-average smoothed, 95th-percentile peak)
+// over the EXACT SAME rep window source A already identified, weighted by
+// how confident that source actually was during that specific window. A
+// rep where the side samples barely showed up, or the wrists were barely
+// visible, ends up close to 100% source A; a rep with strong left/right
+// tracking throughout pulls the reported number meaningfully toward
+// source B's own read -- literally "bar speed isn't an average, it's a
+// knowledgeable guess between multiple factors."
+//
+// Mutates nothing; returns a new RepMetrics with updated repBreakdown
+// entries and every whole-set number that's derived FROM repBreakdown
+// (peak/mean velocity, peak/mean power, velocity loss) recomputed from the
+// fused values the same way summarizeTrackedSet itself derives them --
+// romCm, eccentric numbers, bar-path deviation, and everything else that
+// doesn't come from concentric peak/mean velocity are left untouched.
+// Peak/mean speed (and average confidence) for one VelocitySample[] source
+// over one rep window, using the same moving-average+robust-percentile
+// pipeline the primary trace itself uses (see summarizeTrackedSet above) --
+// shared by fuseSideVelocity and computeArmDriveAsymmetry below rather than
+// each reimplementing "read a rate off part of a trace." Returns null when
+// there aren't enough samples in the window to trust a rate off of, same
+// floor computeLegDriveAsymmetry applies to its own per-rep window.
+function velocityForWindow(
+  speeds: number[],
+  points: TrackedPoint[],
+  confidences: number[],
+  startT: number,
+  endT: number,
+): { peak: number; mean: number; confidence: number } | null {
+  const startIdx = points.findIndex((p) => p.t >= startT);
+  let endIdx = -1;
+  for (let i = points.length - 1; i >= 0; i--) {
+    if (points[i].t <= endT) {
+      endIdx = i;
+      break;
+    }
+  }
+  if (startIdx === -1 || endIdx === -1 || endIdx - startIdx < 3) return null;
+  const { peak } = robustPeakSpeed(speeds, startIdx, endIdx);
+  const windowSpeeds = speeds.slice(startIdx, endIdx + 1);
+  const mean = plausibleMean(windowSpeeds);
+  const confidence = confidences.slice(startIdx, endIdx + 1).reduce((a, c) => a + c, 0) / windowSpeeds.length;
+  return { peak, mean, confidence };
+}
+
+export function fuseSideVelocity(
+  metrics: RepMetrics,
+  sideSamples: VelocitySample[],
+  loadKg?: number,
+): RepMetrics {
+  if (sideSamples.length < 6 || metrics.repBreakdown.length === 0) return metrics;
+
+  const sidePoints: TrackedPoint[] = sideSamples.map((s) => ({ t: s.t, x: 0, y: s.y, z: 0 }));
+  const sideConfidences = sideSamples.map((s) => s.confidence);
+  // Confidence-weighted the same way summarizeTrackedSet's own ySmoothed is
+  // -- this source's smoothing shouldn't lean on a frame it barely trusted
+  // any more than the primary trace's does.
+  const sideSmoothed = movingAverage(
+    sidePoints.map((p) => p.y),
+    framesForDuration(sidePoints, TARGET_SMOOTHING_MS),
+    sideConfidences,
+  );
+  const sideSpeeds = computeSpeeds(sidePoints, sideSmoothed);
+
+  const fusedRepBreakdown = metrics.repBreakdown.map((rep) => {
+    const window = velocityForWindow(sideSpeeds, sidePoints, sideConfidences, rep.startT, rep.endT);
+    // No side data for this rep (too little of it, or none at all) --
+    // keep source A's numbers untouched rather than blending in something
+    // built from almost nothing.
+    if (!window || window.confidence <= 0) return rep;
+
+    const totalWeight = 1 + window.confidence;
+    const peakVelocityMps =
+      Math.round(((rep.peakVelocityMps + window.confidence * window.peak) / totalWeight) * 100) / 100;
+    const meanVelocityMps =
+      Math.round(((rep.meanVelocityMps + window.confidence * window.mean) / totalWeight) * 100) / 100;
+    return {
+      ...rep,
+      peakVelocityMps,
+      meanVelocityMps,
+      peakPowerWatts: loadKg && loadKg > 0 ? Math.round(loadKg * GRAVITY_MPS2 * peakVelocityMps) : null,
+      meanPowerWatts: loadKg && loadKg > 0 ? Math.round(loadKg * GRAVITY_MPS2 * meanVelocityMps) : null,
+    };
+  });
+
+  const concentricPeaks = fusedRepBreakdown.map((r) => r.peakVelocityMps);
+  const concentricMeans = fusedRepBreakdown.map((r) => r.meanVelocityMps);
+  const peakVelocityMps = Math.round(Math.max(...concentricPeaks, 0) * 100) / 100;
+  const meanVelocityMps =
+    Math.round((concentricMeans.reduce((a, b) => a + b, 0) / concentricMeans.length) * 100) / 100;
+
+  return {
+    ...metrics,
+    repBreakdown: fusedRepBreakdown,
+    peakVelocityMps,
+    meanVelocityMps,
+    peakPowerWatts: loadKg && loadKg > 0 ? Math.round(loadKg * GRAVITY_MPS2 * peakVelocityMps) : null,
+    meanPowerWatts: loadKg && loadKg > 0 ? Math.round(loadKg * GRAVITY_MPS2 * meanVelocityMps) : null,
+    velocityLossPercent:
+      fusedRepBreakdown.length > 1 && fusedRepBreakdown[0].peakVelocityMps > 0
+        ? Math.round(
+            ((fusedRepBreakdown[0].peakVelocityMps -
+              fusedRepBreakdown[fusedRepBreakdown.length - 1].peakVelocityMps) /
+              fusedRepBreakdown[0].peakVelocityMps) *
+              1000,
+          ) / 10
+        : null,
+  };
+}
+
+// How much harder one arm drove than the other during each rep's concentric
+// (pressing/pulling) phase -- the same idea as pose-tracking.ts's
+// computeLegDriveAsymmetry, but built from the left/right implement
+// trackers' own fused traces instead of a joint angle, since a press/pull
+// doesn't have a knee to measure drive rate from the way a squat does.
+// Reuses velocityForWindow (see its own comment) over the exact same rep
+// windows the primary trace already identified, same "borrow the caller's
+// segmentation, don't re-derive it" pattern fuseSideVelocity uses.
+// Returns null for a rep without enough clean, confident data on BOTH
+// sides to trust a comparison -- same "no number beats a fake-confident
+// one" stance computeLegDriveAsymmetry already takes.
+export function computeArmDriveAsymmetry(
+  leftSamples: VelocitySample[],
+  rightSamples: VelocitySample[],
+  repWindows: { startT: number; endT: number }[],
+): (ArmDriveAsymmetry | null)[] {
+  if (leftSamples.length < 6 || rightSamples.length < 6) return repWindows.map(() => null);
+
+  const leftPoints: TrackedPoint[] = leftSamples.map((s) => ({ t: s.t, x: 0, y: s.y, z: 0 }));
+  const rightPoints: TrackedPoint[] = rightSamples.map((s) => ({ t: s.t, x: 0, y: s.y, z: 0 }));
+  const leftConfidences = leftSamples.map((s) => s.confidence);
+  const rightConfidences = rightSamples.map((s) => s.confidence);
+  // Same confidence-weighted smoothing as fuseSideVelocity's sideSmoothed --
+  // see its own comment.
+  const leftSmoothed = movingAverage(
+    leftPoints.map((p) => p.y),
+    framesForDuration(leftPoints, TARGET_SMOOTHING_MS),
+    leftConfidences,
+  );
+  const rightSmoothed = movingAverage(
+    rightPoints.map((p) => p.y),
+    framesForDuration(rightPoints, TARGET_SMOOTHING_MS),
+    rightConfidences,
+  );
+  const leftSpeeds = computeSpeeds(leftPoints, leftSmoothed);
+  const rightSpeeds = computeSpeeds(rightPoints, rightSmoothed);
+
+  // Below this, a side's own data for the window is too sparse or too
+  // unconfident to trust as "this arm's real speed" rather than mostly the
+  // wrist landmark alone -- same spirit as MIN_DRIVE_DURATION_SEC's own
+  // floor in computeLegDriveAsymmetry, just expressed as confidence
+  // instead of duration since that's what this source actually carries.
+  const MIN_WINDOW_CONFIDENCE = 0.3;
+
+  return repWindows.map(({ startT, endT }) => {
+    const left = velocityForWindow(leftSpeeds, leftPoints, leftConfidences, startT, endT);
+    const right = velocityForWindow(rightSpeeds, rightPoints, rightConfidences, startT, endT);
+    if (!left || !right || left.confidence < MIN_WINDOW_CONFIDENCE || right.confidence < MIN_WINDOW_CONFIDENCE) {
+      return null;
+    }
+
+    const leftVelocityMps = Math.round(left.peak * 100) / 100;
+    const rightVelocityMps = Math.round(right.peak * 100) / 100;
+    const maxVelocity = Math.max(leftVelocityMps, rightVelocityMps);
+    if (maxVelocity <= 0) return null;
+
+    return {
+      leftVelocityMps,
+      rightVelocityMps,
+      asymmetryPercent: Math.round((Math.abs(leftVelocityMps - rightVelocityMps) / maxVelocity) * 1000) / 10,
+      dominantSide: leftVelocityMps >= rightVelocityMps ? "left" : "right",
+    };
+  });
+}
+
+// Folds every accuracy signal this module and its caller already track into
+// ONE number/label per rep, instead of leaving the athlete to weigh several
+// separate indicators (implement-detected pill, tilt warning, mismatch
+// warning, camera-alignment hint) against each other themselves. Not a new
+// measurement -- purely a summary of ones that already exist:
+//   - confidenceSamples: how much the position fusion actually trusted its
+//     own sources frame to frame (the same wristConfidence+barConfidence mix
+//     that decides the primary trace's position every tick).
+//   - rejectionEvents: timestamps where a tracker's own reported position
+//     disagreed with the wrist badly enough to be thrown out entirely (see
+//     MAX_PLAUSIBLE_IMPLEMENT_OFFSET_M/MAX_PLAUSIBLE_GRIP_OFFSET_M in the
+//     caller) -- however briefly, a rejection inside a rep's window is a
+//     moment that rep's numbers leaned on a single, unfused source.
+//   - patternMismatch/alignmentReason: whole-SET properties (the exercise's
+//     motion didn't look like what was selected; the camera wasn't square to
+//     the lift) that apply equally to every rep, since neither one changes
+//     rep to rep.
+export function computeRepTrustScores(
+  repBreakdown: { repNumber: number; startT: number; endT: number }[],
+  confidenceSamples: { t: number; confidence: number }[],
+  rejectionEvents: number[],
+  patternMismatch: boolean,
+  alignmentReason: "ok" | "angled" | "axial" | "unknown" | null,
+): RepTrustScore[] {
+  return repBreakdown.map((rep) => {
+    const windowSamples = confidenceSamples.filter((s) => s.t >= rep.startT && s.t <= rep.endT);
+    // No confidence samples for this rep (shouldn't normally happen -- every
+    // tracked frame pushes one) reads as neutral, not failing: there's
+    // nothing here to be confident OR unconfident about, unlike a low
+    // reading that IS present.
+    const avgConfidence =
+      windowSamples.length > 0 ? windowSamples.reduce((a, s) => a + s.confidence, 0) / windowSamples.length : 0.6;
+
+    const rejectionCount = rejectionEvents.filter((t) => t >= rep.startT && t <= rep.endT).length;
+
+    const notes: string[] = [];
+    let score = avgConfidence * 100;
+
+    if (rejectionCount > 0) {
+      score -= Math.min(30, rejectionCount * 8);
+      notes.push(
+        rejectionCount === 1
+          ? "Tracking briefly lost and recovered once during this rep"
+          : `Tracking briefly lost and recovered ${rejectionCount} times during this rep`,
+      );
+    }
+
+    if (patternMismatch) {
+      score -= 20;
+      notes.push("This set's motion didn't clearly match the selected exercise");
+    }
+
+    if (alignmentReason === "angled") {
+      score -= 15;
+      notes.push("Camera was angled rather than square to the lift");
+    } else if (alignmentReason === "unknown") {
+      score -= 10;
+      notes.push("Camera framing couldn't be confirmed");
+    }
+    // "axial" (front/foot-on framing) is a legitimate choice -- see
+    // evaluateAutoStartReadiness's own comment in bar-tracker-dialog.tsx --
+    // so it earns no penalty here; it degrades bar-path drift specifically,
+    // not the position/velocity confidence this score is built from.
+
+    score = Math.max(5, Math.min(100, Math.round(score)));
+    const label: RepTrustScore["label"] = score >= 80 ? "high" : score >= 55 ? "medium" : "low";
+    return { repNumber: rep.repNumber, score, label, notes };
+  });
 }
 

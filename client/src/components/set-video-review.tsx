@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogClose, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -10,7 +10,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { RotateCcw, Trash2, ThumbsUp, ThumbsDown, Star } from "lucide-react";
+import { resolveApiUrl } from "@/lib/queryClient";
+import { RotateCcw, Trash2, ThumbsUp, ThumbsDown, Wand2, X, Heart, Trophy } from "lucide-react";
+import { VideoAnalysisDialog } from "@/components/video-analysis-dialog";
 
 export type FlaggedSetVideo = {
   setNumber: number;
@@ -59,10 +61,11 @@ export function SetVideoPreviewDialog({
   videoUrl,
   flag,
   onFlag,
-  favorited,
-  onToggleFavorite,
   onRetake,
   onRemove,
+  favorited,
+  onToggleFavorite,
+  isPr,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -70,59 +73,108 @@ export function SetVideoPreviewDialog({
   videoUrl: string;
   flag: "best" | "worst" | null;
   onFlag: (flag: "best" | "worst" | null) => void;
-  favorited: boolean;
-  onToggleFavorite: () => void;
   onRetake: () => void;
   onRemove: () => void;
+  /** The heart -- the only thing that exempts a video from the rolling
+   * storage cap (see server/video-retention-job.ts). Applies to every
+   * athlete, coached or Free Agent alike. */
+  favorited?: boolean;
+  onToggleFavorite?: () => void;
+  /** Auto-computed server-side (submitWorkoutLog) -- purely a badge, never
+   * user-set, never a reason a video survives the cap on its own. */
+  isPr?: boolean;
 }) {
+  const [analyzing, setAnalyzing] = useState(false);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center justify-between gap-2 pr-6">
-            <span>Set {setNumber} — Form Check</span>
-            <button
-              type="button"
-              onClick={onToggleFavorite}
-              aria-label={favorited ? "Remove favorite" : "Favorite this video"}
-              title={favorited ? "Favorited -- kept longer" : "Favorite -- keep this one longer"}
-              className={cn(
-                "shrink-0 rounded-full p-1 transition-colors",
-                favorited ? "text-amber-400" : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              <Star className={cn("h-5 w-5", favorited && "fill-current")} />
-            </button>
-          </DialogTitle>
-        </DialogHeader>
-        <video src={videoUrl} controls playsInline className="w-full rounded-md bg-black" />
-        <div className="flex items-center justify-center gap-2">
-          <FlagButton
-            active={flag === "best"}
-            onClick={() => onFlag(flag === "best" ? null : "best")}
-            icon={ThumbsUp}
-            label="Best Set"
-            activeClass="border-success bg-success/15 text-success"
-          />
-          <FlagButton
-            active={flag === "worst"}
-            onClick={() => onFlag(flag === "worst" ? null : "worst")}
-            icon={ThumbsDown}
-            label="Worst Set"
-            activeClass="border-destructive bg-destructive/15 text-destructive"
+      {/* Full-screen (same pattern as VideoAnalysisDialog/
+          form-video-recorder-dialog.tsx) -- besides giving the video more
+          room, this fixes the native <video controls> bar's own top row
+          (fullscreen/AirPlay/volume icons) rendering right under the
+          notch/Dynamic Island: those icons sit near the video element's own
+          top edge, so a small centered card with little top margin put that
+          edge close enough to the cutout to collide with it. The safe-area
+          padding below pushes the video's top edge safely clear of it. */}
+      <DialogContent
+        className="inset-0 top-0 left-0 flex h-screen w-screen max-w-none max-h-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 bg-black p-0 [&>button]:hidden"
+        hideClose
+      >
+        <div className="flex shrink-0 items-center justify-between px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
+          <DialogTitle className="text-sm text-white">Set {setNumber} — Form Check</DialogTitle>
+          <div className="flex items-center gap-3">
+            {onToggleFavorite && (
+              <button
+                type="button"
+                onClick={onToggleFavorite}
+                aria-label={favorited ? "Remove favorite" : "Favorite this video"}
+                aria-pressed={!!favorited}
+                className={cn(
+                  "transition-colors",
+                  favorited ? "text-destructive" : "text-white/70 hover:text-white",
+                )}
+              >
+                <Heart className={cn("h-5 w-5", favorited && "fill-current")} />
+              </button>
+            )}
+            <DialogClose className="rounded-sm text-white/70 transition-colors hover:text-white focus:outline-none focus:ring-2 focus:ring-ring">
+              <X className="h-5 w-5" />
+              <span className="sr-only">Close</span>
+            </DialogClose>
+          </div>
+        </div>
+        <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-black">
+          {isPr && (
+            <span className="absolute left-3 top-3 z-10 flex items-center gap-1 rounded-full bg-amber-400/90 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-black">
+              <Trophy className="h-3 w-3" />
+              PR
+            </span>
+          )}
+          <video
+            src={resolveApiUrl(videoUrl)}
+            controls
+            playsInline
+            className="h-full max-h-full w-full max-w-full object-contain"
           />
         </div>
-        <DialogFooter className="sm:justify-between">
-          <Button variant="ghost" className="text-destructive hover:text-destructive" onClick={onRemove}>
-            <Trash2 className="h-4 w-4" />
-            Remove
+        <div className="shrink-0 space-y-3 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3">
+          <Button variant="outline" className="w-full" onClick={() => setAnalyzing(true)}>
+            <Wand2 className="h-4 w-4" />
+            Analysis Tools
           </Button>
-          <Button variant="outline" onClick={onRetake}>
-            <RotateCcw className="h-4 w-4" />
-            Retake
-          </Button>
-        </DialogFooter>
+          <div className="flex items-center justify-center gap-2">
+            <FlagButton
+              active={flag === "best"}
+              onClick={() => onFlag(flag === "best" ? null : "best")}
+              icon={ThumbsUp}
+              label="Best Set"
+              activeClass="border-success bg-success/15 text-success"
+            />
+            <FlagButton
+              active={flag === "worst"}
+              onClick={() => onFlag(flag === "worst" ? null : "worst")}
+              icon={ThumbsDown}
+              label="Worst Set"
+              activeClass="border-destructive bg-destructive/15 text-destructive"
+            />
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <Button variant="ghost" className="text-destructive hover:text-destructive" onClick={onRemove}>
+              <Trash2 className="h-4 w-4" />
+              Remove
+            </Button>
+            <Button variant="outline" onClick={onRetake}>
+              <RotateCcw className="h-4 w-4" />
+              Retake
+            </Button>
+          </div>
+        </div>
       </DialogContent>
+      <VideoAnalysisDialog
+        open={analyzing}
+        onOpenChange={setAnalyzing}
+        videoUrl={videoUrl}
+        title={`Set ${setNumber} — Form Check`}
+      />
     </Dialog>
   );
 }
@@ -148,13 +200,28 @@ export function SetVideoCompareDialog({
 }) {
   const [leftNumber, setLeftNumber] = useState<number | undefined>(undefined);
   const [rightNumber, setRightNumber] = useState<number | undefined>(undefined);
+  // Which side (if either) has its analysis tools open -- a comparison is
+  // exactly when a coach most wants to overlay a skeleton or measure an
+  // angle (this rep vs. that one), but until now the tools only existed on
+  // the single-video preview, not here. One shared dialog instance driven
+  // by this rather than one per side, since only one can ever be open at a
+  // time anyway.
+  const [analyzing, setAnalyzing] = useState<{ url: string; title: string } | null>(null);
 
   const left = sets.find((s) => s.setNumber === (leftNumber ?? pickDefault(sets, "worst", 0)));
   const right = sets.find(
     (s) => s.setNumber === (rightNumber ?? pickDefault(sets, "best", sets.length - 1)),
   );
 
-  function Slot({ video, onPick }: { video: FlaggedSetVideo | undefined; onPick: (n: number) => void }) {
+  function Slot({
+    video,
+    onPick,
+    onAnalyze,
+  }: {
+    video: FlaggedSetVideo | undefined;
+    onPick: (n: number) => void;
+    onAnalyze: () => void;
+  }) {
     if (!video) return null;
     return (
       <div className="space-y-1.5">
@@ -185,7 +252,11 @@ export function SetVideoCompareDialog({
             </Badge>
           )}
         </div>
-        <video src={video.videoUrl} controls playsInline className="w-full rounded-md bg-black" />
+        <video src={resolveApiUrl(video.videoUrl)} controls playsInline className="w-full rounded-md bg-black" />
+        <Button size="sm" variant="outline" className="w-full" onClick={onAnalyze}>
+          <Wand2 className="h-3.5 w-3.5" />
+          Analysis Tools
+        </Button>
         <div className="flex items-center justify-center gap-2">
           <FlagButton
             active={video.flag === "best"}
@@ -212,11 +283,25 @@ export function SetVideoCompareDialog({
         <DialogHeader>
           <DialogTitle>Compare Sets</DialogTitle>
         </DialogHeader>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Slot video={left} onPick={setLeftNumber} />
-          <Slot video={right} onPick={setRightNumber} />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Slot
+            video={left}
+            onPick={setLeftNumber}
+            onAnalyze={() => left && setAnalyzing({ url: left.videoUrl, title: `Set ${left.setNumber}` })}
+          />
+          <Slot
+            video={right}
+            onPick={setRightNumber}
+            onAnalyze={() => right && setAnalyzing({ url: right.videoUrl, title: `Set ${right.setNumber}` })}
+          />
         </div>
       </DialogContent>
+      <VideoAnalysisDialog
+        open={!!analyzing}
+        onOpenChange={(o) => !o && setAnalyzing(null)}
+        videoUrl={analyzing?.url ?? ""}
+        title={analyzing?.title}
+      />
     </Dialog>
   );
 }

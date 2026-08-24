@@ -36,7 +36,7 @@ export function FreeAgentGate({
               AI features are only available while you don't have a coach yet. You're set with a
               coach now, so head to your calendar for what they've assigned you.
             </p>
-            <Button onClick={() => navigate("/athlete")}>
+            <Button onClick={() => navigate("/athlete/calendar")}>
               <Sparkles className="h-4 w-4" />
               Go to My Calendar
             </Button>

@@ -1,4 +1,5 @@
 import { sendPushToUser } from "./push";
+import { storage } from "./storage";
 
 // A client-side rest countdown runs on the page's own JS timers, which
 // mobile browsers throttle or fully suspend once the tab is backgrounded or
@@ -18,13 +19,27 @@ const pending = new Map<number, ReturnType<typeof setTimeout>>();
  * stack two notifications for the same athlete. */
 export function scheduleRestOverPush(athleteId: number, seconds: number, url?: string) {
   cancelRestOverPush(athleteId);
-  const timeout = setTimeout(() => {
+  const timeout = setTimeout(async () => {
     pending.delete(athleteId);
-    sendPushToUser(athleteId, {
-      title: "Rest Over",
-      body: "Time to get back to it",
-      url: url || "/",
-    });
+    // Nothing awaits this callback's own promise (setTimeout can't), and
+    // there's no global unhandledRejection handler in this app -- Node's
+    // default since v15 is to crash the whole process on one. A transient
+    // DB hiccup on getUnreadNotificationCount (the exact kind db.ts's own
+    // 'error' listener exists to survive for idle clients) would otherwise
+    // take the entire server down over one missed rest-timer push, which
+    // is a wildly disproportionate failure mode -- worst case here should
+    // be exactly that, one missed notification, never a full outage.
+    try {
+      const badge = await storage.getUnreadNotificationCount(athleteId);
+      await sendPushToUser(athleteId, {
+        title: "Rest Over",
+        body: "Time to get back to it",
+        url: url || "/",
+        badge,
+      });
+    } catch (err) {
+      console.error(`Rest-over push failed for athlete ${athleteId}:`, err);
+    }
   }, seconds * 1000);
   pending.set(athleteId, timeout);
 }

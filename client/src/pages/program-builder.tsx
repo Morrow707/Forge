@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/select";
 import { ExercisePickerDialog } from "@/components/exercise-picker-dialog";
 import { AssignProgramDialog } from "@/components/assign-program-dialog";
+import { RadioChipGroup } from "@/components/filter-chip-group";
 import { ProgramAiChatPanel } from "@/components/program-ai-chat-panel";
 import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
 import { ProgressionButton } from "@/components/progression-button";
@@ -67,7 +68,7 @@ import {
 
 type RosterEntry = { id: number; name: string; email: string };
 
-type TrackingLevel = "none" | "bar_path" | "full" | "jump";
+type TrackingLevel = "none" | "bar_path" | "full" | "jump" | "golf_swing" | "baseball_swing";
 
 type LocalExercise = {
   key: string;
@@ -83,6 +84,14 @@ type LocalExercise = {
   // when exercises are added/removed/reordered. Converted to/from the
   // persisted `supersetGroup` token only at load/save time.
   linkedToNext: boolean;
+  // Only meaningful for 2+ exercises chained via linkedToNext -- false
+  // (default) rests after every exercise's set same as a solo exercise,
+  // true rests only after the last exercise in the chain's set. Kept in
+  // sync across every exercise in a chain (see the group-rest control in
+  // DayCard), even though only the chain's last exercise's value is
+  // actually read at runtime -- so a value doesn't go stale if the coach
+  // later removes what's currently the last exercise.
+  restAfterGroupOnly: boolean;
   trackingLevel: TrackingLevel;
   videoCheckEnabled: boolean;
   // Drives which camera pipeline "Video" turns on for this exercise (see
@@ -115,6 +124,60 @@ const PHASE_CLASSNAME: Record<PeriodizationPhase, string> = {
 
 function uid() {
   return crypto.randomUUID();
+}
+
+// This builder only ever writes to the server on an explicit "Save
+// Program" tap -- unlike the workout logger, there's no autosave POST on
+// every edit, since a full PUT here replaces the whole program and firing
+// that on every keystroke would be both wasteful and risky against a
+// concurrent AI-chat edit. That leaves a real gap: any interruption before
+// that tap -- a forced logout, a crashed tab, just navigating away mid-edit
+// -- loses everything typed since the last save, with no way back. This is
+// a local-only safety net for exactly that: every edit gets mirrored to
+// localStorage (not the server), and the builder offers to restore it the
+// next time this same program is opened, so a lost session costs a click
+// to recover from instead of the whole draft.
+type ProgramDraft = {
+  name: string;
+  description: string;
+  days: LocalDay[];
+  weekNames: string[];
+  blocks: LocalBlock[];
+  weekBlockKeys: (string | null)[];
+  savedAt: number;
+};
+
+function draftStorageKey(apiBase: string, programId: number) {
+  return `forge:program-draft:${apiBase}:${programId}`;
+}
+
+function loadProgramDraft(apiBase: string, programId: number): ProgramDraft | null {
+  try {
+    const raw = localStorage.getItem(draftStorageKey(apiBase, programId));
+    return raw ? (JSON.parse(raw) as ProgramDraft) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveProgramDraft(apiBase: string, programId: number, draft: Omit<ProgramDraft, "savedAt">) {
+  try {
+    localStorage.setItem(
+      draftStorageKey(apiBase, programId),
+      JSON.stringify({ ...draft, savedAt: Date.now() }),
+    );
+  } catch {
+    // Storage full/unavailable (private browsing, etc) -- the draft is a
+    // nice-to-have safety net, not something worth surfacing an error for.
+  }
+}
+
+function clearProgramDraft(apiBase: string, programId: number) {
+  try {
+    localStorage.removeItem(draftStorageKey(apiBase, programId));
+  } catch {
+    // best-effort
+  }
 }
 
 function makeBlock(): LocalBlock {
@@ -172,6 +235,7 @@ function stateFromProgram(program: any) {
             restSeconds: pe.restSeconds != null ? String(pe.restSeconds) : "",
             notes: pe.notes ?? "",
             supersetGroup: pe.supersetGroup ?? null,
+            restAfterGroupOnly: pe.restAfterGroupOnly ?? false,
             trackingLevel: pe.trackingLevel ?? "none",
             videoCheckEnabled: pe.videoCheckEnabled ?? false,
             category: pe.exercise.category ?? null,
@@ -206,6 +270,15 @@ export function ProgramBuilderPage({
   const qc = useQueryClient();
   const programId = Number(id);
 
+  // Handed off by the "New Program" questionnaire (see program-list.tsx) --
+  // read once and cleared immediately so a page refresh never re-sends it.
+  const [initialAiPrompt] = useState(() => {
+    const key = `forge:pendingAiPrompt:${programId}`;
+    const stored = sessionStorage.getItem(key);
+    if (stored) sessionStorage.removeItem(key);
+    return stored ?? undefined;
+  });
+
   const { data: program, isLoading } = useQuery<any>({
     queryKey: [`${apiBase}/programs`, programId],
     queryFn: () => getJson(`${apiBase}/programs/${programId}`),
@@ -228,7 +301,8 @@ export function ProgramBuilderPage({
 
   useEffect(() => {
     if (program && !hydrated) {
-      const state = stateFromProgram(program);
+      const draft = loadProgramDraft(apiBase, programId);
+      const state = draft ?? stateFromProgram(program);
       setName(state.name);
       setDescription(state.description);
       setDays(state.days);
@@ -236,8 +310,42 @@ export function ProgramBuilderPage({
       setBlocks(state.blocks);
       setWeekBlockKeys(state.weekBlockKeys);
       setHydrated(true);
+      if (draft) {
+        toast.info("Restored unsaved changes from your last session here", {
+          description: "Save Program to keep them, or Discard to go back to the last saved version.",
+          duration: 10000,
+          action: {
+            label: "Discard",
+            onClick: () => {
+              clearProgramDraft(apiBase, programId);
+              const fresh = stateFromProgram(program);
+              setName(fresh.name);
+              setDescription(fresh.description);
+              setDays(fresh.days);
+              setWeekNames(fresh.weekNames);
+              setBlocks(fresh.blocks);
+              setWeekBlockKeys(fresh.weekBlockKeys);
+            },
+          },
+        });
+      }
     }
-  }, [program, hydrated]);
+  }, [program, hydrated, apiBase, programId]);
+
+  // Mirrors every edit to localStorage so an interruption before the next
+  // explicit save -- see the ProgramDraft comment up top -- costs at most a
+  // restore prompt, not the whole draft. Skipped until hydrated so the
+  // initial, empty pre-load state can never overwrite a real draft.
+  // Deliberately keyed only to the actual content fields, not to
+  // saveMutation's state -- a successful save clears the draft directly
+  // (see onSuccess below) rather than being gated here, since gating on
+  // e.g. isSuccess would leave every edit made *after* a save permanently
+  // unprotected until the next save (mutation state doesn't reset itself
+  // back on its own between saves).
+  useEffect(() => {
+    if (!hydrated) return;
+    saveProgramDraft(apiBase, programId, { name, description, days, weekNames, blocks, weekBlockKeys });
+  }, [hydrated, apiBase, programId, name, description, days, weekNames, blocks, weekBlockKeys]);
 
   // Called by the AI chat panel after each turn with the fresh program it
   // just wrote -- updates the builder's fields immediately, no refetch
@@ -325,6 +433,7 @@ export function ProgramBuilderPage({
               restSeconds: ex.restSeconds ? Number(ex.restSeconds) : null,
               notes: ex.notes || null,
               supersetGroup: ex.supersetGroup,
+              restAfterGroupOnly: ex.restAfterGroupOnly,
               trackingLevel: ex.trackingLevel,
               videoCheckEnabled: ex.videoCheckEnabled,
             })),
@@ -336,6 +445,7 @@ export function ProgramBuilderPage({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [`${apiBase}/programs`] });
+      clearProgramDraft(apiBase, programId);
       toast.success("Program saved");
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not save program"),
@@ -353,24 +463,51 @@ export function ProgramBuilderPage({
     <AppShell
       title="Program Builder"
       actions={
-        <>
-          <Button variant="outline" onClick={() => navigate(routeBase)}>
-            <ArrowLeft className="h-4 w-4" />
-            Back
-          </Button>
-          {showAssign && (
-            <Button variant="secondary" onClick={() => setAssignOpen(true)}>
-              <Send className="h-4 w-4" />
-              Assign Program
+        <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => navigate(routeBase)}>
+              <ArrowLeft className="h-4 w-4" />
+              Back
             </Button>
-          )}
+            {showAssign && (
+              <Button
+                variant="secondary"
+                disabled={saveMutation.isPending}
+                onClick={async () => {
+                  // AssignProgramDialog's submit only sends programId to the
+                  // server, which assigns whatever the program currently
+                  // looks like IN THE DATABASE -- not whatever's on screen.
+                  // Without saving first, assigning right after editing
+                  // (a totally natural order, since the two buttons sit side
+                  // by side) would silently hand the athlete a stale or even
+                  // empty program while the coach's screen shows the days
+                  // they just built.
+                  if (editable) {
+                    try {
+                      await saveMutation.mutateAsync();
+                    } catch {
+                      return;
+                    }
+                  }
+                  setAssignOpen(true);
+                }}
+              >
+                <Send className="h-4 w-4" />
+                Assign Program
+              </Button>
+            )}
+          </div>
           {editable && (
-            <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
+            <Button
+              className="w-full sm:w-auto"
+              onClick={() => saveMutation.mutate()}
+              disabled={saveMutation.isPending}
+            >
               <Save className="h-4 w-4" />
               {saveMutation.isPending ? "Saving…" : "Save Program"}
             </Button>
           )}
-        </>
+        </div>
       }
     >
       {program?.ownerLabel && (
@@ -392,7 +529,7 @@ export function ProgramBuilderPage({
         <fieldset disabled={!editable} className="contents">
           <div className="min-w-0">
             <Card className="mb-6">
-              <CardContent className="grid gap-3 p-5 sm:grid-cols-2">
+              <CardContent className="grid grid-cols-1 gap-3 p-5 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label>Program name</Label>
                   <Input value={name} onChange={(e) => setName(e.target.value)} />
@@ -525,7 +662,7 @@ export function ProgramBuilderPage({
                         </Badge>
                       )}
                     </div>
-                    <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+                    <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2 xl:grid-cols-3">
                       {chunk.map((day, di) => (
                         <DayCard
                           key={day.key}
@@ -553,14 +690,16 @@ export function ProgramBuilderPage({
         </fieldset>
 
         {showAiChat && (
-          // flex/flex-col/overflow-hidden here (not just a fixed height) is
-          // load-bearing: ProgramAiChatPanel's Card sizes itself with
-          // flex-1/min-h-0 expecting a flex parent to stretch into -- without
-          // that, the card just grows to fit every message instead of
-          // scrolling internally, and the whole page has to scroll to read
-          // the conversation instead of this box scrolling on its own.
-          <div className="flex h-[75vh] max-h-[720px] flex-col overflow-hidden lg:sticky lg:top-24">
-            <ProgramAiChatPanel apiBase={apiBase} programId={programId} onApplied={handleChatApplied} />
+          // ProgramAiChatPanel sizes and collapses itself (see its `open`
+          // state) -- this wrapper only needs to keep it pinned while the
+          // main column scrolls past it.
+          <div className="lg:sticky lg:top-24">
+            <ProgramAiChatPanel
+              apiBase={apiBase}
+              programId={programId}
+              onApplied={handleChatApplied}
+              initialPrompt={initialAiPrompt}
+            />
           </div>
         )}
       </div>
@@ -585,6 +724,7 @@ export function ProgramBuilderPage({
                 restSeconds: "",
                 notes: "",
                 linkedToNext: false,
+                restAfterGroupOnly: false,
                 trackingLevel: "none",
                 videoCheckEnabled: false,
                 category: exercise.category ?? null,
@@ -605,6 +745,22 @@ export function ProgramBuilderPage({
       )}
     </AppShell>
   );
+}
+
+// A run of 2+ consecutive exercises chained by linkedToNext is one "group"
+// for rest-scope purposes -- these two helpers find where the group this
+// index belongs to starts/ends, so the group-rest control (shown once,
+// after the group's last exercise) can update every exercise in the chain
+// together and stay internally consistent.
+function isEndOfLinkedGroup(exercises: LocalExercise[], i: number): boolean {
+  if (exercises[i].linkedToNext) return false;
+  return i > 0 && exercises[i - 1].linkedToNext;
+}
+
+function startOfLinkedGroup(exercises: LocalExercise[], endIndex: number): number {
+  let start = endIndex;
+  while (start > 0 && exercises[start - 1].linkedToNext) start--;
+  return start;
 }
 
 function DayCard({
@@ -668,7 +824,7 @@ function DayCard({
         />
 
         {day.isRestDay ? (
-          <div className="flex items-center justify-center gap-2 rounded-md border border-dashed border-border py-6 text-sm text-muted-foreground">
+          <div className="flex items-center justify-center gap-2 rounded-md border border-dashed border-border py-3 text-sm text-muted-foreground">
             <MoonStar className="h-4 w-4" />
             Recovery day
           </div>
@@ -719,6 +875,25 @@ function DayCard({
                           }
                         />
                       )}
+                      {isEndOfLinkedGroup(day.exercises, i) && (
+                        <div className="py-1 pl-3">
+                          <RadioChipGroup
+                            label="Rest"
+                            options={["Between each", "After the group"]}
+                            value={ex.restAfterGroupOnly ? "After the group" : "Between each"}
+                            onChange={(v) => {
+                              const groupStart = startOfLinkedGroup(day.exercises, i);
+                              const restAfterGroupOnly = v === "After the group";
+                              onChange((d) => ({
+                                ...d,
+                                exercises: d.exercises.map((e, idx) =>
+                                  idx >= groupStart && idx <= i ? { ...e, restAfterGroupOnly } : e,
+                                ),
+                              }));
+                            }}
+                          />
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -748,20 +923,20 @@ function SupersetConnector({
   onToggle: () => void;
 }) {
   return (
-    <div className="flex items-center gap-2 py-0.5 pl-3">
-      <div className={cn("h-3 w-px", linked ? "bg-blue-500" : "bg-transparent")} />
+    <div className="flex items-center gap-1.5 py-0 pl-3">
+      <div className={cn("h-2 w-px", linked ? "bg-blue-500" : "bg-transparent")} />
       <button
         type="button"
         onClick={onToggle}
         title={linked ? "Unlink superset" : "Link into a superset"}
         className={cn(
-          "flex items-center gap-1 rounded-full border-2 px-2.5 py-1 text-[11px] font-bold transition-colors",
+          "flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold transition-colors",
           linked
             ? "border-blue-500 bg-blue-500 text-white"
-            : "border-blue-500 text-blue-500 hover:bg-blue-500/10",
+            : "border-border text-muted-foreground hover:border-blue-500 hover:text-blue-500",
         )}
       >
-        <Link2 className="h-3 w-3" />
+        <Link2 className="h-2.5 w-2.5" />
         {linked ? "Linked" : "Link"}
       </button>
     </div>
@@ -864,6 +1039,7 @@ function SortableExerciseRow({
         <VideoTrackingToggle
           trackingLevel={exercise.trackingLevel}
           category={exercise.category}
+          exerciseName={exercise.exerciseName}
           onChange={(patch) => onUpdate(patch)}
         />
       </div>

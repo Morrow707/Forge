@@ -1,0 +1,115 @@
+name: CI
+
+# Catches exactly the failure class that broke four Render deploys in a
+# row on 2026-08-19/20: shared/schema.ts (the Drizzle type layer) drifting
+# out of sync with server/reconcile-schema.ts (the actual migration script
+# Render's build runs -- see that file's own comment for why drizzle-kit
+# push isn't used instead). Runs the same build/reconcile/seed sequence
+# Render's buildCommand does, against a throwaway Postgres, so a broken
+# migration fails here in a couple of minutes instead of showing up as a
+# failed production deploy.
+on:
+  push: {}
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  build-and-migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: forge_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/forge_ci
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run check
+
+      # No DATABASE_URL needed for these -- server/billing.test.ts mocks
+      # ./storage rather than importing the real thing, so this can run
+      # before the Postgres-dependent steps below, not after.
+      - name: Test
+        run: npm test
+
+      - name: Build (web + server)
+        run: npm run build
+
+      # Every column/table shared/schema.ts declares must exist in a real
+      # database by the time this step ends -- if it doesn't, reconcile-
+      # schema.ts wasn't updated to match, exactly like tonight's incident.
+      - name: Reconcile schema against a fresh database
+        run: npm run db:reconcile
+
+      # Runs every query seed.ts makes against the real table shapes --
+      # this is what actually caught the missing date_of_birth column,
+      # since reconcile succeeding just means its own statements didn't
+      # error, not that the schema is complete.
+      - name: Seed demo data
+        run: npm run db:seed
+
+      # Re-running both confirms they're still idempotent (additive-only,
+      # safe to re-run on every deploy) and that seeding never clobbers
+      # data a real admin might have already edited -- see seed.ts's own
+      # onConflictDoNothing/"only if not already configured" guards.
+      - name: Reconcile + seed again (idempotency check)
+        run: |
+          npm run db:reconcile
+          npm run db:seed
+
+  # This is the actual fix for the gap that let the 2026-08-19/20 incident
+  # (and this morning's repeat of it) reach production: build-and-migrate
+  # above proved CI *catches* a bad schema/reconcile drift, but Render was
+  # still deploying straight off the raw git push webhook regardless of
+  # whether this workflow passed or failed -- a red CI run only ever told
+  # someone about the problem after the fact, at the same moment as the
+  # failed deploy, not before it.
+  #
+  # `needs: build-and-migrate` is what actually closes that gap: this job
+  # (and the deploy it triggers) is skipped entirely if that job fails, no
+  # separate condition required.
+  #
+  # For this to work, Auto-Deploy must be turned OFF in the Render
+  # dashboard for the forge service (Settings -> Build & Deploy) so Render
+  # stops deploying on every raw push -- otherwise a bad commit still
+  # reaches production immediately, in parallel with this job, and this
+  # gate is decorative. Then paste that service's Deploy Hook URL
+  # (Settings -> Deploy Hook) into a repo secret named
+  # RENDER_DEPLOY_HOOK_URL (Settings -> Secrets and variables -> Actions).
+  # Until that secret exists, this job intentionally no-ops rather than
+  # failing the whole workflow over infra that hasn't been wired up yet.
+  deploy:
+    needs: build-and-migrate
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Trigger Render deploy
+        run: |
+          if [ -z "${{ secrets.RENDER_DEPLOY_HOOK_URL }}" ]; then
+            echo "RENDER_DEPLOY_HOOK_URL isn't set yet -- see this job's own comment in ci.yml for the two Render/GitHub setup steps. Skipping, not failing."
+            exit 0
+          fi
+          curl -fsS -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"

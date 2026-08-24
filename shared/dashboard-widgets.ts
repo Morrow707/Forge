@@ -1,20 +1,23 @@
 import { z } from "zod";
 
-// A user's per-box dashboard preference: whether it's hidden, and where it
-// sits relative to the rest. Kept as an ordered array (not a flat hidden-id
-// list) so the storage shape already supports real drag-to-reorder without
-// another migration, even where today's UI is a show/hide checklist -- see
-// server/storage.ts's getWidgetLayoutForUser/setWidgetLayoutForUser.
-export interface WidgetLayoutEntry {
-  id: string;
-  hidden: boolean;
-}
+// One entry per dashboard/analytics card a user has explicitly touched
+// (hidden it, or moved it) -- stored order is display order for whatever's
+// listed; any widget id rendered on the page but absent from this array
+// falls back to visible, in its default code-declared position. This is the
+// shape users.hiddenWidgets/json stores today (see that column's own
+// comment in shared/schema.ts) -- previously just a flat array of hidden
+// ids with no order captured at all; getWidgetLayoutForCoach in storage.ts
+// coerces an old-shape row (a plain string[]) into this on read, so an
+// existing coach's already-hidden cards survive the upgrade without a data
+// migration.
+export type WidgetLayoutEntry = { id: string; hidden: boolean };
 
+// Shared between the coach- and athlete-scoped widget-prefs routes
+// (server/routes.ts) so the two request/response shapes can't drift apart.
 export const widgetLayoutEntrySchema = z.object({
   id: z.string().min(1),
   hidden: z.boolean(),
 });
-
 export const widgetLayoutSchema = z.object({
-  layout: z.array(widgetLayoutEntrySchema).max(50),
+  layout: z.array(widgetLayoutEntrySchema),
 });

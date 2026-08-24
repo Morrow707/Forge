@@ -1,39 +1,55 @@
 import { useState } from "react";
+import { externalLinkClick } from "@/lib/open-external";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiRequest, ApiError } from "@/lib/queryClient";
+import { apiRequest, ApiError, resolveApiUrl } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { FormVideoRecorderDialog } from "@/components/form-video-recorder-dialog";
 import { VideoAnnotationDialog } from "@/components/video-annotation-dialog";
 import { toast } from "sonner";
-import { MessageSquare, Video, Send, X, Pencil } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
+import { MessageSquare, Video, Send, X, Pencil, Download, Loader2 } from "lucide-react";
+import { formatDistanceToNow, format, parseISO } from "date-fns";
+import { watermarkVideo } from "@/lib/video-watermark";
+import { shareOrDownloadBlob } from "@/lib/share-file";
 
 type Comment = {
   id: number;
   body: string;
   videoUrl: string | null;
   imageUrl: string | null;
+  date: string | null;
   createdAt: string;
   author: { id: number; name: string; role: "coach" | "athlete" };
 };
 
 /** A two-way thread on a specific day of a specific assignment -- flag a
  * rough set, attach a video link, get a reply -- without leaving the
- * workout. Used by both the athlete workout page and the coach's day-edit
- * dialog against the same underlying comments. */
+ * workout. Used by the athlete workout page, the coach's day-edit dialog,
+ * and (kind: "skill") the skill-day view against the parallel
+ * skillDayComments table -- same shape, same two routes, just a different
+ * URL prefix. */
 export function WorkoutCommentThread({
   role,
+  kind = "workout",
   assignmentId,
   programDayId,
+  date,
 }: {
   role: "coach" | "athlete";
+  kind?: "workout" | "skill";
   assignmentId: number;
   programDayId: number;
+  // The calendar date this thread is being viewed/posted from, when known
+  // (the athlete's own workout page always knows it; the coach's day-edit
+  // dialog edits the recurring program day template, not one occurrence of
+  // it, so it has no date to attach) -- see workoutComments.date's comment
+  // in shared/schema.ts for why this matters for a backfilled log.
+  date?: string;
 }) {
   const qc = useQueryClient();
-  const basePath = `/api/${role}/assignments/${assignmentId}/days/${programDayId}/comments`;
+  const pathSegment = kind === "skill" ? "skill-assignments" : "assignments";
+  const basePath = `/api/${role}/${pathSegment}/${assignmentId}/days/${programDayId}/comments`;
   const [body, setBody] = useState("");
   const [videoUrl, setVideoUrl] = useState("");
   const [showVideoField, setShowVideoField] = useState(false);
@@ -41,10 +57,26 @@ export function WorkoutCommentThread({
   const [recorderOpen, setRecorderOpen] = useState(false);
   const [imageUrl, setImageUrl] = useState("");
   const [annotatingUrl, setAnnotatingUrl] = useState<string | null>(null);
+  // Which comment's video is currently being watermarked for download --
+  // a re-encode takes a few seconds for a longer clip, so this drives a
+  // per-row loading state rather than a single global one.
+  const [downloadingId, setDownloadingId] = useState<number | null>(null);
 
   const { data: comments = [] } = useQuery<Comment[]>({
     queryKey: [basePath],
   });
+
+  async function downloadWithWatermark(commentId: number, url: string) {
+    setDownloadingId(commentId);
+    try {
+      const blob = await watermarkVideo(url);
+      await shareOrDownloadBlob(blob, "forge-form-check.webm", "Forge form check");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not prepare that video for download");
+    } finally {
+      setDownloadingId(null);
+    }
+  }
 
   const postMutation = useMutation({
     mutationFn: async () => {
@@ -52,6 +84,7 @@ export function WorkoutCommentThread({
         body,
         videoUrl: videoUrl.trim() || undefined,
         imageUrl: imageUrl || undefined,
+        date: date || undefined,
       });
       return res.json();
     },
@@ -84,15 +117,32 @@ export function WorkoutCommentThread({
                     {c.author.role}
                   </span>
                 </span>
-                <span className="shrink-0 text-[10px] text-muted-foreground">
-                  {formatDistanceToNow(new Date(c.createdAt), { addSuffix: true })}
+                <span className="shrink-0 text-right text-[10px] text-muted-foreground">
+                  {c.date ? (
+                    <>
+                      <span className="block font-semibold text-foreground/70">
+                        For {format(parseISO(c.date), "MMM d, yyyy")}
+                      </span>
+                      <span className="block">
+                        submitted {formatDistanceToNow(new Date(c.createdAt), { addSuffix: true })}
+                      </span>
+                    </>
+                  ) : (
+                    formatDistanceToNow(new Date(c.createdAt), { addSuffix: true })
+                  )}
                 </span>
               </div>
               <p className="mt-0.5 whitespace-pre-wrap text-muted-foreground">{c.body}</p>
               {c.imageUrl && (
-                <a href={c.imageUrl} target="_blank" rel="noreferrer" className="mt-1 block">
+                <a
+                  href={c.imageUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={externalLinkClick(c.imageUrl)}
+                  className="mt-1 block"
+                >
                   <img
-                    src={c.imageUrl}
+                    src={resolveApiUrl(c.imageUrl)}
                     alt="Coach annotation"
                     className="max-h-48 rounded-md border border-border"
                   />
@@ -104,6 +154,7 @@ export function WorkoutCommentThread({
                     href={c.videoUrl}
                     target="_blank"
                     rel="noreferrer"
+                    onClick={externalLinkClick(c.videoUrl)}
                     className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
                   >
                     <Video className="h-3 w-3" /> Watch video
@@ -117,6 +168,22 @@ export function WorkoutCommentThread({
                       <Pencil className="h-3 w-3" /> Annotate
                     </button>
                   )}
+                  <button
+                    type="button"
+                    disabled={downloadingId === c.id}
+                    onClick={() => downloadWithWatermark(c.id, c.videoUrl!)}
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline disabled:opacity-60"
+                  >
+                    {downloadingId === c.id ? (
+                      <>
+                        <Loader2 className="h-3 w-3 animate-spin" /> Preparing…
+                      </>
+                    ) : (
+                      <>
+                        <Download className="h-3 w-3" /> Download
+                      </>
+                    )}
+                  </button>
                 </div>
               )}
             </div>

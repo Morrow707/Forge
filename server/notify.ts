@@ -1,6 +1,6 @@
 import { storage } from "./storage";
 import { sendPushToUser } from "./push";
-import { sendEmail } from "./email";
+import { sendEmail, escapeHtml } from "./email";
 
 /** The one place all three notification channels (in-app inbox, push, email)
  * fan out from, so every targeted event -- a comment reply, a team
@@ -26,14 +26,23 @@ export async function notifyUser(
   }: { bypassEmailPref?: boolean; skipEmail?: boolean } = {},
 ) {
   await storage.createNotification(userId, type, title, body, link);
-  await sendPushToUser(userId, { title, body, url: link });
+  // Counted after creating this notification, so the badge iOS shows on the
+  // app icon always reflects what the notification/inbox screen will show
+  // once opened, not what it was a moment ago.
+  const badge = await storage.getUnreadNotificationCount(userId);
+  await sendPushToUser(userId, { title, body, url: link, badge });
 
   const user = await storage.getUser(userId);
   if (!skipEmail && user && (user.notifyEmail || bypassEmailPref)) {
+    // `body` frequently embeds a coach/athlete's own display name and
+    // free-typed comment text (see the workout-comment routes) -- unescaped,
+    // either could carry markup that renders as part of a real
+    // transactional email sent from Forge's own domain, same risk
+    // escapeHtml already guards against in welcome-email.ts/progress-report.ts.
     await sendEmail({
       to: user.email,
       subject: title,
-      html: `<p style="font-family:Arial,Helvetica,sans-serif;font-size:15px;">${body}</p><p style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#777;">Open Forge to see more.</p>`,
+      html: `<p style="font-family:Arial,Helvetica,sans-serif;font-size:15px;">${escapeHtml(body)}</p><p style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#777;">Open Forge to see more.</p>`,
     });
   }
 }

@@ -1,3 +1,19 @@
+// The HTML email builders (welcome-email.ts, progress-report.ts, etc)
+// interpolate free-text fields a coach or athlete entered themselves --
+// display name, sport/position, exercise names -- directly into HTML
+// strings. Without escaping, any of those could carry markup that renders
+// as part of a real transactional email sent from Forge's own domain to
+// another real user (e.g. a coach's display name rendering a phishing
+// link inside the welcome email their invited athletes receive).
+export function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 const apiKey = process.env.RESEND_API_KEY;
 const fromAddress = process.env.RESEND_FROM_EMAIL || "Forge <onboarding@resend.dev>";
 

@@ -13,7 +13,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { apiRequest, ApiError } from "@/lib/queryClient";
+import { apiRequest, ApiError, resolveApiUrl, getNativeToken } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { groupConsecutiveBySupersetGroup, colorForLabel } from "@/lib/supersets";
 import { ExerciseVideoThumb } from "@/components/exercise-video";
@@ -21,14 +21,26 @@ import { RestTimerControl, type RestTimerHandle } from "@/components/rest-timer"
 import { useWakeLock } from "@/hooks/use-wake-lock";
 import { WorkoutCommentThread } from "@/components/workout-comment-thread";
 import { BarTrackerDialog } from "@/components/bar-tracker-dialog";
+import { ArJumpTrackerDialog } from "@/components/ar-jump-tracker-dialog";
+import { ArBarTrackerDialog } from "@/components/ar-bar-tracker-dialog";
+import { ArSwingTrackerDialog, type SwingSetMetrics } from "@/components/ar-swing-tracker-dialog";
+import { isArPreviewPlatform } from "@/lib/native-ar-preview";
 import { FormVideoRecorderDialog } from "@/components/form-video-recorder-dialog";
 import { SetVideoPreviewDialog, SetVideoCompareDialog } from "@/components/set-video-review";
 import { extractVideoFrames } from "@/lib/video-frames";
 import type { RepMetrics } from "@/lib/bar-tracking";
 import type { JumpSetMetrics } from "@/lib/jump-tracking";
 import { toKg } from "@/lib/bar-tracking";
+import { useDistanceUnit, formatDistanceCm } from "@/lib/distance-unit";
+import { DistanceUnitToggle } from "@/components/distance-unit-toggle";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
+import { hapticLight, hapticSuccess } from "@/lib/haptics";
+import {
+  VIDEO_REATTACHED_EVENT,
+  type VideoReattachedDetail,
+  type VideoRecordContext,
+} from "@/lib/video-offline-store";
 import { renderWorkoutShareCard } from "@/lib/share-card";
 import { shareOrDownloadBlob } from "@/lib/share-file";
 import {
@@ -37,6 +49,9 @@ import {
   loadDayCache,
   queueLog,
   hasPendingLog,
+  claimDayKeyForFlush,
+  releaseDayKeyForFlush,
+  takePendingLog,
 } from "@/lib/offline-queue";
 import {
   ArrowLeft,
@@ -63,7 +78,8 @@ import {
   RefreshCw,
   GitCompare,
   Share2,
-  Headphones,
+  Copy,
+  ShieldAlert,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import type { PublicUser, MovementProfile } from "@shared/schema";
@@ -73,7 +89,6 @@ import { ReadinessBanner } from "@/components/readiness-banner";
 import { ModifiedWorkoutBanner } from "@/components/modified-workout-banner";
 import { WellnessGate } from "@/components/wellness-gate";
 import { CaraTimer } from "@/components/cara-timer";
-import { HandsFreeMode } from "@/components/hands-free-mode";
 
 type ExerciseInfo = {
   id: number;
@@ -171,7 +186,7 @@ type SetHistoryPoint = {
   rpe: number | null;
 };
 
-type TrackingLevel = "none" | "bar_path" | "full" | "jump";
+type TrackingLevel = "none" | "bar_path" | "full" | "jump" | "golf_swing" | "baseball_swing";
 
 type PrescribedExercise = {
   id: number;
@@ -181,6 +196,11 @@ type PrescribedExercise = {
   restSeconds: number | null;
   notes: string | null;
   supersetGroup: string | null;
+  // Only meaningful when supersetGroup is set (2+ chained exercises) --
+  // false (or a solo exercise) rests after every set same as always; true
+  // only auto-starts the rest timer after the LAST exercise in the group
+  // logs a set (see shouldRestAfterSet below).
+  restAfterGroupOnly: boolean;
   trackingLevel: TrackingLevel;
   videoCheckEnabled: boolean;
   exercise: ExerciseInfo;
@@ -240,6 +260,21 @@ type LegDriveAsymmetryEntry = {
   dominantSide: "left" | "right";
 };
 
+type ArmDriveAsymmetryEntry = {
+  repNumber: number;
+  leftVelocityMps: number;
+  rightVelocityMps: number;
+  asymmetryPercent: number;
+  dominantSide: "left" | "right";
+};
+
+type RepTrustScore = {
+  repNumber: number;
+  score: number;
+  label: "high" | "medium" | "low";
+  notes: string[];
+};
+
 type SetMetrics = {
   peakVelocityMps: number | null;
   meanVelocityMps: number | null;
@@ -266,6 +301,9 @@ type SetMetrics = {
   // formCheckFlag above (that's a best/worst comparison tag, this is
   // "don't auto-delete this one").
   videoFavorited: boolean;
+  // Server-computed and read-only from here (never sent back on save, see
+  // buildLogPayload) -- see workoutSetEntries.isPr's own comment.
+  isPr: boolean;
   // Jump-mode-only metrics -- barPathTrace is reused for the ankle-height
   // trace in jump mode rather than adding a redundant trace column.
   jumpHeightCm: number | null;
@@ -273,10 +311,24 @@ type SetMetrics = {
   groundContactSeconds: number | null;
   reactiveStrengthIndex: number | null;
   jumpBreakdown: JumpBreakdownEntry[] | null;
+  // "golf_swing"/"baseball_swing" tracking mode's numbers -- see
+  // ar-swing-tracker-dialog.tsx and rotation-tracking.ts/swing-tracking.ts.
+  swingSeparationDeg: number | null;
+  swingTempoRatio: number | null;
+  swingBackswingMs: number | null;
+  swingDownswingMs: number | null;
+  swingHeadSwayCm: number | null;
   // Per-rep left/right knee-drive comparison for bilateral lower-body lifts
   // -- see pose-tracking.ts's computeLegDriveAsymmetry. Null unless the
   // exercise's movementType/laterality made a same-rep comparison valid.
   legDriveAsymmetry: LegDriveAsymmetryEntry[] | null;
+  // Same idea, arms instead of legs -- see bar-tracking.ts's
+  // computeArmDriveAsymmetry. Null unless the equipment/movementType made a
+  // same-rep left/right arm comparison valid.
+  armDriveAsymmetry: ArmDriveAsymmetryEntry[] | null;
+  // Per-rep tracking-confidence score -- see bar-tracking.ts's
+  // computeRepTrustScores.
+  trustScores: RepTrustScore[] | null;
 };
 
 type LogEntry = {
@@ -355,6 +407,7 @@ export type ItemState = {
   restSeconds: number | null;
   coachNotes: string | null;
   supersetGroup: string | null;
+  restAfterGroupOnly: boolean;
   trackingLevel: TrackingLevel;
   videoCheckEnabled: boolean;
   lastPerformance: LastPerformance;
@@ -400,12 +453,20 @@ function buildItem(
       formCheckVideoUrl: existingSet?.formCheckVideoUrl ?? null,
       formCheckFlag: existingSet?.formCheckFlag ?? null,
       videoFavorited: existingSet?.videoFavorited ?? false,
+      isPr: existingSet?.isPr ?? false,
       jumpHeightCm: existingSet?.jumpHeightCm ?? null,
       jumpDistanceCm: existingSet?.jumpDistanceCm ?? null,
       groundContactSeconds: existingSet?.groundContactSeconds ?? null,
       reactiveStrengthIndex: existingSet?.reactiveStrengthIndex ?? null,
       jumpBreakdown: existingSet?.jumpBreakdown ?? null,
+      swingSeparationDeg: existingSet?.swingSeparationDeg ?? null,
+      swingTempoRatio: existingSet?.swingTempoRatio ?? null,
+      swingBackswingMs: existingSet?.swingBackswingMs ?? null,
+      swingDownswingMs: existingSet?.swingDownswingMs ?? null,
+      swingHeadSwayCm: existingSet?.swingHeadSwayCm ?? null,
       legDriveAsymmetry: existingSet?.legDriveAsymmetry ?? null,
+      armDriveAsymmetry: existingSet?.armDriveAsymmetry ?? null,
+      trustScores: existingSet?.trustScores ?? null,
     };
   });
   const materials = materialsFrom(prescribed.exercise);
@@ -427,6 +488,8 @@ function buildItem(
     restSeconds: prescribed.restSeconds,
     coachNotes: prescribed.notes,
     supersetGroup: kind === "exercise" ? (prescribed as PrescribedExercise).supersetGroup : null,
+    restAfterGroupOnly:
+      kind === "exercise" ? (prescribed as PrescribedExercise).restAfterGroupOnly : false,
     trackingLevel: kind === "exercise" ? (prescribed as PrescribedExercise).trackingLevel : "none",
     videoCheckEnabled:
       kind === "exercise" ? (prescribed as PrescribedExercise).videoCheckEnabled : false,
@@ -484,21 +547,30 @@ function findHistoryForReps(history: SetHistoryPoint[], reps: string) {
 
 // A set is a PR when its weight beats every prior numeric-weight set logged
 // at that same rep count -- so one workout can produce several PRs (one per
-// rep count), not just one for the whole exercise.
+// rep count), not just one for the whole exercise. "Prior" includes both
+// past sessions (history) and earlier sets already filled in THIS session
+// (earlierSetsThisSession) -- without the latter, doing the same weight for
+// sets 1-3 on purpose (holding speed, not chasing a max) would crown every
+// one of them, since each only beat old history, never each other.
 function isRepCountPR(
   history: SetHistoryPoint[],
   reps: string,
   weightMode: WeightMode,
   weight: string,
+  earlierSetsThisSession: { reps: string; weight: string }[] = [],
 ) {
   if (weightMode !== "numeric") return false;
   const trimmed = reps.trim();
   const currentWeight = parseFloat(weight);
   if (!trimmed || Number.isNaN(currentWeight)) return false;
-  const priorWeights = history
-    .filter((h) => h.reps.trim() === trimmed && h.weightMode === "numeric" && h.weight)
-    .map((h) => parseFloat(h.weight!))
-    .filter((w) => !Number.isNaN(w));
+  const priorWeights = [
+    ...history
+      .filter((h) => h.reps.trim() === trimmed && h.weightMode === "numeric" && h.weight)
+      .map((h) => parseFloat(h.weight!)),
+    ...earlierSetsThisSession
+      .filter((s) => s.reps.trim() === trimmed && s.weight.trim())
+      .map((s) => parseFloat(s.weight)),
+  ].filter((w) => !Number.isNaN(w));
   if (priorWeights.length === 0) return false;
   return currentWeight > Math.max(...priorWeights);
 }
@@ -573,6 +645,19 @@ function buildPages(items: ItemState[]): Page[] {
   for (const block of exerciseBlocks) pushBlock("exercise", block);
 
   return pages;
+}
+
+// A solo exercise (no supersetGroup) or one with restAfterGroupOnly off
+// rests after every set, same as always. A grouped exercise with it on
+// only rests once the LAST exercise in its (consecutive) superset chain
+// logs a set -- e.g. bicep curls straight into a single-arm row with no
+// rest between them, then a real rest once both are done for that round.
+export function shouldRestAfterSet(items: ItemState[], completedItem: ItemState): boolean {
+  if (!completedItem.supersetGroup || !completedItem.restAfterGroupOnly) return true;
+  const blocks = groupConsecutiveBySupersetGroup(items.filter((it) => it.kind === "exercise"));
+  const block = blocks.find((b) => b.some((it) => it.key === completedItem.key));
+  if (!block || block.length === 0) return true;
+  return block[block.length - 1].key === completedItem.key;
 }
 
 function isPageComplete(page: Page) {
@@ -695,7 +780,6 @@ export function WorkoutPage({
   const [hydrated, setHydrated] = useState(false);
   const [pageIndex, setPageIndex] = useState(0);
   const [viewMode, setViewMode] = useState<"overview" | "logging">("overview");
-  const [handsFreeActive, setHandsFreeActive] = useState(false);
   const restTimerRef = useRef<RestTimerHandle>(null);
 
   // Keep the screen awake for the length of an active logging session --
@@ -791,27 +875,42 @@ export function WorkoutPage({
           groundContactSeconds: s.groundContactSeconds,
           reactiveStrengthIndex: s.reactiveStrengthIndex,
           jumpBreakdown: s.jumpBreakdown,
+          swingSeparationDeg: s.swingSeparationDeg,
+          swingTempoRatio: s.swingTempoRatio,
+          swingBackswingMs: s.swingBackswingMs,
+          swingDownswingMs: s.swingDownswingMs,
+          swingHeadSwayCm: s.swingHeadSwayCm,
           legDriveAsymmetry: s.legDriveAsymmetry,
+          armDriveAsymmetry: s.armDriveAsymmetry,
+          trustScores: s.trustScores,
         })),
       })),
     };
   }
 
+  // How many autosaves in a row have failed -- reset to 0 on any success.
+  // A single silent failure is expected background noise (a blip); this is
+  // what lets a *persistent* one (expired session, a real server rejection)
+  // get surfaced instead of the athlete training an entire session under
+  // the impression it's all being logged.
+  const consecutiveAutosaveFailuresRef = useRef(0);
+
   const submitMutation = useMutation({
     mutationFn: async ({
-      completed,
-      itemsSnapshot,
+      payload,
       silent,
     }: {
-      completed: boolean;
-      itemsSnapshot?: ItemState[];
+      // Already built by the caller (queueSave, or a recovered offline
+      // entry replayed as-is) rather than an itemsSnapshot -- see
+      // queueRawSave's own comment for why the queue operates at this
+      // level instead of taking itemsSnapshot/completed directly.
+      payload: ReturnType<typeof buildLogPayload>;
       // Autosaves shouldn't toast on every keystroke-adjacent save or steal
       // focus with a loading state -- only the explicit "Mark Workout
       // Complete" tap does, since that's a real state transition worth
       // confirming, not just a background save.
       silent?: boolean;
     }) => {
-      const payload = buildLogPayload(itemsSnapshot ?? items, completed);
       try {
         const res = await apiRequest("POST", `${apiBase}/log`, payload);
         return { synced: true as const, data: await res.json(), silent };
@@ -830,11 +929,12 @@ export function WorkoutPage({
         const isPermanentRejection =
           err instanceof ApiError && err.status !== 401 && err.status < 500;
         if (isPermanentRejection) throw err;
-        queueLog(dayKey, payload);
+        queueLog(dayKey, `${apiBase}/log`, payload);
         return { synced: false as const, data: null, silent };
       }
     },
-    onSuccess: ({ synced, silent, data }, { completed }) => {
+    onSuccess: ({ synced, silent, data }, { payload }) => {
+      consecutiveAutosaveFailuresRef.current = 0;
       // The offline banner needs to reflect reality regardless of which
       // save path triggered it -- only the toast and the query refetch
       // (items only ever hydrates from `data` once per mount, so refetching
@@ -845,7 +945,8 @@ export function WorkoutPage({
       qc.invalidateQueries({ queryKey: [`${apiBase}/calendar`] });
       qc.invalidateQueries({ queryKey: [`${apiBase}/day`] });
       if (synced) {
-        toast.success(completed ? "Workout marked complete" : "Progress saved");
+        hapticLight();
+        toast.success(payload.completed ? "Workout marked complete" : "Progress saved");
         qc.invalidateQueries({ queryKey: ["/api/athlete/trophies"] });
         for (const trophy of data?.newlyUnlockedTrophies ?? []) {
           toast.success(`🏆 New trophy: ${trophy.label}`, {
@@ -857,7 +958,21 @@ export function WorkoutPage({
       }
     },
     onError: (err: ApiError, { silent }) => {
-      if (!silent) toast.error(err.message || "Could not save workout");
+      if (!silent) {
+        toast.error(err.message || "Could not save workout");
+        return;
+      }
+      // A silent autosave failure (expired session, a server-side rejection)
+      // is invisible by design for a one-off blip -- but if it keeps
+      // failing, the athlete is training an entire session believing it's
+      // being logged when nothing is actually reaching the server. Surface
+      // that loudly once it's clearly not transient, rather than never.
+      consecutiveAutosaveFailuresRef.current += 1;
+      if (consecutiveAutosaveFailuresRef.current === 3) {
+        toast.error("Your sets aren't saving -- reload this page and log back in if needed.", {
+          duration: 15000,
+        });
+      }
     },
   });
 
@@ -869,11 +984,112 @@ export function WorkoutPage({
     itemsRef.current = items;
   }, [items]);
 
+  // Fires a haptic exactly once per set the moment it newly qualifies as a
+  // PR, rather than on every render isPR happens to be true (which would
+  // just replay the buzz continuously while the crown icon stays visible).
+  // Keyed by item+set number, not by a version/edit counter, so re-entering
+  // the same PR value twice in a row (e.g. undo then redo) doesn't refire.
+  const notifiedPrKeysRef = useRef(new Set<string>());
+  useEffect(() => {
+    for (const item of items) {
+      const earlierSetsThisSession: { reps: string; weight: string }[] = [];
+      for (const set of item.sets) {
+        const complete = isSetComplete(item, set);
+        const isPR =
+          complete &&
+          isRepCountPR(item.setHistory, set.reps, item.weightMode, set.weight, earlierSetsThisSession);
+        const key = `${item.key}-${set.setNumber}`;
+        if (isPR && !notifiedPrKeysRef.current.has(key)) {
+          notifiedPrKeysRef.current.add(key);
+          hapticSuccess();
+        } else if (!isPR) {
+          notifiedPrKeysRef.current.delete(key);
+        }
+        earlierSetsThisSession.push(set);
+      }
+    }
+  }, [items]);
+
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dayCompletedRef = useRef(false);
   useEffect(() => {
     dayCompletedRef.current = data?.log?.completed ?? false;
   }, [data?.log?.completed]);
+
+  // Every save -- debounced autosave, immediate autosave, and an explicit
+  // "Mark Workout Complete" tap alike -- funnels through this single
+  // in-flight queue so at most one /log POST is ever outstanding at once.
+  // Without it, two overlapping requests race purely on network timing:
+  // submitWorkoutLog does a full delete-and-reinsert of the day's entries
+  // per request, so whichever response the server *finishes processing*
+  // last wins entirely, even if its request started earlier and carries an
+  // older, now-stale snapshot. That silently erases anything saved by the
+  // request that "lost" the race -- a just-captured camera set, a
+  // just-uploaded form-check video -- with no error surfaced anywhere.
+  // Queuing guarantees requests hit the server strictly one at a time, in
+  // the order they were queued, so there's never a second in-flight
+  // response that could land out of turn.
+  const saveInFlightRef = useRef(false);
+  const pendingSaveRef = useRef<{ payload: ReturnType<typeof buildLogPayload>; silent: boolean } | null>(
+    null,
+  );
+
+  function runQueuedSave(args: { payload: ReturnType<typeof buildLogPayload>; silent: boolean }) {
+    saveInFlightRef.current = true;
+    submitMutation.mutate(args, {
+      onSettled: () => {
+        saveInFlightRef.current = false;
+        const next = pendingSaveRef.current;
+        if (next) {
+          pendingSaveRef.current = null;
+          runQueuedSave(next);
+        }
+      },
+    });
+  }
+
+  // Operates on an already-built payload rather than itemsSnapshot/completed
+  // directly, so a recovered offline-queued entry (see the pending-log
+  // recovery effect below) can be replayed through this SAME serialized
+  // queue -- not just this page's own edits. Only the most recently queued
+  // payload ever needs to actually reach the server -- a save requested
+  // while one's in flight replaces whatever was queued rather than piling
+  // up a backlog of stale in-between snapshots to send later.
+  function queueRawSave(args: { payload: ReturnType<typeof buildLogPayload>; silent: boolean }) {
+    if (saveInFlightRef.current) {
+      pendingSaveRef.current = args;
+      return;
+    }
+    runQueuedSave(args);
+  }
+
+  function queueSave(args: { completed: boolean; itemsSnapshot: ItemState[]; silent: boolean }) {
+    queueRawSave({ payload: buildLogPayload(args.itemsSnapshot, args.completed), silent: args.silent });
+  }
+
+  // Claims this day for as long as it's the one open here, and resolves any
+  // offline-queued save for it through the SAME serialized queue above
+  // (rather than the generic background flush in offline-queue.ts, which
+  // has no idea this page's queue exists and would otherwise be able to
+  // POST a stale queued snapshot concurrently with -- and possibly after --
+  // a fresher save already in flight here). Runs once now, in case a prior
+  // session left something queued for this exact day, and again on every
+  // reconnect, in case a save failed and got queued earlier in THIS
+  // session. See claimDayKeyForFlush/takePendingLog's own comments.
+  useEffect(() => {
+    claimDayKeyForFlush(dayKey);
+    function resolveOwnPendingLog() {
+      const entry = takePendingLog(dayKey);
+      if (entry) queueRawSave({ payload: entry.payload as ReturnType<typeof buildLogPayload>, silent: true });
+    }
+    resolveOwnPendingLog();
+    window.addEventListener("online", resolveOwnPendingLog);
+    return () => {
+      releaseDayKeyForFlush(dayKey);
+      window.removeEventListener("online", resolveOwnPendingLog);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dayKey]);
 
   // Debounced background save on any field edit -- weight, reps, RPE, notes,
   // camera-tracked metrics, all of it. Takes the just-computed items array
@@ -885,7 +1101,7 @@ export function WorkoutPage({
     if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
     autosaveTimerRef.current = setTimeout(() => {
       autosaveTimerRef.current = null;
-      submitMutation.mutate({
+      queueSave({
         completed: dayCompletedRef.current,
         itemsSnapshot: nextItems,
         silent: true,
@@ -901,7 +1117,7 @@ export function WorkoutPage({
       clearTimeout(autosaveTimerRef.current);
       autosaveTimerRef.current = null;
     }
-    submitMutation.mutate({
+    queueSave({
       completed: dayCompletedRef.current,
       itemsSnapshot: nextItems,
       silent: true,
@@ -915,10 +1131,37 @@ export function WorkoutPage({
   // reads itemsRef.current for the freshest snapshot at the moment it fires.
   useEffect(() => {
     function flush() {
-      if (typeof navigator.sendBeacon !== "function") return;
       const payload = buildLogPayload(itemsRef.current, dayCompletedRef.current);
-      const blob = new Blob([JSON.stringify(payload)], { type: "application/json" });
-      navigator.sendBeacon(`${apiBase}/log`, blob);
+      const body = JSON.stringify(payload);
+      if (typeof navigator.sendBeacon === "function") {
+        const blob = new Blob([body], { type: "application/json" });
+        if (navigator.sendBeacon(resolveApiUrl(`${apiBase}/log`), blob)) return;
+        // Declined -- most likely the browser's own per-beacon size quota
+        // (commonly ~64KB), plausibly exceeded by a day with several
+        // camera-tracked sets' full path/rep-breakdown JSON already saved
+        // alongside whatever just changed. Fall through to the fetch
+        // fallback below rather than losing the save silently.
+      }
+      // fetch with keepalive survives the page tearing down the same way
+      // sendBeacon does, and is the standard fallback for a browser with no
+      // sendBeacon support at all, or one that declined this specific
+      // payload -- though in some browsers keepalive requests share the
+      // exact same total-quota pool sendBeacon draws from, so this is a
+      // real second attempt, not a guaranteed one for a payload that's
+      // already large enough to hit that shared limit. Fire-and-forget:
+      // there's nothing left to do with a rejection once the page is
+      // already tearing down.
+      const token = getNativeToken();
+      fetch(resolveApiUrl(`${apiBase}/log`), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body,
+        credentials: "include",
+        keepalive: true,
+      }).catch(() => {});
     }
     function handleVisibilityChange() {
       if (document.visibilityState === "hidden") flush();
@@ -939,26 +1182,47 @@ export function WorkoutPage({
       // synced -- queueLog just gets replayed against an already-saved
       // state -- but never redundant with data loss.
       const payload = buildLogPayload(itemsRef.current, dayCompletedRef.current);
-      queueLog(dayKey, payload);
+      queueLog(dayKey, `${apiBase}/log`, payload);
     };
     // apiBase/dayKey are static for the life of this page; only needs to run once.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function updateItem(key: string, patch: Partial<ItemState>) {
+    // Same "keep the updater pure" reasoning as updateSet below.
+    let nextItems: ItemState[] = [];
     setItems((prev) => {
-      const next = prev.map((it) => (it.key === key ? { ...it, ...patch } : it));
-      scheduleAutosave(next);
-      return next;
+      nextItems = prev.map((it) => (it.key === key ? { ...it, ...patch } : it));
+      return nextItems;
     });
+    scheduleAutosave(nextItems);
   }
 
   // `immediate` bypasses the debounce for data that's expensive to redo (a
   // completed camera-tracked capture, a saved form-check video) -- see
   // autosaveNow's comment for why those can't wait out the debounce window.
+  // The moment a set's own completeness flips to true (the green
+  // checkmark) forces the same immediate save -- a debounced save still
+  // pending when the athlete navigates away can be lost (a client-side
+  // route change doesn't fire the pagehide/visibilitychange flush), so a
+  // finished set can never be left sitting in the debounce window.
   function updateSet(key: string, setNumber: number, patch: Partial<SetRow>, options?: { immediate?: boolean }) {
+    // The updater passed to setItems below has to stay pure -- no calls out
+    // to another component's state (restTimerRef.current.autoStart ends up
+    // calling RestTimerControl's own setRemaining) or side effects like the
+    // autosave calls belong inside it. React warns about exactly this
+    // ("Cannot update a component while rendering a different component")
+    // since an updater can run more than once for a single logical update,
+    // which would double-fire a network save or restart the rest timer.
+    // restOnComplete/becameComplete/nextItems are just plain closure
+    // variables, not observable to React -- computed inside the updater,
+    // acted on only after setItems returns.
+    let restOnComplete: number | null = null;
+    let becameComplete = false;
+    let nextItems: ItemState[] = [];
     setItems((prev) => {
-      let restOnComplete: number | null = null;
+      restOnComplete = null;
+      becameComplete = false;
       const next = prev.map((it) => {
         if (it.key !== key) return it;
         return {
@@ -968,20 +1232,53 @@ export function WorkoutPage({
             const wasComplete = isSetComplete(it, s);
             const updated = { ...s, ...patch };
             if (!wasComplete && isSetComplete(it, updated)) {
-              restOnComplete = it.restSeconds;
+              becameComplete = true;
+              if (shouldRestAfterSet(prev, it)) restOnComplete = it.restSeconds;
             }
             return updated;
           }),
         };
       });
-      if (restOnComplete !== null) restTimerRef.current?.autoStart(restOnComplete);
-      if (options?.immediate) autosaveNow(next);
-      else scheduleAutosave(next);
+      nextItems = next;
       return next;
     });
+    if (restOnComplete !== null) restTimerRef.current?.autoStart(restOnComplete);
+    if (options?.immediate || becameComplete) autosaveNow(nextItems);
+    else scheduleAutosave(nextItems);
   }
 
+  // Picks up a video that finished a deferred (queued-for-Wi-Fi) upload and
+  // got reattached server-side -- see video-offline-store.ts's own comment
+  // on VIDEO_REATTACHED_EVENT for why this matters even though the DB row
+  // is already correct by the time this fires: if this exact day is still
+  // open (the athlete queued one set's video, then kept training while
+  // Wi-Fi came back), this page's own in-memory `items` has no idea the
+  // attach happened, and its next autosave would silently overwrite the
+  // set back to no video. Only patches local state for the matching
+  // exercise/set on this exact day; every other day/session ignores it.
+  useEffect(() => {
+    function handleReattached(e: Event) {
+      const detail = (e as CustomEvent<VideoReattachedDetail>).detail;
+      if (
+        String(detail.assignmentId) !== assignmentId ||
+        String(detail.programDayId) !== programDayId ||
+        detail.date !== date
+      ) {
+        return;
+      }
+      const match = itemsRef.current.find(
+        (it) => it.kind === "exercise" && it.refId === detail.programExerciseId,
+      );
+      if (match) updateSet(match.key, detail.setNumber, { formCheckVideoUrl: detail.videoUrl });
+    }
+    window.addEventListener(VIDEO_REATTACHED_EVENT, handleReattached);
+    return () => window.removeEventListener(VIDEO_REATTACHED_EVENT, handleReattached);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assignmentId, programDayId, date]);
+
   function addSet(key: string) {
+    // Same "keep the updater pure" reasoning as updateSet above.
+    let nextItems: ItemState[] = [];
     setItems((prev) => {
       const next = prev.map((it) => {
         if (it.key !== key) return it;
@@ -1014,29 +1311,39 @@ export function WorkoutPage({
               formCheckVideoUrl: null,
               formCheckFlag: null,
               videoFavorited: false,
+              isPr: false,
               jumpHeightCm: null,
               jumpDistanceCm: null,
               groundContactSeconds: null,
               reactiveStrengthIndex: null,
               jumpBreakdown: null,
+              swingSeparationDeg: null,
+              swingTempoRatio: null,
+              swingBackswingMs: null,
+              swingDownswingMs: null,
+              swingHeadSwayCm: null,
               legDriveAsymmetry: null,
+              armDriveAsymmetry: null,
+              trustScores: null,
             },
           ],
         };
       });
-      scheduleAutosave(next);
+      nextItems = next;
       return next;
     });
+    scheduleAutosave(nextItems);
   }
 
   function removeSet(key: string) {
+    let nextItems: ItemState[] = [];
     setItems((prev) => {
-      const next = prev.map((it) =>
+      nextItems = prev.map((it) =>
         it.key === key && it.sets.length > 1 ? { ...it, sets: it.sets.slice(0, -1) } : it,
       );
-      scheduleAutosave(next);
-      return next;
+      return nextItems;
     });
+    scheduleAutosave(nextItems);
   }
 
   if (isLoading || !data) {
@@ -1102,34 +1409,46 @@ export function WorkoutPage({
     <>
       <AppShell
         title={
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => navigate(routeBase)}
-              aria-label="Back to calendar"
-              className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <ArrowLeft className="h-6 w-6 md:h-7 md:w-7" />
-            </button>
-            <span>{format(parseISO(date), "EEEE, MMM d")}</span>
-          </div>
+          // Hidden on the single-exercise logging screen -- that screen
+          // already has its own "Back to full workout" link, so the date
+          // header here is just repeated chrome eating vertical space right
+          // where the athlete needs to see the exercise and log a set.
+          viewMode === "overview" ? (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  autosaveNow(items);
+                  navigate(routeBase);
+                }}
+                aria-label="Back to calendar"
+                className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <ArrowLeft className="h-6 w-6 md:h-7 md:w-7" />
+              </button>
+              <span>{format(parseISO(date), "EEEE, MMM d")}</span>
+            </div>
+          ) : null
         }
       actions={
-        <div className="flex items-center gap-1 rounded-md bg-secondary p-1">
-          {(["lbs", "kg"] as const).map((u) => (
-            <button
-              key={u}
-              onClick={() => unitMutation.mutate(u)}
-              className={cn(
-                "rounded px-2.5 py-1 text-xs font-semibold uppercase transition-colors",
-                unit === u
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {u}
-            </button>
-          ))}
+        <div className="flex items-center gap-2">
+          {items.some((i) => i.trackingLevel === "jump") && <DistanceUnitToggle />}
+          <div className="flex items-center gap-1 rounded-md bg-secondary p-1">
+            {(["lbs", "kg"] as const).map((u) => (
+              <button
+                key={u}
+                onClick={() => unitMutation.mutate(u)}
+                className={cn(
+                  "rounded px-2.5 py-1 text-xs font-semibold uppercase transition-colors",
+                  unit === u
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {u}
+              </button>
+            ))}
+          </div>
         </div>
       }
     >
@@ -1159,10 +1478,13 @@ export function WorkoutPage({
       {/* Only for an actual training day -- a rest day has nothing to check
           in about. Inline and always editable (not a blocking gate), so an
           athlete who under- or over-estimated their soreness or stress can
-          come back and fix it before or during the session. */}
+          come back and fix it before or during the session. The readiness
+          card itself is overview-only -- once the athlete is inside a
+          single exercise, logging a set is the priority and this is just
+          space taken from that. */}
       {user?.role === "athlete" && !data.day.isRestDay && (
         <div className="mb-4 space-y-2">
-          <WellnessGate />
+          {viewMode === "overview" && <WellnessGate />}
           <CaraTimer />
         </div>
       )}
@@ -1191,7 +1513,7 @@ export function WorkoutPage({
         </Card>
       ) : (
         <div className={cn("space-y-4", viewMode === "logging" && "pb-4")}>
-          {stats.totalSets > 0 && (
+          {viewMode === "overview" && stats.totalSets > 0 && (
             <div className="rounded-lg border border-border bg-surface p-4">
               <div className="mb-3 flex items-baseline gap-8">
                 <div>
@@ -1322,7 +1644,7 @@ export function WorkoutPage({
                   </Button>
                   <Button
                     className="flex-1"
-                    onClick={() => submitMutation.mutate({ completed: true })}
+                    onClick={() => queueSave({ completed: true, itemsSnapshot: items, silent: false })}
                     disabled={submitMutation.isPending}
                   >
                     <CheckCircle2 className="h-4 w-4" />
@@ -1344,17 +1666,6 @@ export function WorkoutPage({
                 >
                   <ArrowLeft className="h-3.5 w-3.5" />
                   Back to full workout
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    autosaveNow(items);
-                    setHandsFreeActive(true);
-                  }}
-                  className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
-                >
-                  <Headphones className="h-3.5 w-3.5" />
-                  Hands-Free
                 </button>
               </div>
               {currentPage.kind === "corrective" && (
@@ -1382,6 +1693,7 @@ export function WorkoutPage({
                         unit={unit}
                         assignmentId={Number(assignmentId)}
                         programDayId={Number(programDayId)}
+                        date={date}
                         apiBase={apiBase}
                         programsApiBase={programsApiBase}
                         videoCheckMode={videoCheckMode}
@@ -1414,7 +1726,7 @@ export function WorkoutPage({
                   <Button
                     className="flex-1"
                     onClick={() => {
-                      submitMutation.mutate({ completed: true });
+                      queueSave({ completed: true, itemsSnapshot: items, silent: false });
                       setViewMode("overview");
                     }}
                     disabled={submitMutation.isPending}
@@ -1435,12 +1747,16 @@ export function WorkoutPage({
             role="athlete"
             assignmentId={Number(assignmentId)}
             programDayId={Number(programDayId)}
+            date={date}
           />
         )}
       </div>
 
       {viewMode === "logging" && pages.length > 0 && (
-        <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-surface">
+        <div
+          className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-surface"
+          style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+        >
           <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3 sm:px-8">
             <button
               type="button"
@@ -1465,14 +1781,6 @@ export function WorkoutPage({
           </div>
         </div>
       )}
-      {handsFreeActive && (
-        <HandsFreeMode
-          items={items}
-          unit={unit}
-          onUpdateSet={(key, setNumber, patch) => updateSet(key, setNumber, patch, { immediate: true })}
-          onClose={() => setHandsFreeActive(false)}
-        />
-      )}
       </AppShell>
     </>
   );
@@ -1485,6 +1793,7 @@ function ExerciseLogContent({
   unit,
   assignmentId,
   programDayId,
+  date,
   apiBase,
   programsApiBase,
   videoCheckMode,
@@ -1501,6 +1810,7 @@ function ExerciseLogContent({
   unit: "lbs" | "kg";
   assignmentId: number;
   programDayId: number;
+  date: string;
   apiBase: string;
   programsApiBase: string;
   videoCheckMode: "comment" | "ai" | "off";
@@ -1513,6 +1823,7 @@ function ExerciseLogContent({
 }) {
   const { user } = useAuth();
   const isCorrective = item.kind === "corrective";
+  const [distanceUnit] = useDistanceUnit();
   const [trackingSet, setTrackingSet] = useState<number | null>(null);
   // "jump" mode profiles live under the literal movementType "jump" (jump
   // tracking is its own trackingLevel, not a movementType) -- see
@@ -1530,6 +1841,25 @@ function ExerciseLogContent({
   // video-review surfaces: reviewing one already-recorded clip, and
   // comparing two of them side by side.
   const [recordingSetNumber, setRecordingSetNumber] = useState<number | null>(null);
+
+  // Identifies which set a tracker/form-check dialog's clip belongs to, so
+  // a deferred (queued-for-no-Wi-Fi) upload can find its way back to the
+  // exact set later -- see video-offline-store.ts's VideoReattachTarget.
+  // Correctives have no programExerciseId (attachVideoToSetSchema only
+  // covers real exercises), so a corrective's clip simply queues without a
+  // reattach target and lands as a standalone Video Bank entry instead --
+  // same outcome as any recording context this doesn't apply to.
+  function videoContextFor(setNumber: number | null): VideoRecordContext | undefined {
+    if (setNumber == null) return undefined;
+    return {
+      label: `${item.exerciseName} · Set ${setNumber}`,
+      reattach:
+        item.kind === "exercise"
+          ? { assignmentId, programDayId, date, programExerciseId: item.refId, setNumber }
+          : undefined,
+    };
+  }
+
   const [previewSetNumber, setPreviewSetNumber] = useState<number | null>(null);
   const [compareOpen, setCompareOpen] = useState(false);
   const [plateCalcOpen, setPlateCalcOpen] = useState(false);
@@ -1539,31 +1869,29 @@ function ExerciseLogContent({
   // stacked in matched pairs on either side of anything.
   const usesPlateCalc =
     item.weightMode === "numeric" && (item.equipment === "Barbell" || item.equipment === "Trap Bar");
-  // Tracks which sets currently hold a weight the athlete never actually
-  // typed -- only a value carried forward by handleWeightChange below.
-  // Lets a later edit keep overwriting that whole inherited chain (see
-  // there for why a plain "only fill in empty sets" rule isn't enough).
-  const autoFilledWeightSetsRef = useRef<Set<number>>(new Set());
+  // Whenever a coach wants a video AND the exercise also has camera
+  // analytics turned on, recording the video always runs the analytics too
+  // -- one capture, not two separate ones for the same set (see the merged
+  // "Record & Analyze" button below, which drives BarTrackerDialog's
+  // recordVideo prop instead of a second, standalone FormVideoRecorderDialog
+  // flow). videoCheckEnabled with trackingLevel "none" still falls back to
+  // that standalone flow, unchanged.
+  const videoRequired = item.videoCheckEnabled && videoCheckMode !== "off";
+  const mergedTracking = item.trackingLevel !== "none" && videoRequired;
 
-  // Most working sets in a block use the same weight, so entering it once
-  // should carry forward instead of making the athlete retype it every
-  // set. Propagates into every following set that's still empty or still
-  // holding an earlier carried-forward value, and stops at the first set
-  // the athlete has deliberately put their own number into -- so editing
-  // set 2 from 135 to 185 pushes 185 into sets 3+ (still inherited), but
-  // never touches a set 4 the athlete already set to 225 by hand.
+  // Shared by the three "Use" shortcut buttons below (1RM/progression/last-
+  // performance suggestions) -- they bulk-fill every set at once.
+  function fillSuggestedWeight(value: string) {
+    for (const set of item.sets) {
+      onUpdateSet(set.setNumber, { weight: value });
+    }
+  }
+
+  // Every set requires its own deliberate entry -- no carrying a typed
+  // weight forward into later sets. The "Same as Set N" button below is the
+  // explicit, one-tap way to repeat a weight instead.
   function handleWeightChange(setNumber: number, value: string) {
     onUpdateSet(setNumber, { weight: value });
-    autoFilledWeightSetsRef.current.delete(setNumber);
-    if (value.trim() === "") return;
-    for (const s of item.sets) {
-      if (s.setNumber <= setNumber) continue;
-      const isEmpty = s.weight.trim() === "";
-      const wasAutoFilled = autoFilledWeightSetsRef.current.has(s.setNumber);
-      if (!isEmpty && !wasAutoFilled) break;
-      onUpdateSet(s.setNumber, { weight: value });
-      autoFilledWeightSetsRef.current.add(s.setNumber);
-    }
   }
   // One column per material the exercise actually needs -- not mutually
   // exclusive, so a combo movement (dumbbell box step-up) shows both a
@@ -1617,6 +1945,7 @@ function ExerciseLogContent({
       const res = await apiRequest("POST", commentsPath, {
         body: `Form check: ${item.exerciseName} — Set ${setNumber}`,
         videoUrl,
+        date,
       });
       return res.json();
     },
@@ -1764,10 +2093,7 @@ function ExerciseLogContent({
               </span>
               <button
                 type="button"
-                onClick={() => {
-                  const value = String(suggestedFromOneRm);
-                  for (const set of item.sets) onUpdateSet(set.setNumber, { weight: value });
-                }}
+                onClick={() => fillSuggestedWeight(String(suggestedFromOneRm))}
                 className="font-semibold text-primary hover:underline"
               >
                 Use
@@ -1783,10 +2109,7 @@ function ExerciseLogContent({
               </span>
               <button
                 type="button"
-                onClick={() => {
-                  const value = String(suggestedFromProgression);
-                  for (const set of item.sets) onUpdateSet(set.setNumber, { weight: value });
-                }}
+                onClick={() => fillSuggestedWeight(String(suggestedFromProgression))}
                 className="font-semibold text-primary hover:underline"
               >
                 Use
@@ -1803,10 +2126,9 @@ function ExerciseLogContent({
                 item.weightMode === "numeric" && (
                   <button
                     type="button"
-                    onClick={() => {
-                      const value = String(item.lastPerformance!.suggestion!.suggestedWeight);
-                      for (const set of item.sets) onUpdateSet(set.setNumber, { weight: value });
-                    }}
+                    onClick={() =>
+                      fillSuggestedWeight(String(item.lastPerformance!.suggestion!.suggestedWeight))
+                    }
                     className="font-semibold text-primary hover:underline"
                   >
                     Use
@@ -1826,13 +2148,13 @@ function ExerciseLogContent({
         <p className="text-xs text-muted-foreground">{item.instructions}</p>
       )}
 
-      {item.videoCheckEnabled && videoCheckMode !== "off" && (
+      {videoRequired && (
         <div className="flex items-center justify-between gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-2.5 py-2">
           <span className="flex items-center gap-1.5 text-xs font-semibold text-amber-500">
             {videoCheckMode === "ai" && <Sparkles className="h-3.5 w-3.5 shrink-0" />}
             {videoCheckMode === "ai"
-              ? "Record any set below for full AI analytics -- velocity, bar path, and form"
-              : "Your coach wants a video -- record any set below for full analytics"}
+              ? "Record each set for full AI analytics -- velocity, bar path, and form. Weight unlocks once the video's in."
+              : "Your coach wants a video -- record each set below. Weight unlocks once the video's in."}
           </span>
           {flaggedSetVideos.length > 1 && (
             <Button size="sm" variant="secondary" onClick={() => setCompareOpen(true)}>
@@ -1904,7 +2226,15 @@ function ExerciseLogContent({
             const tracked =
               set.peakVelocityMps != null || set.barPathDeviationCm != null || set.jumpHeightCm != null;
             const historyMatch = findHistoryForReps(item.setHistory, set.reps);
-            const isPR = complete && isRepCountPR(item.setHistory, set.reps, item.weightMode, set.weight);
+            const earlierSetsThisSession = item.sets.filter((s) => s.setNumber < set.setNumber);
+            const isPR =
+              complete &&
+              isRepCountPR(item.setHistory, set.reps, item.weightMode, set.weight, earlierSetsThisSession);
+            const prevSet = item.sets.find((s) => s.setNumber === set.setNumber - 1);
+            const canQuickFillSame =
+              item.weightMode === "numeric" &&
+              !!prevSet?.weight.trim() &&
+              set.weight.trim() !== prevSet.weight.trim();
             return (
               <div key={set.setNumber}>
                 <div
@@ -1978,10 +2308,18 @@ function ExerciseLogContent({
                     Last @ {set.reps} reps: {formatLoad(historyMatch)}
                   </p>
                 )}
-                {(item.trackingLevel !== "none" ||
-                  (item.videoCheckEnabled && videoCheckMode !== "off") ||
-                  usesPlateCalc) && (
+                {(item.trackingLevel !== "none" || videoRequired || usesPlateCalc || canQuickFillSame) && (
                   <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                    {canQuickFillSame && (
+                      <button
+                        type="button"
+                        onClick={() => handleWeightChange(set.setNumber, prevSet!.weight)}
+                        className="flex items-center gap-1.5 rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
+                      >
+                        <Copy className="h-3 w-3" />
+                        Same as Set {prevSet!.setNumber} ({prevSet!.weight} {unit})
+                      </button>
+                    )}
                     {item.trackingLevel !== "none" && (
                       <button
                         type="button"
@@ -1996,16 +2334,22 @@ function ExerciseLogContent({
                         <Camera className="h-3 w-3" />
                         {tracked
                           ? item.trackingLevel === "jump" && set.jumpHeightCm != null
-                            ? `${set.jumpHeightCm} cm jump — retake`
+                            ? `${formatDistanceCm(set.jumpHeightCm, distanceUnit)} jump — retake`
                             : item.trackingLevel === "full" && set.peakVelocityMps != null
                               ? `${set.peakVelocityMps} m/s peak — retake`
                               : `Path ${set.barPathDeviationCm} cm — retake`
                           : item.trackingLevel === "jump"
                             ? "Track this jump"
-                            : "Track this set"}
+                            : mergedTracking
+                              ? "Record & Analyze"
+                              : "Track this set"}
                       </button>
                     )}
-                    {item.videoCheckEnabled && videoCheckMode !== "off" && (
+                    {/* When trackingLevel also applies, the button above already
+                        records the video (see BarTrackerDialog's recordVideo
+                        prop below) -- a second, separate video button here
+                        would just be the same set recorded twice. */}
+                    {videoRequired && !mergedTracking && (
                       <button
                         type="button"
                         onClick={() =>
@@ -2030,6 +2374,20 @@ function ExerciseLogContent({
                           : "Record & Analyze"}
                       </button>
                     )}
+                    {videoRequired && mergedTracking && set.formCheckVideoUrl && (
+                      <button
+                        type="button"
+                        onClick={() => setPreviewSetNumber(set.setNumber)}
+                        className="flex items-center gap-1.5 rounded-full border border-success/40 bg-success/10 px-2 py-0.5 text-[10px] font-semibold text-success"
+                      >
+                        <Video className="h-3 w-3" />
+                        {set.formCheckFlag === "best"
+                          ? "Best set video"
+                          : set.formCheckFlag === "worst"
+                            ? "Worst set video"
+                            : "View video"}
+                      </button>
+                    )}
                     {usesPlateCalc && (
                       <button
                         type="button"
@@ -2051,15 +2409,53 @@ function ExerciseLogContent({
                     ))}
                   </div>
                 )}
+                {/* Trust score is computed for every tracked set (see
+                    computeRepTrustScores) but was never surfaced anywhere --
+                    only worth showing when it's actually flagging something,
+                    same "don't nag about a clean set" restraint formFaults
+                    above already follows. Low beats medium for the summary
+                    line's wording (a single "shaky" rep still deserves the
+                    stronger phrasing even among otherwise-solid ones); the
+                    per-rep chips below carry the detail either way. */}
+                {set.trustScores && set.trustScores.some((t) => t.label !== "high") && (
+                  <div
+                    className="mt-1 flex items-center gap-1 pl-9 text-[9px] text-amber-500"
+                    title={set.trustScores
+                      .filter((t) => t.label !== "high")
+                      .map((t) => `Rep ${t.repNumber}: ${t.notes.join("; ")}`)
+                      .join(" · ")}
+                  >
+                    <ShieldAlert className="h-3 w-3 shrink-0" />
+                    <span>
+                      {set.trustScores.some((t) => t.label === "low")
+                        ? "Tracking was shaky on at least one rep -- take those numbers with a grain of salt"
+                        : "Tracking mostly solid, a couple reps less certain"}
+                    </span>
+                  </div>
+                )}
                 {set.repBreakdown && set.repBreakdown.length > 1 && (
                   <div className="mt-1 flex flex-wrap items-center gap-1 pl-9 text-[9px] text-muted-foreground">
                     <span className="font-semibold uppercase tracking-wide">Rep by rep</span>
-                    {set.repBreakdown.map((r) => (
-                      <span key={r.repNumber} className="rounded bg-secondary px-1.5 py-0.5">
-                        {item.trackingLevel === "full" ? `${r.meanVelocityMps} m/s` : `#${r.repNumber}`}
-                        {r.depthDeg != null ? ` · ${r.depthDeg}°` : ""}
-                      </span>
-                    ))}
+                    {set.repBreakdown.map((r) => {
+                      const trust = set.trustScores?.find((t) => t.repNumber === r.repNumber);
+                      return (
+                        <span
+                          key={r.repNumber}
+                          className={cn(
+                            "rounded px-1.5 py-0.5",
+                            trust?.label === "low"
+                              ? "bg-destructive/15 text-destructive"
+                              : trust?.label === "medium"
+                                ? "bg-amber-500/15 text-amber-600"
+                                : "bg-secondary",
+                          )}
+                          title={trust?.notes.join("; ")}
+                        >
+                          {item.trackingLevel === "full" ? `${r.peakVelocityMps} m/s` : `#${r.repNumber}`}
+                          {r.depthDeg != null ? ` · ${r.depthDeg}°` : ""}
+                        </span>
+                      );
+                    })}
                   </div>
                 )}
                 {set.jumpBreakdown && set.jumpBreakdown.length > 1 && (
@@ -2078,10 +2474,30 @@ function ExerciseLogContent({
                             : undefined
                         }
                       >
-                        {j.jumpHeightCm} cm
+                        {formatDistanceCm(j.jumpHeightCm, distanceUnit)}
                         {j.groundContactSeconds != null ? ` · GCT ${j.groundContactSeconds}s` : ""}
                       </span>
                     ))}
+                  </div>
+                )}
+                {(set.swingSeparationDeg != null || set.swingTempoRatio != null) && (
+                  <div className="mt-1 flex flex-wrap items-center gap-1 pl-9 text-[9px] text-muted-foreground">
+                    <span className="font-semibold uppercase tracking-wide">Swing</span>
+                    {set.swingSeparationDeg != null && (
+                      <span className="rounded bg-secondary px-1.5 py-0.5">
+                        X-Factor {Math.abs(set.swingSeparationDeg)}°
+                      </span>
+                    )}
+                    {set.swingTempoRatio != null && (
+                      <span className="rounded bg-secondary px-1.5 py-0.5">
+                        Tempo {set.swingTempoRatio}:1
+                      </span>
+                    )}
+                    {set.swingHeadSwayCm != null && (
+                      <span className="rounded bg-secondary px-1.5 py-0.5">
+                        Head sway {set.swingHeadSwayCm}cm
+                      </span>
+                    )}
                   </div>
                 )}
               </div>
@@ -2098,6 +2514,188 @@ function ExerciseLogContent({
             item.materials.usesWeight && !Number.isNaN(trackedWeight)
               ? toKg(trackedWeight, unit)
               : undefined;
+
+          function handleTrackerCapture(metrics: RepMetrics | JumpSetMetrics, videoUrl?: string) {
+            if (trackingSet == null) return;
+            const videoPatch = videoUrl ? { formCheckVideoUrl: videoUrl } : {};
+            if ("bestJumpHeightCm" in metrics) {
+              // A box jump's flight time is cut short by landing on the
+              // elevated box, not the ground -- jumpHeightCm's flight-time
+              // formula assumes a symmetric ground-to-ground arc, so it
+              // systematically understates a box jump's real height, worse
+              // the taller the box. peakHeightCm has no such assumption --
+              // it's a direct read of how far the ankle rose above its own
+              // pre-jump position, not inferred from timing -- so this
+              // substitutes it in under the same "jumpHeightCm" field name
+              // for any box-jump exercise, automatically. Every downstream
+              // consumer (PR badges, coach analytics, history) reads that
+              // one field name unchanged; nowhere else needs to know this
+              // was a box jump.
+              const repBreakdown = item.materials.usesBox
+                ? metrics.repBreakdown.map((r) => ({ ...r, jumpHeightCm: r.peakHeightCm }))
+                : metrics.repBreakdown;
+              const jumpHeightCm =
+                repBreakdown.length > 0
+                  ? Math.max(...repBreakdown.map((r) => r.jumpHeightCm))
+                  : metrics.bestJumpHeightCm;
+              onUpdateSet(
+                trackingSet,
+                {
+                  jumpHeightCm,
+                  jumpDistanceCm: metrics.bestHorizontalDistanceCm,
+                  groundContactSeconds: metrics.avgGroundContactSeconds,
+                  reactiveStrengthIndex: metrics.reactiveStrengthIndex,
+                  jumpBreakdown: repBreakdown,
+                  barPathTrace: metrics.pathTrace,
+                  formFaults: metrics.formFaults,
+                  ...videoPatch,
+                },
+                // A tracked capture is expensive to redo -- save it the
+                // instant it lands rather than risk losing it to a
+                // force-close inside the normal autosave debounce window.
+                { immediate: true },
+              );
+            } else {
+              onUpdateSet(
+                trackingSet,
+                {
+                  peakVelocityMps: metrics.peakVelocityMps,
+                  meanVelocityMps: metrics.meanVelocityMps,
+                  concentricSeconds: metrics.concentricSeconds,
+                  eccentricSeconds: metrics.eccentricSeconds,
+                  barPathDeviationCm: metrics.barPathDeviationCm,
+                  barPathTrace: metrics.barPathTrace,
+                  formFaults: metrics.formFaults,
+                  repBreakdown: metrics.repBreakdown,
+                  armPathTrace: metrics.armPathTrace ?? null,
+                  peakPowerWatts: metrics.peakPowerWatts,
+                  meanPowerWatts: metrics.meanPowerWatts,
+                  eccentricMeanVelocityMps: metrics.eccentricMeanVelocityMps,
+                  romCm: metrics.romCm,
+                  velocityLossPercent: metrics.velocityLossPercent,
+                  legDriveAsymmetry: metrics.legDriveAsymmetry ?? null,
+                  armDriveAsymmetry: metrics.armDriveAsymmetry ?? null,
+                  trustScores: metrics.trustScores ?? null,
+                  ...videoPatch,
+                },
+                { immediate: true },
+              );
+            }
+            // Same downstream handling FormVideoRecorderDialog's onSaved
+            // does below -- a merged capture's video is just as much a
+            // real form-check clip as a standalone one.
+            if (videoUrl) {
+              if (videoCheckMode === "ai") aiFormCheckMutation.mutate({ setNumber: trackingSet, videoUrl });
+              else postFormVideoMutation.mutate({ setNumber: trackingSet, videoUrl });
+            }
+          }
+
+          // Separate from handleTrackerCapture above -- golf/baseball swing
+          // metrics (SwingSetMetrics) don't fit the RepMetrics/
+          // JumpSetMetrics union that function already narrows between,
+          // and reusing that narrowing here would mean widening it across
+          // every other call site that pattern-matches on it instead.
+          function handleSwingCapture(metrics: SwingSetMetrics, videoUrl?: string) {
+            if (trackingSet == null) return;
+            const videoPatch = videoUrl ? { formCheckVideoUrl: videoUrl } : {};
+            onUpdateSet(
+              trackingSet,
+              {
+                swingSeparationDeg: metrics.peakSeparationDeg,
+                swingTempoRatio: metrics.tempoRatio,
+                swingBackswingMs: metrics.backswingMs,
+                swingDownswingMs: metrics.downswingMs,
+                swingHeadSwayCm: metrics.headSwayCm,
+                ...videoPatch,
+              },
+              { immediate: true },
+            );
+            if (videoUrl) {
+              if (videoCheckMode === "ai") aiFormCheckMutation.mutate({ setNumber: trackingSet, videoUrl });
+              else postFormVideoMutation.mutate({ setNumber: trackingSet, videoUrl });
+            }
+          }
+
+          if (item.trackingLevel === "golf_swing" || item.trackingLevel === "baseball_swing") {
+            if (isArPreviewPlatform()) {
+              return (
+                <ArSwingTrackerDialog
+                  open={trackingSet !== null}
+                  onOpenChange={(open) => !open && setTrackingSet(null)}
+                  sport={item.trackingLevel === "golf_swing" ? "golf" : "baseball"}
+                  heightIn={user?.heightIn}
+                  recordVideo={mergedTracking}
+                  onCapture={handleSwingCapture}
+                  videoContext={videoContextFor(trackingSet)}
+                />
+              );
+            }
+            // MediaPipe-based rotation/tempo tracking for swings isn't
+            // built yet -- see ar-swing-tracker-dialog.tsx's own comment on
+            // why ARKit went first here too (same "no implement to follow"
+            // reasoning jump mode used). Falls back to a plain video-only
+            // capture rather than forcing this through BarTrackerDialog's
+            // bar/jump-shaped tracking, which doesn't fit a swing at all.
+            return (
+              <FormVideoRecorderDialog
+                open={trackingSet !== null}
+                onOpenChange={(open) => !open && setTrackingSet(null)}
+                videoContext={videoContextFor(trackingSet)}
+                onSaved={(url) => {
+                  if (trackingSet == null) return;
+                  onUpdateSet(trackingSet, { formCheckVideoUrl: url }, { immediate: true });
+                  setTrackingSet(null);
+                }}
+                onQueued={() => setTrackingSet(null)}
+              />
+            );
+          }
+
+          // Jump mode is the first tracker mode moved off MediaPipe onto
+          // native ARKit -- see ar-jump-tracker-dialog.tsx's own comment for
+          // why jump specifically (no implement to follow, unlike bar_path/
+          // full, which still need implement tracking ported to Swift
+          // first). Every other mode, and jump mode on anything that isn't
+          // native iOS, keeps using the existing MediaPipe-based dialog
+          // unchanged.
+          if (isArPreviewPlatform() && item.trackingLevel === "jump") {
+            return (
+              <ArJumpTrackerDialog
+                open={trackingSet !== null}
+                onOpenChange={(open) => !open && setTrackingSet(null)}
+                heightIn={user?.heightIn}
+                movementType={item.movementType}
+                equipment={item.equipment}
+                recordVideo={mergedTracking}
+                onCapture={handleTrackerCapture}
+                videoContext={videoContextFor(trackingSet)}
+              />
+            );
+          }
+
+          // bar_path/full: needs a held implement tracked, unlike jump --
+          // see ArBarTrackerDialog's own file comment for what's ported vs
+          // deliberately still MediaPipe-only in this first pass.
+          if (isArPreviewPlatform() && (item.trackingLevel === "bar_path" || item.trackingLevel === "full")) {
+            return (
+              <ArBarTrackerDialog
+                open={trackingSet !== null}
+                onOpenChange={(open) => !open && setTrackingSet(null)}
+                mode={item.trackingLevel}
+                exerciseName={item.exerciseName}
+                movementType={item.movementType}
+                equipment={item.equipment}
+                laterality={item.laterality}
+                heightIn={user?.heightIn}
+                targetReps={parseTargetReps(item.prescribedReps)}
+                loadKg={loadKg}
+                recordVideo={mergedTracking}
+                onCapture={handleTrackerCapture}
+                videoContext={videoContextFor(trackingSet)}
+              />
+            );
+          }
+
           return (
             <BarTrackerDialog
               open={trackingSet !== null}
@@ -2106,61 +2704,24 @@ function ExerciseLogContent({
               exerciseName={item.exerciseName}
               movementType={item.movementType}
               laterality={item.laterality}
+              equipment={item.equipment}
+              heightIn={user?.heightIn}
               targetReps={parseTargetReps(item.prescribedReps)}
               loadKg={loadKg}
               formFaultThresholds={activeMovementProfile}
               jumpHeightOutlierPercent={activeMovementProfile?.jumpHeightOutlierPercent}
-              onCapture={(metrics: RepMetrics | JumpSetMetrics) => {
-                if (trackingSet == null) return;
-                if ("bestJumpHeightCm" in metrics) {
-                  onUpdateSet(
-                    trackingSet,
-                    {
-                      jumpHeightCm: metrics.bestJumpHeightCm,
-                      jumpDistanceCm: metrics.bestHorizontalDistanceCm,
-                      groundContactSeconds: metrics.avgGroundContactSeconds,
-                      reactiveStrengthIndex: metrics.reactiveStrengthIndex,
-                      jumpBreakdown: metrics.repBreakdown,
-                      barPathTrace: metrics.pathTrace,
-                      formFaults: metrics.formFaults,
-                    },
-                    // A tracked capture is expensive to redo -- save it the
-                    // instant it lands rather than risk losing it to a
-                    // force-close inside the normal autosave debounce window.
-                    { immediate: true },
-                  );
-                  return;
-                }
-                onUpdateSet(
-                  trackingSet,
-                  {
-                    peakVelocityMps: metrics.peakVelocityMps,
-                    meanVelocityMps: metrics.meanVelocityMps,
-                    concentricSeconds: metrics.concentricSeconds,
-                    eccentricSeconds: metrics.eccentricSeconds,
-                    barPathDeviationCm: metrics.barPathDeviationCm,
-                    barPathTrace: metrics.barPathTrace,
-                    formFaults: metrics.formFaults,
-                    repBreakdown: metrics.repBreakdown,
-                    armPathTrace: metrics.armPathTrace ?? null,
-                    peakPowerWatts: metrics.peakPowerWatts,
-                    meanPowerWatts: metrics.meanPowerWatts,
-                    eccentricMeanVelocityMps: metrics.eccentricMeanVelocityMps,
-                    romCm: metrics.romCm,
-                    velocityLossPercent: metrics.velocityLossPercent,
-                    legDriveAsymmetry: metrics.legDriveAsymmetry ?? null,
-                  },
-                  { immediate: true },
-                );
-              }}
+              recordVideo={mergedTracking}
+              onCapture={handleTrackerCapture}
+              videoContext={videoContextFor(trackingSet)}
             />
           );
         })()}
 
-      {item.videoCheckEnabled && videoCheckMode !== "off" && (
+      {videoRequired && !mergedTracking && (
         <FormVideoRecorderDialog
           open={recordingSetNumber !== null}
           onOpenChange={(open) => !open && setRecordingSetNumber(null)}
+          videoContext={videoContextFor(recordingSetNumber)}
           onSaved={(url) => {
             if (recordingSetNumber == null) return;
             onUpdateSet(recordingSetNumber, { formCheckVideoUrl: url }, { immediate: true });
@@ -2168,6 +2729,7 @@ function ExerciseLogContent({
             else postFormVideoMutation.mutate({ setNumber: recordingSetNumber, videoUrl: url });
             setRecordingSetNumber(null);
           }}
+          onQueued={() => setRecordingSetNumber(null)}
         />
       )}
 
@@ -2180,8 +2742,9 @@ function ExerciseLogContent({
           flag={previewSet.formCheckFlag}
           onFlag={(flag) => handleFlagVideo(previewSet.setNumber, flag)}
           favorited={previewSet.videoFavorited}
+          isPr={previewSet.isPr}
           onToggleFavorite={() =>
-            onUpdateSet(previewSet.setNumber, { videoFavorited: !previewSet.videoFavorited })
+            onUpdateSet(previewSet.setNumber, { videoFavorited: !previewSet.videoFavorited }, { immediate: true })
           }
           onRetake={() => {
             setPreviewSetNumber(null);

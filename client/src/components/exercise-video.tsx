@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Youtube, Play } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { externalLinkClick } from "@/lib/open-external";
 
 export function extractYouTubeId(url: string): string | null {
   try {
@@ -83,6 +84,7 @@ export function ExerciseVideoThumb({
       href={url}
       target="_blank"
       rel="noopener noreferrer"
+      onClick={externalLinkClick(url)}
       className={cn(
         frameClass,
         "flex flex-col items-center justify-center gap-1 border border-dashed border-border text-center text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary",

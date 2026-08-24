@@ -9,9 +9,16 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
 import { apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
-import { Plus, Trash2, Dumbbell, Search, Video, Stethoscope } from "lucide-react";
+import { Plus, Trash2, Dumbbell, Search, Video, Stethoscope, Star } from "lucide-react";
 import type { ExerciseWithOwnership } from "@/lib/exercise-types";
-import { MOVEMENT_TYPES, MUSCLE_GROUPS, SPORTS } from "@/lib/exercise-taxonomy";
+import {
+  MOVEMENT_TYPES,
+  MUSCLE_GROUPS,
+  SPORTS,
+  BODY_REGIONS,
+  PLANES,
+  MOVEMENT_COMPLEXITIES,
+} from "@/lib/exercise-taxonomy";
 import { FilterChipGroup, toggleInSet } from "@/components/filter-chip-group";
 import {
   CATEGORY_BADGE_CLASS,
@@ -21,6 +28,9 @@ import {
   MUSCLE_FILTER_ACTIVE_CLASS,
   SPORT_FILTER_ACTIVE_CLASS,
   OWNER_FILTER_ACTIVE_CLASS,
+  BODY_REGION_FILTER_ACTIVE_CLASS,
+  PLANE_FILTER_ACTIVE_CLASS,
+  MOVEMENT_COMPLEXITY_FILTER_ACTIVE_CLASS,
 } from "@/lib/exercise-colors";
 import { toast } from "sonner";
 import { ApiError } from "@/lib/queryClient";
@@ -43,6 +53,7 @@ export function ExerciseBankPage({
   title,
   emptyStateText,
   libraryTabs,
+  showCreate = true,
 }: {
   apiBase: string;
   routeBase: string;
@@ -51,6 +62,12 @@ export function ExerciseBankPage({
   /** Renders the Programs/Exercise Bank tab strip under the title -- only
    * the coach's Library page passes this (see LibraryTabs). */
   libraryTabs?: ReactNode;
+  /** Hides "New Exercise" -- a Free Agent browses this catalog (own
+   * exercises are never in it, since there's no create route for them) but
+   * doesn't author entries in it the way a coach or admin does. Per-card
+   * delete already stays hidden on its own since every visible exercise has
+   * editable: false for a Free Agent. */
+  showCreate?: boolean;
 }) {
   const qc = useQueryClient();
   const [, navigate] = useLocation();
@@ -63,6 +80,9 @@ export function ExerciseBankPage({
   const [movementFilter, setMovementFilter] = useState<Set<string>>(new Set());
   const [muscleGroupFilter, setMuscleGroupFilter] = useState<Set<string>>(new Set());
   const [lateralityFilter, setLateralityFilter] = useState<Set<string>>(new Set());
+  const [bodyRegionFilter, setBodyRegionFilter] = useState<Set<string>>(new Set());
+  const [planeFilter, setPlaneFilter] = useState<Set<string>>(new Set());
+  const [complexityFilter, setComplexityFilter] = useState<Set<string>>(new Set());
   const [sportFilter, setSportFilter] = useState<Set<string>>(new Set());
   const [ownerFilter, setOwnerFilter] = useState<Set<string>>(new Set());
   const [correctivesOnly, setCorrectivesOnly] = useState(false);
@@ -98,6 +118,12 @@ export function ExerciseBankPage({
       const matchesMuscleGroup = muscleGroupFilter.size === 0 || muscleGroupFilter.has(ex.muscleGroup);
       const matchesLaterality =
         lateralityFilter.size === 0 || (ex.laterality != null && lateralityFilter.has(ex.laterality));
+      const matchesBodyRegion =
+        bodyRegionFilter.size === 0 || (ex.bodyRegion != null && bodyRegionFilter.has(ex.bodyRegion));
+      const matchesPlane = planeFilter.size === 0 || (ex.plane != null && planeFilter.has(ex.plane));
+      const matchesComplexity =
+        complexityFilter.size === 0 ||
+        (ex.movementComplexity != null && complexityFilter.has(ex.movementComplexity));
       const matchesSport =
         sportFilter.size === 0 || (ex.sports ?? []).some((s) => sportFilter.has(s));
       const matchesOwner = ownerFilter.size === 0 || ownerFilter.has(ex.ownerLabel);
@@ -108,6 +134,9 @@ export function ExerciseBankPage({
         matchesMovement &&
         matchesMuscleGroup &&
         matchesLaterality &&
+        matchesBodyRegion &&
+        matchesPlane &&
+        matchesComplexity &&
         matchesSport &&
         matchesOwner &&
         matchesCorrective
@@ -120,6 +149,9 @@ export function ExerciseBankPage({
     movementFilter,
     muscleGroupFilter,
     lateralityFilter,
+    bodyRegionFilter,
+    planeFilter,
+    complexityFilter,
     sportFilter,
     ownerFilter,
     correctivesOnly,
@@ -136,15 +168,29 @@ export function ExerciseBankPage({
     onError: (err: ApiError) => toast.error(err.message || "Could not delete exercise"),
   });
 
+  // Admin's Forge-library browse doesn't get this -- favoriting is a
+  // coach's own shortlist for building their programs faster, not a
+  // concept that applies to curating the shared library.
+  const canFavorite = apiBase === "/api/coach";
+  const favoriteMutation = useMutation({
+    mutationFn: async ({ id, next }: { id: number; next: boolean }) => {
+      await apiRequest(next ? "POST" : "DELETE", `${apiBase}/exercises/${id}/favorite`);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: [`${apiBase}/exercises`] }),
+    onError: () => toast.error("Couldn't update favorite"),
+  });
+
   return (
     <AppShell
       title={title}
       subheader={libraryTabs}
       actions={
-        <Button onClick={() => navigate(`${routeBase}/new`)}>
-          <Plus className="h-4 w-4" />
-          New Exercise
-        </Button>
+        showCreate && (
+          <Button onClick={() => navigate(`${routeBase}/new`)}>
+            <Plus className="h-4 w-4" />
+            New Exercise
+          </Button>
+        )
       }
     >
       <div className="mb-4 space-y-3">
@@ -207,6 +253,27 @@ export function ExerciseBankPage({
             onToggle={(v) => toggleInSet(setOwnerFilter, v)}
             colorClass={OWNER_FILTER_ACTIVE_CLASS}
           />
+          <FilterChipGroup
+            label="Body Region"
+            options={BODY_REGIONS}
+            selected={bodyRegionFilter}
+            onToggle={(v) => toggleInSet(setBodyRegionFilter, v)}
+            colorClass={BODY_REGION_FILTER_ACTIVE_CLASS}
+          />
+          <FilterChipGroup
+            label="Plane"
+            options={PLANES}
+            selected={planeFilter}
+            onToggle={(v) => toggleInSet(setPlaneFilter, v)}
+            colorClass={PLANE_FILTER_ACTIVE_CLASS}
+          />
+          <FilterChipGroup
+            label="Complexity"
+            options={MOVEMENT_COMPLEXITIES}
+            selected={complexityFilter}
+            onToggle={(v) => toggleInSet(setComplexityFilter, v)}
+            colorClass={MOVEMENT_COMPLEXITY_FILTER_ACTIVE_CLASS}
+          />
         </div>
         <FilterChipGroup
           label="Muscle"
@@ -231,7 +298,7 @@ export function ExerciseBankPage({
             <p className="text-muted-foreground">
               {exercises.length === 0 ? emptyStateText : "No exercises match your filters."}
             </p>
-            {exercises.length === 0 && (
+            {exercises.length === 0 && showCreate && (
               <Button onClick={() => navigate(`${routeBase}/new`)}>
                 <Plus className="h-4 w-4" />
                 Add Exercise
@@ -241,19 +308,39 @@ export function ExerciseBankPage({
         </Card>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {filtered.map((ex) => (
           <Link key={ex.id} href={`${routeBase}/${ex.id}`}>
             <Card className="flex cursor-pointer flex-col transition-colors hover:border-primary/50">
               <CardContent className="flex flex-1 flex-col gap-3 p-4">
                 <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="font-semibold leading-tight">{ex.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {ex.muscleGroup}
-                      {ex.movementType ? ` · ${ex.movementType}` : ""}
-                      {ex.laterality ? ` · ${ex.laterality}` : ""}
-                    </p>
+                  <div className="flex min-w-0 items-start gap-1.5">
+                    {canFavorite && (
+                      <button
+                        type="button"
+                        aria-label={ex.isFavorite ? `Unfavorite ${ex.name}` : `Favorite ${ex.name}`}
+                        aria-pressed={!!ex.isFavorite}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          favoriteMutation.mutate({ id: ex.id, next: !ex.isFavorite });
+                        }}
+                        className="mt-0.5 shrink-0 text-muted-foreground hover:text-amber-400"
+                      >
+                        <Star className={cn("h-4 w-4", ex.isFavorite && "fill-amber-400 text-amber-400")} />
+                      </button>
+                    )}
+                    <div className="min-w-0">
+                      <p className="font-semibold leading-tight">{ex.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {ex.muscleGroup}
+                        {ex.movementType ? ` · ${ex.movementType}` : ""}
+                        {ex.plane ? ` (${ex.plane})` : ""}
+                        {ex.laterality ? ` · ${ex.laterality}` : ""}
+                        {ex.bodyRegion ? ` · ${ex.bodyRegion}` : ""}
+                        {ex.movementComplexity ? ` · ${ex.movementComplexity}` : ""}
+                      </p>
+                    </div>
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-1">
                     <ExerciseOwnershipBadge

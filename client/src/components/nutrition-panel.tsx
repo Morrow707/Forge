@@ -4,10 +4,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { RadioChipGroup } from "@/components/filter-chip-group";
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { Sparkles, Apple } from "lucide-react";
+import { Sparkles, Apple, Target } from "lucide-react";
 import { FoodLogPanel } from "@/components/food-log-panel";
+import { NUTRITION_GOALS, NUTRITION_GOAL_LABEL, type NutritionGoal } from "@shared/schema";
+
+type NutritionGoalState = { nutritionGoal: NutritionGoal | null; nutritionGoalNote: string | null };
 
 type NutritionTargets = {
   caloriesKcal: number | null;
@@ -78,12 +82,18 @@ export function NutritionPanel({
   nutritionUrl,
   editable,
   askUrl,
+  goalUrl,
   foodLogUrl,
   foodLogEditable,
 }: {
   nutritionUrl: string;
   editable: boolean;
   askUrl?: string;
+  /** Only ever passed alongside askUrl (Free Agent) -- the nutrition AI's
+   * one-time goal questionnaire (see setNutritionGoalSchema). Shown instead
+   * of the ask box until answered, then remembered; a "Set new goal" button
+   * wipes it to re-trigger the questionnaire. */
+  goalUrl?: string;
   /** Distinct from `editable` above: `editable` is about the *targets*
    * (a coach or a Free Agent sets those), while food-log editability is
    * about whether the current viewer IS the athlete -- a coach can view a
@@ -97,15 +107,52 @@ export function NutritionPanel({
   const [form, setForm] = useState<FormState>(emptyForm());
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState<string | null>(null);
+  const [goalChoice, setGoalChoice] = useState<string>("");
+  const [goalNote, setGoalNote] = useState("");
 
   const { data, isLoading } = useQuery<NutritionTargets>({
     queryKey: [nutritionUrl],
     queryFn: () => getJson(nutritionUrl),
   });
 
+  const { data: goalData, isLoading: goalLoading } = useQuery<NutritionGoalState>({
+    queryKey: [goalUrl],
+    queryFn: () => getJson(goalUrl!),
+    enabled: !!goalUrl,
+  });
+
   useEffect(() => {
     if (data !== undefined) setForm(toForm(data));
   }, [data]);
+
+  const setGoalMutation = useMutation({
+    mutationFn: async () => {
+      const nutritionGoal = NUTRITION_GOALS.find((g) => NUTRITION_GOAL_LABEL[g] === goalChoice);
+      const res = await apiRequest("POST", goalUrl!, {
+        nutritionGoal,
+        nutritionGoalNote: goalNote.trim() || null,
+      });
+      return res.json();
+    },
+    onSuccess: (result) => {
+      qc.setQueryData([goalUrl], result);
+      toast.success("Goal saved");
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't save your goal"),
+  });
+
+  const resetGoalMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("DELETE", goalUrl!);
+      return res.json();
+    },
+    onSuccess: (result) => {
+      qc.setQueryData([goalUrl], result);
+      setGoalChoice("");
+      setGoalNote("");
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't reset your goal"),
+  });
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -185,13 +232,13 @@ export function NutritionPanel({
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Macros
             </p>
-            <div className="grid gap-3 sm:grid-cols-3">{MACRO_FIELDS.map(renderField)}</div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">{MACRO_FIELDS.map(renderField)}</div>
           </div>
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Micros
             </p>
-            <div className="grid gap-3 sm:grid-cols-4">{MICRO_FIELDS.map(renderField)}</div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">{MICRO_FIELDS.map(renderField)}</div>
           </div>
         </>
       )}
@@ -227,44 +274,103 @@ export function NutritionPanel({
       )}
 
       {askUrl && (
-        <div className="space-y-2 border-t border-border pt-4">
-          <Label htmlFor="nutrition-ask" className="flex items-center gap-1.5">
-            <Sparkles className="h-3.5 w-3.5 text-primary" />
-            Ask about nutrition
-          </Label>
-          <p className="text-xs text-muted-foreground">
-            General sports-nutrition education -- not a personal plan. For an individualized
-            number, talk to a coach or a registered dietitian.
-          </p>
-          <div className="flex gap-2">
-            <Input
-              id="nutrition-ask"
-              value={question}
-              onChange={(e) => setQuestion(e.target.value)}
-              placeholder="e.g. How much protein do athletes usually need?"
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && question.trim() && !askMutation.isPending) {
-                  setAnswer(null);
-                  askMutation.mutate();
-                }
-              }}
-            />
-            <Button
-              type="button"
-              variant="outline"
-              disabled={!question.trim() || askMutation.isPending}
-              onClick={() => {
-                setAnswer(null);
-                askMutation.mutate();
-              }}
-            >
-              {askMutation.isPending ? "Thinking..." : "Ask"}
-            </Button>
-          </div>
-          {answer && (
-            <div className="flex items-start gap-2 rounded-md border border-primary/30 bg-primary/5 p-3 text-sm">
-              <Apple className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
-              <p>{answer}</p>
+        <div className="space-y-3 border-t border-border pt-4">
+          {goalUrl && !goalLoading && !goalData?.nutritionGoal && (
+            <div className="space-y-3">
+              <Label className="flex items-center gap-1.5">
+                <Target className="h-3.5 w-3.5 text-primary" />
+                What's your main nutrition goal right now?
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                One-time -- the nutrition AI remembers this so it doesn't ask again. You can
+                change it anytime with "Set new goal."
+              </p>
+              <RadioChipGroup
+                label="Goal"
+                options={NUTRITION_GOALS.map((g) => NUTRITION_GOAL_LABEL[g])}
+                value={goalChoice}
+                onChange={setGoalChoice}
+              />
+              <Textarea
+                value={goalNote}
+                onChange={(e) => setGoalNote(e.target.value)}
+                placeholder="Anything else? (optional)"
+                rows={2}
+                maxLength={300}
+              />
+              <Button
+                type="button"
+                size="sm"
+                disabled={!goalChoice || setGoalMutation.isPending}
+                onClick={() => setGoalMutation.mutate()}
+              >
+                Save Goal
+              </Button>
+            </div>
+          )}
+
+          {goalUrl && goalData?.nutritionGoal && (
+            <div className="flex items-center justify-between gap-2 text-sm">
+              <span className="flex items-center gap-1.5">
+                <Target className="h-3.5 w-3.5 text-primary" />
+                Nutrition goal:{" "}
+                <span className="font-semibold">
+                  {NUTRITION_GOAL_LABEL[goalData.nutritionGoal]}
+                </span>
+              </span>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={resetGoalMutation.isPending}
+                onClick={() => resetGoalMutation.mutate()}
+              >
+                Set new goal
+              </Button>
+            </div>
+          )}
+
+          {(!goalUrl || !!goalData?.nutritionGoal) && (
+            <div className="space-y-2">
+              <Label htmlFor="nutrition-ask" className="flex items-center gap-1.5">
+                <Sparkles className="h-3.5 w-3.5 text-primary" />
+                Ask about nutrition
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                General sports-nutrition education -- not a personal plan. For an individualized
+                number, talk to a coach or a registered dietitian.
+              </p>
+              <div className="flex gap-2">
+                <Input
+                  id="nutrition-ask"
+                  value={question}
+                  onChange={(e) => setQuestion(e.target.value)}
+                  placeholder="e.g. How much protein do athletes usually need?"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && question.trim() && !askMutation.isPending) {
+                      setAnswer(null);
+                      askMutation.mutate();
+                    }
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={!question.trim() || askMutation.isPending}
+                  onClick={() => {
+                    setAnswer(null);
+                    askMutation.mutate();
+                  }}
+                >
+                  {askMutation.isPending ? "Thinking..." : "Ask"}
+                </Button>
+              </div>
+              {answer && (
+                <div className="flex items-start gap-2 rounded-md border border-primary/30 bg-primary/5 p-3 text-sm">
+                  <Apple className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+                  <p>{answer}</p>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -281,6 +387,14 @@ export function NutritionPanel({
                   proteinG: data.proteinG,
                   carbsG: data.carbsG,
                   fatG: data.fatG,
+                  calciumMg: data.calciumMg,
+                  ironMg: data.ironMg,
+                  vitaminDMcg: data.vitaminDMcg,
+                  potassiumMg: data.potassiumMg,
+                  magnesiumMg: data.magnesiumMg,
+                  sodiumMg: data.sodiumMg,
+                  vitaminB12Mcg: data.vitaminB12Mcg,
+                  zincMg: data.zincMg,
                 }
               : null
           }

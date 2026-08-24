@@ -12,9 +12,29 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { apiRequest, getJson, ApiError } from "@/lib/queryClient";
 import { BarcodeScanner } from "@/lib/barcode-scanner";
+import {
+  ensureCameraPermission,
+  onAppForeground,
+  onAppBackground,
+  isTorchAvailable,
+  toggleTorch,
+  disableTorch,
+} from "@/lib/native-camera";
 import { capturePhotoFromVideo, downscalePhotoFile, type CapturedPhoto } from "@/lib/photo-capture";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { Camera, Search, Pencil, Loader2, Plus, ImagePlus, Upload, X } from "lucide-react";
+import {
+  Camera,
+  Search,
+  Pencil,
+  Loader2,
+  Plus,
+  ImagePlus,
+  Upload,
+  X,
+  Flashlight,
+  FlashlightOff,
+} from "lucide-react";
 
 type FoodCandidate = {
   description: string;
@@ -26,11 +46,37 @@ type FoodCandidate = {
   fatG: number | null;
   fiberG: number | null;
   sodiumMg: number | null;
+  calciumMg: number | null;
+  ironMg: number | null;
+  vitaminDMcg: number | null;
+  potassiumMg: number | null;
+  magnesiumMg: number | null;
+  vitaminB12Mcg: number | null;
+  zincMg: number | null;
   barcode: string | null;
 };
 
 type Mode = "scan" | "search" | "manual" | "confirm" | "photo" | "photo-review";
 type Source = "barcode" | "search" | "manual" | "photo";
+
+const MACRO_FIELDS = [
+  ["caloriesKcal", "Calories"],
+  ["proteinG", "Protein (g)"],
+  ["carbsG", "Carbs (g)"],
+  ["fatG", "Fat (g)"],
+  ["fiberG", "Fiber (g)"],
+  ["sodiumMg", "Sodium (mg)"],
+] as const;
+
+const MICRO_FIELDS = [
+  ["calciumMg", "Calcium (mg)"],
+  ["ironMg", "Iron (mg)"],
+  ["vitaminDMcg", "Vitamin D (mcg)"],
+  ["potassiumMg", "Potassium (mg)"],
+  ["magnesiumMg", "Magnesium (mg)"],
+  ["vitaminB12Mcg", "Vitamin B12 (mcg)"],
+  ["zincMg", "Zinc (mg)"],
+] as const;
 
 function emptyManual(): FoodCandidate {
   return {
@@ -43,6 +89,13 @@ function emptyManual(): FoodCandidate {
     fatG: null,
     fiberG: null,
     sodiumMg: null,
+    calciumMg: null,
+    ironMg: null,
+    vitaminDMcg: null,
+    potassiumMg: null,
+    magnesiumMg: null,
+    vitaminB12Mcg: null,
+    zincMg: null,
     barcode: null,
   };
 }
@@ -77,10 +130,15 @@ export function FoodScannerDialog({
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [analyzingPhoto, setAnalyzingPhoto] = useState(false);
   const [photoItems, setPhotoItems] = useState<FoodCandidate[]>([]);
+  const [microsOpenForPhotoItem, setMicrosOpenForPhotoItem] = useState<Set<number>>(new Set());
+  const [microsOpenForConfirm, setMicrosOpenForConfirm] = useState(false);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const [torchAvailable, setTorchAvailable] = useState(false);
+  const [torchOn, setTorchOn] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const scannerRef = useRef<BarcodeScanner | null>(null);
   const photoVideoRef = useRef<HTMLVideoElement>(null);
-  const photoStreamRef = useRef<MediaStream | null>(null);
+  const sharedStreamRef = useRef<MediaStream | null>(null);
   const photoFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -94,12 +152,104 @@ export function FoodScannerDialog({
       setPhotoError(null);
       setPhotoItems([]);
       setAnalyzingPhoto(false);
+      setMicrosOpenForPhotoItem(new Set());
+      setMicrosOpenForConfirm(false);
       return;
     }
   }, [open]);
 
+  // Acquire the camera exactly once per dialog-open and share it between
+  // both scan mode and photo mode, instead of each mode independently
+  // calling getUserMedia -- that used to fire a fresh permission prompt
+  // (and a fresh black-until-manually-retried stream) on every mode switch.
   useEffect(() => {
-    if (!open || mode !== "scan") {
+    if (!open) {
+      sharedStreamRef.current?.getTracks().forEach((t) => t.stop());
+      sharedStreamRef.current = null;
+      setCameraStream(null);
+      return;
+    }
+    let cancelled = false;
+    const acquireCamera = async () => {
+      try {
+        const granted = await ensureCameraPermission();
+        if (cancelled) return;
+        if (!granted) {
+          setCameraError("Camera access denied -- enable it for Forge in Settings.");
+          setPhotoError("Camera access denied -- enable it for Forge in Settings, or upload a photo instead.");
+          return;
+        }
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment" },
+        });
+        if (cancelled) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        setCameraError(null);
+        sharedStreamRef.current = stream;
+        setCameraStream(stream);
+      } catch {
+        if (!cancelled) {
+          setCameraError("Couldn't access the camera -- check permissions.");
+          setPhotoError("Couldn't access the camera -- check permissions, or upload a photo instead.");
+        }
+      }
+    };
+    acquireCamera();
+
+    // See bar-tracker-dialog.tsx's own comment on onAppForeground.
+    const unsubscribeForeground = onAppForeground(() => {
+      const stillLive = sharedStreamRef.current?.getVideoTracks().some((t) => t.readyState === "live");
+      if (stillLive) return;
+      sharedStreamRef.current?.getTracks().forEach((t) => t.stop());
+      sharedStreamRef.current = null;
+      setCameraStream(null);
+      acquireCamera();
+    });
+    // See bar-tracker-dialog.tsx's own comment on onAppBackground.
+    const unsubscribeBackground = onAppBackground(() => {
+      sharedStreamRef.current?.getTracks().forEach((t) => t.stop());
+      sharedStreamRef.current = null;
+      setCameraStream(null);
+    });
+    return () => {
+      cancelled = true;
+      unsubscribeForeground();
+      unsubscribeBackground();
+      sharedStreamRef.current?.getTracks().forEach((t) => t.stop());
+      sharedStreamRef.current = null;
+    };
+  }, [open]);
+
+  // Torch tracks the shared stream, not `open`/`mode` -- it needs to turn
+  // off (and its availability re-check) every time the underlying stream is
+  // replaced, e.g. onAppForeground reacquiring after backgrounding, not just
+  // on dialog close, so a torch left on doesn't survive onto a fresh stream.
+  useEffect(() => {
+    if (!cameraStream) {
+      setTorchAvailable(false);
+      setTorchOn(false);
+      return;
+    }
+    let cancelled = false;
+    isTorchAvailable().then((available) => {
+      if (!cancelled) setTorchAvailable(available);
+    });
+    return () => {
+      cancelled = true;
+      setTorchOn(false);
+      disableTorch(cameraStream);
+    };
+  }, [cameraStream]);
+
+  async function handleToggleTorch() {
+    if (!cameraStream) return;
+    setTorchOn(await toggleTorch(cameraStream));
+  }
+
+  useEffect(() => {
+    if (!open || mode !== "scan" || !cameraStream) {
       scannerRef.current?.stop();
       scannerRef.current = null;
       return;
@@ -111,7 +261,8 @@ export function FoodScannerDialog({
     (async () => {
       try {
         if (!videoRef.current) return;
-        await scanner.start(
+        await scanner.startFromStream(
+          cameraStream,
           videoRef.current,
           async (barcode) => {
             if (cancelled) return;
@@ -132,41 +283,25 @@ export function FoodScannerDialog({
       scanner.stop();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, mode]);
+  }, [open, mode, cameraStream]);
 
-  // Plain getUserMedia preview for the photo mode -- no continuous decoding
-  // needed like the barcode scanner above, just a live view to capture one
-  // still frame from on demand.
+  // Photo mode reuses the same shared stream directly (no decoding needed,
+  // just a live view to capture one still frame on demand) -- but unlike a
+  // static `autoPlay` attribute on a `srcObject` assigned after mount, that
+  // isn't reliably enough to start playback on every browser, so play() is
+  // called explicitly. This is the fix for the "camera pops up but the
+  // preview stays black" bug.
   useEffect(() => {
-    if (!open || mode !== "photo") {
-      photoStreamRef.current?.getTracks().forEach((t) => t.stop());
-      photoStreamRef.current = null;
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "environment" },
-        });
-        if (cancelled) {
-          stream.getTracks().forEach((t) => t.stop());
-          return;
-        }
-        photoStreamRef.current = stream;
-        if (photoVideoRef.current) photoVideoRef.current.srcObject = stream;
-      } catch {
-        if (!cancelled) {
-          setPhotoError("Couldn't access the camera -- check permissions, or upload a photo instead.");
-        }
-      }
-    })();
+    if (!open || mode !== "photo" || !cameraStream || !photoVideoRef.current) return;
+    const videoEl = photoVideoRef.current;
+    videoEl.srcObject = cameraStream;
+    videoEl.play().catch(() => {
+      // Benign -- e.g. AbortError from a rapid mode-switch interrupting play().
+    });
     return () => {
-      cancelled = true;
-      photoStreamRef.current?.getTracks().forEach((t) => t.stop());
-      photoStreamRef.current = null;
+      videoEl.srcObject = null;
     };
-  }, [open, mode]);
+  }, [open, mode, cameraStream]);
 
   async function handleBarcodeDetected(barcode: string) {
     try {
@@ -219,6 +354,13 @@ export function FoodScannerDialog({
         fatG: scale(candidate.fatG),
         fiberG: scale(candidate.fiberG),
         sodiumMg: scale(candidate.sodiumMg),
+        calciumMg: scale(candidate.calciumMg),
+        ironMg: scale(candidate.ironMg),
+        vitaminDMcg: scale(candidate.vitaminDMcg),
+        potassiumMg: scale(candidate.potassiumMg),
+        magnesiumMg: scale(candidate.magnesiumMg),
+        vitaminB12Mcg: scale(candidate.vitaminB12Mcg),
+        zincMg: scale(candidate.zincMg),
         source,
         barcode: candidate.barcode,
       });
@@ -276,7 +418,15 @@ export function FoodScannerDialog({
 
   const logPhotoItemsMutation = useMutation({
     mutationFn: async () => {
-      for (const item of photoItems) {
+      // A snapshot, not a live read of photoItems -- items are logged one
+      // POST at a time, and if one partway through fails (a network blip
+      // is the realistic case, not a bad request), everything before it
+      // already reached the server. Removing each item from state as its
+      // own POST succeeds means a retry of "Log N Items" only re-sends
+      // what's actually still unlogged, instead of re-posting (and
+      // duplicating) whatever already made it through before the failure.
+      const itemsToLog = photoItems;
+      for (const item of itemsToLog) {
         await apiRequest("POST", "/api/athlete/food-log", {
           date,
           description: item.description,
@@ -288,14 +438,23 @@ export function FoodScannerDialog({
           fatG: item.fatG,
           fiberG: item.fiberG,
           sodiumMg: item.sodiumMg,
+          calciumMg: item.calciumMg,
+          ironMg: item.ironMg,
+          vitaminDMcg: item.vitaminDMcg,
+          potassiumMg: item.potassiumMg,
+          magnesiumMg: item.magnesiumMg,
+          vitaminB12Mcg: item.vitaminB12Mcg,
+          zincMg: item.zincMg,
           source: "photo",
           barcode: null,
         });
+        setPhotoItems((items) => items.filter((it) => it !== item));
       }
+      return itemsToLog.length;
     },
-    onSuccess: () => {
+    onSuccess: (loggedCount) => {
       qc.invalidateQueries({ queryKey: ["/api/athlete/food-log"] });
-      toast.success(photoItems.length > 1 ? `Logged ${photoItems.length} items` : "Logged");
+      toast.success(loggedCount > 1 ? `Logged ${loggedCount} items` : "Logged");
       onOpenChange(false);
     },
     onError: () => toast.error("Couldn't log one or more of those items -- try again"),
@@ -332,7 +491,18 @@ export function FoodScannerDialog({
           <div className="space-y-3">
             <div className="relative overflow-hidden rounded-md border border-border bg-black">
               <video ref={videoRef} autoPlay playsInline muted className="w-full" />
-              <div className="pointer-events-none absolute inset-x-8 top-1/2 h-16 -translate-y-1/2 rounded-md border-2 border-primary/70" />
+              {torchAvailable && <TorchToggleButton on={torchOn} onToggle={handleToggleTorch} />}
+              <div className="pointer-events-none absolute inset-x-8 top-1/2 h-16 -translate-y-1/2">
+                <div className="absolute left-0 top-0 h-5 w-5 rounded-tl-md border-l-2 border-t-2 border-primary" />
+                <div className="absolute right-0 top-0 h-5 w-5 rounded-tr-md border-r-2 border-t-2 border-primary" />
+                <div className="absolute bottom-0 left-0 h-5 w-5 rounded-bl-md border-b-2 border-l-2 border-primary" />
+                <div className="absolute bottom-0 right-0 h-5 w-5 rounded-br-md border-b-2 border-r-2 border-primary" />
+                <div className="absolute inset-x-6 top-1/2 flex h-9 -translate-y-1/2 items-stretch gap-[3px] opacity-40">
+                  {[2, 1, 3, 1, 1, 2, 3, 1, 2, 1, 1, 3, 2, 1, 2].map((w, i) => (
+                    <div key={i} className="bg-primary" style={{ width: `${w}px` }} />
+                  ))}
+                </div>
+              </div>
             </div>
             {cameraError && <p className="text-sm text-destructive">{cameraError}</p>}
             <p className="text-center text-xs text-muted-foreground">
@@ -367,6 +537,7 @@ export function FoodScannerDialog({
           <div className="space-y-3">
             <div className="relative overflow-hidden rounded-md border border-border bg-black">
               <video ref={photoVideoRef} autoPlay playsInline muted className="w-full" />
+              {torchAvailable && <TorchToggleButton on={torchOn} onToggle={handleToggleTorch} />}
               {analyzingPhoto && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/70 text-white">
                   <Loader2 className="h-6 w-6 animate-spin" />
@@ -454,16 +625,7 @@ export function FoodScannerDialog({
                     className="text-xs"
                   />
                   <div className="grid grid-cols-3 gap-2">
-                    {(
-                      [
-                        ["caloriesKcal", "Calories"],
-                        ["proteinG", "Protein (g)"],
-                        ["carbsG", "Carbs (g)"],
-                        ["fatG", "Fat (g)"],
-                        ["fiberG", "Fiber (g)"],
-                        ["sodiumMg", "Sodium (mg)"],
-                      ] as const
-                    ).map(([key, label]) => (
+                    {MACRO_FIELDS.map(([key, label]) => (
                       <div key={key} className="space-y-1">
                         <Label htmlFor={`photo-${i}-${key}`} className="text-xs">
                           {label}
@@ -481,6 +643,41 @@ export function FoodScannerDialog({
                       </div>
                     ))}
                   </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setMicrosOpenForPhotoItem((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(i)) next.delete(i);
+                        else next.add(i);
+                        return next;
+                      })
+                    }
+                    className="text-xs font-semibold text-muted-foreground hover:text-foreground"
+                  >
+                    {microsOpenForPhotoItem.has(i) ? "Hide micros" : "Micros (optional)"}
+                  </button>
+                  {microsOpenForPhotoItem.has(i) && (
+                    <div className="grid grid-cols-3 gap-2">
+                      {MICRO_FIELDS.map(([key, label]) => (
+                        <div key={key} className="space-y-1">
+                          <Label htmlFor={`photo-${i}-${key}`} className="text-xs">
+                            {label}
+                          </Label>
+                          <Input
+                            id={`photo-${i}-${key}`}
+                            type="number"
+                            inputMode="decimal"
+                            min={0}
+                            value={item[key] ?? ""}
+                            onChange={(e) =>
+                              updatePhotoItem(i, { [key]: e.target.value ? Number(e.target.value) : null })
+                            }
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -592,16 +789,7 @@ export function FoodScannerDialog({
               </div>
             )}
             <div className="grid grid-cols-3 gap-2">
-              {(
-                [
-                  ["caloriesKcal", "Calories"],
-                  ["proteinG", "Protein (g)"],
-                  ["carbsG", "Carbs (g)"],
-                  ["fatG", "Fat (g)"],
-                  ["fiberG", "Fiber (g)"],
-                  ["sodiumMg", "Sodium (mg)"],
-                ] as const
-              ).map(([key, label]) => (
+              {MACRO_FIELDS.map(([key, label]) => (
                 <div key={key} className="space-y-1">
                   <Label htmlFor={`food-${key}`} className="text-xs">
                     {label}
@@ -623,6 +811,43 @@ export function FoodScannerDialog({
                 </div>
               ))}
             </div>
+            {(mode === "manual" ||
+              (mode === "confirm" && MICRO_FIELDS.some(([key]) => candidate[key] != null))) && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setMicrosOpenForConfirm((v) => !v)}
+                  className="text-xs font-semibold text-muted-foreground hover:text-foreground"
+                >
+                  {microsOpenForConfirm ? "Hide micros" : "Micros (optional)"}
+                </button>
+                {microsOpenForConfirm && (
+                  <div className="grid grid-cols-3 gap-2">
+                    {MICRO_FIELDS.map(([key, label]) => (
+                      <div key={key} className="space-y-1">
+                        <Label htmlFor={`food-${key}`} className="text-xs">
+                          {label}
+                        </Label>
+                        <Input
+                          id={`food-${key}`}
+                          type="number"
+                          inputMode="decimal"
+                          min={0}
+                          value={candidate[key] ?? ""}
+                          readOnly={mode === "confirm"}
+                          onChange={(e) =>
+                            setCandidate((c) => ({
+                              ...c,
+                              [key]: e.target.value ? Number(e.target.value) : null,
+                            }))
+                          }
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
             <div className="flex gap-2">
               <Button
                 type="button"
@@ -645,5 +870,26 @@ export function FoodScannerDialog({
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** Only rendered by callers once torchAvailable is known true, so no
+ * disabled/unavailable state to represent here -- just on vs. off. */
+function TorchToggleButton({ on, onToggle }: { on: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-label={on ? "Turn off flashlight" : "Turn on flashlight"}
+      aria-pressed={on}
+      className={cn(
+        "absolute right-2 top-2 z-10 flex h-8 w-8 items-center justify-center rounded-full border backdrop-blur",
+        on
+          ? "border-primary bg-primary text-primary-foreground"
+          : "border-white/30 bg-black/50 text-white",
+      )}
+    >
+      {on ? <Flashlight className="h-4 w-4" /> : <FlashlightOff className="h-4 w-4" />}
+    </button>
   );
 }

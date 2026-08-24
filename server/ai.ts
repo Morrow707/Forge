@@ -216,24 +216,97 @@ export async function askClaudeVisionStructured<T>(
  * where it shouldn't touch anything yet, rather than being forced to
  * produce a real change (or a guess) on every single turn. Returns which
  * tool was called alongside its input so the caller can branch on it; same
- * validate-before-trusting caveat as askClaudeStructured applies. */
+ * validate-before-trusting caveat as askClaudeStructured applies.
+ *
+ * `serverTools` (e.g. web search) run entirely on Anthropic's side and are
+ * merged ahead of the custom tools -- their results land as extra content
+ * blocks in the same response, so the `tool_use` lookup below still finds
+ * our own tool call untouched (a server tool's own invocation block is a
+ * differently-typed `server_tool_use`, never `tool_use`). A research
+ * tangent can occasionally hit the server's own round-trip cap mid-turn
+ * (`stop_reason: "pause_turn"`) before reaching one of our tools -- resume
+ * by resending the conversation with the paused turn appended, exactly as
+ * Anthropic's own docs describe (never inject a synthetic "continue"
+ * message; the API detects the trailing server-tool-use block itself). */
 export async function askClaudeWithTools<T = any>(
   system: SystemPrompt,
   userPrompt: string,
   tools: { name: string; description: string; input_schema: Record<string, unknown> }[],
-  { maxTokens = 1024, model }: CallOptions = {},
+  {
+    maxTokens = 1024,
+    model,
+    serverTools,
+    images,
+    toolExecutors,
+  }: CallOptions & {
+    serverTools?: Record<string, unknown>[];
+    // Optional -- same base64 image-block shape askClaudeVision already
+    // uses. Most tool-calling callers have no image, so this stays a plain
+    // string content block unless one's actually attached (e.g. Forge AI's
+    // teaching chat, when the admin uploads a photo of a book page).
+    images?: { mediaType: "image/jpeg" | "image/png"; data: string }[];
+    // Tools this function runs itself and feeds the result back into the
+    // conversation, rather than returning to the caller (e.g. Forge AI's
+    // fetch_url -- see chatWithForgeAi in storage.ts). Any tool name NOT
+    // listed here still returns immediately like before; existing callers
+    // that never pass this see no change in behavior at all.
+    toolExecutors?: Record<string, (input: any) => Promise<string>>;
+  } = {},
 ): Promise<{ toolName: string; input: T } | null> {
   if (!aiEnabled) return null;
-  const data = await callAnthropic({
-    model: model || defaultModel,
-    max_tokens: maxTokens,
-    system: buildSystemField(system),
-    messages: [{ role: "user", content: userPrompt }],
-    tools,
-    tool_choice: { type: "auto" },
-  });
-  if (!data) return null;
-  const toolUse = data.content?.find((b: any) => b.type === "tool_use");
-  if (!toolUse) return null;
-  return { toolName: toolUse.name as string, input: toolUse.input as T };
+  const allTools = serverTools ? [...serverTools, ...tools] : tools;
+  const userContent =
+    images && images.length > 0
+      ? [
+          ...images.map((img) => ({
+            type: "image",
+            source: { type: "base64", media_type: img.mediaType, data: img.data },
+          })),
+          { type: "text", text: userPrompt },
+        ]
+      : userPrompt;
+  let messages: any[] = [{ role: "user", content: userContent }];
+  // A server-executed tool round-trip (fetch a URL, get the text back, let
+  // the model keep going) costs one extra attempt each time, so this needs
+  // more headroom than the plain pause_turn retry loop alone -- bounded
+  // all the same, so a model stuck calling fetch_url in a loop can't spin
+  // forever.
+  const maxAttempts = toolExecutors ? 8 : 3;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const data = await callAnthropic({
+      model: model || defaultModel,
+      max_tokens: maxTokens,
+      system: buildSystemField(system),
+      messages,
+      tools: allTools,
+      tool_choice: { type: "auto" },
+    });
+    if (!data) return null;
+    const toolUse = data.content?.find((b: any) => b.type === "tool_use");
+    if (toolUse) {
+      const executor = toolExecutors?.[toolUse.name];
+      if (!executor) return { toolName: toolUse.name as string, input: toolUse.input as T };
+      let resultText: string;
+      try {
+        resultText = await executor(toolUse.input);
+      } catch (err) {
+        resultText = `Error: ${err instanceof Error ? err.message : String(err)}`;
+      }
+      messages = [
+        ...messages,
+        { role: "assistant", content: data.content },
+        {
+          role: "user",
+          content: [{ type: "tool_result", tool_use_id: toolUse.id, content: resultText }],
+        },
+      ];
+      continue;
+    }
+    if (data.stop_reason === "pause_turn") {
+      messages = [...messages, { role: "assistant", content: data.content }];
+      continue;
+    }
+    return null;
+  }
+  return null;
 }

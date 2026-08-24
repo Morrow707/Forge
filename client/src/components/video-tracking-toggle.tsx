@@ -1,7 +1,17 @@
 import { Video, VideoOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type TrackingLevel = "none" | "bar_path" | "full" | "jump";
+export type TrackingLevel = "none" | "bar_path" | "full" | "jump" | "golf_swing" | "baseball_swing";
+
+// Word-boundary, not substring -- "Baseball-Style Rotational Med Ball
+// Throw" shouldn't silently become a swing-tracked exercise just because
+// the word appears in its name; an exercise actually named "Golf Swing" or
+// "Baseball Batting Drill" should. Checked against the exercise's own name
+// only (never its description) -- description text is far more likely to
+// mention a sport in passing ("great for baseball players") without the
+// exercise itself being that sport's swing.
+const GOLF_NAME_PATTERN = /\bgolf\b/i;
+const BASEBALL_NAME_PATTERN = /\bbaseball\b/i;
 
 /** Coach-facing camera control for one program exercise. Used to be 5
  * separate controls (4 tracking-level buttons -- Off/Path/Full/Jump --
@@ -16,54 +26,62 @@ export type TrackingLevel = "none" | "bar_path" | "full" | "jump";
  * full bar tracking for everything else. A program exercise saved under
  * the old "bar_path"-only level before this change still works exactly as
  * before in the athlete's workout view -- it just now reads as "Video: On"
- * here rather than exposing that narrower option again. */
+ * here rather than exposing that narrower option again.
+ *
+ * A single small pill rather than a labeled two-button row -- this sits on
+ * every exercise card in a program that can run to dozens of exercises, so
+ * the per-exercise chrome needs to stay as light as the Sets/Reps/Weight
+ * fields next to it. */
 export function VideoTrackingToggle({
   trackingLevel,
   category,
+  exerciseName,
   onChange,
 }: {
   trackingLevel: TrackingLevel;
   category?: string | null;
+  /** Used only to auto-pick golf_swing/baseball_swing -- see
+   * GOLF_NAME_PATTERN's own comment. Optional so every existing caller
+   * that doesn't have a name handy (or doesn't care) keeps working exactly
+   * as before. */
+  exerciseName?: string | null;
   onChange: (patch: { trackingLevel: TrackingLevel; videoCheckEnabled: boolean }) => void;
 }) {
   const isOn = trackingLevel !== "none";
-  const onLevel: TrackingLevel = category === "plyometric" ? "jump" : "full";
+  const onLevel: TrackingLevel =
+    category === "plyometric"
+      ? "jump"
+      : exerciseName && GOLF_NAME_PATTERN.test(exerciseName)
+        ? "golf_swing"
+        : exerciseName && BASEBALL_NAME_PATTERN.test(exerciseName)
+          ? "baseball_swing"
+          : "full";
 
   return (
-    <div>
-      <span className="mb-1 block text-[10px] uppercase text-muted-foreground">Camera</span>
-      <div className="flex gap-2">
-        <button
-          type="button"
-          aria-pressed={!isOn}
-          title="No camera tracking or form-check video for this exercise"
-          onClick={() => onChange({ trackingLevel: "none", videoCheckEnabled: false })}
-          className={cn(
-            "flex items-center gap-1.5 rounded-md border-2 px-3.5 py-2 text-sm font-bold transition-colors",
-            !isOn
-              ? "border-foreground bg-foreground text-background"
-              : "border-border text-muted-foreground hover:border-foreground/40",
-          )}
-        >
-          <VideoOff className="h-4 w-4" />
-          No Video
-        </button>
-        <button
-          type="button"
-          aria-pressed={isOn}
-          title="Captures bar path, velocity, power, ROM, and form faults, plus AI form-check feedback on the same footage"
-          onClick={() => onChange({ trackingLevel: onLevel, videoCheckEnabled: true })}
-          className={cn(
-            "flex items-center gap-1.5 rounded-md border-2 px-3.5 py-2 text-sm font-bold transition-colors",
-            isOn
-              ? "border-primary bg-primary text-primary-foreground"
-              : "border-border text-muted-foreground hover:border-primary/50 hover:text-primary",
-          )}
-        >
-          <Video className="h-4 w-4" />
-          Video
-        </button>
-      </div>
-    </div>
+    <button
+      type="button"
+      aria-pressed={isOn}
+      title={
+        isOn
+          ? "Camera tracking + AI form-check is on for this exercise -- click to turn off"
+          : "Turn on camera tracking (bar path, velocity, power, ROM, form faults) + AI form-check"
+      }
+      onClick={() =>
+        onChange(
+          isOn
+            ? { trackingLevel: "none", videoCheckEnabled: false }
+            : { trackingLevel: onLevel, videoCheckEnabled: true },
+        )
+      }
+      className={cn(
+        "flex w-fit items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-bold uppercase tracking-wide transition-colors",
+        isOn
+          ? "border-primary bg-primary/10 text-primary"
+          : "border-border text-muted-foreground hover:border-primary/40 hover:text-primary",
+      )}
+    >
+      {isOn ? <Video className="h-3.5 w-3.5" /> : <VideoOff className="h-3.5 w-3.5" />}
+      {isOn ? "Video On" : "Video Off"}
+    </button>
   );
 }

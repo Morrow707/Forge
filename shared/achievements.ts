@@ -1,5 +1,5 @@
 export type TrophyTier = "bronze" | "silver" | "gold";
-export type TrophyCategory = "workout_count" | "streak" | "pr_count";
+export type TrophyCategory = "workout_count" | "streak" | "pr_count" | "speed";
 
 export type TrophyDefinition = {
   key: string;
@@ -39,10 +39,26 @@ export const PR_COUNT_TROPHIES: TrophyDefinition[] = [
   { key: "pr_count_100", category: "pr_count", tier: "gold", threshold: 100, label: "100 PRs" },
 ];
 
+// Counts sprint-timing captures (skillSessionLogs rows with tracking_level
+// "sprint") -- entirely Skills-side, but awarded through the exact same
+// checkAndAwardTrophies pass as every other category (see its comment in
+// server/storage.ts). Deliberately count-based like workout_count rather
+// than time-threshold-based, since a fast time is drill-specific and can't
+// be compared across different sprints/distances the way "did a capture"
+// can.
+export const SPEED_TROPHIES: TrophyDefinition[] = [
+  { key: "speed_1", category: "speed", tier: "bronze", threshold: 1, label: "First Sprint Timed" },
+  { key: "speed_10", category: "speed", tier: "bronze", threshold: 10, label: "10 Sprints Timed" },
+  { key: "speed_25", category: "speed", tier: "silver", threshold: 25, label: "25 Sprints Timed" },
+  { key: "speed_50", category: "speed", tier: "silver", threshold: 50, label: "50 Sprints Timed" },
+  { key: "speed_100", category: "speed", tier: "gold", threshold: 100, label: "100 Sprints Timed" },
+];
+
 export const ALL_TROPHY_DEFINITIONS: TrophyDefinition[] = [
   ...WORKOUT_COUNT_TROPHIES,
   ...STREAK_TROPHIES,
   ...PR_COUNT_TROPHIES,
+  ...SPEED_TROPHIES,
 ];
 
 export const TROPHY_DEFINITIONS_BY_KEY = new Map(
@@ -55,4 +71,5 @@ export const TROPHY_CATEGORY_LABEL: Record<TrophyCategory, string> = {
   workout_count: "Workouts Logged",
   streak: "Consistency Streaks",
   pr_count: "Personal Records",
+  speed: "Speed & Agility",
 };

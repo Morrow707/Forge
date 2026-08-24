@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { externalLinkClick } from "@/lib/open-external";
 import { useParams, useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
@@ -38,7 +39,14 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import type { ExerciseWithOwnership } from "@/lib/exercise-types";
-import { MOVEMENT_TYPES, MUSCLE_GROUPS, SPORTS } from "@/lib/exercise-taxonomy";
+import {
+  MOVEMENT_TYPES,
+  MUSCLE_GROUPS,
+  SPORTS,
+  BODY_REGIONS,
+  PLANES,
+  MOVEMENT_COMPLEXITIES,
+} from "@/lib/exercise-taxonomy";
 import {
   CATEGORY_BADGE_CLASS,
   CATEGORY_FILTER_ACTIVE_CLASS,
@@ -46,6 +54,9 @@ import {
   LATERALITY_FILTER_ACTIVE_CLASS,
   MUSCLE_FILTER_ACTIVE_CLASS,
   SPORT_FILTER_ACTIVE_CLASS,
+  BODY_REGION_FILTER_ACTIVE_CLASS,
+  PLANE_FILTER_ACTIVE_CLASS,
+  MOVEMENT_COMPLEXITY_FILTER_ACTIVE_CLASS,
 } from "@/lib/exercise-colors";
 import { FilterChipGroup, RadioChipGroup } from "@/components/filter-chip-group";
 
@@ -78,6 +89,9 @@ type ExerciseForm = {
   equipment: string;
   movementType: string;
   laterality: string;
+  bodyRegion: string;
+  plane: string;
+  movementComplexity: string;
   isCorrective: boolean;
   videoUrl: string;
   instructions: string;
@@ -96,6 +110,9 @@ const emptyForm: ExerciseForm = {
   equipment: "",
   movementType: "",
   laterality: "",
+  bodyRegion: "",
+  plane: "",
+  movementComplexity: "",
   isCorrective: false,
   videoUrl: "",
   instructions: "",
@@ -115,6 +132,9 @@ function formFrom(ex: ExerciseWithOwnership): ExerciseForm {
     equipment: ex.equipment,
     movementType: ex.movementType ?? "",
     laterality: ex.laterality ?? "",
+    bodyRegion: ex.bodyRegion ?? "",
+    plane: ex.plane ?? "",
+    movementComplexity: ex.movementComplexity ?? "",
     isCorrective: ex.isCorrective,
     videoUrl: ex.videoUrl ?? "",
     instructions: ex.instructions ?? "",
@@ -163,6 +183,9 @@ export function ExerciseDetailPage({
         equipment: form.equipment || "Bodyweight",
         movementType: form.movementType || null,
         laterality: form.laterality || null,
+        bodyRegion: form.bodyRegion || null,
+        plane: form.plane || null,
+        movementComplexity: form.movementComplexity || null,
         isCorrective: form.isCorrective,
         videoUrl: form.videoUrl || null,
         instructions: form.instructions || null,
@@ -260,6 +283,7 @@ export function ExerciseDetailPage({
             href={form.videoUrl}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={externalLinkClick(form.videoUrl)}
             className="flex items-center justify-center gap-2 rounded-lg border border-dashed border-border py-6 text-sm font-semibold text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
           >
             <Youtube className="h-5 w-5" />
@@ -317,6 +341,9 @@ export function ExerciseDetailPage({
                 <Field label="Movement" value={exercise.movementType || "—"} />
                 <Field label="Laterality" value={exercise.laterality || "—"} />
                 <Field label="Equipment" value={exercise.equipment} />
+                <Field label="Body region" value={exercise.bodyRegion || "—"} />
+                <Field label="Plane" value={exercise.plane || "—"} />
+                <Field label="Complexity" value={exercise.movementComplexity || "—"} />
               </div>
               {exercise.secondaryMuscles && exercise.secondaryMuscles.length > 0 && (
                 <div>
@@ -433,8 +460,14 @@ export function ExerciseDetailPage({
                     onToggle={(v) =>
                       setForm((f) => {
                         const next = new Set(f.secondaryMuscles);
-                        if (next.has(v)) next.delete(v);
-                        else next.add(v);
+                        if (next.has(v)) {
+                          next.delete(v);
+                        } else if (next.size >= 8) {
+                          toast.error("You can select up to 8 secondary muscles");
+                          return f;
+                        } else {
+                          next.add(v);
+                        }
                         return { ...f, secondaryMuscles: next };
                       })
                     }
@@ -453,8 +486,14 @@ export function ExerciseDetailPage({
                     onToggle={(v) =>
                       setForm((f) => {
                         const next = new Set(f.sports);
-                        if (next.has(v)) next.delete(v);
-                        else next.add(v);
+                        if (next.has(v)) {
+                          next.delete(v);
+                        } else if (next.size >= 8) {
+                          toast.error("You can select up to 8 sports");
+                          return f;
+                        } else {
+                          next.add(v);
+                        }
                         return { ...f, sports: next };
                       })
                     }
@@ -485,6 +524,54 @@ export function ExerciseDetailPage({
                   colorClass={LATERALITY_FILTER_ACTIVE_CLASS}
                   allowNone
                 />
+                <div className="space-y-1.5">
+                  <RadioChipGroup
+                    label="Body region"
+                    options={BODY_REGIONS}
+                    value={form.bodyRegion}
+                    onChange={(v) => setForm((f) => ({ ...f, bodyRegion: v }))}
+                    colorClass={BODY_REGION_FILTER_ACTIVE_CLASS}
+                    allowNone
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Which part of the body this exercise trains as a whole -- lets a coach or the
+                    AI pull "today's upper body exercises" directly instead of inferring it from
+                    body part.
+                  </p>
+                </div>
+                <div className="space-y-1.5">
+                  <RadioChipGroup
+                    label="Plane (push/pull only)"
+                    options={PLANES}
+                    value={form.plane}
+                    onChange={(v) => setForm((f) => ({ ...f, plane: v }))}
+                    colorClass={PLANE_FILTER_ACTIVE_CLASS}
+                    allowNone
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Only meaningful alongside a Push/Press/Pull movement type -- e.g. bench press
+                    is horizontal, overhead press is vertical.
+                  </p>
+                </div>
+                <div className="space-y-1.5">
+                  <RadioChipGroup
+                    label="Complexity"
+                    options={
+                      form.movementComplexity && !MOVEMENT_COMPLEXITIES.includes(form.movementComplexity)
+                        ? [form.movementComplexity, ...MOVEMENT_COMPLEXITIES]
+                        : MOVEMENT_COMPLEXITIES
+                    }
+                    value={form.movementComplexity}
+                    onChange={(v) => setForm((f) => ({ ...f, movementComplexity: v }))}
+                    colorClass={MOVEMENT_COMPLEXITY_FILTER_ACTIVE_CLASS}
+                    allowNone
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Compound (multi-joint, e.g. a squat or bench press), Isolation (single-joint,
+                    one muscle, e.g. a curl), or Combination (two or more patterns chained into one
+                    rep, e.g. a step-up into a shoulder press).
+                  </p>
+                </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="ex-equipment">Equipment</Label>
                   <Input

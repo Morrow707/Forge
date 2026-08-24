@@ -1,0 +1,130 @@
+name: Android Build
+
+# Manual, same reasoning as ios-testflight.yml -- Render already handles
+# continuous deploy of the web app on every push to main.
+on:
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    # No macOS needed here -- Android's whole toolchain (Gradle, the
+    # Android SDK command-line tools) runs fine on Linux, which is also why
+    # this pipeline needs no Apple account at all, unlike the iOS one.
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install JS dependencies
+        run: npm ci
+
+      - name: Build web app
+        run: npm run build
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Sync Capacitor Android platform
+        run: npx cap sync android
+
+      - name: Make gradlew executable
+        run: chmod +x android/gradlew
+
+      # Always runs, needs zero secrets/accounts -- this alone is enough to
+      # get an installable APK onto a test device today by downloading the
+      # workflow's build artifact and sideloading it (Settings > install
+      # from unknown sources). It's unsigned-for-release (debug-signed),
+      # so it's for direct testing only, not Play Store distribution.
+      - name: Build debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: forge-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+      - name: Check for release signing secrets
+        id: has_signing
+        run: |
+          if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Everything from here down is optional and only runs once a release
+      # signing key exists (see the app-store launch notes for how to
+      # generate one with `keytool` -- no Apple or Google account needed
+      # just to create the key itself).
+      - name: Decode release keystore
+        if: steps.has_signing.outputs.present == 'true'
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.keystore"
+          cat > android/keystore.properties <<PROPS
+          storeFile=$RUNNER_TEMP/release.keystore
+          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
+          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
+          PROPS
+
+      - name: Build signed release APK + AAB
+        if: steps.has_signing.outputs.present == 'true'
+        working-directory: android
+        run: |
+          ./gradlew assembleRelease bundleRelease --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        if: steps.has_signing.outputs.present == 'true'
+        with:
+          name: forge-release-apk
+          path: android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        if: steps.has_signing.outputs.present == 'true'
+        with:
+          name: forge-release-aab
+          path: android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+
+      - name: Check for Play Console publishing secret
+        if: steps.has_signing.outputs.present == 'true'
+        id: has_play_console
+        run: |
+          if [ -n "${{ secrets.GOOGLE_PLAY_JSON_KEY }}" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish to Play Console internal testing track
+        if: steps.has_signing.outputs.present == 'true' && steps.has_play_console.outputs.present == 'true'
+        working-directory: android
+        env:
+          GOOGLE_PLAY_JSON_KEY_PATH: ${{ runner.temp }}/google-play-key.json
+          ANDROID_RELEASE_AAB_PATH: app/build/outputs/bundle/release/app-release.aab
+          ANDROID_PACKAGE_NAME: ${{ vars.ANDROID_PACKAGE_NAME }}
+        run: |
+          set -euo pipefail
+          echo "${{ secrets.GOOGLE_PLAY_JSON_KEY }}" > "$GOOGLE_PLAY_JSON_KEY_PATH"
+          gem install fastlane -N
+          bundle_id="${ANDROID_PACKAGE_NAME:-com.foreperformancesystems.forge}"
+          ANDROID_PACKAGE_NAME="$bundle_id" fastlane internal
+
+      - name: Clean up signing assets
+        if: always()
+        run: |
+          rm -f "$RUNNER_TEMP/release.keystore" "$RUNNER_TEMP/google-play-key.json"
+          rm -f android/keystore.properties

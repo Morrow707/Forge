@@ -2,17 +2,31 @@ services:
   - type: web
     name: forge
     env: node
-    plan: free
-    buildCommand: npm install --include=dev && npm run build && npm run db:reconcile && npm run db:seed
+    plan: starter
+    # db:reconcile runs twice: the first pass creates/migrates tables (seed
+    # needs those to exist), the second picks up any of reconcile's own
+    # admin-dependent one-time seeds (e.g. the "Forge Standard Screen"
+    # movement-screen battery in reconcile-schema.ts) that can only fire
+    # once db:seed has created the admin account -- on a brand-new database
+    # the admin doesn't exist yet on the first pass, so without this a
+    # first-ever deploy would permanently skip that seed (there's no admin
+    # account yet until *after* db:seed runs, and the one-time INSERT never
+    # gets a second chance). Both scripts are idempotent/additive-only, so
+    # re-running reconcile here is a safe no-op on every deploy after the
+    # first.
+    buildCommand: npm install --include=dev && npm run build && npm run db:reconcile && npm run db:seed && npm run db:reconcile
     startCommand: npm start
     healthCheckPath: /
-    # Athlete-uploaded form-check videos and coach annotation PNGs are
-    # written to server/uploads (see UPLOADS_DIR/ANNOTATIONS_DIR in
-    # server/routes.ts). Without a persistent disk, that directory lives on
-    # the instance's ephemeral filesystem and is wiped on every deploy and
-    # restart -- every previously-saved video/annotation URL 404s the moment
-    # the service redeploys, even though the DB row referencing it survives.
-    # Mounting a disk here keeps those files across deploys and restarts.
+    # Coach/athlete-uploaded form-check and skill videos, plus coach-drawn
+    # annotation PNGs, live on local disk under server/uploads (see
+    # UPLOADS_DIR/SKILL_VIDEOS_DIR/ANNOTATIONS_DIR in server/routes.ts) --
+    # without a persistent disk, a web service's filesystem is wiped on
+    # every redeploy and every restart, silently deleting every video
+    # anyone has ever saved. Free-plan web services can't attach a disk at
+    # all, hence the "starter" plan above -- if this ever needs to move off
+    # Render's own disks (multi-instance scaling, wanting a CDN in front of
+    # video), swap the uploads' multer disk storage for an S3-compatible
+    # object store instead and drop this block.
     disk:
       name: forge-uploads
       mountPath: /opt/render/project/src/server/uploads
@@ -22,6 +36,25 @@ services:
         value: production
       - key: SESSION_SECRET
         generateValue: true
+      # Signs the short-lived /uploads access tokens (server/media-url-signing.ts)
+      # -- its own key, separate from SESSION_SECRET, so rotating one for a
+      # real reason (a leak, a scheduled rotation) never silently invalidates
+      # the other. Falls back to SESSION_SECRET if this is ever unset, so
+      # nothing breaks without it, but Render auto-generates a real, distinct
+      # value on every deploy going forward.
+      - key: MEDIA_URL_SECRET
+        generateValue: true
+      # Master switch for every "no real billing yet" paywall stub in
+      # server/routes.ts (testingUnlockAllPaywalls) -- Free Agent AI access
+      # (strengthAi/skillsAi entitlements), Coaches Corner content, and Class
+      # lesson purchases. "true" comps everyone so no new coach or Free Agent
+      # signup hits a 402 during this pre-billing period; the underlying
+      # paywall functions (hasAthletePaidForAiAccess, hasCoachesCornerAccess,
+      # the lesson-purchase route) are untouched and start enforcing again
+      # the moment this is set back to "false" or removed -- see
+      # testingUnlockAllPaywalls's own comment for the exact routes it gates.
+      - key: PAYWALLS_DISABLED
+        value: "true"
       - key: DATABASE_URL
         fromDatabase:
           name: forge-db
@@ -37,6 +70,25 @@ services:
         sync: false
       - key: VAPID_SUBJECT
         value: mailto:support@forge.app
+      # APNs (native iOS push) auth key -- native-app twin of the VAPID
+      # keypair above, same "unset = silently no-ops" behavior. Generate in
+      # Apple Developer Portal under Certificates, Identifiers & Profiles ->
+      # Keys -> new key -> check "Apple Push Notifications service (APNs)".
+      # APNS_KEY_ID is the 10-char Key ID shown after creation; APNS_TEAM_ID
+      # is the Apple Developer Team ID (same one Fastlane already uses --
+      # see APPLE_TEAM_ID in .github/workflows/ios-testflight.yml);
+      # APNS_PRIVATE_KEY is the full contents of the downloaded AuthKey_*.p8
+      # file, pasted as-is (PEM with real newlines is fine, Render's env var
+      # editor preserves them). The App ID's Push Notifications capability
+      # must also be enabled before any of this works -- see App.entitlements.
+      - key: APNS_TEAM_ID
+        sync: false
+      - key: APNS_KEY_ID
+        sync: false
+      - key: APNS_PRIVATE_KEY
+        sync: false
+      - key: APNS_BUNDLE_ID
+        value: com.foreperformancesystems.forge
       # Resend API key for coach-driven progress report emails -- sign up at
       # resend.com (free tier), create an API key, and paste it in. Sending
       # silently no-ops until this is set. RESEND_FROM_EMAIL defaults to

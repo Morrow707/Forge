@@ -1,0 +1,30 @@
+version: 2
+updates:
+  # Root package.json -- this is the one that would have caught the
+  # drizzle-orm SQL-injection advisory automatically instead of only on a
+  # manual npm audit pass. Weekly rather than daily: enough to stay current
+  # without a PR every single day for every point release.
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    groups:
+      # Every Radix/shadcn UI primitive bumps together -- one PR to review
+      # instead of a dozen near-identical ones.
+      radix-ui:
+        patterns:
+          - "@radix-ui/*"
+
+  # ios-testflight.yml/android-release.yml/ci.yml themselves -- an action
+  # pinned to an old major version is a real supply-chain surface too.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  # android/ native dependencies (Capacitor's Android shell + plugins).
+  - package-ecosystem: "gradle"
+    directory: "/android"
+    schedule:
+      interval: "weekly"

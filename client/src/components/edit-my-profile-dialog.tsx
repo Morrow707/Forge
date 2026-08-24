@@ -13,6 +13,7 @@ import {
   emptyProfileFields,
   type ProfileFieldsValue,
 } from "@/components/profile-fields-form";
+import { InjuryHistoryPanel } from "@/components/injury-history-panel";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
 import type { PublicUser } from "@shared/schema";
@@ -40,6 +41,7 @@ export function EditMyProfileDialog({
         sport: user.sport ?? "",
         position: user.position ?? "",
         seasonPhase: user.seasonPhase ?? "",
+        trainingStylePreference: user.trainingStylePreference ?? "",
         fortyYardDash: user.fortyYardDash != null ? String(user.fortyYardDash) : "",
         verticalJumpIn: user.verticalJumpIn != null ? String(user.verticalJumpIn) : "",
         broadJumpIn: user.broadJumpIn != null ? String(user.broadJumpIn) : "",
@@ -63,6 +65,7 @@ export function EditMyProfileDialog({
         sport: value.sport.trim() || null,
         position: value.position.trim() || null,
         seasonPhase: value.seasonPhase.trim() || null,
+        trainingStylePreference: value.trainingStylePreference.trim() || null,
         fortyYardDash: value.fortyYardDash.trim() ? Number(value.fortyYardDash) : null,
         verticalJumpIn: value.verticalJumpIn.trim() ? Number(value.verticalJumpIn) : null,
         broadJumpIn: value.broadJumpIn.trim() ? Number(value.broadJumpIn) : null,
@@ -86,14 +89,29 @@ export function EditMyProfileDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent
+        className="max-w-lg"
+        // Radix focuses the first focusable element on open by default --
+        // that's the Name input here, and focusing a text input on iOS
+        // pops the keyboard immediately, covering most of the form before
+        // anyone's chosen to type anything. Only pop up when actually
+        // tapping into a field.
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle>My Profile</DialogTitle>
         </DialogHeader>
         <p className="text-sm text-muted-foreground">
           Your coach uses this to build the team leaderboard and get to know you.
         </p>
-        <ProfileFieldsForm value={value} onChange={setValue} idPrefix="my-profile" showBio />
+        <ProfileFieldsForm
+          value={value}
+          onChange={setValue}
+          idPrefix="my-profile"
+          showBio
+          dateOfBirth={user.dateOfBirth}
+        />
+        <InjuryHistoryPanel baseUrl="/api/athlete/injury-history" />
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Cancel

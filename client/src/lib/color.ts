@@ -1,123 +1,171 @@
-// Color math for the branding dialog: real WCAG contrast (for the "would
-// this be readable" guardrail) plus small hex/HSL conversion helpers used
-// to nudge a color into passing without the coach hand-picking a new one.
-
-function hexToRgb(hex: string): [number, number, number] | null {
+// Converts a coach-picked #RRGGBB into the space-separated "H S% L%" triplet
+// this app's CSS custom properties store (see index.css's --primary etc.) --
+// every one of them gets consumed as hsl(var(--primary)) by tailwind.config.ts,
+// so a hex string can't be dropped straight in; it has to become that same
+// triplet shape or the CSS variable override silently does nothing.
+export function hexToHslTriplet(hex: string): string | null {
   const match = /^#([0-9a-f]{6})$/i.exec(hex.trim());
   if (!match) return null;
-  const n = parseInt(match[1], 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  const r = parseInt(match[1].slice(0, 2), 16) / 255;
+  const g = parseInt(match[1].slice(2, 4), 16) / 255;
+  const b = parseInt(match[1].slice(4, 6), 16) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  let h = 0;
+  let s = 0;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r:
+        h = (g - b) / d + (g < b ? 6 : 0);
+        break;
+      case g:
+        h = (b - r) / d + 2;
+        break;
+      default:
+        h = (r - g) / d + 4;
+    }
+    h /= 6;
+  }
+  return `${Math.round(h * 360)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`;
 }
 
-function rgbToHex(r: number, g: number, b: number): string {
-  const clamp = (n: number) => Math.max(0, Math.min(255, Math.round(n)));
-  return `#${[r, g, b].map((c) => clamp(c).toString(16).padStart(2, "0")).join("")}`;
+// Picks black or white text over a given #RRGGBB background using the
+// standard relative-luminance threshold (WCAG's own "which reads better"
+// cutoff) -- a coach's brand color can land anywhere on the lightness
+// scale (a bright gold vs. a navy), and --primary-foreground has to follow
+// it or button/active-tab text goes unreadable against their own color.
+export function contrastForegroundHsl(hex: string): string {
+  const match = /^#([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!match) return "0 0% 100%";
+  const r = parseInt(match[1].slice(0, 2), 16) / 255;
+  const g = parseInt(match[1].slice(2, 4), 16) / 255;
+  const b = parseInt(match[1].slice(4, 6), 16) / 255;
+  const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+  return luminance > 0.6 ? "0 0% 4%" : "0 0% 100%";
 }
 
-// True WCAG relative luminance (gamma-corrected sRGB), not a simple RGB
-// average -- see https://www.w3.org/TR/WCAG21/#dfn-relative-luminance.
-function relativeLuminance(hex: string): number {
-  const rgb = hexToRgb(hex);
-  if (!rgb) return 0;
-  const [r, g, b] = rgb.map((c) => {
-    const s = c / 255;
-    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
-  });
+// WCAG's actual relative luminance -- gamma-corrected linear RGB, not the
+// simple weighted-average heuristic contrastForegroundHsl above uses for its
+// quick black-or-white pick. This is the real building block the spec's
+// contrast-ratio formula requires; contrastForegroundHsl is left as-is
+// (already shipped, already fine for "pick black or white") rather than
+// rewritten to share this, since its threshold was tuned empirically, not
+// derived from the WCAG ratio itself.
+function relativeLuminance(hex: string): number | null {
+  const match = /^#([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!match) return null;
+  const channel = (c: number) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+  const r = channel(parseInt(match[1].slice(0, 2), 16) / 255);
+  const g = channel(parseInt(match[1].slice(2, 4), 16) / 255);
+  const b = channel(parseInt(match[1].slice(4, 6), 16) / 255);
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
-/** The real WCAG contrast ratio between two colors, from 1 (identical) to
- * 21 (black on white). Order of the two args doesn't matter. */
-export function contrastRatio(hex1: string, hex2: string): number {
+// The real WCAG 2.x contrast-ratio formula: (L_lighter + 0.05) / (L_darker +
+// 0.05), always expressed as a ratio >= 1. Returns null (rather than
+// throwing) on an invalid hex so a caller mid-typing a color doesn't need
+// its own try/catch -- same "null on bad input" convention hexToHslTriplet
+// already uses.
+export function contrastRatio(hex1: string, hex2: string): number | null {
   const l1 = relativeLuminance(hex1);
   const l2 = relativeLuminance(hex2);
+  if (l1 === null || l2 === null) return null;
   const lighter = Math.max(l1, l2);
   const darker = Math.min(l1, l2);
   return (lighter + 0.05) / (darker + 0.05);
 }
 
-/** WCAG AA for normal-size text: 4.5:1. */
+// WCAG AA's normal-text threshold (4.5:1) -- the one that matters here,
+// since a coach's brand color shows up as button/active-tab/nav text at
+// ordinary sizes, not large display type (which AA only requires 3:1 for).
 export function meetsWcagAA(hex1: string, hex2: string): boolean {
-  return contrastRatio(hex1, hex2) >= 4.5;
+  const ratio = contrastRatio(hex1, hex2);
+  return ratio !== null && ratio >= 4.5;
 }
 
-// Quick black/white text pick against a background -- a simple luminance
-// heuristic, not the real WCAG math above. Used where a hard 4.5:1
-// guarantee isn't the point, just a fast good-enough default (e.g. text
-// color inside a small color swatch chip).
-export function contrastForegroundHsl(bgHex: string): "#000000" | "#ffffff" {
-  const rgb = hexToRgb(bgHex);
-  if (!rgb) return "#ffffff";
-  const [r, g, b] = rgb;
-  const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-  return brightness > 150 ? "#000000" : "#ffffff";
+function hexToRgb(hex: string): [number, number, number] | null {
+  const match = /^#([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!match) return null;
+  return [
+    parseInt(match[1].slice(0, 2), 16),
+    parseInt(match[1].slice(2, 4), 16),
+    parseInt(match[1].slice(4, 6), 16),
+  ];
 }
 
-function hexToHsl(hex: string): [number, number, number] | null {
-  const rgb = hexToRgb(hex);
-  if (!rgb) return null;
-  const [r, g, b] = rgb.map((c) => c / 255);
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
+function rgbToHex(r: number, g: number, b: number): string {
+  const clamp = (n: number) => Math.max(0, Math.min(255, Math.round(n)));
+  return `#${[clamp(r), clamp(g), clamp(b)].map((n) => n.toString(16).padStart(2, "0")).join("")}`;
+}
+
+// h in [0,360), s/l in [0,1] -- standard HSL->RGB, kept separate from
+// hexToHslTriplet's own math above since that one returns the CSS-variable
+// string shape, not numbers a caller can do arithmetic on.
+function hslToRgb(h: number, s: number, l: number): [number, number, number] {
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const hh = h / 60;
+  const x = c * (1 - Math.abs((hh % 2) - 1));
+  let [r, g, b] = [0, 0, 0];
+  if (hh < 1) [r, g, b] = [c, x, 0];
+  else if (hh < 2) [r, g, b] = [x, c, 0];
+  else if (hh < 3) [r, g, b] = [0, c, x];
+  else if (hh < 4) [r, g, b] = [0, x, c];
+  else if (hh < 5) [r, g, b] = [x, 0, c];
+  else [r, g, b] = [c, 0, x];
+  const m = l - c / 2;
+  return [(r + m) * 255, (g + m) * 255, (b + m) * 255];
+}
+
+function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
+  const [rn, gn, bn] = [r / 255, g / 255, b / 255];
+  const max = Math.max(rn, gn, bn);
+  const min = Math.min(rn, gn, bn);
   const l = (max + min) / 2;
-  if (max === min) return [0, 0, l * 100];
+  if (max === min) return [0, 0, l];
   const d = max - min;
   const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
   let h: number;
   switch (max) {
-    case r:
-      h = ((g - b) / d + (g < b ? 6 : 0)) * 60;
+    case rn:
+      h = ((gn - bn) / d + (gn < bn ? 6 : 0)) * 60;
       break;
-    case g:
-      h = ((b - r) / d + 2) * 60;
+    case gn:
+      h = ((bn - rn) / d + 2) * 60;
       break;
     default:
-      h = ((r - g) / d + 4) * 60;
+      h = ((rn - gn) / d + 4) * 60;
   }
-  return [h, s * 100, l * 100];
+  return [h, s, l];
 }
 
-function hslToHex(h: number, s: number, l: number): string {
-  const sN = s / 100;
-  const lN = l / 100;
-  const k = (n: number) => (n + h / 30) % 12;
-  const a = sN * Math.min(lN, 1 - lN);
-  const f = (n: number) => lN - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
-  return rgbToHex(f(0) * 255, f(8) * 255, f(4) * 255);
-}
-
-/** Converts a #RRGGBB hex color to this app's "H S% L%" CSS custom
- * property format (see index.css's --primary etc) -- every themed token
- * here is a raw space-separated HSL triplet consumed via hsl(var(--x)),
- * not a literal color, so a branding override has to match that shape
- * rather than just writing the hex straight into the variable. */
-export function hexToHslTriplet(hex: string): string | null {
-  const hsl = hexToHsl(hex);
-  if (!hsl) return null;
-  const [h, s, l] = hsl;
-  return `${Math.round(h)} ${Math.round(s)}% ${Math.round(l)}%`;
-}
-
-/** Nudges a color's lightness (hue/saturation preserved) toward black or
- * white, one step at a time, until its auto-picked text color
- * (contrastForegroundHsl) would clear WCAG AA against it. Returns the
- * original color unchanged if it already passes or isn't a valid hex --
- * this is a one-tap "make this safe" fix, not a color redesign. */
-export function nearestAccessibleColor(hex: string): string {
-  const hsl = hexToHsl(hex);
-  if (!hsl) return hex;
-  const textColor = contrastForegroundHsl(hex);
-  if (meetsWcagAA(hex, textColor)) return hex;
-
-  const [h, s, l] = hsl;
-  // Darkening helps white text pass, lightening helps black text pass.
-  const towardDark = textColor === "#ffffff";
-  let candidate = l;
-  for (let i = 0; i < 50; i++) {
-    candidate = towardDark ? Math.max(0, candidate - 2) : Math.min(100, candidate + 2);
-    const next = hslToHex(h, s, candidate);
-    if (meetsWcagAA(next, textColor)) return next;
-    if (candidate === 0 || candidate === 100) break;
+// Nudges a color's lightness (hue/saturation held constant, so it still
+// reads as "the same color," just a shade darker/lighter) until its
+// auto-picked foreground text (contrastForegroundHsl's black-or-white pick)
+// clears WCAG AA against it -- the fix for the branding dialog's live
+// contrast guardrail. Tries darkening and lightening in parallel and
+// returns whichever direction gets there first with the smaller nudge;
+// null if the input hex is invalid, or in the (practically unreachable
+// for a real color) case neither direction clears it within the full
+// lightness range.
+export function nearestAccessibleColor(hex: string): string | null {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return null;
+  if (meetsWcagAA(hex, `#${contrastForegroundHsl(hex).endsWith("100%") ? "ffffff" : "000000"}`)) {
+    return hex;
   }
-  return hex;
+  const [h, s, l] = rgbToHsl(...rgb);
+  const STEPS = 40;
+  for (let i = 1; i <= STEPS; i++) {
+    const delta = i / STEPS / 2; // walk from current lightness to 0 or 1 over STEPS steps
+    for (const candidateL of [l - delta, l + delta]) {
+      if (candidateL < 0 || candidateL > 1) continue;
+      const candidateHex = rgbToHex(...hslToRgb(h, s, candidateL));
+      const fg = contrastForegroundHsl(candidateHex).endsWith("100%") ? "#ffffff" : "#000000";
+      if (meetsWcagAA(candidateHex, fg)) return candidateHex;
+    }
+  }
+  return null;
 }

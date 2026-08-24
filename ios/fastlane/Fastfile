@@ -1,0 +1,117 @@
+default_platform(:ios)
+
+# This lane assumes it's being run with `ios/` as the working directory
+# (see .github/workflows/ios-testflight.yml) -- every path below is
+# relative to that, not the repo root. It takes a certificate + a
+# provisioning profile that already exist (created by hand in the Apple
+# Developer / App Store Connect portals -- see Phase 2 of the app-store
+# plan) rather than using `match` to generate/store them in a separate
+# encrypted git repo, since that's one more piece of infrastructure this
+# project doesn't otherwise need.
+platform :ios do
+  # Shared by both lanes below -- everything through build_app (signing
+  # setup + the actual archive) is identical whether or not the result gets
+  # uploaded afterward. Returns the keychain name so each caller can clean
+  # up after its own next step (upload_to_testflight for beta, nothing
+  # further for verify_build) rather than this private lane owning cleanup
+  # timing it doesn't actually control.
+  private_lane :build_only do
+    keychain_name = "forge-ci.keychain"
+    keychain_password = SecureRandom.hex(16)
+
+    create_keychain(
+      name: keychain_name,
+      password: keychain_password,
+      default_keychain: true,
+      unlock: true,
+      timeout: 1800,
+      lock_when_sleeps: false,
+    )
+
+    import_certificate(
+      certificate_path: ENV.fetch("IOS_DIST_CERTIFICATE_PATH"),
+      certificate_password: ENV.fetch("IOS_DIST_CERTIFICATE_PASSWORD"),
+      keychain_name: keychain_name,
+      keychain_password: keychain_password,
+    )
+
+    install_provisioning_profile(path: ENV.fetch("IOS_PROVISIONING_PROFILE_PATH"))
+
+    # Plain `||` is wrong here -- GitHub Actions sets an env var to an empty
+    # string (not "unset") whenever a workflow references an optional repo
+    # variable that was never configured, and Ruby's `||` only falls back
+    # on nil/false, not "". Without this, an unset IOS_BUNDLE_ID silently
+    # set PRODUCT_BUNDLE_IDENTIFIER to "", which is exactly what produced
+    # "Bundle identifier is missing" at archive time.
+    env_bundle_id = ENV["IOS_BUNDLE_ID"]
+    bundle_id = (env_bundle_id.nil? || env_bundle_id.empty?) ? "com.foreperformancesystems.forge" : env_bundle_id
+    profile_name = ENV.fetch("IOS_PROVISIONING_PROFILE_NAME")
+
+    # team_id isn't picked up automatically from the Appfile here -- without
+    # it explicitly, DEVELOPMENT_TEAM in the pbxproj stays unset and archiving
+    # fails with "Signing for 'App' requires a development team", even though
+    # the cert/profile/bundle id are all otherwise configured correctly.
+    update_code_signing_settings(
+      use_automatic_signing: false,
+      path: "App/App.xcodeproj",
+      team_id: ENV.fetch("APPLE_TEAM_ID"),
+      code_sign_identity: "Apple Distribution",
+      profile_name: profile_name,
+      bundle_identifier: bundle_id,
+    )
+
+    # TestFlight (and the App Store) reject a re-upload of a build number
+    # that's already been used for this bundle id -- the run number is
+    # unique and monotonically increasing across every workflow run, unlike
+    # a timestamp (which two builds triggered in the same second could
+    # collide on) or the app's own marketing version (which doesn't change
+    # between TestFlight builds of the same release). Harmless to bump this
+    # even for a verify_build run that never uploads -- build numbers are
+    # local to the archive, not reserved/consumed against Apple until an
+    # actual upload happens.
+    increment_build_number(
+      xcodeproj: "App/App.xcodeproj",
+      build_number: ENV.fetch("GITHUB_RUN_NUMBER"),
+    )
+
+    build_app(
+      # No .xcworkspace -- this project uses Swift Package Manager for
+      # plugin integration (see ios/App/CapApp-SPM), not CocoaPods, so
+      # there's never a generated workspace wrapping the project the way
+      # `pod install` would have produced.
+      project: "App/App.xcodeproj",
+      scheme: "App",
+      export_method: "app-store",
+      export_options: {
+        provisioningProfiles: { bundle_id => profile_name },
+      },
+    )
+
+    keychain_name
+  end
+
+  desc "Build the app and upload a new build to TestFlight"
+  lane :beta do
+    keychain_name = build_only
+
+    api_key = app_store_connect_api_key(
+      key_id: ENV.fetch("APP_STORE_CONNECT_KEY_ID"),
+      issuer_id: ENV.fetch("APP_STORE_CONNECT_ISSUER_ID"),
+      key_filepath: ENV.fetch("APP_STORE_CONNECT_API_KEY_PATH"),
+      in_house: false,
+    )
+
+    upload_to_testflight(
+      api_key: api_key,
+      skip_waiting_for_build_processing: true,
+    )
+
+    delete_keychain(name: keychain_name)
+  end
+
+  desc "Archive and sign only, no TestFlight upload -- verifies native (Swift/Xcode project) changes actually compile on a real toolchain without spending any of Apple's rate-limited TestFlight upload quota (build_app itself is never rate-limited, only upload_to_testflight is). Use this to check native changes before batching them into an actual beta upload."
+  lane :verify_build do
+    keychain_name = build_only
+    delete_keychain(name: keychain_name)
+  end
+end

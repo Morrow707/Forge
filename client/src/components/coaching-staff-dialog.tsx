@@ -13,57 +13,24 @@ import { Label } from "@/components/ui/label";
 import { apiRequest, getJson, ApiError } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
-import { UserMinus, Copy } from "lucide-react";
+import { UserMinus, Copy, Settings2, ChevronDown } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { COACH_SECTIONS, COACH_SECTION_LABEL, type CoachSection } from "@shared/coach-sections";
+import { cn } from "@/lib/utils";
 
-type StaffMember = { id: number; name: string; email: string; staffTitle: string | null };
+type StaffMember = {
+  id: number;
+  name: string;
+  email: string;
+  hiddenSections: CoachSection[];
+  staffTitle: string | null;
+};
 type StaffResponse = { primaryCoachId: number; staff: StaffMember[] };
 
-const TITLE_PRESETS = ["Nutritionist", "Strength Coach", "Athletic Trainer", "Sports Psych"];
-
-function StaffTitleField({ staffCoachId, initialTitle }: { staffCoachId: number; initialTitle: string | null }) {
-  const qc = useQueryClient();
-  const [title, setTitle] = useState(initialTitle ?? "");
-
-  const saveMutation = useMutation({
-    mutationFn: async (next: string) => {
-      await apiRequest("PATCH", `/api/coach/staff/${staffCoachId}/title`, {
-        staffTitle: next.trim() || null,
-      });
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/coach/staff"] }),
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't save title"),
-  });
-
-  function save(next: string) {
-    setTitle(next);
-    saveMutation.mutate(next);
-  }
-
-  return (
-    <div className="mt-2 space-y-1.5">
-      <Input
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        onBlur={() => save(title)}
-        placeholder="Display label (e.g. Nutritionist) -- defaults to Coach"
-        className="h-8 text-xs"
-        maxLength={40}
-      />
-      <div className="flex flex-wrap gap-1.5">
-        {TITLE_PRESETS.map((preset) => (
-          <button
-            key={preset}
-            type="button"
-            onClick={() => save(preset)}
-            className="rounded-full border border-border px-2 py-0.5 text-[11px] text-muted-foreground hover:border-primary/50 hover:text-foreground"
-          >
-            {preset}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
+// Free-form is the point (see staffTitle's own comment in schema.ts) -- these
+// are just one-tap starting points for the common cases, not an exhaustive
+// or enforced list.
+const STAFF_TITLE_PRESETS = ["Nutritionist", "Strength Coach", "Athletic Trainer", "Sports Psych"];
 
 /** Lets a whole coaching staff (assistant/position coaches) share one
  * roster/programs/exercises/analytics instead of one coach owning
@@ -81,6 +48,8 @@ export function CoachingStaffDialog({
   const { user } = useAuth();
   const qc = useQueryClient();
   const [joinCode, setJoinCode] = useState("");
+  const [editingPermissionsFor, setEditingPermissionsFor] = useState<number | null>(null);
+  const [titleDraft, setTitleDraft] = useState("");
 
   const { data, isLoading } = useQuery<StaffResponse>({
     queryKey: ["/api/coach/staff"],
@@ -104,6 +73,22 @@ export function CoachingStaffDialog({
       toast.success("Joined -- you now share this staff's full roster and programs");
     },
     onError: (err: ApiError) => toast.error(err.message || "Couldn't join with that code"),
+  });
+
+  const permissionsMutation = useMutation({
+    mutationFn: async ({ staffCoachId, hiddenSections }: { staffCoachId: number; hiddenSections: CoachSection[] }) => {
+      await apiRequest("PATCH", `/api/coach/staff/${staffCoachId}/permissions`, { hiddenSections });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/coach/staff"] }),
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't update their access"),
+  });
+
+  const titleMutation = useMutation({
+    mutationFn: async ({ staffCoachId, title }: { staffCoachId: number; title: string }) => {
+      await apiRequest("PATCH", `/api/coach/staff/${staffCoachId}/title`, { title });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/coach/staff"] }),
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't update their title"),
   });
 
   const removeMutation = useMutation({
@@ -180,36 +165,133 @@ export function CoachingStaffDialog({
               <div className="space-y-1.5">
                 <Label>Staff members</Label>
                 <div className="space-y-2">
-                  {data.staff.map((s) => (
-                    <div key={s.id} className="rounded-md border border-border p-2.5 text-sm">
-                      <div className="flex items-center justify-between">
-                        <div className="min-w-0">
-                          <p className="truncate font-medium">
-                            {s.name}
-                            {s.staffTitle && (
-                              <span className="ml-1.5 text-xs font-normal text-muted-foreground">
-                                · {s.staffTitle}
-                              </span>
+                  {data.staff.map((s) => {
+                    const isEditingThis = editingPermissionsFor === s.id;
+                    return (
+                      <div key={s.id} className="rounded-md border border-border">
+                        <div className="flex items-center justify-between p-2.5 text-sm">
+                          <div className="min-w-0">
+                            <p className="flex items-center gap-1.5 truncate font-medium">
+                              {s.name}
+                              {s.staffTitle && (
+                                <span className="shrink-0 rounded-full border border-border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                  {s.staffTitle}
+                                </span>
+                              )}
+                            </p>
+                            <p className="truncate text-xs text-muted-foreground">{s.email}</p>
+                            {s.hiddenSections.length > 0 && (
+                              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                                {s.hiddenSections.length} section{s.hiddenSections.length === 1 ? "" : "s"} hidden
+                              </p>
                             )}
-                          </p>
-                          <p className="truncate text-xs text-muted-foreground">{s.email}</p>
+                          </div>
+                          {isPrimary && (
+                            <div className="flex shrink-0 items-center">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                aria-label={isEditingThis ? `Close ${s.name}'s access settings` : `Edit ${s.name}'s access`}
+                                onClick={() => {
+                                  setEditingPermissionsFor(isEditingThis ? null : s.id);
+                                  setTitleDraft(isEditingThis ? "" : (s.staffTitle ?? ""));
+                                }}
+                              >
+                                {isEditingThis ? (
+                                  <ChevronDown className="h-4 w-4" />
+                                ) : (
+                                  <Settings2 className="h-4 w-4" />
+                                )}
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                aria-label={`Remove ${s.name}`}
+                                onClick={() => removeMutation.mutate(s.id)}
+                                disabled={removeMutation.isPending}
+                              >
+                                <UserMinus className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          )}
                         </div>
-                        {isPrimary && (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            aria-label={`Remove ${s.name}`}
-                            onClick={() => removeMutation.mutate(s.id)}
-                            disabled={removeMutation.isPending}
-                          >
-                            <UserMinus className="h-4 w-4" />
-                          </Button>
+                        {isEditingThis && (
+                          <div className="space-y-2 border-t border-border p-2.5">
+                            <div className="space-y-1.5">
+                              <p className="text-xs text-muted-foreground">
+                                Display title -- shown instead of "Coach" wherever {s.name.split(" ")[0]}'s
+                                name appears. Leave blank to keep the default.
+                              </p>
+                              <div className="flex items-center gap-2">
+                                <Input
+                                  value={titleDraft}
+                                  onChange={(e) => setTitleDraft(e.target.value)}
+                                  onBlur={() => {
+                                    if (titleDraft !== (s.staffTitle ?? "")) {
+                                      titleMutation.mutate({ staffCoachId: s.id, title: titleDraft });
+                                    }
+                                  }}
+                                  placeholder="e.g. Nutritionist"
+                                  maxLength={40}
+                                  className="h-8 text-xs"
+                                />
+                              </div>
+                              <div className="flex flex-wrap gap-1.5">
+                                {STAFF_TITLE_PRESETS.map((preset) => (
+                                  <button
+                                    key={preset}
+                                    type="button"
+                                    onClick={() => {
+                                      setTitleDraft(preset);
+                                      titleMutation.mutate({ staffCoachId: s.id, title: preset });
+                                    }}
+                                    className={cn(
+                                      "rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary",
+                                      s.staffTitle === preset && "border-primary/50 text-primary",
+                                    )}
+                                  >
+                                    {preset}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                            <p className="pt-1 text-xs text-muted-foreground">
+                              What {s.name.split(" ")[0]} can see -- unchecked sections stay hidden from
+                              their nav until you turn them back on.
+                            </p>
+                            <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+                              {COACH_SECTIONS.map((section) => {
+                                const checked = !s.hiddenSections.includes(section);
+                                return (
+                                  <label
+                                    key={section}
+                                    className={cn(
+                                      "flex items-center gap-1.5 rounded-md border border-border px-2 py-1.5 text-xs",
+                                      permissionsMutation.isPending && "opacity-60",
+                                    )}
+                                  >
+                                    <Checkbox
+                                      checked={checked}
+                                      disabled={permissionsMutation.isPending}
+                                      onCheckedChange={(next) => {
+                                        const hiddenSections = next
+                                          ? s.hiddenSections.filter((sec) => sec !== section)
+                                          : [...s.hiddenSections, section];
+                                        permissionsMutation.mutate({ staffCoachId: s.id, hiddenSections });
+                                      }}
+                                    />
+                                    {COACH_SECTION_LABEL[section]}
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </div>
                         )}
                       </div>
-                      {isPrimary && <StaffTitleField staffCoachId={s.id} initialTitle={s.staffTitle} />}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
