@@ -102,6 +102,7 @@ import { askClaude, askClaudeStructured, askClaudeWithTools, askClaudeVision, as
 import { eq, and, or, inArray, asc, desc, lt, lte, gte, gt, isNull, isNotNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { diffLines } from "diff";
+import { fetchUrlText } from "./url-text";
 import {
   generateCoachCode,
   generateResetToken,
@@ -749,6 +750,24 @@ const updateGuidelinesResultSchema = z.object({
 });
 
 const knowledgeAskQuestionResultSchema = z.object({ reply: z.string() });
+
+// What propose_movement_profile is allowed to hand back -- every threshold
+// field optional (the admin might only be teaching camera framing, or only
+// one of the five lift thresholds), summary required since the admin always
+// needs a reply. Structurally the same shape as applyMovementProfileProposalSchema
+// (shared/schema.ts) plus sourceSummary being called "summary" here -- kept
+// as two separate schemas since one validates an AI tool call and the other
+// validates a client request, even though they describe the same fields.
+const movementProfileProposalResultSchema = z.object({
+  minKneeAngleDeg: z.number().optional(),
+  valgusRatioMin: z.number().optional(),
+  maxTorsoLeanDeg: z.number().optional(),
+  barPathDeviationMaxCm: z.number().optional(),
+  barTiltMaxDeg: z.number().optional(),
+  jumpHeightOutlierPercent: z.number().optional(),
+  cameraFramingNotes: z.string().optional(),
+  summary: z.string(),
+});
 
 // Below this size, a bucket (a sport, an age bracket, a gender) is dropped
 // from every platform-trends breakdown rather than shown with a small
@@ -4840,6 +4859,273 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
       .from(movementProfiles)
       .where(and(eq(movementProfiles.movementType, movementType), eq(movementProfiles.status, "active")));
     return row ?? null;
+  },
+
+  async getMovementKnowledgeChat(
+    movementType: string,
+  ): Promise<{ activeProfile: MovementProfile | null; messages: MovementKnowledgeMessage[] }> {
+    const [activeProfile, messages] = await Promise.all([
+      this.getActiveMovementProfile(movementType),
+      db.query.movementKnowledgeMessages.findMany({
+        where: eq(movementKnowledgeMessages.movementType, movementType),
+        orderBy: asc(movementKnowledgeMessages.createdAt),
+      }),
+    ]);
+    return { activeProfile, messages };
+  },
+
+  // Same propose-then-review design as updateAiKnowledgeFromChat, but the AI
+  // produces structured threshold fields (propose_movement_profile) instead
+  // of a freeform document, and can optionally be pointed at a URL (fetched
+  // server-side via fetchUrlText -- see that file for the SSRF guards) in
+  // addition to, or instead of, typed text. The fetched page text is only
+  // ever used for this one turn's prompt, never persisted -- what gets
+  // stored is the admin's own message and the AI's summary of what it
+  // learned, same as any other turn.
+  async updateMovementKnowledgeFromChat(
+    adminId: number,
+    movementType: string,
+    input: SendMovementKnowledgeChatMessageInput,
+  ) {
+    const typedContent = input.content?.trim() || "";
+    const displayContent = input.url
+      ? typedContent
+        ? `${typedContent}\n\nSource: ${input.url}`
+        : `Learn from: ${input.url}`
+      : typedContent;
+
+    const [adminMessage] = await db
+      .insert(movementKnowledgeMessages)
+      .values({ movementType, authorId: adminId, role: "admin", content: displayContent })
+      .returning();
+
+    const fail = async (text: string) => {
+      const [assistantMessage] = await db
+        .insert(movementKnowledgeMessages)
+        .values({ movementType, authorId: adminId, role: "assistant", content: text })
+        .returning();
+      return {
+        adminMessage,
+        assistantMessage,
+        activeProfile: await this.getActiveMovementProfile(movementType),
+        proposal: null as (ApplyMovementProfileProposalInput & { summary: string }) | null,
+      };
+    };
+
+    if (!aiEnabled) {
+      return fail("AI isn't set up yet -- ask whoever manages this Forge instance to configure it.");
+    }
+
+    let sourceText = "";
+    if (input.url) {
+      const fetched = await fetchUrlText(input.url);
+      if ("error" in fetched) return fail(fetched.error);
+      sourceText = fetched.text;
+    }
+
+    const [currentProfile, history] = await Promise.all([
+      this.getActiveMovementProfile(movementType),
+      db.query.movementKnowledgeMessages.findMany({
+        where: eq(movementKnowledgeMessages.movementType, movementType),
+        orderBy: asc(movementKnowledgeMessages.createdAt),
+      }),
+    ]);
+
+    const askQuestionTool = {
+      name: "ask_question",
+      description:
+        "Reply conversationally without proposing any tracking-profile change. Use this when the admin's message needs clarification, is just a question about what's already taught, or isn't kinematic/coaching guidance at all.",
+      input_schema: {
+        type: "object",
+        properties: { reply: { type: "string", description: "Your conversational reply to the admin." } },
+        required: ["reply"],
+      },
+    };
+
+    const proposeMovementProfileTool = {
+      name: "propose_movement_profile",
+      description:
+        "Proposes updated camera-tracker thresholds for this movement, for the admin to review before it takes effect. Only include a field once you've actually learned something concrete about it -- an omitted field keeps whatever the current profile already has (or the tracker's hardcoded default if there's no profile yet), it does NOT get cleared.",
+      input_schema: {
+        type: "object",
+        properties: {
+          minKneeAngleDeg: {
+            type: "number",
+            description:
+              "Bottom-position knee angle (degrees) beyond which depth is flagged shallow -- lower means deeper is required. Only for movements with a real squat-depth judgment (squat/hinge/lunge patterns); omit entirely for movements where knee depth isn't a meaningful check.",
+          },
+          valgusRatioMin: {
+            type: "number",
+            description:
+              "Minimum knee-width/ankle-width ratio before flagging knee valgus (caving in). 1.0 means knees exactly over ankles; lower allows more inward travel before flagging.",
+          },
+          maxTorsoLeanDeg: {
+            type: "number",
+            description: "Max forward torso lean from vertical (degrees) before flagging excessive forward lean.",
+          },
+          barPathDeviationMaxCm: {
+            type: "number",
+            description:
+              "Max acceptable horizontal bar drift (cm) before flagging bar-path drift. Only meaningful for barbell lifts.",
+          },
+          barTiltMaxDeg: {
+            type: "number",
+            description: "Max acceptable side-to-side bar tilt (degrees) before flagging uneven bar tilt.",
+          },
+          jumpHeightOutlierPercent: {
+            type: "number",
+            description:
+              "Jump tracking only (movementType \"jump\"): how far (%) a single rep's jump height can deviate from the set's own median before it's flagged as a likely tracking glitch rather than a real rep.",
+          },
+          cameraFramingNotes: {
+            type: "string",
+            description:
+              "Where to place the camera for this movement, shown to the athlete before they record -- e.g. 'Side-on, framed from knees to bar path, far enough back to catch the full range of motion.'",
+          },
+          summary: {
+            type: "string",
+            description: "A short (1-3 sentence) conversational reply describing what you're proposing and why.",
+          },
+        },
+        required: ["summary"],
+      },
+    };
+
+    const system = `You maintain camera-tracker kinematic tracking profiles for "${movementType}" movements on a strength-and-conditioning platform. The app's pose-tracking pipeline (MediaPipe-based, on-device) already runs deterministic checks -- knee angle, knee valgus ratio, torso lean, bar-path drift, bar tilt -- against threshold numbers; your job is to refine those numbers and camera guidance for this specific movement based on what the admin teaches you, not to invent a new kind of check. "jump" is a special movementType for vertical/broad jump tracking, which has no bar or knee-depth judgment -- only jumpHeightOutlierPercent and cameraFramingNotes apply there.
+
+You have two tools, and must pick exactly one every turn:
+- ask_question: for anything that needs clarification, is just a question, or isn't kinematic/coaching guidance at all.
+- propose_movement_profile: once the admin has taught you something concrete enough to turn into a number or camera note. Only set the fields you actually learned something about -- everything else is left alone (see the tool's description).
+
+Current active profile for ${movementType}${
+      currentProfile
+        ? `:\n${JSON.stringify(
+            {
+              minKneeAngleDeg: currentProfile.minKneeAngleDeg,
+              valgusRatioMin: currentProfile.valgusRatioMin,
+              maxTorsoLeanDeg: currentProfile.maxTorsoLeanDeg,
+              barPathDeviationMaxCm: currentProfile.barPathDeviationMaxCm,
+              barTiltMaxDeg: currentProfile.barTiltMaxDeg,
+              jumpHeightOutlierPercent: currentProfile.jumpHeightOutlierPercent,
+              cameraFramingNotes: currentProfile.cameraFramingNotes,
+            },
+            null,
+            2,
+          )}`
+        : " -- none applied yet, the tracker is using its built-in hardcoded defaults."
+    }`;
+
+    const historyText = history
+      .map((m) => `${m.role === "admin" ? "Admin" : "Assistant"}: ${m.content}`)
+      .join("\n");
+
+    const userPrompt = `Conversation so far:
+${historyText}
+${sourceText ? `\n\nExtracted text from the URL the admin just shared:\n${sourceText}` : ""}
+
+Respond to the admin's latest message by calling ask_question or propose_movement_profile.`;
+
+    const result = await askClaudeWithTools(system, userPrompt, [askQuestionTool, proposeMovementProfileTool], {
+      maxTokens: 2048,
+    });
+    if (!result) {
+      return fail("Sorry, I couldn't process that just now -- try again in a bit.");
+    }
+
+    if (result.toolName === "ask_question") {
+      const parsedQuestion = knowledgeAskQuestionResultSchema.safeParse(result.input);
+      const reply = parsedQuestion.success ? parsedQuestion.data.reply.trim() : "";
+      const [assistantMessage] = await db
+        .insert(movementKnowledgeMessages)
+        .values({ movementType, authorId: adminId, role: "assistant", content: reply || "Can you say more about that?" })
+        .returning();
+      return { adminMessage, assistantMessage, activeProfile: currentProfile, proposal: null };
+    }
+
+    const parsed = movementProfileProposalResultSchema.safeParse(result.input);
+    if (!parsed.success) {
+      return fail("Sorry, that came back malformed -- try again in a bit.");
+    }
+
+    const [assistantMessage] = await db
+      .insert(movementKnowledgeMessages)
+      .values({
+        movementType,
+        authorId: adminId,
+        role: "assistant",
+        content: parsed.data.summary.trim() || "Here's what I'd change -- review it below.",
+      })
+      .returning();
+
+    return {
+      adminMessage,
+      assistantMessage,
+      activeProfile: currentProfile,
+      proposal: {
+        minKneeAngleDeg: parsed.data.minKneeAngleDeg ?? currentProfile?.minKneeAngleDeg ?? null,
+        valgusRatioMin: parsed.data.valgusRatioMin ?? currentProfile?.valgusRatioMin ?? null,
+        maxTorsoLeanDeg: parsed.data.maxTorsoLeanDeg ?? currentProfile?.maxTorsoLeanDeg ?? null,
+        barPathDeviationMaxCm: parsed.data.barPathDeviationMaxCm ?? currentProfile?.barPathDeviationMaxCm ?? null,
+        barTiltMaxDeg: parsed.data.barTiltMaxDeg ?? currentProfile?.barTiltMaxDeg ?? null,
+        jumpHeightOutlierPercent:
+          parsed.data.jumpHeightOutlierPercent ?? currentProfile?.jumpHeightOutlierPercent ?? null,
+        cameraFramingNotes: parsed.data.cameraFramingNotes ?? currentProfile?.cameraFramingNotes ?? null,
+        sourceSummary: parsed.data.summary.trim(),
+        summary: parsed.data.summary.trim(),
+      },
+    };
+  },
+
+  // Commits a previously-proposed profile: archives the current active row
+  // for this movementType (if any -- full history stays for audit/revert)
+  // and inserts the new one as the active version. Nothing above this call
+  // ever touches movementProfiles itself -- a chat proposal has zero effect
+  // on a live tracker until this explicit step.
+  async applyMovementProfileProposal(
+    adminId: number,
+    movementType: string,
+    proposal: ApplyMovementProfileProposalInput,
+  ): Promise<{ profile: MovementProfile; assistantMessage: MovementKnowledgeMessage }> {
+    return db.transaction(async (tx) => {
+      const [current] = await tx
+        .select()
+        .from(movementProfiles)
+        .where(and(eq(movementProfiles.movementType, movementType), eq(movementProfiles.status, "active")));
+
+      if (current) {
+        await tx.update(movementProfiles).set({ status: "archived" }).where(eq(movementProfiles.id, current.id));
+      }
+
+      const [profile] = await tx
+        .insert(movementProfiles)
+        .values({
+          movementType,
+          status: "active",
+          version: (current?.version ?? 0) + 1,
+          minKneeAngleDeg: proposal.minKneeAngleDeg ?? null,
+          valgusRatioMin: proposal.valgusRatioMin ?? null,
+          maxTorsoLeanDeg: proposal.maxTorsoLeanDeg ?? null,
+          barPathDeviationMaxCm: proposal.barPathDeviationMaxCm ?? null,
+          barTiltMaxDeg: proposal.barTiltMaxDeg ?? null,
+          jumpHeightOutlierPercent: proposal.jumpHeightOutlierPercent ?? null,
+          cameraFramingNotes: proposal.cameraFramingNotes ?? null,
+          sourceSummary: proposal.sourceSummary ?? null,
+          createdBy: adminId,
+        })
+        .returning();
+
+      const [assistantMessage] = await tx
+        .insert(movementKnowledgeMessages)
+        .values({
+          movementType,
+          authorId: adminId,
+          role: "assistant",
+          content: `Applied -- version ${profile.version} is now live for ${movementType}.`,
+        })
+        .returning();
+
+      return { profile, assistantMessage };
+    });
   },
 
   // "Full function" AI form check: a direct, unsupervised critique from

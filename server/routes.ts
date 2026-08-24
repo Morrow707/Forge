@@ -66,6 +66,8 @@ import {
   setCaraCapSchema,
   createTeamChallengeSchema,
   createTeamGameDaySchema,
+  sendMovementKnowledgeChatMessageSchema,
+  applyMovementProfileProposalSchema,
 } from "@shared/schema";
 import { widgetLayoutSchema } from "@shared/dashboard-widgets";
 import { computeReadiness } from "@shared/wellness";
@@ -927,6 +929,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const parsed = applyKnowledgeProposalSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: "Invalid guidelines" });
     const result = await storage.applyNutritionKnowledgeProposal(user.id, parsed.data.guidelines);
+    res.status(201).json(result);
+  });
+
+  // Same admin-teaching pattern again, for the camera tracker's per-movement
+  // kinematic thresholds (movementProfiles) instead of a freeform document --
+  // see storage.updateMovementKnowledgeFromChat. One conversation/profile per
+  // movementType, not a single global one, since a squat and a med ball throw
+  // are unrelated knowledge domains. GET /api/movement-profiles/active/:type
+  // (any authenticated role) is what the tracker itself reads.
+  app.get("/api/admin/movement-knowledge/:movementType", requireRole("admin"), async (req, res) => {
+    const result = await storage.getMovementKnowledgeChat(req.params.movementType);
+    res.json(result);
+  });
+
+  app.post("/api/admin/movement-knowledge/:movementType/chat", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = sendMovementKnowledgeChatMessageSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message || "Invalid message" });
+    const result = await storage.updateMovementKnowledgeFromChat(user.id, req.params.movementType, parsed.data);
+    res.status(201).json(result);
+  });
+
+  // Commits a proposal the chat above returned -- the admin has reviewed it
+  // client-side. Nothing reaches movementProfiles (read by every tracked set
+  // platform-wide) without this explicit step.
+  app.post("/api/admin/movement-knowledge/:movementType/apply", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = applyMovementProfileProposalSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "Invalid profile" });
+    const result = await storage.applyMovementProfileProposal(user.id, req.params.movementType, parsed.data);
     res.status(201).json(result);
   });
 
