@@ -55,6 +55,8 @@ function toFormValue(athlete: ProfileAthlete | null): ProfileFieldsValue {
     benchMaxLbs: athlete.benchMaxLbs != null ? String(athlete.benchMaxLbs) : "",
     squatMaxLbs: athlete.squatMaxLbs != null ? String(athlete.squatMaxLbs) : "",
     deadliftMaxLbs: athlete.deadliftMaxLbs != null ? String(athlete.deadliftMaxLbs) : "",
+    // Never shown/edited here -- see ProfileFieldsForm's showBio comment.
+    bio: "",
   };
 }
 
