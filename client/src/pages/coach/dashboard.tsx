@@ -1,15 +1,19 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { AppShell } from "@/components/app-shell";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { EntryPill, type CalendarEntry } from "@/components/calendar-view";
 import { CoachDayEditDialog } from "@/components/coach-day-edit-dialog";
 import { CoachDigestBanner } from "@/components/coach-digest-banner";
 import { ReengagementBanner } from "@/components/reengagement-banner";
 import { useAuth } from "@/hooks/use-auth";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, getJson } from "@/lib/queryClient";
+import { resolveWidgetOrder } from "@/lib/widget-layout";
+import type { WidgetLayoutEntry } from "@shared/dashboard-widgets";
 import { cn } from "@/lib/utils";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -37,9 +41,55 @@ import {
   Mail,
   QrCode,
   HeartPulse,
+  SlidersHorizontal,
 } from "lucide-react";
 import { toast } from "sonner";
 import { addDays, format, formatISO, isToday } from "date-fns";
+
+// The dashboard's 4 top-level boxes, in their default (and currently only
+// supported) render order -- see CustomizeDashboardPopover for the show/
+// hide UI. Kept as an ordered {id,hidden}[] in storage (not a flat hidden-
+// id list) so real drag-to-reorder can build on this later without
+// another migration, even though today's control is hide-only.
+const DASHBOARD_WIDGETS: { id: string; label: string }[] = [
+  { id: "next-3-days", label: "Next 3 Days" },
+  { id: "stat-cards", label: "Stat Cards" },
+  { id: "recent-programs", label: "Recent Programs" },
+  { id: "team-invite", label: "Invite Athletes" },
+];
+
+function CustomizeDashboardPopover({
+  hidden,
+  onToggle,
+}: {
+  hidden: Set<string>;
+  onToggle: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button type="button" variant="outline" size="sm" className="gap-1.5">
+          <SlidersHorizontal className="h-3.5 w-3.5" />
+          Customize
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-64" align="end">
+        <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
+          Show / hide dashboard boxes
+        </p>
+        <div className="space-y-2">
+          {DASHBOARD_WIDGETS.map((w) => (
+            <label key={w.id} className="flex items-center gap-2 text-sm hover:cursor-pointer">
+              <Checkbox checked={!hidden.has(w.id)} onCheckedChange={() => onToggle(w.id)} />
+              {w.label}
+            </label>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 type ProgramSummary = {
   id: number;
@@ -56,6 +106,27 @@ type TeamSummary = { id: number; name: string; code: string | null };
 
 export default function CoachDashboard() {
   const { user } = useAuth();
+  const qc = useQueryClient();
+  const { data: widgetPrefs } = useQuery<{ layout: WidgetLayoutEntry[] }>({
+    queryKey: ["/api/coach/widget-prefs"],
+    queryFn: () => getJson("/api/coach/widget-prefs"),
+  });
+  const widgetLayout = resolveWidgetOrder(
+    widgetPrefs?.layout,
+    DASHBOARD_WIDGETS.map((w) => w.id),
+  );
+  const hiddenWidgets = new Set(widgetLayout.filter((e) => e.hidden).map((e) => e.id));
+  const widgetPrefsMutation = useMutation({
+    mutationFn: async (layout: WidgetLayoutEntry[]) => {
+      await apiRequest("PATCH", "/api/coach/widget-prefs", { layout });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/coach/widget-prefs"] }),
+  });
+  function toggleWidget(id: string) {
+    const next = widgetLayout.map((e) => (e.id === id ? { ...e, hidden: !e.hidden } : e));
+    widgetPrefsMutation.mutate(next);
+  }
+
   const { data: programs = [] } = useQuery<ProgramSummary[]>({
     queryKey: ["/api/coach/programs"],
   });
@@ -96,11 +167,16 @@ export default function CoachDashboard() {
   } | null>(null);
 
   return (
-    <AppShell title={`Welcome, ${user?.name?.split(" ")[0] ?? "Coach"}`} fitScreen>
+    <AppShell
+      title={`Welcome, ${user?.name?.split(" ")[0] ?? "Coach"}`}
+      fitScreen
+      actions={<CustomizeDashboardPopover hidden={hiddenWidgets} onToggle={toggleWidget} />}
+    >
       <div className="flex h-full min-h-0 flex-col gap-3">
         <CoachDigestBanner />
         <ReengagementBanner />
 
+        {!hiddenWidgets.has("next-3-days") && (
         <Card className="shrink-0">
           <CardHeader className="flex-row items-center justify-between space-y-0 p-3 md:p-4">
             <div>
@@ -172,7 +248,9 @@ export default function CoachDashboard() {
             </div>
           </CardContent>
         </Card>
+        )}
 
+        {!hiddenWidgets.has("stat-cards") && (
         <div className="grid shrink-0 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard icon={Users} label="Athletes" value={roster.length} href="/coach/roster" />
           <StatCard
@@ -194,8 +272,11 @@ export default function CoachDashboard() {
             href="/coach/roster"
           />
         </div>
+        )}
 
+        {(!hiddenWidgets.has("recent-programs") || !hiddenWidgets.has("team-invite")) && (
         <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-3">
+          {!hiddenWidgets.has("recent-programs") && (
           <Card className="flex min-h-0 flex-col lg:col-span-2">
             <CardHeader className="flex-row shrink-0 items-center justify-between space-y-0 p-3 md:p-4">
               <div>
@@ -237,9 +318,13 @@ export default function CoachDashboard() {
               </Link>
             </CardContent>
           </Card>
+          )}
 
+          {!hiddenWidgets.has("team-invite") && (
           <TeamInviteCard teams={teams} coachCode={user?.coachCode ?? null} />
+          )}
         </div>
+        )}
       </div>
 
       <CoachDayEditDialog
