@@ -3347,6 +3347,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.status(201).json(result);
   });
 
+  // ---------------- Movement profiles (camera-tracker knowledge) ----------------
+  // Read by the camera tracker before a set starts (see bar-tracker-dialog.tsx)
+  // -- any authenticated role, not just admin, since athletes and coaches are
+  // the ones actually running tracked sets. See the admin movement-knowledge
+  // routes for how a profile gets taught and applied in the first place.
+
+  app.get("/api/movement-profiles/active/:movementType", requireAuth, async (req, res) => {
+    const movementType = req.params.movementType.trim();
+    if (!movementType) {
+      return res.status(400).json({ message: "movementType is required" });
+    }
+    const profile = await storage.getActiveMovementProfile(movementType);
+    res.json(profile);
+  });
+
   // ---------------- Notifications ----------------
   // In-app inbox, available to any authenticated user. Coaches get entries
   // from athlete comments/videos; athletes get entries from a coach's reply

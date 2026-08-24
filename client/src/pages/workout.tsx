@@ -66,7 +66,7 @@ import {
   Headphones,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
-import type { PublicUser } from "@shared/schema";
+import type { PublicUser, MovementProfile } from "@shared/schema";
 import { parseProgression } from "@/lib/progression";
 import { PlateCalculatorDialog } from "@/components/plate-calculator-dialog";
 import { ReadinessBanner } from "@/components/readiness-banner";
@@ -1514,6 +1514,16 @@ function ExerciseLogContent({
   const { user } = useAuth();
   const isCorrective = item.kind === "corrective";
   const [trackingSet, setTrackingSet] = useState<number | null>(null);
+  // "jump" mode profiles live under the literal movementType "jump" (jump
+  // tracking is its own trackingLevel, not a movementType) -- see
+  // shared/schema.ts's movementProfiles comment. Null/undefined here (no
+  // profile applied yet) just means detectFormFaults/summarizeJumpSet fall
+  // back to their own hardcoded defaults, same as before this existed.
+  const movementTypeForTracking = item.trackingLevel === "jump" ? "jump" : item.movementType;
+  const { data: activeMovementProfile } = useQuery<MovementProfile | null>({
+    queryKey: ["/api/movement-profiles/active", movementTypeForTracking],
+    enabled: item.trackingLevel !== "none" && !!movementTypeForTracking,
+  });
   // Which set the "Record" pill is currently recording for -- one form-check
   // clip per set now, not one per exercise, so this replaces what used to be
   // a single boolean. previewSetNumber/compareOpen below are the other two
@@ -2098,6 +2108,8 @@ function ExerciseLogContent({
               laterality={item.laterality}
               targetReps={parseTargetReps(item.prescribedReps)}
               loadKg={loadKg}
+              formFaultThresholds={activeMovementProfile}
+              jumpHeightOutlierPercent={activeMovementProfile?.jumpHeightOutlierPercent}
               onCapture={(metrics: RepMetrics | JumpSetMetrics) => {
                 if (trackingSet == null) return;
                 if ("bestJumpHeightCm" in metrics) {

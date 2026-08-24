@@ -46,6 +46,8 @@ import {
   redeemCodes,
   redeemCodeRedemptions,
   familyGroups,
+  movementKnowledgeMessages,
+  movementProfiles,
   type InsertUser,
 } from "@shared/schema";
 import type {
@@ -72,6 +74,10 @@ import type {
   UpdateCoachBillingInput,
   CreateRedeemCodeInput,
   UpdateFreeAgentBillingInput,
+  MovementKnowledgeMessage,
+  MovementProfile,
+  SendMovementKnowledgeChatMessageInput,
+  ApplyMovementProfileProposalInput,
 } from "@shared/schema";
 import type { WidgetLayoutEntry } from "@shared/dashboard-widgets";
 import { deleteUploadedFile } from "./uploaded-files";
@@ -4820,6 +4826,20 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
       .returning();
 
     return { assistantMessage, guidelines: trimmed };
+  },
+
+  // ---------- Movement profiles (camera-tracker kinematic knowledge) ----------
+  // Read by detectFormFaults/summarizeJumpSet (via GET
+  // /api/movement-profiles/active) for every tracked set, platform-wide --
+  // see shared/schema.ts for the full design rationale. Chat/apply routes
+  // that actually produce these rows live further down.
+
+  async getActiveMovementProfile(movementType: string): Promise<MovementProfile | null> {
+    const [row] = await db
+      .select()
+      .from(movementProfiles)
+      .where(and(eq(movementProfiles.movementType, movementType), eq(movementProfiles.status, "active")));
+    return row ?? null;
   },
 
   // "Full function" AI form check: a direct, unsupervised critique from
