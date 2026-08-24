@@ -777,6 +777,25 @@ ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "nav_label_overrides" json;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "billing_tier" text;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "billing_add_ons" json;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "is_beta_account" boolean NOT NULL DEFAULT true;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "trial_expires_at" timestamp;
+
+CREATE TABLE IF NOT EXISTS "redeem_codes" (
+  "id" serial PRIMARY KEY,
+  "code" text NOT NULL,
+  "trial_days" integer NOT NULL,
+  "max_redemptions" integer,
+  "expires_at" timestamp,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "redeem_codes_code_idx" ON "redeem_codes" ("code");
+
+CREATE TABLE IF NOT EXISTS "redeem_code_redemptions" (
+  "id" serial PRIMARY KEY,
+  "code_id" integer NOT NULL REFERENCES "redeem_codes"("id") ON DELETE CASCADE,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "redeemed_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "redeem_code_redemptions_pair_idx" ON "redeem_code_redemptions" ("code_id", "coach_id");
 `;
 
 async function main() {

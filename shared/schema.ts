@@ -263,12 +263,63 @@ export const users = pgTable(
     // this codebase sets it false automatically; it's a deliberate,
     // per-account admin action, on purpose, while still in beta.
     isBetaAccount: boolean("is_beta_account").notNull().default(true),
+    // Set by storage.redeemCode() -- while in the future, entitlements
+    // resolve fully unlocked regardless of isBetaAccount/billingTier (see
+    // getEntitlements in server/billing.ts), the same way a beta account
+    // does. Redeeming a second code before this expires extends it rather
+    // than overwriting -- codes stack, they don't reset the clock.
+    trialExpiresAt: timestamp("trial_expires_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({
     emailIdx: uniqueIndex("users_email_idx").on(table.email),
     coachCodeIdx: uniqueIndex("users_coach_code_idx").on(table.coachCode),
     calendarTokenIdx: uniqueIndex("users_calendar_token_idx").on(table.calendarToken),
+  }),
+);
+
+// Admin-created (see /api/admin/redeem-codes) -- grants trialDays of full
+// billing-unlocked access to whichever primary coach redeems it (see
+// storage.redeemCode, users.trialExpiresAt, server/billing.ts). Meant for
+// things like a 14-day new-coach welcome offer or a seasonal "free month"
+// promo -- no codes are created anywhere in this codebase yet, this is
+// just the machinery to create and redeem them whenever needed.
+export const redeemCodes = pgTable(
+  "redeem_codes",
+  {
+    id: serial("id").primaryKey(),
+    code: text("code").notNull(),
+    trialDays: integer("trial_days").notNull(),
+    // null = unlimited redemptions.
+    maxRedemptions: integer("max_redemptions"),
+    // null = never expires.
+    expiresAt: timestamp("expires_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    codeIdx: uniqueIndex("redeem_codes_code_idx").on(table.code),
+  }),
+);
+
+// One row per successful redemption -- the unique (codeId, coachId) pair
+// is what stops the same org redeeming the same code twice, and counting
+// rows here (rather than a hand-maintained counter column) is what
+// enforces maxRedemptions without a race condition between two
+// simultaneous redemptions.
+export const redeemCodeRedemptions = pgTable(
+  "redeem_code_redemptions",
+  {
+    id: serial("id").primaryKey(),
+    codeId: integer("code_id")
+      .notNull()
+      .references(() => redeemCodes.id, { onDelete: "cascade" }),
+    coachId: integer("coach_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    redeemedAt: timestamp("redeemed_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    pairIdx: uniqueIndex("redeem_code_redemptions_pair_idx").on(table.codeId, table.coachId),
   }),
 );
 
@@ -2013,6 +2064,19 @@ export const updateCoachBillingSchema = z.object({
   isBetaAccount: z.boolean().optional(),
 });
 
+// Admin-only -- creates a redeemable code (see redeemCodes table above).
+export const createRedeemCodeSchema = z.object({
+  code: z.string().trim().min(3).max(30),
+  trialDays: z.number().int().min(1).max(365),
+  maxRedemptions: z.number().int().min(1).optional().nullable(),
+  expiresAt: z.string().datetime().optional().nullable(),
+});
+
+// Coach-facing -- what a primary coach types into the redeem box.
+export const redeemCodeInputSchema = z.object({
+  code: z.string().trim().min(1).max(30),
+});
+
 export const insertExerciseSchema = createInsertSchema(exercises)
   .pick({
     name: true,
@@ -2330,6 +2394,8 @@ export type UpdateAccountEmailInput = z.infer<typeof updateAccountEmailSchema>;
 export type UpdateAccountPasswordInput = z.infer<typeof updateAccountPasswordSchema>;
 export type UpdatePersonalAccentInput = z.infer<typeof updatePersonalAccentSchema>;
 export type UpdateCoachBillingInput = z.infer<typeof updateCoachBillingSchema>;
+export type CreateRedeemCodeInput = z.infer<typeof createRedeemCodeSchema>;
+export type RedeemCodeInput = z.infer<typeof redeemCodeInputSchema>;
 export type CreateWorkoutCommentInput = z.infer<typeof createWorkoutCommentSchema>;
 export type CreateExerciseReportInput = z.infer<typeof createExerciseReportSchema>;
 export type ResolveSubmissionInput = z.infer<typeof resolveSubmissionSchema>;

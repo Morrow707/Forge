@@ -43,6 +43,8 @@ import {
   nutritionKnowledgeMessages,
   nutritionKnowledge,
   foodLogEntries,
+  redeemCodes,
+  redeemCodeRedemptions,
   type InsertUser,
 } from "@shared/schema";
 import type {
@@ -67,6 +69,7 @@ import type {
   UpdateTeamBrandingInput,
   UpdateNavPrefsInput,
   UpdateCoachBillingInput,
+  CreateRedeemCodeInput,
 } from "@shared/schema";
 import type { WidgetLayoutEntry } from "@shared/dashboard-widgets";
 import { deleteUploadedFile } from "./uploaded-files";
@@ -1034,6 +1037,67 @@ export const storage = {
         isBetaAccount: users.isBetaAccount,
       });
     return row ?? null;
+  },
+
+  // ---------- Redeem codes (trial promos) ----------
+  async createRedeemCode(input: CreateRedeemCodeInput) {
+    const [row] = await db
+      .insert(redeemCodes)
+      .values({
+        code: input.code.trim().toUpperCase(),
+        trialDays: input.trialDays,
+        maxRedemptions: input.maxRedemptions ?? null,
+        expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
+      })
+      .returning();
+    return row;
+  },
+
+  async listRedeemCodes() {
+    return db.query.redeemCodes.findMany({ orderBy: desc(redeemCodes.createdAt) });
+  },
+
+  // Extends (never overwrites) trialExpiresAt -- a coach who redeems a
+  // second code before their first trial runs out gets the days added on
+  // top, not reset to whichever code they typed most recently. Returns a
+  // discriminated result rather than throwing so the route can turn any
+  // failure into a clear, specific message instead of a generic 500.
+  async redeemCode(
+    coachId: number,
+    code: string,
+  ): Promise<{ ok: true; trialExpiresAt: Date } | { ok: false; message: string }> {
+    const record = await db.query.redeemCodes.findFirst({
+      where: eq(redeemCodes.code, code.trim().toUpperCase()),
+    });
+    if (!record) return { ok: false, message: "That code isn't valid" };
+    if (record.expiresAt && record.expiresAt.getTime() < Date.now()) {
+      return { ok: false, message: "That code has expired" };
+    }
+
+    const alreadyRedeemed = await db.query.redeemCodeRedemptions.findFirst({
+      where: and(eq(redeemCodeRedemptions.codeId, record.id), eq(redeemCodeRedemptions.coachId, coachId)),
+    });
+    if (alreadyRedeemed) return { ok: false, message: "You've already redeemed this code" };
+
+    if (record.maxRedemptions != null) {
+      const [{ count }] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(redeemCodeRedemptions)
+        .where(eq(redeemCodeRedemptions.codeId, record.id));
+      if (count >= record.maxRedemptions) {
+        return { ok: false, message: "That code has reached its redemption limit" };
+      }
+    }
+
+    const coach = await this.getUser(coachId);
+    const now = new Date();
+    const base = coach?.trialExpiresAt && coach.trialExpiresAt.getTime() > now.getTime() ? coach.trialExpiresAt : now;
+    const trialExpiresAt = new Date(base.getTime() + record.trialDays * 24 * 60 * 60 * 1000);
+
+    await db.insert(redeemCodeRedemptions).values({ codeId: record.id, coachId });
+    await db.update(users).set({ trialExpiresAt }).where(eq(users.id, coachId));
+
+    return { ok: true, trialExpiresAt };
   },
 
   async getUserByCoachCode(code: string) {
