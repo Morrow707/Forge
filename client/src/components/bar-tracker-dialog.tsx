@@ -39,6 +39,7 @@ import {
   type PoseFrame,
   type MovementGuess,
   type MovementPattern,
+  type FormFaultThresholds,
 } from "@/lib/pose-tracking";
 import { PoseLandmarker, type NormalizedLandmark, type Landmark } from "@mediapipe/tasks-vision";
 import {
@@ -171,6 +172,8 @@ export function BarTrackerDialog({
   laterality,
   targetReps,
   loadKg,
+  formFaultThresholds,
+  jumpHeightOutlierPercent,
   onCapture,
 }: {
   open: boolean;
@@ -183,6 +186,14 @@ export function BarTrackerDialog({
   // The exercise's movementType (Squat/Hinge/Press/etc.) -- gates which
   // form faults even make sense to check for (see detectFormFaults).
   movementType?: string | null;
+  // The active MovementProfile's thresholds for movementType, when the
+  // caller has fetched one -- undefined/null falls back to
+  // detectFormFaults's own hardcoded defaults, so this is a no-op until a
+  // profile actually exists and a caller starts passing it.
+  formFaultThresholds?: Partial<Record<keyof FormFaultThresholds, number | null>> | null;
+  // The active "jump" MovementProfile's jumpHeightOutlierPercent, same
+  // deal -- undefined/null falls back to summarizeJumpSet's own default.
+  jumpHeightOutlierPercent?: number | null;
   // "unilateral" exercises (single-leg squats, lunges) load one leg at a
   // time across reps/sets rather than both at once, so a same-rep left-vs-
   // right comparison wouldn't mean anything -- gates leg-drive asymmetry
@@ -663,7 +674,11 @@ export function BarTrackerDialog({
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
 
     if (mode === "jump") {
-      const jumpMetrics = summarizeJumpSet(traceRef.current);
+      const jumpMetrics = summarizeJumpSet(
+        traceRef.current,
+        undefined,
+        jumpHeightOutlierPercent ?? undefined,
+      );
       if (!jumpMetrics) {
         toast.error("Couldn't get a clean read — make sure your feet leave the ground clearly in frame.");
         changeStep("setup");
@@ -672,7 +687,7 @@ export function BarTrackerDialog({
       // Landing mechanics (valgus, forward lean) still matter for a jump;
       // squat-depth judgment and bar-path drift don't -- see the "jump"
       // context branch in detectFormFaults.
-      jumpMetrics.formFaults = detectFormFaults(framesRef.current, 0, "jump", movementType);
+      jumpMetrics.formFaults = detectFormFaults(framesRef.current, 0, "jump", movementType, formFaultThresholds);
       if (voiceEnabledRef.current) {
         speak(`Set complete. Best jump ${jumpMetrics.bestJumpHeightCm} centimeters.`);
       }
@@ -687,7 +702,13 @@ export function BarTrackerDialog({
       changeStep("setup");
       return;
     }
-    metrics.formFaults = detectFormFaults(framesRef.current, metrics.barPathDeviationCm, "lift", movementType);
+    metrics.formFaults = detectFormFaults(
+      framesRef.current,
+      metrics.barPathDeviationCm,
+      "lift",
+      movementType,
+      formFaultThresholds,
+    );
 
     const depths = computeRepDepths(
       framesRef.current,
@@ -917,7 +938,15 @@ export function BarTrackerDialog({
                     <div key={r.repNumber} className="flex items-center justify-between gap-2 text-xs">
                       <span className="font-semibold">Jump {r.repNumber}</span>
                       <span className="flex items-center gap-2 text-muted-foreground">
-                        <span>{r.jumpHeightCm} cm</span>
+                        {r.likelyTrackingGlitch && (
+                          <AlertTriangle
+                            className="h-3.5 w-3.5 text-amber-500"
+                            aria-label="Way off from this set's other jumps -- likely a tracking glitch, not corrected automatically"
+                          />
+                        )}
+                        <span className={r.likelyTrackingGlitch ? "text-amber-500" : undefined}>
+                          {r.jumpHeightCm} cm
+                        </span>
                         {r.horizontalDistanceCm != null && <span>{r.horizontalDistanceCm} cm dist.</span>}
                         {r.groundContactSeconds != null && (
                           <span>{r.groundContactSeconds}s contact</span>

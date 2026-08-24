@@ -2470,6 +2470,10 @@ export const jumpBreakdownEntrySchema = z.object({
   // previous jump's landing -- null for the first jump in the set (nothing
   // to measure from).
   groundContactSeconds: z.number().nullable(),
+  // Set by jump-tracking.ts's summarizeJumpSet when this rep's height is a
+  // statistical outlier against the rest of the set -- a likely tracking
+  // glitch, flagged rather than silently dropped or corrected.
+  likelyTrackingGlitch: z.boolean().optional(),
 });
 
 export const setLogInputSchema = z.object({

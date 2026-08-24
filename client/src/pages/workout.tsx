@@ -229,6 +229,7 @@ type JumpBreakdownEntry = {
   peakHeightCm: number;
   horizontalDistanceCm: number | null;
   groundContactSeconds: number | null;
+  likelyTrackingGlitch?: boolean;
 };
 
 type LegDriveAsymmetryEntry = {
@@ -2055,7 +2056,18 @@ function ExerciseLogContent({
                   <div className="mt-1 flex flex-wrap items-center gap-1 pl-9 text-[9px] text-muted-foreground">
                     <span className="font-semibold uppercase tracking-wide">Jump by jump</span>
                     {set.jumpBreakdown.map((j) => (
-                      <span key={j.repNumber} className="rounded bg-secondary px-1.5 py-0.5">
+                      <span
+                        key={j.repNumber}
+                        className={cn(
+                          "rounded px-1.5 py-0.5",
+                          j.likelyTrackingGlitch ? "bg-amber-500/15 text-amber-500" : "bg-secondary",
+                        )}
+                        title={
+                          j.likelyTrackingGlitch
+                            ? "Way off from this set's other jumps -- likely a tracking glitch"
+                            : undefined
+                        }
+                      >
                         {j.jumpHeightCm} cm
                         {j.groundContactSeconds != null ? ` · GCT ${j.groundContactSeconds}s` : ""}
                       </span>

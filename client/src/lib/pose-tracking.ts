@@ -406,6 +406,41 @@ export type FormFault = {
 // a bench press is just wrong regardless of what the numbers say.
 const LOWER_BODY_MOVEMENT_TYPES = new Set(["Squat", "Hinge", "Lunge"]);
 
+// The five numbers detectFormFaults judges against, previously hardcoded
+// inline. Field names match shared/schema.ts's movementProfiles columns
+// exactly, so a fetched MovementProfile row can be passed straight in as
+// overrides with no adapter -- a null field there means "use this default."
+export interface FormFaultThresholds {
+  minKneeAngleDeg: number;
+  valgusRatioMin: number;
+  maxTorsoLeanDeg: number;
+  barPathDeviationMaxCm: number;
+  barTiltMaxDeg: number;
+}
+
+const DEFAULT_FORM_FAULT_THRESHOLDS: FormFaultThresholds = {
+  minKneeAngleDeg: 100,
+  valgusRatioMin: 0.75,
+  maxTorsoLeanDeg: 45,
+  barPathDeviationMaxCm: 8,
+  barTiltMaxDeg: 7,
+};
+
+// Every field on a MovementProfile is nullable (null = "use the default"),
+// so this can't just be a spread -- an explicit null in overrides would
+// otherwise clobber the default it's supposed to fall back to.
+function resolveFormFaultThresholds(
+  overrides?: Partial<Record<keyof FormFaultThresholds, number | null>> | null,
+): FormFaultThresholds {
+  if (!overrides) return DEFAULT_FORM_FAULT_THRESHOLDS;
+  const resolved = { ...DEFAULT_FORM_FAULT_THRESHOLDS };
+  for (const key of Object.keys(DEFAULT_FORM_FAULT_THRESHOLDS) as (keyof FormFaultThresholds)[]) {
+    const value = overrides[key];
+    if (value != null) resolved[key] = value;
+  }
+  return resolved;
+}
+
 export function detectFormFaults(
   frames: PoseFrame[],
   barPathDeviationCm: number,
@@ -422,9 +457,14 @@ export function detectFormFaults(
   // behavior) rather than required, so this can be threaded through
   // gradually without breaking existing callers.
   movementType?: string | null,
+  // The active MovementProfile for movementType, when one's been applied --
+  // undefined/null for everyone else, which resolves to the same defaults
+  // this always used. See resolveFormFaultThresholds above.
+  thresholdOverrides?: Partial<Record<keyof FormFaultThresholds, number | null>> | null,
 ): FormFault[] {
   const faults: FormFault[] = [];
   if (frames.length < 6) return faults;
+  const thresholds = resolveFormFaultThresholds(thresholdOverrides);
 
   const kneeAngles: number[] = [];
   const valgusRatios: number[] = [];
@@ -480,7 +520,7 @@ export function detectFormFaults(
       ? LOWER_BODY_MOVEMENT_TYPES.has(movementType) && romSuggestsKneeDriven
       : romSuggestsKneeDriven;
 
-  if (context === "lift" && isKneeDrivenMovement && minKneeAngle > 100) {
+  if (context === "lift" && isKneeDrivenMovement && minKneeAngle > thresholds.minKneeAngleDeg) {
     faults.push({
       code: "shallow_depth",
       label: `Depth: knees only reached ~${Math.round(minKneeAngle)}° -- aim to break parallel`,
@@ -489,7 +529,7 @@ export function detectFormFaults(
 
   if (isKneeDrivenMovement && valgusRatios.length) {
     const minValgusRatio = Math.min(...valgusRatios);
-    if (minValgusRatio < 0.75) {
+    if (minValgusRatio < thresholds.valgusRatioMin) {
       faults.push({
         code: "knee_valgus",
         label: "Knees caved inward past the ankles on at least one rep",
@@ -499,7 +539,7 @@ export function detectFormFaults(
 
   if (isKneeDrivenMovement && torsoAngles.length) {
     const maxTorsoAngle = Math.max(...torsoAngles);
-    if (maxTorsoAngle > 45) {
+    if (maxTorsoAngle > thresholds.maxTorsoLeanDeg) {
       faults.push({
         code: "forward_lean",
         label: `Excessive forward lean (~${Math.round(maxTorsoAngle)}° from vertical) at the bottom`,
@@ -507,7 +547,7 @@ export function detectFormFaults(
     }
   }
 
-  if (context === "lift" && barPathDeviationCm > 8) {
+  if (context === "lift" && barPathDeviationCm > thresholds.barPathDeviationMaxCm) {
     faults.push({
       code: "bar_path_drift",
       label: `Bar drifted ${barPathDeviationCm}cm off a straight vertical line`,
@@ -518,7 +558,7 @@ export function detectFormFaults(
     // Worst (largest-magnitude) tilt observed, keeping its sign so the
     // label can say which side was dropping.
     const worstTilt = tiltAngles.reduce((worst, t) => (Math.abs(t) > Math.abs(worst) ? t : worst), 0);
-    if (Math.abs(worstTilt) > 7) {
+    if (Math.abs(worstTilt) > thresholds.barTiltMaxDeg) {
       const side = worstTilt > 0 ? "right" : "left";
       faults.push({
         code: "bar_tilt",
