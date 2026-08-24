@@ -1710,6 +1710,114 @@ export const nutritionKnowledge = pgTable("nutrition_knowledge", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+// ---------- Movement profiles (camera-tracker kinematic knowledge) ----------
+// Same admin-teaching pattern as aiKnowledge/nutritionKnowledge above, but
+// the AI produces structured tracking thresholds instead of a freeform
+// guidelines document, and there's one profile per movement -- not a
+// single running conversation -- since a squat and a med ball throw are
+// unrelated knowledge domains. See pose-tracking.ts's detectFormFaults and
+// jump-tracking.ts's summarizeJumpSet, which read the active profile's
+// thresholds instead of the hardcoded constants they used before this
+// existed.
+
+export const movementKnowledgeMessages = pgTable(
+  "movement_knowledge_messages",
+  {
+    id: serial("id").primaryKey(),
+    // A shared/exercise-taxonomy.ts MOVEMENT_TYPES value, or the literal
+    // "jump" (jump tracking is its own trackingLevel mode, not a
+    // movementType, but still gets taught/profiled the same way).
+    movementType: text("movement_type").notNull(),
+    authorId: integer("author_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    role: aiKnowledgeChatRoleEnum("role").notNull(),
+    content: text("content").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    movementTypeCreatedIdx: index("movement_knowledge_messages_type_created_idx").on(
+      table.movementType,
+      table.createdAt,
+    ),
+  }),
+);
+
+export type MovementKnowledgeMessage = typeof movementKnowledgeMessages.$inferSelect;
+
+export const movementProfileStatusEnum = pgEnum("movement_profile_status", ["active", "archived"]);
+
+// One row per applied version of a movement's tracking profile. At most one
+// "active" row per movementType -- applying a new proposal archives the
+// previous one rather than overwriting it, so every version stays around
+// for audit/revert. Nothing here affects a live tracker until
+// storage.applyMovementProfileProposal commits it; a chat proposal sits in
+// the conversation only, with zero effect, until that explicit step.
+export const movementProfiles = pgTable(
+  "movement_profiles",
+  {
+    id: serial("id").primaryKey(),
+    movementType: text("movement_type").notNull(),
+    status: movementProfileStatusEnum("status").notNull().default("active"),
+    version: integer("version").notNull().default(1),
+    // Lift-pattern thresholds (detectFormFaults) -- null means "use the
+    // hardcoded default," so a profile can override just one or two
+    // fields without having to restate every threshold.
+    minKneeAngleDeg: real("min_knee_angle_deg"),
+    valgusRatioMin: real("valgus_ratio_min"),
+    maxTorsoLeanDeg: real("max_torso_lean_deg"),
+    barPathDeviationMaxCm: real("bar_path_deviation_max_cm"),
+    barTiltMaxDeg: real("bar_tilt_max_deg"),
+    // Jump-pattern threshold (summarizeJumpSet) -- how far a single rep's
+    // jump height can deviate from the set's own median before it's
+    // flagged as a likely tracking glitch rather than a real rep.
+    jumpHeightOutlierPercent: real("jump_height_outlier_percent"),
+    // Where to put the camera for this movement -- surfaced to the athlete
+    // before they start recording, not just used to judge what came out.
+    cameraFramingNotes: text("camera_framing_notes"),
+    // What the admin actually taught it, kept for audit -- not read by the
+    // tracker, just shown alongside the profile so a future admin (or a
+    // later recalibration pass) can see where a number came from.
+    sourceSummary: text("source_summary"),
+    createdBy: integer("created_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    movementTypeStatusIdx: index("movement_profiles_type_status_idx").on(
+      table.movementType,
+      table.status,
+    ),
+  }),
+);
+
+export type MovementProfile = typeof movementProfiles.$inferSelect;
+
+export const sendMovementKnowledgeChatMessageSchema = z
+  .object({
+    content: z.string().trim().min(1).max(5000).optional(),
+    url: z.string().trim().url().max(2000).optional(),
+  })
+  .refine((data) => Boolean(data.content?.trim()) || Boolean(data.url?.trim()), {
+    message: "Provide text or a URL",
+  });
+
+export type SendMovementKnowledgeChatMessageInput = z.infer<typeof sendMovementKnowledgeChatMessageSchema>;
+
+export const applyMovementProfileProposalSchema = z.object({
+  minKneeAngleDeg: z.number().optional().nullable(),
+  valgusRatioMin: z.number().optional().nullable(),
+  maxTorsoLeanDeg: z.number().optional().nullable(),
+  barPathDeviationMaxCm: z.number().optional().nullable(),
+  barTiltMaxDeg: z.number().optional().nullable(),
+  jumpHeightOutlierPercent: z.number().optional().nullable(),
+  cameraFramingNotes: z.string().trim().max(1000).optional().nullable(),
+  sourceSummary: z.string().trim().max(2000).optional().nullable(),
+});
+
+export type ApplyMovementProfileProposalInput = z.infer<typeof applyMovementProfileProposalSchema>;
+
 export const substituteExerciseSchema = z.object({
   programExerciseId: z.number().int().positive(),
   reason: z.string().trim().min(1).max(200),

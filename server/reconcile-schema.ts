@@ -823,6 +823,42 @@ ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "has_video_storage_add_on" boolean 
 -- backfill on a second pass).
 UPDATE "workout_set_entries" SET "video_uploaded_at" = now()
   WHERE "form_check_video_url" IS NOT NULL AND "video_uploaded_at" IS NULL;
+
+-- Movement profiles (camera-tracker kinematic knowledge) -- same
+-- admin-teaching pattern as ai_knowledge/nutrition_knowledge above, but
+-- structured tracking thresholds per movement instead of one freeform
+-- guidelines document. See shared/schema.ts for the full field rationale.
+CREATE TABLE IF NOT EXISTS "movement_knowledge_messages" (
+  "id" serial PRIMARY KEY,
+  "movement_type" text NOT NULL,
+  "author_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "role" ai_knowledge_chat_role NOT NULL,
+  "content" text NOT NULL,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "movement_knowledge_messages_type_created_idx" ON "movement_knowledge_messages" ("movement_type", "created_at");
+
+DO $$ BEGIN
+  CREATE TYPE "movement_profile_status" AS ENUM ('active', 'archived');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+CREATE TABLE IF NOT EXISTS "movement_profiles" (
+  "id" serial PRIMARY KEY,
+  "movement_type" text NOT NULL,
+  "status" movement_profile_status NOT NULL DEFAULT 'active',
+  "version" integer NOT NULL DEFAULT 1,
+  "min_knee_angle_deg" real,
+  "valgus_ratio_min" real,
+  "max_torso_lean_deg" real,
+  "bar_path_deviation_max_cm" real,
+  "bar_tilt_max_deg" real,
+  "jump_height_outlier_percent" real,
+  "camera_framing_notes" text,
+  "source_summary" text,
+  "created_by" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "movement_profiles_type_status_idx" ON "movement_profiles" ("movement_type", "status");
 `;
 
 async function main() {
