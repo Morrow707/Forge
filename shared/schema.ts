@@ -18,6 +18,12 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { BODY_PAIN_PARTS } from "./wellness";
 import type { WidgetLayoutEntry } from "./dashboard-widgets";
+import {
+  BILLING_TIER_ORDER,
+  BILLING_ADD_ON_ORDER,
+  type BillingTierId,
+  type AddOnId,
+} from "./billing-tiers";
 
 // Owned and populated by connect-pg-simple at runtime, not by our own code --
 // declared here purely so drizzle-kit's live-diff sees it as an already-
@@ -241,6 +247,22 @@ export const users = pgTable(
     // key shape as hiddenNavSections, so both live on the one settings
     // surface (NavCustomizeDialog) without needing two lookups.
     navLabelOverrides: json("nav_label_overrides").$type<Record<string, string>>(),
+    // Which pricing tier/add-ons this primary coach's org is on -- see
+    // shared/billing-tiers.ts for what each id actually means. Null tier
+    // means no tier has been assigned (an admin hasn't set one yet, or
+    // this account predates billing entirely) -- server/billing.ts treats
+    // that the same as "not entitled to anything paid" once enforcement is
+    // actually on, but see isBetaAccount below for why that's not the case
+    // today.
+    billingTier: text("billing_tier"),
+    billingAddOns: json("billing_add_ons").$type<string[]>(),
+    // Defaults true so every existing row and every new signup starts
+    // exempt from billing enforcement -- flipping this to false (via the
+    // admin billing panel) is the only thing that makes billingTier/
+    // billingAddOns start actually restricting that account. Nothing in
+    // this codebase sets it false automatically; it's a deliberate,
+    // per-account admin action, on purpose, while still in beta.
+    isBetaAccount: boolean("is_beta_account").notNull().default(true),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({
@@ -1981,6 +2003,16 @@ export const updatePersonalAccentSchema = z.object({
   accentColor: hexColor.optional().nullable(),
 });
 
+// Admin-only -- see server/billing.ts and shared/billing-tiers.ts. Enum
+// values pulled from BILLING_TIER_ORDER/BILLING_ADD_ON_ORDER (not
+// hand-typed) so a new tier/add-on id can never validate here without
+// also being a real entry in billing-tiers.ts.
+export const updateCoachBillingSchema = z.object({
+  billingTier: z.enum(BILLING_TIER_ORDER as [BillingTierId, ...BillingTierId[]]).optional().nullable(),
+  billingAddOns: z.array(z.enum(BILLING_ADD_ON_ORDER as [AddOnId, ...AddOnId[]])).optional(),
+  isBetaAccount: z.boolean().optional(),
+});
+
 export const insertExerciseSchema = createInsertSchema(exercises)
   .pick({
     name: true,
@@ -2297,6 +2329,7 @@ export type UpdateAccountNameInput = z.infer<typeof updateAccountNameSchema>;
 export type UpdateAccountEmailInput = z.infer<typeof updateAccountEmailSchema>;
 export type UpdateAccountPasswordInput = z.infer<typeof updateAccountPasswordSchema>;
 export type UpdatePersonalAccentInput = z.infer<typeof updatePersonalAccentSchema>;
+export type UpdateCoachBillingInput = z.infer<typeof updateCoachBillingSchema>;
 export type CreateWorkoutCommentInput = z.infer<typeof createWorkoutCommentSchema>;
 export type CreateExerciseReportInput = z.infer<typeof createExerciseReportSchema>;
 export type ResolveSubmissionInput = z.infer<typeof resolveSubmissionSchema>;

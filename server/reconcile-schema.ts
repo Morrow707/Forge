@@ -769,6 +769,14 @@ ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "brand_contact_email" text;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "brand_welcome_message" text;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "personal_accent_color" text;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "nav_label_overrides" json;
+
+-- Pricing/billing structure (see shared/billing-tiers.ts, server/billing.ts).
+-- is_beta_account defaults true so every existing row stays exempt from
+-- enforcement the moment this column exists -- nothing here changes
+-- behavior on its own.
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "billing_tier" text;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "billing_add_ons" json;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "is_beta_account" boolean NOT NULL DEFAULT true;
 `;
 
 async function main() {
