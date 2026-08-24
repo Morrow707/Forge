@@ -9,14 +9,22 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { CalendarView, type CalendarEntry } from "@/components/calendar-view";
 import { CalendarLinkDialog } from "@/components/calendar-link-dialog";
-import { apiRequest, ApiError } from "@/lib/queryClient";
+import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { CalendarDays } from "lucide-react";
+import { CalendarDays, MessageSquareText } from "lucide-react";
 
 export default function AthleteDashboard() {
   const [, navigate] = useLocation();
   const [range, setRange] = useState<{ start: string; end: string }>({ start: "", end: "" });
   const [syncOpen, setSyncOpen] = useState(false);
+
+  // Same query AppShell already makes for its own CSS-var re-skin --
+  // React Query dedupes the identical in-flight request, so reading it
+  // again here for the welcome banner costs nothing extra.
+  const { data: branding } = useQuery<{ brandWelcomeMessage?: string | null }>({
+    queryKey: ["/api/branding/me"],
+    queryFn: () => getJson("/api/branding/me"),
+  });
 
   const { data: entries = [] } = useQuery<CalendarEntry[]>({
     queryKey: ["/api/athlete/calendar", range.start, range.end],
@@ -51,6 +59,15 @@ export default function AthleteDashboard() {
         </Button>
       }
     >
+      {branding?.brandWelcomeMessage && (
+        <Card className="mb-4 border-primary/30 bg-primary/5">
+          <CardContent className="flex items-start gap-2.5 py-3.5 text-sm">
+            <MessageSquareText className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+            <p className="whitespace-pre-wrap">{branding.brandWelcomeMessage}</p>
+          </CardContent>
+        </Card>
+      )}
+
       <CalendarView
         entries={entries}
         onRangeChange={(start, end) => setRange({ start, end })}
