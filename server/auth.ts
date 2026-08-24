@@ -46,6 +46,12 @@ export function setupAuth(app: Express) {
       secret: process.env.SESSION_SECRET || "forge-dev-secret",
       resave: false,
       saveUninitialized: false,
+      // Without this, the 30-day window is fixed from the moment you log
+      // in -- someone using the app daily still gets logged out 30 days
+      // later. rolling re-issues the cookie's expiry on every request, so
+      // it's 30 days of *inactivity*, not 30 days since login, which is
+      // what "don't make me log in again" actually means in practice.
+      rolling: true,
       cookie: {
         maxAge: 30 * 24 * 60 * 60 * 1000,
         httpOnly: true,
