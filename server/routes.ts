@@ -35,7 +35,7 @@ import {
   updateBrandingSchema,
   updateTeamBrandingSchema,
   updateStaffTitleSchema,
-  updateHiddenNavSectionsSchema,
+  updateNavPrefsSchema,
   createBodyMetricSchema,
   createAnnotationSchema,
   testingTrendsQuerySchema,
@@ -3155,19 +3155,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/coach/nav-prefs", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     const coachIds = await storage.getEffectiveCoachIds(user.id);
-    const hiddenNavSections = await storage.getHiddenNavSectionsForCoach(coachIds[0]);
-    res.json({ hiddenNavSections });
+    const prefs = await storage.getNavPrefsForCoach(coachIds[0]);
+    res.json(prefs);
   });
 
   app.patch("/api/coach/nav-prefs", requireRole("coach"), requirePrimaryCoach, async (req, res) => {
     const user = currentUser(req);
-    const parsed = updateHiddenNavSectionsSchema.safeParse(req.body);
+    const parsed = updateNavPrefsSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
     const coachIds = await storage.getEffectiveCoachIds(user.id);
-    const hiddenNavSections = await storage.setHiddenNavSectionsForCoach(coachIds[0], parsed.data);
-    res.json({ hiddenNavSections });
+    const prefs = await storage.setNavPrefsForCoach(coachIds[0], parsed.data);
+    res.json(prefs);
   });
 
   app.get("/api/coach/widget-prefs", requireRole("coach"), async (req, res) => {

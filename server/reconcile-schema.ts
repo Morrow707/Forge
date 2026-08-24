@@ -757,6 +757,18 @@ ALTER TABLE "teams" ADD COLUMN IF NOT EXISTS "brand_logo_url" text;
 ALTER TABLE "teams" ADD COLUMN IF NOT EXISTS "brand_primary_color" text;
 ALTER TABLE "teams" ADD COLUMN IF NOT EXISTS "brand_secondary_color" text;
 ALTER TABLE "coach_staff" ADD COLUMN IF NOT EXISTS "staff_title" text;
+
+-- Account self-service (name/email/password already had columns/routes;
+-- these are the new personalization surface): athlete bio, org
+-- motto/mission/contact/welcome text, per-coach personal accent, and
+-- primary-coach-only nav label overrides.
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "bio" text;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "brand_motto" text;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "brand_mission" text;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "brand_contact_email" text;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "brand_welcome_message" text;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "personal_accent_color" text;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "nav_label_overrides" json;
 `;
 
 async function main() {

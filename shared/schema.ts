@@ -207,6 +207,40 @@ export const users = pgTable(
     // UI is a show/hide checklist (see WidgetLayoutEntry in
     // shared/dashboard-widgets.ts).
     hiddenWidgets: json("hidden_widgets").$type<WidgetLayoutEntry[]>(),
+    // Athlete-only self-written line about who they are/what they're
+    // training for -- optional, free text, distinct from the performance/
+    // testing fields above (which are numbers a coach cares about; this is
+    // the one place an athlete gets to say something in their own words).
+    bio: text("bio"),
+    // Org-wide identity, alongside brandTeamName/brandLogoUrl/brand*Color
+    // above -- kept as separate columns (not folded into one JSON blob)
+    // for the same reason those are: simple nullable text columns need no
+    // Zod-shape versioning the way a JSON column would if its shape ever
+    // changed.
+    brandMotto: text("brand_motto"),
+    brandMission: text("brand_mission"),
+    // Deliberately its own field, never the coach's real login email --
+    // shown on the About page if a coach chooses to fill it in, so a
+    // coach never has their actual account email exposed to their roster
+    // just by branding their program.
+    brandContactEmail: text("brand_contact_email"),
+    // Shown to athletes on their own dashboard when set -- the program's
+    // own voice, separate from brandMission (a static "about us" blurb on
+    // the About page) in that this is meant to read like a note from the
+    // coach, not a program description.
+    brandWelcomeMessage: text("brand_welcome_message"),
+    // Any staff member's own personal touch -- overrides --ring/--accent
+    // (hover/focus highlight) on top of whatever the org's brandPrimaryColor
+    // already set for --primary, so a program's identity stays coherent
+    // while each coach still gets one personalization knob that's theirs
+    // alone, not gated to the primary the way org branding is.
+    personalAccentColor: text("personal_accent_color"),
+    // Primary-coach-only (same gate as hiddenNavSections): renames a
+    // coachNav item's label without touching its route or icon -- e.g.
+    // "Team Board" -> "Locker Room". Keyed by the nav item's href, same
+    // key shape as hiddenNavSections, so both live on the one settings
+    // surface (NavCustomizeDialog) without needing two lookups.
+    navLabelOverrides: json("nav_label_overrides").$type<Record<string, string>>(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({
@@ -1871,6 +1905,7 @@ export const updateProfileSchema = z.object({
   benchMaxLbs: z.number().min(0).max(1500).optional().nullable(),
   squatMaxLbs: z.number().min(0).max(1500).optional().nullable(),
   deadliftMaxLbs: z.number().min(0).max(1500).optional().nullable(),
+  bio: z.string().trim().max(300).optional().nullable(),
 });
 
 export const updateNotificationPrefsSchema = z.object({
@@ -1891,6 +1926,13 @@ export const updateBrandingSchema = z.object({
   teamName: z.string().trim().max(60).optional().nullable(),
   primaryColor: hexColor.optional().nullable(),
   secondaryColor: hexColor.optional().nullable(),
+  motto: z.string().trim().max(80).optional().nullable(),
+  mission: z.string().trim().max(500).optional().nullable(),
+  // Client is responsible for sending null rather than "" when cleared
+  // (same convention as every other optional branding field here) --
+  // kept a plain nullable email check rather than a preprocessing chain.
+  contactEmail: z.string().trim().toLowerCase().email().max(255).optional().nullable(),
+  welcomeMessage: z.string().trim().max(300).optional().nullable(),
 });
 
 // Team-level override never carries its own name -- teams already have
@@ -1904,8 +1946,39 @@ export const updateStaffTitleSchema = z.object({
   staffTitle: z.string().trim().max(40).optional().nullable(),
 });
 
-export const updateHiddenNavSectionsSchema = z.object({
+// Covers both nav-customization fields together since they're edited from
+// the one NavCustomizeDialog surface -- one PATCH instead of two.
+export const updateNavPrefsSchema = z.object({
   hiddenNavSections: z.array(z.string().trim().min(1)).max(20),
+  navLabelOverrides: z.record(z.string(), z.string().trim().min(1).max(30)).optional(),
+});
+
+// Name-only -- deliberately doesn't reuse updateProfileSchema (all its
+// other fields are athlete-only performance data that would be
+// meaningless, and confusing to accept, on a coach/admin account).
+export const updateAccountNameSchema = z.object({
+  name: z.string().trim().min(1).max(100),
+});
+
+// Requires the current password (not just an active session) before
+// changing the address login/password-reset email goes to -- the same
+// re-auth-before-a-sensitive-change discipline updateAccountPasswordSchema
+// below already needs for its own reason.
+export const updateAccountEmailSchema = z.object({
+  password: z.string().min(1),
+  newEmail: z.string().trim().toLowerCase().email().max(255),
+});
+
+export const updateAccountPasswordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(6),
+});
+
+// Any staff member's own personal touch (not gated to the primary the
+// way org branding is) -- see personalAccentColor's comment on the users
+// table.
+export const updatePersonalAccentSchema = z.object({
+  accentColor: hexColor.optional().nullable(),
 });
 
 export const insertExerciseSchema = createInsertSchema(exercises)
@@ -2219,7 +2292,11 @@ export type UpdateNotificationPrefsInput = z.infer<typeof updateNotificationPref
 export type UpdateBrandingInput = z.infer<typeof updateBrandingSchema>;
 export type UpdateTeamBrandingInput = z.infer<typeof updateTeamBrandingSchema>;
 export type UpdateStaffTitleInput = z.infer<typeof updateStaffTitleSchema>;
-export type UpdateHiddenNavSectionsInput = z.infer<typeof updateHiddenNavSectionsSchema>;
+export type UpdateNavPrefsInput = z.infer<typeof updateNavPrefsSchema>;
+export type UpdateAccountNameInput = z.infer<typeof updateAccountNameSchema>;
+export type UpdateAccountEmailInput = z.infer<typeof updateAccountEmailSchema>;
+export type UpdateAccountPasswordInput = z.infer<typeof updateAccountPasswordSchema>;
+export type UpdatePersonalAccentInput = z.infer<typeof updatePersonalAccentSchema>;
 export type CreateWorkoutCommentInput = z.infer<typeof createWorkoutCommentSchema>;
 export type CreateExerciseReportInput = z.infer<typeof createExerciseReportSchema>;
 export type ResolveSubmissionInput = z.infer<typeof resolveSubmissionSchema>;

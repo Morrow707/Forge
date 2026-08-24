@@ -65,7 +65,7 @@ import type {
   CreateFoodLogEntryInput,
   UpdateBrandingInput,
   UpdateTeamBrandingInput,
-  UpdateHiddenNavSectionsInput,
+  UpdateNavPrefsInput,
 } from "@shared/schema";
 import type { WidgetLayoutEntry } from "@shared/dashboard-widgets";
 import { deleteUploadedFile } from "./uploaded-files";
@@ -5286,21 +5286,30 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
   },
 
   // ---------- Nav / dashboard personalization ----------
-  async getHiddenNavSectionsForCoach(primaryCoachId: number): Promise<string[]> {
+  async getNavPrefsForCoach(primaryCoachId: number) {
     const row = await db.query.users.findFirst({
       where: eq(users.id, primaryCoachId),
-      columns: { hiddenNavSections: true },
+      columns: { hiddenNavSections: true, navLabelOverrides: true },
     });
-    return row?.hiddenNavSections ?? [];
+    return {
+      hiddenNavSections: row?.hiddenNavSections ?? [],
+      navLabelOverrides: row?.navLabelOverrides ?? {},
+    };
   },
 
-  async setHiddenNavSectionsForCoach(primaryCoachId: number, input: UpdateHiddenNavSectionsInput) {
+  async setNavPrefsForCoach(primaryCoachId: number, input: UpdateNavPrefsInput) {
     const [row] = await db
       .update(users)
-      .set({ hiddenNavSections: input.hiddenNavSections })
+      .set({
+        hiddenNavSections: input.hiddenNavSections,
+        ...(input.navLabelOverrides !== undefined && { navLabelOverrides: input.navLabelOverrides }),
+      })
       .where(eq(users.id, primaryCoachId))
-      .returning({ hiddenNavSections: users.hiddenNavSections });
-    return row?.hiddenNavSections ?? [];
+      .returning({ hiddenNavSections: users.hiddenNavSections, navLabelOverrides: users.navLabelOverrides });
+    return {
+      hiddenNavSections: row?.hiddenNavSections ?? [],
+      navLabelOverrides: row?.navLabelOverrides ?? {},
+    };
   },
 
   // Per-user (coach or athlete -- whichever userId belongs to) dashboard
