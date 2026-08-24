@@ -240,7 +240,7 @@ function MonthGrid({
               key={dateStr}
               aria-current={isToday(day) ? "date" : undefined}
               className={cn(
-                "flex min-h-11 flex-col gap-0.5 rounded-md border border-border p-1 sm:min-h-28 sm:gap-1 sm:p-2",
+                "flex min-h-20 flex-col gap-1 rounded-md border border-border p-1.5 sm:min-h-28 sm:gap-1 sm:p-2",
                 !inMonth && "opacity-30",
                 isToday(day) && "border-primary",
               )}
@@ -256,8 +256,10 @@ function MonthGrid({
               </span>
 
               {/* Mobile: icon-only dots so a full month fits on one screen
-                  without scrolling -- tapping still opens that entry. */}
-              <div className="flex flex-1 flex-wrap items-end gap-0.5 sm:hidden">
+                  without scrolling -- tapping still opens that entry. Sized
+                  well above the old 16px (way under any reasonable tap
+                  target) now that the taller cell has room for it. */}
+              <div className="flex flex-1 flex-wrap items-end gap-1 sm:hidden">
                 {dayEntries.slice(0, 3).map((e) => (
                   <button
                     key={`${e.assignmentId}-${e.programDayId}`}
@@ -265,7 +267,7 @@ function MonthGrid({
                     aria-label={e.title}
                     title={e.title}
                     className={cn(
-                      "flex h-4 w-4 items-center justify-center rounded-full",
+                      "flex h-8 w-8 items-center justify-center rounded-full",
                       e.isRestDay
                         ? "bg-secondary text-muted-foreground"
                         : e.completed
@@ -273,7 +275,7 @@ function MonthGrid({
                           : "bg-primary/25 text-primary",
                     )}
                   >
-                    {entryIcon(e, "h-2.5 w-2.5")}
+                    {entryIcon(e, "h-5 w-5")}
                   </button>
                 ))}
               </div>
