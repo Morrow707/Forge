@@ -354,7 +354,7 @@ export function AppShell({
                       Coaching staff
                     </button>
                   )}
-                  {user?.role === "coach" && (
+                  {user?.role === "coach" && user.isPrimaryCoach && (
                     <button
                       type="button"
                       role="menuitem"
@@ -368,7 +368,7 @@ export function AppShell({
                       Branding
                     </button>
                   )}
-                  {user?.role === "coach" && (
+                  {user?.role === "coach" && user.isPrimaryCoach && (
                     <button
                       type="button"
                       role="menuitem"
@@ -484,7 +484,7 @@ export function AppShell({
                     Staff
                   </button>
                 )}
-                {user?.role === "coach" && (
+                {user?.role === "coach" && user.isPrimaryCoach && (
                   <button
                     type="button"
                     onClick={() => {
@@ -552,10 +552,10 @@ export function AppShell({
       {user?.role === "coach" && (
         <CoachingStaffDialog open={coachingStaffOpen} onOpenChange={setCoachingStaffOpen} />
       )}
-      {user?.role === "coach" && (
+      {user?.role === "coach" && user.isPrimaryCoach && (
         <TeamBrandingDialog open={brandingOpen} onOpenChange={setBrandingOpen} scope={{ type: "org" }} />
       )}
-      {user?.role === "coach" && (
+      {user?.role === "coach" && user.isPrimaryCoach && (
         <NavCustomizeDialog
           open={navCustomizeOpen}
           onOpenChange={setNavCustomizeOpen}

@@ -2234,6 +2234,7 @@ export type ResolveSubmissionInput = z.infer<typeof resolveSubmissionSchema>;
 // for a primary coach or non-staff account. See auth.ts's toPublicUser.
 export type PublicUser = Omit<User, "passwordHash" | "healthStatus"> & {
   staffTitle?: string | null;
+  isPrimaryCoach?: boolean;
 };
 
 export const updateHealthStatusSchema = z.object({

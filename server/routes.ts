@@ -135,6 +135,20 @@ function currentUser(req: any) {
   return req.user as { id: number; role: "coach" | "athlete" | "admin"; name: string; email: string };
 }
 
+// Org-wide identity (branding, nav customization) is a whole-program
+// decision, not day-to-day operational data like the roster/programs/
+// exercises the rest of getEffectiveCoachIds widens to every staff
+// member -- gated to specifically the primary coach so an assistant
+// can't repaint the whole program's colors or hide tabs for everyone.
+async function requirePrimaryCoach(req: any, res: any, next: any) {
+  const user = currentUser(req);
+  const coachIds = await storage.getEffectiveCoachIds(user.id);
+  if (coachIds[0] !== user.id) {
+    return res.status(403).json({ message: "Only the primary coach can change this" });
+  }
+  next();
+}
+
 // The single gate for every Free Agent AI route below (program building AND
 // the general AI chat coach) -- true iff this athlete currently has zero
 // coaches. Once they join a team, the coach is their guidance now, not the
@@ -3080,7 +3094,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(branding);
   });
 
-  app.patch("/api/coach/branding", requireRole("coach"), async (req, res) => {
+  app.patch("/api/coach/branding", requireRole("coach"), requirePrimaryCoach, async (req, res) => {
     const user = currentUser(req);
     const parsed = updateBrandingSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -3094,6 +3108,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post(
     "/api/coach/branding/logo",
     requireRole("coach"),
+    requirePrimaryCoach,
     uploadOrgLogo.single("logo"),
     async (req, res) => {
       const user = currentUser(req);
@@ -3107,7 +3122,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
-  app.delete("/api/coach/branding/logo", requireRole("coach"), async (req, res) => {
+  app.delete("/api/coach/branding/logo", requireRole("coach"), requirePrimaryCoach, async (req, res) => {
     const user = currentUser(req);
     const coachIds = await storage.getEffectiveCoachIds(user.id);
     const updated = await storage.updateCoachLogo(coachIds[0], null);
@@ -3130,7 +3145,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ hiddenNavSections });
   });
 
-  app.patch("/api/coach/nav-prefs", requireRole("coach"), async (req, res) => {
+  app.patch("/api/coach/nav-prefs", requireRole("coach"), requirePrimaryCoach, async (req, res) => {
     const user = currentUser(req);
     const parsed = updateHiddenNavSectionsSchema.safeParse(req.body);
     if (!parsed.success) {

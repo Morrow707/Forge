@@ -21,13 +21,19 @@ function toPublicUser(user: any): PublicUser {
 }
 
 // A coach's login/me response needs their own display title (e.g.
-// "Nutritionist") if the primary set one for them -- storage-backed, not
-// a users column, so it's attached here rather than by toPublicUser
-// itself (which has no async access to storage).
+// "Nutritionist") if the primary set one for them, and whether they ARE
+// the primary -- both storage-backed, not users columns, so they're
+// attached here rather than by toPublicUser itself (which has no async
+// access to storage). isPrimaryCoach gates org-wide identity edits
+// (branding, nav customization) to the one account whose call it should
+// actually be, not any staff member sharing the roster -- see the
+// requirePrimaryCoach guard in routes.ts.
 async function withStaffTitle(user: any): Promise<PublicUser> {
   const publicUser = toPublicUser(user);
   if (user.role === "coach") {
     publicUser.staffTitle = await storage.getStaffTitleForCoach(user.id);
+    const coachIds = await storage.getEffectiveCoachIds(user.id);
+    publicUser.isPrimaryCoach = coachIds[0] === user.id;
   }
   return publicUser;
 }
