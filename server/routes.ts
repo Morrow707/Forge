@@ -4,6 +4,7 @@ import path from "path";
 import fs from "fs";
 import multer from "multer";
 import { setupAuth, requireAuth, requireRole } from "./auth";
+import { hashPassword, comparePasswords } from "./auth-utils";
 import { storage } from "./storage";
 import { buildIcsFeed } from "./ics";
 import { getVapidPublicKey } from "./push";
@@ -36,6 +37,10 @@ import {
   updateTeamBrandingSchema,
   updateStaffTitleSchema,
   updateNavPrefsSchema,
+  updateAccountNameSchema,
+  updateAccountEmailSchema,
+  updateAccountPasswordSchema,
+  updatePersonalAccentSchema,
   createBodyMetricSchema,
   createAnnotationSchema,
   testingTrendsQuerySchema,
@@ -3077,6 +3082,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const updated = await storage.updateNotificationPrefs(user.id, parsed.data);
     const { passwordHash, healthStatus, ...publicUser } = updated;
     res.json(publicUser);
+  });
+
+  // ---------------- Account self-service ----------------
+  // Name/email/password, available to every role -- a coach previously
+  // had no way to edit their own account at all short of the logged-out
+  // forgot-password flow.
+
+  app.patch("/api/account/profile", requireAuth, async (req, res) => {
+    const user = currentUser(req);
+    const parsed = updateAccountNameSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const updated = await storage.updateUserName(user.id, parsed.data.name);
+    res.json(updated);
+  });
+
+  app.patch("/api/account/email", requireAuth, async (req, res) => {
+    const user = currentUser(req);
+    const parsed = updateAccountEmailSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const fullUser = await storage.getUser(user.id);
+    if (!fullUser || !(await comparePasswords(parsed.data.password, fullUser.passwordHash))) {
+      return res.status(401).json({ message: "Current password is incorrect" });
+    }
+    const existing = await storage.getUserByEmail(parsed.data.newEmail);
+    if (existing && existing.id !== user.id) {
+      return res.status(409).json({ message: "That email is already in use" });
+    }
+    const updated = await storage.updateUserEmail(user.id, parsed.data.newEmail);
+    res.json(updated);
+  });
+
+  app.patch("/api/account/password", requireAuth, async (req, res) => {
+    const user = currentUser(req);
+    const parsed = updateAccountPasswordSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const fullUser = await storage.getUser(user.id);
+    if (!fullUser || !(await comparePasswords(parsed.data.currentPassword, fullUser.passwordHash))) {
+      return res.status(401).json({ message: "Current password is incorrect" });
+    }
+    const newHash = await hashPassword(parsed.data.newPassword);
+    await storage.updateUserPasswordHash(user.id, newHash);
+    res.status(204).end();
+  });
+
+  // Any staff member's own personal touch, not gated to the primary the
+  // way org branding is -- see personalAccentColor's comment on the users
+  // table in shared/schema.ts.
+  app.patch("/api/coach/personal-accent", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = updatePersonalAccentSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const updated = await storage.updatePersonalAccentColor(user.id, parsed.data.accentColor ?? null);
+    res.json(updated);
   });
 
   // ---------------- Branding & personalization ----------------

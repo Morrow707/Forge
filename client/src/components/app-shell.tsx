@@ -26,6 +26,7 @@ import {
   ChevronDown,
   Palette,
   SlidersHorizontal,
+  UserCog,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -35,6 +36,7 @@ import { NotificationSettingsDialog } from "@/components/notification-settings-d
 import { CoachingStaffDialog } from "@/components/coaching-staff-dialog";
 import { TeamBrandingDialog } from "@/components/team-branding-dialog";
 import { NavCustomizeDialog } from "@/components/nav-customize-dialog";
+import { AccountSettingsDialog } from "@/components/account-settings-dialog";
 import { PoweredByFooter } from "@/components/powered-by-footer";
 import { computeBrandingStyle, type EffectiveBranding } from "@/lib/branding-style";
 
@@ -116,6 +118,7 @@ export function AppShell({
   const [coachingStaffOpen, setCoachingStaffOpen] = useState(false);
   const [brandingOpen, setBrandingOpen] = useState(false);
   const [navCustomizeOpen, setNavCustomizeOpen] = useState(false);
+  const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
 
   // Any authenticated role can be on the receiving end of someone else's
@@ -135,7 +138,10 @@ export function AppShell({
   });
   const hiddenNavSections = new Set(navPrefs?.hiddenNavSections ?? []);
 
-  const brandingStyle = computeBrandingStyle(branding);
+  const brandingStyle = computeBrandingStyle(
+    branding,
+    user?.role === "coach" ? user.personalAccentColor : null,
+  );
 
   // Runtime favicon/home-screen-icon swap -- covers the browser tab icon
   // and, in practice, iOS's "Add to Home Screen" (which reads these DOM
@@ -290,6 +296,20 @@ export function AppShell({
                   role="menu"
                   className="absolute right-0 top-full z-40 mt-1 w-64 overflow-hidden rounded-md border border-border bg-surface shadow-lg"
                 >
+                  {user && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setAccountSettingsOpen(true);
+                        setAccountMenuOpen(false);
+                      }}
+                      className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-foreground hover:bg-surface-elevated"
+                    >
+                      <UserCog className="h-4 w-4" />
+                      Account settings
+                    </button>
+                  )}
                   {user?.role === "athlete" && (
                     <button
                       type="button"
@@ -423,6 +443,19 @@ export function AppShell({
                 </p>
               </div>
               <div className="flex items-center gap-3">
+                {user && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAccountSettingsOpen(true);
+                      setMobileNavOpen(false);
+                    }}
+                    className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground"
+                  >
+                    <UserCog className="h-4 w-4" />
+                    Account
+                  </button>
+                )}
                 {user?.role === "athlete" && (
                   <button
                     type="button"
@@ -517,6 +550,9 @@ export function AppShell({
         )}
       </div>
 
+      {user && (
+        <AccountSettingsDialog user={user} open={accountSettingsOpen} onOpenChange={setAccountSettingsOpen} />
+      )}
       {user?.role === "athlete" && (
         <EditMyProfileDialog user={user} open={profileOpen} onOpenChange={setProfileOpen} />
       )}

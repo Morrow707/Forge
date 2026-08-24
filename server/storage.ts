@@ -1019,6 +1019,46 @@ export const storage = {
     return user;
   },
 
+  // ---------- Account self-service (name/email/password) ----------
+  // All three return only safe columns, never a bare .returning() -- see
+  // the passwordHash leak this exact mistake caused on the branding
+  // routes earlier.
+  async updateUserName(userId: number, name: string) {
+    const [row] = await db
+      .update(users)
+      .set({ name })
+      .where(eq(users.id, userId))
+      .returning({ id: users.id, name: users.name });
+    return row ?? null;
+  },
+
+  // Caller (routes.ts) is responsible for the current-password check and
+  // the pre-flight uniqueness check via getUserByEmail before calling
+  // this -- kept here as a plain write so this function can't itself
+  // silently swallow a race-condition duplicate (the unique index is the
+  // real backstop; a duplicate here throws and the route surfaces it).
+  async updateUserEmail(userId: number, newEmail: string) {
+    const [row] = await db
+      .update(users)
+      .set({ email: newEmail.toLowerCase() })
+      .where(eq(users.id, userId))
+      .returning({ id: users.id, email: users.email });
+    return row ?? null;
+  },
+
+  async updateUserPasswordHash(userId: number, passwordHash: string) {
+    await db.update(users).set({ passwordHash }).where(eq(users.id, userId));
+  },
+
+  async updatePersonalAccentColor(userId: number, accentColor: string | null) {
+    const [row] = await db
+      .update(users)
+      .set({ personalAccentColor: accentColor })
+      .where(eq(users.id, userId))
+      .returning({ personalAccentColor: users.personalAccentColor });
+    return row ?? null;
+  },
+
   async updateUserPreferences(userId: number, input: UpdatePreferencesInput) {
     const [row] = await db
       .update(users)
