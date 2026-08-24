@@ -769,7 +769,11 @@ export function BarTrackerDialog({
     movementGuess.pattern !== expectedPattern;
   const liftResult = result && !isJumpMetrics(result) ? result : null;
   const jumpResult = result && isJumpMetrics(result) ? result : null;
-  const firstRepPeak = liftResult?.repBreakdown[0]?.peakVelocityMps ?? 0;
+  // Mean (concentric) velocity, not peak, is the standard VBT fatigue
+  // signal -- peak is a single-frame extremum, so it's disproportionately
+  // vulnerable to a noisy tracking spike; mean is much more stable rep to
+  // rep, same reasoning as summarizeTrackedSet's velocityLossPercent.
+  const firstRepMean = liftResult?.repBreakdown[0]?.meanVelocityMps ?? 0;
   const lastRepCurve = liftResult?.repBreakdown[liftResult.repBreakdown.length - 1]?.velocityCurve ?? [];
   const legDriveByRep = new Map((liftResult?.legDriveAsymmetry ?? []).map((d) => [d.repNumber, d]));
   const avgLegAsymmetry =
@@ -965,8 +969,11 @@ export function BarTrackerDialog({
             <div className="grid grid-cols-2 gap-3 rounded-md border border-border p-3 text-center">
               {mode === "full" && (
                 <>
-                  <Stat label="Peak Velocity" value={`${liftResult.peakVelocityMps} m/s`} />
+                  {/* Mean (concentric) velocity leads -- it's the stable, load-velocity-profiling
+                      metric VBT autoregulation is actually built on; peak is one noisy sample and
+                      stays as secondary context, not the headline number. */}
                   <Stat label="Mean Velocity" value={`${liftResult.meanVelocityMps} m/s`} />
+                  <Stat label="Peak Velocity" value={`${liftResult.peakVelocityMps} m/s`} />
                   <Stat label="Concentric" value={`${liftResult.concentricSeconds}s`} />
                   <Stat
                     label="Eccentric"
@@ -1035,8 +1042,8 @@ export function BarTrackerDialog({
                 <div className="space-y-1 rounded-md border border-border p-2">
                   {liftResult.repBreakdown.map((r) => {
                     const decayPct =
-                      mode === "full" && firstRepPeak > 0
-                        ? Math.round(((firstRepPeak - r.peakVelocityMps) / firstRepPeak) * 100)
+                      mode === "full" && firstRepMean > 0
+                        ? Math.round(((firstRepMean - r.meanVelocityMps) / firstRepMean) * 100)
                         : 0;
                     return (
                       <div key={r.repNumber} className="flex items-center justify-between gap-2 text-xs">
@@ -1044,7 +1051,8 @@ export function BarTrackerDialog({
                         <span className="flex items-center gap-2 text-muted-foreground">
                           {mode === "full" && (
                             <span className={decayPct > 15 ? "font-semibold text-amber-500" : undefined}>
-                              {r.peakVelocityMps} m/s{decayPct > 15 ? ` (-${decayPct}%)` : ""}
+                              {r.meanVelocityMps} m/s{decayPct > 15 ? ` (-${decayPct}%)` : ""}
+                              <span className="ml-1 opacity-70">(pk {r.peakVelocityMps})</span>
                             </span>
                           )}
                           {r.depthDeg != null && <span>{r.depthDeg}° knee</span>}

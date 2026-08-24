@@ -2056,7 +2056,7 @@ function ExerciseLogContent({
                     <span className="font-semibold uppercase tracking-wide">Rep by rep</span>
                     {set.repBreakdown.map((r) => (
                       <span key={r.repNumber} className="rounded bg-secondary px-1.5 py-0.5">
-                        {item.trackingLevel === "full" ? `${r.peakVelocityMps} m/s` : `#${r.repNumber}`}
+                        {item.trackingLevel === "full" ? `${r.meanVelocityMps} m/s` : `#${r.repNumber}`}
                         {r.depthDeg != null ? ` · ${r.depthDeg}°` : ""}
                       </span>
                     ))}
