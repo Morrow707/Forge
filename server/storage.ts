@@ -5178,6 +5178,10 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
     return row ?? null;
   },
 
+  // Both branding mutators below return only the branding columns, not
+  // the full users row -- update(...).returning() with no column list
+  // would otherwise hand the response straight back to the client
+  // including passwordHash.
   async updateCoachBranding(primaryCoachId: number, values: UpdateBrandingInput) {
     const [row] = await db
       .update(users)
@@ -5187,7 +5191,12 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
         ...(values.secondaryColor !== undefined && { brandSecondaryColor: values.secondaryColor }),
       })
       .where(eq(users.id, primaryCoachId))
-      .returning();
+      .returning({
+        brandTeamName: users.brandTeamName,
+        brandLogoUrl: users.brandLogoUrl,
+        brandPrimaryColor: users.brandPrimaryColor,
+        brandSecondaryColor: users.brandSecondaryColor,
+      });
     return row ?? null;
   },
 
@@ -5200,7 +5209,12 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
       .update(users)
       .set({ brandLogoUrl: logoUrl })
       .where(eq(users.id, primaryCoachId))
-      .returning();
+      .returning({
+        brandTeamName: users.brandTeamName,
+        brandLogoUrl: users.brandLogoUrl,
+        brandPrimaryColor: users.brandPrimaryColor,
+        brandSecondaryColor: users.brandSecondaryColor,
+      });
     return row ?? null;
   },
 
