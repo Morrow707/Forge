@@ -1025,6 +1025,41 @@ export function usesSharedBarEquipment(equipment?: string | null): boolean {
   return !!equipment && SHARED_BAR_EQUIPMENT.has(equipment);
 }
 
+// The five numbers detectFormFaults judges against, previously hardcoded
+// inline. Field names match shared/schema.ts's movementProfiles columns
+// exactly, so a fetched MovementProfile row can be passed straight in as
+// overrides with no adapter -- a null field there means "use this default."
+export interface FormFaultThresholds {
+  minKneeAngleDeg: number;
+  valgusRatioMin: number;
+  maxTorsoLeanDeg: number;
+  barPathDeviationMaxCm: number;
+  barTiltMaxDeg: number;
+}
+
+const DEFAULT_FORM_FAULT_THRESHOLDS: FormFaultThresholds = {
+  minKneeAngleDeg: 100,
+  valgusRatioMin: 0.75,
+  maxTorsoLeanDeg: 45,
+  barPathDeviationMaxCm: 8,
+  barTiltMaxDeg: 7,
+};
+
+// Every field on a MovementProfile is nullable (null = "use the default"),
+// so this can't just be a spread -- an explicit null in overrides would
+// otherwise clobber the default it's supposed to fall back to.
+function resolveFormFaultThresholds(
+  overrides?: Partial<Record<keyof FormFaultThresholds, number | null>> | null,
+): FormFaultThresholds {
+  if (!overrides) return DEFAULT_FORM_FAULT_THRESHOLDS;
+  const resolved = { ...DEFAULT_FORM_FAULT_THRESHOLDS };
+  for (const key of Object.keys(DEFAULT_FORM_FAULT_THRESHOLDS) as (keyof FormFaultThresholds)[]) {
+    const value = overrides[key];
+    if (value != null) resolved[key] = value;
+  }
+  return resolved;
+}
+
 export function detectFormFaults(
   frames: PoseFrame[],
   barPathDeviationCm: number,
@@ -1078,6 +1113,10 @@ export function detectFormFaults(
   // frame, the prior behavior) -- same gradual-threading pattern as
   // movementType/equipment above.
   repWindows?: { startT: number; endT: number }[],
+  // The active MovementProfile for movementType, when one's been applied --
+  // undefined/null for everyone else, which resolves to the same defaults
+  // this always used. See resolveFormFaultThresholds above.
+  thresholdOverrides?: Partial<Record<keyof FormFaultThresholds, number | null>> | null,
 ): FormFault[] {
   const faults: FormFault[] = [];
   const activeFrames =
@@ -1086,6 +1125,7 @@ export function detectFormFaults(
       : frames;
   if (activeFrames.length < 6) return faults;
 
+  const thresholds = resolveFormFaultThresholds(thresholdOverrides);
   const usesSharedBar = context === "lift" && usesSharedBarEquipment(equipment);
 
   const kneeAngles: number[] = [];
@@ -1256,7 +1296,7 @@ export function detectFormFaults(
     trackedOverheadFrameCount > 0 ? overheadFrameCount / trackedOverheadFrameCount : 0;
   const isOverheadSet = overheadFraction > 0.5;
 
-  if (context === "lift" && isKneeDrivenMovement && minKneeAngle > 100) {
+  if (context === "lift" && isKneeDrivenMovement && minKneeAngle > thresholds.minKneeAngleDeg) {
     faults.push({
       code: "shallow_depth",
       label: `Depth: knees only reached ~${Math.round(minKneeAngle)}° -- aim to break parallel`,
@@ -1265,7 +1305,7 @@ export function detectFormFaults(
 
   if (isKneeDrivenMovement && valgusRatios.length) {
     const minValgusRatio = percentile(valgusRatios, 0.05);
-    if (minValgusRatio < 0.75) {
+    if (minValgusRatio < thresholds.valgusRatioMin) {
       faults.push({
         code: "knee_valgus",
         label: "Knees caved inward past the ankles on at least one rep",
@@ -1319,7 +1359,7 @@ export function detectFormFaults(
           label: `Losing thoracic extension -- torso rounded ~${Math.round(maxTorsoAngle)}° from vertical, more than an overhead squat can afford`,
         });
       }
-    } else if (maxTorsoAngle > 45) {
+    } else if (maxTorsoAngle > thresholds.maxTorsoLeanDeg) {
       faults.push({
         code: "forward_lean",
         label: `Excessive forward lean (~${Math.round(maxTorsoAngle)}° from vertical) at the bottom`,
@@ -1342,7 +1382,7 @@ export function detectFormFaults(
     }
   }
 
-  if (usesSharedBar && barPathDeviationCm > 8) {
+  if (usesSharedBar && barPathDeviationCm > thresholds.barPathDeviationMaxCm) {
     faults.push({
       code: "bar_path_drift",
       label: `Bar drifted ${barPathDeviationCm}cm off a straight vertical line`,
@@ -1358,7 +1398,7 @@ export function detectFormFaults(
       0.95,
     );
     const worstTilt = tiltAngles.find((t) => Math.abs(t) >= worstMagnitude) ?? 0;
-    if (Math.abs(worstTilt) > 7) {
+    if (Math.abs(worstTilt) > thresholds.barTiltMaxDeg) {
       const side = worstTilt > 0 ? "right" : "left";
       faults.push({
         code: "bar_tilt",

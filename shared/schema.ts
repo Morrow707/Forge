@@ -18,13 +18,26 @@ import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { BODY_PAIN_PARTS } from "./wellness";
+import type { WidgetLayoutEntry } from "./dashboard-widgets";
+import {
+  BILLING_TIER_ORDER,
+  BILLING_ADD_ON_ORDER,
+  type BillingTierId,
+  type AddOnId,
+} from "./billing-tiers";
+import {
+  FREE_AGENT_TIERS,
+  FREE_AGENT_TIER_ORDER,
+  FREE_AGENT_ADD_ON_ORDER,
+  type FreeAgentTierId,
+  type FreeAgentAddOnId,
+} from "./free-agent-tiers";
 import type { SkillFaultThresholds } from "./skill-fault-thresholds";
 import { SKILL_FAULT_THRESHOLD_BOUNDS } from "./skill-fault-thresholds";
 import type { CoachFeature } from "./team-features";
 import { COACH_FEATURES } from "./team-features";
 import type { CoachSection } from "./coach-sections";
 import { COACH_SECTIONS } from "./coach-sections";
-import type { WidgetLayoutEntry } from "./dashboard-widgets";
 
 // Owned and populated by connect-pg-simple at runtime, not by our own code --
 // declared here purely so drizzle-kit's live-diff sees it as an already-
@@ -306,19 +319,31 @@ export const users = pgTable(
     // actually agreed to regardless of any later edit.
     agreedToTermsAt: timestamp("agreed_to_terms_at"),
     agreedToTermsText: text("agreed_to_terms_text"),
-    // White-label team identity -- coach-only, meaningless on an athlete/
-    // admin row. Resolved through to the whole coaching staff (see
-    // getEffectiveCoachIds), so it always lives on the staff's primary
-    // coach account regardless of which staff member set it; an athlete
-    // sees their own coach's values via getEffectiveBrandingForUser, not
-    // their own row. logoUrl points at an uploaded file the same way
-    // lesson images do (see uploadLessonImage in routes.ts). Colors are
-    // hex strings ("#RRGGBB"), validated in updateCoachBrandingSchema
-    // below -- applied as CSS custom properties, not parsed further.
+    // Coach-only white-label identity, applied for their whole staff (see
+    // getEffectiveCoachIds) and every athlete on their roster -- overrides
+    // the app's own Forge/orange look with the program's own name/logo/
+    // colors (CSS custom-property swap at the AppShell root, not a theme
+    // rebuild). All optional and independently settable: a coach can set a
+    // name with no logo, colors with no name, etc. logoUrl points at an
+    // uploaded file the same way lesson images do (see uploadLessonImage in
+    // routes.ts); colors are hex strings ("#RRGGBB"), validated in
+    // updateBrandingSchema below. An athlete sees their own coach's
+    // values via getEffectiveBrandingForUser, not their own row. A team can
+    // further override brandLogoUrl/brandPrimaryColor/brandSecondaryColor
+    // below on a per-field basis (see teams table) -- this row is always
+    // the org-wide fallback.
     brandTeamName: text("brand_team_name"),
     brandLogoUrl: text("brand_logo_url"),
     brandPrimaryColor: text("brand_primary_color"),
     brandSecondaryColor: text("brand_secondary_color"),
+    // Primary-coach-only: whole coachNav items (see app-shell.tsx) this
+    // org has opted to hide -- stored as the item's href, since that's
+    // already the unique/stable key the nav array uses. Lets a program
+    // trim tabs it doesn't use (e.g. no Nutrition tracking) instead of
+    // living with a nav full of dead ends. Applies to the whole staff, not
+    // per staff-member -- a simpler, org-wide on/off rather than a
+    // per-coach permission matrix.
+    hiddenNavSections: json("hidden_nav_sections").$type<string[]>(),
     // Coach-only nav-visibility toggles -- see shared/team-features.ts for
     // the field list and "missing means on" resolution. Same primary-coach
     // resolution as the branding fields above.
@@ -335,6 +360,85 @@ export const users = pgTable(
     // before the drag-and-drop layout editor; getWidgetLayoutForCoach in
     // storage.ts coerces an old-shape row on read.
     hiddenWidgets: json("hidden_widgets").$type<WidgetLayoutEntry[]>(),
+    // Athlete-only self-written line about who they are/what they're
+    // training for -- optional, free text, distinct from the performance/
+    // testing fields above (which are numbers a coach cares about; this is
+    // the one place an athlete gets to say something in their own words).
+    bio: text("bio"),
+    // Org-wide identity, alongside brandTeamName/brandLogoUrl/brand*Color
+    // above -- kept as separate columns (not folded into one JSON blob)
+    // for the same reason those are: simple nullable text columns need no
+    // Zod-shape versioning the way a JSON column would if its shape ever
+    // changed.
+    brandMotto: text("brand_motto"),
+    brandMission: text("brand_mission"),
+    // Deliberately its own field, never the coach's real login email --
+    // shown on the About page if a coach chooses to fill it in, so a
+    // coach never has their actual account email exposed to their roster
+    // just by branding their program.
+    brandContactEmail: text("brand_contact_email"),
+    // Shown to athletes on their own dashboard when set -- the program's
+    // own voice, separate from brandMission (a static "about us" blurb on
+    // the About page) in that this is meant to read like a note from the
+    // coach, not a program description.
+    brandWelcomeMessage: text("brand_welcome_message"),
+    // Any staff member's own personal touch -- overrides --ring/--accent
+    // (hover/focus highlight) on top of whatever the org's brandPrimaryColor
+    // already set for --primary, so a program's identity stays coherent
+    // while each coach still gets one personalization knob that's theirs
+    // alone, not gated to the primary the way org branding is.
+    personalAccentColor: text("personal_accent_color"),
+    // Primary-coach-only (same gate as hiddenNavSections): renames a
+    // coachNav item's label without touching its route or icon -- e.g.
+    // "Team Board" -> "Locker Room". Keyed by the nav item's href, same
+    // key shape as hiddenNavSections, so both live on the one settings
+    // surface (NavCustomizeDialog) without needing two lookups.
+    navLabelOverrides: json("nav_label_overrides").$type<Record<string, string>>(),
+    // Which pricing tier/add-ons this primary coach's org is on -- see
+    // shared/billing-tiers.ts for what each id actually means. Null tier
+    // means no tier has been assigned (an admin hasn't set one yet, or
+    // this account predates billing entirely) -- server/billing.ts treats
+    // that the same as "not entitled to anything paid" once enforcement is
+    // actually on, but see isBetaAccount below for why that's not the case
+    // today.
+    billingTier: text("billing_tier"),
+    billingAddOns: json("billing_add_ons").$type<string[]>(),
+    // Defaults true so every existing row and every new signup starts
+    // exempt from billing enforcement -- flipping this to false (via the
+    // admin billing panel) is the only thing that makes billingTier/
+    // billingAddOns start actually restricting that account. Nothing in
+    // this codebase sets it false automatically; it's a deliberate,
+    // per-account admin action, on purpose, while still in beta.
+    isBetaAccount: boolean("is_beta_account").notNull().default(true),
+    // Set by storage.redeemCode() -- while in the future, entitlements
+    // resolve fully unlocked regardless of isBetaAccount/billingTier (see
+    // getEntitlements in server/billing.ts), the same way a beta account
+    // does. Redeeming a second code before this expires extends it rather
+    // than overwriting -- codes stack, they don't reset the clock.
+    trialExpiresAt: timestamp("trial_expires_at"),
+    // Which Free Agent (individual athlete) AI-coach tier/add-ons this
+    // account is on -- a separate track from billingTier above, see
+    // shared/free-agent-tiers.ts. Meaningless for a coach's own row.
+    // Resolved by getFreeAgentEntitlements in server/billing.ts using the
+    // same isBetaAccount/trialExpiresAt switches already on this table --
+    // no new safety switch needed for this second pricing track.
+    freeAgentTier: text("free_agent_tier"),
+    freeAgentAddOns: json("free_agent_add_ons").$type<string[]>(),
+    // Set when an admin groups this athlete under a shared Family plan
+    // (see storage.createFamilyGroup) -- null for everyone not on one.
+    // Family membership doesn't change what a member can do (still
+    // resolves to ai_coach_video-level entitlements); it's only about who
+    // pays for how many profiles.
+    familyGroupId: integer("family_group_id").references(() => familyGroups.id, {
+      onDelete: "set null",
+    }),
+    // Extra form-check video retention (see shared/video-retention.ts) --
+    // applies to this account regardless of role/coached status, admin-
+    // assignable the same way as everything else in this pass (no self-
+    // serve checkout yet) via /api/admin/athletes/:id/billing -- the same
+    // route already used for a Free Agent's AI tier, since it already
+    // resolves any athlete by email regardless of coached status.
+    hasVideoStorageAddOn: boolean("has_video_storage_add_on").notNull().default(false),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({
@@ -343,6 +447,62 @@ export const users = pgTable(
     calendarTokenIdx: uniqueIndex("users_calendar_token_idx").on(table.calendarToken),
   }),
 );
+
+// Admin-created (see /api/admin/redeem-codes) -- grants trialDays of full
+// billing-unlocked access to whichever primary coach redeems it (see
+// storage.redeemCode, users.trialExpiresAt, server/billing.ts). Meant for
+// things like a 14-day new-coach welcome offer or a seasonal "free month"
+// promo -- no codes are created anywhere in this codebase yet, this is
+// just the machinery to create and redeem them whenever needed.
+export const redeemCodes = pgTable(
+  "redeem_codes",
+  {
+    id: serial("id").primaryKey(),
+    code: text("code").notNull(),
+    trialDays: integer("trial_days").notNull(),
+    // null = unlimited redemptions.
+    maxRedemptions: integer("max_redemptions"),
+    // null = never expires.
+    expiresAt: timestamp("expires_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    codeIdx: uniqueIndex("redeem_codes_code_idx").on(table.code),
+  }),
+);
+
+// One row per successful redemption -- the unique (codeId, coachId) pair
+// is what stops the same org redeeming the same code twice, and counting
+// rows here (rather than a hand-maintained counter column) is what
+// enforces maxRedemptions without a race condition between two
+// simultaneous redemptions.
+export const redeemCodeRedemptions = pgTable(
+  "redeem_code_redemptions",
+  {
+    id: serial("id").primaryKey(),
+    codeId: integer("code_id")
+      .notNull()
+      .references(() => redeemCodes.id, { onDelete: "cascade" }),
+    coachId: integer("coach_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    redeemedAt: timestamp("redeemed_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    pairIdx: uniqueIndex("redeem_code_redemptions_pair_idx").on(table.codeId, table.coachId),
+  }),
+);
+
+// A Family Free Agent plan (shared/free-agent-tiers.ts: "family", up to
+// FREE_AGENT_TIERS.family.athleteProfileCap members) is billed once but
+// covers multiple athlete accounts -- this is just the shared group they're
+// linked under via users.familyGroupId. Admin-created (see
+// /api/admin/family-groups), same manual-assignment pattern as coach
+// billing -- no self-serve group creation yet.
+export const familyGroups = pgTable("family_groups", {
+  id: serial("id").primaryKey(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
 
 export const coachAthletes = pgTable(
   "coach_athletes",
@@ -463,11 +623,11 @@ export const teams = pgTable(
     // Optional override of the coach/org-wide branding (users.brand* --
     // see getEffectiveBrandingForUser) for this one team specifically --
     // e.g. an athletic department's own colors school-wide, with one sport
-    // picking its own accent on top. Resolved field-by-field, not
-    // all-or-nothing: a team that's only set its own primary color still
-    // shows the org's logo underneath it, rather than losing the logo the
-    // moment it sets anything of its own. Null on any one field means
-    // "fall through to the org's value for that field."
+    // picking its own accent on top ("school vs. program"). Resolved
+    // field-by-field, not all-or-nothing: a team that's only set its own
+    // primary color still shows the org's logo underneath it, rather than
+    // losing the logo the moment it sets anything of its own. Null on any
+    // one field means "fall through to the org's value for that field."
     brandLogoUrl: text("brand_logo_url"),
     brandPrimaryColor: text("brand_primary_color"),
     brandSecondaryColor: text("brand_secondary_color"),
@@ -611,6 +771,11 @@ export const coachStaff = pgTable(
     staffCoachId: integer("staff_coach_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
+    // Free-form display label shown instead of the generic "Coach" role
+    // wherever this staff member's name renders (e.g. "Nutritionist",
+    // "Strength Coach") -- purely cosmetic, doesn't change what they can
+    // do or see. Null falls back to "Coach", same as today.
+    staffTitle: text("staff_title"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     // Which of the sections above this staff member does NOT get -- empty
     // (the default) means full access, same as before this existed, so a
@@ -619,13 +784,6 @@ export const coachStaff = pgTable(
     // the primary coach themself -- there's no row here for their own
     // account to restrict.
     hiddenSections: coachSectionEnum("hidden_sections").array().notNull().default([]),
-    // Free-text label shown in place of "Coach" wherever this staff
-    // member's name renders (roster, chat, team-board posts) -- e.g.
-    // "Nutritionist" or "Athletic Trainer". Deliberately free text, not an
-    // enum: the point is a school can label a staff seat however they
-    // actually use it without Forge having to anticipate every title.
-    // Null means "just show Coach," same as before this column existed.
-    staffTitle: text("staff_title"),
   },
   (table) => ({
     pairIdx: uniqueIndex("coach_staff_pair_idx").on(
@@ -1442,24 +1600,30 @@ export const workoutSetEntries = pgTable("workout_set_entries", {
   // deliberately immutable once true (a later set beating this one doesn't
   // retroactively un-flag it; it really was a milestone at the time).
   isPr: boolean("is_pr").notNull().default(false),
-  // The heart -- explicit, athlete-set, the ONLY thing that exempts a video
-  // from the Free Agent rolling-cap purge below. Distinct from
-  // formCheckFlag (a coach-facing best/worst comparison marker) on
-  // purpose: a set can be a coach's "best" pick and not be the athlete's
-  // own favorite, or vice versa.
-  favorited: boolean("favorited").notNull().default(false),
+  // Retention-management fields, independent of formCheckFlag above (that's
+  // a coach-facing best/worst comparison tag; this is the athlete's own
+  // heart -- explicit, and the ONLY thing that exempts a video from the
+  // rolling-cap sweep below). videoUploadedAt is carried forward across a
+  // same-day resubmission when the video URL hasn't changed, so editing
+  // e.g. a rep count doesn't make an untouched video look freshly captured
+  // to the retention sweep. See shared/video-retention.ts /
+  // server/billing.ts's getVideoRetentionLimits for the actual caps
+  // (baseline vs. the paid add-on), which apply to both coach-rostered
+  // athletes and Free Agents alike -- this isn't Free-Agent-only.
+  videoFavorited: boolean("video_favorited").notNull().default(false),
+  videoUploadedAt: timestamp("video_uploaded_at"),
   // Set the first time this video becomes one of the oldest-beyond-the-cap
-  // unfavorited videos for a Free Agent's exercise (see
-  // free-agent-video-cap-job.ts) -- starts a grace window before the file
-  // is actually deleted, rather than purging the instant it's over the
-  // limit. Cleared if the athlete favorites it, or if it falls back within
-  // the cap before the grace window elapses (newer excess videos got
-  // purged first). Null for every coached athlete; this column only ever
-  // matters for Free Agents. Note: any autosave of this set's day deletes
-  // and reinserts every set row on it (see submitWorkoutLog), which resets
-  // this back to null along with everything else -- editing an old day
-  // during a video's grace window restarts that video's clock rather than
-  // losing it, the safe direction for this particular edge case to fail.
+  // unfavorited videos for its (athlete, exercise) pair (see
+  // video-retention-job.ts) -- starts a grace window (with a push/email/
+  // in-app notice) before the file is actually deleted, rather than
+  // purging the instant it's over the limit. Cleared if the athlete
+  // favorites it, or if it falls back within the cap before the grace
+  // window elapses (newer excess videos got purged first). Note: any
+  // autosave of this set's day deletes and reinserts every set row on it
+  // (see submitWorkoutLog), which resets this back to null along with
+  // everything else -- editing an old day during a video's grace window
+  // restarts that video's clock rather than losing it, the safe direction
+  // for this particular edge case to fail.
   pendingDeletionAt: date("pending_deletion_at"),
   // "jump" tracking mode's numbers (see jump-tracking.ts) -- null unless
   // trackingLevel was "jump" when this set was logged. Best-of-set height
@@ -4082,6 +4246,116 @@ export const forgeAiMessages = pgTable(
 
 export type ForgeAiMessage = typeof forgeAiMessages.$inferSelect;
 
+// ---------- Movement profiles (camera-tracker kinematic knowledge) ----------
+// Same admin-teaching pattern as aiKnowledge/nutritionKnowledge above, but
+// the AI produces structured tracking thresholds instead of a freeform
+// guidelines document, and there's one profile per movement -- not a
+// single running conversation -- since a squat and a med ball throw are
+// unrelated knowledge domains. See pose-tracking.ts's detectFormFaults and
+// jump-tracking.ts's summarizeJumpSet, which read the active profile's
+// thresholds instead of the hardcoded constants they used before this
+// existed. Independent of aiKnowledgeEntries above -- that's the general
+// per-fact knowledge base for AI-generated programs/coaching; this is
+// specifically the camera tracker's own kinematic thresholds, structured
+// numeric fields rather than freeform facts.
+export const movementKnowledgeMessages = pgTable(
+  "movement_knowledge_messages",
+  {
+    id: serial("id").primaryKey(),
+    // A shared/exercise-taxonomy.ts MOVEMENT_TYPES value, or the literal
+    // "jump" (jump tracking is its own trackingLevel mode, not a
+    // movementType, but still gets taught/profiled the same way).
+    movementType: text("movement_type").notNull(),
+    authorId: integer("author_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    role: aiKnowledgeChatRoleEnum("role").notNull(),
+    content: text("content").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    movementTypeCreatedIdx: index("movement_knowledge_messages_type_created_idx").on(
+      table.movementType,
+      table.createdAt,
+    ),
+  }),
+);
+
+export type MovementKnowledgeMessage = typeof movementKnowledgeMessages.$inferSelect;
+
+export const movementProfileStatusEnum = pgEnum("movement_profile_status", ["active", "archived"]);
+
+// One row per applied version of a movement's tracking profile. At most one
+// "active" row per movementType -- applying a new proposal archives the
+// previous one rather than overwriting it, so every version stays around
+// for audit/revert. Nothing here affects a live tracker until
+// storage.applyMovementProfileProposal commits it; a chat proposal sits in
+// the conversation only, with zero effect, until that explicit step.
+export const movementProfiles = pgTable(
+  "movement_profiles",
+  {
+    id: serial("id").primaryKey(),
+    movementType: text("movement_type").notNull(),
+    status: movementProfileStatusEnum("status").notNull().default("active"),
+    version: integer("version").notNull().default(1),
+    // Lift-pattern thresholds (detectFormFaults) -- null means "use the
+    // hardcoded default," so a profile can override just one or two
+    // fields without having to restate every threshold.
+    minKneeAngleDeg: real("min_knee_angle_deg"),
+    valgusRatioMin: real("valgus_ratio_min"),
+    maxTorsoLeanDeg: real("max_torso_lean_deg"),
+    barPathDeviationMaxCm: real("bar_path_deviation_max_cm"),
+    barTiltMaxDeg: real("bar_tilt_max_deg"),
+    // Jump-pattern threshold (summarizeJumpSet) -- how far a single rep's
+    // jump height can deviate from the set's own median before it's
+    // flagged as a likely tracking glitch rather than a real rep.
+    jumpHeightOutlierPercent: real("jump_height_outlier_percent"),
+    // Where to put the camera for this movement -- surfaced to the athlete
+    // before they start recording, not just used to judge what came out.
+    cameraFramingNotes: text("camera_framing_notes"),
+    // What the admin actually taught it, kept for audit -- not read by the
+    // tracker, just shown alongside the profile so a future admin (or a
+    // later recalibration pass) can see where a number came from.
+    sourceSummary: text("source_summary"),
+    createdBy: integer("created_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    movementTypeStatusIdx: index("movement_profiles_type_status_idx").on(
+      table.movementType,
+      table.status,
+    ),
+  }),
+);
+
+export type MovementProfile = typeof movementProfiles.$inferSelect;
+
+export const sendMovementKnowledgeChatMessageSchema = z
+  .object({
+    content: z.string().trim().min(1).max(5000).optional(),
+    url: z.string().trim().url().max(2000).optional(),
+  })
+  .refine((data) => Boolean(data.content?.trim()) || Boolean(data.url?.trim()), {
+    message: "Provide text or a URL",
+  });
+
+export type SendMovementKnowledgeChatMessageInput = z.infer<typeof sendMovementKnowledgeChatMessageSchema>;
+
+export const applyMovementProfileProposalSchema = z.object({
+  minKneeAngleDeg: z.number().optional().nullable(),
+  valgusRatioMin: z.number().optional().nullable(),
+  maxTorsoLeanDeg: z.number().optional().nullable(),
+  barPathDeviationMaxCm: z.number().optional().nullable(),
+  barTiltMaxDeg: z.number().optional().nullable(),
+  jumpHeightOutlierPercent: z.number().optional().nullable(),
+  cameraFramingNotes: z.string().trim().max(1000).optional().nullable(),
+  sourceSummary: z.string().trim().max(2000).optional().nullable(),
+});
+
+export type ApplyMovementProfileProposalInput = z.infer<typeof applyMovementProfileProposalSchema>;
+
 export const sendForgeAiChatMessageSchema = z.object({
   content: z.string().trim().min(1), // no max -- admin gets an unbounded paste, see task list
   // Same base64 image-block shape the meal-photo/food-scan AI routes
@@ -4545,12 +4819,128 @@ export const updateProfileSchema = z.object({
   benchMaxLbs: z.number().min(0).max(1500).optional().nullable(),
   squatMaxLbs: z.number().min(0).max(1500).optional().nullable(),
   deadliftMaxLbs: z.number().min(0).max(1500).optional().nullable(),
+  bio: z.string().trim().max(300).optional().nullable(),
 });
 
 export const updateNotificationPrefsSchema = z.object({
   phone: z.string().trim().max(20).optional().nullable(),
   notifyEmail: z.boolean(),
   notifySms: z.boolean(),
+});
+
+// #RRGGBB only -- the exact-color ask this whole feature is built around,
+// not a loose CSS-color-name/rgb() acceptor. Logo upload is handled as its
+// own multipart route, not through this schema.
+const hexColor = z
+  .string()
+  .trim()
+  .regex(/^#[0-9a-fA-F]{6}$/, "Enter a hex color like #003262");
+
+export const updateBrandingSchema = z.object({
+  teamName: z.string().trim().max(60).optional().nullable(),
+  primaryColor: hexColor.optional().nullable(),
+  secondaryColor: hexColor.optional().nullable(),
+  motto: z.string().trim().max(80).optional().nullable(),
+  mission: z.string().trim().max(500).optional().nullable(),
+  // Client is responsible for sending null rather than "" when cleared
+  // (same convention as every other optional branding field here) --
+  // kept a plain nullable email check rather than a preprocessing chain.
+  contactEmail: z.string().trim().toLowerCase().email().max(255).optional().nullable(),
+  welcomeMessage: z.string().trim().max(300).optional().nullable(),
+});
+
+// Team-level override never carries its own name -- teams already have
+// `name`; only the visual identity is overridable per-field.
+export const updateTeamBrandingSchema = z.object({
+  primaryColor: hexColor.optional().nullable(),
+  secondaryColor: hexColor.optional().nullable(),
+});
+
+export const updateStaffTitleSchema = z.object({
+  staffTitle: z.string().trim().max(40).optional().nullable(),
+});
+
+// Covers both nav-customization fields together since they're edited from
+// the one NavCustomizeDialog surface -- one PATCH instead of two.
+export const updateNavPrefsSchema = z.object({
+  hiddenNavSections: z.array(z.string().trim().min(1)).max(20),
+  navLabelOverrides: z.record(z.string(), z.string().trim().min(1).max(30)).optional(),
+});
+
+// Name-only -- deliberately doesn't reuse updateProfileSchema (all its
+// other fields are athlete-only performance data that would be
+// meaningless, and confusing to accept, on a coach/admin account).
+export const updateAccountNameSchema = z.object({
+  name: z.string().trim().min(1).max(100),
+});
+
+// Requires the current password (not just an active session) before
+// changing the address login/password-reset email goes to -- the same
+// re-auth-before-a-sensitive-change discipline updateAccountPasswordSchema
+// below already needs for its own reason.
+export const updateAccountEmailSchema = z.object({
+  password: z.string().min(1),
+  newEmail: z.string().trim().toLowerCase().email().max(255),
+});
+
+export const updateAccountPasswordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(6),
+});
+
+// Any staff member's own personal touch (not gated to the primary the
+// way org branding is) -- see personalAccentColor's comment on the users
+// table.
+export const updatePersonalAccentSchema = z.object({
+  accentColor: hexColor.optional().nullable(),
+});
+
+// Admin-only -- see server/billing.ts and shared/billing-tiers.ts. Enum
+// values pulled from BILLING_TIER_ORDER/BILLING_ADD_ON_ORDER (not
+// hand-typed) so a new tier/add-on id can never validate here without
+// also being a real entry in billing-tiers.ts.
+export const updateCoachBillingSchema = z.object({
+  billingTier: z.enum(BILLING_TIER_ORDER as [BillingTierId, ...BillingTierId[]]).optional().nullable(),
+  billingAddOns: z.array(z.enum(BILLING_ADD_ON_ORDER as [AddOnId, ...AddOnId[]])).optional(),
+  isBetaAccount: z.boolean().optional(),
+});
+
+// Admin-only -- creates a redeemable code (see redeemCodes table above).
+export const createRedeemCodeSchema = z.object({
+  code: z.string().trim().min(3).max(30),
+  trialDays: z.number().int().min(1).max(365),
+  maxRedemptions: z.number().int().min(1).optional().nullable(),
+  expiresAt: z.string().datetime().optional().nullable(),
+});
+
+// Coach-facing -- what a primary coach types into the redeem box.
+export const redeemCodeInputSchema = z.object({
+  code: z.string().trim().min(1).max(30),
+});
+
+// Admin-only -- see server/billing.ts and shared/free-agent-tiers.ts. Enum
+// values pulled from FREE_AGENT_TIER_ORDER/FREE_AGENT_ADD_ON_ORDER (not
+// hand-typed), same reasoning as updateCoachBillingSchema above.
+export const updateFreeAgentBillingSchema = z.object({
+  freeAgentTier: z
+    .enum(FREE_AGENT_TIER_ORDER as [FreeAgentTierId, ...FreeAgentTierId[]])
+    .optional()
+    .nullable(),
+  freeAgentAddOns: z.array(z.enum(FREE_AGENT_ADD_ON_ORDER as [FreeAgentAddOnId, ...FreeAgentAddOnId[]])).optional(),
+  isBetaAccount: z.boolean().optional(),
+  // Applies regardless of coached status -- see users.hasVideoStorageAddOn.
+  hasVideoStorageAddOn: z.boolean().optional(),
+});
+
+// Admin-only -- creates a new Family group and links these athletes to it
+// (see storage.createFamilyGroup). Capped at the tier's own
+// athleteProfileCap so this schema can never validate a group larger than
+// what Family actually covers.
+export const createFamilyGroupSchema = z.object({
+  athleteEmails: z
+    .array(z.string().trim().toLowerCase().email())
+    .min(1)
+    .max(FREE_AGENT_TIERS.family.athleteProfileCap ?? 3),
 });
 
 export const insertExerciseSchema = createInsertSchema(exercises)
@@ -4941,6 +5331,10 @@ export const jumpBreakdownEntrySchema = z.object({
   // previous jump's landing -- null for the first jump in the set (nothing
   // to measure from).
   groundContactSeconds: z.number().nullable(),
+  // Set by jump-tracking.ts's summarizeJumpSet when this rep's height is a
+  // statistical outlier against the rest of the set -- a likely tracking
+  // glitch, flagged rather than silently dropped or corrected.
+  likelyTrackingGlitch: z.boolean().optional(),
 });
 
 export const setLogInputSchema = z.object({
@@ -4969,11 +5363,13 @@ export const setLogInputSchema = z.object({
   velocityLossPercent: z.number().optional().nullable(),
   formCheckVideoUrl: z.string().trim().max(500).optional().nullable(),
   formCheckFlag: z.enum(["best", "worst"]).optional().nullable(),
+  // See workoutSetEntries.videoFavorited -- exempts this video from the
+  // rolling-deletion cap once retention limits are actually enforced.
   // isPr and pendingDeletionAt are deliberately absent here -- both are
   // server-computed only (see workoutSetEntries' own comments) and would
   // otherwise let a client claim a set was a PR or dictate its own purge
   // timing.
-  favorited: z.boolean().optional(),
+  videoFavorited: z.boolean().optional(),
   jumpHeightCm: z.number().optional().nullable(),
   jumpDistanceCm: z.number().optional().nullable(),
   groundContactSeconds: z.number().optional().nullable(),
@@ -5076,6 +5472,19 @@ export type AttachVideoToSetInput = z.infer<typeof attachVideoToSetSchema>;
 export type UpdatePreferencesInput = z.infer<typeof updatePreferencesSchema>;
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 export type UpdateNotificationPrefsInput = z.infer<typeof updateNotificationPrefsSchema>;
+export type UpdateBrandingInput = z.infer<typeof updateBrandingSchema>;
+export type UpdateTeamBrandingInput = z.infer<typeof updateTeamBrandingSchema>;
+export type UpdateStaffTitleInput = z.infer<typeof updateStaffTitleSchema>;
+export type UpdateNavPrefsInput = z.infer<typeof updateNavPrefsSchema>;
+export type UpdateAccountNameInput = z.infer<typeof updateAccountNameSchema>;
+export type UpdateAccountEmailInput = z.infer<typeof updateAccountEmailSchema>;
+export type UpdateAccountPasswordInput = z.infer<typeof updateAccountPasswordSchema>;
+export type UpdatePersonalAccentInput = z.infer<typeof updatePersonalAccentSchema>;
+export type UpdateCoachBillingInput = z.infer<typeof updateCoachBillingSchema>;
+export type CreateRedeemCodeInput = z.infer<typeof createRedeemCodeSchema>;
+export type RedeemCodeInput = z.infer<typeof redeemCodeInputSchema>;
+export type UpdateFreeAgentBillingInput = z.infer<typeof updateFreeAgentBillingSchema>;
+export type CreateFamilyGroupInput = z.infer<typeof createFamilyGroupSchema>;
 export type CreateWorkoutCommentInput = z.infer<typeof createWorkoutCommentSchema>;
 export type CreateSkillDayCommentInput = z.infer<typeof createSkillDayCommentSchema>;
 export type SetSkillDayCompleteInput = z.infer<typeof setSkillDayCompleteSchema>;
@@ -5085,52 +5494,28 @@ export type ResolveSubmissionInput = z.infer<typeof resolveSubmissionSchema>;
 // healthStatus is coach-only -- deliberately excluded here so it never rides
 // along in an athlete's own login/signup/me response. Coach-facing roster
 // endpoints attach it explicitly (see getRosterForCoach).
+// staffTitle isn't a users column (it lives on coachStaff, since it's set
+// by the primary coach per staff member, not by the account itself) --
+// bolted on here so a coach's own /api/auth/me response can carry their
+// display title without a users table column that would be meaningless
+// for a primary coach or non-staff account. See auth.ts's toPublicUser.
 export type PublicUser = Omit<
   User,
   "passwordHash" | "healthStatus" | "agreedToTermsText" | "mfaSecret" | "mfaBackupCodeHashes"
 > & {
+  staffTitle?: string | null;
+  isPrimaryCoach?: boolean;
   // Not a users column -- computed per-request from this coach's own
   // coachStaff row (see getHiddenSectionsForCoach) and attached by
   // /api/auth/me. Always [] for a primary/non-staff coach, and absent
   // entirely for an athlete/admin.
   hiddenSections?: CoachSection[];
-  // Same computed-per-request pattern as hiddenSections, from the same row
-  // (see getStaffTitleForCoach) -- null for a primary/non-staff coach, and
-  // absent entirely for an athlete/admin. Lets AppShell's account menu show
-  // this staff coach's own title ("Nutritionist") instead of the generic
-  // "Coach" role label.
-  staffTitle?: string | null;
 };
 
 export const updateHealthStatusSchema = z.object({
   healthStatus: z.enum(["healthy", "hurt"]),
 });
 export type UpdateHealthStatusInput = z.infer<typeof updateHealthStatusSchema>;
-
-// Empty string clears a field back to unbranded (falls back to the default
-// Forge wordmark/colors) -- a coach who set a team name and wants to undo
-// it shouldn't have to know to send null specifically.
-const hexColor = z
-  .string()
-  .trim()
-  .regex(/^#[0-9a-fA-F]{6}$/, "Enter a color as #RRGGBB")
-  .or(z.literal(""));
-
-export const updateCoachBrandingSchema = z.object({
-  teamName: z.string().trim().max(60).optional(),
-  primaryColor: hexColor.optional(),
-  secondaryColor: hexColor.optional(),
-});
-export type UpdateCoachBrandingInput = z.infer<typeof updateCoachBrandingSchema>;
-
-// A specific team's own override of the org-wide branding above -- no
-// teamName field, since a team already has its own `name` column (this
-// only ever touches the visual identity, not what it's called).
-export const updateTeamBrandingSchema = z.object({
-  primaryColor: hexColor.optional(),
-  secondaryColor: hexColor.optional(),
-});
-export type UpdateTeamBrandingInput = z.infer<typeof updateTeamBrandingSchema>;
 
 export const updateCoachFeaturesSchema = z.object(
   Object.fromEntries(COACH_FEATURES.map((key) => [key, z.boolean().optional()])) as Record<

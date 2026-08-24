@@ -232,6 +232,13 @@ export function AssignProgramDialog({
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
                 required
+                // iOS renders a native date input's value in its own larger,
+                // centered, bolder styling that page CSS can't fully
+                // override -- text-base (not text-sm like other inputs)
+                // keeps it above the 16px iOS auto-zooms-on-focus below,
+                // and the extra height gives that native rendering room
+                // instead of looking cramped against the field's edges.
+                className="h-12 text-base"
               />
               <p className="text-xs text-muted-foreground">
                 Day 1 of Week 1 lands on this date by default -- adjust individual days below for

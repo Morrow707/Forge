@@ -20,6 +20,7 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CaraCompliancePanel } from "@/components/cara-compliance-panel";
 import { TeamChallengesSection } from "@/components/team-challenges-panel";
 import { GameDaysSection } from "@/components/game-days-panel";
+import { TeamBrandingDialog } from "@/components/team-branding-dialog";
 import { TestingDayImportDialog } from "@/components/testing-day-import-dialog";
 import { WeighInImportDialog } from "@/components/weigh-in-import-dialog";
 import { NutritionSheetImportDialog } from "@/components/nutrition-sheet-import-dialog";
@@ -57,7 +58,6 @@ import {
   UserPlus2,
   Palette,
 } from "lucide-react";
-import { TeamBrandingDialog } from "@/components/team-branding-dialog";
 
 type PhotoImportKind = "testing-day" | "weigh-in" | "nutrition" | "injury" | "testing-data" | "player-intake";
 
@@ -146,9 +146,9 @@ export default function CoachRoster() {
 
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignAthleteIds, setAssignAthleteIds] = useState<number[]>([]);
-  const [brandingForTeam, setBrandingForTeam] = useState<TeamEntry | null>(null);
 
   const [teamDialogOpen, setTeamDialogOpen] = useState(false);
+  const [brandingTeamId, setBrandingTeamId] = useState<number | null>(null);
   const [newTeamName, setNewTeamName] = useState("");
 
   const [addFreeAgentOpen, setAddFreeAgentOpen] = useState(false);
@@ -410,8 +410,24 @@ export default function CoachRoster() {
               return (
               <Card key={team.id}>
                 <CardHeader className="flex-row items-center justify-between space-y-0">
-                  <div>
-                    <CardTitle>{team.name}</CardTitle>
+                  <div className="min-w-0">
+                    <div className="flex min-w-0 items-center gap-2">
+                      {team.brandLogoUrl && (
+                        <img
+                          src={team.brandLogoUrl}
+                          alt=""
+                          className="h-6 w-6 shrink-0 rounded object-contain"
+                        />
+                      )}
+                      <CardTitle className="truncate">{team.name}</CardTitle>
+                      {(team.brandPrimaryColor || team.brandSecondaryColor) && (
+                        <span
+                          title="This team has its own branding override"
+                          className="h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-border"
+                          style={{ backgroundColor: team.brandPrimaryColor || team.brandSecondaryColor! }}
+                        />
+                      )}
+                    </div>
                     {team.members.length > 0 && (
                       <p className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
                         <span className="flex items-center gap-1 text-success">
@@ -430,7 +446,7 @@ export default function CoachRoster() {
                       size="sm"
                       variant="outline"
                       aria-label={`Edit ${team.name}'s branding`}
-                      onClick={() => setBrandingForTeam(team)}
+                      onClick={() => setBrandingTeamId(team.id)}
                     >
                       <Palette className="h-3.5 w-3.5" />
                     </Button>
@@ -546,21 +562,6 @@ export default function CoachRoster() {
           <CaraCompliancePanel roster={roster} />
         </TabsContent>
 
-      {brandingForTeam && (
-        <TeamBrandingDialog
-          open={!!brandingForTeam}
-          onOpenChange={(open) => !open && setBrandingForTeam(null)}
-          scope={{
-            kind: "team",
-            teamId: brandingForTeam.id,
-            teamName: brandingForTeam.name,
-            initialLogoUrl: brandingForTeam.brandLogoUrl,
-            initialPrimaryColor: brandingForTeam.brandPrimaryColor,
-            initialSecondaryColor: brandingForTeam.brandSecondaryColor,
-          }}
-        />
-      )}
-
       <Dialog open={teamDialogOpen} onOpenChange={setTeamDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -640,6 +641,28 @@ export default function CoachRoster() {
         programs={programs}
         initialAthleteIds={assignAthleteIds}
       />
+
+      {brandingTeamId !== null &&
+        (() => {
+          const liveTeam = teams.find((t) => t.id === brandingTeamId);
+          if (!liveTeam) return null;
+          return (
+            <TeamBrandingDialog
+              open
+              onOpenChange={(open) => !open && setBrandingTeamId(null)}
+              scope={{
+                type: "team",
+                teamId: liveTeam.id,
+                teamName: liveTeam.name,
+                initial: {
+                  brandLogoUrl: liveTeam.brandLogoUrl,
+                  brandPrimaryColor: liveTeam.brandPrimaryColor,
+                  brandSecondaryColor: liveTeam.brandSecondaryColor,
+                },
+              }}
+            />
+          );
+        })()}
 
       <Dialog open={photoImportPickerOpen} onOpenChange={setPhotoImportPickerOpen}>
         <DialogContent>

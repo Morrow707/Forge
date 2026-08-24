@@ -1,4 +1,4 @@
-import { useRef, useState, type CSSProperties, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, Redirect } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
@@ -20,16 +20,20 @@ import { cn } from "@/lib/utils";
 import { Dumbbell, ClipboardList, Sparkles, Check, Lock } from "lucide-react";
 import { ForgeMark } from "@/components/forge-mark";
 import { getJson, resolveApiUrl } from "@/lib/queryClient";
-import { hexToHslTriplet, contrastForegroundHsl } from "@/lib/color";
+import { computeBrandingStyle, type EffectiveBranding } from "@/lib/branding-style";
 import { POWERED_BY_FORGE_LABEL } from "@/lib/branding-copy";
 import { derivePrivacyTier } from "@shared/privacy-tiers";
 
-type PublicBranding = {
-  teamName: string | null;
-  logoUrl: string | null;
-  primaryColor: string | null;
-  secondaryColor: string | null;
-};
+/** Debounces a fast-changing value (here, the invite-code input) so a
+ * lookup only fires once someone pauses typing, not on every keystroke. */
+function useDebounced<T>(value: T, delayMs: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(value), delayMs);
+    return () => clearTimeout(timer);
+  }, [value, delayMs]);
+  return debounced;
+}
 
 export default function SignupPage() {
   const { user, isLoading, signupMutation } = useAuth();
@@ -42,29 +46,24 @@ export default function SignupPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [coachCode, setCoachCode] = useState(prefilledCode.toUpperCase());
-  // A scanned/shared invite link carries whoever it belongs to's branding
-  // along with it -- see GET /api/public/branding/:code, the one
-  // unauthenticated branding lookup, since this page runs before login.
-  const { data: branding } = useQuery<PublicBranding>({
-    queryKey: ["/api/public/branding", prefilledCode],
-    queryFn: () => getJson(`/api/public/branding/${encodeURIComponent(prefilledCode)}`),
-    enabled: !!prefilledCode,
-    staleTime: 5 * 60_000,
-  });
-  const brandStyle = (() => {
-    if (!branding?.primaryColor) return undefined;
-    const triplet = hexToHslTriplet(branding.primaryColor);
-    if (!triplet) return undefined;
-    const fg = contrastForegroundHsl(branding.primaryColor);
-    return {
-      "--primary": triplet,
-      "--primary-foreground": fg,
-      "--ring": triplet,
-      "--accent": triplet,
-      "--accent-foreground": fg,
-    } as CSSProperties;
-  })();
   const [phone, setPhone] = useState("");
+
+  // Looks up whichever coach/team invite code is currently typed in so
+  // the page can re-skin itself before an account even exists -- the
+  // first thing a new athlete sees should already look like the program
+  // they're joining, not a detour through plain Forge. Debounced so it
+  // doesn't fire on every keystroke; a short/empty code just skips the
+  // lookup rather than round-tripping for something that can't resolve.
+  // Seeded from prefilledCode (a QR/shared-link ?code=) via coachCode's own
+  // initial state above, so a scanned invite re-skins the page immediately
+  // without a separate, redundant lookup.
+  const debouncedCode = useDebounced(coachCode.trim(), 400);
+  const { data: inviteBranding } = useQuery<EffectiveBranding | null>({
+    queryKey: ["/api/public/branding", debouncedCode],
+    queryFn: () => getJson(`/api/public/branding?code=${encodeURIComponent(debouncedCode)}`),
+    enabled: role === "athlete" && debouncedCode.length >= 4,
+  });
+  const brandingStyle = computeBrandingStyle(inviteBranding);
   const [dateOfBirth, setDateOfBirth] = useState("");
   const [guardianEmail, setGuardianEmail] = useState("");
   // A signed-up-under-18 athlete needs a guardian's email collected right
@@ -129,24 +128,26 @@ export default function SignupPage() {
       style={{
         paddingTop: "max(env(safe-area-inset-top), 2.5rem)",
         paddingBottom: "max(env(safe-area-inset-bottom), 2.5rem)",
-        ...brandStyle,
+        ...brandingStyle,
       }}
     >
       <div className="w-full max-w-md">
         <div className="mb-8 flex flex-col items-center gap-3">
-          {branding?.logoUrl ? (
+          {inviteBranding?.brandLogoUrl ? (
             <img
-              src={resolveApiUrl(branding.logoUrl)}
-              alt={branding.teamName ?? "Team logo"}
+              src={resolveApiUrl(inviteBranding.brandLogoUrl)}
+              alt={inviteBranding.brandTeamName || "Team logo"}
               className="h-14 w-14 rounded-xl object-contain"
             />
           ) : (
             <ForgeMark className="h-14 w-14 rounded-xl" />
           )}
           <h1 className="font-display text-4xl font-extrabold uppercase tracking-wider">
-            {branding?.teamName || "Forge"}
+            {inviteBranding?.brandTeamName || "Forge"}
           </h1>
-          {branding?.teamName || branding?.logoUrl ? (
+          {inviteBranding?.brandTeamName ? (
+            <p className="text-sm text-muted-foreground">You're joining {inviteBranding.brandTeamName}</p>
+          ) : inviteBranding?.brandLogoUrl ? (
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               {POWERED_BY_FORGE_LABEL}
             </p>
@@ -320,6 +321,11 @@ export default function SignupPage() {
               Already have an account?{" "}
               <Link href="/login" className="font-semibold text-primary hover:underline">
                 Log in
+              </Link>
+            </p>
+            <p className="mt-2 text-center text-sm text-muted-foreground">
+              <Link href="/pricing" className="font-semibold text-primary hover:underline">
+                View pricing
               </Link>
             </p>
           </CardContent>

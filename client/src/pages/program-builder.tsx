@@ -999,7 +999,7 @@ function SortableExerciseRow({
           <Trash2 className="h-4 w-4" />
         </button>
       </div>
-      <div className="grid grid-cols-4 gap-1.5">
+      <div className={cn("grid gap-1.5", exercise.linkedToNext ? "grid-cols-3" : "grid-cols-4")}>
         <FieldInput
           label="Sets"
           value={String(exercise.sets)}
@@ -1023,12 +1023,17 @@ function SortableExerciseRow({
             />
           </div>
         </div>
-        <FieldInput
-          label="Rest (sec)"
-          value={exercise.restSeconds}
-          onChange={(v) => onUpdate({ restSeconds: v })}
-          type="number"
-        />
+        {/* Rest only applies once the whole superset chain finishes, so it's
+            set once per group on its last (or only) exercise -- not per row -- and
+            that's the value workout.tsx's auto-start rest timer reads on set completion. */}
+        {!exercise.linkedToNext && (
+          <FieldInput
+            label="Rest (s)"
+            value={exercise.restSeconds}
+            onChange={(v) => onUpdate({ restSeconds: v })}
+            type="number"
+          />
+        )}
       </div>
       <div className="mt-1.5">
         <VideoTrackingToggle

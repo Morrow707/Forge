@@ -147,9 +147,12 @@ export type RepMetrics = {
   eccentricMeanVelocityMps: number;
   // Average per-rep vertical range of motion, in cm.
   romCm: number;
-  // How much peak concentric velocity dropped from the first rep to the
+  // How much mean concentric velocity dropped from the first rep to the
   // last, as a percentage -- the standard within-set fatigue signal in
-  // velocity-based training. Null for single-rep sets (nothing to compare).
+  // velocity-based training. Mean, not peak: peak is one noisy single-frame
+  // sample, so a tracking spike on any one rep would corrupt a peak-based
+  // loss figure; mean is far more stable rep to rep. Null for single-rep
+  // sets (nothing to compare).
   velocityLossPercent: number | null;
 };
 
@@ -342,6 +345,165 @@ export function kalmanSmooth(values: number[], times: number[], weights?: number
     out[i] = pos;
   }
   return out;
+}
+
+// A window's least-squares quadratic fit, evaluated at offset 0 (the
+// window's center) -- computed fresh from the actual points every call
+// (via the 3x3 normal-equations system, solved by Cramer's rule) rather
+// than a hardcoded coefficient table, so it's correct by construction and
+// naturally handles a truncated/asymmetric window (savitzkyGolay's own
+// boundary handling below) with no special case. Falls back to a plain
+// mean when there aren't enough points to fit a quadratic (never happens
+// at window >= 3, only possible right at the very ends of a short trace).
+function quadraticFitAtZero(offsets: number[], values: number[]): number {
+  const n = offsets.length;
+  let s0 = n,
+    s1 = 0,
+    s2 = 0,
+    s3 = 0,
+    s4 = 0;
+  let t0 = 0,
+    t1 = 0,
+    t2 = 0;
+  for (let k = 0; k < n; k++) {
+    const x = offsets[k];
+    const y = values[k];
+    const x2 = x * x;
+    s1 += x;
+    s2 += x2;
+    s3 += x2 * x;
+    s4 += x2 * x2;
+    t0 += y;
+    t1 += x * y;
+    t2 += x2 * y;
+  }
+  const det3 = (m: number[][]) =>
+    m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) -
+    m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) +
+    m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+  const M = [
+    [s0, s1, s2],
+    [s1, s2, s3],
+    [s2, s3, s4],
+  ];
+  const D = det3(M);
+  if (Math.abs(D) < 1e-9) return t0 / n;
+  // Cramer's rule: the intercept `a` of y = a + b*x + c*x^2 is what we
+  // want, since the fit's value at x=0 is just `a`.
+  const Ma = [
+    [t0, s1, s2],
+    [t1, s2, s3],
+    [t2, s3, s4],
+  ];
+  return det3(Ma) / D;
+}
+
+// Savitzky-Golay smoothing: at every point, fits a quadratic to the local
+// window and takes the fit's value at the center, instead of movingAverage's
+// flat mean. The two differ in exactly the case that matters for peak
+// velocity: a flat mean can't represent curvature, so it systematically
+// blunts a real peak (verified: smoothing a pure quadratic test signal with
+// movingAverage introduces a real, nonzero bias; savitzkyGolay reproduces it
+// exactly, since fitting a quadratic to quadratic data has zero residual by
+// construction). Not a movingAverage replacement everywhere -- jump-tracking.ts
+// still uses movingAverage for its own signal, unchanged -- this is specifically
+// for summarizeTrackedSet's velocity curve, where peak-velocity fidelity is
+// the point.
+export function savitzkyGolay(values: number[], window: number): number[] {
+  const out: number[] = [];
+  const half = Math.floor(window / 2);
+  for (let i = 0; i < values.length; i++) {
+    const start = Math.max(0, i - half);
+    const end = Math.min(values.length, i + half + 1);
+    if (end - start < 3) {
+      const slice = values.slice(start, end);
+      out.push(slice.reduce((a, b) => a + b, 0) / slice.length);
+      continue;
+    }
+    const offsets: number[] = [];
+    const slice: number[] = [];
+    for (let k = start; k < end; k++) {
+      offsets.push(k - i);
+      slice.push(values[k]);
+    }
+    out.push(quadraticFitAtZero(offsets, slice));
+  }
+  return out;
+}
+
+// A barbell (or any tracked point) can't actually accelerate arbitrarily
+// fast between two frames -- a tracking glitch (a wrist briefly "jumping" to
+// a wrong position, e.g. passing in front of the chest on a bench press, per
+// the comment on barPathDeviationCm below) produces an instantaneous position
+// jump that implies an acceleration far beyond anything a real lift produces.
+// This repairs that raw point (linear interpolation between its neighbors --
+// same spirit as interpolateOcclusionGap above, just for an implausible jump
+// instead of a time gap) before it ever reaches smoothing or a computed
+// metric, rather than leaving a glitch for downstream code to somehow
+// discount. MAX_PLAUSIBLE_ACCEL_G is deliberately generous (well above even
+// an aggressive Olympic-lift pull's turnaround) so this only ever catches a
+// genuine glitch, never a real explosive rep -- untuned against real footage
+// (this sandbox has no camera to test against).
+const MAX_PLAUSIBLE_ACCEL_G = 6;
+
+export function rejectImplausibleAccelerationSpikes(points: TrackedPoint[]): TrackedPoint[] {
+  if (points.length < 3) return points;
+  const maxAccelMps2 = MAX_PLAUSIBLE_ACCEL_G * GRAVITY_MPS2;
+
+  // Pass 1: flag every interior point whose local (3-point) acceleration
+  // implies something physically impossible. A single one-frame glitch
+  // shows up at THREE consecutive indices here, not just the glitched one
+  // -- the jump into it (centered on the point before) and the jump back
+  // out (centered on the point after) both look "impossible" too. Pass 2
+  // below accounts for that instead of repairing each flagged point
+  // in place, which would reach into a still-corrupt neighbor.
+  const flagged = new Array(points.length).fill(false);
+  for (let i = 1; i < points.length - 1; i++) {
+    const prev = points[i - 1];
+    const curr = points[i];
+    const next = points[i + 1];
+    const dt1 = (curr.t - prev.t) / 1000;
+    const dt2 = (next.t - curr.t) / 1000;
+    if (dt1 <= 0 || dt2 <= 0) continue;
+    const v1 = (curr.y - prev.y) / dt1;
+    const v2 = (next.y - curr.y) / dt2;
+    const accel = Math.abs(v2 - v1) / ((dt1 + dt2) / 2);
+    if (accel > maxAccelMps2) flagged[i] = true;
+  }
+
+  // Pass 2: repair each contiguous run of flagged points by linearly
+  // interpolating between the nearest CONFIRMED-CLEAN point before and
+  // after the run -- never from another flagged point, which is what made
+  // a single-pass, repair-as-you-go version corrupt the glitch's own
+  // clean neighbors too (their "impossible acceleration" was only ever an
+  // artifact of being next to the real glitch, not a problem of their own).
+  // The detection loop above only checks indices 1..length-2, so index 0
+  // and the last index are never flagged -- every run is guaranteed a
+  // clean point on both sides.
+  const cleaned = points.map((p) => ({ ...p }));
+  let i = 0;
+  while (i < points.length) {
+    if (!flagged[i]) {
+      i++;
+      continue;
+    }
+    let runEnd = i;
+    while (runEnd < points.length && flagged[runEnd]) runEnd++;
+    const before = points[i - 1];
+    const after = points[runEnd];
+    const span = after.t - before.t;
+    for (let k = i; k < runEnd; k++) {
+      const frac = span > 0 ? (points[k].t - before.t) / span : 0;
+      cleaned[k] = {
+        ...points[k],
+        x: before.x + (after.x - before.x) * frac,
+        y: before.y + (after.y - before.y) * frac,
+        z: before.z + (after.z - before.z) * frac,
+      };
+    }
+    i = runEnd;
+  }
+  return cleaned;
 }
 
 // Central-difference speed (pixels/second, always positive) from a smoothed
@@ -582,12 +744,18 @@ export function summarizeTrackedSet(
   if (rawPoints.length < 6) return null;
   const minRepAmplitudeCm = heightScaledAmplitudeCm(BASE_MIN_REP_AMPLITUDE_CM, heightIn);
 
+  // Repair single-frame implausible-acceleration glitches before anything
+  // downstream (smoothing, phase segmentation, bar-path deviation) ever
+  // sees them -- see rejectImplausibleAccelerationSpikes above. `points` is
+  // used everywhere below instead of the raw parameter.
+  const points = rejectImplausibleAccelerationSpikes(rawPoints);
+
   const ySmoothed = kalmanSmooth(
-    rawPoints.map((p) => p.y),
-    rawPoints.map((p) => p.t),
-    rawPoints.map((p) => p.confidence ?? 1),
+    points.map((p) => p.y),
+    points.map((p) => p.t),
+    points.map((p) => p.confidence ?? 1),
   );
-  const speedsMps = computeSpeeds(rawPoints, ySmoothed);
+  const speedsMps = computeSpeeds(points, ySmoothed);
 
   const minAmplitudeM = minRepAmplitudeCm / 100;
   const phases = segmentPhases(ySmoothed, minAmplitudeM);
@@ -595,7 +763,7 @@ export function summarizeTrackedSet(
 
   const phaseStats = phases.map((phase) => {
     const slice = speedsMps.slice(phase.startIdx, phase.endIdx + 1);
-    const duration = (rawPoints[phase.endIdx].t - rawPoints[phase.startIdx].t) / 1000;
+    const duration = (points[phase.endIdx].t - points[phase.startIdx].t) / 1000;
     const mean = plausibleMean(slice);
     // peak/peakIdx (index within the whole trace, used to report how long
     // it took to reach peak velocity, a standard VBT metric) come from
@@ -661,8 +829,8 @@ export function summarizeTrackedSet(
     // call on a single- or double-rep set.
     if (concentric.length < 3 || medianConcentricDuration <= 0) return false;
     if (phase.duration >= medianConcentricDuration * PHANTOM_DURATION_RATIO) return false;
-    const startT = rawPoints[phase.startIdx].t;
-    const endT = rawPoints[phase.endIdx].t;
+    const startT = points[phase.startIdx].t;
+    const endT = points[phase.endIdx].t;
     return rejectionEvents.some((t) => t >= startT && t <= endT);
   }
 
@@ -684,7 +852,7 @@ export function summarizeTrackedSet(
       // "never report a physically impossible number" stance as
       // MAX_PLAUSIBLE_LIFT_VELOCITY_MPS's other two call sites above.
       velocityCurve.push({
-        positionCm: Math.round((rawPoints[idx].y - rawPoints[phase.startIdx].y) * -1000) / 10,
+        positionCm: Math.round((points[idx].y - points[phase.startIdx].y) * -1000) / 10,
         velocityMps: Math.round(Math.min(speedsMps[idx], MAX_PLAUSIBLE_LIFT_VELOCITY_MPS) * 100) / 100,
       });
     }
@@ -693,10 +861,10 @@ export function summarizeTrackedSet(
     // whenever this rep isn't the very first phase, phaseStats[i - 1] is
     // guaranteed to be the eccentric that led into it.
     const pairedEccentric = i > 0 ? phaseStats[i - 1] : null;
-    const romCm = Math.round(Math.abs(rawPoints[phase.endIdx].y - rawPoints[phase.startIdx].y) * 1000) / 10;
+    const romCm = Math.round(Math.abs(points[phase.endIdx].y - points[phase.startIdx].y) * 1000) / 10;
 
     const timeToPeakVelocitySeconds =
-      Math.round(((rawPoints[phase.peakIdx].t - rawPoints[phase.startIdx].t) / 1000) * 100) / 100;
+      Math.round(((points[phase.peakIdx].t - points[phase.startIdx].t) / 1000) * 100) / 100;
 
     repBreakdown.push({
       repNumber: repBreakdown.length + 1,
@@ -704,8 +872,8 @@ export function summarizeTrackedSet(
       meanVelocityMps: Math.round(phase.mean * 100) / 100,
       concentricSeconds: Math.round(phase.duration * 100) / 100,
       timeToPeakVelocitySeconds,
-      startT: rawPoints[repStartIdx].t,
-      endT: rawPoints[phase.endIdx].t,
+      startT: points[repStartIdx].t,
+      endT: points[phase.endIdx].t,
       velocityCurve,
       romCm,
       peakPowerWatts:
@@ -732,7 +900,7 @@ export function summarizeTrackedSet(
   // in the full horizontal plane (x and z, i.e. side-to-side AND
   // forward/backward drift from a straight vertical line) now that real
   // depth is available -- 2D pixel tracking could only ever see x drift.
-  // rawPoints spans the whole Start Set-to-Stop Set window, not just the
+  // points spans the whole Start Set-to-Stop Set window, not just the
   // reps themselves -- it includes stepping back out of the rack before the
   // first rep and stepping/bending back in to re-rack after the last one.
   // Both are real, correctly-tracked motion, not noise, but neither is bar
@@ -744,8 +912,8 @@ export function summarizeTrackedSet(
   // part of a rep. Falls back to the full trace when repBreakdown is empty
   // (e.g. every phase got filtered as phantom) rather than computing
   // deviation over nothing.
-  const activePoints = rawPoints.filter((p) => repBreakdown.some((r) => p.t >= r.startT && p.t <= r.endT));
-  const driftPoints = activePoints.length > 0 ? activePoints : rawPoints;
+  const activePoints = points.filter((p) => repBreakdown.some((r) => p.t >= r.startT && p.t <= r.endT));
+  const driftPoints = activePoints.length > 0 ? activePoints : points;
 
   const medianOf = (values: number[]) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
   const medianX = medianOf(driftPoints.map((p) => p.x));
@@ -756,7 +924,7 @@ export function summarizeTrackedSet(
   const p90Idx = Math.min(sortedDeviations.length - 1, Math.floor(sortedDeviations.length * 0.9));
   const barPathDeviationCm = sortedDeviations[p90Idx] * 100;
 
-  const barPathTrace = buildPathTrace(rawPoints, { x: rawPoints[0].x, y: rawPoints[0].y });
+  const barPathTrace = buildPathTrace(points, { x: points[0].x, y: points[0].y });
 
   return {
     peakVelocityMps: Math.round((Math.max(...concentric.map((c) => c.peak), 0)) * 100) / 100,
@@ -800,11 +968,11 @@ export function summarizeTrackedSet(
           ) / 10
         : 0,
     velocityLossPercent:
-      repBreakdown.length > 1 && repBreakdown[0].peakVelocityMps > 0
+      repBreakdown.length > 1 && repBreakdown[0].meanVelocityMps > 0
         ? Math.round(
-            ((repBreakdown[0].peakVelocityMps -
-              repBreakdown[repBreakdown.length - 1].peakVelocityMps) /
-              repBreakdown[0].peakVelocityMps) *
+            ((repBreakdown[0].meanVelocityMps -
+              repBreakdown[repBreakdown.length - 1].meanVelocityMps) /
+              repBreakdown[0].meanVelocityMps) *
               1000,
           ) / 10
         : null,

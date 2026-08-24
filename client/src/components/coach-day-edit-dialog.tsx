@@ -425,7 +425,12 @@ export function CoachDayEditDialog({
                               <Trash2 className="h-4 w-4" />
                             </button>
                           </div>
-                          <div className="grid grid-cols-4 gap-1.5">
+                          <div
+                            className={cn(
+                              "grid gap-1.5",
+                              ex.linkedToNext ? "grid-cols-3" : "grid-cols-4",
+                            )}
+                          >
                             <MiniField
                               label="Sets"
                               value={ex.sets}
@@ -475,16 +480,22 @@ export function CoachDayEditDialog({
                                 />
                               </div>
                             </div>
-                            <MiniField
-                              label="Rest (sec)"
-                              value={ex.restSeconds}
-                              type="number"
-                              onChange={(v) =>
-                                setExercises((prev) =>
-                                  prev.map((e) => (e.key === ex.key ? { ...e, restSeconds: v } : e)),
-                                )
-                              }
-                            />
+                            {/* Rest only applies once the whole superset chain finishes,
+                                so it's set once per group on its last (or only) exercise. */}
+                            {!ex.linkedToNext && (
+                              <MiniField
+                                label="Rest (s)"
+                                value={ex.restSeconds}
+                                type="number"
+                                onChange={(v) =>
+                                  setExercises((prev) =>
+                                    prev.map((e) =>
+                                      e.key === ex.key ? { ...e, restSeconds: v } : e,
+                                    ),
+                                  )
+                                }
+                              />
+                            )}
                           </div>
                           <div className="mt-1.5 flex items-center gap-2">
                             <VideoTrackingToggle

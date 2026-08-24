@@ -23,7 +23,7 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { startReflectionJob } from "./reflection-job";
 import { startDataRetentionJob } from "./data-retention-job";
-import { startFreeAgentVideoCapJob } from "./free-agent-video-cap-job";
+import { startVideoRetentionJob } from "./video-retention-job";
 import { verifyStripeWebhook, handleStripeWebhookEvent } from "./billing";
 import { signMediaUrlsDeep } from "./media-url-signing";
 import { verifyRequestOrigin } from "./csrf-protection";
@@ -218,6 +218,6 @@ app.use((req, res, next) => {
     log(`serving on port ${port}`);
     startReflectionJob();
     startDataRetentionJob();
-    startFreeAgentVideoCapJob();
+    startVideoRetentionJob();
   });
 })();

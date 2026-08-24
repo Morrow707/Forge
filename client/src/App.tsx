@@ -1,4 +1,5 @@
 import { Switch, Route, Redirect, useLocation } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { Toaster } from "sonner";
 import { lazy, Suspense, useEffect, type ComponentType } from "react";
@@ -18,6 +19,7 @@ import LandingPage from "@/pages/landing";
 import LoginPage from "@/pages/login";
 import AdminLoginPage from "@/pages/admin-login";
 import SignupPage from "@/pages/signup";
+import PricingPage from "@/pages/pricing";
 import ClaimPage from "@/pages/claim";
 import GuardianClaimPage from "@/pages/guardian-claim";
 import ForgotPasswordPage from "@/pages/forgot-password";
@@ -50,6 +52,8 @@ const CoachMyWorkout = lazy(() => import("@/pages/coach/my-workout"));
 const CoachAnalytics = lazy(() => import("@/pages/coach/analytics"));
 const CoachLeaderboard = lazy(() => import("@/pages/coach/leaderboard"));
 const CoachTeamBoard = lazy(() => import("@/pages/coach/team-board"));
+const CoachMyCalendar = lazy(() => import("@/pages/coach/my-calendar"));
+const TeamAboutPage = lazy(() => import("@/pages/team-about"));
 const AthleteDashboard = lazy(() => import("@/pages/athlete/dashboard"));
 const GuardianDashboard = lazy(() => import("@/pages/guardian-dashboard"));
 const AthleteCalendar = lazy(() => import("@/pages/athlete/calendar"));
@@ -78,6 +82,7 @@ const AdminPrograms = lazy(() => import("@/pages/admin/programs"));
 const AdminProgramBuilder = lazy(() => import("@/pages/admin/program-builder"));
 const AdminReviewQueue = lazy(() => import("@/pages/admin/review-queue"));
 const AdminAiKnowledge = lazy(() => import("@/pages/admin/ai-knowledge"));
+const AdminMovementKnowledge = lazy(() => import("@/pages/admin/movement-knowledge"));
 const ForgeAi = lazy(() => import("@/pages/admin/forge-ai"));
 const AdminLegalAgreement = lazy(() => import("@/pages/admin/legal-agreement"));
 const AdminDocuments = lazy(() => import("@/pages/admin/documents"));
@@ -86,6 +91,7 @@ const AdminNutritionKnowledge = lazy(() => import("@/pages/admin/nutrition-knowl
 const AdminMyCalendar = lazy(() => import("@/pages/admin/my-calendar"));
 const AdminMyWorkout = lazy(() => import("@/pages/admin/my-workout"));
 const AdminPlatformTrends = lazy(() => import("@/pages/admin/platform-trends"));
+const AdminBilling = lazy(() => import("@/pages/admin/billing"));
 const AdminVideos = lazy(() => import("@/pages/admin/videos"));
 const AdminClasses = lazy(() => import("@/pages/admin/classes"));
 const AdminClassesAnalytics = lazy(() => import("@/pages/admin/classes-analytics"));
@@ -101,31 +107,38 @@ function FullScreenSpinner() {
   );
 }
 
-// Shown when the auth check has failed and exhausted its retries without a
-// real answer -- distinct from "confirmed logged out," so this deliberately
-// never redirects to /login. See useAuth's isError comment for why this
-// case exists (most commonly: app just resumed from background and the
-// network isn't back yet).
-function ConnectionProblem() {
-  return (
-    <div className="flex h-screen w-full flex-col items-center justify-center gap-4 bg-background px-6 text-center">
-      <p className="text-sm text-muted-foreground">Can't reach Forge -- check your connection.</p>
-      <button
-        type="button"
-        onClick={() => queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] })}
-        className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
-      >
-        Retry
-      </button>
-    </div>
-  );
-}
-
 function homeFor(role: "coach" | "athlete" | "admin" | "guardian") {
   if (role === "coach") return "/coach";
   if (role === "admin") return "/admin";
   if (role === "guardian") return "/guardian";
   return "/athlete";
+}
+
+// Shown instead of a hard redirect-to-login when the "who am I" check
+// itself couldn't complete (dropped connection, server hiccup) -- as
+// opposed to completing and confirming no one is logged in. The
+// distinction matters: booting someone to /login on a plain network blip
+// unmounts whatever page they're mid-task on (e.g. an in-progress workout
+// log) for no real reason, since their session is almost certainly still
+// valid the moment the connection recovers. This keeps them in place and
+// lets them retry instead.
+function ConnectionProblem() {
+  const qc = useQueryClient();
+  return (
+    <div className="flex h-screen w-full flex-col items-center justify-center gap-4 bg-background px-6 text-center">
+      <p className="text-sm text-muted-foreground">
+        Having trouble reaching Forge. Your session is still fine -- check your connection and
+        try again.
+      </p>
+      <button
+        type="button"
+        className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
+        onClick={() => qc.refetchQueries({ queryKey: ["/api/auth/me"] })}
+      >
+        Retry
+      </button>
+    </div>
+  );
 }
 
 function ProtectedRoute({
@@ -199,6 +212,7 @@ function Router() {
         <Route path="/login" component={LoginPage} />
         <Route path="/admin/login" component={AdminLoginPage} />
         <Route path="/signup" component={SignupPage} />
+        <Route path="/pricing" component={PricingPage} />
         <Route path="/claim/:code" component={ClaimPage} />
         <Route path="/guardian/claim" component={GuardianClaimPage} />
         <Route path="/forgot-password" component={ForgotPasswordPage} />
@@ -272,6 +286,12 @@ function Router() {
         <Route path="/coach/team-board">
           <ProtectedRoute role="coach" component={CoachTeamBoard} />
         </Route>
+        <Route path="/coach/my">
+          <ProtectedRoute role="coach" component={CoachMyCalendar} />
+        </Route>
+        <Route path="/coach/about">
+          <ProtectedRoute role="coach" component={TeamAboutPage} />
+        </Route>
         <Route path="/athlete">
           <ProtectedRoute role="athlete" component={AthleteDashboard} />
         </Route>
@@ -335,6 +355,9 @@ function Router() {
         <Route path="/athlete/day/:assignmentId/:programDayId/:date">
           <ProtectedRoute role="athlete" component={AthleteWorkout} />
         </Route>
+        <Route path="/athlete/about">
+          <ProtectedRoute role="athlete" component={TeamAboutPage} />
+        </Route>
         <Route path="/admin">
           <ProtectedRoute role="admin" component={AdminDashboard} />
         </Route>
@@ -392,8 +415,14 @@ function Router() {
         <Route path="/admin/nutrition-knowledge">
           <ProtectedRoute role="admin" component={AdminNutritionKnowledge} />
         </Route>
+        <Route path="/admin/movement-knowledge">
+          <ProtectedRoute role="admin" component={AdminMovementKnowledge} />
+        </Route>
         <Route path="/admin/platform-trends">
           <ProtectedRoute role="admin" component={AdminPlatformTrends} />
+        </Route>
+        <Route path="/admin/billing">
+          <ProtectedRoute role="admin" component={AdminBilling} />
         </Route>
         <Route path="/admin/videos">
           <ProtectedRoute role="admin" component={AdminVideos} />

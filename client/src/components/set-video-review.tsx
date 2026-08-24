@@ -75,9 +75,9 @@ export function SetVideoPreviewDialog({
   onFlag: (flag: "best" | "worst" | null) => void;
   onRetake: () => void;
   onRemove: () => void;
-  /** The heart -- the only thing that exempts a Free Agent's video from
-   * the rolling storage cap (see server/free-agent-video-cap-job.ts). No
-   * effect for a coached athlete beyond just marking it a favorite. */
+  /** The heart -- the only thing that exempts a video from the rolling
+   * storage cap (see server/video-retention-job.ts). Applies to every
+   * athlete, coached or Free Agent alike. */
   favorited?: boolean;
   onToggleFavorite?: () => void;
   /** Auto-computed server-side (submitWorkoutLog) -- purely a badge, never

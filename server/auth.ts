@@ -109,12 +109,20 @@ function toPublicUser(user: any): PublicUser {
 // directly from THIS response body (see qc.setQueryData in use-auth.tsx),
 // so a login response missing hiddenSections leaves a just-restricted staff
 // coach's nav showing everything until their next full page load happens
-// to trigger a real /api/auth/me refetch.
+// to trigger a real /api/auth/me refetch. staffTitle/isPrimaryCoach/
+// hiddenSections are all storage-backed, not users columns, so they're
+// attached here rather than by toPublicUser itself (which has no async
+// access to storage). isPrimaryCoach gates org-wide identity edits
+// (branding, nav customization) to the one account whose call it should
+// actually be, not any staff member sharing the roster -- see the
+// requirePrimaryCoach guard in routes.ts.
 async function toPublicUserWithSections(user: any): Promise<PublicUser> {
   const publicUser = toPublicUser(user);
   if (user.role === "coach") {
     (publicUser as any).hiddenSections = await storage.getHiddenSectionsForCoach(user.id);
-    (publicUser as any).staffTitle = await storage.getStaffTitleForCoach(user.id);
+    publicUser.staffTitle = await storage.getStaffTitleForCoach(user.id);
+    const coachIds = await storage.getEffectiveCoachIds(user.id);
+    publicUser.isPrimaryCoach = coachIds[0] === user.id;
   }
   return publicUser;
 }
@@ -250,6 +258,12 @@ export function setupAuth(app: Express) {
       secret: process.env.SESSION_SECRET || "forge-dev-secret",
       resave: false,
       saveUninitialized: false,
+      // Without this, the 30-day window is fixed from the moment you log
+      // in -- someone using the app daily still gets logged out 30 days
+      // later. rolling re-issues the cookie's expiry on every request, so
+      // it's 30 days of *inactivity*, not 30 days since login, which is
+      // what "don't make me log in again" actually means in practice.
+      rolling: true,
       cookie: {
         maxAge: 30 * 24 * 60 * 60 * 1000,
         httpOnly: true,

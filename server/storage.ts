@@ -89,6 +89,11 @@ import {
   movementScreens,
   movementScreenResults,
   foodLogEntries,
+  redeemCodes,
+  redeemCodeRedemptions,
+  familyGroups,
+  movementKnowledgeMessages,
+  movementProfiles,
   weaknessDeficitSchema,
   PERIODIZATION_PHASE_LABEL,
   NUTRITION_GOAL_LABEL,
@@ -151,6 +156,16 @@ import type {
   CreateMovementScreenInput,
   UpdateMovementScreenBatteryInput,
   CreateFoodLogEntryInput,
+  UpdateBrandingInput,
+  UpdateTeamBrandingInput,
+  UpdateNavPrefsInput,
+  UpdateCoachBillingInput,
+  CreateRedeemCodeInput,
+  UpdateFreeAgentBillingInput,
+  MovementKnowledgeMessage,
+  MovementProfile,
+  SendMovementKnowledgeChatMessageInput,
+  ApplyMovementProfileProposalInput,
   UpdateFoodLogEntryInput,
   ClassStructureInput,
   ClassCoachSettingsInput,
@@ -163,6 +178,9 @@ import type {
   RecordAccessAuditLog,
   LegalDocument,
 } from "@shared/schema";
+import { FREE_AGENT_TIERS } from "@shared/free-agent-tiers";
+import { getEntitlements, getVideoRetentionLimits } from "./billing";
+import type { VideoRetentionLimits } from "@shared/video-retention";
 import { lookupBarcode, searchFoodsByName, type FoodCandidate } from "./food-lookup";
 import { TESTING_METRICS, testingMetricLowerIsBetter } from "@shared/testing-metrics";
 import { computeReadiness, BODY_PAIN_PARTS } from "@shared/wellness";
@@ -190,6 +208,7 @@ import { tierForAppleProductId, type VerifiedAppleTransaction } from "./apple-ia
 import {
   eq,
   and,
+  or,
   inArray,
   notInArray,
   asc,
@@ -358,6 +377,33 @@ const TESTING_FIELDS = [
   "squatMaxLbs",
   "deadliftMaxLbs",
 ] as const;
+
+// Every org-wide branding field, shared by getCoachBranding's drizzle
+// query `columns` selector and BRANDING_COLUMNS_SQL below -- kept in one
+// place so a bare .returning() on a users-table branding update can never
+// again leak the rest of the row (passwordHash included) the way an
+// earlier version of updateCoachBranding/updateCoachLogo did.
+const BRANDING_COLUMNS = {
+  brandTeamName: true,
+  brandLogoUrl: true,
+  brandPrimaryColor: true,
+  brandSecondaryColor: true,
+  brandMotto: true,
+  brandMission: true,
+  brandContactEmail: true,
+  brandWelcomeMessage: true,
+} as const;
+
+const BRANDING_COLUMNS_SQL = {
+  brandTeamName: users.brandTeamName,
+  brandLogoUrl: users.brandLogoUrl,
+  brandPrimaryColor: users.brandPrimaryColor,
+  brandSecondaryColor: users.brandSecondaryColor,
+  brandMotto: users.brandMotto,
+  brandMission: users.brandMission,
+  brandContactEmail: users.brandContactEmail,
+  brandWelcomeMessage: users.brandWelcomeMessage,
+};
 
 // Shared by every AI program-generation prompt (generateProgramDraft and
 // generateProgramFromChat) so the two never drift into contradicting each
@@ -1257,6 +1303,24 @@ const updateGuidelinesResultSchema = z.object({
 
 const knowledgeAskQuestionResultSchema = z.object({ reply: z.string() });
 
+// What propose_movement_profile is allowed to hand back -- every threshold
+// field optional (the admin might only be teaching camera framing, or only
+// one of the five lift thresholds), summary required since the admin always
+// needs a reply. Structurally the same shape as applyMovementProfileProposalSchema
+// (shared/schema.ts) plus sourceSummary being called "summary" here -- kept
+// as two separate schemas since one validates an AI tool call and the other
+// validates a client request, even though they describe the same fields.
+const movementProfileProposalResultSchema = z.object({
+  minKneeAngleDeg: z.number().optional(),
+  valgusRatioMin: z.number().optional(),
+  maxTorsoLeanDeg: z.number().optional(),
+  barPathDeviationMaxCm: z.number().optional(),
+  barTiltMaxDeg: z.number().optional(),
+  jumpHeightOutlierPercent: z.number().optional(),
+  cameraFramingNotes: z.string().optional(),
+  summary: z.string(),
+});
+
 const forgeAiDiscussResultSchema = z.object({ reply: z.string() });
 
 const forgeAiProposeEntryResultSchema = z.object({
@@ -1544,6 +1608,57 @@ async function buildPlatformTrends() {
   };
 }
 
+type DbTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+// Trims favorited-video count down to favoritedCap (oldest favorite first)
+// for one (athlete, exercise) pair -- immediate, not grace-windowed, since
+// un-favoriting never deletes anything. Called from submitWorkoutLog once
+// per exercise touched by a submission, since even a resubmission with no
+// new video can change which ones are favorited. The totalCap side (what
+// happens to videos beyond it) is NOT handled here -- that's
+// sweepVideoRetentionCap below, a background sweep with a grace window and
+// a warning notification rather than a synchronous delete-on-submit, so a
+// slow/failed notification can't silently start deleting anyone's footage.
+// No-ops entirely when limits are unlimited (beta/enforcement-off/active
+// trial) -- see getVideoRetentionLimits in server/billing.ts.
+async function enforceVideoRetention(
+  tx: DbTx,
+  athleteId: number,
+  exerciseId: number,
+  limits: VideoRetentionLimits,
+) {
+  if (!Number.isFinite(limits.favoritedCap)) return;
+
+  const rows = await tx
+    .select({
+      id: workoutSetEntries.id,
+      favorited: workoutSetEntries.videoFavorited,
+      videoUrl: workoutSetEntries.formCheckVideoUrl,
+    })
+    .from(workoutSetEntries)
+    .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
+    .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
+    .leftJoin(programExercises, eq(workoutLogEntries.programExerciseId, programExercises.id))
+    .leftJoin(assignmentCorrectives, eq(workoutLogEntries.correctiveId, assignmentCorrectives.id))
+    .where(
+      and(
+        eq(workoutLogs.athleteId, athleteId),
+        isNotNull(workoutSetEntries.formCheckVideoUrl),
+        or(eq(programExercises.exerciseId, exerciseId), eq(assignmentCorrectives.exerciseId, exerciseId)),
+      ),
+    )
+    .orderBy(asc(workoutSetEntries.videoUploadedAt));
+
+  const favorited = rows.filter((r) => r.favorited);
+  if (favorited.length > limits.favoritedCap) {
+    const toUnfavorite = favorited.slice(0, favorited.length - limits.favoritedCap);
+    await tx
+      .update(workoutSetEntries)
+      .set({ videoFavorited: false })
+      .where(inArray(workoutSetEntries.id, toUnfavorite.map((r) => r.id)));
+  }
+}
+
 // One row shape for the admin video-management page, regardless of which
 // of the three underlying tables (workoutSetEntries/skillSessionLogs/
 // workoutComments -- see getAdminVideos' own comment) it actually came
@@ -1606,6 +1721,151 @@ export const storage = {
     });
   },
 
+  // Admin-only (see /api/admin/coaches* in routes.ts) -- the only way a
+  // real billingTier/billingAddOns/isBetaAccount gets set anywhere in this
+  // codebase right now, since there's no self-serve checkout yet.
+  async updateCoachBilling(coachId: number, values: UpdateCoachBillingInput) {
+    const [row] = await db
+      .update(users)
+      .set({
+        ...(values.billingTier !== undefined && { billingTier: values.billingTier }),
+        ...(values.billingAddOns !== undefined && { billingAddOns: values.billingAddOns }),
+        ...(values.isBetaAccount !== undefined && { isBetaAccount: values.isBetaAccount }),
+      })
+      .where(eq(users.id, coachId))
+      .returning({
+        id: users.id,
+        billingTier: users.billingTier,
+        billingAddOns: users.billingAddOns,
+        isBetaAccount: users.isBetaAccount,
+      });
+    return row ?? null;
+  },
+
+  // ---------- Redeem codes (trial promos) ----------
+  async createRedeemCode(input: CreateRedeemCodeInput) {
+    const [row] = await db
+      .insert(redeemCodes)
+      .values({
+        code: input.code.trim().toUpperCase(),
+        trialDays: input.trialDays,
+        maxRedemptions: input.maxRedemptions ?? null,
+        expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
+      })
+      .returning();
+    return row;
+  },
+
+  async listRedeemCodes() {
+    return db.query.redeemCodes.findMany({ orderBy: desc(redeemCodes.createdAt) });
+  },
+
+  // Extends (never overwrites) trialExpiresAt -- a coach who redeems a
+  // second code before their first trial runs out gets the days added on
+  // top, not reset to whichever code they typed most recently. Returns a
+  // discriminated result rather than throwing so the route can turn any
+  // failure into a clear, specific message instead of a generic 500.
+  async redeemCode(
+    coachId: number,
+    code: string,
+  ): Promise<{ ok: true; trialExpiresAt: Date } | { ok: false; message: string }> {
+    const record = await db.query.redeemCodes.findFirst({
+      where: eq(redeemCodes.code, code.trim().toUpperCase()),
+    });
+    if (!record) return { ok: false, message: "That code isn't valid" };
+    if (record.expiresAt && record.expiresAt.getTime() < Date.now()) {
+      return { ok: false, message: "That code has expired" };
+    }
+
+    const alreadyRedeemed = await db.query.redeemCodeRedemptions.findFirst({
+      where: and(eq(redeemCodeRedemptions.codeId, record.id), eq(redeemCodeRedemptions.coachId, coachId)),
+    });
+    if (alreadyRedeemed) return { ok: false, message: "You've already redeemed this code" };
+
+    if (record.maxRedemptions != null) {
+      const [{ count }] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(redeemCodeRedemptions)
+        .where(eq(redeemCodeRedemptions.codeId, record.id));
+      if (count >= record.maxRedemptions) {
+        return { ok: false, message: "That code has reached its redemption limit" };
+      }
+    }
+
+    const coach = await this.getUser(coachId);
+    const now = new Date();
+    const base = coach?.trialExpiresAt && coach.trialExpiresAt.getTime() > now.getTime() ? coach.trialExpiresAt : now;
+    const trialExpiresAt = new Date(base.getTime() + record.trialDays * 24 * 60 * 60 * 1000);
+
+    await db.insert(redeemCodeRedemptions).values({ codeId: record.id, coachId });
+    await db.update(users).set({ trialExpiresAt }).where(eq(users.id, coachId));
+
+    return { ok: true, trialExpiresAt };
+  },
+
+  // ---------- Free Agent billing (separate track from coach/org billing
+  // above -- shared/free-agent-tiers.ts). Admin-only, same manual-
+  // assignment pattern as updateCoachBilling since there's no self-serve
+  // checkout for this either. ----------
+  async updateFreeAgentBilling(athleteId: number, values: UpdateFreeAgentBillingInput) {
+    const [row] = await db
+      .update(users)
+      .set({
+        ...(values.freeAgentTier !== undefined && { freeAgentTier: values.freeAgentTier }),
+        ...(values.freeAgentAddOns !== undefined && { freeAgentAddOns: values.freeAgentAddOns }),
+        ...(values.isBetaAccount !== undefined && { isBetaAccount: values.isBetaAccount }),
+        ...(values.hasVideoStorageAddOn !== undefined && {
+          hasVideoStorageAddOn: values.hasVideoStorageAddOn,
+        }),
+      })
+      .where(eq(users.id, athleteId))
+      .returning({
+        id: users.id,
+        freeAgentTier: users.freeAgentTier,
+        freeAgentAddOns: users.freeAgentAddOns,
+        isBetaAccount: users.isBetaAccount,
+        hasVideoStorageAddOn: users.hasVideoStorageAddOn,
+      });
+    return row ?? null;
+  },
+
+  // Creates a new Family group and links 1-athleteProfileCap athletes to
+  // it, setting freeAgentTier="family" on each. Refuses rather than
+  // silently reassigning if any listed email isn't an athlete or is
+  // already in a group -- a discriminated result so the route can turn any
+  // failure into a specific message instead of a generic 500.
+  async createFamilyGroup(
+    athleteEmails: string[],
+  ): Promise<{ ok: true; groupId: number; memberIds: number[] } | { ok: false; message: string }> {
+    const cap = FREE_AGENT_TIERS.family.athleteProfileCap ?? athleteEmails.length;
+    if (athleteEmails.length > cap) {
+      return { ok: false, message: `Family plans cover up to ${cap} athletes` };
+    }
+
+    const members = await Promise.all(athleteEmails.map((email) => this.getUserByEmail(email)));
+    const missingEmails = athleteEmails.filter((_, i) => !members[i]);
+    if (missingEmails.length > 0) {
+      return { ok: false, message: `No account found for: ${missingEmails.join(", ")}` };
+    }
+    const notAthlete = members.find((m) => m!.role !== "athlete");
+    if (notAthlete) {
+      return { ok: false, message: `${notAthlete.email} isn't an athlete account` };
+    }
+    const alreadyGrouped = members.find((m) => m!.familyGroupId != null);
+    if (alreadyGrouped) {
+      return { ok: false, message: `${alreadyGrouped.email} is already in a family group` };
+    }
+
+    const [group] = await db.insert(familyGroups).values({}).returning();
+    const memberIds = members.map((m) => m!.id);
+    await db
+      .update(users)
+      .set({ familyGroupId: group.id, freeAgentTier: "family" })
+      .where(inArray(users.id, memberIds));
+
+    return { ok: true, groupId: group.id, memberIds };
+  },
+
   async getUserByCoachCode(code: string) {
     return db.query.users.findFirst({
       where: eq(users.coachCode, code.toUpperCase()),
@@ -1637,6 +1897,46 @@ export const storage = {
     }
     const [user] = await db.insert(users).values(values).returning();
     return user;
+  },
+
+  // ---------- Account self-service (name/email/password) ----------
+  // All three return only safe columns, never a bare .returning() -- see
+  // the passwordHash leak this exact mistake caused on the branding
+  // routes earlier.
+  async updateUserName(userId: number, name: string) {
+    const [row] = await db
+      .update(users)
+      .set({ name })
+      .where(eq(users.id, userId))
+      .returning({ id: users.id, name: users.name });
+    return row ?? null;
+  },
+
+  // Caller (routes.ts) is responsible for the current-password check and
+  // the pre-flight uniqueness check via getUserByEmail before calling
+  // this -- kept here as a plain write so this function can't itself
+  // silently swallow a race-condition duplicate (the unique index is the
+  // real backstop; a duplicate here throws and the route surfaces it).
+  async updateUserEmail(userId: number, newEmail: string) {
+    const [row] = await db
+      .update(users)
+      .set({ email: newEmail.toLowerCase() })
+      .where(eq(users.id, userId))
+      .returning({ id: users.id, email: users.email });
+    return row ?? null;
+  },
+
+  async updateUserPasswordHash(userId: number, passwordHash: string) {
+    await db.update(users).set({ passwordHash }).where(eq(users.id, userId));
+  },
+
+  async updatePersonalAccentColor(userId: number, accentColor: string | null) {
+    const [row] = await db
+      .update(users)
+      .set({ personalAccentColor: accentColor })
+      .where(eq(users.id, userId))
+      .returning({ personalAccentColor: users.personalAccentColor });
+    return row ?? null;
   },
 
   // Self-service account deletion (Apple 5.1.1(v) / Google Play's account-
@@ -2227,48 +2527,10 @@ export const storage = {
   },
 
   // ---------- Team branding + feature toggles (white-label) ----------
-
-  async getCoachBranding(coachId: number) {
-    const primaryId = await this.getPrimaryCoachId(coachId);
-    const coach = await db.query.users.findFirst({ where: eq(users.id, primaryId) });
-    return {
-      teamName: coach?.brandTeamName ?? null,
-      logoUrl: coach?.brandLogoUrl ?? null,
-      primaryColor: coach?.brandPrimaryColor ?? null,
-      secondaryColor: coach?.brandSecondaryColor ?? null,
-    };
-  },
-
-  async updateCoachBranding(
-    coachId: number,
-    values: { teamName?: string; primaryColor?: string; secondaryColor?: string },
-  ) {
-    const primaryId = await this.getPrimaryCoachId(coachId);
-    const patch: Record<string, string | null> = {};
-    // "" clears the field back to unbranded -- see updateCoachBrandingSchema's
-    // own comment in shared/schema.ts.
-    if (values.teamName !== undefined) patch.brandTeamName = values.teamName || null;
-    if (values.primaryColor !== undefined) patch.brandPrimaryColor = values.primaryColor || null;
-    if (values.secondaryColor !== undefined) patch.brandSecondaryColor = values.secondaryColor || null;
-    if (Object.keys(patch).length > 0) {
-      await db.update(users).set(patch).where(eq(users.id, primaryId));
-    }
-    return this.getCoachBranding(primaryId);
-  },
-
-  async updateCoachLogo(coachId: number, logoUrl: string | null) {
-    const primaryId = await this.getPrimaryCoachId(coachId);
-    const previous = await db.query.users.findFirst({ where: eq(users.id, primaryId) });
-    await db.update(users).set({ brandLogoUrl: logoUrl }).where(eq(users.id, primaryId));
-    // Old logo file becomes unreferenced the moment a new one (or null)
-    // replaces it -- same cleanup-on-replace reasoning as every other
-    // uploaded-file column in this file (see deleteUploadedFile's own
-    // callers), otherwise every re-upload leaks a file on disk forever.
-    if (previous?.brandLogoUrl && previous.brandLogoUrl !== logoUrl) {
-      await deleteUploadedFile(previous.brandLogoUrl);
-    }
-    return this.getCoachBranding(primaryId);
-  },
+  // getCoachBranding/updateCoachBranding/updateCoachLogo/
+  // getEffectiveBrandingForUser live further down (see "White-label
+  // branding" below) -- that version also carries the motto/mission/
+  // contact/welcome fields.
 
   async getCoachFeatures(coachId: number): Promise<Record<CoachFeature, boolean>> {
     const primaryId = await this.getPrimaryCoachId(coachId);
@@ -2302,63 +2564,18 @@ export const storage = {
     return null;
   },
 
-  // Single resolver for "what should this logged-in user's app look like" --
-  // a coach (or staff coach) gets their own team's settings, an athlete
-  // inherits their (first linked) coach's, and anyone else (admin, or a
-  // Free Agent with no coach yet) gets the unbranded default. AppShell and
-  // the pre-login-adjacent surfaces call this through one endpoint
-  // (GET /api/branding/me) rather than each needing to know the
-  // coach/athlete branching themselves.
-  async getEffectiveBrandingForUser(userId: number, role: string) {
-    if (role === "coach") {
-      const [branding, features] = await Promise.all([
-        this.getCoachBranding(userId),
-        this.getCoachFeatures(userId),
-      ]);
-      return { ...branding, features };
-    }
-    if (role === "athlete") {
-      const coaches = await this.getCoachesForAthlete(userId);
-      const coachId = coaches[0]?.id;
-      if (coachId) {
-        const [branding, features, athleteTeams] = await Promise.all([
-          this.getCoachBranding(coachId),
-          this.getCoachFeatures(coachId),
-          this.getTeamsForAthlete(userId),
-        ]);
-        // First team (of possibly several) that's actually set anything of
-        // its own -- resolved field-by-field against the org branding
-        // above, per teams.brandLogoUrl's own comment, so a team that's
-        // only picked a color doesn't lose the org's logo underneath it.
-        const brandedTeam = athleteTeams.find(
-          (t) => t.brandLogoUrl || t.brandPrimaryColor || t.brandSecondaryColor,
-        );
-        if (brandedTeam) {
-          return {
-            ...branding,
-            logoUrl: brandedTeam.brandLogoUrl ?? branding.logoUrl,
-            primaryColor: brandedTeam.brandPrimaryColor ?? branding.primaryColor,
-            secondaryColor: brandedTeam.brandSecondaryColor ?? branding.secondaryColor,
-            features,
-          };
-        }
-        return { ...branding, features };
-      }
-    }
-    return {
-      teamName: null,
-      logoUrl: null,
-      primaryColor: null,
-      secondaryColor: null,
-      features: resolveCoachFeatures(null),
-    };
-  },
-
   // Scoped to the whole staff (not just the exact coachId passed in) so an
   // athlete can never end up with two coachAthletes rows for the same
   // staff -- one per coach who happened to link them -- which would
   // otherwise double-count them in every roster/ACWR/wellness query below
   // that joins through this table.
+  // Returns null (instead of inserting) if the org's primary coach is over
+  // their billing tier's roster cap -- see server/billing.ts. Both call
+  // sites (signup, /api/auth/join-coach) funnel through this one function,
+  // so the check only needs to live here. Signup already created the
+  // athlete's account by the time this runs; a null here just leaves them
+  // a Free Agent (an existing, fully-supported state, not an error) rather
+  // than failing the whole signup.
   async linkAthleteToCoach(coachId: number, athleteId: number) {
     const coachIds = await this.getEffectiveCoachIds(coachId);
     const existing = await db.query.coachAthletes.findFirst({
@@ -2368,6 +2585,14 @@ export const storage = {
       ),
     });
     if (existing) return existing;
+
+    const primary = await this.getUser(coachIds[0]);
+    const entitlements = getEntitlements(primary!);
+    if (entitlements.athleteCap !== null) {
+      const roster = await this.getRosterForCoach(coachId);
+      if (roster.length >= entitlements.athleteCap) return null;
+    }
+
     const [row] = await db
       .insert(coachAthletes)
       .values({ coachId, athleteId })
@@ -2715,6 +2940,21 @@ export const storage = {
     };
   },
 
+  // Name + display title only -- the public-facing About page's staff
+  // list, safe for an athlete to see (unlike getStaffForCoach above,
+  // which also carries each staff member's email for the coach-only
+  // Coaching Staff management dialog).
+  async getTeamRosterInfo(primaryCoachId: number) {
+    const [primary, staff] = await Promise.all([
+      this.getUser(primaryCoachId),
+      this.getStaffForCoach(primaryCoachId),
+    ]);
+    return {
+      primaryCoachName: primary?.name ?? null,
+      staff: staff.staff.map((s) => ({ name: s.name, staffTitle: s.staffTitle })),
+    };
+  },
+
   // Primary-only -- which parts of the app one specific staff member
   // doesn't get. See coachSectionEnum's own comment for why the primary
   // coach can never be the target here (there's no coachStaff row for
@@ -2737,23 +2977,6 @@ export const storage = {
     return row;
   },
 
-  // Primary-only, same shape/guard as setStaffHiddenSections above -- "" is
-  // treated as clearing back to the default "Coach" label, same "empty
-  // string clears" convention updateCoachBranding already uses.
-  async setStaffTitle(primaryCoachId: number, staffCoachId: number, title: string) {
-    const [row] = await db
-      .update(coachStaff)
-      .set({ staffTitle: title || null })
-      .where(
-        and(
-          eq(coachStaff.primaryCoachId, primaryCoachId),
-          eq(coachStaff.staffCoachId, staffCoachId),
-        ),
-      )
-      .returning();
-    return row;
-  },
-
   // Empty for a primary coach or anyone not on a staff at all -- only a
   // joined staff member can have anything hidden. Read on every
   // /api/auth/me call (see toPublicUser's caller in auth.ts), so this stays
@@ -2765,17 +2988,8 @@ export const storage = {
     return asStaff?.hiddenSections ?? [];
   },
 
-  // Same shape/reasoning as getHiddenSectionsForCoach above -- null for a
-  // primary coach or anyone not on a staff, since only a joined staff
-  // member's own row can carry a title. This is what lets a staff coach's
-  // OWN account menu show "Nutritionist" instead of "Coach" once their
-  // primary sets it, not just the primary's staff-list view of them.
-  async getStaffTitleForCoach(coachId: number): Promise<string | null> {
-    const asStaff = await db.query.coachStaff.findFirst({
-      where: eq(coachStaff.staffCoachId, coachId),
-    });
-    return asStaff?.staffTitle ?? null;
-  },
+  // setStaffTitle/getStaffTitleForCoach live further down (see "The primary
+  // sets a display label" below).
 
   // The primary removes a specific staff member. No-op (not an error) if
   // that id isn't actually staff under this primary, so a double-click
@@ -2795,6 +3009,30 @@ export const storage = {
   // round so the caller doesn't need to already know their own primary.
   async leaveCoachStaff(staffCoachId: number) {
     await db.delete(coachStaff).where(eq(coachStaff.staffCoachId, staffCoachId));
+  },
+
+  // The primary sets a display label ("Nutritionist", "Strength Coach")
+  // for one of their staff -- cosmetic only, doesn't touch what that
+  // account can do. No-op if primaryCoachId doesn't actually own that row.
+  async setStaffTitle(primaryCoachId: number, staffCoachId: number, title: string | null) {
+    const [row] = await db
+      .update(coachStaff)
+      .set({ staffTitle: title })
+      .where(
+        and(eq(coachStaff.primaryCoachId, primaryCoachId), eq(coachStaff.staffCoachId, staffCoachId)),
+      )
+      .returning();
+    return row ?? null;
+  },
+
+  // Null for a primary coach (no coachStaff row as staffCoachId at all) or
+  // a staff member who's never had a title set -- both fall back to the
+  // generic "Coach" label client-side.
+  async getStaffTitleForCoach(coachId: number): Promise<string | null> {
+    const asStaff = await db.query.coachStaff.findFirst({
+      where: eq(coachStaff.staffCoachId, coachId),
+    });
+    return asStaff?.staffTitle ?? null;
   },
 
   // ---------- Body metrics (weight/composition over time, no photos) ----------
@@ -5012,11 +5250,12 @@ ${athleteContext}
 
   // A team's own override of the org-wide branding -- see
   // updateTeamBrandingSchema's own comment for why there's no teamName
-  // field here (the team's `name` column already covers that). Same "" ->
-  // null clearing convention as updateCoachBranding.
+  // field here (the team's `name` column already covers that). Null (or
+  // "") clears a field back to the org-wide fallback. Caller (routes.ts)
+  // is responsible for the assertOwnsTeam check.
   async updateTeamBranding(
     teamId: number,
-    values: { primaryColor?: string; secondaryColor?: string },
+    values: { primaryColor?: string | null; secondaryColor?: string | null },
   ) {
     const patch: Record<string, string | null> = {};
     if (values.primaryColor !== undefined) patch.brandPrimaryColor = values.primaryColor || null;
@@ -5437,23 +5676,8 @@ ${athleteContext}
   // see, and in what order" preference (coach and athlete dashboards
   // alike -- hence "ForUser," not "ForCoach"), so two people on the same
   // staff, or any two athletes, each arrange their own view without
-  // stepping on each other. Coerces a pre-drag-and-drop row (a bare
-  // string[] of hidden ids, no order) into the current WidgetLayoutEntry[]
-  // shape on read -- an existing user's already-hidden cards survive the
-  // upgrade with no migration script, they just start out in default order.
-  async getWidgetLayoutForUser(userId: number): Promise<WidgetLayoutEntry[]> {
-    const user = await db.query.users.findFirst({ where: eq(users.id, userId) });
-    const raw = user?.hiddenWidgets;
-    if (!raw) return [];
-    if (raw.length > 0 && typeof raw[0] === "string") {
-      return (raw as unknown as string[]).map((id) => ({ id, hidden: true }));
-    }
-    return raw;
-  },
-  async setWidgetLayoutForUser(userId: number, layout: WidgetLayoutEntry[]) {
-    await db.update(users).set({ hiddenWidgets: layout }).where(eq(users.id, userId));
-    return layout;
-  },
+  // stepping on each other. See getWidgetLayoutForUser/setWidgetLayoutForUser
+  // further down for the actual implementation.
 
   // A coach's own (and their staff's) bank plus every Forge-official
   // exercise -- what a coach sees in their exercise bank and the
@@ -9883,6 +10107,291 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
     return { assistantMessage, guidelines: trimmed };
   },
 
+  // ---------- Movement profiles (camera-tracker kinematic knowledge) ----------
+  // Read by detectFormFaults/summarizeJumpSet (via GET
+  // /api/movement-profiles/active) for every tracked set, platform-wide --
+  // see shared/schema.ts for the full design rationale. Chat/apply routes
+  // that actually produce these rows live further down.
+
+  async getActiveMovementProfile(movementType: string): Promise<MovementProfile | null> {
+    const [row] = await db
+      .select()
+      .from(movementProfiles)
+      .where(and(eq(movementProfiles.movementType, movementType), eq(movementProfiles.status, "active")));
+    return row ?? null;
+  },
+
+  async getMovementKnowledgeChat(
+    movementType: string,
+  ): Promise<{ activeProfile: MovementProfile | null; messages: MovementKnowledgeMessage[] }> {
+    const [activeProfile, messages] = await Promise.all([
+      this.getActiveMovementProfile(movementType),
+      db.query.movementKnowledgeMessages.findMany({
+        where: eq(movementKnowledgeMessages.movementType, movementType),
+        orderBy: asc(movementKnowledgeMessages.createdAt),
+      }),
+    ]);
+    return { activeProfile, messages };
+  },
+
+  // Same propose-then-review design as updateAiKnowledgeFromChat, but the AI
+  // produces structured threshold fields (propose_movement_profile) instead
+  // of a freeform document, and can optionally be pointed at a URL (fetched
+  // server-side via fetchUrlSafely (./safe-fetch) -- see that file for the
+  // SSRF guards (DNS-resolved + IP-pinned, private ranges blocked) -- in
+  // addition to, or instead of, typed text. The fetched page text is only
+  // ever used for this one turn's prompt, never persisted -- what gets
+  // stored is the admin's own message and the AI's summary of what it
+  // learned, same as any other turn.
+  async updateMovementKnowledgeFromChat(
+    adminId: number,
+    movementType: string,
+    input: SendMovementKnowledgeChatMessageInput,
+  ) {
+    const typedContent = input.content?.trim() || "";
+    const displayContent = input.url
+      ? typedContent
+        ? `${typedContent}\n\nSource: ${input.url}`
+        : `Learn from: ${input.url}`
+      : typedContent;
+
+    const [adminMessage] = await db
+      .insert(movementKnowledgeMessages)
+      .values({ movementType, authorId: adminId, role: "admin", content: displayContent })
+      .returning();
+
+    const fail = async (text: string) => {
+      const [assistantMessage] = await db
+        .insert(movementKnowledgeMessages)
+        .values({ movementType, authorId: adminId, role: "assistant", content: text })
+        .returning();
+      return {
+        adminMessage,
+        assistantMessage,
+        activeProfile: await this.getActiveMovementProfile(movementType),
+        proposal: null as (ApplyMovementProfileProposalInput & { summary: string }) | null,
+      };
+    };
+
+    if (!aiEnabled) {
+      return fail("AI isn't set up yet -- ask whoever manages this Forge instance to configure it.");
+    }
+
+    let sourceText = "";
+    if (input.url) {
+      try {
+        sourceText = await fetchUrlSafely(input.url);
+      } catch (err) {
+        return fail(err instanceof UnsafeUrlError ? err.message : "Couldn't fetch that URL.");
+      }
+    }
+
+    const [currentProfile, history] = await Promise.all([
+      this.getActiveMovementProfile(movementType),
+      db.query.movementKnowledgeMessages.findMany({
+        where: eq(movementKnowledgeMessages.movementType, movementType),
+        orderBy: asc(movementKnowledgeMessages.createdAt),
+      }),
+    ]);
+
+    const askQuestionTool = {
+      name: "ask_question",
+      description:
+        "Reply conversationally without proposing any tracking-profile change. Use this when the admin's message needs clarification, is just a question about what's already taught, or isn't kinematic/coaching guidance at all.",
+      input_schema: {
+        type: "object",
+        properties: { reply: { type: "string", description: "Your conversational reply to the admin." } },
+        required: ["reply"],
+      },
+    };
+
+    const proposeMovementProfileTool = {
+      name: "propose_movement_profile",
+      description:
+        "Proposes updated camera-tracker thresholds for this movement, for the admin to review before it takes effect. Only include a field once you've actually learned something concrete about it -- an omitted field keeps whatever the current profile already has (or the tracker's hardcoded default if there's no profile yet), it does NOT get cleared.",
+      input_schema: {
+        type: "object",
+        properties: {
+          minKneeAngleDeg: {
+            type: "number",
+            description:
+              "Bottom-position knee angle (degrees) beyond which depth is flagged shallow -- lower means deeper is required. Only for movements with a real squat-depth judgment (squat/hinge/lunge patterns); omit entirely for movements where knee depth isn't a meaningful check.",
+          },
+          valgusRatioMin: {
+            type: "number",
+            description:
+              "Minimum knee-width/ankle-width ratio before flagging knee valgus (caving in). 1.0 means knees exactly over ankles; lower allows more inward travel before flagging.",
+          },
+          maxTorsoLeanDeg: {
+            type: "number",
+            description: "Max forward torso lean from vertical (degrees) before flagging excessive forward lean.",
+          },
+          barPathDeviationMaxCm: {
+            type: "number",
+            description:
+              "Max acceptable horizontal bar drift (cm) before flagging bar-path drift. Only meaningful for barbell lifts.",
+          },
+          barTiltMaxDeg: {
+            type: "number",
+            description: "Max acceptable side-to-side bar tilt (degrees) before flagging uneven bar tilt.",
+          },
+          jumpHeightOutlierPercent: {
+            type: "number",
+            description:
+              "Jump tracking only (movementType \"jump\"): how far (%) a single rep's jump height can deviate from the set's own median before it's flagged as a likely tracking glitch rather than a real rep.",
+          },
+          cameraFramingNotes: {
+            type: "string",
+            description:
+              "Where to place the camera for this movement, shown to the athlete before they record -- e.g. 'Side-on, framed from knees to bar path, far enough back to catch the full range of motion.'",
+          },
+          summary: {
+            type: "string",
+            description: "A short (1-3 sentence) conversational reply describing what you're proposing and why.",
+          },
+        },
+        required: ["summary"],
+      },
+    };
+
+    const system = `You maintain camera-tracker kinematic tracking profiles for "${movementType}" movements on a strength-and-conditioning platform. The app's pose-tracking pipeline (MediaPipe-based, on-device) already runs deterministic checks -- knee angle, knee valgus ratio, torso lean, bar-path drift, bar tilt -- against threshold numbers; your job is to refine those numbers and camera guidance for this specific movement based on what the admin teaches you, not to invent a new kind of check. "jump" is a special movementType for vertical/broad jump tracking, which has no bar or knee-depth judgment -- only jumpHeightOutlierPercent and cameraFramingNotes apply there.
+
+You have two tools, and must pick exactly one every turn:
+- ask_question: for anything that needs clarification, is just a question, or isn't kinematic/coaching guidance at all.
+- propose_movement_profile: once the admin has taught you something concrete enough to turn into a number or camera note. Only set the fields you actually learned something about -- everything else is left alone (see the tool's description).
+
+Current active profile for ${movementType}${
+      currentProfile
+        ? `:\n${JSON.stringify(
+            {
+              minKneeAngleDeg: currentProfile.minKneeAngleDeg,
+              valgusRatioMin: currentProfile.valgusRatioMin,
+              maxTorsoLeanDeg: currentProfile.maxTorsoLeanDeg,
+              barPathDeviationMaxCm: currentProfile.barPathDeviationMaxCm,
+              barTiltMaxDeg: currentProfile.barTiltMaxDeg,
+              jumpHeightOutlierPercent: currentProfile.jumpHeightOutlierPercent,
+              cameraFramingNotes: currentProfile.cameraFramingNotes,
+            },
+            null,
+            2,
+          )}`
+        : " -- none applied yet, the tracker is using its built-in hardcoded defaults."
+    }`;
+
+    const historyText = history
+      .map((m) => `${m.role === "admin" ? "Admin" : "Assistant"}: ${m.content}`)
+      .join("\n");
+
+    const userPrompt = `Conversation so far:
+${historyText}
+${sourceText ? `\n\nExtracted text from the URL the admin just shared:\n${sourceText}` : ""}
+
+Respond to the admin's latest message by calling ask_question or propose_movement_profile.`;
+
+    const result = await askClaudeWithTools(system, userPrompt, [askQuestionTool, proposeMovementProfileTool], {
+      maxTokens: 2048,
+    });
+    if (!result) {
+      return fail("Sorry, I couldn't process that just now -- try again in a bit.");
+    }
+
+    if (result.toolName === "ask_question") {
+      const parsedQuestion = knowledgeAskQuestionResultSchema.safeParse(result.input);
+      const reply = parsedQuestion.success ? parsedQuestion.data.reply.trim() : "";
+      const [assistantMessage] = await db
+        .insert(movementKnowledgeMessages)
+        .values({ movementType, authorId: adminId, role: "assistant", content: reply || "Can you say more about that?" })
+        .returning();
+      return { adminMessage, assistantMessage, activeProfile: currentProfile, proposal: null };
+    }
+
+    const parsed = movementProfileProposalResultSchema.safeParse(result.input);
+    if (!parsed.success) {
+      return fail("Sorry, that came back malformed -- try again in a bit.");
+    }
+
+    const [assistantMessage] = await db
+      .insert(movementKnowledgeMessages)
+      .values({
+        movementType,
+        authorId: adminId,
+        role: "assistant",
+        content: parsed.data.summary.trim() || "Here's what I'd change -- review it below.",
+      })
+      .returning();
+
+    return {
+      adminMessage,
+      assistantMessage,
+      activeProfile: currentProfile,
+      proposal: {
+        minKneeAngleDeg: parsed.data.minKneeAngleDeg ?? currentProfile?.minKneeAngleDeg ?? null,
+        valgusRatioMin: parsed.data.valgusRatioMin ?? currentProfile?.valgusRatioMin ?? null,
+        maxTorsoLeanDeg: parsed.data.maxTorsoLeanDeg ?? currentProfile?.maxTorsoLeanDeg ?? null,
+        barPathDeviationMaxCm: parsed.data.barPathDeviationMaxCm ?? currentProfile?.barPathDeviationMaxCm ?? null,
+        barTiltMaxDeg: parsed.data.barTiltMaxDeg ?? currentProfile?.barTiltMaxDeg ?? null,
+        jumpHeightOutlierPercent:
+          parsed.data.jumpHeightOutlierPercent ?? currentProfile?.jumpHeightOutlierPercent ?? null,
+        cameraFramingNotes: parsed.data.cameraFramingNotes ?? currentProfile?.cameraFramingNotes ?? null,
+        sourceSummary: parsed.data.summary.trim(),
+        summary: parsed.data.summary.trim(),
+      },
+    };
+  },
+
+  // Commits a previously-proposed profile: archives the current active row
+  // for this movementType (if any -- full history stays for audit/revert)
+  // and inserts the new one as the active version. Nothing above this call
+  // ever touches movementProfiles itself -- a chat proposal has zero effect
+  // on a live tracker until this explicit step.
+  async applyMovementProfileProposal(
+    adminId: number,
+    movementType: string,
+    proposal: ApplyMovementProfileProposalInput,
+  ): Promise<{ profile: MovementProfile; assistantMessage: MovementKnowledgeMessage }> {
+    return db.transaction(async (tx) => {
+      const [current] = await tx
+        .select()
+        .from(movementProfiles)
+        .where(and(eq(movementProfiles.movementType, movementType), eq(movementProfiles.status, "active")));
+
+      if (current) {
+        await tx.update(movementProfiles).set({ status: "archived" }).where(eq(movementProfiles.id, current.id));
+      }
+
+      const [profile] = await tx
+        .insert(movementProfiles)
+        .values({
+          movementType,
+          status: "active",
+          version: (current?.version ?? 0) + 1,
+          minKneeAngleDeg: proposal.minKneeAngleDeg ?? null,
+          valgusRatioMin: proposal.valgusRatioMin ?? null,
+          maxTorsoLeanDeg: proposal.maxTorsoLeanDeg ?? null,
+          barPathDeviationMaxCm: proposal.barPathDeviationMaxCm ?? null,
+          barTiltMaxDeg: proposal.barTiltMaxDeg ?? null,
+          jumpHeightOutlierPercent: proposal.jumpHeightOutlierPercent ?? null,
+          cameraFramingNotes: proposal.cameraFramingNotes ?? null,
+          sourceSummary: proposal.sourceSummary ?? null,
+          createdBy: adminId,
+        })
+        .returning();
+
+      const [assistantMessage] = await tx
+        .insert(movementKnowledgeMessages)
+        .values({
+          movementType,
+          authorId: adminId,
+          role: "assistant",
+          content: `Applied -- version ${profile.version} is now live for ${movementType}.`,
+        })
+        .returning();
+
+      return { profile, assistantMessage };
+    });
+  },
+
+
   // All active, per-entry taught knowledge -- the central knowledge base
   // every AI feature on the platform reads from (see the schema comment on
   // aiKnowledgeEntries for why this replaced the single-document
@@ -11026,6 +11535,15 @@ ${entriesText}`;
     });
   },
 
+  async getAssignmentFull(id: number) {
+    const assignment = await db.query.assignments.findFirst({
+      where: eq(assignments.id, id),
+    });
+    if (!assignment) return undefined;
+    const program = await this.getProgramFull(assignment.programId);
+    return { assignment, program };
+  },
+
   // ---------- Correctives ----------
   async getCorrectivesForAssignmentDay(assignmentId: number, programDayId: number) {
     return db.query.assignmentCorrectives.findMany({
@@ -11465,6 +11983,203 @@ ${entriesText}`;
       .where(eq(users.id, userId))
       .returning();
     return row;
+  },
+
+  // ---------- White-label branding ----------
+  // Org-wide identity lives on the primary coach's own users row and
+  // applies to their whole staff (see getEffectiveCoachIds) -- a coach
+  // calling this with their own id always resolves to the same row a
+  // staff member's calls do, since coachId here should already be the
+  // resolved primary (routes.ts passes getEffectiveCoachIds()[0]).
+  async getCoachBranding(primaryCoachId: number) {
+    const row = await db.query.users.findFirst({
+      where: eq(users.id, primaryCoachId),
+      columns: BRANDING_COLUMNS,
+    });
+    return row ?? null;
+  },
+
+  // Both branding mutators below return only the branding columns, not
+  // the full users row -- update(...).returning() with no column list
+  // would otherwise hand the response straight back to the client
+  // including passwordHash.
+  async updateCoachBranding(primaryCoachId: number, values: UpdateBrandingInput) {
+    const [row] = await db
+      .update(users)
+      .set({
+        ...(values.teamName !== undefined && { brandTeamName: values.teamName }),
+        ...(values.primaryColor !== undefined && { brandPrimaryColor: values.primaryColor }),
+        ...(values.secondaryColor !== undefined && { brandSecondaryColor: values.secondaryColor }),
+        ...(values.motto !== undefined && { brandMotto: values.motto }),
+        ...(values.mission !== undefined && { brandMission: values.mission }),
+        ...(values.contactEmail !== undefined && { brandContactEmail: values.contactEmail }),
+        ...(values.welcomeMessage !== undefined && { brandWelcomeMessage: values.welcomeMessage }),
+      })
+      .where(eq(users.id, primaryCoachId))
+      .returning(BRANDING_COLUMNS_SQL);
+    return row ?? null;
+  },
+
+  async updateCoachLogo(primaryCoachId: number, logoUrl: string | null) {
+    const existing = await db.query.users.findFirst({ where: eq(users.id, primaryCoachId) });
+    if (existing?.brandLogoUrl && existing.brandLogoUrl !== logoUrl) {
+      await deleteUploadedFile(existing.brandLogoUrl);
+    }
+    const [row] = await db
+      .update(users)
+      .set({ brandLogoUrl: logoUrl })
+      .where(eq(users.id, primaryCoachId))
+      .returning(BRANDING_COLUMNS_SQL);
+    return row ?? null;
+  },
+
+  // Resolves the branding a given user should actually see: a coach/admin
+  // sees their own org's branding; an athlete sees their coach's org
+  // branding, with any team they belong to that has its own override
+  // applied field-by-field on top (first team with any override wins if
+  // they're on more than one -- uncommon today, but possible). Falls back
+  // to null fields throughout when nothing's been branded, which the
+  // client treats as "stay on the default Forge look."
+  async getEffectiveBrandingForUser(userId: number) {
+    const user = await this.getUser(userId);
+    if (!user) return null;
+
+    if (user.role === "coach" || user.role === "admin") {
+      const coachIds = await this.getEffectiveCoachIds(userId);
+      const [branding, features] = await Promise.all([
+        this.getCoachBranding(coachIds[0]),
+        this.getCoachFeatures(coachIds[0]),
+      ]);
+      return { ...branding, features };
+    }
+
+    // Athlete: base branding comes from their coach's org.
+    const emptyBranding = {
+      brandTeamName: null,
+      brandLogoUrl: null,
+      brandPrimaryColor: null,
+      brandSecondaryColor: null,
+      brandMotto: null,
+      brandMission: null,
+      brandContactEmail: null,
+      brandWelcomeMessage: null,
+      features: resolveCoachFeatures(null),
+    };
+    const coaches = await this.getCoachesForAthlete(userId);
+    if (coaches.length === 0) {
+      return emptyBranding;
+    }
+    const coachIds = await this.getEffectiveCoachIds(coaches[0].id);
+    const [orgBranding, features] = await Promise.all([
+      this.getCoachBranding(coachIds[0]),
+      this.getCoachFeatures(coachIds[0]),
+    ]);
+
+    const athleteTeams = await this.getTeamsForAthlete(userId);
+    const brandedTeam = athleteTeams.find(
+      (t) => t.brandLogoUrl || t.brandPrimaryColor || t.brandSecondaryColor,
+    );
+
+    // Motto/mission/contact/welcome are org-only -- no team-level field
+    // exists for them (see updateTeamBrandingSchema), so they always come
+    // straight from orgBranding with no team fallback needed.
+    return {
+      brandTeamName: orgBranding?.brandTeamName ?? null,
+      brandLogoUrl: brandedTeam?.brandLogoUrl ?? orgBranding?.brandLogoUrl ?? null,
+      brandPrimaryColor: brandedTeam?.brandPrimaryColor ?? orgBranding?.brandPrimaryColor ?? null,
+      brandSecondaryColor: brandedTeam?.brandSecondaryColor ?? orgBranding?.brandSecondaryColor ?? null,
+      brandMotto: orgBranding?.brandMotto ?? null,
+      brandMission: orgBranding?.brandMission ?? null,
+      brandContactEmail: orgBranding?.brandContactEmail ?? null,
+      brandWelcomeMessage: orgBranding?.brandWelcomeMessage ?? null,
+      features,
+    };
+  },
+
+  // Unauthenticated lookup for the signup page -- a coach or team invite
+  // code typed in before an account even exists still deserves the same
+  // re-skin an already-linked athlete gets, so signing up doesn't feel
+  // like a detour through plain Forge before "arriving" at the real
+  // program. A team code resolves with that team's own override applied
+  // (mirroring getEffectiveBrandingForUser's athlete branch); a coach's
+  // personal code returns the org's branding as-is. Returns null for an
+  // unrecognized code -- the signup page just stays unbranded, same as
+  // today, rather than showing an error for what's a normal "still
+  // typing" state.
+  async getPublicBrandingForCode(code: string) {
+    const team = await this.getTeamByCode(code);
+    if (team) {
+      const coachIds = await this.getEffectiveCoachIds(team.coachId);
+      const orgBranding = await this.getCoachBranding(coachIds[0]);
+      return {
+        brandTeamName: orgBranding?.brandTeamName ?? null,
+        brandLogoUrl: team.brandLogoUrl ?? orgBranding?.brandLogoUrl ?? null,
+        brandPrimaryColor: team.brandPrimaryColor ?? orgBranding?.brandPrimaryColor ?? null,
+        brandSecondaryColor: team.brandSecondaryColor ?? orgBranding?.brandSecondaryColor ?? null,
+      };
+    }
+    const coach = await this.getUserByCoachCode(code);
+    if (coach && coach.role === "coach") {
+      const coachIds = await this.getEffectiveCoachIds(coach.id);
+      return this.getCoachBranding(coachIds[0]);
+    }
+    return null;
+  },
+
+  // ---------- Nav / dashboard personalization ----------
+  async getNavPrefsForCoach(primaryCoachId: number) {
+    const row = await db.query.users.findFirst({
+      where: eq(users.id, primaryCoachId),
+      columns: { hiddenNavSections: true, navLabelOverrides: true },
+    });
+    return {
+      hiddenNavSections: row?.hiddenNavSections ?? [],
+      navLabelOverrides: row?.navLabelOverrides ?? {},
+    };
+  },
+
+  async setNavPrefsForCoach(primaryCoachId: number, input: UpdateNavPrefsInput) {
+    const [row] = await db
+      .update(users)
+      .set({
+        hiddenNavSections: input.hiddenNavSections,
+        ...(input.navLabelOverrides !== undefined && { navLabelOverrides: input.navLabelOverrides }),
+      })
+      .where(eq(users.id, primaryCoachId))
+      .returning({ hiddenNavSections: users.hiddenNavSections, navLabelOverrides: users.navLabelOverrides });
+    return {
+      hiddenNavSections: row?.hiddenNavSections ?? [],
+      navLabelOverrides: row?.navLabelOverrides ?? {},
+    };
+  },
+
+  // Per-user (coach or athlete -- whichever userId belongs to) dashboard
+  // box layout. Unlike branding/nav above, this is never staff-widened --
+  // each coach on a shared staff sees their own dashboard arrangement.
+  // Coerces a pre-drag-and-drop row (a bare string[] of hidden ids, no
+  // order) into the current WidgetLayoutEntry[] shape on read -- an
+  // existing user's already-hidden cards survive the upgrade with no
+  // migration script, they just start out in default order.
+  async getWidgetLayoutForUser(userId: number): Promise<WidgetLayoutEntry[]> {
+    const row = await db.query.users.findFirst({
+      where: eq(users.id, userId),
+      columns: { hiddenWidgets: true },
+    });
+    const raw = row?.hiddenWidgets;
+    if (!raw) return [];
+    if (raw.length > 0 && typeof raw[0] === "string") {
+      return (raw as unknown as string[]).map((id) => ({ id, hidden: true }));
+    }
+    return raw;
+  },
+
+  async setWidgetLayoutForUser(userId: number, layout: WidgetLayoutEntry[]) {
+    const [row] = await db
+      .update(users)
+      .set({ hiddenWidgets: layout })
+      .where(eq(users.id, userId))
+      .returning({ hiddenWidgets: users.hiddenWidgets });
+    return row?.hiddenWidgets ?? [];
   },
 
   // ---------- Push subscriptions ----------
@@ -12206,6 +12921,15 @@ ${entriesText}`;
     );
   },
 
+  async getPerformanceHistoryForAthlete(
+    athleteId: number,
+    exerciseId: number,
+    beforeDate: string,
+  ) {
+    const logs = await this.getRecentWorkoutLogsForAthlete(athleteId, beforeDate);
+    return extractPerformanceHistory(logs, exerciseId);
+  },
+
   async getWorkoutDayDetail(
     athleteId: number,
     assignmentId: number,
@@ -12585,6 +13309,11 @@ ${catalog}`;
     }
     const athlete = await db.query.users.findFirst({ where: eq(users.id, athleteId) });
     const weightUnit = athlete?.preferredWeightUnit ?? "lbs";
+    const retentionLimits = getVideoRetentionLimits({
+      hasVideoStorageAddOn: athlete?.hasVideoStorageAddOn ?? false,
+      isBetaAccount: athlete?.isBetaAccount ?? true,
+      trialExpiresAt: athlete?.trialExpiresAt ?? null,
+    });
     // This whole save is a delete-then-reinsert of every set entry (see the
     // workoutLogEntries delete below, cascading to workoutSetEntries) --
     // fine for the DB rows themselves, but a video's on-disk FILE has no
@@ -12595,6 +13324,7 @@ ${catalog}`;
     // Captured before the delete so it can be diffed against whatever the
     // client still sent back once the new rows are in.
     let priorVideoUrls = new Set<string>();
+
     const log = await db.transaction(async (tx) => {
       let log = await tx.query.workoutLogs.findFirst({
         where: and(
@@ -12604,13 +13334,31 @@ ${catalog}`;
         ),
       });
 
+      // Snapshot existing videos before the cascade-delete below wipes them
+      // out -- a resubmission (e.g. editing a rep count) re-creates every
+      // entry/set row from scratch, and without this, an untouched video
+      // would look freshly captured to the retention eviction pass at the
+      // bottom of this function every single time the athlete saves.
+      // Keyed by (exercise, set number) since row ids don't survive a
+      // resubmission but that pair does.
+      const priorVideoByKey = new Map<string, { url: string; uploadedAt: Date | null }>();
       if (log) {
-        const priorRows = await tx
-          .select({ url: workoutSetEntries.formCheckVideoUrl })
-          .from(workoutSetEntries)
-          .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
-          .where(eq(workoutLogEntries.workoutLogId, log.id));
-        priorVideoUrls = new Set(priorRows.map((r) => r.url).filter((u): u is string => !!u));
+        const priorEntries = await tx.query.workoutLogEntries.findMany({
+          where: eq(workoutLogEntries.workoutLogId, log.id),
+          with: { sets: true },
+        });
+        for (const pe of priorEntries) {
+          const exerciseKey = pe.programExerciseId != null ? `pe:${pe.programExerciseId}` : `c:${pe.correctiveId}`;
+          for (const s of pe.sets as any[]) {
+            if (s.formCheckVideoUrl) {
+              priorVideoByKey.set(`${exerciseKey}:${s.setNumber}`, {
+                url: s.formCheckVideoUrl,
+                uploadedAt: s.videoUploadedAt ?? null,
+              });
+              priorVideoUrls.add(s.formCheckVideoUrl);
+            }
+          }
+        }
 
         [log] = await tx
           .update(workoutLogs)
@@ -12638,6 +13386,10 @@ ${catalog}`;
           .returning();
       }
 
+      // Resolved lazily per entry below, then reused to run retention
+      // enforcement once per distinct exercise after every insert is in.
+      const touchedExerciseIds = new Set<number>();
+
       for (const entry of input.entries) {
         const [entryRow] = await tx
           .insert(workoutLogEntries)
@@ -12651,7 +13403,28 @@ ${catalog}`;
           })
           .returning();
 
+        const hasAnyVideo = entry.sets.some((s) => s.formCheckVideoUrl);
+        if (hasAnyVideo) {
+          const exerciseId =
+            entry.programExerciseId != null
+              ? (
+                  await tx.query.programExercises.findFirst({
+                    where: eq(programExercises.id, entry.programExerciseId),
+                  })
+                )?.exerciseId
+              : entry.correctiveId != null
+                ? (
+                    await tx.query.assignmentCorrectives.findFirst({
+                      where: eq(assignmentCorrectives.id, entry.correctiveId),
+                    })
+                  )?.exerciseId
+                : undefined;
+          if (exerciseId != null) touchedExerciseIds.add(exerciseId);
+        }
+
         if (entry.sets.length > 0) {
+          const exerciseKey = entry.programExerciseId != null ? `pe:${entry.programExerciseId}` : `c:${entry.correctiveId}`;
+
           // Auto "PR" badge -- see workoutSetEntries.isPr's own comment.
           // Only numeric-weight exercise entries have a meaningful PR at
           // all (correctives/bodyweight/band sets never get one). Resolved
@@ -12697,54 +13470,60 @@ ${catalog}`;
 
           await tx.insert(workoutSetEntries).values(
             entry.sets.map((s) => {
+              const prior = priorVideoByKey.get(`${exerciseKey}:${s.setNumber}`);
+              const isSameVideo = Boolean(s.formCheckVideoUrl) && prior?.url === s.formCheckVideoUrl;
               const weightNum = s.weight ? parseFloat(s.weight) : NaN;
               const priorBest = priorBestByKey.get(`${weightUnit}-${s.reps ?? ""}`);
-              const isPr =
-                !Number.isNaN(weightNum) && priorBest != null && weightNum > priorBest;
+              const isPr = !Number.isNaN(weightNum) && priorBest != null && weightNum > priorBest;
               return {
-              logEntryId: entryRow.id,
-              setNumber: s.setNumber,
-              reps: s.reps ?? null,
-              weight: s.weight ?? null,
-              weightUnit: entry.weightMode === "numeric" && s.weight ? weightUnit : null,
-              bandColor: s.bandColor ?? null,
-              boxHeight: s.boxHeight ?? null,
-              boxHeightUnit: s.boxHeightUnit ?? null,
-              peakVelocityMps: s.peakVelocityMps ?? null,
-              meanVelocityMps: s.meanVelocityMps ?? null,
-              concentricSeconds: s.concentricSeconds ?? null,
-              eccentricSeconds: s.eccentricSeconds ?? null,
-              barPathDeviationCm: s.barPathDeviationCm ?? null,
-              barPathTrace: s.barPathTrace ?? null,
-              formFaults: s.formFaults ?? null,
-              repBreakdown: s.repBreakdown ?? null,
-              armPathTrace: s.armPathTrace ?? null,
-              peakPowerWatts: s.peakPowerWatts ?? null,
-              meanPowerWatts: s.meanPowerWatts ?? null,
-              eccentricMeanVelocityMps: s.eccentricMeanVelocityMps ?? null,
-              romCm: s.romCm ?? null,
-              velocityLossPercent: s.velocityLossPercent ?? null,
-              formCheckVideoUrl: s.formCheckVideoUrl ?? null,
-              formCheckFlag: s.formCheckFlag ?? null,
-              jumpHeightCm: s.jumpHeightCm ?? null,
-              jumpDistanceCm: s.jumpDistanceCm ?? null,
-              groundContactSeconds: s.groundContactSeconds ?? null,
-              reactiveStrengthIndex: s.reactiveStrengthIndex ?? null,
-              jumpBreakdown: s.jumpBreakdown ?? null,
-              legDriveAsymmetry: s.legDriveAsymmetry ?? null,
-              armDriveAsymmetry: s.armDriveAsymmetry ?? null,
-              trustScores: s.trustScores ?? null,
-              isPr,
-              favorited: s.favorited ?? false,
-              swingSeparationDeg: s.swingSeparationDeg ?? null,
-              swingTempoRatio: s.swingTempoRatio ?? null,
-              swingBackswingMs: s.swingBackswingMs ?? null,
-              swingDownswingMs: s.swingDownswingMs ?? null,
-              swingHeadSwayCm: s.swingHeadSwayCm ?? null,
+                logEntryId: entryRow.id,
+                setNumber: s.setNumber,
+                reps: s.reps ?? null,
+                weight: s.weight ?? null,
+                weightUnit: entry.weightMode === "numeric" && s.weight ? weightUnit : null,
+                bandColor: s.bandColor ?? null,
+                boxHeight: s.boxHeight ?? null,
+                boxHeightUnit: s.boxHeightUnit ?? null,
+                peakVelocityMps: s.peakVelocityMps ?? null,
+                meanVelocityMps: s.meanVelocityMps ?? null,
+                concentricSeconds: s.concentricSeconds ?? null,
+                eccentricSeconds: s.eccentricSeconds ?? null,
+                barPathDeviationCm: s.barPathDeviationCm ?? null,
+                barPathTrace: s.barPathTrace ?? null,
+                formFaults: s.formFaults ?? null,
+                repBreakdown: s.repBreakdown ?? null,
+                armPathTrace: s.armPathTrace ?? null,
+                peakPowerWatts: s.peakPowerWatts ?? null,
+                meanPowerWatts: s.meanPowerWatts ?? null,
+                eccentricMeanVelocityMps: s.eccentricMeanVelocityMps ?? null,
+                romCm: s.romCm ?? null,
+                velocityLossPercent: s.velocityLossPercent ?? null,
+                formCheckVideoUrl: s.formCheckVideoUrl ?? null,
+                formCheckFlag: s.formCheckFlag ?? null,
+                videoFavorited: s.formCheckVideoUrl ? (s.videoFavorited ?? false) : false,
+                videoUploadedAt: s.formCheckVideoUrl ? (isSameVideo ? prior!.uploadedAt : new Date()) : null,
+                jumpHeightCm: s.jumpHeightCm ?? null,
+                jumpDistanceCm: s.jumpDistanceCm ?? null,
+                groundContactSeconds: s.groundContactSeconds ?? null,
+                reactiveStrengthIndex: s.reactiveStrengthIndex ?? null,
+                jumpBreakdown: s.jumpBreakdown ?? null,
+                legDriveAsymmetry: s.legDriveAsymmetry ?? null,
+                armDriveAsymmetry: s.armDriveAsymmetry ?? null,
+                trustScores: s.trustScores ?? null,
+                isPr,
+                swingSeparationDeg: s.swingSeparationDeg ?? null,
+                swingTempoRatio: s.swingTempoRatio ?? null,
+                swingBackswingMs: s.swingBackswingMs ?? null,
+                swingDownswingMs: s.swingDownswingMs ?? null,
+                swingHeadSwayCm: s.swingHeadSwayCm ?? null,
               };
             }),
           );
         }
+      }
+
+      for (const exerciseId of touchedExerciseIds) {
+        await enforceVideoRetention(tx, athleteId, exerciseId, retentionLimits);
       }
 
       return log;
@@ -12765,17 +13544,6 @@ ${catalog}`;
     return log;
   },
 
-  // Reattaches a deferred-upload video to the exact set it was recorded
-  // for -- see client/src/lib/video-offline-store.ts and
-  // shared/schema.ts's attachVideoToSetSchema comment for why the tuple
-  // (assignmentId, programDayId, date, programExerciseId, setNumber) is
-  // the only stable address a set has (submitWorkoutLog above deletes and
-  // reinserts every set row on every autosave, so no row id survives
-  // between the moment a clip is recorded and the moment it finally
-  // uploads). Returns false -- never throws -- for every "can't safely
-  // attach" case: wrong owner, the day/exercise/set no longer exists, or
-  // the set already has a different video, so a caller always has a clear
-  // "queue it as a standalone clip instead" fallback.
   async attachVideoToLoggedSet(athleteId: number, input: AttachVideoToSetInput): Promise<boolean> {
     // assertUploadedFileOwnedBy throws (see uploadedFiles' own schema
     // comment) -- caught here rather than left to propagate, matching this
@@ -13814,7 +14582,7 @@ ${catalog}`;
           // erased that record every time a video aged out or was purged
           // for a Free Agent's storage cap, contradicting the flag's own
           // documented invariant.
-          favorited: false,
+          videoFavorited: false,
           pendingDeletionAt: null,
         })
         .where(eq(workoutSetEntries.id, id));
@@ -15735,29 +16503,40 @@ ${catalog}`;
     return results;
   },
 
-  // Free Agent video storage cap -- the app's only self-serve, no-coach
-  // account type, and the one whose video count nobody else is curating.
-  // Coached athletes keep every video regardless of count (a coach may
-  // want a full season on file); this only ever touches Free Agents. Cap
-  // is per (athlete, exercise): the 10 most recent unfavorited videos are
-  // kept, older unfavorited ones beyond that get a grace window
-  // (FREE_AGENT_VIDEO_GRACE_DAYS) before actual deletion, and any
-  // favorited video is completely exempt -- see workoutSetEntries'
-  // isPr/favorited/pendingDeletionAt comments. Returns what happened this
-  // run so the job file can log/notify without a second query.
-  async sweepFreeAgentVideoCap(): Promise<{
+  // Video storage cap -- applies to BOTH coached athletes and Free Agents
+  // alike (see shared/video-retention.ts's own comment), keyed off each
+  // athlete's own getVideoRetentionLimits (beta/trial/add-on all resolve
+  // per-athlete same as everywhere else billing-related). Cap is per
+  // (athlete, exercise): that athlete's totalCap most recent unfavorited
+  // videos are kept, older unfavorited ones beyond that get a grace window
+  // (VIDEO_RETENTION_GRACE_DAYS) before actual deletion, and any favorited
+  // video is completely exempt -- see workoutSetEntries'
+  // isPr/videoFavorited/pendingDeletionAt comments. Returns what happened
+  // this run so the job file can log/notify without a second query.
+  async sweepVideoRetentionCap(): Promise<{
     warned: { id: number; athleteId: number; exerciseName: string; link: string }[];
     purged: number;
   }> {
-    const FREE_AGENT_VIDEO_CAP = 10;
-    const FREE_AGENT_VIDEO_GRACE_DAYS = 7;
+    const VIDEO_RETENTION_GRACE_DAYS = 7;
 
-    const athleteRows = await db.select({ id: users.id }).from(users).where(eq(users.role, "athlete"));
-    const coachedAthleteIds = new Set(
-      (await db.select({ athleteId: coachAthletes.athleteId }).from(coachAthletes)).map((r) => r.athleteId),
-    );
-    const freeAgentIds = athleteRows.map((a) => a.id).filter((id) => !coachedAthleteIds.has(id));
-    if (freeAgentIds.length === 0) return { warned: [], purged: 0 };
+    const athleteRows = await db
+      .select({
+        id: users.id,
+        hasVideoStorageAddOn: users.hasVideoStorageAddOn,
+        isBetaAccount: users.isBetaAccount,
+        trialExpiresAt: users.trialExpiresAt,
+      })
+      .from(users)
+      .where(eq(users.role, "athlete"));
+    // Unlimited (beta/trial/enforcement-off) accounts have nothing to
+    // sweep -- skipped up front so the query below, and the per-row work
+    // after it, never touches a row that could never actually be evicted.
+    const capByAthlete = new Map<number, number>();
+    for (const a of athleteRows) {
+      const limits = getVideoRetentionLimits(a);
+      if (Number.isFinite(limits.totalCap)) capByAthlete.set(a.id, limits.totalCap);
+    }
+    if (capByAthlete.size === 0) return { warned: [], purged: 0 };
 
     const rows = await db
       .select({
@@ -15777,9 +16556,9 @@ ${catalog}`;
       .innerJoin(exercises, eq(programExercises.exerciseId, exercises.id))
       .where(
         and(
-          inArray(workoutLogs.athleteId, freeAgentIds),
+          inArray(workoutLogs.athleteId, [...capByAthlete.keys()]),
           isNotNull(workoutSetEntries.formCheckVideoUrl),
-          eq(workoutSetEntries.favorited, false),
+          eq(workoutSetEntries.videoFavorited, false),
         ),
       );
 
@@ -15794,7 +16573,7 @@ ${catalog}`;
     const warned: { id: number; athleteId: number; exerciseName: string; link: string }[] = [];
     let purged = 0;
     const todayMs = Date.now();
-    const graceMs = FREE_AGENT_VIDEO_GRACE_DAYS * 24 * 60 * 60 * 1000;
+    const graceMs = VIDEO_RETENTION_GRACE_DAYS * 24 * 60 * 60 * 1000;
 
     for (const group of groups.values()) {
       // Tiebreak on id, not just date: workoutLogs.date has no time
@@ -15805,7 +16584,8 @@ ${catalog}`;
       // instead and un-flags A, flip-flopping which video gets warned/
       // reprieved from one sweep to the next for no reason a user could see.
       group.sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
-      const excess = group.slice(0, Math.max(0, group.length - FREE_AGENT_VIDEO_CAP));
+      const totalCap = capByAthlete.get(group[0].athleteId)!;
+      const excess = group.slice(0, Math.max(0, group.length - totalCap));
       const excessIds = new Set(excess.map((r) => r.id));
 
       for (const row of group) {
@@ -15843,7 +16623,7 @@ ${catalog}`;
   },
 
   // Starts a video's 7-day deletion grace window -- split out from
-  // sweepFreeAgentVideoCap itself so the caller only calls this once the
+  // sweepVideoRetentionCap itself so the caller only calls this once the
   // cap-warning notification has actually been delivered (see that
   // function's comment on the "warned" list).
   async markVideoPendingDeletion(setEntryId: number) {

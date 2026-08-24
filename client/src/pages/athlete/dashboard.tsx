@@ -27,7 +27,7 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
 import { useAuth } from "@/hooks/use-auth";
-import { apiRequest, ApiError } from "@/lib/queryClient";
+import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { addDays, formatISO } from "date-fns";
 import { Pencil, Check } from "lucide-react";
@@ -38,6 +38,7 @@ import {
   ListChecks,
   CalendarCheck,
   Trophy,
+  MessageSquareText,
 } from "lucide-react";
 
 type ProgressSummary = {
@@ -57,6 +58,14 @@ export default function AthleteDashboard() {
     skillProgramDayId: number;
     date: string;
   } | null>(null);
+
+  // Same query AppShell already makes for its own CSS-var re-skin --
+  // React Query dedupes the identical in-flight request, so reading it
+  // again here for the welcome banner costs nothing extra.
+  const { data: branding } = useQuery<{ brandWelcomeMessage?: string | null }>({
+    queryKey: ["/api/branding/me"],
+    queryFn: () => getJson("/api/branding/me"),
+  });
 
   const { data: coaches = [], isLoading: coachesLoading } = useQuery<
     { id: number; name: string; coachCode: string }[]
@@ -207,6 +216,14 @@ export default function AthleteDashboard() {
       }
     >
       <div className="flex flex-col gap-4">
+        {branding?.brandWelcomeMessage && (
+          <Card className="border-primary/30 bg-primary/5">
+            <CardContent className="flex items-start gap-2.5 py-3.5 text-sm">
+              <MessageSquareText className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+              <p className="whitespace-pre-wrap">{branding.brandWelcomeMessage}</p>
+            </CardContent>
+          </Card>
+        )}
         <PendingCoachRequests />
         <PendingVideosBanner />
         <DigestBanner />

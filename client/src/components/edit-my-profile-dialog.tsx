@@ -49,6 +49,7 @@ export function EditMyProfileDialog({
         benchMaxLbs: user.benchMaxLbs != null ? String(user.benchMaxLbs) : "",
         squatMaxLbs: user.squatMaxLbs != null ? String(user.squatMaxLbs) : "",
         deadliftMaxLbs: user.deadliftMaxLbs != null ? String(user.deadliftMaxLbs) : "",
+        bio: user.bio ?? "",
       });
     }
   }, [open, user]);
@@ -74,6 +75,7 @@ export function EditMyProfileDialog({
         benchMaxLbs: value.benchMaxLbs.trim() ? Number(value.benchMaxLbs) : null,
         squatMaxLbs: value.squatMaxLbs.trim() ? Number(value.squatMaxLbs) : null,
         deadliftMaxLbs: value.deadliftMaxLbs.trim() ? Number(value.deadliftMaxLbs) : null,
+        bio: value.bio.trim() || null,
       });
       return (await res.json()) as PublicUser;
     },
@@ -106,6 +108,7 @@ export function EditMyProfileDialog({
           value={value}
           onChange={setValue}
           idPrefix="my-profile"
+          showBio
           dateOfBirth={user.dateOfBirth}
         />
         <InjuryHistoryPanel baseUrl="/api/athlete/injury-history" />

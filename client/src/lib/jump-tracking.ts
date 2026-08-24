@@ -63,6 +63,14 @@ export type JumpRep = {
   // Time on the ground before this jump's takeoff, from the previous jump's
   // landing -- null for the first jump (nothing to measure from).
   groundContactSeconds: number | null;
+  // True when this rep's jumpHeightCm is a statistical outlier against the
+  // rest of the set (see the outlier pass in summarizeJumpSet below) --
+  // e.g. "24, 24, 6, 24" is a tracking glitch on rep 3, not a real jump a
+  // third the height of the others. Never adjusts or drops the number
+  // itself, only flags it -- same principle as video-retention's eviction
+  // logic: a number this module can't verify against ground truth doesn't
+  // get silently "corrected," it gets surfaced so a human can look at it.
+  likelyTrackingGlitch: boolean;
   // Same clock as TrackedPoint.t (ms since tracking started) -- lift mode's
   // RepBreakdown has always carried startT/endT for exactly this reason
   // (video-overlay.ts locating which rep a given video timestamp falls
@@ -118,6 +126,14 @@ const BASE_MIN_FLIGHT_AMPLITUDE_CM = 15;
 export function summarizeJumpSet(
   rawPoints: TrackedPoint[],
   heightIn?: number | null,
+  // How far a rep's jumpHeightCm can deviate from the set's median before
+  // it's flagged as a likely tracking glitch -- from the active
+  // MovementProfile's jumpHeightOutlierPercent when one exists (see
+  // shared/schema.ts), this default otherwise. 35% is generous enough that
+  // real fatigue across a set of jumps (typically well under 20% rep to
+  // rep) doesn't trip it, while still catching a glitch like a 6cm read
+  // sitting next to three 24cm reps (a ~75% deviation).
+  outlierPercent = 35,
 ): JumpSetMetrics | null {
   if (rawPoints.length < 6) return null;
   const minFlightAmplitudeCm = heightScaledAmplitudeCm(BASE_MIN_FLIGHT_AMPLITUDE_CM, heightIn);
@@ -213,6 +229,7 @@ export function summarizeJumpSet(
               peakHeightCm: Math.round(peakHeightCm * 10) / 10,
               horizontalDistanceCm,
               groundContactSeconds,
+              likelyTrackingGlitch: false,
               takeoffT,
               landingT,
             });
@@ -232,6 +249,24 @@ export function summarizeJumpSet(
   }
 
   if (reps.length === 0) return null;
+
+  // Flagging needs at least 3 reps -- with only 2, there's no way to tell
+  // which one (if either) is the odd one out, so a big gap between them
+  // could just as easily be real fatigue as a tracking glitch. Median
+  // (not mean) so a single wild rep can't drag the baseline it's being
+  // compared against toward itself.
+  if (reps.length >= 3) {
+    const heights = reps.map((r) => r.jumpHeightCm).sort((a, b) => a - b);
+    const mid = Math.floor(heights.length / 2);
+    const medianHeightCm =
+      heights.length % 2 !== 0 ? heights[mid] : (heights[mid - 1] + heights[mid]) / 2;
+    if (medianHeightCm > 0) {
+      for (const rep of reps) {
+        const deviationPercent = (Math.abs(rep.jumpHeightCm - medianHeightCm) / medianHeightCm) * 100;
+        rep.likelyTrackingGlitch = deviationPercent > outlierPercent;
+      }
+    }
+  }
 
   const bestJumpHeightCm = Math.max(...reps.map((r) => r.jumpHeightCm));
   const distances = reps.map((r) => r.horizontalDistanceCm).filter((d): d is number => d != null);

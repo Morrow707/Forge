@@ -1,4 +1,4 @@
-import { type ReactNode, type CSSProperties, useState, useEffect } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Capacitor } from "@capacitor/core";
 import { useQuery } from "@tanstack/react-query";
@@ -24,13 +24,17 @@ import {
   Apple,
   BarChart3,
   ChevronDown,
+  Palette,
+  SlidersHorizontal,
+  UserCog,
+  Info,
+  CreditCard,
+  Camera,
   GraduationCap,
   BookOpen,
   HardDrive,
   TrendingUp,
   FileText,
-  Camera,
-  Palette,
   ShieldCheck,
   Trash2,
   Flag,
@@ -53,10 +57,12 @@ import { NotificationBell } from "@/components/notification-bell";
 import { NotificationSettingsDialog } from "@/components/notification-settings-dialog";
 import { CoachingStaffDialog } from "@/components/coaching-staff-dialog";
 import { TeamBrandingDialog } from "@/components/team-branding-dialog";
+import { NavCustomizeDialog } from "@/components/nav-customize-dialog";
+import { AccountSettingsDialog } from "@/components/account-settings-dialog";
 import { NonIosTrackingNotice } from "@/components/non-ios-tracking-warning";
 import { PoweredByFooter } from "@/components/powered-by-footer";
 import { POWERED_BY_FORGE_LABEL } from "@/lib/branding-copy";
-import { hexToHslTriplet, contrastForegroundHsl } from "@/lib/color";
+import { computeBrandingStyle, type EffectiveBranding } from "@/lib/branding-style";
 import { COACH_FEATURE_FIELDS, type CoachFeature } from "@shared/team-features";
 import { COACH_SECTION_NAV_HREFS } from "@shared/coach-sections";
 
@@ -98,6 +104,8 @@ const coachNav: NavItem[] = [
   { href: "/coach/nutrition", label: "Nutrition", icon: Apple, overflow: true },
   { href: "/coach/leaderboard", label: "Leaderboard", icon: Trophy, overflow: true },
   { href: "/coach/team-board", label: "Team Board", icon: MessagesSquare, overflow: true },
+  { href: "/coach/my", label: "My Training", icon: UserCircle, overflow: true },
+  { href: "/coach/about", label: "About", icon: Info, overflow: true },
 ];
 
 const athleteNav: NavItem[] = [
@@ -126,6 +134,7 @@ const athleteNav: NavItem[] = [
   { href: "/athlete/nutrition", label: "Nutrition", icon: Apple },
   { href: "/athlete/team-board", label: "Team Board", icon: MessagesSquare },
   { href: "/athlete/chat", label: "AI Chat", icon: Sparkles },
+  { href: "/athlete/about", label: "About", icon: Info },
 ];
 
 const adminNav: NavItem[] = [
@@ -134,14 +143,18 @@ const adminNav: NavItem[] = [
   { href: "/admin/exercises", label: "Forge Library", icon: Dumbbell },
   { href: "/admin/programs", label: "Forge Programs", icon: CalendarRange },
   { href: "/admin/classes", label: "Forge Classes", icon: GraduationCap },
-  // Same overflow treatment as coachNav above -- at 14 items, admin's full
+  // Same overflow treatment as coachNav above -- at 14+ items, admin's full
   // nav was the one role actually forced into horizontal scroll instead of
   // getting the "More" dropdown this exact problem already has a fix for.
   { href: "/admin/classes-analytics", label: "Class Analytics", icon: TrendingUp, overflow: true },
   { href: "/admin/coaches-corner", label: "Coaches Corner", icon: BookOpen, overflow: true },
   { href: "/admin/review", label: "Review Queue", icon: ClipboardCheck, overflow: true },
+  { href: "/admin/ai-knowledge", label: "Teach AI", icon: Sparkles, overflow: true },
   { href: "/admin/forge-ai", label: "Forge AI", icon: Sparkles, overflow: true },
+  { href: "/admin/nutrition-knowledge", label: "Teach Nutrition AI", icon: Apple, overflow: true },
+  { href: "/admin/movement-knowledge", label: "Teach Movement AI", icon: Camera, overflow: true },
   { href: "/admin/platform-trends", label: "Platform Trends", icon: BarChart3, overflow: true },
+  { href: "/admin/billing", label: "Billing", icon: CreditCard, overflow: true },
   { href: "/admin/videos", label: "Video Storage", icon: HardDrive, overflow: true },
   { href: "/admin/legal-agreement", label: "Legal Agreement", icon: FileText, overflow: true },
   { href: "/admin/documents", label: "Documents", icon: ShieldCheck, overflow: true },
@@ -177,7 +190,9 @@ export function AppShell({
   const [profileOpen, setProfileOpen] = useState(false);
   const [notifSettingsOpen, setNotifSettingsOpen] = useState(false);
   const [coachingStaffOpen, setCoachingStaffOpen] = useState(false);
-  const [teamBrandingOpen, setTeamBrandingOpen] = useState(false);
+  const [brandingOpen, setBrandingOpen] = useState(false);
+  const [navCustomizeOpen, setNavCustomizeOpen] = useState(false);
+  const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
   const [guardianAccessOpen, setGuardianAccessOpen] = useState(false);
@@ -190,13 +205,10 @@ export function AppShell({
   // Resolved server-side: a coach's own team settings, or their athlete's
   // coach's -- see getEffectiveBrandingForUser in storage.ts. Drives the
   // header logo/name/colors below and which optional nav sections show.
-  const { data: branding } = useQuery<{
-    teamName: string | null;
-    logoUrl: string | null;
-    primaryColor: string | null;
-    secondaryColor: string | null;
-    features: Record<CoachFeature, boolean>;
-  }>({
+  // Any authenticated role can be on the receiving end of someone else's
+  // branding (an athlete wearing their coach's colors) even though only a
+  // coach can edit it.
+  const { data: branding } = useQuery<EffectiveBranding & { features: Record<CoachFeature, boolean> }>({
     queryKey: ["/api/branding/me"],
     queryFn: () => getJson("/api/branding/me"),
     enabled: !!user,
@@ -207,23 +219,12 @@ export function AppShell({
   // custom properties, so overriding them here on the shell's own root
   // recolors every bg-primary/text-primary/border-ring use inside it --
   // active nav tab, buttons, focus rings -- without touching each
-  // component individually. Only --primary/--ring/--accent (and their
-  // foregrounds) move; --secondary stays the app's own dark neutral
-  // surface color (see index.css) since a huge amount of unrelated chrome
-  // assumes that's always a dark gray, not a coach's second brand color.
-  const brandStyle = (() => {
-    if (!branding?.primaryColor) return undefined;
-    const triplet = hexToHslTriplet(branding.primaryColor);
-    if (!triplet) return undefined;
-    const fg = contrastForegroundHsl(branding.primaryColor);
-    return {
-      "--primary": triplet,
-      "--primary-foreground": fg,
-      "--ring": triplet,
-      "--accent": triplet,
-      "--accent-foreground": fg,
-    } as CSSProperties;
-  })();
+  // component individually. See computeBrandingStyle's own comment for why
+  // --secondary is deliberately left alone.
+  const brandingStyle = computeBrandingStyle(
+    branding,
+    user?.role === "coach" ? user.personalAccentColor : null,
+  );
 
   // Best-effort branded icon: swaps the browser tab favicon and (in
   // practice) iOS's "Add to Home Screen" icon, since Safari reads these
@@ -238,12 +239,12 @@ export function AppShell({
   // (logo removed, or an unbranded user's session loads), rather than
   // leaving a previous session's icon stuck.
   useEffect(() => {
-    const logoHref = branding?.logoUrl ? resolveApiUrl(branding.logoUrl) : null;
+    const logoHref = branding?.brandLogoUrl ? resolveApiUrl(branding.brandLogoUrl) : null;
     const favicon = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
     const appleTouchIcon = document.querySelector<HTMLLinkElement>('link[rel="apple-touch-icon"]');
     if (favicon) favicon.href = logoHref ?? "/favicon-32.png";
     if (appleTouchIcon) appleTouchIcon.href = logoHref ?? "/apple-touch-icon.png";
-  }, [branding?.logoUrl]);
+  }, [branding?.brandLogoUrl]);
 
   const disabledNavHrefs = new Set<string>();
   if (branding?.features) {
@@ -264,6 +265,20 @@ export function AppShell({
     }
   }
 
+  const { data: navPrefs } = useQuery<{
+    hiddenNavSections: string[];
+    navLabelOverrides: Record<string, string>;
+  }>({
+    queryKey: ["/api/coach/nav-prefs"],
+    queryFn: () => getJson("/api/coach/nav-prefs"),
+    enabled: user?.role === "coach",
+  });
+  const hiddenNavSections = new Set(navPrefs?.hiddenNavSections ?? []);
+  const navLabelOverrides = navPrefs?.navLabelOverrides ?? {};
+  function navLabel(item: NavItem) {
+    return navLabelOverrides[item.href] || item.label;
+  }
+
   // Same query (and cache) the athlete dashboard's empty-state uses to
   // decide Free Agent status -- zero coaches linked. The "My Programs" and
   // "AI Chat" nav entries only make sense while that's true: once a coach is
@@ -279,7 +294,7 @@ export function AppShell({
 
   const nav = (
     user?.role === "coach"
-      ? coachNav
+      ? coachNav.filter((item) => !hiddenNavSections.has(item.href))
       : user?.role === "admin"
         ? adminNav
         : isFreeAgent
@@ -320,7 +335,7 @@ export function AppShell({
         "app-shell-root min-h-screen overflow-x-hidden bg-background",
         fitScreen && "flex flex-col md:h-screen md:overflow-hidden",
       )}
-      style={brandStyle}
+      style={brandingStyle}
     >
       {/* paddingTop here (not on the inner row) so the surface color itself
           extends up under the iPhone notch/Dynamic Island instead of leaving
@@ -332,19 +347,19 @@ export function AppShell({
           // A coach's second brand color gets exactly this one bounded,
           // cosmetic use -- nothing structural reads --secondary here, so
           // there's no risk of it fighting the dark-neutral --secondary
-          // token the rest of the app's chrome assumes (see brandStyle's
-          // own comment above).
-          ...(branding?.secondaryColor
-            ? { borderBottomColor: branding.secondaryColor, borderBottomWidth: 3 }
+          // token the rest of the app's chrome assumes (see computeBrandingStyle's
+          // own comment).
+          ...(branding?.brandSecondaryColor
+            ? { borderBottomColor: branding.brandSecondaryColor, borderBottomWidth: 3 }
             : {}),
         }}
       >
         <div className="flex items-center justify-between gap-3 px-4 py-3 md:px-8">
           <div className="flex items-center gap-2">
-            {branding?.logoUrl ? (
+            {branding?.brandLogoUrl ? (
               <img
-                src={resolveApiUrl(branding.logoUrl)}
-                alt={branding.teamName ?? "Team logo"}
+                src={resolveApiUrl(branding.brandLogoUrl)}
+                alt={branding.brandTeamName || "Team logo"}
                 className="h-8 w-8 shrink-0 rounded-md object-contain"
               />
             ) : (
@@ -352,9 +367,9 @@ export function AppShell({
             )}
             <div className="flex flex-col leading-none">
               <span className="font-display text-xl font-extrabold uppercase tracking-wider">
-                {branding?.teamName || "Forge"}
+                {branding?.brandTeamName || "Forge"}
               </span>
-              {(branding?.teamName || branding?.logoUrl) && (
+              {(branding?.brandTeamName || branding?.brandLogoUrl) && (
                 <span className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
                   {POWERED_BY_FORGE_LABEL}
                 </span>
@@ -386,7 +401,7 @@ export function AppShell({
                   )}
                 >
                   <Icon className="h-4 w-4" />
-                  {item.label}
+                  {navLabel(item)}
                   {showUnreadDot && (
                     <span className="rounded-full bg-amber-400 px-1.5 py-0.5 text-[9px] font-bold uppercase leading-none text-black">
                       New
@@ -525,6 +540,20 @@ export function AppShell({
                   role="menu"
                   className="absolute right-0 top-full z-40 mt-1 w-64 overflow-hidden rounded-xl border border-white/10 bg-surface/80 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.08),0_8px_30px_-10px_rgba(0,0,0,0.6)] backdrop-blur-xl backdrop-saturate-150"
                 >
+                  {user && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setAccountSettingsOpen(true);
+                        setAccountMenuOpen(false);
+                      }}
+                      className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-foreground hover:bg-surface-elevated"
+                    >
+                      <UserCog className="h-4 w-4" />
+                      Account settings
+                    </button>
+                  )}
                   {user?.role === "athlete" && (
                     <button
                       type="button"
@@ -623,18 +652,32 @@ export function AppShell({
                       Coaching staff
                     </button>
                   )}
-                  {user?.role === "coach" && (
+                  {user?.role === "coach" && user.isPrimaryCoach && (
                     <button
                       type="button"
                       role="menuitem"
                       onClick={() => {
-                        setTeamBrandingOpen(true);
+                        setBrandingOpen(true);
                         setAccountMenuOpen(false);
                       }}
                       className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-foreground hover:bg-surface-elevated"
                     >
                       <Palette className="h-4 w-4" />
-                      Team branding
+                      Branding
+                    </button>
+                  )}
+                  {user?.role === "coach" && user.isPrimaryCoach && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setNavCustomizeOpen(true);
+                        setAccountMenuOpen(false);
+                      }}
+                      className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-foreground hover:bg-surface-elevated"
+                    >
+                      <SlidersHorizontal className="h-4 w-4" />
+                      Customize navigation
                     </button>
                   )}
                   {Capacitor.getPlatform() === "ios" && (
@@ -728,7 +771,7 @@ export function AppShell({
                     )}
                   >
                     <Icon className="h-3.5 w-3.5" />
-                    {item.label}
+                    {navLabel(item)}
                     {showUnreadDot && (
                       <span className="rounded-full bg-amber-400 px-1.5 py-0.5 text-[9px] font-bold uppercase leading-none text-black">
                         New
@@ -754,7 +797,26 @@ export function AppShell({
               )}
             </div>
             <div className="mt-3 border-t border-border pt-3">
+              <div className="min-w-0 pb-2">
+                <p className="truncate text-sm font-semibold">{user?.name}</p>
+                <p className="truncate text-xs capitalize text-muted-foreground">
+                  {user?.staffTitle || (isFreeAgent ? "Free Agent" : user?.role)}
+                </p>
+              </div>
               <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                {user && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAccountSettingsOpen(true);
+                      setMobileNavOpen(false);
+                    }}
+                    className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground"
+                  >
+                    <UserCog className="h-4 w-4" />
+                    Account
+                  </button>
+                )}
                 {user?.role === "athlete" && (
                   <button
                     type="button"
@@ -840,11 +902,11 @@ export function AppShell({
                     Staff
                   </button>
                 )}
-                {user?.role === "coach" && (
+                {user?.role === "coach" && user.isPrimaryCoach && (
                   <button
                     type="button"
                     onClick={() => {
-                      setTeamBrandingOpen(true);
+                      setBrandingOpen(true);
                       setMobileNavOpen(false);
                     }}
                     className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground"
@@ -926,8 +988,16 @@ export function AppShell({
           {children}
           {showWatermark && <PoweredByFooter />}
         </main>
+        {showWatermark && (
+          <div className="shrink-0 px-4 md:px-8">
+            <PoweredByFooter />
+          </div>
+        )}
       </div>
 
+      {user && (
+        <AccountSettingsDialog user={user} open={accountSettingsOpen} onOpenChange={setAccountSettingsOpen} />
+      )}
       {user?.role === "athlete" && (
         <EditMyProfileDialog user={user} open={profileOpen} onOpenChange={setProfileOpen} />
       )}
@@ -941,8 +1011,15 @@ export function AppShell({
       {user?.role === "coach" && (
         <CoachingStaffDialog open={coachingStaffOpen} onOpenChange={setCoachingStaffOpen} />
       )}
-      {user?.role === "coach" && (
-        <TeamBrandingDialog open={teamBrandingOpen} onOpenChange={setTeamBrandingOpen} />
+      {user?.role === "coach" && user.isPrimaryCoach && (
+        <TeamBrandingDialog open={brandingOpen} onOpenChange={setBrandingOpen} scope={{ type: "org" }} />
+      )}
+      {user?.role === "coach" && user.isPrimaryCoach && (
+        <NavCustomizeDialog
+          open={navCustomizeOpen}
+          onOpenChange={setNavCustomizeOpen}
+          items={coachNav.filter((item) => item.href !== "/coach")}
+        />
       )}
       {user && <DeleteAccountDialog open={deleteAccountOpen} onOpenChange={setDeleteAccountOpen} />}
       {user?.role === "athlete" && (

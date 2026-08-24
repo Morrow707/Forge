@@ -5,6 +5,8 @@ import fs from "fs";
 import multer from "multer";
 import rateLimit from "express-rate-limit";
 import { setupAuth, requireAuth, requireRole, attachNativeTokenAuth } from "./auth";
+import { hashPassword, comparePasswords } from "./auth-utils";
+import { getEntitlements, type Entitlements, getFreeAgentEntitlements } from "./billing";
 import { uploadsLimiter } from "./rate-limiters";
 import { storage } from "./storage";
 import { buildIcsFeed } from "./ics";
@@ -58,6 +60,18 @@ import {
   resolveSubmissionSchema,
   coachAnalyticsQuerySchema,
   createTeamPostSchema,
+  updateBrandingSchema,
+  updateTeamBrandingSchema,
+  updateNavPrefsSchema,
+  updateAccountNameSchema,
+  updateAccountEmailSchema,
+  updateAccountPasswordSchema,
+  updatePersonalAccentSchema,
+  updateCoachBillingSchema,
+  createRedeemCodeSchema,
+  redeemCodeInputSchema,
+  updateFreeAgentBillingSchema,
+  createFamilyGroupSchema,
   createBodyMetricSchema,
   createAnnotationSchema,
   testingTrendsQuerySchema,
@@ -88,12 +102,12 @@ import {
   setCaraCapSchema,
   createTeamChallengeSchema,
   createTeamGameDaySchema,
+  sendMovementKnowledgeChatMessageSchema,
+  applyMovementProfileProposalSchema,
   classStructureSchema,
   enrollInClassSchema,
   classCoachSettingsInputSchema,
   academyTrackStructureSchema,
-  updateCoachBrandingSchema,
-  updateTeamBrandingSchema,
   createProblemReportSchema,
   updateCoachFeaturesSchema,
   adminAthleteQueryFiltersSchema,
@@ -391,6 +405,29 @@ async function notifyEach<T>(items: T[], deliver: (item: T) => Promise<void>): P
       }
     }),
   );
+}
+
+// Org-wide identity (branding, nav customization) is a whole-program
+// decision, not day-to-day operational data like the roster/programs/
+// exercises the rest of getEffectiveCoachIds widens to every staff
+// member -- gated to specifically the primary coach so an assistant
+// can't repaint the whole program's colors or hide tabs for everyone.
+async function requirePrimaryCoach(req: any, res: any, next: any) {
+  const user = currentUser(req);
+  const coachIds = await storage.getEffectiveCoachIds(user.id);
+  if (coachIds[0] !== user.id) {
+    return res.status(403).json({ message: "Only the primary coach can change this" });
+  }
+  next();
+}
+
+// Entitlements are always resolved from the org's primary coach (billing
+// lives on that row, same as branding) -- see server/billing.ts. Safe to
+// call from any staff member's request, not just the primary's.
+async function getEntitlementsForCoach(coachId: number): Promise<Entitlements> {
+  const coachIds = await storage.getEffectiveCoachIds(coachId);
+  const primary = await storage.getUser(coachIds[0]);
+  return getEntitlements(primary!);
 }
 
 // The single gate for every Free Agent AI route below (program building AND
@@ -731,12 +768,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // cookie, so access control here is "possession of the unguessable
   // token" rather than a login. Only ever resolves to someone's own
   // training days -- never rest days, to keep a subscribed calendar from
-  // filling up with noise. Admins get this too since they can self-assign
-  // programs to their own calendar (see /api/admin/my/*); coaches never
-  // train off their own calendar, so they're not included.
+  // filling up with noise. Admins and coaches get this too since they can
+  // self-assign programs to their own calendar (see /api/admin/my/*,
+  // /api/coach/my/*).
   app.get("/api/calendar/:token.ics", async (req, res) => {
     const user = await storage.getUserByCalendarToken(req.params.token);
-    if (!user || (user.role !== "athlete" && user.role !== "admin")) {
+    if (!user || (user.role !== "athlete" && user.role !== "admin" && user.role !== "coach")) {
       return res.status(404).send("Calendar not found");
     }
     const start = new Date();
@@ -1816,6 +1853,137 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(trends);
   });
 
+  // ---------------- Admin: billing/pricing assignment ----------------
+  // No self-serve checkout exists yet (see shared/billing-tiers.ts,
+  // server/billing.ts) -- an admin manually assigning a tier here is the
+  // only way a real coach account ever gets billingTier/billingAddOns set,
+  // matching the pilot-program/manual-sales approach for now.
+
+  app.get("/api/admin/coaches/lookup", requireRole("admin"), async (req, res) => {
+    const email = typeof req.query.email === "string" ? req.query.email.trim() : "";
+    if (!email) {
+      return res.status(400).json({ message: "email is required" });
+    }
+    const coach = await storage.getUserByEmail(email);
+    if (!coach || coach.role !== "coach") {
+      return res.status(404).json({ message: "No coach with that email" });
+    }
+    const coachIds = await storage.getEffectiveCoachIds(coach.id);
+    const isPrimary = coachIds[0] === coach.id;
+    const roster = await storage.getRosterForCoach(coach.id);
+    res.json({
+      id: coach.id,
+      name: coach.name,
+      email: coach.email,
+      isPrimary,
+      rosterCount: roster.length,
+      billingTier: coach.billingTier,
+      billingAddOns: coach.billingAddOns ?? [],
+      isBetaAccount: coach.isBetaAccount,
+    });
+  });
+
+  app.patch("/api/admin/coaches/:id/billing", requireRole("admin"), async (req, res) => {
+    const coachId = Number(req.params.id);
+    const target = await storage.getUser(coachId);
+    if (!target || target.role !== "coach") {
+      return res.status(404).json({ message: "Coach not found" });
+    }
+    const coachIds = await storage.getEffectiveCoachIds(coachId);
+    if (coachIds[0] !== coachId) {
+      return res.status(400).json({ message: "Billing is assigned to the primary coach of an org, not a staff member" });
+    }
+    const parsed = updateCoachBillingSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const updated = await storage.updateCoachBilling(coachId, parsed.data);
+    res.json(updated);
+  });
+
+  app.get("/api/admin/redeem-codes", requireRole("admin"), async (_req, res) => {
+    const codes = await storage.listRedeemCodes();
+    res.json(codes);
+  });
+
+  app.post("/api/admin/redeem-codes", requireRole("admin"), async (req, res) => {
+    const parsed = createRedeemCodeSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const code = await storage.createRedeemCode(parsed.data);
+    res.status(201).json(code);
+  });
+
+  // Coach-facing redemption -- primary only, same as the rest of billing
+  // (an org's trial applies to the whole org, not one staff member).
+  app.post("/api/coach/redeem-code", requireRole("coach"), requirePrimaryCoach, async (req, res) => {
+    const user = currentUser(req);
+    const parsed = redeemCodeInputSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const result = await storage.redeemCode(user.id, parsed.data.code);
+    if (!result.ok) {
+      return res.status(400).json({ message: result.message });
+    }
+    res.json({ trialExpiresAt: result.trialExpiresAt });
+  });
+
+  // Free Agent (individual athlete) billing -- a separate track from the
+  // coach/org billing above, see shared/free-agent-tiers.ts. Same
+  // manual/pilot-program admin-assignment approach for now.
+
+  app.get("/api/admin/athletes/lookup", requireRole("admin"), async (req, res) => {
+    const email = typeof req.query.email === "string" ? req.query.email.trim() : "";
+    if (!email) {
+      return res.status(400).json({ message: "email is required" });
+    }
+    const athlete = await storage.getUserByEmail(email);
+    if (!athlete || athlete.role !== "athlete") {
+      return res.status(404).json({ message: "No athlete with that email" });
+    }
+    res.json({
+      id: athlete.id,
+      name: athlete.name,
+      email: athlete.email,
+      freeAgentTier: athlete.freeAgentTier,
+      freeAgentAddOns: athlete.freeAgentAddOns ?? [],
+      isBetaAccount: athlete.isBetaAccount,
+      familyGroupId: athlete.familyGroupId,
+      hasVideoStorageAddOn: athlete.hasVideoStorageAddOn,
+    });
+  });
+
+  app.patch("/api/admin/athletes/:id/billing", requireRole("admin"), async (req, res) => {
+    const athleteId = Number(req.params.id);
+    const target = await storage.getUser(athleteId);
+    if (!target || target.role !== "athlete") {
+      return res.status(404).json({ message: "Athlete not found" });
+    }
+    const parsed = updateFreeAgentBillingSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const updated = await storage.updateFreeAgentBilling(athleteId, parsed.data);
+    res.json(updated);
+  });
+
+  // Groups up to FREE_AGENT_TIERS.family.athleteProfileCap athletes under
+  // one Family plan (see storage.createFamilyGroup) -- each member ends up
+  // with freeAgentTier="family" and a shared familyGroupId.
+  app.post("/api/admin/family-groups", requireRole("admin"), async (req, res) => {
+    const parsed = createFamilyGroupSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const result = await storage.createFamilyGroup(parsed.data.athleteEmails);
+    if (!result.ok) {
+      return res.status(400).json({ message: result.message });
+    }
+    res.status(201).json(result);
+  });
+
   // Cheap headcount tiles for the admin dashboard -- see
   // storage.getAdminPlatformStats' own comment for why this is separate
   // from the (much heavier) platform-trends aggregation above.
@@ -2351,6 +2519,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.status(201).json(result);
   });
 
+  // Same admin-teaching pattern again, for the camera tracker's per-movement
+  // kinematic thresholds (movementProfiles) instead of a freeform document --
+  // see storage.updateMovementKnowledgeFromChat. One conversation/profile per
+  // movementType, not a single global one, since a squat and a med ball throw
+  // are unrelated knowledge domains. GET /api/movement-profiles/active/:type
+  // (any authenticated role) is what the tracker itself reads.
+  // Cast to string at each handler below, not a runtime coercion: a plain
+  // :name path segment is always a single string at runtime (Express only
+  // produces string[] for a `*` wildcard segment, unused here) -- the
+  // wider inferred type is this repo's installed @types/express (^5.0.0)
+  // not lining up with its express runtime (^4.21.2).
+  app.get("/api/admin/movement-knowledge/:movementType", requireRole("admin"), async (req, res) => {
+    const result = await storage.getMovementKnowledgeChat(req.params.movementType as string);
+    res.json(result);
+  });
+
+  app.post("/api/admin/movement-knowledge/:movementType/chat", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = sendMovementKnowledgeChatMessageSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message || "Invalid message" });
+    const result = await storage.updateMovementKnowledgeFromChat(
+      user.id,
+      req.params.movementType as string,
+      parsed.data,
+    );
+    res.status(201).json(result);
+  });
+
+  // Commits a proposal the chat above returned -- the admin has reviewed it
+  // client-side. Nothing reaches movementProfiles (read by every tracked set
+  // platform-wide) without this explicit step.
+  app.post("/api/admin/movement-knowledge/:movementType/apply", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = applyMovementProfileProposalSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "Invalid profile" });
+    const result = await storage.applyMovementProfileProposal(
+      user.id,
+      req.params.movementType as string,
+      parsed.data,
+    );
+    res.status(201).json(result);
+  });
+
   // ---------------- Coach: Programs ----------------
 
   app.get("/api/coach/programs", requireRole("coach"), async (req, res) => {
@@ -2514,6 +2725,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   app.patch("/api/coach/widget-prefs", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
+    if (!(await getEntitlementsForCoach(user.id)).hasWorkflowCustomization) {
+      return res.status(402).json({ message: "Dashboard customization requires the Workflow add-on or a Growth plan or higher" });
+    }
     const parsed = widgetLayoutSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ message: "layout must be a list of {id, hidden} entries" });
@@ -2543,6 +2757,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const user = currentUser(req);
     const result = await storage.getStaffForCoach(user.id);
     res.json(result);
+  });
+
+  // Public-facing (within the coach's own org) roster info for the About
+  // page -- name/title only, safe for the whole staff to read.
+  app.get("/api/coach/team-roster", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const coachIds = await storage.getEffectiveCoachIds(user.id);
+    const roster = await storage.getTeamRosterInfo(coachIds[0]);
+    res.json(roster);
   });
 
   app.post("/api/coach/staff/join", requireRole("coach"), async (req, res) => {
@@ -2963,10 +3186,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const detail = await storage.getMovementScreenBatteryDetail(user.id, Number(req.params.id));
     if (!detail) return res.status(404).json({ message: "Battery not found" });
     const branding = await storage.getCoachBranding(user.id);
-    const logoBuffer = await readUploadedFile(branding.logoUrl);
+    const logoBuffer = await readUploadedFile(branding?.brandLogoUrl);
     const pdf = await buildMovementScreenSheetPdf(detail.battery.name, detail.tests, {
-      teamName: branding.teamName,
-      primaryColor: branding.primaryColor,
+      teamName: branding?.brandTeamName ?? null,
+      primaryColor: branding?.brandPrimaryColor ?? null,
       logoBuffer,
     });
     res.setHeader("Content-Type", "application/pdf");
@@ -3661,36 +3884,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/public/branding/:code", async (req, res) => {
     const branding = await storage.getCoachBrandingByCode(String(req.params.code));
     res.json(
-      branding ?? { teamName: null, logoUrl: null, primaryColor: null, secondaryColor: null },
+      branding ?? {
+        brandTeamName: null,
+        brandLogoUrl: null,
+        brandPrimaryColor: null,
+        brandSecondaryColor: null,
+        brandMotto: null,
+        brandMission: null,
+        brandContactEmail: null,
+        brandWelcomeMessage: null,
+      },
     );
   });
 
+  // Effective branding for whoever's logged in -- any role, since an
+  // athlete needs this to re-skin their own AppShell too, not just coaches
+  // editing it. Includes .features (see getCoachFeatures) so AppShell can
+  // hide nav sections a coach has turned off for their program.
   app.get("/api/branding/me", requireAuth, async (req, res) => {
     const user = currentUser(req);
-    const branding = await storage.getEffectiveBrandingForUser(user.id, user.role);
+    const branding = await storage.getEffectiveBrandingForUser(user.id);
     res.json(branding);
   });
 
+  // Org-wide white-label identity (name/logo/colors/motto/mission/contact/
+  // welcome) -- resolved through getEffectiveCoachIds so a staff member
+  // editing this always reads/writes the shared primary-coach row, never
+  // their own.
   app.get("/api/coach/branding", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
+    const coachIds = await storage.getEffectiveCoachIds(user.id);
     const [branding, features] = await Promise.all([
-      storage.getCoachBranding(user.id),
-      storage.getCoachFeatures(user.id),
+      storage.getCoachBranding(coachIds[0]),
+      storage.getCoachFeatures(coachIds[0]),
     ]);
     res.json({ ...branding, features });
   });
 
-  app.put("/api/coach/branding", requireRole("coach"), async (req, res) => {
+  app.patch("/api/coach/branding", requireRole("coach"), requirePrimaryCoach, async (req, res) => {
     const user = currentUser(req);
-    const parsed = updateCoachBrandingSchema.safeParse(req.body);
+    const parsed = updateBrandingSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
-    const branding = await storage.updateCoachBranding(user.id, parsed.data);
-    res.json(branding);
+    const coachIds = await storage.getEffectiveCoachIds(user.id);
+    const entitlements = await getEntitlementsForCoach(user.id);
+    // Logo and a primary color are free at every tier -- only secondaryColor
+    // and the team-identity fields are gated, and silently dropped rather
+    // than rejected so a Solo/Coach account editing what they're actually
+    // allowed to still succeeds in one request.
+    const values = { ...parsed.data };
+    if (!entitlements.hasCustomColors) delete values.secondaryColor;
+    if (!entitlements.hasTeamIdentity) {
+      delete values.motto;
+      delete values.mission;
+      delete values.contactEmail;
+      delete values.welcomeMessage;
+    }
+    const updated = await storage.updateCoachBranding(coachIds[0], values);
+    res.json(updated);
   });
 
-  app.post("/api/coach/branding/logo", requireRole("coach"), (req, res) => {
+  app.post("/api/coach/branding/logo", requireRole("coach"), requirePrimaryCoach, (req, res) => {
     uploadTeamLogo.single("logo")(req, res, async (err: unknown) => {
       if (err) {
         const message = err instanceof Error ? err.message : "Upload failed";
@@ -3698,14 +3953,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       if (!req.file) return res.status(400).json({ message: "No image file provided" });
       const user = currentUser(req);
-      const branding = await storage.updateCoachLogo(user.id, `/uploads/team-logos/${req.file.filename}`);
+      const coachIds = await storage.getEffectiveCoachIds(user.id);
+      const branding = await storage.updateCoachLogo(coachIds[0], `/uploads/team-logos/${req.file.filename}`);
       res.status(201).json(branding);
     });
   });
 
-  app.delete("/api/coach/branding/logo", requireRole("coach"), async (req, res) => {
+  app.delete("/api/coach/branding/logo", requireRole("coach"), requirePrimaryCoach, async (req, res) => {
     const user = currentUser(req);
-    const branding = await storage.updateCoachLogo(user.id, null);
+    const coachIds = await storage.getEffectiveCoachIds(user.id);
+    const branding = await storage.updateCoachLogo(coachIds[0], null);
     res.json(branding);
   });
 
@@ -4040,11 +4297,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // A single team's own branding override -- see teams.brand* columns'
   // own comment for the field-by-field fallback to the org-wide branding.
   // Same assertOwnsTeam guard as every other team-scoped route above.
+  // Gated behind hasMultiTeam: a single-team coach never needs a
+  // per-team override since the org-wide branding already covers them.
   app.patch("/api/coach/teams/:id/branding", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     const teamId = Number(req.params.id);
     if (!(await assertOwnsTeam(user.id, teamId))) {
       return res.status(404).json({ message: "Team not found" });
+    }
+    if (!(await getEntitlementsForCoach(user.id)).hasMultiTeam) {
+      return res.status(402).json({ message: "Per-team branding requires a Growth plan or higher" });
     }
     const parsed = updateTeamBrandingSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -4065,6 +4327,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!(await assertOwnsTeam(user.id, teamId))) {
         return res.status(404).json({ message: "Team not found" });
       }
+      if (!(await getEntitlementsForCoach(user.id)).hasMultiTeam) {
+        return res.status(402).json({ message: "Per-team branding requires a Growth plan or higher" });
+      }
       if (!req.file) return res.status(400).json({ message: "No image file provided" });
       const team = await storage.updateTeamLogo(teamId, `/uploads/team-branding/${req.file.filename}`);
       res.status(201).json(team);
@@ -4076,6 +4341,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const teamId = Number(req.params.id);
     if (!(await assertOwnsTeam(user.id, teamId))) {
       return res.status(404).json({ message: "Team not found" });
+    }
+    if (!(await getEntitlementsForCoach(user.id)).hasMultiTeam) {
+      return res.status(402).json({ message: "Per-team branding requires a Growth plan or higher" });
     }
     const team = await storage.updateTeamLogo(teamId, null);
     res.json(team);
@@ -4374,6 +4642,109 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.status(201).json(result);
   });
 
+  // ---------------- Coach: self-training ("My Training") ----------------
+  // Mirrors /api/admin/my/* exactly -- a coach training under their own
+  // program, on their own calendar, same as an admin. getCalendarForAthlete/
+  // getWorkoutDayDetail/submitWorkoutLog/updateUserPreferences don't care
+  // what role the id belongs to, so these are thin role-gated wrappers.
+
+  app.get("/api/coach/my/calendar", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const schema = z.object({ start: z.string(), end: z.string() });
+    const parsed = schema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "start and end query params required" });
+    }
+    const entries = await storage.getCalendarForAthlete(
+      user.id,
+      parsed.data.start,
+      parsed.data.end,
+    );
+    res.json(entries);
+  });
+
+  app.get("/api/coach/my/calendar-link", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const token = await storage.getOrCreateCalendarToken(user.id);
+    res.json({ token });
+  });
+
+  app.get("/api/coach/my/day", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const schema = z.object({
+      assignmentId: z.coerce.number(),
+      programDayId: z.coerce.number(),
+      date: z.string(),
+    });
+    const parsed = schema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Missing or invalid query params" });
+    }
+    const detail = await storage.getWorkoutDayDetail(
+      user.id,
+      parsed.data.assignmentId,
+      parsed.data.programDayId,
+      parsed.data.date,
+    );
+    if (!detail) return res.status(404).json({ message: "Workout not found" });
+    res.json(detail);
+  });
+
+  app.post("/api/coach/my/log", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = submitWorkoutLogSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const log = await storage.submitWorkoutLog(user.id, parsed.data);
+    if (!log) return res.status(404).json({ message: "Assignment not found" });
+    res.status(200).json(log);
+  });
+
+  app.patch("/api/coach/my/preferences", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = updatePreferencesSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const updated = await storage.updateUserPreferences(user.id, parsed.data);
+    const { passwordHash, healthStatus, ...publicUser } = updated;
+    res.json(publicUser);
+  });
+
+  // Self-assignment: coachId and athleteId are both the coach's own id.
+  // Deliberately bypasses the roster-membership check that guards
+  // /api/coach/assignments -- a coach is never on their own roster, so
+  // that check would always fail here. getProgramIfUsableByCoach already
+  // covers the real authorization question: their own program, or any
+  // Forge-official one.
+  app.post("/api/coach/my/assignments", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const schema = z.object({
+      programId: z.number(),
+      startDate: z.string(),
+      durationWeeks: z.number().int().min(1).max(12).default(1),
+      dateOverrides: z.record(z.string(), z.string()).optional(),
+      correctivesEnabled: z.boolean().default(true),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const usable = await storage.getProgramIfUsableByCoach(user.id, parsed.data.programId);
+    if (!usable) return res.status(404).json({ message: "Program not found" });
+
+    const result = await storage.createAssignment(
+      user.id,
+      parsed.data.programId,
+      [{ athleteId: user.id, correctivesEnabled: parsed.data.correctivesEnabled }],
+      parsed.data.startDate,
+      parsed.data.dateOverrides,
+      parsed.data.durationWeeks,
+    );
+    res.status(201).json(result);
+  });
+
   app.get("/api/coach/assignments/:id", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     const id = Number(req.params.id);
@@ -4415,80 +4786,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       parsed.data.athleteId,
     );
     res.json(entries);
-  });
-
-  // ---------------- Coach: My Training ----------------
-  // A coach programming and logging their OWN lifts -- same self-assignment
-  // pattern as /api/admin/my/* (an assignments row with coachId === athleteId,
-  // no schema change needed), reusing the same role-agnostic storage
-  // functions an athlete uses. getCalendarForCoach already includes these
-  // rows (tagged isSelfAssigned) in the coach's own /api/coach/calendar
-  // response, so the athlete-style /my/day and /my/log endpoints below exist
-  // only to let the coach open and log their own entries from that same
-  // calendar -- there's no separate "my calendar" page the way admin has one.
-
-  app.get("/api/coach/my/day", requireRole("coach"), async (req, res) => {
-    const user = currentUser(req);
-    const schema = z.object({
-      assignmentId: z.coerce.number(),
-      programDayId: z.coerce.number(),
-      date: z.string(),
-    });
-    const parsed = schema.safeParse(req.query);
-    if (!parsed.success) {
-      return res.status(400).json({ message: "Missing or invalid query params" });
-    }
-    const detail = await storage.getWorkoutDayDetail(
-      user.id,
-      parsed.data.assignmentId,
-      parsed.data.programDayId,
-      parsed.data.date,
-    );
-    if (!detail) return res.status(404).json({ message: "Workout not found" });
-    res.json(detail);
-  });
-
-  app.post("/api/coach/my/log", requireRole("coach"), async (req, res) => {
-    const user = currentUser(req);
-    const parsed = submitWorkoutLogSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ message: parsed.error.issues[0]?.message });
-    }
-    const log = await storage.submitWorkoutLog(user.id, parsed.data);
-    if (!log) return res.status(404).json({ message: "Assignment not found" });
-    res.status(200).json(log);
-  });
-
-  // Self-assignment: coachId and athleteId are both the coach's own id.
-  // Deliberately bypasses the roster-membership check /api/coach/assignments
-  // enforces -- a coach is never on their own roster, so that check would
-  // always fail here. getProgramIfUsableByCoach already covers the real
-  // authorization question: their own program, or any Forge-official one.
-  app.post("/api/coach/my/assignments", requireRole("coach"), async (req, res) => {
-    const user = currentUser(req);
-    const schema = z.object({
-      programId: z.number(),
-      startDate: z.string(),
-      durationWeeks: z.number().int().min(1).max(12).default(1),
-      dateOverrides: z.record(z.string(), z.string()).optional(),
-      correctivesEnabled: z.boolean().default(true),
-    });
-    const parsed = schema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ message: parsed.error.issues[0]?.message });
-    }
-    const usable = await storage.getProgramIfUsableByCoach(user.id, parsed.data.programId);
-    if (!usable) return res.status(404).json({ message: "Program not found" });
-
-    const result = await storage.createAssignment(
-      user.id,
-      parsed.data.programId,
-      [{ athleteId: user.id, correctivesEnabled: parsed.data.correctivesEnabled }],
-      parsed.data.startDate,
-      parsed.data.dateOverrides,
-      parsed.data.durationWeeks,
-    );
-    res.status(201).json(result);
   });
 
   app.get("/api/coach/day-briefing", requireRole("coach"), async (req, res) => {
@@ -4887,6 +5184,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(coaches);
   });
 
+  app.get("/api/athlete/team-roster", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const coaches = await storage.getCoachesForAthlete(user.id);
+    if (coaches.length === 0) {
+      return res.json({ primaryCoachName: null, staff: [] });
+    }
+    const coachIds = await storage.getEffectiveCoachIds(coaches[0].id);
+    const roster = await storage.getTeamRosterInfo(coachIds[0]);
+    res.json(roster);
+  });
+
   // Pending coach invites this athlete can accept or decline -- see
   // storage.sendFreeAgentRequest for why a coach can never link an athlete
   // without this consent step.
@@ -4948,7 +5256,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Free-Agent-only self-edit: manual data entry, not an AI capability, so
-  // it isn't behind requirePaidAiAccess -- a Free Agent with their own real
+  // it isn't behind requireFreeAgentAiChat -- a Free Agent with their own real
   // nutritionist can just use the app the same way a coached athlete's
   // coach would. Once they join a coach, this stops being reachable
   // (requireFreeAgent) and the coach's roster route above becomes the only
@@ -5019,7 +5327,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // against the targets above. This is data entry (a barcode/name lookup is
   // just a convenience proxy to a public food database, never an AI call --
   // see server/food-lookup.ts), so unlike the nutrition Q&A below it's
-  // never gated behind requireFreeAgent or requirePaidAiAccess.
+  // never gated behind requireFreeAgent or requireFreeAgentAiChat.
   app.get("/api/athlete/food-log", requireRole("athlete"), async (req, res) => {
     const user = currentUser(req);
     const date = typeof req.query.date === "string" ? req.query.date : todayIso();
@@ -5082,7 +5390,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // home-cooked or restaurant plate, so this is a real vision call rather
   // than a lookup. Same "every athlete, coached or Free Agent" access as the
   // rest of food logging -- not gated behind requireFreeAgent/
-  // requirePaidAiAccess, since this doesn't compete with a coach's guidance
+  // requireFreeAgentAiChat, since this doesn't compete with a coach's guidance
   // any more than typing in a food name does.
   app.post("/api/athlete/food/analyze-photo", requireRole("athlete"), async (req, res) => {
     const schema = z.object({
@@ -5917,8 +6225,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // once an athlete joins a team they're meant to rely on that coach, not
   // keep a parallel self-serve programs feature running. The AI-specific
   // routes below (ai-draft, chat, form-check) are further gated behind
-  // requirePaidAiAccess, a paid-upgrade paywall that's a hard block until
-  // real billing exists; the plain CRUD routes (list/get/create/update/
+  // requireFreeAgentAiChat/requireFreeAgentVideoAccess, real tiered paywalls
+  // now (see shared/free-agent-tiers.ts); the plain CRUD routes (list/get/create/update/
   // delete) and the dedicated swap-exercise route stay free for every Free
   // Agent, so manual program building and exercise substitution always
   // work. No human reviews an AI edit before it applies (see
@@ -6180,6 +6488,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       parsed.data.durationWeeks,
     );
     res.status(201).json(result);
+  });
+
+  // ---------------- Movement profiles (camera-tracker knowledge) ----------------
+  // Read by the camera tracker before a set starts (see bar-tracker-dialog.tsx)
+  // -- any authenticated role, not just admin, since athletes and coaches are
+  // the ones actually running tracked sets. See the admin movement-knowledge
+  // routes for how a profile gets taught and applied in the first place.
+
+  app.get("/api/movement-profiles/active/:movementType", requireAuth, async (req, res) => {
+    // Cast, not a runtime coercion: a plain :name path segment is always a
+    // single string at runtime (Express only produces string[] for a `*`
+    // wildcard segment, which this route doesn't use) -- the wider type
+    // here is this repo's installed @types/express (^5.0.0) not lining up
+    // with its express runtime (^4.21.2), not anything this route does.
+    const movementType = (req.params.movementType as string).trim();
+    if (!movementType) {
+      return res.status(400).json({ message: "movementType is required" });
+    }
+    const profile = await storage.getActiveMovementProfile(movementType);
+    res.json(profile);
   });
 
   // ---------------- Athlete: Conversational AI skills program builder (Free Agent) ----------------
@@ -6613,6 +6941,111 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const updated = await storage.updateNotificationPrefs(user.id, parsed.data);
     const { passwordHash, healthStatus, ...publicUser } = updated;
     res.json(publicUser);
+  });
+
+  // ---------------- Account self-service ----------------
+  // Name/email/password, available to every role -- a coach previously
+  // had no way to edit their own account at all short of the logged-out
+  // forgot-password flow.
+
+  app.patch("/api/account/profile", requireAuth, async (req, res) => {
+    const user = currentUser(req);
+    const parsed = updateAccountNameSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const updated = await storage.updateUserName(user.id, parsed.data.name);
+    res.json(updated);
+  });
+
+  app.patch("/api/account/email", requireAuth, async (req, res) => {
+    const user = currentUser(req);
+    const parsed = updateAccountEmailSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const fullUser = await storage.getUser(user.id);
+    if (!fullUser || !(await comparePasswords(parsed.data.password, fullUser.passwordHash))) {
+      return res.status(401).json({ message: "Current password is incorrect" });
+    }
+    const existing = await storage.getUserByEmail(parsed.data.newEmail);
+    if (existing && existing.id !== user.id) {
+      return res.status(409).json({ message: "That email is already in use" });
+    }
+    const updated = await storage.updateUserEmail(user.id, parsed.data.newEmail);
+    res.json(updated);
+  });
+
+  app.patch("/api/account/password", requireAuth, async (req, res) => {
+    const user = currentUser(req);
+    const parsed = updateAccountPasswordSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const fullUser = await storage.getUser(user.id);
+    if (!fullUser || !(await comparePasswords(parsed.data.currentPassword, fullUser.passwordHash))) {
+      return res.status(401).json({ message: "Current password is incorrect" });
+    }
+    const newHash = await hashPassword(parsed.data.newPassword);
+    await storage.updateUserPasswordHash(user.id, newHash);
+    res.status(204).end();
+  });
+
+  // Any staff member's own personal touch, not gated to the primary the
+  // way org branding is -- see personalAccentColor's comment on the users
+  // table in shared/schema.ts.
+  app.patch("/api/coach/personal-accent", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = updatePersonalAccentSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const updated = await storage.updatePersonalAccentColor(user.id, parsed.data.accentColor ?? null);
+    res.json(updated);
+  });
+
+  // ---------------- Branding & personalization ----------------
+  // Org-wide white-label identity, a per-team override of the color/logo
+  // fields, primary-coach-only nav trimming, and per-coach dashboard box
+  // show/hide -- see storage.ts's getEffectiveBrandingForUser for how a
+  // coach's own branding resolves vs. an athlete's (their coach's org
+  // branding, with any team override layered on top field-by-field). The
+  // GET/PATCH/logo routes themselves live earlier, alongside GET
+  // /api/branding/me and GET /api/public/branding/:code.
+
+  // Deliberately unauthenticated -- lets the signup page re-skin itself
+  // for whichever coach/team invite code someone just typed in, before
+  // they have an account to log into at all. Doesn't reveal anything a
+  // failed/successful signup attempt with the same code wouldn't already:
+  // whether it resolves to a real program.
+  app.get("/api/public/branding", async (req, res) => {
+    const code = typeof req.query.code === "string" ? req.query.code.trim() : "";
+    if (!code) {
+      return res.json(null);
+    }
+    const branding = await storage.getPublicBrandingForCode(code);
+    res.json(branding);
+  });
+
+  app.get("/api/coach/nav-prefs", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const coachIds = await storage.getEffectiveCoachIds(user.id);
+    const prefs = await storage.getNavPrefsForCoach(coachIds[0]);
+    res.json(prefs);
+  });
+
+  app.patch("/api/coach/nav-prefs", requireRole("coach"), requirePrimaryCoach, async (req, res) => {
+    const user = currentUser(req);
+    if (!(await getEntitlementsForCoach(user.id)).hasWorkflowCustomization) {
+      return res.status(402).json({ message: "Nav customization requires the Workflow add-on or a Growth plan or higher" });
+    }
+    const parsed = updateNavPrefsSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const coachIds = await storage.getEffectiveCoachIds(user.id);
+    const prefs = await storage.setNavPrefsForCoach(coachIds[0], parsed.data);
+    res.json(prefs);
   });
 
   app.get("/api/push/vapid-public-key", requireAuth, async (req, res) => {

@@ -82,7 +82,7 @@ import {
   ShieldAlert,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
-import type { PublicUser } from "@shared/schema";
+import type { PublicUser, MovementProfile } from "@shared/schema";
 import { parseProgression } from "@/lib/progression";
 import { PlateCalculatorDialog } from "@/components/plate-calculator-dialog";
 import { ReadinessBanner } from "@/components/readiness-banner";
@@ -249,6 +249,7 @@ type JumpBreakdownEntry = {
   peakHeightCm: number;
   horizontalDistanceCm: number | null;
   groundContactSeconds: number | null;
+  likelyTrackingGlitch?: boolean;
 };
 
 type LegDriveAsymmetryEntry = {
@@ -295,10 +296,13 @@ type SetMetrics = {
   // view; every recorded clip is kept regardless of whether it's flagged.
   formCheckVideoUrl: string | null;
   formCheckFlag: FormCheckFlag;
-  // The heart -- exempts a Free Agent's video from the rolling storage cap
-  // (see server/free-agent-video-cap-job.ts). isPr is server-computed and
-  // read-only from here (never sent back on save, see buildLogPayload).
-  favorited: boolean;
+  // Exempts this clip from the rolling-deletion cap once retention limits
+  // are actually enforced -- see shared/video-retention.ts. Independent of
+  // formCheckFlag above (that's a best/worst comparison tag, this is
+  // "don't auto-delete this one").
+  videoFavorited: boolean;
+  // Server-computed and read-only from here (never sent back on save, see
+  // buildLogPayload) -- see workoutSetEntries.isPr's own comment.
   isPr: boolean;
   // Jump-mode-only metrics -- barPathTrace is reused for the ankle-height
   // trace in jump mode rather than adding a redundant trace column.
@@ -448,7 +452,7 @@ function buildItem(
       velocityLossPercent: existingSet?.velocityLossPercent ?? null,
       formCheckVideoUrl: existingSet?.formCheckVideoUrl ?? null,
       formCheckFlag: existingSet?.formCheckFlag ?? null,
-      favorited: existingSet?.favorited ?? false,
+      videoFavorited: existingSet?.videoFavorited ?? false,
       isPr: existingSet?.isPr ?? false,
       jumpHeightCm: existingSet?.jumpHeightCm ?? null,
       jumpDistanceCm: existingSet?.jumpDistanceCm ?? null,
@@ -865,7 +869,7 @@ export function WorkoutPage({
           velocityLossPercent: s.velocityLossPercent,
           formCheckVideoUrl: s.formCheckVideoUrl,
           formCheckFlag: s.formCheckFlag,
-          favorited: s.favorited,
+          videoFavorited: s.videoFavorited,
           jumpHeightCm: s.jumpHeightCm,
           jumpDistanceCm: s.jumpDistanceCm,
           groundContactSeconds: s.groundContactSeconds,
@@ -911,10 +915,20 @@ export function WorkoutPage({
         const res = await apiRequest("POST", `${apiBase}/log`, payload);
         return { synced: true as const, data: await res.json(), silent };
       } catch (err) {
-        // A real server rejection (bad data, auth, etc) should surface as
-        // an error same as always -- only a genuine network failure gets
-        // queued for automatic retry.
-        if (err instanceof ApiError) throw err;
+        // A genuine rejection of the payload itself (bad data, forbidden,
+        // not found) should surface as an error same as always -- retrying
+        // it later won't change the outcome. Everything else -- a raw
+        // network failure, a 401 (a stalled/expired session looks
+        // identical to a real logout from here, but the 30-day session
+        // cookie means it's almost always still valid server-side once the
+        // connection recovers), or a 5xx blip -- gets queued for automatic
+        // retry instead of silently dropping the athlete's data. This is
+        // what makes autosave safe to run silently: a queued entry gets
+        // replayed by startOfflineLogSync on the next reconnect/reload, so
+        // nothing typed is ever lost to a transient hiccup.
+        const isPermanentRejection =
+          err instanceof ApiError && err.status !== 401 && err.status < 500;
+        if (isPermanentRejection) throw err;
         queueLog(dayKey, `${apiBase}/log`, payload);
         return { synced: false as const, data: null, silent };
       }
@@ -1157,8 +1171,20 @@ export function WorkoutPage({
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("pagehide", flush);
+      // The tab/app-close cases above don't cover an *in-app* navigation
+      // away from this page -- most importantly ProtectedRoute swapping
+      // this component out for a login redirect when an auth check fails.
+      // That's a normal React unmount, not a page teardown, so sendBeacon
+      // isn't needed and a plain synchronous write to the same durable
+      // queue startOfflineLogSync drains is enough: it guarantees the
+      // latest snapshot is captured the moment this page goes away for any
+      // reason, not just a closed tab. Redundant if the last save already
+      // synced -- queueLog just gets replayed against an already-saved
+      // state -- but never redundant with data loss.
+      const payload = buildLogPayload(itemsRef.current, dayCompletedRef.current);
+      queueLog(dayKey, `${apiBase}/log`, payload);
     };
-    // apiBase is static for the life of this page; only needs to run once.
+    // apiBase/dayKey are static for the life of this page; only needs to run once.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1284,7 +1310,7 @@ export function WorkoutPage({
               velocityLossPercent: null,
               formCheckVideoUrl: null,
               formCheckFlag: null,
-              favorited: false,
+              videoFavorited: false,
               isPr: false,
               jumpHeightCm: null,
               jumpDistanceCm: null,
@@ -1795,10 +1821,20 @@ function ExerciseLogContent({
   onAddSet: () => void;
   onRemoveSet: () => void;
 }) {
-  const isCorrective = item.kind === "corrective";
   const { user } = useAuth();
+  const isCorrective = item.kind === "corrective";
   const [distanceUnit] = useDistanceUnit();
   const [trackingSet, setTrackingSet] = useState<number | null>(null);
+  // "jump" mode profiles live under the literal movementType "jump" (jump
+  // tracking is its own trackingLevel, not a movementType) -- see
+  // shared/schema.ts's movementProfiles comment. Null/undefined here (no
+  // profile applied yet) just means detectFormFaults/summarizeJumpSet fall
+  // back to their own hardcoded defaults, same as before this existed.
+  const movementTypeForTracking = item.trackingLevel === "jump" ? "jump" : item.movementType;
+  const { data: activeMovementProfile } = useQuery<MovementProfile | null>({
+    queryKey: ["/api/movement-profiles/active", movementTypeForTracking],
+    enabled: item.trackingLevel !== "none" && !!movementTypeForTracking,
+  });
   // Which set the "Record" pill is currently recording for -- one form-check
   // clip per set now, not one per exercise, so this replaces what used to be
   // a single boolean. previewSetNumber/compareOpen below are the other two
@@ -2426,7 +2462,18 @@ function ExerciseLogContent({
                   <div className="mt-1 flex flex-wrap items-center gap-1 pl-9 text-[9px] text-muted-foreground">
                     <span className="font-semibold uppercase tracking-wide">Jump by jump</span>
                     {set.jumpBreakdown.map((j) => (
-                      <span key={j.repNumber} className="rounded bg-secondary px-1.5 py-0.5">
+                      <span
+                        key={j.repNumber}
+                        className={cn(
+                          "rounded px-1.5 py-0.5",
+                          j.likelyTrackingGlitch ? "bg-amber-500/15 text-amber-500" : "bg-secondary",
+                        )}
+                        title={
+                          j.likelyTrackingGlitch
+                            ? "Way off from this set's other jumps -- likely a tracking glitch"
+                            : undefined
+                        }
+                      >
                         {formatDistanceCm(j.jumpHeightCm, distanceUnit)}
                         {j.groundContactSeconds != null ? ` · GCT ${j.groundContactSeconds}s` : ""}
                       </span>
@@ -2661,6 +2708,8 @@ function ExerciseLogContent({
               heightIn={user?.heightIn}
               targetReps={parseTargetReps(item.prescribedReps)}
               loadKg={loadKg}
+              formFaultThresholds={activeMovementProfile}
+              jumpHeightOutlierPercent={activeMovementProfile?.jumpHeightOutlierPercent}
               recordVideo={mergedTracking}
               onCapture={handleTrackerCapture}
               videoContext={videoContextFor(trackingSet)}
@@ -2692,17 +2741,21 @@ function ExerciseLogContent({
           videoUrl={previewSet.formCheckVideoUrl}
           flag={previewSet.formCheckFlag}
           onFlag={(flag) => handleFlagVideo(previewSet.setNumber, flag)}
-          favorited={previewSet.favorited}
+          favorited={previewSet.videoFavorited}
           isPr={previewSet.isPr}
           onToggleFavorite={() =>
-            onUpdateSet(previewSet.setNumber, { favorited: !previewSet.favorited }, { immediate: true })
+            onUpdateSet(previewSet.setNumber, { videoFavorited: !previewSet.videoFavorited }, { immediate: true })
           }
           onRetake={() => {
             setPreviewSetNumber(null);
             setRecordingSetNumber(previewSet.setNumber);
           }}
           onRemove={() => {
-            onUpdateSet(previewSet.setNumber, { formCheckVideoUrl: null, formCheckFlag: null });
+            onUpdateSet(previewSet.setNumber, {
+              formCheckVideoUrl: null,
+              formCheckFlag: null,
+              videoFavorited: false,
+            });
             setPreviewSetNumber(null);
           }}
         />
@@ -2801,14 +2854,20 @@ function ExerciseLogContent({
           <Minus className="h-4 w-4" />
         </button>
         <span className="text-xs font-semibold text-muted-foreground">Set</span>
-        <button
-          type="button"
-          onClick={onAddSet}
-          aria-label="Add set"
-          className="flex h-8 w-8 items-center justify-center rounded-full border border-primary text-primary transition-colors hover:bg-primary/10"
-        >
-          <Plus className="h-4 w-4" />
-        </button>
+        {/* The coach set this program's prescribed sets -- an athlete
+            changing that count isn't theirs to do, even though they can
+            still remove a set they physically couldn't complete. Admin/coach
+            self-training (the other callers of this page) keep the button. */}
+        {user?.role !== "athlete" && (
+          <button
+            type="button"
+            onClick={onAddSet}
+            aria-label="Add set"
+            className="flex h-8 w-8 items-center justify-center rounded-full border border-primary text-primary transition-colors hover:bg-primary/10"
+          >
+            <Plus className="h-4 w-4" />
+          </button>
+        )}
       </div>
 
       <div className="space-y-2 rounded-lg border border-border bg-surface-elevated p-3">

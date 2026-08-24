@@ -1237,10 +1237,99 @@ CREATE TABLE IF NOT EXISTS "provisional_athletes" (
 CREATE UNIQUE INDEX IF NOT EXISTS "provisional_athletes_claim_code_idx" ON "provisional_athletes" ("claim_code");
 CREATE INDEX IF NOT EXISTS "provisional_athletes_coach_idx" ON "provisional_athletes" ("coach_id");
 
+-- White-label branding + dashboard/nav personalization (org-wide on
+-- users, per-team override, per-staff-member display title).
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "brand_team_name" text;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "brand_logo_url" text;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "brand_primary_color" text;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "brand_secondary_color" text;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "hidden_nav_sections" json;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "hidden_widgets" json;
+ALTER TABLE "teams" ADD COLUMN IF NOT EXISTS "brand_logo_url" text;
+ALTER TABLE "teams" ADD COLUMN IF NOT EXISTS "brand_primary_color" text;
+ALTER TABLE "teams" ADD COLUMN IF NOT EXISTS "brand_secondary_color" text;
+ALTER TABLE "coach_staff" ADD COLUMN IF NOT EXISTS "staff_title" text;
+
+-- Account self-service (name/email/password already had columns/routes;
+-- these are the new personalization surface): athlete bio, org
+-- motto/mission/contact/welcome text, per-coach personal accent, and
+-- primary-coach-only nav label overrides.
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "bio" text;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "brand_motto" text;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "brand_mission" text;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "brand_contact_email" text;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "brand_welcome_message" text;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "personal_accent_color" text;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "nav_label_overrides" json;
+
+-- Pricing/billing structure (see shared/billing-tiers.ts, server/billing.ts).
+-- is_beta_account defaults true so every existing row stays exempt from
+-- enforcement the moment this column exists -- nothing here changes
+-- behavior on its own.
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "billing_tier" text;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "billing_add_ons" json;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "is_beta_account" boolean NOT NULL DEFAULT true;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "trial_expires_at" timestamp;
+
+CREATE TABLE IF NOT EXISTS "redeem_codes" (
+  "id" serial PRIMARY KEY,
+  "code" text NOT NULL,
+  "trial_days" integer NOT NULL,
+  "max_redemptions" integer,
+  "expires_at" timestamp,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "redeem_codes_code_idx" ON "redeem_codes" ("code");
+
+CREATE TABLE IF NOT EXISTS "redeem_code_redemptions" (
+  "id" serial PRIMARY KEY,
+  "code_id" integer NOT NULL REFERENCES "redeem_codes"("id") ON DELETE CASCADE,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "redeemed_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "redeem_code_redemptions_pair_idx" ON "redeem_code_redemptions" ("code_id", "coach_id");
+
+-- Free Agent (individual athlete) AI-coach pricing -- a separate track
+-- from the coach/org billing above (see shared/free-agent-tiers.ts).
+-- Reuses users.is_beta_account / trial_expires_at as the same two safety
+-- switches already in place; nothing here changes behavior on its own.
+CREATE TABLE IF NOT EXISTS "family_groups" (
+  "id" serial PRIMARY KEY,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "free_agent_tier" text;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "free_agent_add_ons" json;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "family_group_id" integer REFERENCES "family_groups"("id") ON DELETE SET NULL;
+
+-- Form-check video retention (see shared/video-retention.ts). Reuses the
+-- same is_beta_account/trial_expires_at switches -- nothing here deletes
+-- any video until enforcement is actually on for a given account.
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "video_favorited" boolean NOT NULL DEFAULT false;
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "video_uploaded_at" timestamp;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "has_video_storage_add_on" boolean NOT NULL DEFAULT false;
+-- Backfill so a video saved before this column existed doesn't sort as
+-- "newest" (NULL sorts last under ASC) and get treated as the last thing
+-- retention eviction would ever touch -- one-time, idempotent (only fills
+-- rows that are still null; harmless to re-run, there's nothing left to
+-- backfill on a second pass).
+UPDATE "workout_set_entries" SET "video_uploaded_at" = now()
+  WHERE "form_check_video_url" IS NOT NULL AND "video_uploaded_at" IS NULL;
+
+-- Movement profiles (camera-tracker kinematic knowledge) -- same
+-- admin-teaching pattern as ai_knowledge/nutrition_knowledge above, but
+-- structured tracking thresholds per movement instead of one freeform
+-- guidelines document. See shared/schema.ts for the full field rationale.
+CREATE TABLE IF NOT EXISTS "movement_knowledge_messages" (
+  "id" serial PRIMARY KEY,
+  "movement_type" text NOT NULL,
+  "author_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "role" ai_knowledge_chat_role NOT NULL,
+  "content" text NOT NULL,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "movement_knowledge_messages_type_created_idx" ON "movement_knowledge_messages" ("movement_type", "created_at");
+
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "enabled_features" json;
 
 ALTER TABLE "injury_history" ADD COLUMN IF NOT EXISTS "resolved_on" date;
@@ -1305,6 +1394,28 @@ CREATE TABLE IF NOT EXISTS "forge_ai_messages" (
   "created_at" timestamp NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS "forge_ai_messages_created_idx" ON "forge_ai_messages" ("created_at");
+
+DO $$ BEGIN
+  CREATE TYPE "movement_profile_status" AS ENUM ('active', 'archived');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+CREATE TABLE IF NOT EXISTS "movement_profiles" (
+  "id" serial PRIMARY KEY,
+  "movement_type" text NOT NULL,
+  "status" movement_profile_status NOT NULL DEFAULT 'active',
+  "version" integer NOT NULL DEFAULT 1,
+  "min_knee_angle_deg" real,
+  "valgus_ratio_min" real,
+  "max_torso_lean_deg" real,
+  "bar_path_deviation_max_cm" real,
+  "bar_tilt_max_deg" real,
+  "jump_height_outlier_percent" real,
+  "camera_framing_notes" text,
+  "source_summary" text,
+  "created_by" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "movement_profiles_type_status_idx" ON "movement_profiles" ("movement_type", "status");
 
 CREATE TABLE IF NOT EXISTS "ai_knowledge_usage_log" (
   "id" serial PRIMARY KEY,
@@ -1576,10 +1687,10 @@ ALTER TABLE "wellness_checkins" ADD COLUMN IF NOT EXISTS "body_mass" real;
 -- wellnessCheckins.heartRateRecovery).
 ALTER TABLE "wellness_checkins" ADD COLUMN IF NOT EXISTS "heart_rate_recovery" real;
 
--- Video favoriting/PR-badge/Free-Agent rolling-cap purge (shared/schema.ts
--- workoutSetEntries.isPr/favorited/pendingDeletionAt).
+-- PR-badge/Free-Agent rolling-cap purge (shared/schema.ts
+-- workoutSetEntries.isPr/pendingDeletionAt -- videoFavorited/video_favorited
+-- already added above).
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "is_pr" boolean NOT NULL DEFAULT false;
-ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "favorited" boolean NOT NULL DEFAULT false;
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "pending_deletion_at" date;
 
 -- Golf/baseball swing tracking (shared/schema.ts workoutSetEntries's

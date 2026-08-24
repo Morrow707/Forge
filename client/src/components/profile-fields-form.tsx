@@ -1,5 +1,6 @@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -32,6 +33,7 @@ export type ProfileFieldsValue = {
   benchMaxLbs: string;
   squatMaxLbs: string;
   deadliftMaxLbs: string;
+  bio: string;
 };
 
 export const emptyProfileFields: ProfileFieldsValue = {
@@ -51,6 +53,7 @@ export const emptyProfileFields: ProfileFieldsValue = {
   benchMaxLbs: "",
   squatMaxLbs: "",
   deadliftMaxLbs: "",
+  bio: "",
 };
 
 const SEASON_PHASE_OPTIONS = [
@@ -77,6 +80,7 @@ export function ProfileFieldsForm({
   onChange,
   idPrefix,
   showName = true,
+  showBio = false,
   dateOfBirth,
 }: {
   value: ProfileFieldsValue;
@@ -85,6 +89,12 @@ export function ProfileFieldsForm({
   /** Hide the name field when a caller already shows it elsewhere (e.g. as
    * the dialog title). Defaults to shown. */
   showName?: boolean;
+  /** Self-authored "about me/goals" text -- only shown when an athlete is
+   * editing their own profile (EditMyProfileDialog), never when a coach
+   * edits an athlete's profile (athlete-profile-dialog.tsx uses the same
+   * shared form for the performance fields below, but a coach writing an
+   * athlete's own bio for them defeats the point of it). Defaults off. */
+  showBio?: boolean;
   /** Read-only for now -- collected once at signup (see signup.tsx/claim.tsx)
    * for age-tier purposes (shared/privacy-tiers.ts), not yet editable here.
    * Deliberately not reconciled with the Age field above, which stays its
@@ -103,6 +113,19 @@ export function ProfileFieldsForm({
               id={`${idPrefix}-name`}
               value={value.name}
               onChange={(e) => onChange({ ...value, name: e.target.value })}
+            />
+          </div>
+        )}
+        {showBio && (
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label htmlFor={`${idPrefix}-bio`}>About me / goals</Label>
+            <Textarea
+              id={`${idPrefix}-bio`}
+              value={value.bio}
+              onChange={(e) => onChange({ ...value, bio: e.target.value })}
+              placeholder="What you're training for, in your own words"
+              maxLength={300}
+              className="min-h-20"
             />
           </div>
         )}
