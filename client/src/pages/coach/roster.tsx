@@ -29,6 +29,7 @@ import { TrainingHistoryExportDialog } from "@/components/training-history-expor
 import { CaraCompliancePanel } from "@/components/cara-compliance-panel";
 import { TeamChallengesSection } from "@/components/team-challenges-panel";
 import { GameDaysSection } from "@/components/game-days-panel";
+import { TeamBrandingDialog } from "@/components/team-branding-dialog";
 import { READINESS_LABEL, type ReadinessLevel } from "@shared/wellness";
 import { ACWR_RISK_LABEL, type AcwrRiskLevel } from "@shared/load";
 import { apiRequest, ApiError } from "@/lib/queryClient";
@@ -81,7 +82,15 @@ type RosterEntry = {
   healthStatus?: HealthStatus;
 };
 type TeamMember = { athlete: RosterEntry };
-type TeamEntry = { id: number; name: string; code: string | null; members: TeamMember[] };
+type TeamEntry = {
+  id: number;
+  name: string;
+  code: string | null;
+  members: TeamMember[];
+  brandLogoUrl: string | null;
+  brandPrimaryColor: string | null;
+  brandSecondaryColor: string | null;
+};
 type ProgramSummary = { id: number; name: string };
 
 export default function CoachRoster() {
@@ -121,6 +130,7 @@ export default function CoachRoster() {
   const [assignAthleteIds, setAssignAthleteIds] = useState<number[]>([]);
 
   const [teamDialogOpen, setTeamDialogOpen] = useState(false);
+  const [brandingTeamId, setBrandingTeamId] = useState<number | null>(null);
   const [newTeamName, setNewTeamName] = useState("");
 
   const [rosterSearch, setRosterSearch] = useState("");
@@ -415,16 +425,30 @@ export default function CoachRoster() {
             {teams.map((team) => (
               <Card key={team.id}>
                 <CardHeader className="flex-row items-center justify-between space-y-0">
-                  <CardTitle>{team.name}</CardTitle>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => openAssignFor(team.members.map((m) => m.athlete.id))}
-                    disabled={team.members.length === 0}
-                  >
-                    <Send className="h-3.5 w-3.5" />
-                    Assign to Team
-                  </Button>
+                  <div className="flex min-w-0 items-center gap-2">
+                    {team.brandLogoUrl && (
+                      <img
+                        src={team.brandLogoUrl}
+                        alt=""
+                        className="h-6 w-6 shrink-0 rounded object-contain"
+                      />
+                    )}
+                    <CardTitle className="truncate">{team.name}</CardTitle>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Button size="sm" variant="ghost" onClick={() => setBrandingTeamId(team.id)}>
+                      Brand
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => openAssignFor(team.members.map((m) => m.athlete.id))}
+                      disabled={team.members.length === 0}
+                    >
+                      <Send className="h-3.5 w-3.5" />
+                      Assign to Team
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <div className="mb-3 space-y-1.5">
@@ -564,6 +588,28 @@ export default function CoachRoster() {
         programs={programs}
         initialAthleteIds={assignAthleteIds}
       />
+
+      {brandingTeamId !== null &&
+        (() => {
+          const liveTeam = teams.find((t) => t.id === brandingTeamId);
+          if (!liveTeam) return null;
+          return (
+            <TeamBrandingDialog
+              open
+              onOpenChange={(open) => !open && setBrandingTeamId(null)}
+              scope={{
+                type: "team",
+                teamId: liveTeam.id,
+                teamName: liveTeam.name,
+                initial: {
+                  brandLogoUrl: liveTeam.brandLogoUrl,
+                  brandPrimaryColor: liveTeam.brandPrimaryColor,
+                  brandSecondaryColor: liveTeam.brandSecondaryColor,
+                },
+              }}
+            />
+          );
+        })()}
 
       <AthleteProfileDialog
         athlete={profileAthlete}
