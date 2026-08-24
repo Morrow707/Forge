@@ -234,10 +234,12 @@ export function ProgramListPage({
     onSuccess: () => {
       // The calendar this lands on lives under a different path shape for
       // each caller (admin's own training is "/api/admin/my/calendar", a
-      // Free Agent athlete's is "/api/athlete/calendar") -- invalidating
-      // both is harmless (a no-op for whichever one has no observers) and
-      // avoids this shared component needing to know which one it's in.
+      // coach's is "/api/coach/my/calendar", a Free Agent athlete's is
+      // "/api/athlete/calendar") -- invalidating all three is harmless (a
+      // no-op for whichever ones have no observers) and avoids this shared
+      // component needing to know which one it's in.
       qc.invalidateQueries({ queryKey: ["/api/admin/my/calendar"] });
+      qc.invalidateQueries({ queryKey: ["/api/coach/my/calendar"] });
       qc.invalidateQueries({ queryKey: ["/api/athlete/calendar"] });
       toast.success("Added to your calendar");
       setSelfAssignProgramId(null);

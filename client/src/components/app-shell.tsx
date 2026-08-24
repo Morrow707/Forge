@@ -68,6 +68,7 @@ const coachNav: NavItem[] = [
   { href: "/coach/analytics", label: "Analytics", icon: LineChart },
   { href: "/coach/leaderboard", label: "Leaderboard", icon: Trophy },
   { href: "/coach/team-board", label: "Team Board", icon: MessagesSquare },
+  { href: "/coach/my", label: "My Training", icon: UserCircle },
   { href: "/coach/about", label: "About", icon: Info },
 ];
 

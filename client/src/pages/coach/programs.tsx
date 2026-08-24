@@ -9,6 +9,7 @@ export default function CoachPrograms() {
       title="Programs"
       emptyStateText="No programs yet. Build a training block to start assigning workouts to athletes."
       showAiAssist
+      showSelfAssign
       libraryTabs={
         <LibraryTabs active="programs" programsHref="/coach/programs" exercisesHref="/coach/exercises" />
       }

@@ -277,12 +277,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // cookie, so access control here is "possession of the unguessable
   // token" rather than a login. Only ever resolves to someone's own
   // training days -- never rest days, to keep a subscribed calendar from
-  // filling up with noise. Admins get this too since they can self-assign
-  // programs to their own calendar (see /api/admin/my/*); coaches never
-  // train off their own calendar, so they're not included.
+  // filling up with noise. Admins and coaches get this too since they can
+  // self-assign programs to their own calendar (see /api/admin/my/*,
+  // /api/coach/my/*).
   app.get("/api/calendar/:token.ics", async (req, res) => {
     const user = await storage.getUserByCalendarToken(req.params.token);
-    if (!user || (user.role !== "athlete" && user.role !== "admin")) {
+    if (!user || (user.role !== "athlete" && user.role !== "admin" && user.role !== "coach")) {
       return res.status(404).send("Calendar not found");
     }
     const start = new Date();
@@ -2075,6 +2075,106 @@ export async function registerRoutes(app: Express): Promise<Server> {
       user.id,
       parsed.data.programId,
       parsed.data.athletes,
+      parsed.data.startDate,
+      parsed.data.dateOverrides,
+    );
+    res.status(201).json(result);
+  });
+
+  // ---------------- Coach: self-training ("My Training") ----------------
+  // Mirrors /api/admin/my/* exactly -- a coach training under their own
+  // program, on their own calendar, same as an admin. getCalendarForAthlete/
+  // getWorkoutDayDetail/submitWorkoutLog/updateUserPreferences don't care
+  // what role the id belongs to, so these are thin role-gated wrappers.
+
+  app.get("/api/coach/my/calendar", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const schema = z.object({ start: z.string(), end: z.string() });
+    const parsed = schema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "start and end query params required" });
+    }
+    const entries = await storage.getCalendarForAthlete(
+      user.id,
+      parsed.data.start,
+      parsed.data.end,
+    );
+    res.json(entries);
+  });
+
+  app.get("/api/coach/my/calendar-link", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const token = await storage.getOrCreateCalendarToken(user.id);
+    res.json({ token });
+  });
+
+  app.get("/api/coach/my/day", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const schema = z.object({
+      assignmentId: z.coerce.number(),
+      programDayId: z.coerce.number(),
+      date: z.string(),
+    });
+    const parsed = schema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Missing or invalid query params" });
+    }
+    const detail = await storage.getWorkoutDayDetail(
+      user.id,
+      parsed.data.assignmentId,
+      parsed.data.programDayId,
+      parsed.data.date,
+    );
+    if (!detail) return res.status(404).json({ message: "Workout not found" });
+    res.json(detail);
+  });
+
+  app.post("/api/coach/my/log", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = submitWorkoutLogSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const log = await storage.submitWorkoutLog(user.id, parsed.data);
+    res.status(200).json(log);
+  });
+
+  app.patch("/api/coach/my/preferences", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = updatePreferencesSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const updated = await storage.updateUserPreferences(user.id, parsed.data);
+    const { passwordHash, healthStatus, ...publicUser } = updated;
+    res.json(publicUser);
+  });
+
+  // Self-assignment: coachId and athleteId are both the coach's own id.
+  // Deliberately bypasses the roster-membership check that guards
+  // /api/coach/assignments -- a coach is never on their own roster, so
+  // that check would always fail here. getProgramIfUsableByCoach already
+  // covers the real authorization question: their own program, or any
+  // Forge-official one.
+  app.post("/api/coach/my/assignments", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const schema = z.object({
+      programId: z.number(),
+      startDate: z.string(),
+      dateOverrides: z.record(z.string(), z.string()).optional(),
+      correctivesEnabled: z.boolean().default(true),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const usable = await storage.getProgramIfUsableByCoach(user.id, parsed.data.programId);
+    if (!usable) return res.status(404).json({ message: "Program not found" });
+
+    const result = await storage.createAssignment(
+      user.id,
+      parsed.data.programId,
+      [{ athleteId: user.id, correctivesEnabled: parsed.data.correctivesEnabled }],
       parsed.data.startDate,
       parsed.data.dateOverrides,
     );
