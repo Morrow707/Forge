@@ -20,6 +20,18 @@ function toPublicUser(user: any): PublicUser {
   return rest;
 }
 
+// A coach's login/me response needs their own display title (e.g.
+// "Nutritionist") if the primary set one for them -- storage-backed, not
+// a users column, so it's attached here rather than by toPublicUser
+// itself (which has no async access to storage).
+async function withStaffTitle(user: any): Promise<PublicUser> {
+  const publicUser = toPublicUser(user);
+  if (user.role === "coach") {
+    publicUser.staffTitle = await storage.getStaffTitleForCoach(user.id);
+  }
+  return publicUser;
+}
+
 export function setupAuth(app: Express) {
   app.set("trust proxy", 1);
   app.use(
@@ -124,7 +136,7 @@ export function setupAuth(app: Express) {
       req.login(user, async (err2) => {
         if (err2) return next(err2);
         await storage.touchUserActivity(user.id);
-        res.json(toPublicUser(user));
+        res.json(await withStaffTitle(user));
       });
     })(req, res, next);
   });
@@ -182,11 +194,11 @@ export function setupAuth(app: Express) {
     }
   });
 
-  app.get("/api/auth/me", (req, res) => {
+  app.get("/api/auth/me", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Not authenticated" });
     }
-    res.json(toPublicUser(req.user));
+    res.json(await withStaffTitle(req.user));
   });
 
   app.post("/api/auth/join-coach", async (req, res, next) => {

@@ -32,6 +32,10 @@ import {
   resolveSubmissionSchema,
   coachAnalyticsQuerySchema,
   createTeamPostSchema,
+  updateBrandingSchema,
+  updateTeamBrandingSchema,
+  updateStaffTitleSchema,
+  updateHiddenNavSectionsSchema,
   createBodyMetricSchema,
   createAnnotationSchema,
   testingTrendsQuerySchema,
@@ -52,6 +56,7 @@ import {
   createTeamChallengeSchema,
   createTeamGameDaySchema,
 } from "@shared/schema";
+import { widgetLayoutSchema } from "@shared/dashboard-widgets";
 import { computeReadiness } from "@shared/wellness";
 import { z } from "zod";
 import { startOfWeek, addWeeks } from "date-fns";
@@ -90,6 +95,41 @@ const uploadFormVideo = multer({
     cb(null, true);
   },
 });
+
+// Branding logos -- raster only (PNG/JPEG/WebP), deliberately no SVG:
+// keeps every consumer (the CSS background-image preview, the browser tab
+// favicon swap) working from one predictable, already-rasterized format
+// instead of needing an SVG-to-raster fallback path for the favicon case.
+const IMAGE_EXTENSION_BY_MIME: Record<string, string> = {
+  "image/png": ".png",
+  "image/jpeg": ".jpg",
+  "image/webp": ".webp",
+};
+
+const ORG_LOGO_DIR = path.join(process.cwd(), "server", "uploads", "team-logos");
+fs.mkdirSync(ORG_LOGO_DIR, { recursive: true });
+const TEAM_LOGO_DIR = path.join(process.cwd(), "server", "uploads", "team-branding");
+fs.mkdirSync(TEAM_LOGO_DIR, { recursive: true });
+
+function makeLogoUpload(dir: string) {
+  return multer({
+    storage: multer.diskStorage({
+      destination: dir,
+      filename: (_req, file, cb) => {
+        cb(null, `${crypto.randomUUID()}${IMAGE_EXTENSION_BY_MIME[file.mimetype] ?? ""}`);
+      },
+    }),
+    limits: { fileSize: 5 * 1024 * 1024 },
+    fileFilter: (_req, file, cb) => {
+      if (!IMAGE_EXTENSION_BY_MIME[file.mimetype]) {
+        return cb(new Error("Unsupported image format -- use PNG, JPEG, or WebP"));
+      }
+      cb(null, true);
+    },
+  });
+}
+const uploadOrgLogo = makeLogoUpload(ORG_LOGO_DIR);
+const uploadTeamLogo = makeLogoUpload(TEAM_LOGO_DIR);
 
 function currentUser(req: any) {
   return req.user as { id: number; role: "coach" | "athlete" | "admin"; name: string; email: string };
@@ -872,6 +912,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.status(204).end();
   });
 
+  app.patch("/api/coach/staff/:staffCoachId/title", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = updateStaffTitleSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const updated = await storage.setStaffTitle(
+      user.id,
+      Number(req.params.staffCoachId),
+      parsed.data.staffTitle ?? null,
+    );
+    if (!updated) {
+      return res.status(404).json({ message: "Not a member of your staff" });
+    }
+    res.json({ staffTitle: updated.staffTitle });
+  });
+
   // ---------------- Coach: Roster & Teams ----------------
 
   app.get("/api/coach/roster", requireRole("coach"), async (req, res) => {
@@ -1472,6 +1529,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     await storage.deleteTeam(teamId);
     res.status(204).end();
+  });
+
+  // Per-team override of the org's branding (see the org-wide routes
+  // under "Branding & personalization" below) -- a team can override just
+  // its colors, just its logo, or both, and falls back to the org's own
+  // values field-by-field for whatever it doesn't set.
+  app.patch("/api/coach/teams/:id/branding", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const teamId = Number(req.params.id);
+    if (!(await assertOwnsTeam(user.id, teamId))) {
+      return res.status(404).json({ message: "Team not found" });
+    }
+    const parsed = updateTeamBrandingSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const updated = await storage.updateTeamBranding(teamId, parsed.data);
+    res.json(updated);
+  });
+
+  app.post(
+    "/api/coach/teams/:id/branding/logo",
+    requireRole("coach"),
+    uploadTeamLogo.single("logo"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const teamId = Number(req.params.id);
+      if (!(await assertOwnsTeam(user.id, teamId))) {
+        return res.status(404).json({ message: "Team not found" });
+      }
+      if (!req.file) {
+        return res.status(400).json({ message: "No file uploaded" });
+      }
+      const logoUrl = `/uploads/team-branding/${req.file.filename}`;
+      const updated = await storage.updateTeamLogo(teamId, logoUrl);
+      res.json(updated);
+    },
+  );
+
+  app.delete("/api/coach/teams/:id/branding/logo", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const teamId = Number(req.params.id);
+    if (!(await assertOwnsTeam(user.id, teamId))) {
+      return res.status(404).json({ message: "Team not found" });
+    }
+    const updated = await storage.updateTeamLogo(teamId, null);
+    res.json(updated);
   });
 
   // ---------------- Coach & Athlete: Team challenges (squad quests) ----------------
@@ -2959,6 +3063,98 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const updated = await storage.updateNotificationPrefs(user.id, parsed.data);
     const { passwordHash, healthStatus, ...publicUser } = updated;
     res.json(publicUser);
+  });
+
+  // ---------------- Branding & personalization ----------------
+  // Org-wide white-label identity (name/logo/colors), a per-team override
+  // of the color/logo fields, primary-coach-only nav trimming, and
+  // per-coach dashboard box show/hide -- see storage.ts's
+  // getEffectiveBrandingForUser for how a coach's own branding resolves
+  // vs. an athlete's (their coach's org branding, with any team override
+  // layered on top field-by-field).
+
+  app.get("/api/coach/branding", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const coachIds = await storage.getEffectiveCoachIds(user.id);
+    const branding = await storage.getCoachBranding(coachIds[0]);
+    res.json(branding);
+  });
+
+  app.patch("/api/coach/branding", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = updateBrandingSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const coachIds = await storage.getEffectiveCoachIds(user.id);
+    const updated = await storage.updateCoachBranding(coachIds[0], parsed.data);
+    res.json(updated);
+  });
+
+  app.post(
+    "/api/coach/branding/logo",
+    requireRole("coach"),
+    uploadOrgLogo.single("logo"),
+    async (req, res) => {
+      const user = currentUser(req);
+      if (!req.file) {
+        return res.status(400).json({ message: "No file uploaded" });
+      }
+      const coachIds = await storage.getEffectiveCoachIds(user.id);
+      const logoUrl = `/uploads/team-logos/${req.file.filename}`;
+      const updated = await storage.updateCoachLogo(coachIds[0], logoUrl);
+      res.json(updated);
+    },
+  );
+
+  app.delete("/api/coach/branding/logo", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const coachIds = await storage.getEffectiveCoachIds(user.id);
+    const updated = await storage.updateCoachLogo(coachIds[0], null);
+    res.json(updated);
+  });
+
+  // Effective branding for whoever's logged in -- any role, since an
+  // athlete needs this to re-skin their own AppShell too, not just coaches
+  // editing it.
+  app.get("/api/branding/me", requireAuth, async (req, res) => {
+    const user = currentUser(req);
+    const branding = await storage.getEffectiveBrandingForUser(user.id);
+    res.json(branding);
+  });
+
+  app.get("/api/coach/nav-prefs", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const coachIds = await storage.getEffectiveCoachIds(user.id);
+    const hiddenNavSections = await storage.getHiddenNavSectionsForCoach(coachIds[0]);
+    res.json({ hiddenNavSections });
+  });
+
+  app.patch("/api/coach/nav-prefs", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = updateHiddenNavSectionsSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const coachIds = await storage.getEffectiveCoachIds(user.id);
+    const hiddenNavSections = await storage.setHiddenNavSectionsForCoach(coachIds[0], parsed.data);
+    res.json({ hiddenNavSections });
+  });
+
+  app.get("/api/coach/widget-prefs", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const layout = await storage.getWidgetLayoutForUser(user.id);
+    res.json({ layout });
+  });
+
+  app.patch("/api/coach/widget-prefs", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = widgetLayoutSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const layout = await storage.setWidgetLayoutForUser(user.id, parsed.data.layout);
+    res.json({ layout });
   });
 
   app.get("/api/push/vapid-public-key", requireAuth, async (req, res) => {
