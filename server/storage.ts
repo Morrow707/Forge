@@ -63,7 +63,12 @@ import type {
   AiKnowledgeMessage,
   NutritionKnowledgeMessage,
   CreateFoodLogEntryInput,
+  UpdateBrandingInput,
+  UpdateTeamBrandingInput,
+  UpdateHiddenNavSectionsInput,
 } from "@shared/schema";
+import type { WidgetLayoutEntry } from "@shared/dashboard-widgets";
+import { deleteUploadedFile } from "./uploaded-files";
 import { lookupBarcode, searchFoodsByName, type FoodCandidate } from "./food-lookup";
 import { TESTING_METRICS, testingMetricLowerIsBetter } from "@shared/testing-metrics";
 import { computeReadiness, BODY_PAIN_PARTS } from "@shared/wellness";
@@ -1326,6 +1331,30 @@ export const storage = {
     await db.delete(coachStaff).where(eq(coachStaff.staffCoachId, staffCoachId));
   },
 
+  // The primary sets a display label ("Nutritionist", "Strength Coach")
+  // for one of their staff -- cosmetic only, doesn't touch what that
+  // account can do. No-op if primaryCoachId doesn't actually own that row.
+  async setStaffTitle(primaryCoachId: number, staffCoachId: number, title: string | null) {
+    const [row] = await db
+      .update(coachStaff)
+      .set({ staffTitle: title })
+      .where(
+        and(eq(coachStaff.primaryCoachId, primaryCoachId), eq(coachStaff.staffCoachId, staffCoachId)),
+      )
+      .returning();
+    return row ?? null;
+  },
+
+  // Null for a primary coach (no coachStaff row as staffCoachId at all) or
+  // a staff member who's never had a title set -- both fall back to the
+  // generic "Coach" label client-side.
+  async getStaffTitleForCoach(coachId: number): Promise<string | null> {
+    const asStaff = await db.query.coachStaff.findFirst({
+      where: eq(coachStaff.staffCoachId, coachId),
+    });
+    return asStaff?.staffTitle ?? null;
+  },
+
   // ---------- Body metrics (weight/composition over time, no photos) ----------
   async getBodyMetricsForAthlete(athleteId: number) {
     return db.query.bodyMetrics.findMany({
@@ -2497,6 +2526,34 @@ Athlete's data:
 
   async deleteTeam(teamId: number) {
     await db.delete(teams).where(eq(teams.id, teamId));
+  },
+
+  // Per-field override of the org's branding (see updateCoachBranding) --
+  // a team can set just a logo and still inherit the org's colors, etc.
+  // Caller (routes.ts) is responsible for the assertOwnsTeam check.
+  async updateTeamBranding(teamId: number, values: UpdateTeamBrandingInput) {
+    const [row] = await db
+      .update(teams)
+      .set({
+        ...(values.primaryColor !== undefined && { brandPrimaryColor: values.primaryColor }),
+        ...(values.secondaryColor !== undefined && { brandSecondaryColor: values.secondaryColor }),
+      })
+      .where(eq(teams.id, teamId))
+      .returning();
+    return row ?? null;
+  },
+
+  async updateTeamLogo(teamId: number, logoUrl: string | null) {
+    const existing = await db.query.teams.findFirst({ where: eq(teams.id, teamId) });
+    if (existing?.brandLogoUrl && existing.brandLogoUrl !== logoUrl) {
+      await deleteUploadedFile(existing.brandLogoUrl);
+    }
+    const [row] = await db
+      .update(teams)
+      .set({ brandLogoUrl: logoUrl })
+      .where(eq(teams.id, teamId))
+      .returning();
+    return row ?? null;
   },
 
   // ---------- Team challenges (monthly squad quests) ----------
@@ -5100,6 +5157,126 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
       .where(eq(users.id, userId))
       .returning();
     return row;
+  },
+
+  // ---------- White-label branding ----------
+  // Org-wide identity lives on the primary coach's own users row and
+  // applies to their whole staff (see getEffectiveCoachIds) -- a coach
+  // calling this with their own id always resolves to the same row a
+  // staff member's calls do, since coachId here should already be the
+  // resolved primary (routes.ts passes getEffectiveCoachIds()[0]).
+  async getCoachBranding(primaryCoachId: number) {
+    const row = await db.query.users.findFirst({
+      where: eq(users.id, primaryCoachId),
+      columns: {
+        brandTeamName: true,
+        brandLogoUrl: true,
+        brandPrimaryColor: true,
+        brandSecondaryColor: true,
+      },
+    });
+    return row ?? null;
+  },
+
+  async updateCoachBranding(primaryCoachId: number, values: UpdateBrandingInput) {
+    const [row] = await db
+      .update(users)
+      .set({
+        ...(values.teamName !== undefined && { brandTeamName: values.teamName }),
+        ...(values.primaryColor !== undefined && { brandPrimaryColor: values.primaryColor }),
+        ...(values.secondaryColor !== undefined && { brandSecondaryColor: values.secondaryColor }),
+      })
+      .where(eq(users.id, primaryCoachId))
+      .returning();
+    return row ?? null;
+  },
+
+  async updateCoachLogo(primaryCoachId: number, logoUrl: string | null) {
+    const existing = await db.query.users.findFirst({ where: eq(users.id, primaryCoachId) });
+    if (existing?.brandLogoUrl && existing.brandLogoUrl !== logoUrl) {
+      await deleteUploadedFile(existing.brandLogoUrl);
+    }
+    const [row] = await db
+      .update(users)
+      .set({ brandLogoUrl: logoUrl })
+      .where(eq(users.id, primaryCoachId))
+      .returning();
+    return row ?? null;
+  },
+
+  // Resolves the branding a given user should actually see: a coach/admin
+  // sees their own org's branding; an athlete sees their coach's org
+  // branding, with any team they belong to that has its own override
+  // applied field-by-field on top (first team with any override wins if
+  // they're on more than one -- uncommon today, but possible). Falls back
+  // to null fields throughout when nothing's been branded, which the
+  // client treats as "stay on the default Forge look."
+  async getEffectiveBrandingForUser(userId: number) {
+    const user = await this.getUser(userId);
+    if (!user) return null;
+
+    if (user.role === "coach" || user.role === "admin") {
+      const coachIds = await this.getEffectiveCoachIds(userId);
+      return this.getCoachBranding(coachIds[0]);
+    }
+
+    // Athlete: base branding comes from their coach's org.
+    const coaches = await this.getCoachesForAthlete(userId);
+    if (coaches.length === 0) {
+      return { brandTeamName: null, brandLogoUrl: null, brandPrimaryColor: null, brandSecondaryColor: null };
+    }
+    const coachIds = await this.getEffectiveCoachIds(coaches[0].id);
+    const orgBranding = await this.getCoachBranding(coachIds[0]);
+
+    const athleteTeams = await this.getTeamsForAthlete(userId);
+    const brandedTeam = athleteTeams.find(
+      (t) => t.brandLogoUrl || t.brandPrimaryColor || t.brandSecondaryColor,
+    );
+
+    return {
+      brandTeamName: orgBranding?.brandTeamName ?? null,
+      brandLogoUrl: brandedTeam?.brandLogoUrl ?? orgBranding?.brandLogoUrl ?? null,
+      brandPrimaryColor: brandedTeam?.brandPrimaryColor ?? orgBranding?.brandPrimaryColor ?? null,
+      brandSecondaryColor: brandedTeam?.brandSecondaryColor ?? orgBranding?.brandSecondaryColor ?? null,
+    };
+  },
+
+  // ---------- Nav / dashboard personalization ----------
+  async getHiddenNavSectionsForCoach(primaryCoachId: number): Promise<string[]> {
+    const row = await db.query.users.findFirst({
+      where: eq(users.id, primaryCoachId),
+      columns: { hiddenNavSections: true },
+    });
+    return row?.hiddenNavSections ?? [];
+  },
+
+  async setHiddenNavSectionsForCoach(primaryCoachId: number, input: UpdateHiddenNavSectionsInput) {
+    const [row] = await db
+      .update(users)
+      .set({ hiddenNavSections: input.hiddenNavSections })
+      .where(eq(users.id, primaryCoachId))
+      .returning({ hiddenNavSections: users.hiddenNavSections });
+    return row?.hiddenNavSections ?? [];
+  },
+
+  // Per-user (coach or athlete -- whichever userId belongs to) dashboard
+  // box layout. Unlike branding/nav above, this is never staff-widened --
+  // each coach on a shared staff sees their own dashboard arrangement.
+  async getWidgetLayoutForUser(userId: number): Promise<WidgetLayoutEntry[]> {
+    const row = await db.query.users.findFirst({
+      where: eq(users.id, userId),
+      columns: { hiddenWidgets: true },
+    });
+    return row?.hiddenWidgets ?? [];
+  },
+
+  async setWidgetLayoutForUser(userId: number, layout: WidgetLayoutEntry[]) {
+    const [row] = await db
+      .update(users)
+      .set({ hiddenWidgets: layout })
+      .where(eq(users.id, userId))
+      .returning({ hiddenWidgets: users.hiddenWidgets });
+    return row?.hiddenWidgets ?? [];
   },
 
   // ---------- Push subscriptions ----------
