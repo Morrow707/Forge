@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/select";
 import { apiRequest, getJson, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { Search, Ticket, Users } from "lucide-react";
+import { Search, Ticket, Users, Video } from "lucide-react";
 import {
   BILLING_TIERS,
   BILLING_TIER_ORDER,
@@ -33,6 +33,7 @@ import {
   type FreeAgentTierId,
   type FreeAgentAddOnId,
 } from "@shared/free-agent-tiers";
+import { VIDEO_STORAGE_ADD_ON, VIDEO_RETENTION } from "@shared/video-retention";
 
 type CoachLookup = {
   id: number;
@@ -62,6 +63,7 @@ type AthleteLookup = {
   freeAgentAddOns: string[];
   isBetaAccount: boolean;
   familyGroupId: number | null;
+  hasVideoStorageAddOn: boolean;
 };
 
 /** No self-serve checkout exists yet -- this is the only place a real
@@ -85,6 +87,7 @@ export default function AdminBilling() {
   const [freeAgentTier, setFreeAgentTier] = useState<string>("none");
   const [freeAgentAddOns, setFreeAgentAddOns] = useState<Set<FreeAgentAddOnId>>(new Set());
   const [athleteIsBeta, setAthleteIsBeta] = useState(true);
+  const [videoStorageAddOn, setVideoStorageAddOn] = useState(false);
 
   const [familyEmails, setFamilyEmails] = useState(["", "", ""]);
 
@@ -156,6 +159,7 @@ export default function AdminBilling() {
       setFreeAgentTier(data.freeAgentTier ?? "none");
       setFreeAgentAddOns(new Set(data.freeAgentAddOns as FreeAgentAddOnId[]));
       setAthleteIsBeta(data.isBetaAccount);
+      setVideoStorageAddOn(data.hasVideoStorageAddOn);
     },
     onError: (err: ApiError) => {
       setAthlete(null);
@@ -170,6 +174,7 @@ export default function AdminBilling() {
         freeAgentTier: freeAgentTier === "none" ? null : freeAgentTier,
         freeAgentAddOns: Array.from(freeAgentAddOns),
         isBetaAccount: athleteIsBeta,
+        hasVideoStorageAddOn: videoStorageAddOn,
       });
     },
     onSuccess: () => {
@@ -359,10 +364,11 @@ export default function AdminBilling() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Find a Free Agent</CardTitle>
+            <CardTitle className="text-base">Find an athlete</CardTitle>
             <CardDescription>
-              Look up an individual athlete by email to assign their AI-coach tier -- a separate
-              track from coach/org billing above (see shared/free-agent-tiers.ts).
+              Look up any athlete by email -- Free Agent AI-coach tier assignment (a separate
+              track from coach/org billing above) and the video storage add-on below both work
+              here, and the latter applies to a coached athlete too.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex gap-2">
@@ -431,6 +437,25 @@ export default function AdminBilling() {
                   ))}
                 </div>
               </div>
+
+              <label className="flex items-center gap-2 rounded-md border border-border p-3 text-sm hover:cursor-pointer">
+                <Checkbox
+                  checked={videoStorageAddOn}
+                  onCheckedChange={(v) => setVideoStorageAddOn(v === true)}
+                />
+                <span className="flex items-center gap-1.5">
+                  <Video className="h-3.5 w-3.5 shrink-0" />
+                  <span>
+                    <span className="font-medium">
+                      Extra video storage -- {formatCents(VIDEO_STORAGE_ADD_ON.monthlyPriceCents)}/mo
+                    </span>{" "}
+                    -- {VIDEO_STORAGE_ADD_ON.favoritedCap} favorited / {VIDEO_STORAGE_ADD_ON.totalCap}{" "}
+                    total per exercise (baseline is {VIDEO_RETENTION.favoritedCap}/
+                    {VIDEO_RETENTION.totalCap}). Works for a coached athlete too, not just Free
+                    Agents.
+                  </span>
+                </span>
+              </label>
 
               <label className="flex items-center gap-2 rounded-md border border-border p-3 text-sm hover:cursor-pointer">
                 <Checkbox checked={athleteIsBeta} onCheckedChange={(v) => setAthleteIsBeta(v === true)} />

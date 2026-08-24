@@ -76,7 +76,8 @@ import type {
 import type { WidgetLayoutEntry } from "@shared/dashboard-widgets";
 import { deleteUploadedFile } from "./uploaded-files";
 import { FREE_AGENT_TIERS } from "@shared/free-agent-tiers";
-import { getEntitlements } from "./billing";
+import { getEntitlements, getVideoRetentionLimits } from "./billing";
+import type { VideoRetentionLimits } from "@shared/video-retention";
 import { lookupBarcode, searchFoodsByName, type FoodCandidate } from "./food-lookup";
 import { TESTING_METRICS, testingMetricLowerIsBetter } from "@shared/testing-metrics";
 import { computeReadiness, BODY_PAIN_PARTS } from "@shared/wellness";
@@ -92,7 +93,7 @@ import {
 import { computeForceVelocityProfile, type LoadVelocityPoint } from "@shared/force-velocity";
 import { ALL_TROPHY_DEFINITIONS } from "@shared/achievements";
 import { askClaude, askClaudeStructured, askClaudeWithTools, askClaudeVision, askClaudeVisionStructured, aiEnabled, fastModel, type SystemPrompt } from "./ai";
-import { eq, and, inArray, asc, desc, lt, lte, gte, gt, isNull, sql } from "drizzle-orm";
+import { eq, and, or, inArray, asc, desc, lt, lte, gte, gt, isNull, isNotNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { diffLines } from "diff";
 import {
@@ -1009,6 +1010,74 @@ async function buildPlatformTrends() {
   };
 }
 
+type DbTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+// Trims favorited-video count down to favoritedCap (oldest favorite first)
+// and evicts non-favorited videos beyond totalCap (oldest first, deleting
+// the file too) for one (athlete, exercise) pair. Called from
+// submitWorkoutLog once per exercise touched by a submission, since even a
+// resubmission with no new video can change which ones are favorited.
+// No-ops entirely when limits are unlimited (beta/enforcement-off/active
+// trial) -- see getVideoRetentionLimits in server/billing.ts.
+async function enforceVideoRetention(
+  tx: DbTx,
+  athleteId: number,
+  exerciseId: number,
+  limits: VideoRetentionLimits,
+) {
+  if (!Number.isFinite(limits.totalCap)) return;
+
+  const rows = await tx
+    .select({
+      id: workoutSetEntries.id,
+      favorited: workoutSetEntries.videoFavorited,
+      videoUrl: workoutSetEntries.formCheckVideoUrl,
+    })
+    .from(workoutSetEntries)
+    .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
+    .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
+    .leftJoin(programExercises, eq(workoutLogEntries.programExerciseId, programExercises.id))
+    .leftJoin(assignmentCorrectives, eq(workoutLogEntries.correctiveId, assignmentCorrectives.id))
+    .where(
+      and(
+        eq(workoutLogs.athleteId, athleteId),
+        isNotNull(workoutSetEntries.formCheckVideoUrl),
+        or(eq(programExercises.exerciseId, exerciseId), eq(assignmentCorrectives.exerciseId, exerciseId)),
+      ),
+    )
+    .orderBy(asc(workoutSetEntries.videoUploadedAt));
+
+  const favorited = rows.filter((r) => r.favorited);
+  if (favorited.length > limits.favoritedCap) {
+    const toUnfavorite = favorited.slice(0, favorited.length - limits.favoritedCap);
+    await tx
+      .update(workoutSetEntries)
+      .set({ videoFavorited: false })
+      .where(inArray(workoutSetEntries.id, toUnfavorite.map((r) => r.id)));
+    const unfavoritedIds = new Set(toUnfavorite.map((r) => r.id));
+    for (const r of rows) if (unfavoritedIds.has(r.id)) r.favorited = false;
+  }
+
+  if (rows.length > limits.totalCap) {
+    const evictable = rows.filter((r) => !r.favorited);
+    const toEvict = evictable.slice(0, rows.length - limits.totalCap);
+    for (const row of toEvict) {
+      await deleteUploadedFile(row.videoUrl);
+    }
+    if (toEvict.length > 0) {
+      await tx
+        .update(workoutSetEntries)
+        .set({ formCheckVideoUrl: null, videoUploadedAt: null, videoFavorited: false })
+        .where(
+          inArray(
+            workoutSetEntries.id,
+            toEvict.map((r) => r.id),
+          ),
+        );
+    }
+  }
+}
+
 export const storage = {
   // ---------- Users ----------
   async getUser(id: number) {
@@ -1114,6 +1183,9 @@ export const storage = {
         ...(values.freeAgentTier !== undefined && { freeAgentTier: values.freeAgentTier }),
         ...(values.freeAgentAddOns !== undefined && { freeAgentAddOns: values.freeAgentAddOns }),
         ...(values.isBetaAccount !== undefined && { isBetaAccount: values.isBetaAccount }),
+        ...(values.hasVideoStorageAddOn !== undefined && {
+          hasVideoStorageAddOn: values.hasVideoStorageAddOn,
+        }),
       })
       .where(eq(users.id, athleteId))
       .returning({
@@ -1121,6 +1193,7 @@ export const storage = {
         freeAgentTier: users.freeAgentTier,
         freeAgentAddOns: users.freeAgentAddOns,
         isBetaAccount: users.isBetaAccount,
+        hasVideoStorageAddOn: users.hasVideoStorageAddOn,
       });
     return row ?? null;
   },
@@ -6173,7 +6246,13 @@ ${catalog}`;
   async submitWorkoutLog(athleteId: number, input: SubmitWorkoutLogInput) {
     const athlete = await db.query.users.findFirst({ where: eq(users.id, athleteId) });
     const weightUnit = athlete?.preferredWeightUnit ?? "lbs";
-    return db.transaction(async (tx) => {
+    const retentionLimits = getVideoRetentionLimits({
+      hasVideoStorageAddOn: athlete?.hasVideoStorageAddOn ?? false,
+      isBetaAccount: athlete?.isBetaAccount ?? true,
+      trialExpiresAt: athlete?.trialExpiresAt ?? null,
+    });
+
+    const result = await db.transaction(async (tx) => {
       let log = await tx.query.workoutLogs.findFirst({
         where: and(
           eq(workoutLogs.assignmentId, input.assignmentId),
@@ -6182,7 +6261,31 @@ ${catalog}`;
         ),
       });
 
+      // Snapshot existing videos before the cascade-delete below wipes them
+      // out -- a resubmission (e.g. editing a rep count) re-creates every
+      // entry/set row from scratch, and without this, an untouched video
+      // would look freshly captured to the retention eviction pass at the
+      // bottom of this function every single time the athlete saves.
+      // Keyed by (exercise, set number) since row ids don't survive a
+      // resubmission but that pair does.
+      const priorVideoByKey = new Map<string, { url: string; uploadedAt: Date | null }>();
       if (log) {
+        const priorEntries = await tx.query.workoutLogEntries.findMany({
+          where: eq(workoutLogEntries.workoutLogId, log.id),
+          with: { sets: true },
+        });
+        for (const pe of priorEntries) {
+          const exerciseKey = pe.programExerciseId != null ? `pe:${pe.programExerciseId}` : `c:${pe.correctiveId}`;
+          for (const s of pe.sets as any[]) {
+            if (s.formCheckVideoUrl) {
+              priorVideoByKey.set(`${exerciseKey}:${s.setNumber}`, {
+                url: s.formCheckVideoUrl,
+                uploadedAt: s.videoUploadedAt ?? null,
+              });
+            }
+          }
+        }
+
         [log] = await tx
           .update(workoutLogs)
           .set({
@@ -6209,6 +6312,10 @@ ${catalog}`;
           .returning();
       }
 
+      // Resolved lazily per entry below, then reused to run retention
+      // enforcement once per distinct exercise after every insert is in.
+      const touchedExerciseIds = new Set<number>();
+
       for (const entry of input.entries) {
         const [entryRow] = await tx
           .insert(workoutLogEntries)
@@ -6222,46 +6329,78 @@ ${catalog}`;
           })
           .returning();
 
+        const hasAnyVideo = entry.sets.some((s) => s.formCheckVideoUrl);
+        if (hasAnyVideo) {
+          const exerciseId =
+            entry.programExerciseId != null
+              ? (
+                  await tx.query.programExercises.findFirst({
+                    where: eq(programExercises.id, entry.programExerciseId),
+                  })
+                )?.exerciseId
+              : entry.correctiveId != null
+                ? (
+                    await tx.query.assignmentCorrectives.findFirst({
+                      where: eq(assignmentCorrectives.id, entry.correctiveId),
+                    })
+                  )?.exerciseId
+                : undefined;
+          if (exerciseId != null) touchedExerciseIds.add(exerciseId);
+        }
+
         if (entry.sets.length > 0) {
+          const exerciseKey = entry.programExerciseId != null ? `pe:${entry.programExerciseId}` : `c:${entry.correctiveId}`;
           await tx.insert(workoutSetEntries).values(
-            entry.sets.map((s) => ({
-              logEntryId: entryRow.id,
-              setNumber: s.setNumber,
-              reps: s.reps ?? null,
-              weight: s.weight ?? null,
-              weightUnit: entry.weightMode === "numeric" && s.weight ? weightUnit : null,
-              bandColor: s.bandColor ?? null,
-              boxHeight: s.boxHeight ?? null,
-              boxHeightUnit: s.boxHeightUnit ?? null,
-              peakVelocityMps: s.peakVelocityMps ?? null,
-              meanVelocityMps: s.meanVelocityMps ?? null,
-              concentricSeconds: s.concentricSeconds ?? null,
-              eccentricSeconds: s.eccentricSeconds ?? null,
-              barPathDeviationCm: s.barPathDeviationCm ?? null,
-              barPathTrace: s.barPathTrace ?? null,
-              formFaults: s.formFaults ?? null,
-              repBreakdown: s.repBreakdown ?? null,
-              armPathTrace: s.armPathTrace ?? null,
-              peakPowerWatts: s.peakPowerWatts ?? null,
-              meanPowerWatts: s.meanPowerWatts ?? null,
-              eccentricMeanVelocityMps: s.eccentricMeanVelocityMps ?? null,
-              romCm: s.romCm ?? null,
-              velocityLossPercent: s.velocityLossPercent ?? null,
-              formCheckVideoUrl: s.formCheckVideoUrl ?? null,
-              formCheckFlag: s.formCheckFlag ?? null,
-              jumpHeightCm: s.jumpHeightCm ?? null,
-              jumpDistanceCm: s.jumpDistanceCm ?? null,
-              groundContactSeconds: s.groundContactSeconds ?? null,
-              reactiveStrengthIndex: s.reactiveStrengthIndex ?? null,
-              jumpBreakdown: s.jumpBreakdown ?? null,
-              legDriveAsymmetry: s.legDriveAsymmetry ?? null,
-            })),
+            entry.sets.map((s) => {
+              const prior = priorVideoByKey.get(`${exerciseKey}:${s.setNumber}`);
+              const isSameVideo = Boolean(s.formCheckVideoUrl) && prior?.url === s.formCheckVideoUrl;
+              return {
+                logEntryId: entryRow.id,
+                setNumber: s.setNumber,
+                reps: s.reps ?? null,
+                weight: s.weight ?? null,
+                weightUnit: entry.weightMode === "numeric" && s.weight ? weightUnit : null,
+                bandColor: s.bandColor ?? null,
+                boxHeight: s.boxHeight ?? null,
+                boxHeightUnit: s.boxHeightUnit ?? null,
+                peakVelocityMps: s.peakVelocityMps ?? null,
+                meanVelocityMps: s.meanVelocityMps ?? null,
+                concentricSeconds: s.concentricSeconds ?? null,
+                eccentricSeconds: s.eccentricSeconds ?? null,
+                barPathDeviationCm: s.barPathDeviationCm ?? null,
+                barPathTrace: s.barPathTrace ?? null,
+                formFaults: s.formFaults ?? null,
+                repBreakdown: s.repBreakdown ?? null,
+                armPathTrace: s.armPathTrace ?? null,
+                peakPowerWatts: s.peakPowerWatts ?? null,
+                meanPowerWatts: s.meanPowerWatts ?? null,
+                eccentricMeanVelocityMps: s.eccentricMeanVelocityMps ?? null,
+                romCm: s.romCm ?? null,
+                velocityLossPercent: s.velocityLossPercent ?? null,
+                formCheckVideoUrl: s.formCheckVideoUrl ?? null,
+                formCheckFlag: s.formCheckFlag ?? null,
+                videoFavorited: s.formCheckVideoUrl ? (s.videoFavorited ?? false) : false,
+                videoUploadedAt: s.formCheckVideoUrl ? (isSameVideo ? prior!.uploadedAt : new Date()) : null,
+                jumpHeightCm: s.jumpHeightCm ?? null,
+                jumpDistanceCm: s.jumpDistanceCm ?? null,
+                groundContactSeconds: s.groundContactSeconds ?? null,
+                reactiveStrengthIndex: s.reactiveStrengthIndex ?? null,
+                jumpBreakdown: s.jumpBreakdown ?? null,
+                legDriveAsymmetry: s.legDriveAsymmetry ?? null,
+              };
+            }),
           );
         }
       }
 
+      for (const exerciseId of touchedExerciseIds) {
+        await enforceVideoRetention(tx, athleteId, exerciseId, retentionLimits);
+      }
+
       return log;
     });
+
+    return result;
   },
 
   // Scans a just-submitted log's sets for a genuine (not single-rep-noise)

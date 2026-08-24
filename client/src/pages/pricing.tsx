@@ -11,7 +11,8 @@ import {
   formatCents,
 } from "@shared/billing-tiers";
 import { FREE_AGENT_TIERS, FREE_AGENT_TIER_ORDER, FREE_AGENT_ADD_ONS, FREE_AGENT_ADD_ON_ORDER } from "@shared/free-agent-tiers";
-import { Flame, Check } from "lucide-react";
+import { VIDEO_RETENTION, VIDEO_STORAGE_ADD_ON } from "@shared/video-retention";
+import { Flame, Check, Video } from "lucide-react";
 
 /** Public, unauthenticated -- renders straight from shared/billing-tiers.ts
  * so this page can never drift from what server/billing.ts actually
@@ -183,6 +184,19 @@ export default function PricingPage() {
                 </div>
               );
             })}
+          </div>
+
+          <div className="mx-auto mt-6 flex max-w-lg items-start gap-3 rounded-md border border-border p-4 text-sm">
+            <Video className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+            <p className="text-muted-foreground">
+              <span className="font-semibold text-foreground">
+                Extra video storage -- {formatCents(VIDEO_STORAGE_ADD_ON.monthlyPriceCents)}/mo
+              </span>{" "}
+              -- every athlete keeps {VIDEO_RETENTION.favoritedCap} favorited form-check clips per
+              exercise, {VIDEO_RETENTION.totalCap} total on a rolling basis. This add-on bumps
+              that to {VIDEO_STORAGE_ADD_ON.favoritedCap} favorited / {VIDEO_STORAGE_ADD_ON.totalCap}{" "}
+              total. Applies per athlete on any plan -- Free Agent or coached.
+            </p>
           </div>
         </div>
 

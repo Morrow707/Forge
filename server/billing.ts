@@ -1,5 +1,6 @@
 import { BILLING_TIERS, type AddOnId, type BillingTierId } from "@shared/billing-tiers";
 import { FREE_AGENT_TIERS, type FreeAgentTierId } from "@shared/free-agent-tiers";
+import { VIDEO_RETENTION, VIDEO_STORAGE_ADD_ON, type VideoRetentionLimits } from "@shared/video-retention";
 
 // Global kill switch -- deliberately not read from render.yaml (it's not
 // added there at all), so production stays off the same way local dev does
@@ -101,4 +102,31 @@ export function getFreeAgentEntitlements(account: FreeAgentBillingAccount): Free
   if (!tier) return NONE_FREE_AGENT_ENTITLEMENTS;
 
   return { hasAiChat: tier.hasAiChat, hasVideoFormCheck: tier.hasVideoFormCheck };
+}
+
+// ---------- Form-check video retention ----------
+// Independent of both billing tracks above -- applies to ANY athlete
+// (coached or Free Agent), keyed off the athlete's own row. Unlike a
+// paywall, this actively deletes data once active, so it stays fully
+// unlimited (no eviction at all) under the exact same "don't restrict by
+// accident" conditions as everything else: enforcement off, still beta, or
+// an active redeemed trial.
+
+const UNLIMITED_VIDEO_RETENTION: VideoRetentionLimits = {
+  favoritedCap: Infinity,
+  totalCap: Infinity,
+};
+
+export interface VideoRetentionAccount {
+  hasVideoStorageAddOn: boolean;
+  isBetaAccount: boolean;
+  trialExpiresAt: Date | null;
+}
+
+export function getVideoRetentionLimits(account: VideoRetentionAccount): VideoRetentionLimits {
+  const trialActive = account.trialExpiresAt != null && account.trialExpiresAt.getTime() > Date.now();
+  if (!ENFORCEMENT_ENABLED || account.isBetaAccount || trialActive) {
+    return UNLIMITED_VIDEO_RETENTION;
+  }
+  return account.hasVideoStorageAddOn ? VIDEO_STORAGE_ADD_ON : VIDEO_RETENTION;
 }

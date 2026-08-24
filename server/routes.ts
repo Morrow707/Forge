@@ -706,6 +706,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       freeAgentAddOns: athlete.freeAgentAddOns ?? [],
       isBetaAccount: athlete.isBetaAccount,
       familyGroupId: athlete.familyGroupId,
+      hasVideoStorageAddOn: athlete.hasVideoStorageAddOn,
     });
   });
 

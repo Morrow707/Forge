@@ -10,7 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { RotateCcw, Trash2, ThumbsUp, ThumbsDown } from "lucide-react";
+import { RotateCcw, Trash2, ThumbsUp, ThumbsDown, Star } from "lucide-react";
 
 export type FlaggedSetVideo = {
   setNumber: number;
@@ -59,6 +59,8 @@ export function SetVideoPreviewDialog({
   videoUrl,
   flag,
   onFlag,
+  favorited,
+  onToggleFavorite,
   onRetake,
   onRemove,
 }: {
@@ -68,6 +70,8 @@ export function SetVideoPreviewDialog({
   videoUrl: string;
   flag: "best" | "worst" | null;
   onFlag: (flag: "best" | "worst" | null) => void;
+  favorited: boolean;
+  onToggleFavorite: () => void;
   onRetake: () => void;
   onRemove: () => void;
 }) {
@@ -75,7 +79,21 @@ export function SetVideoPreviewDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Set {setNumber} — Form Check</DialogTitle>
+          <DialogTitle className="flex items-center justify-between gap-2 pr-6">
+            <span>Set {setNumber} — Form Check</span>
+            <button
+              type="button"
+              onClick={onToggleFavorite}
+              aria-label={favorited ? "Remove favorite" : "Favorite this video"}
+              title={favorited ? "Favorited -- kept longer" : "Favorite -- keep this one longer"}
+              className={cn(
+                "shrink-0 rounded-full p-1 transition-colors",
+                favorited ? "text-amber-400" : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <Star className={cn("h-5 w-5", favorited && "fill-current")} />
+            </button>
+          </DialogTitle>
         </DialogHeader>
         <video src={videoUrl} controls playsInline className="w-full rounded-md bg-black" />
         <div className="flex items-center justify-center gap-2">

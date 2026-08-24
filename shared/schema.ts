@@ -292,6 +292,13 @@ export const users = pgTable(
     familyGroupId: integer("family_group_id").references(() => familyGroups.id, {
       onDelete: "set null",
     }),
+    // Extra form-check video retention (see shared/video-retention.ts) --
+    // applies to this account regardless of role/coached status, admin-
+    // assignable the same way as everything else in this pass (no self-
+    // serve checkout yet) via /api/admin/athletes/:id/billing -- the same
+    // route already used for a Free Agent's AI tier, since it already
+    // resolves any athlete by email regardless of coached status.
+    hasVideoStorageAddOn: boolean("has_video_storage_add_on").notNull().default(false),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({
@@ -989,6 +996,16 @@ export const workoutSetEntries = pgTable("workout_set_entries", {
   // deletion signal.
   formCheckVideoUrl: text("form_check_video_url"),
   formCheckFlag: formCheckFlagEnum("form_check_flag"),
+  // Retention-management fields, independent of formCheckFlag above (that's
+  // a best/worst comparison tag; this is "don't auto-delete this one" plus
+  // when it was captured, for the rolling-FIFO eviction in
+  // storage.submitWorkoutLog to order by). videoUploadedAt is carried
+  // forward across a same-day resubmission when the video URL hasn't
+  // changed, so editing e.g. a rep count doesn't make an untouched video
+  // look freshly captured to the eviction logic. See
+  // shared/video-retention.ts / server/billing.ts's getVideoRetentionLimits.
+  videoFavorited: boolean("video_favorited").notNull().default(false),
+  videoUploadedAt: timestamp("video_uploaded_at"),
   // "jump" tracking mode's numbers (see jump-tracking.ts) -- null unless
   // trackingLevel was "jump" when this set was logged. Best-of-set height
   // and distance rather than an average, same convention as peakVelocityMps
@@ -2121,6 +2138,8 @@ export const updateFreeAgentBillingSchema = z.object({
     .nullable(),
   freeAgentAddOns: z.array(z.enum(FREE_AGENT_ADD_ON_ORDER as [FreeAgentAddOnId, ...FreeAgentAddOnId[]])).optional(),
   isBetaAccount: z.boolean().optional(),
+  // Applies regardless of coached status -- see users.hasVideoStorageAddOn.
+  hasVideoStorageAddOn: z.boolean().optional(),
 });
 
 // Admin-only -- creates a new Family group and links these athletes to it
@@ -2369,6 +2388,9 @@ export const setLogInputSchema = z.object({
   velocityLossPercent: z.number().optional().nullable(),
   formCheckVideoUrl: z.string().trim().max(500).optional().nullable(),
   formCheckFlag: z.enum(["best", "worst"]).optional().nullable(),
+  // See workoutSetEntries.videoFavorited -- exempts this video from the
+  // rolling-deletion cap once retention limits are actually enforced.
+  videoFavorited: z.boolean().optional(),
   jumpHeightCm: z.number().optional().nullable(),
   jumpDistanceCm: z.number().optional().nullable(),
   groundContactSeconds: z.number().optional().nullable(),

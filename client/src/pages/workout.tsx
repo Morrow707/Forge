@@ -260,6 +260,11 @@ type SetMetrics = {
   // view; every recorded clip is kept regardless of whether it's flagged.
   formCheckVideoUrl: string | null;
   formCheckFlag: FormCheckFlag;
+  // Exempts this clip from the rolling-deletion cap once retention limits
+  // are actually enforced -- see shared/video-retention.ts. Independent of
+  // formCheckFlag above (that's a best/worst comparison tag, this is
+  // "don't auto-delete this one").
+  videoFavorited: boolean;
   // Jump-mode-only metrics -- barPathTrace is reused for the ankle-height
   // trace in jump mode rather than adding a redundant trace column.
   jumpHeightCm: number | null;
@@ -393,6 +398,7 @@ function buildItem(
       velocityLossPercent: existingSet?.velocityLossPercent ?? null,
       formCheckVideoUrl: existingSet?.formCheckVideoUrl ?? null,
       formCheckFlag: existingSet?.formCheckFlag ?? null,
+      videoFavorited: existingSet?.videoFavorited ?? false,
       jumpHeightCm: existingSet?.jumpHeightCm ?? null,
       jumpDistanceCm: existingSet?.jumpDistanceCm ?? null,
       groundContactSeconds: existingSet?.groundContactSeconds ?? null,
@@ -778,6 +784,7 @@ export function WorkoutPage({
           velocityLossPercent: s.velocityLossPercent,
           formCheckVideoUrl: s.formCheckVideoUrl,
           formCheckFlag: s.formCheckFlag,
+          videoFavorited: s.videoFavorited,
           jumpHeightCm: s.jumpHeightCm,
           jumpDistanceCm: s.jumpDistanceCm,
           groundContactSeconds: s.groundContactSeconds,
@@ -1005,6 +1012,7 @@ export function WorkoutPage({
               velocityLossPercent: null,
               formCheckVideoUrl: null,
               formCheckFlag: null,
+              videoFavorited: false,
               jumpHeightCm: null,
               jumpDistanceCm: null,
               groundContactSeconds: null,
@@ -2146,12 +2154,20 @@ function ExerciseLogContent({
           videoUrl={previewSet.formCheckVideoUrl}
           flag={previewSet.formCheckFlag}
           onFlag={(flag) => handleFlagVideo(previewSet.setNumber, flag)}
+          favorited={previewSet.videoFavorited}
+          onToggleFavorite={() =>
+            onUpdateSet(previewSet.setNumber, { videoFavorited: !previewSet.videoFavorited })
+          }
           onRetake={() => {
             setPreviewSetNumber(null);
             setRecordingSetNumber(previewSet.setNumber);
           }}
           onRemove={() => {
-            onUpdateSet(previewSet.setNumber, { formCheckVideoUrl: null, formCheckFlag: null });
+            onUpdateSet(previewSet.setNumber, {
+              formCheckVideoUrl: null,
+              formCheckFlag: null,
+              videoFavorited: false,
+            });
             setPreviewSetNumber(null);
           }}
         />

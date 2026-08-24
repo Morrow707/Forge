@@ -809,6 +809,20 @@ CREATE TABLE IF NOT EXISTS "family_groups" (
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "free_agent_tier" text;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "free_agent_add_ons" json;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "family_group_id" integer REFERENCES "family_groups"("id") ON DELETE SET NULL;
+
+-- Form-check video retention (see shared/video-retention.ts). Reuses the
+-- same is_beta_account/trial_expires_at switches -- nothing here deletes
+-- any video until enforcement is actually on for a given account.
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "video_favorited" boolean NOT NULL DEFAULT false;
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "video_uploaded_at" timestamp;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "has_video_storage_add_on" boolean NOT NULL DEFAULT false;
+-- Backfill so a video saved before this column existed doesn't sort as
+-- "newest" (NULL sorts last under ASC) and get treated as the last thing
+-- retention eviction would ever touch -- one-time, idempotent (only fills
+-- rows that are still null; harmless to re-run, there's nothing left to
+-- backfill on a second pass).
+UPDATE "workout_set_entries" SET "video_uploaded_at" = now()
+  WHERE "form_check_video_url" IS NOT NULL AND "video_uploaded_at" IS NULL;
 `;
 
 async function main() {
