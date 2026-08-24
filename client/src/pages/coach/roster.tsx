@@ -434,6 +434,13 @@ export default function CoachRoster() {
                       />
                     )}
                     <CardTitle className="truncate">{team.name}</CardTitle>
+                    {(team.brandPrimaryColor || team.brandSecondaryColor) && (
+                      <span
+                        title="This team has its own branding override"
+                        className="h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-border"
+                        style={{ backgroundColor: team.brandPrimaryColor || team.brandSecondaryColor! }}
+                      />
+                    )}
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
                     <Button size="sm" variant="ghost" onClick={() => setBrandingTeamId(team.id)}>
