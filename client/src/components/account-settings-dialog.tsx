@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { ColorField } from "@/components/color-field";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
+import { Ticket } from "lucide-react";
 import type { PublicUser } from "@shared/schema";
 
 /** Account-level self-service: name, email, and password, none of which
@@ -88,6 +89,20 @@ export function AccountSettingsDialog({
       toast.success("Personal accent updated");
     },
     onError: (err: ApiError) => toast.error(err.message || "Couldn't update accent color"),
+  });
+
+  const [redeemCode, setRedeemCode] = useState("");
+  const redeemMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/coach/redeem-code", { code: redeemCode.trim() });
+      return (await res.json()) as { trialExpiresAt: string };
+    },
+    onSuccess: (data) => {
+      const until = new Date(data.trialExpiresAt).toLocaleDateString();
+      toast.success(`Code redeemed -- full access unlocked through ${until}`);
+      setRedeemCode("");
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't redeem that code"),
   });
 
   return (
@@ -211,6 +226,34 @@ export function AccountSettingsDialog({
                     Clear
                   </Button>
                 )}
+              </div>
+            </div>
+          )}
+
+          {user.role === "coach" && user.isPrimaryCoach && (
+            <div className="space-y-1.5 border-t border-border pt-4">
+              <Label className="flex items-center gap-1.5">
+                <Ticket className="h-4 w-4" />
+                Redeem a code
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Have a promo code for free trial access? Enter it here.
+              </p>
+              <div className="flex items-center gap-2">
+                <Input
+                  value={redeemCode}
+                  onChange={(e) => setRedeemCode(e.target.value.toUpperCase())}
+                  placeholder="CODE"
+                  className="font-mono uppercase"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => redeemMutation.mutate()}
+                  disabled={!redeemCode.trim() || redeemMutation.isPending}
+                >
+                  Redeem
+                </Button>
               </div>
             </div>
           )}

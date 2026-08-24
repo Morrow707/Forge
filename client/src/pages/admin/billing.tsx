@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/select";
 import { apiRequest, getJson, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { Search } from "lucide-react";
+import { Search, Ticket } from "lucide-react";
 import {
   BILLING_TIERS,
   BILLING_TIER_ORDER,
@@ -37,6 +37,15 @@ type CoachLookup = {
   isBetaAccount: boolean;
 };
 
+type RedeemCode = {
+  id: number;
+  code: string;
+  trialDays: number;
+  maxRedemptions: number | null;
+  expiresAt: string | null;
+  createdAt: string;
+};
+
 /** No self-serve checkout exists yet -- this is the only place a real
  * coach account gets a billingTier/billingAddOns/isBetaAccount set (see
  * shared/billing-tiers.ts, server/billing.ts). Look up an org by its
@@ -48,6 +57,33 @@ export default function AdminBilling() {
   const [tier, setTier] = useState<string>("none");
   const [addOns, setAddOns] = useState<Set<AddOnId>>(new Set());
   const [isBeta, setIsBeta] = useState(true);
+
+  const [newCode, setNewCode] = useState("");
+  const [newTrialDays, setNewTrialDays] = useState("14");
+  const [newMaxRedemptions, setNewMaxRedemptions] = useState("");
+
+  const { data: codes = [] } = useQuery<RedeemCode[]>({
+    queryKey: ["/api/admin/redeem-codes"],
+    queryFn: () => getJson("/api/admin/redeem-codes"),
+  });
+
+  const createCodeMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("POST", "/api/admin/redeem-codes", {
+        code: newCode.trim(),
+        trialDays: Number(newTrialDays),
+        maxRedemptions: newMaxRedemptions.trim() ? Number(newMaxRedemptions) : null,
+      });
+    },
+    onSuccess: () => {
+      toast.success("Code created");
+      setNewCode("");
+      setNewTrialDays("14");
+      setNewMaxRedemptions("");
+      qc.invalidateQueries({ queryKey: ["/api/admin/redeem-codes"] });
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't create code"),
+  });
 
   const lookupMutation = useMutation({
     mutationFn: async (email: string) => getJson(`/api/admin/coaches/lookup?email=${encodeURIComponent(email)}`) as Promise<CoachLookup>,
@@ -183,6 +219,67 @@ export default function AdminBilling() {
             </CardContent>
           </Card>
         )}
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Ticket className="h-4 w-4" />
+              Redeem codes
+            </CardTitle>
+            <CardDescription>
+              Trial promos a coach can redeem for temporary full access (e.g. a 14-day new-coach
+              offer, a seasonal free month) -- doesn't require a tier to be assigned first.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-3 gap-2">
+              <Input
+                value={newCode}
+                onChange={(e) => setNewCode(e.target.value.toUpperCase())}
+                placeholder="WELCOME14"
+                className="col-span-3 font-mono uppercase sm:col-span-1"
+              />
+              <Input
+                type="number"
+                min={1}
+                value={newTrialDays}
+                onChange={(e) => setNewTrialDays(e.target.value)}
+                placeholder="Trial days"
+              />
+              <Input
+                type="number"
+                min={1}
+                value={newMaxRedemptions}
+                onChange={(e) => setNewMaxRedemptions(e.target.value)}
+                placeholder="Max uses (blank = unlimited)"
+              />
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => createCodeMutation.mutate()}
+              disabled={!newCode.trim() || !newTrialDays.trim() || createCodeMutation.isPending}
+            >
+              Create code
+            </Button>
+
+            {codes.length > 0 && (
+              <div className="space-y-1.5 border-t border-border pt-3">
+                {codes.map((c) => (
+                  <div
+                    key={c.id}
+                    className="flex items-center justify-between rounded-md bg-surface-elevated px-3 py-2 text-sm"
+                  >
+                    <span className="font-mono font-semibold">{c.code}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {c.trialDays}d trial{c.maxRedemptions ? ` · max ${c.maxRedemptions} uses` : ""}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </AppShell>
   );

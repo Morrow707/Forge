@@ -43,6 +43,8 @@ import {
   updateAccountPasswordSchema,
   updatePersonalAccentSchema,
   updateCoachBillingSchema,
+  createRedeemCodeSchema,
+  redeemCodeInputSchema,
   createBodyMetricSchema,
   createAnnotationSchema,
   testingTrendsQuerySchema,
@@ -628,6 +630,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     const updated = await storage.updateCoachBilling(coachId, parsed.data);
     res.json(updated);
+  });
+
+  app.get("/api/admin/redeem-codes", requireRole("admin"), async (_req, res) => {
+    const codes = await storage.listRedeemCodes();
+    res.json(codes);
+  });
+
+  app.post("/api/admin/redeem-codes", requireRole("admin"), async (req, res) => {
+    const parsed = createRedeemCodeSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const code = await storage.createRedeemCode(parsed.data);
+    res.status(201).json(code);
+  });
+
+  // Coach-facing redemption -- primary only, same as the rest of billing
+  // (an org's trial applies to the whole org, not one staff member).
+  app.post("/api/coach/redeem-code", requireRole("coach"), requirePrimaryCoach, async (req, res) => {
+    const user = currentUser(req);
+    const parsed = redeemCodeInputSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const result = await storage.redeemCode(user.id, parsed.data.code);
+    if (!result.ok) {
+      return res.status(400).json({ message: result.message });
+    }
+    res.json({ trialExpiresAt: result.trialExpiresAt });
   });
 
   // Self-assignment: coachId and athleteId are both the admin's own id.
