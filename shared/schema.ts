@@ -17,6 +17,7 @@ import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { BODY_PAIN_PARTS } from "./wellness";
+import type { WidgetLayoutEntry } from "./dashboard-widgets";
 
 // Owned and populated by connect-pg-simple at runtime, not by our own code --
 // declared here purely so drizzle-kit's live-diff sees it as an already-
@@ -178,6 +179,34 @@ export const users = pgTable(
     // back to their most recent workout_logs date so a genuinely active
     // athlete isn't misflagged just because this column is new.
     lastActivityAt: timestamp("last_activity_at"),
+    // Coach-only white-label identity, applied for their whole staff (see
+    // getEffectiveCoachIds) and every athlete on their roster -- overrides
+    // the app's own Forge/orange look with the program's own name/logo/
+    // colors (CSS custom-property swap at the AppShell root, not a theme
+    // rebuild). All optional and independently settable: a coach can set a
+    // name with no logo, colors with no name, etc. A team can further
+    // override brandLogoUrl/brandPrimaryColor/brandSecondaryColor below on
+    // a per-field basis (see teams table) -- this row is always the
+    // org-wide fallback.
+    brandTeamName: text("brand_team_name"),
+    brandLogoUrl: text("brand_logo_url"),
+    brandPrimaryColor: text("brand_primary_color"),
+    brandSecondaryColor: text("brand_secondary_color"),
+    // Primary-coach-only: whole coachNav items (see app-shell.tsx) this
+    // org has opted to hide -- stored as the item's href, since that's
+    // already the unique/stable key the nav array uses. Lets a program
+    // trim tabs it doesn't use (e.g. no Nutrition tracking) instead of
+    // living with a nav full of dead ends. Applies to the whole staff, not
+    // per staff-member -- a simpler, org-wide on/off rather than a
+    // per-coach permission matrix.
+    hiddenNavSections: json("hidden_nav_sections").$type<string[]>(),
+    // Per-user (coach or athlete, whichever this row belongs to) show/hide
+    // for their own dashboard's boxes -- an ordered {id,hidden}[] rather
+    // than a flat id list so the storage shape already supports real
+    // drag-to-reorder later without another migration, even though today's
+    // UI is a show/hide checklist (see WidgetLayoutEntry in
+    // shared/dashboard-widgets.ts).
+    hiddenWidgets: json("hidden_widgets").$type<WidgetLayoutEntry[]>(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({
@@ -219,6 +248,15 @@ export const teams = pgTable(
     // with it links to the team's coach AND is added straight to the team,
     // unlike the coach's personal code which only links the coach.
     code: text("code"),
+    // Optional per-team override of the coach's org-wide branding above --
+    // each field falls back to the org's independently (a team can set
+    // just a logo and still inherit the org's colors, etc). This is the
+    // "school vs. program" case: a school-wide org brand that one
+    // particular team (e.g. a travel squad with its own mark) wants to
+    // wear instead.
+    brandLogoUrl: text("brand_logo_url"),
+    brandPrimaryColor: text("brand_primary_color"),
+    brandSecondaryColor: text("brand_secondary_color"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({
@@ -352,6 +390,11 @@ export const coachStaff = pgTable(
     staffCoachId: integer("staff_coach_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
+    // Free-form display label shown instead of the generic "Coach" role
+    // wherever this staff member's name renders (e.g. "Nutritionist",
+    // "Strength Coach") -- purely cosmetic, doesn't change what they can
+    // do or see. Null falls back to "Coach", same as today.
+    staffTitle: text("staff_title"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({
@@ -1836,6 +1879,35 @@ export const updateNotificationPrefsSchema = z.object({
   notifySms: z.boolean(),
 });
 
+// #RRGGBB only -- the exact-color ask this whole feature is built around,
+// not a loose CSS-color-name/rgb() acceptor. Logo upload is handled as its
+// own multipart route, not through this schema.
+const hexColor = z
+  .string()
+  .trim()
+  .regex(/^#[0-9a-fA-F]{6}$/, "Enter a hex color like #003262");
+
+export const updateBrandingSchema = z.object({
+  teamName: z.string().trim().max(60).optional().nullable(),
+  primaryColor: hexColor.optional().nullable(),
+  secondaryColor: hexColor.optional().nullable(),
+});
+
+// Team-level override never carries its own name -- teams already have
+// `name`; only the visual identity is overridable per-field.
+export const updateTeamBrandingSchema = z.object({
+  primaryColor: hexColor.optional().nullable(),
+  secondaryColor: hexColor.optional().nullable(),
+});
+
+export const updateStaffTitleSchema = z.object({
+  staffTitle: z.string().trim().max(40).optional().nullable(),
+});
+
+export const updateHiddenNavSectionsSchema = z.object({
+  hiddenNavSections: z.array(z.string().trim().min(1)).max(20),
+});
+
 export const insertExerciseSchema = createInsertSchema(exercises)
   .pick({
     name: true,
@@ -2151,7 +2223,14 @@ export type ResolveSubmissionInput = z.infer<typeof resolveSubmissionSchema>;
 // healthStatus is coach-only -- deliberately excluded here so it never rides
 // along in an athlete's own login/signup/me response. Coach-facing roster
 // endpoints attach it explicitly (see getRosterForCoach).
-export type PublicUser = Omit<User, "passwordHash" | "healthStatus">;
+// staffTitle isn't a users column (it lives on coachStaff, since it's set
+// by the primary coach per staff member, not by the account itself) --
+// bolted on here so a coach's own /api/auth/me response can carry their
+// display title without a users table column that would be meaningless
+// for a primary coach or non-staff account. See auth.ts's toPublicUser.
+export type PublicUser = Omit<User, "passwordHash" | "healthStatus"> & {
+  staffTitle?: string | null;
+};
 
 export const updateHealthStatusSchema = z.object({
   healthStatus: z.enum(["healthy", "hurt"]),

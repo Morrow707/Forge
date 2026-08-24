@@ -744,6 +744,19 @@ DO $$ BEGIN
   CREATE TYPE "gender" AS ENUM ('male', 'female', 'non_binary', 'prefer_not_to_say');
 EXCEPTION WHEN duplicate_object THEN null; END $$;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "gender" gender;
+
+-- White-label branding + dashboard/nav personalization (org-wide on
+-- users, per-team override, per-staff-member display title).
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "brand_team_name" text;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "brand_logo_url" text;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "brand_primary_color" text;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "brand_secondary_color" text;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "hidden_nav_sections" json;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "hidden_widgets" json;
+ALTER TABLE "teams" ADD COLUMN IF NOT EXISTS "brand_logo_url" text;
+ALTER TABLE "teams" ADD COLUMN IF NOT EXISTS "brand_primary_color" text;
+ALTER TABLE "teams" ADD COLUMN IF NOT EXISTS "brand_secondary_color" text;
+ALTER TABLE "coach_staff" ADD COLUMN IF NOT EXISTS "staff_title" text;
 `;
 
 async function main() {
