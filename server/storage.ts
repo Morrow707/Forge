@@ -69,6 +69,7 @@ import type {
 } from "@shared/schema";
 import type { WidgetLayoutEntry } from "@shared/dashboard-widgets";
 import { deleteUploadedFile } from "./uploaded-files";
+import { getEntitlements } from "./billing";
 import { lookupBarcode, searchFoodsByName, type FoodCandidate } from "./food-lookup";
 import { TESTING_METRICS, testingMetricLowerIsBetter } from "@shared/testing-metrics";
 import { computeReadiness, BODY_PAIN_PARTS } from "@shared/wellness";
@@ -1156,6 +1157,13 @@ export const storage = {
   // staff -- one per coach who happened to link them -- which would
   // otherwise double-count them in every roster/ACWR/wellness query below
   // that joins through this table.
+  // Returns null (instead of inserting) if the org's primary coach is over
+  // their billing tier's roster cap -- see server/billing.ts. Both call
+  // sites (signup, /api/auth/join-coach) funnel through this one function,
+  // so the check only needs to live here. Signup already created the
+  // athlete's account by the time this runs; a null here just leaves them
+  // a Free Agent (an existing, fully-supported state, not an error) rather
+  // than failing the whole signup.
   async linkAthleteToCoach(coachId: number, athleteId: number) {
     const coachIds = await this.getEffectiveCoachIds(coachId);
     const existing = await db.query.coachAthletes.findFirst({
@@ -1165,6 +1173,14 @@ export const storage = {
       ),
     });
     if (existing) return existing;
+
+    const primary = await this.getUser(coachIds[0]);
+    const entitlements = getEntitlements(primary!);
+    if (entitlements.athleteCap !== null) {
+      const roster = await this.getRosterForCoach(coachId);
+      if (roster.length >= entitlements.athleteCap) return null;
+    }
+
     const [row] = await db
       .insert(coachAthletes)
       .values({ coachId, athleteId })

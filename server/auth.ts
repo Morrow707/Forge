@@ -118,8 +118,11 @@ export function setupAuth(app: Express) {
       });
 
       if (coach) {
-        await storage.linkAthleteToCoach(coach.id, user.id);
-        if (team) await storage.addAthleteToTeam(team.id, user.id);
+        // Account already exists at this point -- a full roster (see
+        // linkAthleteToCoach's billing-cap check) just leaves them a Free
+        // Agent instead of failing the whole signup.
+        const linked = await storage.linkAthleteToCoach(coach.id, user.id);
+        if (linked && team) await storage.addAthleteToTeam(team.id, user.id);
       }
 
       req.login(user, (err) => {
@@ -226,7 +229,10 @@ export function setupAuth(app: Express) {
       if (!coach) {
         return res.status(400).json({ message: "Invalid invite code" });
       }
-      await storage.linkAthleteToCoach(coach.id, user.id);
+      const linked = await storage.linkAthleteToCoach(coach.id, user.id);
+      if (!linked) {
+        return res.status(402).json({ message: "This coach's roster is full -- ask them to upgrade their plan." });
+      }
       if (team) await storage.addAthleteToTeam(team.id, user.id);
       res.json({ coachId: coach.id, coachName: coach.name });
     } catch (err) {

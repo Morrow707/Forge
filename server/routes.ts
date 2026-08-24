@@ -5,6 +5,7 @@ import fs from "fs";
 import multer from "multer";
 import { setupAuth, requireAuth, requireRole } from "./auth";
 import { hashPassword, comparePasswords } from "./auth-utils";
+import { getEntitlements, type Entitlements } from "./billing";
 import { storage } from "./storage";
 import { buildIcsFeed } from "./ics";
 import { getVapidPublicKey } from "./push";
@@ -152,6 +153,15 @@ async function requirePrimaryCoach(req: any, res: any, next: any) {
     return res.status(403).json({ message: "Only the primary coach can change this" });
   }
   next();
+}
+
+// Entitlements are always resolved from the org's primary coach (billing
+// lives on that row, same as branding) -- see server/billing.ts. Safe to
+// call from any staff member's request, not just the primary's.
+async function getEntitlementsForCoach(coachId: number): Promise<Entitlements> {
+  const coachIds = await storage.getEffectiveCoachIds(coachId);
+  const primary = await storage.getUser(coachIds[0]);
+  return getEntitlements(primary!);
 }
 
 // The single gate for every Free Agent AI route below (program building AND
@@ -1569,6 +1579,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!(await assertOwnsTeam(user.id, teamId))) {
       return res.status(404).json({ message: "Team not found" });
     }
+    if (!(await getEntitlementsForCoach(user.id)).hasMultiTeam) {
+      return res.status(402).json({ message: "Per-team branding requires a Growth plan or higher" });
+    }
     const parsed = updateTeamBrandingSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
@@ -1587,6 +1600,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!(await assertOwnsTeam(user.id, teamId))) {
         return res.status(404).json({ message: "Team not found" });
       }
+      if (!(await getEntitlementsForCoach(user.id)).hasMultiTeam) {
+        return res.status(402).json({ message: "Per-team branding requires a Growth plan or higher" });
+      }
       if (!req.file) {
         return res.status(400).json({ message: "No file uploaded" });
       }
@@ -1601,6 +1617,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const teamId = Number(req.params.id);
     if (!(await assertOwnsTeam(user.id, teamId))) {
       return res.status(404).json({ message: "Team not found" });
+    }
+    if (!(await getEntitlementsForCoach(user.id)).hasMultiTeam) {
+      return res.status(402).json({ message: "Per-team branding requires a Growth plan or higher" });
     }
     const updated = await storage.updateTeamLogo(teamId, null);
     res.json(updated);
@@ -3187,7 +3206,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
     const coachIds = await storage.getEffectiveCoachIds(user.id);
-    const updated = await storage.updateCoachBranding(coachIds[0], parsed.data);
+    const entitlements = await getEntitlementsForCoach(user.id);
+    // Logo and a primary color are free at every tier -- only secondaryColor
+    // and the team-identity fields are gated, and silently dropped rather
+    // than rejected so a Solo/Coach account editing what they're actually
+    // allowed to still succeeds in one request.
+    const values = { ...parsed.data };
+    if (!entitlements.hasCustomColors) delete values.secondaryColor;
+    if (!entitlements.hasTeamIdentity) {
+      delete values.motto;
+      delete values.mission;
+      delete values.contactEmail;
+      delete values.welcomeMessage;
+    }
+    const updated = await storage.updateCoachBranding(coachIds[0], values);
     res.json(updated);
   });
 
@@ -3247,6 +3279,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch("/api/coach/nav-prefs", requireRole("coach"), requirePrimaryCoach, async (req, res) => {
     const user = currentUser(req);
+    if (!(await getEntitlementsForCoach(user.id)).hasWorkflowCustomization) {
+      return res.status(402).json({ message: "Nav customization requires the Workflow add-on or a Growth plan or higher" });
+    }
     const parsed = updateNavPrefsSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
@@ -3264,6 +3299,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch("/api/coach/widget-prefs", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
+    if (!(await getEntitlementsForCoach(user.id)).hasWorkflowCustomization) {
+      return res.status(402).json({ message: "Dashboard customization requires the Workflow add-on or a Growth plan or higher" });
+    }
     const parsed = widgetLayoutSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
