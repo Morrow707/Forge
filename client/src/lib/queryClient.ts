@@ -1,4 +1,4 @@
-import { QueryCache, QueryClient, QueryFunction } from "@tanstack/react-query";
+import { QueryCache, QueryClient, QueryFunction, type Query } from "@tanstack/react-query";
 import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
 import { Capacitor } from "@capacitor/core";
 
@@ -243,4 +243,21 @@ export const persistOptions = {
   // just refetching, and this is the one signal that forces that instead of
   // silently trying to use it.
   buster: "v1",
+  dehydrateOptions: {
+    // "/api/auth/me" never gets written to localStorage in the first
+    // place -- the flush this persister does on every query update is
+    // throttled (~1s), so a hard reload/cold launch landing inside that
+    // window restored whatever snapshot was last flushed, which could
+    // still be the pre-login "not authenticated" one even though the
+    // login that just succeeded is a moment old. useIsRestoring() (see
+    // use-auth.tsx) only guards the restore itself, not whether the
+    // thing being restored is stale, so within staleTime that wrong
+    // snapshot read as confirmed-logged-out and bounced a genuinely
+    // logged-in user to /login. Excluding this one query keeps every
+    // reload/cold-launch asking the server fresh -- one cheap GET, and
+    // the one query in the app where "instant paint from a maybe-stale
+    // cache" is worse than the loading spinner it would otherwise skip.
+    shouldDehydrateQuery: (query: Query) =>
+      query.queryKey[0] !== "/api/auth/me" && query.state.status === "success",
+  },
 };
