@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { apiRequest, getJson, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { Upload, X, AlertTriangle } from "lucide-react";
@@ -22,6 +23,13 @@ type Branding = {
   brandLogoUrl: string | null;
   brandPrimaryColor: string | null;
   brandSecondaryColor: string | null;
+  // Org-scope-only fields -- never present on a team's `initial` override,
+  // since a team never gets its own motto/mission/contact/welcome text,
+  // only colors and a logo (see updateTeamBrandingSchema).
+  brandMotto?: string | null;
+  brandMission?: string | null;
+  brandContactEmail?: string | null;
+  brandWelcomeMessage?: string | null;
 };
 
 export type BrandingScope =
@@ -129,6 +137,10 @@ export function TeamBrandingDialog({
   const [teamName, setTeamName] = useState("");
   const [primaryColor, setPrimaryColor] = useState("#F65B23");
   const [secondaryColor, setSecondaryColor] = useState("#1A1D23");
+  const [motto, setMotto] = useState("");
+  const [mission, setMission] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
+  const [welcomeMessage, setWelcomeMessage] = useState("");
   const [swatches, setSwatches] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -149,6 +161,10 @@ export function TeamBrandingDialog({
     setTeamName(branding?.brandTeamName ?? "");
     setPrimaryColor(branding?.brandPrimaryColor || "#F65B23");
     setSecondaryColor(branding?.brandSecondaryColor || "#1A1D23");
+    setMotto(branding?.brandMotto ?? "");
+    setMission(branding?.brandMission ?? "");
+    setContactEmail(branding?.brandContactEmail ?? "");
+    setWelcomeMessage(branding?.brandWelcomeMessage ?? "");
     setSwatches([]);
     seededRef.current = seedKey;
   }, [open, seedKey, branding]);
@@ -157,7 +173,15 @@ export function TeamBrandingDialog({
     mutationFn: async () => {
       const body =
         scope.type === "org"
-          ? { teamName: teamName.trim() || null, primaryColor, secondaryColor }
+          ? {
+              teamName: teamName.trim() || null,
+              primaryColor,
+              secondaryColor,
+              motto: motto.trim() || null,
+              mission: mission.trim() || null,
+              contactEmail: contactEmail.trim() || null,
+              welcomeMessage: welcomeMessage.trim() || null,
+            }
           : { primaryColor, secondaryColor };
       await apiRequest("PATCH", endpoints.patch, body);
     },
@@ -203,7 +227,18 @@ export function TeamBrandingDialog({
   // field by hand and separately remember to hit Remove on the logo.
   const resetMutation = useMutation({
     mutationFn: async () => {
-      const body = scope.type === "org" ? { teamName: null, primaryColor: null, secondaryColor: null } : { primaryColor: null, secondaryColor: null };
+      const body =
+        scope.type === "org"
+          ? {
+              teamName: null,
+              primaryColor: null,
+              secondaryColor: null,
+              motto: null,
+              mission: null,
+              contactEmail: null,
+              welcomeMessage: null,
+            }
+          : { primaryColor: null, secondaryColor: null };
       await apiRequest("PATCH", endpoints.patch, body);
       if (branding?.brandLogoUrl) {
         await apiRequest("DELETE", endpoints.logo);
@@ -234,7 +269,11 @@ export function TeamBrandingDialog({
     branding?.brandTeamName ||
     branding?.brandLogoUrl ||
     branding?.brandPrimaryColor ||
-    branding?.brandSecondaryColor
+    branding?.brandSecondaryColor ||
+    branding?.brandMotto ||
+    branding?.brandMission ||
+    branding?.brandContactEmail ||
+    branding?.brandWelcomeMessage
   );
 
   return (
@@ -366,6 +405,53 @@ export function TeamBrandingDialog({
                 >
                   Use a readable version of this color
                 </Button>
+              </div>
+            </div>
+          )}
+
+          {!isTeamScope && (
+            <div className="space-y-4 border-t border-border pt-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="brand-motto">Motto / tagline</Label>
+                <Input
+                  id="brand-motto"
+                  value={motto}
+                  onChange={(e) => setMotto(e.target.value)}
+                  placeholder="e.g. Earn it every day"
+                  maxLength={80}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="brand-mission">About the team</Label>
+                <Textarea
+                  id="brand-mission"
+                  value={mission}
+                  onChange={(e) => setMission(e.target.value)}
+                  placeholder="Shown on your team's About page -- who you are, what the program's about"
+                  maxLength={500}
+                  className="min-h-20"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="brand-contact-email">Public contact email (optional)</Label>
+                <Input
+                  id="brand-contact-email"
+                  type="email"
+                  value={contactEmail}
+                  onChange={(e) => setContactEmail(e.target.value)}
+                  placeholder="Shown on the About page -- never your real login email unless you enter it here"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="brand-welcome">Welcome message for athletes</Label>
+                <Textarea
+                  id="brand-welcome"
+                  value={welcomeMessage}
+                  onChange={(e) => setWelcomeMessage(e.target.value)}
+                  placeholder="Shown on your athletes' own dashboard -- a note in your own voice"
+                  maxLength={300}
+                  className="min-h-16"
+                />
               </div>
             </div>
           )}

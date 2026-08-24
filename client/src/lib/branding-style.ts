@@ -5,6 +5,10 @@ export type EffectiveBranding = {
   brandLogoUrl: string | null;
   brandPrimaryColor: string | null;
   brandSecondaryColor: string | null;
+  brandMotto?: string | null;
+  brandMission?: string | null;
+  brandContactEmail?: string | null;
+  brandWelcomeMessage?: string | null;
 };
 
 /** Converts an effective branding record (plus an optional personal

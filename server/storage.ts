@@ -218,6 +218,33 @@ const TESTING_FIELDS = [
   "deadliftMaxLbs",
 ] as const;
 
+// Every org-wide branding field, shared by getCoachBranding's drizzle
+// query `columns` selector and BRANDING_COLUMNS_SQL below -- kept in one
+// place so a bare .returning() on a users-table branding update can never
+// again leak the rest of the row (passwordHash included) the way an
+// earlier version of updateCoachBranding/updateCoachLogo did.
+const BRANDING_COLUMNS = {
+  brandTeamName: true,
+  brandLogoUrl: true,
+  brandPrimaryColor: true,
+  brandSecondaryColor: true,
+  brandMotto: true,
+  brandMission: true,
+  brandContactEmail: true,
+  brandWelcomeMessage: true,
+} as const;
+
+const BRANDING_COLUMNS_SQL = {
+  brandTeamName: users.brandTeamName,
+  brandLogoUrl: users.brandLogoUrl,
+  brandPrimaryColor: users.brandPrimaryColor,
+  brandSecondaryColor: users.brandSecondaryColor,
+  brandMotto: users.brandMotto,
+  brandMission: users.brandMission,
+  brandContactEmail: users.brandContactEmail,
+  brandWelcomeMessage: users.brandWelcomeMessage,
+};
+
 // Shared by every AI program-generation prompt (generateProgramDraft and
 // generateProgramFromChat) so the two never drift into contradicting each
 // other. Distilled from how well-known strength coaches/systems actually
@@ -5208,12 +5235,7 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
   async getCoachBranding(primaryCoachId: number) {
     const row = await db.query.users.findFirst({
       where: eq(users.id, primaryCoachId),
-      columns: {
-        brandTeamName: true,
-        brandLogoUrl: true,
-        brandPrimaryColor: true,
-        brandSecondaryColor: true,
-      },
+      columns: BRANDING_COLUMNS,
     });
     return row ?? null;
   },
@@ -5229,14 +5251,13 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
         ...(values.teamName !== undefined && { brandTeamName: values.teamName }),
         ...(values.primaryColor !== undefined && { brandPrimaryColor: values.primaryColor }),
         ...(values.secondaryColor !== undefined && { brandSecondaryColor: values.secondaryColor }),
+        ...(values.motto !== undefined && { brandMotto: values.motto }),
+        ...(values.mission !== undefined && { brandMission: values.mission }),
+        ...(values.contactEmail !== undefined && { brandContactEmail: values.contactEmail }),
+        ...(values.welcomeMessage !== undefined && { brandWelcomeMessage: values.welcomeMessage }),
       })
       .where(eq(users.id, primaryCoachId))
-      .returning({
-        brandTeamName: users.brandTeamName,
-        brandLogoUrl: users.brandLogoUrl,
-        brandPrimaryColor: users.brandPrimaryColor,
-        brandSecondaryColor: users.brandSecondaryColor,
-      });
+      .returning(BRANDING_COLUMNS_SQL);
     return row ?? null;
   },
 
@@ -5249,12 +5270,7 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
       .update(users)
       .set({ brandLogoUrl: logoUrl })
       .where(eq(users.id, primaryCoachId))
-      .returning({
-        brandTeamName: users.brandTeamName,
-        brandLogoUrl: users.brandLogoUrl,
-        brandPrimaryColor: users.brandPrimaryColor,
-        brandSecondaryColor: users.brandSecondaryColor,
-      });
+      .returning(BRANDING_COLUMNS_SQL);
     return row ?? null;
   },
 
@@ -5275,9 +5291,19 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
     }
 
     // Athlete: base branding comes from their coach's org.
+    const emptyBranding = {
+      brandTeamName: null,
+      brandLogoUrl: null,
+      brandPrimaryColor: null,
+      brandSecondaryColor: null,
+      brandMotto: null,
+      brandMission: null,
+      brandContactEmail: null,
+      brandWelcomeMessage: null,
+    };
     const coaches = await this.getCoachesForAthlete(userId);
     if (coaches.length === 0) {
-      return { brandTeamName: null, brandLogoUrl: null, brandPrimaryColor: null, brandSecondaryColor: null };
+      return emptyBranding;
     }
     const coachIds = await this.getEffectiveCoachIds(coaches[0].id);
     const orgBranding = await this.getCoachBranding(coachIds[0]);
@@ -5287,11 +5313,18 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
       (t) => t.brandLogoUrl || t.brandPrimaryColor || t.brandSecondaryColor,
     );
 
+    // Motto/mission/contact/welcome are org-only -- no team-level field
+    // exists for them (see updateTeamBrandingSchema), so they always come
+    // straight from orgBranding with no team fallback needed.
     return {
       brandTeamName: orgBranding?.brandTeamName ?? null,
       brandLogoUrl: brandedTeam?.brandLogoUrl ?? orgBranding?.brandLogoUrl ?? null,
       brandPrimaryColor: brandedTeam?.brandPrimaryColor ?? orgBranding?.brandPrimaryColor ?? null,
       brandSecondaryColor: brandedTeam?.brandSecondaryColor ?? orgBranding?.brandSecondaryColor ?? null,
+      brandMotto: orgBranding?.brandMotto ?? null,
+      brandMission: orgBranding?.brandMission ?? null,
+      brandContactEmail: orgBranding?.brandContactEmail ?? null,
+      brandWelcomeMessage: orgBranding?.brandWelcomeMessage ?? null,
     };
   },
 
