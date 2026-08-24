@@ -1510,6 +1510,7 @@ function ExerciseLogContent({
   onAddSet: () => void;
   onRemoveSet: () => void;
 }) {
+  const { user } = useAuth();
   const isCorrective = item.kind === "corrective";
   const [trackingSet, setTrackingSet] = useState<number | null>(null);
   // Which set the "Record" pill is currently recording for -- one form-check
@@ -2266,14 +2267,20 @@ function ExerciseLogContent({
           <Minus className="h-4 w-4" />
         </button>
         <span className="text-xs font-semibold text-muted-foreground">Set</span>
-        <button
-          type="button"
-          onClick={onAddSet}
-          aria-label="Add set"
-          className="flex h-8 w-8 items-center justify-center rounded-full border border-primary text-primary transition-colors hover:bg-primary/10"
-        >
-          <Plus className="h-4 w-4" />
-        </button>
+        {/* The coach set this program's prescribed sets -- an athlete
+            changing that count isn't theirs to do, even though they can
+            still remove a set they physically couldn't complete. Admin/coach
+            self-training (the other callers of this page) keep the button. */}
+        {user?.role !== "athlete" && (
+          <button
+            type="button"
+            onClick={onAddSet}
+            aria-label="Add set"
+            className="flex h-8 w-8 items-center justify-center rounded-full border border-primary text-primary transition-colors hover:bg-primary/10"
+          >
+            <Plus className="h-4 w-4" />
+          </button>
+        )}
       </div>
 
       <div className="space-y-2 rounded-lg border border-border bg-surface-elevated p-3">
