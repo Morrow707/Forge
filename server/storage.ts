@@ -1378,6 +1378,21 @@ export const storage = {
     };
   },
 
+  // Name + display title only -- the public-facing About page's staff
+  // list, safe for an athlete to see (unlike getStaffForCoach above,
+  // which also carries each staff member's email for the coach-only
+  // Coaching Staff management dialog).
+  async getTeamRosterInfo(primaryCoachId: number) {
+    const [primary, staff] = await Promise.all([
+      this.getUser(primaryCoachId),
+      this.getStaffForCoach(primaryCoachId),
+    ]);
+    return {
+      primaryCoachName: primary?.name ?? null,
+      staff: staff.staff.map((s) => ({ name: s.name, staffTitle: s.staffTitle })),
+    };
+  },
+
   // The primary removes a specific staff member. No-op (not an error) if
   // that id isn't actually staff under this primary, so a double-click
   // can't produce a confusing error.

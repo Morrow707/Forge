@@ -27,6 +27,7 @@ import {
   Palette,
   SlidersHorizontal,
   UserCog,
+  Info,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -66,6 +67,7 @@ const coachNav: NavItem[] = [
   { href: "/coach/analytics", label: "Analytics", icon: LineChart },
   { href: "/coach/leaderboard", label: "Leaderboard", icon: Trophy },
   { href: "/coach/team-board", label: "Team Board", icon: MessagesSquare },
+  { href: "/coach/about", label: "About", icon: Info },
 ];
 
 const athleteNav: NavItem[] = [
@@ -75,6 +77,7 @@ const athleteNav: NavItem[] = [
   { href: "/athlete/nutrition", label: "Nutrition", icon: Apple },
   { href: "/athlete/team-board", label: "Team Board", icon: MessagesSquare },
   { href: "/athlete/chat", label: "AI Chat", icon: Sparkles },
+  { href: "/athlete/about", label: "About", icon: Info },
 ];
 
 const adminNav: NavItem[] = [

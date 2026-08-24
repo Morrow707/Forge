@@ -902,6 +902,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(result);
   });
 
+  // Public-facing (within the coach's own org) roster info for the About
+  // page -- name/title only, safe for the whole staff to read.
+  app.get("/api/coach/team-roster", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const coachIds = await storage.getEffectiveCoachIds(user.id);
+    const roster = await storage.getTeamRosterInfo(coachIds[0]);
+    res.json(roster);
+  });
+
   app.post("/api/coach/staff/join", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     const schema = z.object({ code: z.string().trim().min(1) });
@@ -2196,6 +2205,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const user = currentUser(req);
     const coaches = await storage.getCoachesForAthlete(user.id);
     res.json(coaches);
+  });
+
+  app.get("/api/athlete/team-roster", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const coaches = await storage.getCoachesForAthlete(user.id);
+    if (coaches.length === 0) {
+      return res.json({ primaryCoachName: null, staff: [] });
+    }
+    const coachIds = await storage.getEffectiveCoachIds(coaches[0].id);
+    const roster = await storage.getTeamRosterInfo(coachIds[0]);
+    res.json(roster);
   });
 
   app.patch("/api/athlete/preferences", requireRole("athlete"), async (req, res) => {
