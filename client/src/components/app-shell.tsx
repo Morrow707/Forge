@@ -36,14 +36,7 @@ import { CoachingStaffDialog } from "@/components/coaching-staff-dialog";
 import { TeamBrandingDialog } from "@/components/team-branding-dialog";
 import { NavCustomizeDialog } from "@/components/nav-customize-dialog";
 import { PoweredByFooter } from "@/components/powered-by-footer";
-import { hexToHslTriplet } from "@/lib/color";
-
-type EffectiveBranding = {
-  brandTeamName?: string | null;
-  brandLogoUrl: string | null;
-  brandPrimaryColor: string | null;
-  brandSecondaryColor: string | null;
-};
+import { computeBrandingStyle, type EffectiveBranding } from "@/lib/branding-style";
 
 type NavItem = {
   href: string;
@@ -142,22 +135,7 @@ export function AppShell({
   });
   const hiddenNavSections = new Set(navPrefs?.hiddenNavSections ?? []);
 
-  const brandingStyle = (() => {
-    const vars: Record<string, string> = {};
-    if (branding?.brandPrimaryColor) {
-      const hsl = hexToHslTriplet(branding.brandPrimaryColor);
-      if (hsl) {
-        vars["--primary"] = hsl;
-        vars["--ring"] = hsl;
-        vars["--accent"] = hsl;
-      }
-    }
-    if (branding?.brandSecondaryColor) {
-      const hsl = hexToHslTriplet(branding.brandSecondaryColor);
-      if (hsl) vars["--secondary"] = hsl;
-    }
-    return Object.keys(vars).length > 0 ? (vars as React.CSSProperties) : undefined;
-  })();
+  const brandingStyle = computeBrandingStyle(branding);
 
   // Runtime favicon/home-screen-icon swap -- covers the browser tab icon
   // and, in practice, iOS's "Add to Home Screen" (which reads these DOM

@@ -5255,6 +5255,36 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
     };
   },
 
+  // Unauthenticated lookup for the signup page -- a coach or team invite
+  // code typed in before an account even exists still deserves the same
+  // re-skin an already-linked athlete gets, so signing up doesn't feel
+  // like a detour through plain Forge before "arriving" at the real
+  // program. A team code resolves with that team's own override applied
+  // (mirroring getEffectiveBrandingForUser's athlete branch); a coach's
+  // personal code returns the org's branding as-is. Returns null for an
+  // unrecognized code -- the signup page just stays unbranded, same as
+  // today, rather than showing an error for what's a normal "still
+  // typing" state.
+  async getPublicBrandingForCode(code: string) {
+    const team = await this.getTeamByCode(code);
+    if (team) {
+      const coachIds = await this.getEffectiveCoachIds(team.coachId);
+      const orgBranding = await this.getCoachBranding(coachIds[0]);
+      return {
+        brandTeamName: orgBranding?.brandTeamName ?? null,
+        brandLogoUrl: team.brandLogoUrl ?? orgBranding?.brandLogoUrl ?? null,
+        brandPrimaryColor: team.brandPrimaryColor ?? orgBranding?.brandPrimaryColor ?? null,
+        brandSecondaryColor: team.brandSecondaryColor ?? orgBranding?.brandSecondaryColor ?? null,
+      };
+    }
+    const coach = await this.getUserByCoachCode(code);
+    if (coach && coach.role === "coach") {
+      const coachIds = await this.getEffectiveCoachIds(coach.id);
+      return this.getCoachBranding(coachIds[0]);
+    }
+    return null;
+  },
+
   // ---------- Nav / dashboard personalization ----------
   async getHiddenNavSectionsForCoach(primaryCoachId: number): Promise<string[]> {
     const row = await db.query.users.findFirst({

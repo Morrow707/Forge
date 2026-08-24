@@ -1,5 +1,6 @@
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, Redirect } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +16,20 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { getJson } from "@/lib/queryClient";
+import { computeBrandingStyle, type EffectiveBranding } from "@/lib/branding-style";
 import { Flame, Dumbbell, ClipboardList, Sparkles, Check, Lock } from "lucide-react";
+
+/** Debounces a fast-changing value (here, the invite-code input) so a
+ * lookup only fires once someone pauses typing, not on every keystroke. */
+function useDebounced<T>(value: T, delayMs: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(value), delayMs);
+    return () => clearTimeout(timer);
+  }, [value, delayMs]);
+  return debounced;
+}
 
 export default function SignupPage() {
   const { user, isLoading, signupMutation } = useAuth();
@@ -29,6 +43,20 @@ export default function SignupPage() {
   const [password, setPassword] = useState("");
   const [coachCode, setCoachCode] = useState(prefilledCode.toUpperCase());
   const [phone, setPhone] = useState("");
+
+  // Looks up whichever coach/team invite code is currently typed in so
+  // the page can re-skin itself before an account even exists -- the
+  // first thing a new athlete sees should already look like the program
+  // they're joining, not a detour through plain Forge. Debounced so it
+  // doesn't fire on every keystroke; a short/empty code just skips the
+  // lookup rather than round-tripping for something that can't resolve.
+  const debouncedCode = useDebounced(coachCode.trim(), 400);
+  const { data: inviteBranding } = useQuery<EffectiveBranding | null>({
+    queryKey: ["/api/public/branding", debouncedCode],
+    queryFn: () => getJson(`/api/public/branding?code=${encodeURIComponent(debouncedCode)}`),
+    enabled: role === "athlete" && debouncedCode.length >= 4,
+  });
+  const brandingStyle = computeBrandingStyle(inviteBranding);
   // Whether the in-flight/just-submitted signup is a no-code athlete
   // signup -- set synchronously on submit (a ref, not state, so it's
   // already correct by the time the mutation's success re-render happens,
@@ -67,16 +95,31 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-10">
+    <div
+      className="flex min-h-screen items-center justify-center bg-background px-4 py-10"
+      style={brandingStyle}
+    >
       <div className="w-full max-w-md">
         <div className="mb-8 flex flex-col items-center gap-3">
-          <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-            <Flame className="h-8 w-8" />
-          </div>
+          {inviteBranding?.brandLogoUrl ? (
+            <img
+              src={inviteBranding.brandLogoUrl}
+              alt={inviteBranding.brandTeamName || "Team logo"}
+              className="h-14 w-14 rounded-xl object-contain"
+            />
+          ) : (
+            <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+              <Flame className="h-8 w-8" />
+            </div>
+          )}
           <h1 className="font-display text-4xl font-extrabold uppercase tracking-wider">
-            Forge
+            {inviteBranding?.brandTeamName || "Forge"}
           </h1>
-          <p className="text-sm text-muted-foreground">Coach. Program. Perform.</p>
+          {inviteBranding ? (
+            <p className="text-sm text-muted-foreground">You're joining {inviteBranding.brandTeamName || "this program"}</p>
+          ) : (
+            <p className="text-sm text-muted-foreground">Coach. Program. Perform.</p>
+          )}
         </div>
 
         <Card>

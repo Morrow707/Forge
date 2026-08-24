@@ -3138,6 +3138,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(branding);
   });
 
+  // Deliberately unauthenticated -- lets the signup page re-skin itself
+  // for whichever coach/team invite code someone just typed in, before
+  // they have an account to log into at all. Doesn't reveal anything a
+  // failed/successful signup attempt with the same code wouldn't already:
+  // whether it resolves to a real program.
+  app.get("/api/public/branding", async (req, res) => {
+    const code = typeof req.query.code === "string" ? req.query.code.trim() : "";
+    if (!code) {
+      return res.json(null);
+    }
+    const branding = await storage.getPublicBrandingForCode(code);
+    res.json(branding);
+  });
+
   app.get("/api/coach/nav-prefs", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     const coachIds = await storage.getEffectiveCoachIds(user.id);
