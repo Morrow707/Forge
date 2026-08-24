@@ -10,6 +10,7 @@ import {
   BILLING_ADD_ON_ORDER,
   formatCents,
 } from "@shared/billing-tiers";
+import { FREE_AGENT_TIERS, FREE_AGENT_TIER_ORDER, FREE_AGENT_ADD_ONS, FREE_AGENT_ADD_ON_ORDER } from "@shared/free-agent-tiers";
 import { Flame, Check } from "lucide-react";
 
 /** Public, unauthenticated -- renders straight from shared/billing-tiers.ts
@@ -116,6 +117,70 @@ export default function PricingPage() {
                     <p className="text-sm text-muted-foreground">{addOn.description}</p>
                   </CardContent>
                 </Card>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="mt-16">
+          <h2 className="mb-1 text-center text-xl font-bold">Training on your own?</h2>
+          <p className="mb-6 text-center text-sm text-muted-foreground">
+            No coach yet? Get your own AI coach -- these tiers are per athlete, not per team.
+          </p>
+          <div className="grid gap-4 sm:grid-cols-3">
+            {FREE_AGENT_TIER_ORDER.map((id) => {
+              const tier = FREE_AGENT_TIERS[id];
+              const featured = id === "ai_coach_video";
+              return (
+                <Card
+                  key={id}
+                  className={cn(
+                    "flex flex-col",
+                    featured && "border-primary shadow-[0_0_0_1px] shadow-primary/50",
+                  )}
+                >
+                  <CardHeader>
+                    {featured && (
+                      <Badge className="mb-1 w-fit gap-1 bg-primary/15 text-primary hover:bg-primary/15">
+                        Most popular
+                      </Badge>
+                    )}
+                    <CardTitle className="text-lg">{tier.label}</CardTitle>
+                    <CardDescription>
+                      <span className="text-2xl font-extrabold text-foreground">
+                        {formatCents(tier.monthlyPriceCents)}
+                      </span>
+                      <span className="text-sm text-muted-foreground">/mo</span>
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="flex flex-1 flex-col justify-between gap-4">
+                    <div>
+                      <p className="text-sm text-muted-foreground">{tier.description}</p>
+                      {tier.athleteProfileCap != null && (
+                        <p className="mt-2 flex items-center gap-2 text-sm">
+                          <Check className="h-4 w-4 shrink-0 text-primary" />
+                          Covers up to {tier.athleteProfileCap} athlete profiles
+                        </p>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+
+          <p className="mb-4 mt-8 text-center text-sm text-muted-foreground">
+            Sport-specialist coaches (coming soon) will be available as add-ons on any Free Agent
+            tier:
+          </p>
+          <div className="grid gap-3 sm:grid-cols-3">
+            {FREE_AGENT_ADD_ON_ORDER.map((id) => {
+              const addOn = FREE_AGENT_ADD_ONS[id];
+              return (
+                <div key={id} className="rounded-md border border-border p-3 text-center text-sm">
+                  <span className="font-semibold">{addOn.label}</span>
+                  <span className="text-muted-foreground"> -- {formatCents(addOn.monthlyPriceCents)}/mo</span>
+                </div>
               );
             })}
           </div>

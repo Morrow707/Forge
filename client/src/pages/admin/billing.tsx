@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/select";
 import { apiRequest, getJson, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { Search, Ticket } from "lucide-react";
+import { Search, Ticket, Users } from "lucide-react";
 import {
   BILLING_TIERS,
   BILLING_TIER_ORDER,
@@ -25,6 +25,14 @@ import {
   type BillingTierId,
   type AddOnId,
 } from "@shared/billing-tiers";
+import {
+  FREE_AGENT_TIERS,
+  FREE_AGENT_TIER_ORDER,
+  FREE_AGENT_ADD_ONS,
+  FREE_AGENT_ADD_ON_ORDER,
+  type FreeAgentTierId,
+  type FreeAgentAddOnId,
+} from "@shared/free-agent-tiers";
 
 type CoachLookup = {
   id: number;
@@ -46,6 +54,16 @@ type RedeemCode = {
   createdAt: string;
 };
 
+type AthleteLookup = {
+  id: number;
+  name: string;
+  email: string;
+  freeAgentTier: string | null;
+  freeAgentAddOns: string[];
+  isBetaAccount: boolean;
+  familyGroupId: number | null;
+};
+
 /** No self-serve checkout exists yet -- this is the only place a real
  * coach account gets a billingTier/billingAddOns/isBetaAccount set (see
  * shared/billing-tiers.ts, server/billing.ts). Look up an org by its
@@ -61,6 +79,14 @@ export default function AdminBilling() {
   const [newCode, setNewCode] = useState("");
   const [newTrialDays, setNewTrialDays] = useState("14");
   const [newMaxRedemptions, setNewMaxRedemptions] = useState("");
+
+  const [athleteEmailInput, setAthleteEmailInput] = useState("");
+  const [athlete, setAthlete] = useState<AthleteLookup | null>(null);
+  const [freeAgentTier, setFreeAgentTier] = useState<string>("none");
+  const [freeAgentAddOns, setFreeAgentAddOns] = useState<Set<FreeAgentAddOnId>>(new Set());
+  const [athleteIsBeta, setAthleteIsBeta] = useState(true);
+
+  const [familyEmails, setFamilyEmails] = useState(["", "", ""]);
 
   const { data: codes = [] } = useQuery<RedeemCode[]>({
     queryKey: ["/api/admin/redeem-codes"],
@@ -121,6 +147,56 @@ export default function AdminBilling() {
     else next.add(id);
     setAddOns(next);
   }
+
+  const lookupAthleteMutation = useMutation({
+    mutationFn: async (email: string) =>
+      getJson(`/api/admin/athletes/lookup?email=${encodeURIComponent(email)}`) as Promise<AthleteLookup>,
+    onSuccess: (data) => {
+      setAthlete(data);
+      setFreeAgentTier(data.freeAgentTier ?? "none");
+      setFreeAgentAddOns(new Set(data.freeAgentAddOns as FreeAgentAddOnId[]));
+      setAthleteIsBeta(data.isBetaAccount);
+    },
+    onError: (err: ApiError) => {
+      setAthlete(null);
+      toast.error(err.message || "No athlete found with that email");
+    },
+  });
+
+  const saveAthleteMutation = useMutation({
+    mutationFn: async () => {
+      if (!athlete) return;
+      await apiRequest("PATCH", `/api/admin/athletes/${athlete.id}/billing`, {
+        freeAgentTier: freeAgentTier === "none" ? null : freeAgentTier,
+        freeAgentAddOns: Array.from(freeAgentAddOns),
+        isBetaAccount: athleteIsBeta,
+      });
+    },
+    onSuccess: () => {
+      toast.success("Billing updated");
+      qc.invalidateQueries({ queryKey: ["/api/admin/athletes/lookup"] });
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't save"),
+  });
+
+  function toggleFreeAgentAddOn(id: FreeAgentAddOnId) {
+    const next = new Set(freeAgentAddOns);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setFreeAgentAddOns(next);
+  }
+
+  const createFamilyGroupMutation = useMutation({
+    mutationFn: async () => {
+      const emails = familyEmails.map((e) => e.trim()).filter(Boolean);
+      await apiRequest("POST", "/api/admin/family-groups", { athleteEmails: emails });
+    },
+    onSuccess: () => {
+      toast.success("Family group created");
+      setFamilyEmails(["", "", ""]);
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't create family group"),
+  });
 
   return (
     <AppShell title="Billing">
@@ -278,6 +354,139 @@ export default function AdminBilling() {
                 ))}
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Find a Free Agent</CardTitle>
+            <CardDescription>
+              Look up an individual athlete by email to assign their AI-coach tier -- a separate
+              track from coach/org billing above (see shared/free-agent-tiers.ts).
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex gap-2">
+            <Input
+              type="email"
+              value={athleteEmailInput}
+              onChange={(e) => setAthleteEmailInput(e.target.value)}
+              placeholder="athlete@example.com"
+              onKeyDown={(e) =>
+                e.key === "Enter" && athleteEmailInput.trim() && lookupAthleteMutation.mutate(athleteEmailInput.trim())
+              }
+            />
+            <Button
+              type="button"
+              onClick={() => lookupAthleteMutation.mutate(athleteEmailInput.trim())}
+              disabled={!athleteEmailInput.trim() || lookupAthleteMutation.isPending}
+            >
+              <Search className="h-4 w-4" />
+              Look up
+            </Button>
+          </CardContent>
+        </Card>
+
+        {athlete && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{athlete.name}</CardTitle>
+              <CardDescription>
+                {athlete.email}
+                {athlete.familyGroupId != null && ` · in family group #${athlete.familyGroupId}`}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-1.5">
+                <Label>Tier</Label>
+                <Select value={freeAgentTier} onValueChange={setFreeAgentTier}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No tier assigned</SelectItem>
+                    {FREE_AGENT_TIER_ORDER.map((id) => (
+                      <SelectItem key={id} value={id}>
+                        {FREE_AGENT_TIERS[id].label} -- {formatCents(FREE_AGENT_TIERS[id].monthlyPriceCents)}/mo
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Sport add-ons</Label>
+                <p className="text-xs text-muted-foreground">
+                  Pricing only -- none of these sport-specialist coaches are built yet, so
+                  assigning one here doesn't unlock anything today.
+                </p>
+                <div className="space-y-2">
+                  {FREE_AGENT_ADD_ON_ORDER.map((id) => (
+                    <label key={id} className="flex items-center gap-2 text-sm hover:cursor-pointer">
+                      <Checkbox
+                        checked={freeAgentAddOns.has(id)}
+                        onCheckedChange={() => toggleFreeAgentAddOn(id)}
+                      />
+                      {FREE_AGENT_ADD_ONS[id].label} -- {formatCents(FREE_AGENT_ADD_ONS[id].monthlyPriceCents)}/mo
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <label className="flex items-center gap-2 rounded-md border border-border p-3 text-sm hover:cursor-pointer">
+                <Checkbox checked={athleteIsBeta} onCheckedChange={(v) => setAthleteIsBeta(v === true)} />
+                <span>
+                  <span className="font-medium">Beta account</span> -- fully unlocked regardless of
+                  tier, exempt from billing enforcement entirely.
+                </span>
+              </label>
+
+              <Button
+                type="button"
+                className="w-full"
+                onClick={() => saveAthleteMutation.mutate()}
+                disabled={saveAthleteMutation.isPending}
+              >
+                Save
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Users className="h-4 w-4" />
+              Family groups
+            </CardTitle>
+            <CardDescription>
+              Link up to {FREE_AGENT_TIERS.family.athleteProfileCap} athletes under one Family plan
+              -- each gets set to the Family tier automatically.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              {familyEmails.map((email, i) => (
+                <Input
+                  key={i}
+                  type="email"
+                  value={email}
+                  onChange={(e) => {
+                    const next = [...familyEmails];
+                    next[i] = e.target.value;
+                    setFamilyEmails(next);
+                  }}
+                  placeholder={`Athlete ${i + 1} email${i === 0 ? "" : " (optional)"}`}
+                />
+              ))}
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => createFamilyGroupMutation.mutate()}
+              disabled={!familyEmails[0]?.trim() || createFamilyGroupMutation.isPending}
+            >
+              Create family group
+            </Button>
           </CardContent>
         </Card>
       </div>

@@ -1,4 +1,5 @@
 import { BILLING_TIERS, type AddOnId, type BillingTierId } from "@shared/billing-tiers";
+import { FREE_AGENT_TIERS, type FreeAgentTierId } from "@shared/free-agent-tiers";
 
 // Global kill switch -- deliberately not read from render.yaml (it's not
 // added there at all), so production stays off the same way local dev does
@@ -57,4 +58,47 @@ export function getEntitlements(account: BillingAccount): Entitlements {
       Boolean(tier?.includesFullPersonalization) || hasFullBundle || addOns.has("workflow"),
     hasMultiTeam: Boolean(tier?.includesMultiTeam),
   };
+}
+
+// ---------- Free Agent (individual athlete) AI-coach billing ----------
+// A separate track from the coach/org billing above -- see
+// shared/free-agent-tiers.ts. Reuses the exact same isBetaAccount/
+// trialExpiresAt columns and ENFORCEMENT_ENABLED switch (both live on the
+// one users table regardless of role), so there's nothing new to default
+// "off" here.
+
+export interface FreeAgentEntitlements {
+  hasAiChat: boolean;
+  hasVideoFormCheck: boolean;
+}
+
+const UNLIMITED_FREE_AGENT_ENTITLEMENTS: FreeAgentEntitlements = {
+  hasAiChat: true,
+  hasVideoFormCheck: true,
+};
+
+const NONE_FREE_AGENT_ENTITLEMENTS: FreeAgentEntitlements = {
+  hasAiChat: false,
+  hasVideoFormCheck: false,
+};
+
+export interface FreeAgentBillingAccount {
+  freeAgentTier: string | null;
+  isBetaAccount: boolean;
+  trialExpiresAt: Date | null;
+}
+
+/** Family resolves identically to ai_coach_video -- Family only changes how
+ * many athlete profiles one payment covers (see users.familyGroupId), not
+ * what any one member can do. */
+export function getFreeAgentEntitlements(account: FreeAgentBillingAccount): FreeAgentEntitlements {
+  const trialActive = account.trialExpiresAt != null && account.trialExpiresAt.getTime() > Date.now();
+  if (!ENFORCEMENT_ENABLED || account.isBetaAccount || trialActive) {
+    return UNLIMITED_FREE_AGENT_ENTITLEMENTS;
+  }
+
+  const tier = account.freeAgentTier ? FREE_AGENT_TIERS[account.freeAgentTier as FreeAgentTierId] : null;
+  if (!tier) return NONE_FREE_AGENT_ENTITLEMENTS;
+
+  return { hasAiChat: tier.hasAiChat, hasVideoFormCheck: tier.hasVideoFormCheck };
 }

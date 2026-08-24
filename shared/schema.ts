@@ -24,6 +24,13 @@ import {
   type BillingTierId,
   type AddOnId,
 } from "./billing-tiers";
+import {
+  FREE_AGENT_TIERS,
+  FREE_AGENT_TIER_ORDER,
+  FREE_AGENT_ADD_ON_ORDER,
+  type FreeAgentTierId,
+  type FreeAgentAddOnId,
+} from "./free-agent-tiers";
 
 // Owned and populated by connect-pg-simple at runtime, not by our own code --
 // declared here purely so drizzle-kit's live-diff sees it as an already-
@@ -269,6 +276,22 @@ export const users = pgTable(
     // does. Redeeming a second code before this expires extends it rather
     // than overwriting -- codes stack, they don't reset the clock.
     trialExpiresAt: timestamp("trial_expires_at"),
+    // Which Free Agent (individual athlete) AI-coach tier/add-ons this
+    // account is on -- a separate track from billingTier above, see
+    // shared/free-agent-tiers.ts. Meaningless for a coach's own row.
+    // Resolved by getFreeAgentEntitlements in server/billing.ts using the
+    // same isBetaAccount/trialExpiresAt switches already on this table --
+    // no new safety switch needed for this second pricing track.
+    freeAgentTier: text("free_agent_tier"),
+    freeAgentAddOns: json("free_agent_add_ons").$type<string[]>(),
+    // Set when an admin groups this athlete under a shared Family plan
+    // (see storage.createFamilyGroup) -- null for everyone not on one.
+    // Family membership doesn't change what a member can do (still
+    // resolves to ai_coach_video-level entitlements); it's only about who
+    // pays for how many profiles.
+    familyGroupId: integer("family_group_id").references(() => familyGroups.id, {
+      onDelete: "set null",
+    }),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({
@@ -322,6 +345,17 @@ export const redeemCodeRedemptions = pgTable(
     pairIdx: uniqueIndex("redeem_code_redemptions_pair_idx").on(table.codeId, table.coachId),
   }),
 );
+
+// A Family Free Agent plan (shared/free-agent-tiers.ts: "family", up to
+// FREE_AGENT_TIERS.family.athleteProfileCap members) is billed once but
+// covers multiple athlete accounts -- this is just the shared group they're
+// linked under via users.familyGroupId. Admin-created (see
+// /api/admin/family-groups), same manual-assignment pattern as coach
+// billing -- no self-serve group creation yet.
+export const familyGroups = pgTable("family_groups", {
+  id: serial("id").primaryKey(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
 
 export const coachAthletes = pgTable(
   "coach_athletes",
@@ -2077,6 +2111,29 @@ export const redeemCodeInputSchema = z.object({
   code: z.string().trim().min(1).max(30),
 });
 
+// Admin-only -- see server/billing.ts and shared/free-agent-tiers.ts. Enum
+// values pulled from FREE_AGENT_TIER_ORDER/FREE_AGENT_ADD_ON_ORDER (not
+// hand-typed), same reasoning as updateCoachBillingSchema above.
+export const updateFreeAgentBillingSchema = z.object({
+  freeAgentTier: z
+    .enum(FREE_AGENT_TIER_ORDER as [FreeAgentTierId, ...FreeAgentTierId[]])
+    .optional()
+    .nullable(),
+  freeAgentAddOns: z.array(z.enum(FREE_AGENT_ADD_ON_ORDER as [FreeAgentAddOnId, ...FreeAgentAddOnId[]])).optional(),
+  isBetaAccount: z.boolean().optional(),
+});
+
+// Admin-only -- creates a new Family group and links these athletes to it
+// (see storage.createFamilyGroup). Capped at the tier's own
+// athleteProfileCap so this schema can never validate a group larger than
+// what Family actually covers.
+export const createFamilyGroupSchema = z.object({
+  athleteEmails: z
+    .array(z.string().trim().toLowerCase().email())
+    .min(1)
+    .max(FREE_AGENT_TIERS.family.athleteProfileCap ?? 3),
+});
+
 export const insertExerciseSchema = createInsertSchema(exercises)
   .pick({
     name: true,
@@ -2396,6 +2453,8 @@ export type UpdatePersonalAccentInput = z.infer<typeof updatePersonalAccentSchem
 export type UpdateCoachBillingInput = z.infer<typeof updateCoachBillingSchema>;
 export type CreateRedeemCodeInput = z.infer<typeof createRedeemCodeSchema>;
 export type RedeemCodeInput = z.infer<typeof redeemCodeInputSchema>;
+export type UpdateFreeAgentBillingInput = z.infer<typeof updateFreeAgentBillingSchema>;
+export type CreateFamilyGroupInput = z.infer<typeof createFamilyGroupSchema>;
 export type CreateWorkoutCommentInput = z.infer<typeof createWorkoutCommentSchema>;
 export type CreateExerciseReportInput = z.infer<typeof createExerciseReportSchema>;
 export type ResolveSubmissionInput = z.infer<typeof resolveSubmissionSchema>;

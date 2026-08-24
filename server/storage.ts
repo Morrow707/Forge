@@ -45,6 +45,7 @@ import {
   foodLogEntries,
   redeemCodes,
   redeemCodeRedemptions,
+  familyGroups,
   type InsertUser,
 } from "@shared/schema";
 import type {
@@ -70,9 +71,11 @@ import type {
   UpdateNavPrefsInput,
   UpdateCoachBillingInput,
   CreateRedeemCodeInput,
+  UpdateFreeAgentBillingInput,
 } from "@shared/schema";
 import type { WidgetLayoutEntry } from "@shared/dashboard-widgets";
 import { deleteUploadedFile } from "./uploaded-files";
+import { FREE_AGENT_TIERS } from "@shared/free-agent-tiers";
 import { getEntitlements } from "./billing";
 import { lookupBarcode, searchFoodsByName, type FoodCandidate } from "./food-lookup";
 import { TESTING_METRICS, testingMetricLowerIsBetter } from "@shared/testing-metrics";
@@ -1098,6 +1101,65 @@ export const storage = {
     await db.update(users).set({ trialExpiresAt }).where(eq(users.id, coachId));
 
     return { ok: true, trialExpiresAt };
+  },
+
+  // ---------- Free Agent billing (separate track from coach/org billing
+  // above -- shared/free-agent-tiers.ts). Admin-only, same manual-
+  // assignment pattern as updateCoachBilling since there's no self-serve
+  // checkout for this either. ----------
+  async updateFreeAgentBilling(athleteId: number, values: UpdateFreeAgentBillingInput) {
+    const [row] = await db
+      .update(users)
+      .set({
+        ...(values.freeAgentTier !== undefined && { freeAgentTier: values.freeAgentTier }),
+        ...(values.freeAgentAddOns !== undefined && { freeAgentAddOns: values.freeAgentAddOns }),
+        ...(values.isBetaAccount !== undefined && { isBetaAccount: values.isBetaAccount }),
+      })
+      .where(eq(users.id, athleteId))
+      .returning({
+        id: users.id,
+        freeAgentTier: users.freeAgentTier,
+        freeAgentAddOns: users.freeAgentAddOns,
+        isBetaAccount: users.isBetaAccount,
+      });
+    return row ?? null;
+  },
+
+  // Creates a new Family group and links 1-athleteProfileCap athletes to
+  // it, setting freeAgentTier="family" on each. Refuses rather than
+  // silently reassigning if any listed email isn't an athlete or is
+  // already in a group -- a discriminated result so the route can turn any
+  // failure into a specific message instead of a generic 500.
+  async createFamilyGroup(
+    athleteEmails: string[],
+  ): Promise<{ ok: true; groupId: number; memberIds: number[] } | { ok: false; message: string }> {
+    const cap = FREE_AGENT_TIERS.family.athleteProfileCap ?? athleteEmails.length;
+    if (athleteEmails.length > cap) {
+      return { ok: false, message: `Family plans cover up to ${cap} athletes` };
+    }
+
+    const members = await Promise.all(athleteEmails.map((email) => this.getUserByEmail(email)));
+    const missingEmails = athleteEmails.filter((_, i) => !members[i]);
+    if (missingEmails.length > 0) {
+      return { ok: false, message: `No account found for: ${missingEmails.join(", ")}` };
+    }
+    const notAthlete = members.find((m) => m!.role !== "athlete");
+    if (notAthlete) {
+      return { ok: false, message: `${notAthlete.email} isn't an athlete account` };
+    }
+    const alreadyGrouped = members.find((m) => m!.familyGroupId != null);
+    if (alreadyGrouped) {
+      return { ok: false, message: `${alreadyGrouped.email} is already in a family group` };
+    }
+
+    const [group] = await db.insert(familyGroups).values({}).returning();
+    const memberIds = members.map((m) => m!.id);
+    await db
+      .update(users)
+      .set({ familyGroupId: group.id, freeAgentTier: "family" })
+      .where(inArray(users.id, memberIds));
+
+    return { ok: true, groupId: group.id, memberIds };
   },
 
   async getUserByCoachCode(code: string) {

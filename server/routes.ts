@@ -5,7 +5,7 @@ import fs from "fs";
 import multer from "multer";
 import { setupAuth, requireAuth, requireRole } from "./auth";
 import { hashPassword, comparePasswords } from "./auth-utils";
-import { getEntitlements, type Entitlements } from "./billing";
+import { getEntitlements, type Entitlements, getFreeAgentEntitlements } from "./billing";
 import { storage } from "./storage";
 import { buildIcsFeed } from "./ics";
 import { getVapidPublicKey } from "./push";
@@ -45,6 +45,8 @@ import {
   updateCoachBillingSchema,
   createRedeemCodeSchema,
   redeemCodeInputSchema,
+  updateFreeAgentBillingSchema,
+  createFamilyGroupSchema,
   createBodyMetricSchema,
   createAnnotationSchema,
   testingTrendsQuerySchema,
@@ -186,33 +188,55 @@ async function requireFreeAgent(req: any, res: any, next: any) {
 }
 
 // The seeded demo Free Agent account (see server/seed.ts) is the one
-// deliberate exception to the paywall below -- it's used for demoing/
-// testing the full Free Agent AI experience without real billing existing
-// yet, so it's treated as permanently "paid." No other account gets this.
+// deliberate exception to real tier resolution below -- it's used for
+// demoing/testing the full Free Agent AI experience without needing to
+// admin-assign it a real tier, so it's treated as permanently fully paid.
+// No other account gets this.
 const COMPED_FREE_AGENT_EMAILS = new Set(["freeagent@forge.app"]);
 
-// The future paywall requireFreeAgent's own comment anticipates: nothing
-// sets this true yet (no billing exists), so every route gated behind it is
-// a hard block for a Free Agent until that's built -- change only this
-// function once real billing exists. Exercise substitution is deliberately
-// never gated by this (see the swap-exercise routes below) so a Free Agent
-// keeps that one AI feature even while everything else here is paywalled.
-async function hasAthletePaidForAiAccess(_athleteId: number, email: string): Promise<boolean> {
-  return COMPED_FREE_AGENT_EMAILS.has(email);
+// Resolves what a Free Agent is actually entitled to -- see
+// shared/free-agent-tiers.ts and getFreeAgentEntitlements in billing.ts.
+// Fully unlocked for the comped demo account regardless of its real
+// isBetaAccount/freeAgentTier, same as before this tier system existed.
+async function getFreeAgentEntitlementsForAthlete(athleteId: number, email: string) {
+  if (COMPED_FREE_AGENT_EMAILS.has(email)) {
+    return { hasAiChat: true, hasVideoFormCheck: true };
+  }
+  const account = await storage.getUser(athleteId);
+  return getFreeAgentEntitlements({
+    freeAgentTier: account?.freeAgentTier ?? null,
+    isBetaAccount: account?.isBetaAccount ?? true,
+    trialExpiresAt: account?.trialExpiresAt ?? null,
+  });
 }
 
-// Gates the "full function" AI features (program builder chat/draft, AI
-// form-check, the general AI chat coach) for a Free Agent specifically.
+// Gates the "AI Coach" tier features (program builder chat/draft, the
+// general AI chat coach, nutrition Q&A) for a Free Agent specifically.
 // Only meaningful stacked after requireFreeAgent, which already guarantees
 // the caller has zero coaches by the time this runs -- a coached athlete
 // never reaches this paywall at all, they're already rejected upstream.
-async function requirePaidAiAccess(req: any, res: any, next: any) {
+async function requireFreeAgentAiChat(req: any, res: any, next: any) {
   const user = currentUser(req);
-  const hasPaid = await hasAthletePaidForAiAccess(user.id, user.email);
-  if (!hasPaid) {
+  const entitlements = await getFreeAgentEntitlementsForAthlete(user.id, user.email);
+  if (!entitlements.hasAiChat) {
     return res.status(402).json({
       message:
-        "This AI feature is a paid upgrade for Free Agents, coming soon -- exercise substitution stays free in the meantime.",
+        "This AI feature needs a Free Agent AI Coach plan or higher -- see /pricing. Exercise substitution stays free either way.",
+      freeAgentPaywall: true,
+    });
+  }
+  next();
+}
+
+// Gates AI form-check specifically -- needs the "AI Coach + Video" tier
+// (or Family, which resolves the same). Stacks after requireFreeAgentAiChat
+// wherever both apply, but form-check only ever needs this one.
+async function requireFreeAgentVideoAccess(req: any, res: any, next: any) {
+  const user = currentUser(req);
+  const entitlements = await getFreeAgentEntitlementsForAthlete(user.id, user.email);
+  if (!entitlements.hasVideoFormCheck) {
+    return res.status(402).json({
+      message: "AI form-check needs the Free Agent AI Coach + Video tier (or Family) -- see /pricing.",
       freeAgentPaywall: true,
     });
   }
@@ -659,6 +683,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ message: result.message });
     }
     res.json({ trialExpiresAt: result.trialExpiresAt });
+  });
+
+  // Free Agent (individual athlete) billing -- a separate track from the
+  // coach/org billing above, see shared/free-agent-tiers.ts. Same
+  // manual/pilot-program admin-assignment approach for now.
+
+  app.get("/api/admin/athletes/lookup", requireRole("admin"), async (req, res) => {
+    const email = typeof req.query.email === "string" ? req.query.email.trim() : "";
+    if (!email) {
+      return res.status(400).json({ message: "email is required" });
+    }
+    const athlete = await storage.getUserByEmail(email);
+    if (!athlete || athlete.role !== "athlete") {
+      return res.status(404).json({ message: "No athlete with that email" });
+    }
+    res.json({
+      id: athlete.id,
+      name: athlete.name,
+      email: athlete.email,
+      freeAgentTier: athlete.freeAgentTier,
+      freeAgentAddOns: athlete.freeAgentAddOns ?? [],
+      isBetaAccount: athlete.isBetaAccount,
+      familyGroupId: athlete.familyGroupId,
+    });
+  });
+
+  app.patch("/api/admin/athletes/:id/billing", requireRole("admin"), async (req, res) => {
+    const athleteId = Number(req.params.id);
+    const target = await storage.getUser(athleteId);
+    if (!target || target.role !== "athlete") {
+      return res.status(404).json({ message: "Athlete not found" });
+    }
+    const parsed = updateFreeAgentBillingSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const updated = await storage.updateFreeAgentBilling(athleteId, parsed.data);
+    res.json(updated);
+  });
+
+  // Groups up to FREE_AGENT_TIERS.family.athleteProfileCap athletes under
+  // one Family plan (see storage.createFamilyGroup) -- each member ends up
+  // with freeAgentTier="family" and a shared familyGroupId.
+  app.post("/api/admin/family-groups", requireRole("admin"), async (req, res) => {
+    const parsed = createFamilyGroupSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const result = await storage.createFamilyGroup(parsed.data.athleteEmails);
+    if (!result.ok) {
+      return res.status(400).json({ message: result.message });
+    }
+    res.status(201).json(result);
   });
 
   // Self-assignment: coachId and athleteId are both the admin's own id.
@@ -2349,7 +2426,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Free-Agent-only self-edit: manual data entry, not an AI capability, so
-  // it isn't behind requirePaidAiAccess -- a Free Agent with their own real
+  // it isn't behind requireFreeAgentAiChat -- a Free Agent with their own real
   // nutritionist can just use the app the same way a coached athlete's
   // coach would. Once they join a coach, this stops being reachable
   // (requireFreeAgent) and the coach's roster route above becomes the only
@@ -2374,7 +2451,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // against the targets above. This is data entry (a barcode/name lookup is
   // just a convenience proxy to a public food database, never an AI call --
   // see server/food-lookup.ts), so unlike the nutrition Q&A below it's
-  // never gated behind requireFreeAgent or requirePaidAiAccess.
+  // never gated behind requireFreeAgent or requireFreeAgentAiChat.
   app.get("/api/athlete/food-log", requireRole("athlete"), async (req, res) => {
     const user = currentUser(req);
     const date = typeof req.query.date === "string" ? req.query.date : todayIso();
@@ -2425,7 +2502,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // home-cooked or restaurant plate, so this is a real vision call rather
   // than a lookup. Same "every athlete, coached or Free Agent" access as the
   // rest of food logging -- not gated behind requireFreeAgent/
-  // requirePaidAiAccess, since this doesn't compete with a coach's guidance
+  // requireFreeAgentAiChat, since this doesn't compete with a coach's guidance
   // any more than typing in a food name does.
   app.post("/api/athlete/food/analyze-photo", requireRole("athlete"), async (req, res) => {
     const schema = z.object({
@@ -2671,14 +2748,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // by the athlete's coach too (see the matching /api/coach/roster/:id/chat
   // route below), which stays true for a Free-Agent-era history even after
   // they join a coach. Gated the same as the AI-programs routes above: a
-  // Free Agent is the only one who ever reaches requirePaidAiAccess here --
+  // Free Agent is the only one who ever reaches requireFreeAgentAiChat here --
   // requireFreeAgent already rejects a coached athlete before that, since
   // the coach is their guidance now, not the AI.
   app.get(
     "/api/athlete/chat",
     requireRole("athlete"),
     requireFreeAgent,
-    requirePaidAiAccess,
+    requireFreeAgentAiChat,
     async (req, res) => {
       const user = currentUser(req);
       const messages = await storage.getChatMessagesForAthlete(user.id);
@@ -2690,7 +2767,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "/api/athlete/chat",
     requireRole("athlete"),
     requireFreeAgent,
-    requirePaidAiAccess,
+    requireFreeAgentAiChat,
     async (req, res) => {
       const user = currentUser(req);
       const parsed = sendChatMessageSchema.safeParse(req.body);
@@ -2916,8 +2993,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // once an athlete joins a team they're meant to rely on that coach, not
   // keep a parallel self-serve programs feature running. The AI-specific
   // routes below (ai-draft, chat, form-check) are further gated behind
-  // requirePaidAiAccess, a paid-upgrade paywall that's a hard block until
-  // real billing exists; the plain CRUD routes (list/get/create/update/
+  // requireFreeAgentAiChat/requireFreeAgentVideoAccess, real tiered paywalls
+  // now (see shared/free-agent-tiers.ts); the plain CRUD routes (list/get/create/update/
   // delete) and the dedicated swap-exercise route stay free for every Free
   // Agent, so manual program building and exercise substitution always
   // work. No human reviews an AI edit before it applies (see
@@ -2967,7 +3044,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "/api/athlete/programs/ai-draft",
     requireRole("athlete"),
     requireFreeAgent,
-    requirePaidAiAccess,
+    requireFreeAgentAiChat,
     async (req, res) => {
       const user = currentUser(req);
       const parsed = generateProgramDraftSchema.safeParse(req.body);
@@ -3006,7 +3083,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "/api/athlete/programs/:id/chat",
     requireRole("athlete"),
     requireFreeAgent,
-    requirePaidAiAccess,
+    requireFreeAgentAiChat,
     async (req, res) => {
       const user = currentUser(req);
       const id = Number(req.params.id);
@@ -3021,7 +3098,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "/api/athlete/programs/:id/chat",
     requireRole("athlete"),
     requireFreeAgent,
-    requirePaidAiAccess,
+    requireFreeAgentAiChat,
     async (req, res) => {
       const user = currentUser(req);
       const id = Number(req.params.id);
@@ -3035,7 +3112,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   );
 
   // The exercise-substitution agent -- deliberately its own narrow route,
-  // never behind requirePaidAiAccess, so a Free Agent keeps this one AI
+  // never behind requireFreeAgentAiChat, so a Free Agent keeps this one AI
   // feature even with the general program builder/chat paywalled above.
   app.post(
     "/api/athlete/programs/:id/swap-exercise",
@@ -3070,7 +3147,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "/api/athlete/nutrition/ask",
     requireRole("athlete"),
     requireFreeAgent,
-    requirePaidAiAccess,
+    requireFreeAgentAiChat,
     async (req, res) => {
       const user = currentUser(req);
       const schema = z.object({ question: z.string().trim().min(3).max(500) });
@@ -3091,7 +3168,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "/api/athlete/programs/:id/form-check",
     requireRole("athlete"),
     requireFreeAgent,
-    requirePaidAiAccess,
+    requireFreeAgentVideoAccess,
     async (req, res) => {
       const user = currentUser(req);
       const id = Number(req.params.id);

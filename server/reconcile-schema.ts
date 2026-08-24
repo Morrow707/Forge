@@ -796,6 +796,19 @@ CREATE TABLE IF NOT EXISTS "redeem_code_redemptions" (
   "redeemed_at" timestamp NOT NULL DEFAULT now()
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "redeem_code_redemptions_pair_idx" ON "redeem_code_redemptions" ("code_id", "coach_id");
+
+-- Free Agent (individual athlete) AI-coach pricing -- a separate track
+-- from the coach/org billing above (see shared/free-agent-tiers.ts).
+-- Reuses users.is_beta_account / trial_expires_at as the same two safety
+-- switches already in place; nothing here changes behavior on its own.
+CREATE TABLE IF NOT EXISTS "family_groups" (
+  "id" serial PRIMARY KEY,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "free_agent_tier" text;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "free_agent_add_ons" json;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "family_group_id" integer REFERENCES "family_groups"("id") ON DELETE SET NULL;
 `;
 
 async function main() {
