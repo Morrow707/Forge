@@ -94,6 +94,20 @@ jobs:
         working-directory: ios/App
         run: xcodebuild -resolvePackageDependencies -project App.xcodeproj
 
+      # Matches android-release.yml's own JDK -- CodeQL's Java autobuild
+      # pins org.gradle.java.home to whatever JAVA_HOME resolves to when
+      # it runs (near the end of this job, at the analyze step below),
+      # not necessarily this runner's default JDK. Without this, autobuild
+      # picked whatever ubuntu-latest defaults to (Temurin 17) and failed
+      # with "invalid source release: 21" -- this project's Gradle config
+      # targets 21.
+      - name: Set up Java
+        if: matrix.language == 'java-kotlin'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
       # Same two steps as android-release.yml's own build job -- the
       # missing half of why java-kotlin's autobuild failed outright (see
       # this file's top comment).
