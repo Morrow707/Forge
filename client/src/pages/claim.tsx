@@ -13,6 +13,14 @@ import { savePasswordToKeychain } from "@/lib/native-auth";
 import { ForgeMark } from "@/components/forge-mark";
 import { toast } from "sonner";
 import type { PublicUser } from "@shared/schema";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { SPORTS } from "@shared/exercise-taxonomy";
 
 type ProvisionalPreview = {
   name: string;
@@ -20,6 +28,8 @@ type ProvisionalPreview = {
   position: string | null;
   needsDateOfBirth: boolean;
   needsGuardianEmail: boolean;
+  needsSport: boolean;
+  needsPosition: boolean;
 };
 
 /** Where a player-inflow-sheet claim code lands (see PlayerIntakeImportDialog
@@ -37,6 +47,8 @@ export default function ClaimPage() {
   const [password, setPassword] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState("");
   const [guardianEmail, setGuardianEmail] = useState("");
+  const [sport, setSport] = useState("");
+  const [position, setPosition] = useState("");
   const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   const { data: preview, isLoading: previewLoading, isError: previewError } = useQuery<ProvisionalPreview>({
@@ -51,6 +63,8 @@ export default function ClaimPage() {
         password,
         dateOfBirth: dateOfBirth || undefined,
         guardianEmail: guardianEmail.trim() || undefined,
+        sport: sport || undefined,
+        position: position.trim() || undefined,
         agreedToTerms: true,
       });
       return (await res.json()) as PublicUser & { nativeToken?: string };
@@ -129,6 +143,35 @@ export default function ClaimPage() {
                 />
               </div>
             )}
+            {preview?.needsSport && (
+              <div className="space-y-1.5">
+                <Label htmlFor="claim-sport">Sport</Label>
+                <Select value={sport} onValueChange={setSport}>
+                  <SelectTrigger id="claim-sport">
+                    <SelectValue placeholder="Select your sport" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SPORTS.map((s) => (
+                      <SelectItem key={s} value={s}>
+                        {s}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            {preview?.needsPosition && (
+              <div className="space-y-1.5">
+                <Label htmlFor="claim-position">Position</Label>
+                <Input
+                  id="claim-position"
+                  required
+                  value={position}
+                  onChange={(e) => setPosition(e.target.value)}
+                  placeholder="e.g. Linebacker"
+                />
+              </div>
+            )}
             {(preview?.needsDateOfBirth || preview?.needsGuardianEmail) && (
               <div className="space-y-1.5">
                 <Label htmlFor="claim-guardian-email">Parent/guardian email</Label>
@@ -161,7 +204,16 @@ export default function ClaimPage() {
               <Checkbox checked={agreedToTerms} onCheckedChange={(c) => setAgreedToTerms(c === true)} />
               I agree to the terms of service
             </label>
-            <Button type="submit" className="w-full" disabled={!agreedToTerms || claimMutation.isPending}>
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={
+                !agreedToTerms ||
+                claimMutation.isPending ||
+                (!!preview?.needsSport && !sport) ||
+                (!!preview?.needsPosition && !position.trim())
+              }
+            >
               {claimMutation.isPending ? "Creating account..." : "Create Account"}
             </Button>
           </form>

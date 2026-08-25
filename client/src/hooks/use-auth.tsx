@@ -16,6 +16,8 @@ type SignupPayload = {
   phone?: string;
   dateOfBirth: string;
   guardianEmail?: string;
+  sport?: string;
+  position?: string;
   agreedToTerms: true;
 };
 

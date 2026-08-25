@@ -4,11 +4,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { Search, Target, Star, Clock } from "lucide-react";
+import { Search, Target, Star, Clock, Lock } from "lucide-react";
+import { toast } from "sonner";
 import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
 import type { SkillExerciseWithOwnership as SkillExercise } from "@/lib/skill-types";
 import { SKILL_TYPES, SKILL_EQUIPMENT } from "@/lib/skill-taxonomy";
 import { SPORTS } from "@shared/exercise-taxonomy";
+import { SKILL_SPORT_UNLOCK_MONTHLY_PRICE_CENTS } from "@shared/free-agent-tiers";
 import { toggleInSet } from "@/components/filter-chip-group";
 import {
   SKILL_FILTER_ACTIVE_CLASS,
@@ -73,6 +75,26 @@ export function SkillPickerDialog({
       }
     }
     return counts;
+  }, [skills]);
+  // Which sports are entirely behind the paywall for this Free Agent (see
+  // getVisibleSkillExercisesForFreeAgent's per-drill `locked` flag) -- a
+  // sport with a mix of locked and cross-sport-free drills doesn't get the
+  // lock badge on its top-level button, only on the individual rows still
+  // locked once opened, same "locked but visible" posture as skill-bank.tsx.
+  const fullyLockedSports = useMemo(() => {
+    const totals = new Map<string, number>();
+    const locked = new Map<string, number>();
+    for (const sk of skills) {
+      for (const sp of sk.sports ?? []) {
+        totals.set(sp, (totals.get(sp) ?? 0) + 1);
+        if (sk.locked) locked.set(sp, (locked.get(sp) ?? 0) + 1);
+      }
+    }
+    const result = new Set<string>();
+    for (const [sport, total] of totals) {
+      if (total > 0 && locked.get(sport) === total) result.add(sport);
+    }
+    return result;
   }, [skills]);
   const scopedToSport = useMemo(
     () => (activeSport ? skills.filter((sk) => (sk.sports ?? []).includes(activeSport)) : skills),
@@ -202,6 +224,7 @@ export function SkillPickerDialog({
                 {SPORTS.map((sport) => {
                   const active = activeSport === sport;
                   const count = sportCounts.get(sport) ?? 0;
+                  const locked = fullyLockedSports.has(sport);
                   return (
                     <button
                       key={sport}
@@ -210,12 +233,13 @@ export function SkillPickerDialog({
                       aria-pressed={active}
                       disabled={count === 0}
                       className={cn(
-                        "rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-40",
+                        "flex items-center rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-40",
                         active
                           ? SPORT_FILTER_ACTIVE_CLASS
                           : "border-border text-muted-foreground hover:border-primary/50 hover:text-primary",
                       )}
                     >
+                      {locked && <Lock className="mr-1 h-3 w-3" />}
                       {sport}
                       <span className="ml-1 font-normal opacity-70">{count}</span>
                     </button>
@@ -296,11 +320,20 @@ export function SkillPickerDialog({
                 key={sk.id}
                 type="button"
                 onClick={() => {
+                  if (sk.locked) {
+                    toast.info(
+                      `Unlock ${activeSport ?? sk.sports?.[0] ?? "this sport"} drills for $${(SKILL_SPORT_UNLOCK_MONTHLY_PRICE_CENTS / 100).toFixed(2)}/mo to add "${sk.name}."`,
+                    );
+                    return;
+                  }
                   onSelect(sk);
                   onOpenChange(false);
                   setSearch("");
                 }}
-                className="flex w-full items-center justify-between rounded-md px-3 py-2.5 text-left transition-colors hover:bg-surface-elevated"
+                className={cn(
+                  "flex w-full items-center justify-between rounded-md px-3 py-2.5 text-left transition-colors",
+                  sk.locked ? "opacity-60" : "hover:bg-surface-elevated",
+                )}
               >
                 <div>
                   <p className="text-sm font-semibold">{sk.name}</p>
@@ -310,14 +343,23 @@ export function SkillPickerDialog({
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
-                  <ExerciseOwnershipBadge isForgeOfficial={sk.isForgeOfficial} ownerLabel={sk.ownerLabel} />
-                  {/* Every visible row already matches activeSport when one's
-                      selected -- showing that instead of a raw skillType or
-                      first-sports-tag badge keeps the row's badge meaningful
-                      relative to whichever accordion tab is open, same as
-                      the exercise picker's activeFamily badge. */}
-                  {(activeSport ?? sk.sports?.[0]) && (
-                    <Badge variant="secondary">{activeSport ?? sk.sports![0]}</Badge>
+                  {sk.locked ? (
+                    <Badge variant="secondary" className="gap-1 text-amber-500">
+                      <Lock className="h-3 w-3" />
+                      Locked
+                    </Badge>
+                  ) : (
+                    <>
+                      <ExerciseOwnershipBadge isForgeOfficial={sk.isForgeOfficial} ownerLabel={sk.ownerLabel} />
+                      {/* Every visible row already matches activeSport when one's
+                          selected -- showing that instead of a raw skillType or
+                          first-sports-tag badge keeps the row's badge meaningful
+                          relative to whichever accordion tab is open, same as
+                          the exercise picker's activeFamily badge. */}
+                      {(activeSport ?? sk.sports?.[0]) && (
+                        <Badge variant="secondary">{activeSport ?? sk.sports![0]}</Badge>
+                      )}
+                    </>
                   )}
                 </div>
               </button>

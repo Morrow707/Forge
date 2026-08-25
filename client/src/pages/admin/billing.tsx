@@ -34,6 +34,9 @@ import {
   type FreeAgentAddOnId,
 } from "@shared/free-agent-tiers";
 import { VIDEO_STORAGE_ADD_ON, VIDEO_RETENTION } from "@shared/video-retention";
+import { SKILL_SPORT_UNLOCK_MONTHLY_PRICE_CENTS } from "@shared/free-agent-tiers";
+import { SPORTS } from "@shared/exercise-taxonomy";
+import { FilterChipGroup, toggleInSet } from "@/components/filter-chip-group";
 
 type CoachLookup = {
   id: number;
@@ -64,6 +67,7 @@ type AthleteLookup = {
   isBetaAccount: boolean;
   familyGroupId: number | null;
   hasVideoStorageAddOn: boolean;
+  unlockedSkillSports: string[];
 };
 
 /** No self-serve checkout exists yet -- this is the only place a real
@@ -88,6 +92,7 @@ export default function AdminBilling() {
   const [freeAgentAddOns, setFreeAgentAddOns] = useState<Set<FreeAgentAddOnId>>(new Set());
   const [athleteIsBeta, setAthleteIsBeta] = useState(true);
   const [videoStorageAddOn, setVideoStorageAddOn] = useState(false);
+  const [unlockedSkillSports, setUnlockedSkillSports] = useState<Set<string>>(new Set());
 
   const [familyEmails, setFamilyEmails] = useState(["", "", ""]);
 
@@ -160,6 +165,7 @@ export default function AdminBilling() {
       setFreeAgentAddOns(new Set(data.freeAgentAddOns as FreeAgentAddOnId[]));
       setAthleteIsBeta(data.isBetaAccount);
       setVideoStorageAddOn(data.hasVideoStorageAddOn);
+      setUnlockedSkillSports(new Set(data.unlockedSkillSports));
     },
     onError: (err: ApiError) => {
       setAthlete(null);
@@ -175,6 +181,7 @@ export default function AdminBilling() {
         freeAgentAddOns: Array.from(freeAgentAddOns),
         isBetaAccount: athleteIsBeta,
         hasVideoStorageAddOn: videoStorageAddOn,
+        unlockedSkillSports: Array.from(unlockedSkillSports),
       });
     },
     onSuccess: () => {
@@ -436,6 +443,20 @@ export default function AdminBilling() {
                     </label>
                   ))}
                 </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Unlocked skill sports</Label>
+                <p className="text-xs text-muted-foreground">
+                  Every Free Agent gets their own signup sport's Skill Bank free -- toggle on any
+                  other sport here to unlock it manually (${(SKILL_SPORT_UNLOCK_MONTHLY_PRICE_CENTS / 100).toFixed(2)}/mo each, no live checkout yet).
+                </p>
+                <FilterChipGroup
+                  label="Sports"
+                  options={SPORTS}
+                  selected={unlockedSkillSports}
+                  onToggle={(v) => toggleInSet(setUnlockedSkillSports, v)}
+                />
               </div>
 
               <label className="flex items-center gap-2 rounded-md border border-border p-3 text-sm hover:cursor-pointer">

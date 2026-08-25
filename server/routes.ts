@@ -1965,6 +1965,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       isBetaAccount: athlete.isBetaAccount,
       familyGroupId: athlete.familyGroupId,
       hasVideoStorageAddOn: athlete.hasVideoStorageAddOn,
+      unlockedSkillSports: athlete.unlockedSkillSports ?? [],
     });
   });
 
@@ -6556,7 +6557,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // instead of "strengthAi", since paying for one never unlocks the other.
   app.get("/api/athlete/skill-exercises", requireRole("athlete"), requireFreeAgent, async (req, res) => {
     const user = currentUser(req);
-    const list = await storage.getVisibleSkillExercisesForCoach(user.id);
+    const list = await storage.getVisibleSkillExercisesForFreeAgent(user.id);
     res.json(list);
   });
 
@@ -6595,6 +6596,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
+    const skillExerciseIds = parsed.data.weeks.flatMap((w) =>
+      w.days.flatMap((d) => d.exercises.map((ex) => ex.skillExerciseId)),
+    );
+    const locked = await storage.assertSkillExercisesUnlockedForFreeAgent(user.id, skillExerciseIds);
+    if (locked.length > 0) {
+      return res.status(403).json({
+        message: `Unlock these drills' sport to use them: ${locked.join(", ")}`,
+      });
+    }
     const program = await storage.createSkillProgramWithStructure(user.id, parsed.data);
     res.status(201).json(program);
   });
@@ -6623,6 +6633,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const parsed = skillProgramStructureSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const skillExerciseIds = parsed.data.weeks.flatMap((w) =>
+      w.days.flatMap((d) => d.exercises.map((ex) => ex.skillExerciseId)),
+    );
+    const locked = await storage.assertSkillExercisesUnlockedForFreeAgent(user.id, skillExerciseIds);
+    if (locked.length > 0) {
+      return res.status(403).json({
+        message: `Unlock these drills' sport to use them: ${locked.join(", ")}`,
+      });
     }
     await storage.updateSkillProgramStructure(id, parsed.data, user.id);
     const updated = await storage.getSkillProgramFull(id);

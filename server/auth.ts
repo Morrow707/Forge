@@ -342,10 +342,18 @@ export function setupAuth(app: Express) {
       if (!parsed.success) {
         return res.status(400).json({ message: parsed.error.issues[0]?.message });
       }
-      const { email, password, name, role, coachCode, phone, dateOfBirth, guardianEmail } = parsed.data;
+      const { email, password, name, role, coachCode, phone, dateOfBirth, guardianEmail, sport, position } =
+        parsed.data;
       const existing = await storage.getUserByEmail(email);
       if (existing) {
         return res.status(409).json({ message: "Email already in use" });
+      }
+
+      // Only an athlete needs these (a coach doesn't play the sport they
+      // coach) -- same "required by the route, not the schema" posture as
+      // guardianEmail below, since the schema alone can't see role.
+      if (role === "athlete" && (!sport || !position)) {
+        return res.status(400).json({ message: "Sport and position are required." });
       }
 
       // Tier 1 (under 13) athletes can't self-register at all -- see
@@ -405,6 +413,12 @@ export function setupAuth(app: Express) {
         emailVerified: false,
         phone: phone || null,
         dateOfBirth,
+        sport: role === "athlete" ? sport : null,
+        position: role === "athlete" ? position : null,
+        // Snapshotted once, here, at creation -- see users.signupSport's
+        // own comment for why this never gets touched again even if the
+        // athlete's `sport` profile field changes later.
+        signupSport: role === "athlete" ? sport : null,
         requiresGuardianNotice: role === "athlete" && tier === "tier2_teen_13_17",
         agreedToTermsAt: new Date(),
         agreedToTermsText,
@@ -499,6 +513,8 @@ export function setupAuth(app: Express) {
       position,
       needsDateOfBirth: !provisional.dateOfBirth,
       needsGuardianEmail,
+      needsSport: !provisional.sport,
+      needsPosition: !provisional.position,
     });
   });
 

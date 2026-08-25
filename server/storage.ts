@@ -1822,6 +1822,9 @@ export const storage = {
         ...(values.hasVideoStorageAddOn !== undefined && {
           hasVideoStorageAddOn: values.hasVideoStorageAddOn,
         }),
+        ...(values.unlockedSkillSports !== undefined && {
+          unlockedSkillSports: values.unlockedSkillSports,
+        }),
       })
       .where(eq(users.id, athleteId))
       .returning({
@@ -1830,6 +1833,7 @@ export const storage = {
         freeAgentAddOns: users.freeAgentAddOns,
         isBetaAccount: users.isBetaAccount,
         hasVideoStorageAddOn: users.hasVideoStorageAddOn,
+        unlockedSkillSports: users.unlockedSkillSports,
       });
     return row ?? null;
   },
@@ -6085,6 +6089,58 @@ ${athleteContext}
         lastUsedAt: usageBySkillExerciseId.get(ex.id) ?? null,
       }))
       .sort((a, b) => Number(b.isFavorite) - Number(a.isFavorite));
+  },
+
+  // Free-Agent-specific wrapper around getVisibleSkillExercisesForCoach
+  // above -- adds a `locked: boolean` per drill instead of filtering
+  // anything out (see skill-picker-dialog.tsx's own comment on why locked
+  // stays visible rather than hidden -- functionally identical for storage
+  // cost either way, since a locked drill can never be selected into a
+  // program regardless, but visible-and-locked gives a real upgrade
+  // prompt instead of nothing). Free = the athlete's own signupSport, the
+  // cross-sport bucket (skillExercises.crossSportFree), or any sport
+  // they've separately paid to unlock (users.unlockedSkillSports). A
+  // pre-signupSport account (created before this feature existed) falls
+  // back to whatever `sport` is currently on their profile rather than
+  // locking everything -- nobody who signed up before this shipped should
+  // get a worse experience than they had yesterday.
+  async getVisibleSkillExercisesForFreeAgent(athleteId: number) {
+    const [list, athlete] = await Promise.all([
+      this.getVisibleSkillExercisesForCoach(athleteId),
+      this.getUser(athleteId),
+    ]);
+    const freeSport = athlete?.signupSport ?? athlete?.sport ?? null;
+    const unlockedSports = new Set(athlete?.unlockedSkillSports ?? []);
+    return list.map((sk) => {
+      const sports = sk.sports ?? [];
+      const unlocked =
+        sk.crossSportFree ||
+        (freeSport != null && sports.includes(freeSport)) ||
+        sports.some((s) => unlockedSports.has(s));
+      return { ...sk, locked: !unlocked };
+    });
+  },
+
+  // Server-side enforcement counterpart to the locked flag above -- a
+  // Free Agent's own skill-program save (POST/PUT /api/athlete/skill-
+  // programs) rejects outright if it references any drill locked for
+  // them, rather than silently letting a client bypass the picker's own
+  // disabled-selection UI. Returns the locked drills' names for a useful
+  // error message; empty means everything referenced is unlocked.
+  async assertSkillExercisesUnlockedForFreeAgent(
+    athleteId: number,
+    skillExerciseIds: number[],
+  ): Promise<string[]> {
+    const ids = Array.from(new Set(skillExerciseIds));
+    if (ids.length === 0) return [];
+    const list = await this.getVisibleSkillExercisesForFreeAgent(athleteId);
+    const byId = new Map(list.map((sk) => [sk.id, sk]));
+    const lockedNames: string[] = [];
+    for (const id of ids) {
+      const sk = byId.get(id);
+      if (sk?.locked) lockedNames.push(sk.name);
+    }
+    return lockedNames;
   },
 
   // Admin counterpart to getExercisesByCoach -- an admin's own skill bank
@@ -16329,6 +16385,15 @@ ${catalog}`;
         error: "A parent or guardian's email is required to finish creating this account." as const,
       };
     }
+    // Same "whichever of the two actually has one" pattern as dateOfBirth
+    // above -- required even though this athlete is coach-provisioned
+    // (not a Free Agent today), since users.signupSport needs a real value
+    // in case this athlete ever leaves their coach and becomes one later.
+    const sport = provisional.sport ?? input.sport;
+    const position = provisional.position ?? input.position;
+    if (!sport || !position) {
+      return { error: "Sport and position are required to finish creating this account." as const };
+    }
     const passwordHash = await hashPassword(input.password);
     const user = await this.createUser({
       email: input.email,
@@ -16347,8 +16412,9 @@ ${catalog}`;
       gender: provisional.gender ?? undefined,
       heightIn: provisional.heightIn ?? undefined,
       bodyWeightLbs: provisional.bodyWeightLbs ?? undefined,
-      sport: provisional.sport ?? undefined,
-      position: provisional.position ?? undefined,
+      sport,
+      position,
+      signupSport: sport,
       agreedToTermsAt: new Date(),
       agreedToTermsText,
     });

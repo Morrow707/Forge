@@ -8,7 +8,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
 import { SkillFaultThresholdsDialog } from "@/components/skill-fault-thresholds-dialog";
 import { apiRequest } from "@/lib/queryClient";
-import { Plus, Trash2, Target, Search, Video, SlidersHorizontal, Star, Clock } from "lucide-react";
+import { Plus, Trash2, Target, Search, Video, SlidersHorizontal, Star, Clock, Lock } from "lucide-react";
+import { SKILL_SPORT_UNLOCK_MONTHLY_PRICE_CENTS } from "@shared/free-agent-tiers";
 import { cn } from "@/lib/utils";
 import type { SkillExerciseWithOwnership } from "@/lib/skill-types";
 import { SKILL_TYPES } from "@/lib/skill-taxonomy";
@@ -244,7 +245,12 @@ export function SkillBankPage({
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {displayed.map((sk) => (
           <Link key={sk.id} href={`${routeBase}/${sk.id}`}>
-            <Card className="flex cursor-pointer flex-col transition-colors hover:border-teal-500/50">
+            <Card
+              className={cn(
+                "flex cursor-pointer flex-col transition-colors hover:border-teal-500/50",
+                sk.locked && "opacity-60",
+              )}
+            >
               <CardContent className="flex flex-1 flex-col gap-3 p-4">
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex min-w-0 items-start gap-1.5">
@@ -282,8 +288,17 @@ export function SkillBankPage({
                 )}
                 <div className="mt-auto flex items-center justify-between pt-2">
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <span>{sk.equipment?.join(", ")}</span>
-                    {sk.videoUrl && <Video className="h-3.5 w-3.5 text-teal-400" />}
+                    {sk.locked ? (
+                      <span className="flex items-center gap-1 font-medium text-amber-500">
+                        <Lock className="h-3.5 w-3.5" />
+                        Unlock for ${(SKILL_SPORT_UNLOCK_MONTHLY_PRICE_CENTS / 100).toFixed(2)}/mo
+                      </span>
+                    ) : (
+                      <>
+                        <span>{sk.equipment?.join(", ")}</span>
+                        {sk.videoUrl && <Video className="h-3.5 w-3.5 text-teal-400" />}
+                      </>
+                    )}
                   </div>
                   {sk.editable && (
                     <Button

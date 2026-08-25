@@ -250,6 +250,11 @@ export const users = pgTable(
     gender: genderEnum("gender"),
     heightIn: integer("height_in"),
     bodyWeightLbs: real("body_weight_lbs"),
+    // Required at signup (see signupSchema) and editable anytime afterward
+    // via ProfileFieldsForm -- an athlete switching sports updates this
+    // freely. signupSport above is the one that stays locked; this one
+    // doesn't. Nullable at the column level regardless, since every account
+    // created before signup required it still needs to load.
     sport: text("sport"),
     position: text("position"),
     seasonPhase: seasonPhaseEnum("season_phase"),
@@ -444,6 +449,26 @@ export const users = pgTable(
     // route already used for a Free Agent's AI tier, since it already
     // resolves any athlete by email regardless of coached status.
     hasVideoStorageAddOn: boolean("has_video_storage_add_on").notNull().default(false),
+    // Which sport's Skill Bank content is free for this Free Agent --
+    // snapshotted from `sport` above ONCE at signup and never updated
+    // again, deliberately independent of the mutable `sport` profile field
+    // above it. An athlete who changes their profile sport later (a
+    // baseball player who also plays football in the fall) does NOT get
+    // football unlocked for free just by editing their profile -- that's
+    // the whole point of a separate column rather than reading `sport`
+    // live. Null for every account created before this existed and for
+    // non-Free-Agent accounts (meaningless for a coached athlete or a
+    // coach, same posture as freeAgentTier above). See
+    // storage.getVisibleSkillExercisesForFreeAgent for how this,
+    // unlockedSkillSports below, and skillExercises.crossSportFree
+    // combine to decide what's locked.
+    signupSport: text("signup_sport"),
+    // Additional sports this Free Agent has paid to unlock beyond
+    // signupSport, at $9.99/mo each (shared/free-agent-tiers.ts) -- same
+    // "framework only, no live purchase flow yet, admin assigns it" posture
+    // as freeAgentAddOns above, via the same /api/admin/athletes/:id/billing
+    // route. Empty/null means no additional sports unlocked.
+    unlockedSkillSports: json("unlocked_skill_sports").$type<string[]>(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({
@@ -976,6 +1001,17 @@ export const skillExercises = pgTable(
     // restricts it. Enforced server-side in storage.resolveSkillTrackingLevel,
     // not just hidden client-side.
     videoEligible: boolean("video_eligible"),
+    // Free for every Free Agent regardless of their own signupSport --
+    // the cross-sport "Athletic Footwork & Agility" bucket seeded in
+    // seed.ts (agility/footwork/sprint-mechanics drills genuinely shared
+    // across sports, see multiSportSkillDrills' own comment) plus any
+    // other drill an admin marks this way. NOT NULL/false default: unlike
+    // videoEligible's "default open, opt out" posture, this is an opt-in
+    // grant -- most drills are sport-specific and should stay behind
+    // whichever sport's paywall they belong to. See
+    // storage.getVisibleSkillExercisesForFreeAgent for how this combines
+    // with users.signupSport/unlockedSkillSports to decide what's locked.
+    crossSportFree: boolean("cross_sport_free").notNull().default(false),
   },
   (table) => ({
     coachIdx: index("skill_exercises_coach_idx").on(table.coachId),
@@ -2776,6 +2812,12 @@ export const claimProvisionalAthleteSchema = z.object({
   // guardianEmail field -- enforced in storage.claimProvisionalAthlete once
   // the tier is known, not here.
   guardianEmail: z.string().trim().email().optional(),
+  // Same "only required if the coach's intake didn't already capture one"
+  // pattern as dateOfBirth above -- see provisionalAthletes.sport/position.
+  // Whichever of the two is present is what becomes users.sport/position
+  // AND users.signupSport (see that column's own comment) once claimed.
+  sport: z.string().trim().min(1).max(60).optional(),
+  position: z.string().trim().min(1).max(60).optional(),
   agreedToTerms: z.literal(true, {
     errorMap: () => ({ message: "You must agree to the terms to create an account" }),
   }),
@@ -4858,6 +4900,14 @@ export const signupSchema = z.object({
   // not just role, to know whether to enforce this) whenever the account
   // being created is a minor. See server/auth.ts's signup handler.
   guardianEmail: z.string().trim().email().optional(),
+  // Same "required by the route, not here" posture as guardianEmail above
+  // -- only athlete signups need these (a coach doesn't play the sport
+  // they coach), and the route is what knows role. See
+  // users.signupSport's own comment for why sport gets snapshotted into a
+  // separate immutable column at account-creation time rather than just
+  // reading this field later.
+  sport: z.string().trim().min(1).max(60).optional(),
+  position: z.string().trim().min(1).max(60).optional(),
   agreedToTerms: z.literal(true, {
     errorMap: () => ({ message: "You must agree to the terms to create an account" }),
   }),
@@ -5029,6 +5079,9 @@ export const updateFreeAgentBillingSchema = z.object({
   isBetaAccount: z.boolean().optional(),
   // Applies regardless of coached status -- see users.hasVideoStorageAddOn.
   hasVideoStorageAddOn: z.boolean().optional(),
+  // Free text, not an enum -- same SPORTS-suggestions-not-enforcement
+  // posture as users.sport itself. See users.unlockedSkillSports.
+  unlockedSkillSports: z.array(z.string().trim().min(1).max(60)).optional(),
 });
 
 // Admin-only -- creates a new Family group and links these athletes to it

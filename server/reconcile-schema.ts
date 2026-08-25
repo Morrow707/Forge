@@ -334,10 +334,12 @@ CREATE TABLE IF NOT EXISTS "skill_exercises" (
   "video_url" text,
   "instructions" text,
   "created_at" timestamp NOT NULL DEFAULT now(),
-  "video_eligible" boolean
+  "video_eligible" boolean,
+  "cross_sport_free" boolean NOT NULL DEFAULT false
 );
 CREATE INDEX IF NOT EXISTS "skill_exercises_coach_idx" ON "skill_exercises" ("coach_id");
 ALTER TABLE "skill_exercises" ADD COLUMN IF NOT EXISTS "video_eligible" boolean;
+ALTER TABLE "skill_exercises" ADD COLUMN IF NOT EXISTS "cross_sport_free" boolean NOT NULL DEFAULT false;
 -- equipment was a free-text "Bat, Balls, Screen" string until the skill
 -- picker got a real equipment filter -- converts any row still on the old
 -- text column to a real json array (comma-split), guarded by the column's
@@ -1336,6 +1338,8 @@ ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "family_group_id" integer REFERENCE
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "video_favorited" boolean NOT NULL DEFAULT false;
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "video_uploaded_at" timestamp;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "has_video_storage_add_on" boolean NOT NULL DEFAULT false;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "signup_sport" text;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "unlocked_skill_sports" json;
 -- Backfill so a video saved before this column existed doesn't sort as
 -- "newest" (NULL sorts last under ASC) and get treated as the last thing
 -- retention eviction would ever touch -- one-time, idempotent (only fills

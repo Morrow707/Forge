@@ -4216,6 +4216,35 @@ async function main() {
     if (skillVideoRestricted > 0) {
       console.log(`Set videoEligible=false on ${skillVideoRestricted} skill drill(s) outside the camera-tracking-eligible set.`);
     }
+
+    // Cross-sport Skill Bank paywall: which drills every Free Agent gets
+    // free regardless of their signup sport (see
+    // getVisibleSkillExercisesForFreeAgent and
+    // SKILL_SPORT_UNLOCK_MONTHLY_PRICE_CENTS in shared/free-agent-tiers.ts).
+    // This is exactly the CROSS-SPORT: ATHLETIC FOOTWORK & AGILITY block
+    // seeded above -- a name list, not a sports.length-based inference,
+    // since a future single-sport drill sharing the same skillType
+    // shouldn't silently become free.
+    const CROSS_SPORT_FREE_SKILL_NAMES = new Set([
+      "Lateral Shuffle Footwork", "Backpedal to Sprint Transition", "5-10-5 Pro Agility Footwork",
+      "T-Drill Change of Direction", "Mirror Drill - Reactive Footwork", "Ladder Drill - Icky Shuffle",
+      "Ladder Drill - Lateral High Knees", "Cone Zig-Zag Sprint", "Deceleration and Stick Landing",
+      "Reactive Cone Touch Drill", "Carioca Footwork Drill", "Box Drill Agility",
+      "Reaction Ball Footwork", "Overhand Throwing Mechanics", "Crossover Step Acceleration",
+      "Reactive Start Drill", "Single-Leg Balance and Stability", "Hip Turn and Open-Gate Drill",
+      "Multi-Directional Sprint Cone Drill", "Approach Run Rhythm Drill", "Quick Feet In-Place Drill",
+      "Change of Pace Running",
+    ]);
+    let skillCrossSportBackfilled = 0;
+    for (const existingSkill of await storage.getAllSkillExercises()) {
+      if (existingSkill.crossSportFree) continue;
+      if (!CROSS_SPORT_FREE_SKILL_NAMES.has(existingSkill.name)) continue;
+      await storage.updateSkillExercise(existingSkill.id, { crossSportFree: true });
+      skillCrossSportBackfilled++;
+    }
+    if (skillCrossSportBackfilled > 0) {
+      console.log(`Set crossSportFree=true on ${skillCrossSportBackfilled} cross-sport skill drill(s).`);
+    }
   }
 
   // The platform's first paid, drip-content Class: "American Hitting -
@@ -5875,6 +5904,28 @@ async function main() {
     }
     if (backfilled > 0) {
       console.log(`Backfilled bodyRegion/plane on ${backfilled} existing exercise(s).`);
+    }
+  }
+
+  // One-time backfill (fully idempotent -- only ever touches rows where
+  // signupSport is still NULL): existing accounts predate users.signupSport
+  // (added for the Skill Bank sport-paywall), so without this every
+  // pre-feature athlete would lose access to their own sport's drills the
+  // moment the lock went live. Copies the current (mutable) sport into the
+  // new immutable snapshot field exactly once -- afterward the two diverge
+  // on purpose if the athlete edits their profile sport later.
+  {
+    const usersNeedingSignupSport = await db.query.users.findMany({
+      where: isNull(users.signupSport),
+    });
+    let signupSportBackfilled = 0;
+    for (const u of usersNeedingSignupSport) {
+      if (!u.sport) continue;
+      await db.update(users).set({ signupSport: u.sport }).where(eq(users.id, u.id));
+      signupSportBackfilled++;
+    }
+    if (signupSportBackfilled > 0) {
+      console.log(`Backfilled signupSport on ${signupSportBackfilled} existing account(s).`);
     }
   }
 
