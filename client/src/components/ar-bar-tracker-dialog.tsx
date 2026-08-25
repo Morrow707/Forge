@@ -40,6 +40,7 @@ import {
   scaleWorldLandmarks,
   type PoseFrame,
   type CameraAlignment,
+  type FormFaultThresholds,
 } from "@/lib/pose-tracking";
 import {
   summarizeTrackedSet,
@@ -168,6 +169,7 @@ export function ArBarTrackerDialog({
   recordVideo,
   onCapture,
   videoContext,
+  formFaultThresholds,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -185,6 +187,14 @@ export function ArBarTrackerDialog({
    * Wi-Fi) upload can find its way back to it later -- see
    * video-offline-store.ts. */
   videoContext?: VideoRecordContext;
+  /** The active MovementProfile for movementType, when a coach/admin has
+   * taught one -- same prop bar-tracker-dialog.tsx already threads into
+   * its own detectFormFaults call. Was missing here entirely (this dialog
+   * always fell back to the hardcoded defaults, silently ignoring any
+   * taught profile) since ARKit support was ported after this field
+   * existed on the MediaPipe path -- see this file's header comment on
+   * being "last and hardest." */
+  formFaultThresholds?: Partial<Record<keyof FormFaultThresholds, number | null>> | null;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [tracking, setTracking] = useState(false);
@@ -638,6 +648,7 @@ export function ArBarTrackerDialog({
       tiltReadingsRef.current,
       undefined,
       metrics.repBreakdown.map((r) => ({ startT: r.startT, endT: r.endT })),
+      formFaultThresholds,
     );
 
     // Same gating as bar-tracker-dialog.tsx: only a bilateral lower-body
