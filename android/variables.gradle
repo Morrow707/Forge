@@ -1,5 +1,9 @@
 ext {
-    minSdkVersion = 24
+    // 26 (Android 8.0), not 24 -- @capgo/capacitor-health's own manifest
+    // declares minSdkVersion 26 (APIs it needs aren't available on 24/25),
+    // and Gradle's manifest merger hard-fails the whole build rather than
+    // silently allowing an app minSdk lower than a library's.
+    minSdkVersion = 26
     compileSdkVersion = 36
     targetSdkVersion = 36
     androidxActivityVersion = '1.11.0'
