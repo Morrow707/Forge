@@ -557,7 +557,14 @@ export const MAX_PLAUSIBLE_LIFT_VELOCITY_MPS = 3;
 // reading IMPOSSIBLY FAST (a spike); a brief lock-loss-and-recover instead
 // typically reads as an implausibly SLOW or FROZEN stretch, well under that
 // ceiling, that the old filter let straight through into the mean/peak.
-export const MIN_TRACKING_CONFIDENCE = 0.3;
+// 0.5, not the originally-hoisted 0.3 -- matches pose-tracking.ts's own
+// MIN_VISIBILITY, the same "trust this frame's position" bar already
+// established there for the identical landmark-confidence judgment call.
+// 0.3 let too much marginal-confidence tracking (the implement barely
+// re-acquired, not genuinely locked) still count as "confident enough,"
+// which is exactly what let a low-quality stretch of frames dominate a
+// rep's reported bar-path drift or velocity instead of being excluded.
+export const MIN_TRACKING_CONFIDENCE = 0.5;
 
 function robustPeakSpeed(
   speedsMps: number[],
@@ -587,16 +594,19 @@ function robustPeakSpeed(
   // alone assumes only a handful of frames are bad, which doesn't hold when a
   // contiguous smoothing-window edge effect corrupts several consecutive
   // frames near the start of a trace (worst exactly where robustPeakSpeed's
-  // own moving-average edge-effect note above applies hardest). Falls back
-  // to every sample only if the whole phase is somehow above the ceiling --
-  // an even worse case this ceiling can't rescue, but reporting SOMETHING
-  // consistent with the rest of this function's "never just report zero"
-  // stance beats silently zeroing out a whole rep.
+  // own moving-average edge-effect note above applies hardest).
   const plausible = pool0.filter((s) => s.v <= MAX_PLAUSIBLE_LIFT_VELOCITY_MPS);
-  const pool = plausible.length > 0 ? plausible : pool0;
-  const sorted = [...pool].sort((a, b) => a.v - b.v);
+  // Every remaining sample is above the physical ceiling -- the whole phase
+  // was corrupted (a real rep never does this). The old behavior fell back
+  // to the raw, over-ceiling pool here, which defeated the ceiling entirely
+  // and reported the tracking glitch itself as the athlete's peak (e.g. a
+  // reported "24 m/s" bar speed). Clamping to the ceiling keeps this
+  // function's "never just report zero" stance -- still a non-zero,
+  // physically-real number -- without ever surfacing an impossible one.
+  if (plausible.length === 0) return { peak: MAX_PLAUSIBLE_LIFT_VELOCITY_MPS, peakIdx: pool0[0].idx };
+  const sorted = [...plausible].sort((a, b) => a.v - b.v);
   const peak = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))].v;
-  const peakIdx = pool.find((s) => s.v >= peak)?.idx ?? startIdx;
+  const peakIdx = plausible.find((s) => s.v >= peak)?.idx ?? startIdx;
   return { peak, peakIdx };
 }
 
@@ -613,8 +623,11 @@ function plausibleMean(speeds: number[], confidences?: number[]): number {
     : speeds;
   const pool0 = confident.length > 0 ? confident : speeds;
   const plausible = pool0.filter((v) => v <= MAX_PLAUSIBLE_LIFT_VELOCITY_MPS);
-  const pool = plausible.length > 0 ? plausible : pool0;
-  return pool.reduce((a, b) => a + b, 0) / pool.length;
+  // Same clamp-instead-of-raw-fallback fix as robustPeakSpeed above -- see
+  // its comment. A window entirely above the physical ceiling shouldn't get
+  // to report its own impossible average as the rep's mean speed either.
+  if (plausible.length === 0) return MAX_PLAUSIBLE_LIFT_VELOCITY_MPS;
+  return plausible.reduce((a, b) => a + b, 0) / plausible.length;
 }
 
 // Peak speed (m/s) over a short live segment -- e.g. the trace since the
