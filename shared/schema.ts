@@ -1200,6 +1200,17 @@ export const skillSessionLogs = pgTable(
     videoUrl: text("video_url"),
     coachAnnotationUrl: text("coach_annotation_url"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
+    // Retention-management fields, exact mirror of workoutSetEntries'
+    // videoFavorited/pendingDeletionAt (see that column's own comment) --
+    // storage.sweepVideoRetentionCap applies the same per-(athlete,
+    // skillExercise) rolling cap here as it does for exercise sets, using
+    // the same shared/video-retention.ts limits and the same
+    // hasVideoStorageAddOn purchase. No videoUploadedAt equivalent needed:
+    // unlike a workout set, a skill session log is created once and never
+    // resubmitted/autosaved over, so createdAt is already a stable
+    // reference time.
+    videoFavorited: boolean("video_favorited").notNull().default(false),
+    pendingDeletionAt: date("pending_deletion_at"),
   },
   (table) => ({
     athleteIdx: index("skill_session_logs_athlete_idx").on(table.athleteId),
@@ -5263,6 +5274,11 @@ export const createSkillSessionLogSchema = z.object({
   // Opt-in only -- set when the athlete explicitly chooses "Save clip for
   // coach" after a capture (see MechanicsTrackerDialog); absent otherwise.
   videoUrl: z.string().trim().max(500).optional().nullable(),
+  // Exact mirror of workoutSetEntries.videoFavorited -- the athlete's own
+  // "never auto-delete this one" choice, only meaningful (and only shown
+  // client-side) alongside videoUrl above. Ignored server-side when videoUrl
+  // is absent, same as the exercise side's equivalent field.
+  videoFavorited: z.boolean().optional(),
 });
 
 export const setSkillSessionAnnotationSchema = z.object({

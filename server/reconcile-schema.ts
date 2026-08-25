@@ -439,8 +439,12 @@ CREATE TABLE IF NOT EXISTS "skill_session_logs" (
   "well_sequenced" boolean,
   "video_url" text,
   "coach_annotation_url" text,
-  "created_at" timestamp NOT NULL DEFAULT now()
+  "created_at" timestamp NOT NULL DEFAULT now(),
+  "video_favorited" boolean NOT NULL DEFAULT false,
+  "pending_deletion_at" date
 );
+ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "video_favorited" boolean NOT NULL DEFAULT false;
+ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "pending_deletion_at" date;
 ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "hip_shoulder_separation_deg" real;
 ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "weight_transfer_pct" real;
 ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "hip_rotation_deg" real;

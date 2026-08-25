@@ -158,6 +158,7 @@ export function ArSprintTrackerDialog({
   const [savedToProfile, setSavedToProfile] = useState(false);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [saveClipForCoach, setSaveClipForCoach] = useState(false);
+  const [favoriteClip, setFavoriteClip] = useState(false);
 
   const { data: thresholds } = useQuery<SkillFaultThresholds>({
     queryKey: ["/api/athlete/skill-fault-thresholds", skillAssignmentId],
@@ -411,6 +412,7 @@ export function ArSprintTrackerDialog({
     setVideoUrl(null);
     recordedBlobRef.current = null;
     setSaveClipForCoach(false);
+    setFavoriteClip(false);
     resetCheckpoints();
     setResult(null);
     setFaults([]);
@@ -465,6 +467,7 @@ export function ArSprintTrackerDialog({
         cameraAngle,
         faults,
         videoUrl: uploadedVideoUrl,
+        videoFavorited: uploadedVideoUrl ? favoriteClip : false,
       });
       toast.success("Sprint saved");
       onOpenChange(false);
@@ -743,6 +746,18 @@ export function ArSprintTrackerDialog({
                   Save this clip so my coach can review it
                   <span className="block text-xs text-muted-foreground">
                     Off by default -- only the numbers above are saved unless you turn this on.
+                  </span>
+                </span>
+              </label>
+            )}
+            {videoUrl && saveClipForCoach && (
+              <label className="flex items-start gap-2 text-sm">
+                <Checkbox checked={favoriteClip} onCheckedChange={(c) => setFavoriteClip(c === true)} />
+                <span>
+                  Never auto-delete this clip
+                  <span className="block text-xs text-muted-foreground">
+                    Your plan only keeps a limited number of saved clips per drill -- favoriting
+                    this one keeps it forever, even once older clips start rolling off.
                   </span>
                 </span>
               </label>

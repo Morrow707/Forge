@@ -450,7 +450,7 @@ export default function AdminBilling() {
                       Extra video storage -- {formatCents(VIDEO_STORAGE_ADD_ON.monthlyPriceCents)}/mo
                     </span>{" "}
                     -- {VIDEO_STORAGE_ADD_ON.favoritedCap} favorited / {VIDEO_STORAGE_ADD_ON.totalCap}{" "}
-                    total per exercise (baseline is {VIDEO_RETENTION.favoritedCap}/
+                    total per exercise AND per skill drill (baseline is {VIDEO_RETENTION.favoritedCap}/
                     {VIDEO_RETENTION.totalCap}). Works for a coached athlete too, not just Free
                     Agents.
                   </span>

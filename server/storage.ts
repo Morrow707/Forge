@@ -6377,6 +6377,10 @@ ${athleteContext}
         setPointPauseSeconds: input.setPointPauseSeconds ?? null,
         kneeBendDepthDeg: input.kneeBendDepthDeg ?? null,
         videoUrl: input.videoUrl ?? null,
+        // Only meaningful alongside a real videoUrl -- a favorite flag with
+        // no clip to exempt from the cap sweep is a no-op either way, so no
+        // extra guard needed here beyond what the client already does.
+        videoFavorited: input.videoUrl ? (input.videoFavorited ?? false) : false,
       })
       .returning();
     return row;
@@ -14728,7 +14732,18 @@ ${catalog}`;
       await Promise.all([deleteUploadedFile(row.videoUrl), deleteUploadedFile(row.coachAnnotationUrl)]);
       await db
         .update(skillSessionLogs)
-        .set({ videoUrl: null, coachAnnotationUrl: null })
+        .set({
+          videoUrl: null,
+          coachAnnotationUrl: null,
+          // Exact mirror of the "set" branch above's videoFavorited/
+          // pendingDeletionAt reset -- a favorited video CAN still reach
+          // here via the compliance-tier job (which doesn't check
+          // favorited status), and either flag is meaningless once the
+          // clip itself is gone, so both get cleared regardless of which
+          // caller triggered this delete.
+          videoFavorited: false,
+          pendingDeletionAt: null,
+        })
         .where(eq(skillSessionLogs.id, id));
       return { deleted: true, athleteId: row.athleteId };
     }
@@ -16634,15 +16649,18 @@ ${catalog}`;
   // Video storage cap -- applies to BOTH coached athletes and Free Agents
   // alike (see shared/video-retention.ts's own comment), keyed off each
   // athlete's own getVideoRetentionLimits (beta/trial/add-on all resolve
-  // per-athlete same as everywhere else billing-related). Cap is per
-  // (athlete, exercise): that athlete's totalCap most recent unfavorited
-  // videos are kept, older unfavorited ones beyond that get a grace window
-  // (VIDEO_RETENTION_GRACE_DAYS) before actual deletion, and any favorited
-  // video is completely exempt -- see workoutSetEntries'
-  // isPr/videoFavorited/pendingDeletionAt comments. Returns what happened
-  // this run so the job file can log/notify without a second query.
+  // per-athlete same as everywhere else billing-related, and the SAME
+  // add-on purchase covers both tracks below -- one $4.99/mo purchase, not
+  // a separate one per track). Cap is per (athlete, exercise) AND
+  // separately per (athlete, skill exercise): that athlete's totalCap most
+  // recent unfavorited videos are kept for each, older unfavorited ones
+  // beyond that get a grace window (VIDEO_RETENTION_GRACE_DAYS) before
+  // actual deletion, and any favorited video is completely exempt -- see
+  // workoutSetEntries' isPr/videoFavorited/pendingDeletionAt comments (and
+  // skillSessionLogs' mirrored ones). Returns what happened this run so the
+  // job file can log/notify without a second query.
   async sweepVideoRetentionCap(): Promise<{
-    warned: { id: number; athleteId: number; exerciseName: string; link: string }[];
+    warned: { source: "set" | "skill"; id: number; athleteId: number; exerciseName: string; link: string }[];
     purged: number;
   }> {
     const VIDEO_RETENTION_GRACE_DAYS = 7;
@@ -16657,8 +16675,8 @@ ${catalog}`;
       .from(users)
       .where(eq(users.role, "athlete"));
     // Unlimited (beta/trial/enforcement-off) accounts have nothing to
-    // sweep -- skipped up front so the query below, and the per-row work
-    // after it, never touches a row that could never actually be evicted.
+    // sweep -- skipped up front so the queries below, and the per-row work
+    // after them, never touch a row that could never actually be evicted.
     const capByAthlete = new Map<number, number>();
     for (const a of athleteRows) {
       const limits = getVideoRetentionLimits(a);
@@ -16666,7 +16684,23 @@ ${catalog}`;
     }
     if (capByAthlete.size === 0) return { warned: [], purged: 0 };
 
-    const rows = await db
+    // Normalized shape both tracks feed into so the group/sort/evict pass
+    // below runs once instead of twice -- the two source queries differ
+    // (different join chains, different date columns), but eviction itself
+    // is identical logic either way.
+    type Candidate = {
+      source: "set" | "skill";
+      id: number;
+      pendingDeletionAt: string | null;
+      athleteId: number;
+      groupKey: string;
+      sortKey: string;
+      itemName: string;
+      link: string;
+    };
+    const candidates: Candidate[] = [];
+
+    const setRows = await db
       .select({
         id: workoutSetEntries.id,
         pendingDeletionAt: workoutSetEntries.pendingDeletionAt,
@@ -16689,36 +16723,86 @@ ${catalog}`;
           eq(workoutSetEntries.videoFavorited, false),
         ),
       );
-
-    const groups = new Map<string, typeof rows>();
-    for (const row of rows) {
-      const key = `${row.athleteId}-${row.exerciseId}`;
-      const group = groups.get(key);
-      if (group) group.push(row);
-      else groups.set(key, [row]);
+    for (const row of setRows) {
+      candidates.push({
+        source: "set",
+        id: row.id,
+        pendingDeletionAt: row.pendingDeletionAt,
+        athleteId: row.athleteId,
+        groupKey: `set-${row.athleteId}-${row.exerciseId}`,
+        // workoutLogs.date has no time component, so same-day sets compare
+        // equal on date alone -- id is appended as a deterministic tiebreak
+        // (see the sort comment below for why that matters).
+        sortKey: `${row.date}-${String(row.id).padStart(10, "0")}`,
+        itemName: row.exerciseName,
+        link: `/athlete/day/${row.assignmentId}/${row.programDayId}/${row.date}`,
+      });
     }
 
-    const warned: { id: number; athleteId: number; exerciseName: string; link: string }[] = [];
+    const skillRows = await db
+      .select({
+        id: skillSessionLogs.id,
+        pendingDeletionAt: skillSessionLogs.pendingDeletionAt,
+        athleteId: skillSessionLogs.athleteId,
+        createdAt: skillSessionLogs.createdAt,
+        skillExerciseId: skillExercises.id,
+        skillExerciseName: skillExercises.name,
+      })
+      .from(skillSessionLogs)
+      .innerJoin(skillProgramExercises, eq(skillSessionLogs.skillProgramExerciseId, skillProgramExercises.id))
+      .innerJoin(skillExercises, eq(skillProgramExercises.skillExerciseId, skillExercises.id))
+      .where(
+        and(
+          inArray(skillSessionLogs.athleteId, [...capByAthlete.keys()]),
+          isNotNull(skillSessionLogs.videoUrl),
+          eq(skillSessionLogs.videoFavorited, false),
+        ),
+      );
+    for (const row of skillRows) {
+      candidates.push({
+        source: "skill",
+        id: row.id,
+        pendingDeletionAt: row.pendingDeletionAt,
+        athleteId: row.athleteId,
+        groupKey: `skill-${row.athleteId}-${row.skillExerciseId}`,
+        sortKey: `${row.createdAt.toISOString()}-${String(row.id).padStart(10, "0")}`,
+        itemName: row.skillExerciseName,
+        // No standalone deep-linkable route exists for a single skill day
+        // (it's opened as a dialog off the athlete calendar/dashboard, not
+        // its own URL -- see SkillDayViewDialog's call sites), unlike the
+        // exercise side's /athlete/day/... route above. The calendar is the
+        // closest real destination.
+        link: "/athlete/calendar",
+      });
+    }
+
+    const groups = new Map<string, Candidate[]>();
+    for (const c of candidates) {
+      const group = groups.get(c.groupKey);
+      if (group) group.push(c);
+      else groups.set(c.groupKey, [c]);
+    }
+
+    const warned: { source: "set" | "skill"; id: number; athleteId: number; exerciseName: string; link: string }[] = [];
     let purged = 0;
     const todayMs = Date.now();
     const graceMs = VIDEO_RETENTION_GRACE_DAYS * 24 * 60 * 60 * 1000;
 
     for (const group of groups.values()) {
-      // Tiebreak on id, not just date: workoutLogs.date has no time
-      // component, so same-day sets compare equal on date alone, and
-      // without a deterministic tiebreak the query's row order (which SQL
-      // makes no guarantee about across runs) decides which one lands in
-      // "excess" -- one run flags set A as at-risk, the next flags set B
-      // instead and un-flags A, flip-flopping which video gets warned/
-      // reprieved from one sweep to the next for no reason a user could see.
-      group.sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
+      // Deterministic tiebreak baked into sortKey above -- without it, the
+      // query's row order (which SQL makes no guarantee about across runs)
+      // decides which same-date/same-timestamp item lands in "excess," so
+      // one run could flag item A as at-risk and the next flag item B
+      // instead, flip-flopping which video gets warned/reprieved from one
+      // sweep to the next for no reason a user could see.
+      group.sort((a, b) => a.sortKey.localeCompare(b.sortKey));
       const totalCap = capByAthlete.get(group[0].athleteId)!;
       const excess = group.slice(0, Math.max(0, group.length - totalCap));
       const excessIds = new Set(excess.map((r) => r.id));
 
-      for (const row of group) {
-        if (excessIds.has(row.id)) {
-          if (row.pendingDeletionAt == null) {
+      for (const c of group) {
+        if (excessIds.has(c.id)) {
+          if (c.pendingDeletionAt == null) {
             // Deliberately doesn't write pendingDeletionAt here. That only
             // happens once the caller confirms the warning notification
             // actually went out (see markVideoPendingDeletion below) --
@@ -16727,22 +16811,30 @@ ${catalog}`;
             // told about, and it'd get silently deleted with no warning
             // ever having reached them.
             warned.push({
-              id: row.id,
-              athleteId: row.athleteId,
-              exerciseName: row.exerciseName,
-              link: `/athlete/day/${row.assignmentId}/${row.programDayId}/${row.date}`,
+              source: c.source,
+              id: c.id,
+              athleteId: c.athleteId,
+              exerciseName: c.itemName,
+              link: c.link,
             });
-          } else if (todayMs - new Date(row.pendingDeletionAt).getTime() >= graceMs) {
-            const result = await this.deleteAdminVideo("set", row.id);
+          } else if (todayMs - new Date(c.pendingDeletionAt).getTime() >= graceMs) {
+            const result = await this.deleteAdminVideo(c.source, c.id);
             if (result.deleted) purged++;
           }
-        } else if (row.pendingDeletionAt != null) {
+        } else if (c.pendingDeletionAt != null) {
           // Fell back within the cap (older excess videos already purged
           // ahead of it) -- no longer at risk.
-          await db
-            .update(workoutSetEntries)
-            .set({ pendingDeletionAt: null })
-            .where(eq(workoutSetEntries.id, row.id));
+          if (c.source === "set") {
+            await db
+              .update(workoutSetEntries)
+              .set({ pendingDeletionAt: null })
+              .where(eq(workoutSetEntries.id, c.id));
+          } else {
+            await db
+              .update(skillSessionLogs)
+              .set({ pendingDeletionAt: null })
+              .where(eq(skillSessionLogs.id, c.id));
+          }
         }
       }
     }
@@ -16754,11 +16846,13 @@ ${catalog}`;
   // sweepVideoRetentionCap itself so the caller only calls this once the
   // cap-warning notification has actually been delivered (see that
   // function's comment on the "warned" list).
-  async markVideoPendingDeletion(setEntryId: number) {
-    await db
-      .update(workoutSetEntries)
-      .set({ pendingDeletionAt: new Date().toISOString().slice(0, 10) })
-      .where(eq(workoutSetEntries.id, setEntryId));
+  async markVideoPendingDeletion(source: "set" | "skill", id: number) {
+    const today = new Date().toISOString().slice(0, 10);
+    if (source === "set") {
+      await db.update(workoutSetEntries).set({ pendingDeletionAt: today }).where(eq(workoutSetEntries.id, id));
+    } else {
+      await db.update(skillSessionLogs).set({ pendingDeletionAt: today }).where(eq(skillSessionLogs.id, id));
+    }
   },
 
   // Verbatim program transcription -- see programPhotoDraftSchema's own

@@ -133,6 +133,7 @@ export function MechanicsTrackerDialog({
   const [faults, setFaults] = useState<MechanicsFault[]>([]);
   const [saving, setSaving] = useState(false);
   const [saveClipForCoach, setSaveClipForCoach] = useState(false);
+  const [favoriteClip, setFavoriteClip] = useState(false);
 
   // Same coach-configurable sensitivity thresholds as the sprint tracker --
   // see the route comment on /api/athlete/skill-fault-thresholds.
@@ -154,6 +155,7 @@ export function MechanicsTrackerDialog({
     setFaults([]);
     setShowSkeleton(true);
     setSaveClipForCoach(false);
+    setFavoriteClip(false);
     framesRef.current = [];
     chunksRef.current = [];
     recordedBlobRef.current = null;
@@ -391,6 +393,7 @@ export function MechanicsTrackerDialog({
     setResult(null);
     setFaults([]);
     setSaveClipForCoach(false);
+    setFavoriteClip(false);
     framesRef.current = [];
     recordedBlobRef.current = null;
     changeStep("capture");
@@ -435,6 +438,7 @@ export function MechanicsTrackerDialog({
         setPointPauseSeconds: result.setPointPauseSeconds,
         kneeBendDepthDeg: result.kneeBendDepthDeg,
         videoUrl: uploadedVideoUrl,
+        videoFavorited: uploadedVideoUrl ? favoriteClip : false,
       });
       toast.success(`${actionLabel} saved`);
       onOpenChange(false);
@@ -657,6 +661,18 @@ export function MechanicsTrackerDialog({
                 </span>
               </span>
             </label>
+            {saveClipForCoach && (
+              <label className="flex items-start gap-2 text-sm">
+                <Checkbox checked={favoriteClip} onCheckedChange={(c) => setFavoriteClip(c === true)} />
+                <span>
+                  Never auto-delete this clip
+                  <span className="block text-xs text-muted-foreground">
+                    Your plan only keeps a limited number of saved clips per drill -- favoriting
+                    this one keeps it forever, even once older clips start rolling off.
+                  </span>
+                </span>
+              </label>
+            )}
 
             <DialogFooter>
               <Button variant="outline" onClick={retry}>
