@@ -16719,7 +16719,7 @@ ${catalog}`;
   // alike (see shared/video-retention.ts's own comment), keyed off each
   // athlete's own getVideoRetentionLimits (beta/trial/add-on all resolve
   // per-athlete same as everywhere else billing-related, and the SAME
-  // add-on purchase covers both tracks below -- one $4.99/mo purchase, not
+  // add-on purchase covers both tracks below -- one $9.99/mo purchase, not
   // a separate one per track). Cap is per (athlete, exercise) AND
   // separately per (athlete, skill exercise): that athlete's totalCap most
   // recent unfavorited videos are kept for each, older unfavorited ones
