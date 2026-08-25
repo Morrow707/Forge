@@ -33,6 +33,7 @@ import {
   scaleWorldLandmarks,
   worldVerticalSign,
   type PoseFrame,
+  type FormFaultThresholds,
 } from "@/lib/pose-tracking";
 import { summarizeJumpSet, type JumpSetMetrics } from "@/lib/jump-tracking";
 import type { TrackedPoint } from "@/lib/bar-tracking";
@@ -105,6 +106,8 @@ export function ArJumpTrackerDialog({
   recordVideo,
   onCapture,
   videoContext,
+  formFaultThresholds,
+  jumpHeightOutlierPercent,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -117,6 +120,13 @@ export function ArJumpTrackerDialog({
    * Wi-Fi) upload can find its way back to it later -- see
    * video-offline-store.ts. */
   videoContext?: VideoRecordContext;
+  /** Same prop bar-tracker-dialog.tsx already threads into its own
+   * detectFormFaults call -- was missing here entirely, see
+   * ar-bar-tracker-dialog.tsx's own comment on the same gap. */
+  formFaultThresholds?: Partial<Record<keyof FormFaultThresholds, number | null>> | null;
+  /** The active "jump" MovementProfile's jumpHeightOutlierPercent, same
+   * prop/reasoning as bar-tracker-dialog.tsx's own copy. */
+  jumpHeightOutlierPercent?: number | null;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [tracking, setTracking] = useState(false);
@@ -300,7 +310,7 @@ export function ArJumpTrackerDialog({
     // Live feedback: recomputing off the trace so far every frame is cheap
     // for a jump set's small point count, and gives an honest running rep
     // count/height read instead of only revealing anything at Stop.
-    const live = summarizeJumpSet(traceRef.current, heightIn);
+    const live = summarizeJumpSet(traceRef.current, heightIn, jumpHeightOutlierPercent ?? undefined);
     if (live) {
       setRecordedReps(live.repBreakdown.length);
       setLastJumpCm(live.repBreakdown[live.repBreakdown.length - 1].jumpHeightCm);
@@ -337,7 +347,7 @@ export function ArJumpTrackerDialog({
   async function stopTracking() {
     trackingRef.current = false;
     setTracking(false);
-    const metrics = summarizeJumpSet(traceRef.current, heightIn);
+    const metrics = summarizeJumpSet(traceRef.current, heightIn, jumpHeightOutlierPercent ?? undefined);
     if (!metrics) {
       // The rep-tracking read failing doesn't mean the recording itself
       // failed -- see ar-bar-tracker-dialog.tsx's stopTracking for the full
@@ -398,6 +408,7 @@ export function ArJumpTrackerDialog({
       undefined,
       undefined,
       metrics.repBreakdown.map((r) => ({ startT: r.takeoffT, endT: r.landingT })),
+      formFaultThresholds,
     );
     // Per-rep landing-foot timing -- see computeLandingAsymmetry's own
     // comment for why this is only trustworthy with real per-frame 3D

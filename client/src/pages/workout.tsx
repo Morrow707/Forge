@@ -2669,6 +2669,8 @@ function ExerciseLogContent({
                 recordVideo={mergedTracking}
                 onCapture={handleTrackerCapture}
                 videoContext={videoContextFor(trackingSet)}
+                formFaultThresholds={activeMovementProfile}
+                jumpHeightOutlierPercent={activeMovementProfile?.jumpHeightOutlierPercent}
               />
             );
           }
