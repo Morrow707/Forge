@@ -1,17 +1,19 @@
 name: "CodeQL"
 
 # Advanced setup, replacing the repo's previous "default setup" -- needed
-# because default setup's generic `autobuild` for Swift can't build this
-# project: it runs a bare `xcodebuild build` with no Swift Package Manager
-# resolution step first, and Capacitor 7+ wires in every native plugin via
-# SPM (ios/App/CapApp-SPM), not CocoaPods. That's the exact same failure
-# mode ios-testflight.yml's own "Resolve Swift Package dependencies" step
-# exists to avoid -- this workflow's swift job mirrors that proven build
-# sequence up through compiling (no signing, archiving, or upload needed
-# just to let CodeQL trace the build). javascript-typescript/ruby/actions
-# stay build-mode: none (nothing to compile); java-kotlin stays autobuild,
-# same as default setup used -- Swift was the only language actually
-# failing to run at all.
+# because default setup's generic `autobuild` can't build either native
+# platform on its own: Swift needs SPM package resolution + a scheme (not
+# target) build first (see the swift-specific comments below), and
+# java-kotlin's Gradle build needs the Capacitor Android platform synced
+# first -- without it, capacitor.build.gradle references
+# android/capacitor-cordova-android-plugins/cordova.variables.gradle,
+# which doesn't exist until `cap sync android` generates it, so autobuild
+# fails outright (default setup only ever managed a degraded partial
+# scan here, never a clean one). Both native jobs mirror their respective
+# proven-working CI lane (ios-testflight.yml, android-release.yml) up
+# through getting the platform into a buildable state.
+# javascript-typescript/ruby/actions stay build-mode: none (nothing to
+# compile).
 on:
   push:
     branches: ["main"]
@@ -61,23 +63,22 @@ jobs:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
 
-      # Same three steps as ios-testflight.yml's own build job, up through
-      # `cap sync` -- gets the native iOS project into a buildable state
-      # (bundled web assets + synced Capacitor platform) before Xcode ever
-      # touches it.
+      # Shared by both native jobs -- same "bundle the web assets, then
+      # sync the native platform" first half every native CI lane in this
+      # repo starts with (ios-testflight.yml, android-release.yml).
       - name: Set up Node.js
-        if: matrix.language == 'swift'
+        if: matrix.language == 'swift' || matrix.language == 'java-kotlin'
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
 
       - name: Install JS dependencies
-        if: matrix.language == 'swift'
+        if: matrix.language == 'swift' || matrix.language == 'java-kotlin'
         run: npm ci
 
       - name: Build web app
-        if: matrix.language == 'swift'
+        if: matrix.language == 'swift' || matrix.language == 'java-kotlin'
         run: npm run build
 
       - name: Sync Capacitor iOS platform
@@ -92,6 +93,17 @@ jobs:
         if: matrix.language == 'swift'
         working-directory: ios/App
         run: xcodebuild -resolvePackageDependencies -project App.xcodeproj
+
+      # Same two steps as android-release.yml's own build job -- the
+      # missing half of why java-kotlin's autobuild failed outright (see
+      # this file's top comment).
+      - name: Sync Capacitor Android platform
+        if: matrix.language == 'java-kotlin'
+        run: npx cap sync android
+
+      - name: Make gradlew executable
+        if: matrix.language == 'java-kotlin'
+        run: chmod +x android/gradlew
 
       # Manual build-mode: CodeQL traces whatever command runs between
       # init and analyze. No signing/archiving/upload -- this only needs
