@@ -969,6 +969,13 @@ export const skillExercises = pgTable(
     videoUrl: text("video_url"),
     instructions: text("instructions"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
+    // Admin-editable per-drill gate on skillProgramExercises.trackingLevel,
+    // exact mirror of exercises.videoEligible (see that column's own
+    // comment): null/true both mean a coach can turn Sprint Timing or
+    // Mechanics tracking on for this drill, only an explicit false
+    // restricts it. Enforced server-side in storage.resolveSkillTrackingLevel,
+    // not just hidden client-side.
+    videoEligible: boolean("video_eligible"),
   },
   (table) => ({
     coachIdx: index("skill_exercises_coach_idx").on(table.coachId),
@@ -5019,6 +5026,9 @@ export const insertSkillExerciseSchema = createInsertSchema(skillExercises)
   .extend({
     sports: z.array(z.string().trim().min(1)).max(8, "You can select up to 8 sports").optional().nullable(),
     equipment: z.array(z.string().trim().min(1)).max(8, "You can select up to 8 pieces of equipment").optional().nullable(),
+    // Admin-only in practice via UI gating, same posture as
+    // insertExerciseSchema's videoEligible above.
+    videoEligible: z.boolean().optional().nullable(),
   });
 
 // ---------- Skill Programs (fully separate from Programs) ----------

@@ -32,6 +32,11 @@ type LocalExercise = {
   restSeconds: string;
   notes: string;
   trackingLevel: SkillTrackingLevel;
+  // Admin-editable per-drill gate on SprintTrackingToggle -- see
+  // skillExercises.videoEligible's own comment in shared/schema.ts. Only an
+  // explicit false hides the toggle (unless it's already on, so a coach can
+  // still turn off an existing capture -- see the render site).
+  videoEligible: boolean | null;
 };
 
 type LocalDay = {
@@ -126,6 +131,7 @@ function stateFromProgram(program: any) {
           restSeconds: pe.restSeconds != null ? String(pe.restSeconds) : "",
           notes: pe.notes ?? "",
           trackingLevel: (pe.trackingLevel ?? "none") as SkillTrackingLevel,
+          videoEligible: pe.skillExercise.videoEligible ?? null,
         })),
       });
     }
@@ -458,6 +464,7 @@ export function SkillProgramBuilderPage({
                 restSeconds: "",
                 notes: "",
                 trackingLevel: "none",
+                videoEligible: skill.videoEligible ?? null,
               },
             ],
           }));
@@ -625,17 +632,22 @@ function DayCard({
                       }
                     />
                   </div>
-                  <SprintTrackingToggle
-                    trackingLevel={ex.trackingLevel}
-                    onChange={(trackingLevel) =>
-                      onChange((d) => ({
-                        ...d,
-                        exercises: d.exercises.map((e) =>
-                          e.key === ex.key ? { ...e, trackingLevel } : e,
-                        ),
-                      }))
-                    }
-                  />
+                  {/* Hidden entirely for an admin-restricted drill -- unless it's
+                      already on, so a coach can still turn OFF a capture that
+                      predates the restriction. See videoEligible's own comment. */}
+                  {(ex.videoEligible !== false || ex.trackingLevel !== "none") && (
+                    <SprintTrackingToggle
+                      trackingLevel={ex.trackingLevel}
+                      onChange={(trackingLevel) =>
+                        onChange((d) => ({
+                          ...d,
+                          exercises: d.exercises.map((e) =>
+                            e.key === ex.key ? { ...e, trackingLevel } : e,
+                          ),
+                        }))
+                      }
+                    />
+                  )}
                 </div>
               ))}
             </div>

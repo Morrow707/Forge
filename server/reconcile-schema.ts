@@ -333,9 +333,11 @@ CREATE TABLE IF NOT EXISTS "skill_exercises" (
   "equipment" json,
   "video_url" text,
   "instructions" text,
-  "created_at" timestamp NOT NULL DEFAULT now()
+  "created_at" timestamp NOT NULL DEFAULT now(),
+  "video_eligible" boolean
 );
 CREATE INDEX IF NOT EXISTS "skill_exercises_coach_idx" ON "skill_exercises" ("coach_id");
+ALTER TABLE "skill_exercises" ADD COLUMN IF NOT EXISTS "video_eligible" boolean;
 -- equipment was a free-text "Bat, Balls, Screen" string until the skill
 -- picker got a real equipment filter -- converts any row still on the old
 -- text column to a real json array (comma-split), guarded by the column's

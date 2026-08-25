@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
 import { extractYouTubeId } from "@/components/exercise-video";
 import { apiRequest, ApiError } from "@/lib/queryClient";
@@ -31,6 +32,11 @@ type SkillForm = {
   equipment: Set<string>;
   videoUrl: string;
   instructions: string;
+  // Admin-only control (see the checkbox's own render-site comment) --
+  // null/true both mean a coach can turn Sprint Timing/Mechanics tracking
+  // on for this drill, only an explicit false restricts it. See the
+  // column's own comment in shared/schema.ts.
+  videoEligible: boolean | null;
 };
 
 const emptyForm: SkillForm = {
@@ -40,6 +46,7 @@ const emptyForm: SkillForm = {
   equipment: new Set(),
   videoUrl: "",
   instructions: "",
+  videoEligible: null,
 };
 
 function formFrom(sk: SkillExerciseWithOwnership): SkillForm {
@@ -50,6 +57,7 @@ function formFrom(sk: SkillExerciseWithOwnership): SkillForm {
     equipment: new Set(sk.equipment ?? []),
     videoUrl: sk.videoUrl ?? "",
     instructions: sk.instructions ?? "",
+    videoEligible: sk.videoEligible,
   };
 }
 
@@ -83,6 +91,7 @@ export function SkillDetailPage({ apiBase, routeBase }: { apiBase: string; route
         equipment: form.equipment.size > 0 ? Array.from(form.equipment) : null,
         videoUrl: form.videoUrl || null,
         instructions: form.instructions || null,
+        videoEligible: form.videoEligible,
       };
       if (isNew) {
         const res = await apiRequest("POST", `${apiBase}/skill-exercises`, payload);
@@ -351,6 +360,21 @@ export function SkillDetailPage({ apiBase, routeBase }: { apiBase: string; route
                     placeholder="Setup, reps/rounds, coaching cues…"
                   />
                 </div>
+                {/* Admin-only -- restricts whether a coach can turn Sprint
+                    Timing/Mechanics camera tracking on for this drill (see
+                    SprintTrackingToggle/TrackingToggle's own gating in
+                    skill-program-builder.tsx/class-builder.tsx). Only shown
+                    on the admin Forge Skill Bank route, same as
+                    exercise-detail.tsx's equivalent checkbox. */}
+                {apiBase === "/api/admin" && (
+                  <label className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm">
+                    <Checkbox
+                      checked={form.videoEligible !== false}
+                      onCheckedChange={(c) => setForm((f) => ({ ...f, videoEligible: c === true }))}
+                    />
+                    Video check eligible (coaches can turn Sprint Timing/Mechanics tracking on for this drill)
+                  </label>
+                )}
                 <div className="flex justify-end gap-2 border-t border-border pt-4">
                   {!isNew && (
                     <Button

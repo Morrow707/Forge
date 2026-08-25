@@ -4173,6 +4173,49 @@ async function main() {
         videoUrl: skillVideoSearchUrl(drill.name),
       });
     }
+
+    // Video-check eligibility default for skill drills: which ones a coach
+    // can turn Sprint Timing or Mechanics tracking on for (see
+    // SprintTrackingToggle/TrackingToggle client-side). Same cost-containment
+    // rationale as the exercise videoEligible backfill above -- storage cost
+    // scales with how many DISTINCT drills this is true for, not with
+    // library size. Rule (skillType-driven, not a hand-picked name list,
+    // since drills within a skillType are functionally interchangeable for
+    // this purpose): a skillType with a real "correct form" a coach reviews
+    // on camera is Mechanics-eligible; Agility/Starts and the timed-pattern
+    // Footwork drills (ladder/cone/sprint, not positioning footwork) are
+    // Sprint-Timing-eligible; everything else (reactive, positional,
+    // continuous-flow, or contact-heavy) stays restricted.
+    const MECHANICS_ELIGIBLE_SKILL_TYPES = new Set([
+      "Hitting", "Pitching", "Throwing", "Fielding", "Catching", "Shooting",
+      "Full Swing", "Groundstrokes", "Serve", "Serving", "QB Mechanics",
+      "Kicking", "Sprint Mechanics", "Jumps & Throws", "Takedowns",
+    ]);
+    const SPRINT_TIMING_ELIGIBLE_SKILL_TYPES = new Set(["Agility", "Starts"]);
+    const SPRINT_TIMING_ELIGIBLE_FOOTWORK_NAMES = new Set([
+      "Approach Run Rhythm Drill", "Base Running - Turn at First", "Carioca Footwork Drill",
+      "Crossover Step Drill", "First-Step Quickness Drill", "Home to First Sprint Drill",
+      "Ladder Drill - Icky Shuffle", "Ladder Drill - Infield Feet", "Ladder Drill - Lateral High Knees",
+      "Quick Feet In-Place Drill", "Rounding Bases Drill", "Steal Break Drill",
+    ]);
+    function isSkillVideoEligible(skillType: string, name: string): boolean {
+      if (MECHANICS_ELIGIBLE_SKILL_TYPES.has(skillType)) return true;
+      if (SPRINT_TIMING_ELIGIBLE_SKILL_TYPES.has(skillType)) return true;
+      if (skillType === "Footwork" && SPRINT_TIMING_ELIGIBLE_FOOTWORK_NAMES.has(name)) return true;
+      return false;
+    }
+    let skillVideoRestricted = 0;
+    for (const existingSkill of await storage.getAllSkillExercises()) {
+      // Nullable, not boolean-default -- only ever touches a row still at
+      // null, so an admin's explicit edit always wins over a future reseed.
+      if (existingSkill.videoEligible !== null) continue;
+      if (isSkillVideoEligible(existingSkill.skillType, existingSkill.name)) continue;
+      await storage.updateSkillExercise(existingSkill.id, { videoEligible: false });
+      skillVideoRestricted++;
+    }
+    if (skillVideoRestricted > 0) {
+      console.log(`Set videoEligible=false on ${skillVideoRestricted} skill drill(s) outside the camera-tracking-eligible set.`);
+    }
   }
 
   // The platform's first paid, drip-content Class: "American Hitting -

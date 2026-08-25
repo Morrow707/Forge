@@ -5938,6 +5938,37 @@ ${athleteContext}
     return result;
   },
 
+  // Server-side enforcement counterpart to the client's SprintTrackingToggle/
+  // TrackingToggle gating -- exact mirror of resolveVideoCheckEnabled above,
+  // adapted for skillExercises' tri-state trackingLevel ("none"/"sprint"/
+  // "mechanics") instead of a plain boolean. A coach requesting sprint or
+  // mechanics tracking on a drill the admin has restricted (videoEligible
+  // === false) always gets "none" back, regardless of what the client sent.
+  async resolveSkillTrackingLevel<T extends { skillExerciseId: number; trackingLevel?: string }>(
+    items: T[],
+  ): Promise<Map<T, "none" | "sprint" | "mechanics">> {
+    const requestedOn = items.filter((i) => i.trackingLevel && i.trackingLevel !== "none");
+    const result = new Map<T, "none" | "sprint" | "mechanics">();
+    if (requestedOn.length === 0) {
+      for (const i of items) result.set(i, "none");
+      return result;
+    }
+    const ids = Array.from(new Set(requestedOn.map((i) => i.skillExerciseId)));
+    const rows = await db
+      .select({ id: skillExercises.id, videoEligible: skillExercises.videoEligible })
+      .from(skillExercises)
+      .where(inArray(skillExercises.id, ids));
+    const eligibleById = new Map(rows.map((r) => [r.id, r.videoEligible !== false]));
+    for (const i of items) {
+      const requested = (i.trackingLevel ?? "none") as "none" | "sprint" | "mechanics";
+      result.set(
+        i,
+        requested !== "none" && (eligibleById.get(i.skillExerciseId) ?? true) ? requested : "none",
+      );
+    }
+    return result;
+  },
+
   async createExercise(coachId: number, data: any) {
     const [row] = await db
       .insert(exercises)
@@ -6152,6 +6183,8 @@ ${athleteContext}
       coachId,
       structure.weeks.flatMap((w) => w.days.flatMap((d) => d.exercises.map((ex) => ex.skillExerciseId))),
     );
+    const allSkillExercises = structure.weeks.flatMap((w) => w.days.flatMap((d) => d.exercises));
+    const trackingMap = await this.resolveSkillTrackingLevel(allSkillExercises);
     return db.transaction(async (tx) => {
       const [program] = await tx
         .insert(skillPrograms)
@@ -6192,7 +6225,7 @@ ${athleteContext}
               reps: ex.reps,
               restSeconds: ex.restSeconds ?? null,
               notes: ex.notes ?? null,
-              trackingLevel: ex.trackingLevel ?? "none",
+              trackingLevel: trackingMap.get(ex) ?? "none",
             });
           }
         }
@@ -6211,6 +6244,8 @@ ${athleteContext}
       requesterId,
       structure.weeks.flatMap((w) => w.days.flatMap((d) => d.exercises.map((ex) => ex.skillExerciseId))),
     );
+    const allSkillExercises = structure.weeks.flatMap((w) => w.days.flatMap((d) => d.exercises));
+    const trackingMap = await this.resolveSkillTrackingLevel(allSkillExercises);
     return db.transaction(async (tx) => {
       await tx
         .update(skillPrograms)
@@ -6254,7 +6289,7 @@ ${athleteContext}
               reps: ex.reps,
               restSeconds: ex.restSeconds ?? null,
               notes: ex.notes ?? null,
-              trackingLevel: ex.trackingLevel ?? "none",
+              trackingLevel: trackingMap.get(ex) ?? "none",
             });
           }
         }
@@ -6488,6 +6523,9 @@ ${athleteContext}
     structure: ClassStructureInput,
     isForgeOfficial: boolean,
   ) {
+    const trackingMap = await this.resolveSkillTrackingLevel(
+      structure.lessons.flatMap((l) => l.exercises),
+    );
     return db.transaction(async (tx) => {
       const [cls] = await tx
         .insert(classes)
@@ -6533,7 +6571,7 @@ ${athleteContext}
             reps: ex.reps,
             restSeconds: ex.restSeconds ?? null,
             notes: ex.notes ?? null,
-            trackingLevel: ex.trackingLevel ?? "none",
+            trackingLevel: trackingMap.get(ex) ?? "none",
           });
         }
         const [newLesson] = await tx
@@ -6571,6 +6609,9 @@ ${athleteContext}
   },
 
   async updateClassStructure(classId: number, structure: ClassStructureInput) {
+    const trackingMap = await this.resolveSkillTrackingLevel(
+      structure.lessons.flatMap((l) => l.exercises),
+    );
     await db.transaction(async (tx) => {
       const cls = await tx.query.classes.findFirst({ where: eq(classes.id, classId) });
       if (!cls) throw new Error("Class not found");
@@ -6666,7 +6707,7 @@ ${athleteContext}
                 reps: ex.reps,
                 restSeconds: ex.restSeconds ?? null,
                 notes: ex.notes ?? null,
-                trackingLevel: ex.trackingLevel ?? "none",
+                trackingLevel: trackingMap.get(ex) ?? "none",
               });
             }
           }
@@ -6696,7 +6737,7 @@ ${athleteContext}
               reps: ex.reps,
               restSeconds: ex.restSeconds ?? null,
               notes: ex.notes ?? null,
-              trackingLevel: ex.trackingLevel ?? "none",
+              trackingLevel: trackingMap.get(ex) ?? "none",
             });
           }
           const [newLesson] = await tx
