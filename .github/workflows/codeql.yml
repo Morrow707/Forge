@@ -98,13 +98,26 @@ jobs:
       # the compiler to actually run so CodeQL can extract source-level
       # facts from it, unlike ios-testflight.yml's fastlane lane which
       # produces a real distributable build.
+      #
+      # -scheme, not -target: this project's native plugins are wired in
+      # through nested local Swift packages (CapApp-SPM -> e.g.
+      # CameraPlugin -> its own IONCameraLib target) -- a bare `-target
+      # App` build compiles each package's own target in isolation but
+      # skips the scheme-level build-order/dependency-graph resolution
+      # that actually links them together, which is what GitHub's own
+      # default-setup `autobuild` was doing (and why it failed the exact
+      # same way: "unable to resolve module dependency"). fastlane's
+      # build_app (ios/fastlane/Fastfile) already builds via `-scheme App`
+      # for exactly this reason -- this mirrors that, just without the
+      # signing/archiving it also does.
       - name: Build (traced by CodeQL)
         if: matrix.language == 'swift'
         working-directory: ios/App
         run: |
           xcodebuild build \
             -project App.xcodeproj \
-            -target App \
+            -scheme App \
+            -destination 'generic/platform=iOS' \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO
 
