@@ -1,0 +1,164 @@
+name: "CodeQL"
+
+# Advanced setup, replacing the repo's previous "default setup" -- needed
+# because default setup's generic `autobuild` can't build either native
+# platform on its own (it only ever managed a degraded partial scan for
+# java-kotlin, and failed outright for swift). Both native jobs instead
+# build manually, mirroring their respective proven-working CI lane
+# (ios-testflight.yml, android-release.yml) up through getting the
+# platform into a buildable state and compiling a debug-only build --
+# see the swift/java-kotlin-specific comments below for exactly what
+# each platform needed that plain autobuild didn't do.
+# javascript-typescript/ruby/actions stay build-mode: none (nothing to
+# compile).
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  schedule:
+    - cron: "27 6 * * 3"
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: ${{ matrix.language == 'swift' && 60 || 30 }}
+    permissions:
+      security-events: write
+      packages: read
+      actions: read
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: javascript-typescript
+            build-mode: none
+            os: ubuntu-latest
+          - language: java-kotlin
+            build-mode: manual
+            os: ubuntu-latest
+          - language: ruby
+            build-mode: none
+            os: ubuntu-latest
+          - language: actions
+            build-mode: none
+            os: ubuntu-latest
+          - language: swift
+            build-mode: manual
+            os: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+
+      # Shared by both native jobs -- same "bundle the web assets, then
+      # sync the native platform" first half every native CI lane in this
+      # repo starts with (ios-testflight.yml, android-release.yml).
+      - name: Set up Node.js
+        if: matrix.language == 'swift' || matrix.language == 'java-kotlin'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install JS dependencies
+        if: matrix.language == 'swift' || matrix.language == 'java-kotlin'
+        run: npm ci
+
+      - name: Build web app
+        if: matrix.language == 'swift' || matrix.language == 'java-kotlin'
+        run: npm run build
+
+      - name: Sync Capacitor iOS platform
+        if: matrix.language == 'swift'
+        run: npx cap sync ios
+
+      # The step default setup's autobuild was missing -- see this file's
+      # top comment. Without it, xcodebuild fails before compiling a single
+      # source file, which is why CodeQL "exited with errors" rather than
+      # just being slow.
+      - name: Resolve Swift Package dependencies
+        if: matrix.language == 'swift'
+        working-directory: ios/App
+        run: xcodebuild -resolvePackageDependencies -project App.xcodeproj
+
+      # Matches android-release.yml's own JDK -- CodeQL's Java autobuild
+      # pins org.gradle.java.home to whatever JAVA_HOME resolves to when
+      # it runs (near the end of this job, at the analyze step below),
+      # not necessarily this runner's default JDK. Without this, autobuild
+      # picked whatever ubuntu-latest defaults to (Temurin 17) and failed
+      # with "invalid source release: 21" -- this project's Gradle config
+      # targets 21.
+      - name: Set up Java
+        if: matrix.language == 'java-kotlin'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      # Same two steps as android-release.yml's own build job -- the
+      # missing half of why java-kotlin's autobuild failed outright (see
+      # this file's top comment).
+      - name: Sync Capacitor Android platform
+        if: matrix.language == 'java-kotlin'
+        run: npx cap sync android
+
+      - name: Make gradlew executable
+        if: matrix.language == 'java-kotlin'
+        run: chmod +x android/gradlew
+
+      # Manual build-mode: CodeQL traces whatever command runs between
+      # init and analyze. No signing/archiving/upload -- this only needs
+      # the compiler to actually run so CodeQL can extract source-level
+      # facts from it, unlike ios-testflight.yml's fastlane lane which
+      # produces a real distributable build.
+      #
+      # -scheme, not -target: this project's native plugins are wired in
+      # through nested local Swift packages (CapApp-SPM -> e.g.
+      # CameraPlugin -> its own IONCameraLib target) -- a bare `-target
+      # App` build compiles each package's own target in isolation but
+      # skips the scheme-level build-order/dependency-graph resolution
+      # that actually links them together, which is what GitHub's own
+      # default-setup `autobuild` was doing (and why it failed the exact
+      # same way: "unable to resolve module dependency"). fastlane's
+      # build_app (ios/fastlane/Fastfile) already builds via `-scheme App`
+      # for exactly this reason -- this mirrors that, just without the
+      # signing/archiving it also does.
+      - name: Build (traced by CodeQL)
+        if: matrix.language == 'swift'
+        working-directory: ios/App
+        run: |
+          xcodebuild build \
+            -project App.xcodeproj \
+            -scheme App \
+            -destination 'generic/platform=iOS' \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      # autobuild's generic `assemble` task builds every variant,
+      # including release -- which android-release.yml itself only ever
+      # attempts when a real signing keystore secret is configured (see
+      # its own has_signing check), and fails here with "SigningConfig
+      # 'release' is missing required property 'storeFile'" since this CI
+      # environment has none. assembleDebug alone is exactly what
+      # android-release.yml's own always-runs step builds (debug-signed,
+      # no keystore needed) -- plenty for CodeQL to extract from, same as
+      # Swift's build above needing no real signing either.
+      - name: Build (traced by CodeQL)
+        if: matrix.language == 'java-kotlin'
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
