@@ -56,13 +56,26 @@ The Service is provided "as is," without warranties of any kind, to the fullest 
 12. LIMITATION OF LIABILITY
 To the fullest extent the law allows, Forge Athletic Technologies LLC is not liable for indirect, incidental, or consequential damages arising from use of the Service, including injuries arising from training activity -- athletic training carries inherent physical risk that using this app does not create or increase.
 
-13. GOVERNING LAW
+13. ASSUMPTION OF RISK
+Athletic training -- including weightlifting, sprinting, jumping, and other movements tracked or programmed through Forge -- carries inherent risks of physical injury, up to and including severe injury or death. By using the Service, you expressly acknowledge and assume these risks. As stated in Section 3, Forge's camera-based tracking, AI-generated suggestions, and form-fault flags are informational aids only; they do not guarantee safety, correct execution of any movement, or the absence of injury. A coach using the Service remains responsible for appropriately supervising and modifying training for their own athletes.
+
+14. INDEMNIFICATION
+You agree to defend, indemnify, and hold harmless Forge Athletic Technologies LLC, its affiliates, officers, and employees from any claim, damage, liability, or expense (including reasonable attorneys' fees) arising from: (a) your use of the Service, (b) your violation of these Terms, or (c) injury or harm arising from athletic training you directed, supervised, or performed. This section does not extend to a claim arising from Forge's own gross negligence or willful misconduct. [Placeholder -- confirm with counsel whether and how this section can apply where the person being asked to indemnify is a minor athlete or their parent/guardian; several states limit or void an indemnification obligation imposed on a minor.]
+
+15. DISPUTE RESOLUTION AND BINDING ARBITRATION
+Except as set out below, any dispute, claim, or controversy arising out of or relating to these Terms or your use of the Service will be resolved by binding arbitration administered by the American Arbitration Association under its Consumer Arbitration Rules, instead of in court, except that either party may bring an individual claim in small-claims court where eligible. You and Forge each waive any right to a jury trial.
+
+Class Action Waiver: Any arbitration or proceeding will be conducted only on an individual basis, not as a class, collective, or representative action, to the fullest extent the law allows.
+
+Minors: This arbitration and class-action-waiver section applies only to a user who is 18 or older at the time a dispute arises. For a dispute involving an athlete under 18, this section does not apply, and the dispute may instead be brought in a court of competent jurisdiction, unless a parent or legal guardian separately and knowingly agrees to arbitration on the athlete's behalf in a signed writing. [Placeholder -- confirm this carve-out with counsel; state law on arbitration involving minors varies and this approach has not been reviewed.]
+
+16. GOVERNING LAW
 [Placeholder -- to be set once the company's home jurisdiction is finalized.]
 
-14. CHANGES TO THESE TERMS
+17. CHANGES TO THESE TERMS
 We may update these Terms; continued use after an update means you accept the revised Terms. Material changes will be reflected in the version an athlete is asked to accept at signup.
 
-15. CONTACT
+18. CONTACT
 [Placeholder -- add a real support/contact email once one exists.]`;
 
 export const PRIVACY_POLICY_DRAFT = `${DRAFT_NOTICE}
@@ -134,7 +147,7 @@ Forge's camera-based tracking (ARKit on iOS, MediaPipe on web/Android) processes
 Solely to provide the Service: showing an athlete and their coach tracked performance metrics and trends, flagging movement-mechanics faults for coaching purposes, and (only for saved clips) letting an athlete or coach review the footage itself. This data is not used for facial recognition, identity verification, or any purpose other than athletic performance tracking as described here.
 
 4. RETENTION AND DESTRUCTION
-Raw video for Tier 1 (under 13) and Tier 2 (13-17) accounts is automatically deleted after a configured retention window (see the Privacy Policy); numeric metrics derived from it are kept as ordinary performance history, the same as a hand-recorded stopwatch time would be. Adult (Tier 3) accounts have no automatic video deletion. [Placeholder -- a specific, published retention schedule and destruction procedure for every tier, stated in the precise terms BIPA requires, is legal work that hasn't happened yet.]
+Raw video for Tier 1 (under 13) accounts is automatically deleted 30 days after capture; for Tier 2 (13-17) accounts, 90 days after capture. These windows are current engineering defaults, not figures set by counsel or required by any specific statute -- see the note below. Numeric metrics computed from that video (bar-path velocity, joint angles, jump height, and similar) are NOT deleted on this schedule; they are retained as ordinary performance history, the same as a hand-recorded stopwatch time would be, until the athlete's account itself is deleted. Adult (Tier 3, 18+) accounts have no automatic video deletion window -- video is retained until the athlete deletes it individually or deletes their account. Deleting an account permanently removes all of that account's stored video immediately, for every tier. [Placeholder -- confirm with counsel that stating these operational windows here satisfies BIPA's requirement for a published retention schedule, whether the 30/90-day figures themselves should change, and whether a maximum age-independent retention ceiling should also be added.]
 
 5. NO SALE, NO UNRELATED DISCLOSURE
 Forge does not sell, lease, trade, or otherwise profit from this data. It is shared only with the athlete's own coach (as the core function of the Service) and with the service providers named in the Privacy Policy's "How We Share Information" section, solely to operate the Service.
