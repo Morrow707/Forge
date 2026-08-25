@@ -162,7 +162,7 @@ export function getOfflinePoseLandmarker(): Promise<PoseLandmarker> {
   return offlineLandmarkerPromise;
 }
 
-function visible<T extends { visibility: number }>(lm: T | undefined): lm is T {
+export function visible<T extends { visibility: number }>(lm: T | undefined): lm is T {
   return !!lm && lm.visibility >= MIN_VISIBILITY;
 }
 

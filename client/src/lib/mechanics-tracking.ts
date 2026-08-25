@@ -21,7 +21,14 @@
 // single frame, or angles derived that way across frames, never absolute
 // position.
 import type { Landmark, NormalizedLandmark } from "@mediapipe/tasks-vision";
-import { POSE_LANDMARKS, percentile, worldAngleAtVertex, worldVerticalSign, frameKneeAngles } from "./pose-tracking";
+import {
+  POSE_LANDMARKS,
+  percentile,
+  worldAngleAtVertex,
+  worldVerticalSign,
+  frameKneeAngles,
+  visible,
+} from "./pose-tracking";
 import {
   DEFAULT_SKILL_FAULT_THRESHOLDS,
   type SkillFaultThresholds,
@@ -51,7 +58,7 @@ export type MechanicsCameraAngle = "face_on" | "down_the_line";
 function segmentAngleDeg(worldLandmarks: Landmark[], leftIdx: number, rightIdx: number): number | null {
   const left = worldLandmarks[leftIdx];
   const right = worldLandmarks[rightIdx];
-  if (!left || !right) return null;
+  if (!visible(left) || !visible(right)) return null;
   return (Math.atan2(right.z - left.z, right.x - left.x) * 180) / Math.PI;
 }
 
@@ -215,7 +222,7 @@ export function analyzeMechanics(
       for (let i = 1; i < frames.length; i++) {
         const a = frames[i - 1].worldLandmarks[idx];
         const b = frames[i].worldLandmarks[idx];
-        if (!a || !b) continue;
+        if (!visible(a) || !visible(b)) continue;
         total += Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z);
       }
       return total;
@@ -238,7 +245,7 @@ export function analyzeMechanics(
       const a = frames[i - 1].worldLandmarks[wristIdx];
       const b = frames[i].worldLandmarks[wristIdx];
       const dtSeconds = (frames[i].t - frames[i - 1].t) / 1000;
-      if (!a || !b || dtSeconds <= 0) continue;
+      if (!visible(a) || !visible(b) || dtSeconds <= 0) continue;
       wristSpeedSamples.push({
         t: (frames[i].t + frames[i - 1].t) / 2,
         speed: Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z) / dtSeconds,
@@ -250,7 +257,7 @@ export function analyzeMechanics(
     const armAnglesRaw = frames.map((f) => {
       const shoulder = f.worldLandmarks[shoulderIdx];
       const elbow = f.worldLandmarks[elbowIdx];
-      if (!shoulder || !elbow) return null;
+      if (!visible(shoulder) || !visible(elbow)) return null;
       // Elevation above horizontal (0 = arm straight out to the side, 90 =
       // straight up), independent of which way the athlete faces the
       // camera or which arm is throwing.
@@ -284,13 +291,13 @@ export function analyzeMechanics(
       const shoulder = releaseFrame.worldLandmarks[shoulderIdx];
       const elbow = releaseFrame.worldLandmarks[elbowIdx];
       const wrist = releaseFrame.worldLandmarks[wristIdx];
-      if (shoulder && elbow && wrist) {
+      if (visible(shoulder) && visible(elbow) && visible(wrist)) {
         elbowExtensionDeg = Math.round(worldAngleAtVertex(shoulder, elbow, wrist));
       }
       const lHip = releaseFrame.worldLandmarks[POSE_LANDMARKS.LEFT_HIP];
       const rHip = releaseFrame.worldLandmarks[POSE_LANDMARKS.RIGHT_HIP];
       const sign = worldVerticalSign(releaseFrame.worldLandmarks);
-      if (wrist && lHip && rHip && sign != null) {
+      if (visible(wrist) && visible(lHip) && visible(rHip) && sign != null) {
         const hipMidY = (lHip.y + rHip.y) / 2;
         releaseHeightM = Math.round(sign * (hipMidY - wrist.y) * 100) / 100;
       }
@@ -339,7 +346,7 @@ export function analyzeMechanics(
   const ankleMidX = (f: MechanicsFrame) => {
     const left = f.worldLandmarks[POSE_LANDMARKS.LEFT_ANKLE];
     const right = f.worldLandmarks[POSE_LANDMARKS.RIGHT_ANKLE];
-    if (!left || !right) return null;
+    if (!visible(left) || !visible(right)) return null;
     return { mid: (left.x + right.x) / 2, width: Math.abs(left.x - right.x) };
   };
   const ankleSamples = frames.map(ankleMidX).filter((v): v is { mid: number; width: number } => v != null);
@@ -359,7 +366,7 @@ export function analyzeMechanics(
     .map((f) => {
       const left = f.worldLandmarks[POSE_LANDMARKS.LEFT_ANKLE];
       const right = f.worldLandmarks[POSE_LANDMARKS.RIGHT_ANKLE];
-      if (!left || !right) return null;
+      if (!visible(left) || !visible(right)) return null;
       return Math.hypot(left.x - right.x, left.z - right.z);
     })
     .filter((v): v is number => v != null);

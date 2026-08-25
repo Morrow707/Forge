@@ -14,6 +14,7 @@ import {
   buildPathTrace,
   heightScaledAmplitudeCm,
   framesForDuration,
+  MIN_TRACKING_CONFIDENCE,
   type TrackedPoint,
   type PathTracePoint,
 } from "./bar-tracking";
@@ -138,7 +139,17 @@ export function summarizeJumpSet(
   if (rawPoints.length < 6) return null;
   const minFlightAmplitudeCm = heightScaledAmplitudeCm(BASE_MIN_FLIGHT_AMPLITUDE_CM, heightIn);
 
-  const ySmoothed = movingAverage(rawPoints.map((p) => p.y), framesForDuration(rawPoints, TARGET_SMOOTHING_MS));
+  // Confidence-weighted the same way bar-tracking.ts's own sideSmoothed is
+  // (see fuseSideVelocity) -- movingAverage already accepts this, this call
+  // just never passed it, so a stretch of low-lock frames (the implement/
+  // ankle tracker briefly losing the athlete mid-air, e.g. a broad jump
+  // sending an ankle out of frame for an instant) got the same weight as a
+  // fully-trusted frame going into the takeoff/landing state machine below.
+  const ySmoothed = movingAverage(
+    rawPoints.map((p) => p.y),
+    framesForDuration(rawPoints, TARGET_SMOOTHING_MS),
+    rawPoints.map((p) => p.confidence ?? 1),
+  );
   const minAmplitudeM = minFlightAmplitudeCm / 100;
   // A fraction of the minimum flight amplitude, used both as the
   // takeoff/landing trigger threshold and as the jitter tolerance the
@@ -222,6 +233,10 @@ export function summarizeJumpSet(
                 ? Math.round(((takeoffT - previousLandingT) / 1000) * 1000) / 1000
                 : null;
 
+            const repPoints = rawPoints.slice(takeoffIdx, landingIdx + 1);
+            const avgConfidence =
+              repPoints.reduce((sum, p) => sum + (p.confidence ?? 1), 0) / repPoints.length;
+
             reps.push({
               repNumber: reps.length + 1,
               flightSeconds: Math.round(flightSeconds * 1000) / 1000,
@@ -229,7 +244,7 @@ export function summarizeJumpSet(
               peakHeightCm: Math.round(peakHeightCm * 10) / 10,
               horizontalDistanceCm,
               groundContactSeconds,
-              likelyTrackingGlitch: false,
+              likelyTrackingGlitch: avgConfidence < MIN_TRACKING_CONFIDENCE,
               takeoffT,
               landingT,
             });
@@ -263,7 +278,7 @@ export function summarizeJumpSet(
     if (medianHeightCm > 0) {
       for (const rep of reps) {
         const deviationPercent = (Math.abs(rep.jumpHeightCm - medianHeightCm) / medianHeightCm) * 100;
-        rep.likelyTrackingGlitch = deviationPercent > outlierPercent;
+        rep.likelyTrackingGlitch = rep.likelyTrackingGlitch || deviationPercent > outlierPercent;
       }
     }
   }

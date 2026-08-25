@@ -11,7 +11,7 @@
 // distance between checkpoints comes from the coach (marker/known-distance
 // calibration), not from the camera.
 import type { Landmark, NormalizedLandmark } from "@mediapipe/tasks-vision";
-import { POSE_LANDMARKS, percentile } from "./pose-tracking";
+import { POSE_LANDMARKS, percentile, visible } from "./pose-tracking";
 import {
   DEFAULT_SKILL_FAULT_THRESHOLDS,
   type SkillFaultThresholds,
@@ -267,7 +267,7 @@ export function detectSprintFaults(
       const rightHip = frame.worldLandmarks[POSE_LANDMARKS.RIGHT_HIP];
       const leftShoulder = frame.worldLandmarks[POSE_LANDMARKS.LEFT_SHOULDER];
       const rightShoulder = frame.worldLandmarks[POSE_LANDMARKS.RIGHT_SHOULDER];
-      if (!leftHip || !rightHip || !leftShoulder || !rightShoulder) continue;
+      if (!visible(leftHip) || !visible(rightHip) || !visible(leftShoulder) || !visible(rightShoulder)) continue;
       // Real-world meters, not normalized image-space -- a normalized
       // frame's x and y axes are each independently divided by frame width
       // vs. height, so on portrait video (or with any camera tilt) an angle
@@ -298,7 +298,7 @@ export function detectSprintFaults(
     for (const frame of frames) {
       const leftHip = frame.worldLandmarks[POSE_LANDMARKS.LEFT_HIP];
       const rightHip = frame.worldLandmarks[POSE_LANDMARKS.RIGHT_HIP];
-      if (!leftHip || !rightHip) continue;
+      if (!visible(leftHip) || !visible(rightHip)) continue;
       // Also switched to world landmarks: the ratio mixes a y-based
       // numerator with an x-based denominator, which is just as exposed to
       // the aspect-ratio distortion above as an explicit angle would be --
