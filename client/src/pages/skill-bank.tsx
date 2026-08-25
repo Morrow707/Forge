@@ -227,7 +227,7 @@ export function SkillBankPage({
                 )}
                 <div className="mt-auto flex items-center justify-between pt-2">
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <span>{sk.equipment}</span>
+                    <span>{sk.equipment?.join(", ")}</span>
                     {sk.videoUrl && <Video className="h-3.5 w-3.5 text-teal-400" />}
                   </div>
                   {sk.editable && (

@@ -3093,102 +3093,102 @@ async function main() {
     const seedSkillDrills: Array<{
       name: string;
       skillType: string;
-      equipment: string;
+      equipment: string[];
       instructions: string;
     }> = [
       // Hitting
       {
         name: "Tee Work - Inside Pitch",
         skillType: "Hitting",
-        equipment: "Batting Tee, Balls",
+        equipment: ["Batting Tee", "Balls"],
         instructions:
           "Set the tee on the inside third of the plate and work on keeping the barrel inside the ball, driving it to the pull side.",
       },
       {
         name: "Tee Work - Outside Pitch",
         skillType: "Hitting",
-        equipment: "Batting Tee, Balls",
+        equipment: ["Batting Tee", "Balls"],
         instructions:
           "Set the tee on the outside third and practice staying back to drive the ball the other way without pulling off.",
       },
       {
         name: "Front Toss",
         skillType: "Hitting",
-        equipment: "Screen, Balls",
+        equipment: ["Screen", "Balls"],
         instructions:
           "Coach flips underhand from the side behind an L-screen; focus on timing the load to the toss.",
       },
       {
         name: "Soft Toss",
         skillType: "Hitting",
-        equipment: "Balls, Net",
+        equipment: ["Balls", "Net"],
         instructions:
           "Partner tosses from a 45-degree angle into a net; work on a short, direct path to contact.",
       },
       {
         name: "Live Batting Practice",
         skillType: "Hitting",
-        equipment: "Bat, Balls, Screen",
+        equipment: ["Bat", "Balls", "Screen"],
         instructions:
           "Full-speed pitches from a mound or machine; track pitch recognition and apply game-speed timing.",
       },
       {
         name: "One-Hand Drill",
         skillType: "Hitting",
-        equipment: "Bat, Tee",
+        equipment: ["Bat", "Tee"],
         instructions:
           "Hit off a tee using only the top hand to isolate and strengthen the direction of the swing path.",
       },
       {
         name: "Walk-Up Swing Drill",
         skillType: "Hitting",
-        equipment: "Bat, Tee or Toss",
+        equipment: ["Bat", "Tee or Toss"],
         instructions:
           "Start with feet together, stride into the box as the ball is delivered to build a rhythmic load and stride.",
       },
       {
         name: "Load and Stride Drill",
         skillType: "Hitting",
-        equipment: "Bat",
+        equipment: ["Bat"],
         instructions:
           "Shadow-swing focusing on a controlled weight shift back before striding forward, no ball.",
       },
       {
         name: "Two-Strike Approach Drill",
         skillType: "Hitting",
-        equipment: "Bat, Balls, Screen",
+        equipment: ["Bat", "Balls", "Screen"],
         instructions:
           "Simulate two-strike counts, choking up and shortening the swing to protect the plate.",
       },
       {
         name: "Opposite Field Hitting Drill",
         skillType: "Hitting",
-        equipment: "Bat, Balls, Tee or Toss",
+        equipment: ["Bat", "Balls", "Tee or Toss"],
         instructions: "Work pitches on the outer half specifically to drive the ball the opposite way.",
       },
       {
         name: "High Tee Drill (Top Hand Path)",
         skillType: "Hitting",
-        equipment: "Tee (raised), Balls",
+        equipment: ["Tee (raised)", "Balls"],
         instructions:
           "Set the tee at chest height to train the top hand's path staying above the ball into contact.",
       },
       {
         name: "Bunt Placement Drill",
         skillType: "Hitting",
-        equipment: "Bat, Balls, Cones",
+        equipment: ["Bat", "Balls", "Cones"],
         instructions: "Square around early and practice directing bunts to marked zones down each baseline.",
       },
       {
         name: "Overload/Underload Bat Drill",
         skillType: "Hitting",
-        equipment: "Weighted Bats",
+        equipment: ["Weighted Bats"],
         instructions: "Alternate swings with a heavier and lighter bat to build bat speed through contrast training.",
       },
       {
         name: "Contact Point Drill",
         skillType: "Hitting",
-        equipment: "Tee, Balls, Cones",
+        equipment: ["Tee", "Balls", "Cones"],
         instructions:
           "Move the tee to different contact points (front hip, middle, deep) to feel how location changes the swing.",
       },
@@ -3196,28 +3196,28 @@ async function main() {
       {
         name: "Athletic Stance Hold",
         skillType: "Hitting",
-        equipment: "None",
+        equipment: ["None"],
         instructions:
           "Set up in an athletic hitting stance -- weight balanced over both feet, knees softly flexed, hands relaxed, eyes level -- and hold for 10-15 seconds, checking that balance stays centered rather than drifting onto the heels or toes.",
       },
       {
         name: "Stance-to-Load Walkthrough",
         skillType: "Hitting",
-        equipment: "Bat",
+        equipment: ["Bat"],
         instructions:
           "Walk through the move from a static stance into the load position in slow motion, feeling weight shift onto the back side without losing head position or upper-body posture.",
       },
       {
         name: "Ground Force Hop-to-Stance Drill",
         skillType: "Hitting",
-        equipment: "None",
+        equipment: ["None"],
         instructions:
           "Perform a small two-foot hop and stick the landing directly into an athletic hitting stance, training the body to feel the ground push back rather than sink passively into it.",
       },
       {
         name: "Posture Line Drill",
         skillType: "Hitting",
-        equipment: "Mirror or Phone Camera",
+        equipment: ["Mirror or Phone Camera"],
         instructions:
           "Set up in the stance and check that the spine angle from head through hips stays consistent from setup through the load, using video or a mirror for instant feedback.",
       },
@@ -3225,35 +3225,35 @@ async function main() {
       {
         name: "Colored-Ball Recognition Drill",
         skillType: "Hitting",
-        equipment: "Colored Training Balls, Tee or Toss",
+        equipment: ["Colored Training Balls", "Tee or Toss"],
         instructions:
           "Coach mixes different colored balls into toss or front-toss work and calls for the color after each swing, forcing the hitter to actually track and identify the ball instead of just reacting to motion.",
       },
       {
         name: "Front Toss Recognition Drill",
         skillType: "Hitting",
-        equipment: "Screen, Balls",
+        equipment: ["Screen", "Balls"],
         instructions:
           "From a short front-toss distance, the coach mixes locations without warning; the hitter calls out \"in\" or \"away\" as the pitch is released, before deciding whether to swing.",
       },
       {
         name: "Velocity Variation Round",
         skillType: "Hitting",
-        equipment: "Machine or Coach Arm, Balls",
+        equipment: ["Machine or Coach Arm", "Balls"],
         instructions:
           "Coach or machine randomly changes speed between pitches within a round, training the hitter's eyes and rhythm to adjust to velocity changes rather than lock into one fixed tempo.",
       },
       {
         name: "Take/Swing Decision Drill",
         skillType: "Hitting",
-        equipment: "Balls, Screen",
+        equipment: ["Balls", "Screen"],
         instructions:
           "Hitter loads on every pitch but only swings at balls in a defined zone, calling \"take\" out loud on pitches left alone to reinforce plate discipline under real timing pressure.",
       },
       {
         name: "Ball/Strike Recognition Drill",
         skillType: "Hitting",
-        equipment: "Balls, Screen or Machine",
+        equipment: ["Balls", "Screen or Machine"],
         instructions:
           "Pitches are thrown at or near the edges of the zone; the hitter calls ball or strike before the pitch reaches the plate, training early recognition independent of swinging.",
       },
@@ -3261,35 +3261,35 @@ async function main() {
       {
         name: "Pause-and-Go Load Drill",
         skillType: "Hitting",
-        equipment: "Bat, Tee or Toss",
+        equipment: ["Bat", "Tee or Toss"],
         instructions:
           "Hitter pauses briefly at the top of the load before continuing into the swing, isolating the rhythm that connects the load to the launch.",
       },
       {
         name: "Timing-Window Toss Drill",
         skillType: "Hitting",
-        equipment: "Balls, Net",
+        equipment: ["Balls", "Net"],
         instructions:
           "Partner tosses on an irregular count instead of a fixed rhythm, so the hitter has to trigger their load off the toss itself rather than a memorized beat.",
       },
       {
         name: "Rhythm-to-Launch Drill",
         skillType: "Hitting",
-        equipment: "Bat",
+        equipment: ["Bat"],
         instructions:
           "Shadow-swing while counting the rhythm out loud through the load and into the swing to build a repeatable internal tempo.",
       },
       {
         name: "Variable-Speed Batting Practice",
         skillType: "Hitting",
-        equipment: "Machine or Coach Arm, Balls",
+        equipment: ["Machine or Coach Arm", "Balls"],
         instructions:
           "Round of batting practice where pitch speed changes every 2-3 pitches without announcement, forcing late timing adjustments instead of pre-set timing.",
       },
       {
         name: "Two-Speed Front Toss Drill",
         skillType: "Hitting",
-        equipment: "Screen, Balls",
+        equipment: ["Screen", "Balls"],
         instructions:
           "Coach alternates a slow toss and a quick toss back to back so the hitter has to feel the difference in how early or late their load needs to start.",
       },
@@ -3297,35 +3297,35 @@ async function main() {
       {
         name: "Rotational Med Ball Scoop Throw",
         skillType: "Hitting",
-        equipment: "Medicine Ball",
+        equipment: ["Medicine Ball"],
         instructions:
           "From an athletic hitting stance, load and rotate to throw the medicine ball out in front like a swing, training hip-to-hand sequencing.",
       },
       {
         name: "Standing Rotational Med Ball Throw",
         skillType: "Hitting",
-        equipment: "Medicine Ball, Wall or Partner",
+        equipment: ["Medicine Ball", "Wall or Partner"],
         instructions:
           "Facing a wall or partner, rotate the hips first and let the throw follow, emphasizing that the lower half initiates the movement before the hands and arms.",
       },
       {
         name: "Resisted Rotation Drill",
         skillType: "Hitting",
-        equipment: "Resistance Band, Anchor Point",
+        equipment: ["Resistance Band", "Anchor Point"],
         instructions:
           "Anchor a band at hip height behind the hitter and swing against the resistance to train explosive hip rotation strength through the swing path.",
       },
       {
         name: "Bat Speed Overload/Underload Rounds",
         skillType: "Hitting",
-        equipment: "Weighted Bats, Standard Bat",
+        equipment: ["Weighted Bats", "Standard Bat"],
         instructions:
           "Alternate sets of swings between a heavier and lighter bat, then a standard bat, to train the nervous system to produce more bat speed through contrast.",
       },
       {
         name: "Max-Intent Tee Rounds",
         skillType: "Hitting",
-        equipment: "Tee, Balls",
+        equipment: ["Tee", "Balls"],
         instructions:
           "Take a set number of swings off the tee at full, competitive effort, focusing on the fastest controlled bat speed rather than mechanics, then rest and repeat.",
       },
@@ -3333,28 +3333,28 @@ async function main() {
       {
         name: "Fastball/Changeup Recognition Rounds",
         skillType: "Hitting",
-        equipment: "Balls, Screen or Machine",
+        equipment: ["Balls", "Screen or Machine"],
         instructions:
           "Coach mixes fastballs and changeups (same arm speed, different velocity) without pattern; hitter stays back and lets the ball travel before committing.",
       },
       {
         name: "Random Pitch Sequence Drill",
         skillType: "Hitting",
-        equipment: "Balls, Screen or Machine",
+        equipment: ["Balls", "Screen or Machine"],
         instructions:
           "Coach throws random combinations of pitch types and locations in no set order across a round to simulate the unpredictability of a real at-bat.",
       },
       {
         name: "Breaking Ball Recognition Drill",
         skillType: "Hitting",
-        equipment: "Balls, Screen or Machine",
+        equipment: ["Balls", "Screen or Machine"],
         instructions:
           "Coach mixes in pitches that break or change plane; the hitter tracks spin and trajectory out of the hand and calls \"breaking ball\" before deciding to swing.",
       },
       {
         name: "Competitive At-Bat Simulation",
         skillType: "Hitting",
-        equipment: "Balls, Screen or Machine",
+        equipment: ["Balls", "Screen or Machine"],
         instructions:
           "Live simulated at-bats where the hitter reacts to an unknown sequence of pitch types thrown in random order, with each at-bat scored as a competitive result -- good decision, hit, or miss.",
       },
@@ -3362,166 +3362,166 @@ async function main() {
       {
         name: "Short Hop Fielding Drill",
         skillType: "Fielding",
-        equipment: "Glove, Balls",
+        equipment: ["Glove", "Balls"],
         instructions:
           "Partner throws or rolls balls that bounce just in front of the glove; work on soft hands absorbing the short hop.",
       },
       {
         name: "Backhand Fielding Drill",
         skillType: "Fielding",
-        equipment: "Glove, Balls",
+        equipment: ["Glove", "Balls"],
         instructions: "Field ground balls hit to the backhand side, working on footwork to get the glove out in front.",
       },
       {
         name: "Forehand Fielding Drill",
         skillType: "Fielding",
-        equipment: "Glove, Balls",
+        equipment: ["Glove", "Balls"],
         instructions: "Field balls hit to the glove side, staying low and funneling the ball to the center of the body.",
       },
       {
         name: "Barehand Charge Drill",
         skillType: "Fielding",
-        equipment: "Balls (no glove)",
+        equipment: ["Balls (no glove)"],
         instructions:
           "Charge slow rollers and field them barehand, fielding off the glove-side foot for a quick transfer and throw.",
       },
       {
         name: "Double Play Turn Drill",
         skillType: "Fielding",
-        equipment: "Glove, Balls, Bases",
+        equipment: ["Glove", "Balls", "Bases"],
         instructions: "Practice receiving a feed at second base and completing the pivot and throw to first.",
       },
       {
         name: "First Base Scoop Drill",
         skillType: "Fielding",
-        equipment: "Glove, Balls",
+        equipment: ["Glove", "Balls"],
         instructions:
           "Practice scooping short-hop and in-the-dirt throws at first base, working footwork to stay on the bag.",
       },
       {
         name: "Pop Fly Communication Drill",
         skillType: "Fielding",
-        equipment: "Glove, Balls",
+        equipment: ["Glove", "Balls"],
         instructions: "Two or more fielders call loudly for a fly ball to practice communication and avoid collisions.",
       },
       {
         name: "Slow Roller Drill",
         skillType: "Fielding",
-        equipment: "Glove, Balls",
+        equipment: ["Glove", "Balls"],
         instructions: "Charge a slow-hit ground ball, field it on the move, and make an accurate off-balance throw.",
       },
       {
         name: "Bunt Fielding Drill",
         skillType: "Fielding",
-        equipment: "Glove, Balls",
+        equipment: ["Glove", "Balls"],
         instructions:
           "Infielders and pitchers practice charging bunts, barehanding, and making a quick throw to the correct base.",
       },
       {
         name: "Wall Ball Reaction Drill",
         skillType: "Fielding",
-        equipment: "Wall, Ball",
+        equipment: ["Wall", "Ball"],
         instructions: "Throw the ball against a wall at varying angles and speeds to react and field quick rebounds.",
       },
       {
         name: "Ground Ball Angles Drill",
         skillType: "Fielding",
-        equipment: "Glove, Balls, Cones",
+        equipment: ["Glove", "Balls", "Cones"],
         instructions: "Field ground balls from varied angles to train proper angle of approach and shuffle-step positioning.",
       },
       {
         name: "Diving Drill (Lateral Range)",
         skillType: "Fielding",
-        equipment: "Glove, Balls, Mats",
+        equipment: ["Glove", "Balls", "Mats"],
         instructions:
           "Roll or hit balls just out of reach to either side, working the extension dive and quick recovery to a knee.",
       },
       {
         name: "Glove-to-Hand Transfer Drill",
         skillType: "Fielding",
-        equipment: "Glove, Balls",
+        equipment: ["Glove", "Balls"],
         instructions: "Field a ball and practice a rapid, clean transfer from glove to throwing hand without wasted motion.",
       },
       // Throwing
       {
         name: "Long Toss Progression",
         skillType: "Throwing",
-        equipment: "Balls, Open Field",
+        equipment: ["Balls", "Open Field"],
         instructions:
           "Gradually increase throwing distance with an arc, then work back down with a flatter, more direct throw.",
       },
       {
         name: "Crow Hop Throwing Drill",
         skillType: "Throwing",
-        equipment: "Balls",
+        equipment: ["Balls"],
         instructions:
           "Practice the crow-hop footwork pattern (skip-step into throw) to generate momentum on outfield throws.",
       },
       {
         name: "Rapid Fire Throws",
         skillType: "Throwing",
-        equipment: "Balls, Partner",
+        equipment: ["Balls", "Partner"],
         instructions: "Two partners throw back and forth quickly at short distance to build quick hands and a fast release.",
       },
       {
         name: "One-Knee Throwing Drill",
         skillType: "Throwing",
-        equipment: "Balls, Partner",
+        equipment: ["Balls", "Partner"],
         instructions:
           "Throw from a kneeling position to isolate the arm path and upper body mechanics without the lower half.",
       },
       {
         name: "Wall Throw Drill",
         skillType: "Throwing",
-        equipment: "Ball, Wall",
+        equipment: ["Ball", "Wall"],
         instructions: "Throw against a wall and field the rebound solo to repeat proper arm mechanics at high volume.",
       },
       {
         name: "Quick Release Drill",
         skillType: "Throwing",
-        equipment: "Balls, Partner",
+        equipment: ["Balls", "Partner"],
         instructions: "Emphasize getting rid of the ball as fast as possible after the catch, minimizing extra glove movement.",
       },
       {
         name: "Turn and Burn Drill (Outfield)",
         skillType: "Throwing",
-        equipment: "Balls",
+        equipment: ["Balls"],
         instructions: "Outfielder fields the ball on the run and immediately turns the hips to throw without resetting the feet.",
       },
       {
         name: "Jump Throw Drill (Infield)",
         skillType: "Throwing",
-        equipment: "Glove, Balls",
+        equipment: ["Glove", "Balls"],
         instructions: "Field in the hole and practice a jump-throw to generate arm strength and carry on off-balance throws.",
       },
       {
         name: "4-Seam Grip Accuracy Drill",
         skillType: "Throwing",
-        equipment: "Balls, Target or Net",
+        equipment: ["Balls", "Target or Net"],
         instructions: "Throw at a fixed target focusing on a clean four-seam grip and consistent release point for accuracy.",
       },
       {
         name: "Reverse Throws (Arm Care)",
         skillType: "Throwing",
-        equipment: "Light Ball or Towel",
+        equipment: ["Light Ball or Towel"],
         instructions: "Perform the throwing motion in reverse, decelerating patterns as a light arm-care warmup routine.",
       },
       {
         name: "Shuffle Throw Drill",
         skillType: "Throwing",
-        equipment: "Glove, Balls",
+        equipment: ["Glove", "Balls"],
         instructions: "Field a ball moving laterally and practice a quick shuffle of the feet before delivering an accurate throw.",
       },
       {
         name: "Relay Throw Drill",
         skillType: "Throwing",
-        equipment: "Balls, Multiple Players",
+        equipment: ["Balls", "Multiple Players"],
         instructions: "Outfielder throws to a relay man who redirects the throw to a base, working exchange speed and accuracy.",
       },
       {
         name: "Pull-Down Throwing Drill",
         skillType: "Throwing",
-        equipment: "Balls, Radar Gun (optional)",
+        equipment: ["Balls", "Radar Gun (optional)"],
         instructions:
           "Short-distance, max-effort throws off a small crow hop to build arm strength and measure throwing velocity.",
       },
@@ -3529,251 +3529,251 @@ async function main() {
       {
         name: "Receiving Drill - Framing",
         skillType: "Catching",
-        equipment: "Catcher's Gear, Balls",
+        equipment: ["Catcher's Gear", "Balls"],
         instructions: "Receive pitches on the edges of the zone, working quiet hands and a subtle glove turn to frame strikes.",
       },
       {
         name: "Blocking Balls in the Dirt",
         skillType: "Catching",
-        equipment: "Catcher's Gear, Balls",
+        equipment: ["Catcher's Gear", "Balls"],
         instructions: "Drop to the block position on pitches thrown short-hop to smother the ball in front of the plate.",
       },
       {
         name: "Pop-Time Transfer Drill",
         skillType: "Catching",
-        equipment: "Catcher's Gear, Balls, Stopwatch",
+        equipment: ["Catcher's Gear", "Balls", "Stopwatch"],
         instructions:
           "Receive a pitch and time the transfer/throw to second base, working to shave time off the exchange.",
       },
       {
         name: "Blocking Drill - Two Knee",
         skillType: "Catching",
-        equipment: "Catcher's Gear, Balls",
+        equipment: ["Catcher's Gear", "Balls"],
         instructions:
           "Practice the two-knee blocking stance for pitches in the dirt, rounding the shoulders to keep the ball in front.",
       },
       {
         name: "Framing Low Strikes Drill",
         skillType: "Catching",
-        equipment: "Catcher's Gear, Balls",
+        equipment: ["Catcher's Gear", "Balls"],
         instructions: "Set up low in the zone and work receiving low strikes without stabbing downward at the pitch.",
       },
       {
         name: "Bare-Hand Transfer Drill",
         skillType: "Catching",
-        equipment: "Catcher's Gear, Balls",
+        equipment: ["Catcher's Gear", "Balls"],
         instructions:
           "Practice pulling the throwing hand out of the glove quickly on the transfer to speed up throws to bases.",
       },
       {
         name: "Passed Ball Recovery Drill",
         skillType: "Catching",
-        equipment: "Catcher's Gear, Balls, Backstop",
+        equipment: ["Catcher's Gear", "Balls", "Backstop"],
         instructions: "Simulate a ball getting past the catcher and practice the sprint, recovery, and throw home.",
       },
       {
         name: "Throw-Down to Second Drill",
         skillType: "Catching",
-        equipment: "Catcher's Gear, Balls, Bases",
+        equipment: ["Catcher's Gear", "Balls", "Bases"],
         instructions: "From the crouch, receive and throw down to second base focusing on footwork out of the stance.",
       },
       {
         name: "Backpick Drill",
         skillType: "Catching",
-        equipment: "Catcher's Gear, Balls",
+        equipment: ["Catcher's Gear", "Balls"],
         instructions: "Practice a quick backpick throw to first or third base to keep runners honest on their leads.",
       },
       {
         name: "One-Hand Catching Drill",
         skillType: "Catching",
-        equipment: "Catcher's Gear, Balls",
+        equipment: ["Catcher's Gear", "Balls"],
         instructions:
           "Receive pitches with the throwing hand tucked behind the back to build confidence in one-handed receiving.",
       },
       {
         name: "Pitch Tracking Drill",
         skillType: "Catching",
-        equipment: "Catcher's Gear, Balls",
+        equipment: ["Catcher's Gear", "Balls"],
         instructions:
           "Track the ball fully into the glove without peeking at the target early, improving focus through the catch.",
       },
       {
         name: "Blocking Drill - Lateral Movement",
         skillType: "Catching",
-        equipment: "Catcher's Gear, Balls",
+        equipment: ["Catcher's Gear", "Balls"],
         instructions:
           "Block pitches thrown to either side of the plate, working the shuffle needed to square the body to the ball.",
       },
       {
         name: "Catcher Footwork Reset Drill",
         skillType: "Catching",
-        equipment: "Catcher's Gear",
+        equipment: ["Catcher's Gear"],
         instructions: "Practice quickly resetting the feet into a strong throwing base immediately after receiving a pitch.",
       },
       // Footwork
       {
         name: "Ladder Drill - Infield Feet",
         skillType: "Footwork",
-        equipment: "Agility Ladder",
+        equipment: ["Agility Ladder"],
         instructions: "Run quick-feet ladder patterns to build the fast, choppy footwork needed for infield range.",
       },
       {
         name: "First-Step Quickness Drill",
         skillType: "Footwork",
-        equipment: "Cones",
+        equipment: ["Cones"],
         instructions: "React to a visual or verbal cue and explode the first step in a random direction to train reaction time.",
       },
       {
         name: "Crossover Step Drill",
         skillType: "Footwork",
-        equipment: "Cones",
+        equipment: ["Cones"],
         instructions: "Practice the crossover step used to cover ground laterally on balls hit into the gap or hole.",
       },
       {
         name: "Base Running - Turn at First",
         skillType: "Footwork",
-        equipment: "Bases",
+        equipment: ["Bases"],
         instructions:
           "Run through first base, working a proper banana-shaped turn to be in position to advance on an overthrow.",
       },
       {
         name: "Lead-Off and Return Drill",
         skillType: "Footwork",
-        equipment: "Bases",
+        equipment: ["Bases"],
         instructions: "Practice taking a secondary lead and diving or sprinting back safely on a pickoff throw.",
       },
       {
         name: "Rounding Bases Drill",
         skillType: "Footwork",
-        equipment: "Bases",
+        equipment: ["Bases"],
         instructions: "Run the bases at full speed, working the footwork to round each bag efficiently without losing speed.",
       },
       {
         name: "Shuffle Step Fielding Drill",
         skillType: "Footwork",
-        equipment: "Cones",
+        equipment: ["Cones"],
         instructions:
           "Practice the low, wide shuffle step infielders and outfielders use to move laterally while staying balanced.",
       },
       {
         name: "Drop Step Drill (Outfield)",
         skillType: "Footwork",
-        equipment: "Cones",
+        equipment: ["Cones"],
         instructions: "Work the outfielder's first-step drop and turn to run down balls hit over the head.",
       },
       {
         name: "Pivot Footwork Drill (Middle Infield)",
         skillType: "Footwork",
-        equipment: "Glove, Balls, Bases",
+        equipment: ["Glove", "Balls", "Bases"],
         instructions: "Practice the different pivot footwork options at second base for turning a double play.",
       },
       {
         name: "Steal Break Drill",
         skillType: "Footwork",
-        equipment: "Bases, Stopwatch",
+        equipment: ["Bases", "Stopwatch"],
         instructions: "Practice the first-step burst out of a lead when stealing a base, timing the break for efficiency.",
       },
       {
         name: "Home to First Sprint Drill",
         skillType: "Footwork",
-        equipment: "Bases, Stopwatch",
+        equipment: ["Bases", "Stopwatch"],
         instructions: "Sprint from home plate to first base at game speed, timing the run to track improvement.",
       },
       {
         name: "Angle Route Drill (Outfield)",
         skillType: "Footwork",
-        equipment: "Cones, Balls",
+        equipment: ["Cones", "Balls"],
         instructions: "Take proper pursuit angles to fly balls hit to either gap instead of running a direct, inefficient path.",
       },
       {
         name: "Split-Step Timing Drill",
         skillType: "Footwork",
-        equipment: "Balls",
+        equipment: ["Balls"],
         instructions: "Practice timing a split-step (small hop) as the ball is hit to be ready to move in any direction.",
       },
       // Pitching
       {
         name: "Bullpen Session - Fastball Command",
         skillType: "Pitching",
-        equipment: "Mound, Balls, Catcher",
+        equipment: ["Mound", "Balls", "Catcher"],
         instructions: "Throw a structured bullpen focused on locating the fastball to specific quadrants of the zone.",
       },
       {
         name: "Towel Drill",
         skillType: "Pitching",
-        equipment: "Towel",
+        equipment: ["Towel"],
         instructions: "Go through the full pitching motion snapping a towel instead of a ball to groove arm-path mechanics.",
       },
       {
         name: "Balance Point Drill",
         skillType: "Pitching",
-        equipment: "None",
+        equipment: ["None"],
         instructions: "Lift the leg to the balance point and hold to reinforce a stable, controlled leg lift before driving forward.",
       },
       {
         name: "Long Toss for Pitchers",
         skillType: "Pitching",
-        equipment: "Balls, Open Field",
+        equipment: ["Balls", "Open Field"],
         instructions: "Extend throwing distance to build arm strength as part of a between-starts throwing program.",
       },
       {
         name: "Change-Up Grip and Feel Drill",
         skillType: "Pitching",
-        equipment: "Balls",
+        equipment: ["Balls"],
         instructions: "Throw change-ups at short distance focusing purely on grip and release feel rather than velocity.",
       },
       {
         name: "Curveball Spin Drill",
         skillType: "Pitching",
-        equipment: "Balls, Spin Indicator (optional)",
+        equipment: ["Balls", "Spin Indicator (optional)"],
         instructions: "Throw curveballs focusing on consistent spin direction and finishing the pitch out in front.",
       },
       {
         name: "Slide Step Drill (Runners On)",
         skillType: "Pitching",
-        equipment: "Mound, Balls",
+        equipment: ["Mound", "Balls"],
         instructions: "Practice a quickened leg lift and delivery to hold runners on base while maintaining pitch quality.",
       },
       {
         name: "Pickoff Move Drill - First Base",
         skillType: "Pitching",
-        equipment: "Mound, Bases",
+        equipment: ["Mound", "Bases"],
         instructions: "Practice the pickoff move to first base, working quick, deceptive footwork within the rules.",
       },
       {
         name: "Fielding Position Drill (PFP)",
         skillType: "Pitching",
-        equipment: "Glove, Balls",
+        equipment: ["Glove", "Balls"],
         instructions: "Practice fielding comebackers and bunts off the mound and making accurate throws to each base.",
       },
       {
         name: "Mound Repeat Drill",
         skillType: "Pitching",
-        equipment: "Mound, Balls",
+        equipment: ["Mound", "Balls"],
         instructions: "Throw consecutive pitches focusing on repeating the exact same arm slot and release point each time.",
       },
       {
         name: "Stride Length Drill",
         skillType: "Pitching",
-        equipment: "Mound, Tape Measure (optional)",
+        equipment: ["Mound", "Tape Measure (optional)"],
         instructions: "Mark and check stride length down the mound to build a consistent, athletic stride every pitch.",
       },
       {
         name: "Glove-Side Command Drill",
         skillType: "Pitching",
-        equipment: "Balls, Target or Net",
+        equipment: ["Balls", "Target or Net"],
         instructions: "Throw specifically to the glove-side edge of the plate to build command away from the arm side.",
       },
       {
         name: "Rocker Drill (Weight Transfer)",
         skillType: "Pitching",
-        equipment: "None",
+        equipment: ["None"],
         instructions: "Rock weight back onto the drive leg and then transfer forward to reinforce proper sequencing off the rubber.",
       },
       {
         name: "Bullpen Session - Off-Speed Mix",
         skillType: "Pitching",
-        equipment: "Mound, Balls, Catcher",
+        equipment: ["Mound", "Balls", "Catcher"],
         instructions: "Throw a bullpen mixing fastballs with off-speed pitches to simulate real at-bat sequencing.",
       },
     ];
@@ -3783,6 +3783,393 @@ async function main() {
       await storage.createSkillExercise(skillLibraryOwner.id, {
         ...drill,
         sports: ["Baseball", "Softball"],
+        videoUrl: skillVideoSearchUrl(drill.name),
+      });
+    }
+
+    // Multi-sport expansion: real, sport-technical drills across the 10
+    // sports with a genuine technical-skill vocabulary worth camera-based
+    // mechanics review (see the skillType additions in skill-taxonomy.ts).
+    // Deliberately excludes strength/conditioning-dominant sports
+    // (Powerlifting, Cross Country, Cycling, Rowing) -- those are already
+    // covered by the Strength exercise library, not this one. Each item
+    // carries its own `sports` tag (unlike the uniform Baseball/Softball
+    // tag above) since these aren't one shared sport's content -- and the
+    // trailing "Athletic Footwork & Agility" block deliberately tags
+    // several sports per drill, the cross-sport overlap the picker's Sport
+    // accordion is built to surface.
+    const multiSportSkillDrills: Array<{
+      name: string;
+      skillType: string;
+      sports: string[];
+      equipment: string[];
+      instructions: string;
+    }> = [
+      // ============ BASKETBALL (~45) ============
+      // Shooting
+      { name: "Form Shooting - Close Range", skillType: "Shooting", sports: ["Basketball"], equipment: ["Basketball"], instructions: "Shoot one-handed from 3 feet, focusing on a high release and full wrist snap before stepping back once form is consistent." },
+      { name: "Catch-and-Shoot Reps", skillType: "Shooting", sports: ["Basketball"], equipment: ["Basketball", "Partner"], instructions: "Catch a pass on the move and get the shot off within one dribble or less, feet already squared before the catch." },
+      { name: "Off-the-Dribble Pull-Up", skillType: "Shooting", sports: ["Basketball"], equipment: ["Basketball"], instructions: "Attack off one or two dribbles and rise into a balanced jump shot, landing in the same spot you jumped from." },
+      { name: "Free Throw Routine Reps", skillType: "Shooting", sports: ["Basketball"], equipment: ["Basketball"], instructions: "Repeat the exact same pre-shot routine every rep -- same number of dribbles, same breath, same release -- to build a reliable pressure habit." },
+      { name: "Spot-Up Shooting Circuit", skillType: "Shooting", sports: ["Basketball"], equipment: ["Basketball", "Partner"], instructions: "Rotate through 5 perimeter spots, catching and shooting from each before moving to the next." },
+      { name: "Floater/Runner Finishing", skillType: "Shooting", sports: ["Basketball"], equipment: ["Basketball"], instructions: "Attack the paint off two feet or one, releasing a soft touch shot over an imagined shot-blocker before contact." },
+      { name: "Step-Back Jumper", skillType: "Shooting", sports: ["Basketball"], equipment: ["Basketball"], instructions: "Drive, plant, and push off to create separation backward into a squared, balanced jumper." },
+      { name: "Corner Three Reps", skillType: "Shooting", sports: ["Basketball"], equipment: ["Basketball", "Partner"], instructions: "Catch on the move from the corner and release quickly -- the shortest three-point shot demands the fastest release." },
+      { name: "Contested Shot Reps", skillType: "Shooting", sports: ["Basketball"], equipment: ["Basketball", "Partner"], instructions: "A partner closes out with a hand up on every rep -- focus on staying balanced and not fading away from a normal shot." },
+      { name: "Mikan Drill", skillType: "Shooting", sports: ["Basketball"], equipment: ["Basketball"], instructions: "Alternate finishing layups off the glass on each side of the rim without the ball touching the ground, building both-hands finishing." },
+      // Ball Handling
+      { name: "Stationary Two-Ball Dribbling", skillType: "Ball Handling", sports: ["Basketball"], equipment: ["Basketball"], instructions: "Dribble two balls simultaneously in place, alternating pound and crossover patterns without looking down." },
+      { name: "Crossover Series", skillType: "Ball Handling", sports: ["Basketball"], equipment: ["Basketball"], instructions: "Chain in-and-out, crossover, and behind-the-back moves stationary, then walking, then at full speed." },
+      { name: "Full-Court Speed Dribble", skillType: "Ball Handling", sports: ["Basketball"], equipment: ["Basketball"], instructions: "Push the ball ahead with the dominant hand at a sprint pace, keeping the dribble low and controlled." },
+      { name: "Cone Weave Dribbling", skillType: "Ball Handling", sports: ["Basketball"], equipment: ["Basketball", "Cones"], instructions: "Weave through a line of cones using a crossover or between-the-legs move at each one, changing hands every touch." },
+      { name: "Two-Ball Alternating Dribble", skillType: "Ball Handling", sports: ["Basketball"], equipment: ["Basketball"], instructions: "Dribble two balls at alternating heights and rhythms to build independent hand control." },
+      { name: "Pressure Dribbling vs. Defender", skillType: "Ball Handling", sports: ["Basketball"], equipment: ["Basketball", "Partner"], instructions: "A live defender applies ball pressure while the ball handler works to protect the ball and change speeds." },
+      { name: "Between-the-Legs Combo", skillType: "Ball Handling", sports: ["Basketball"], equipment: ["Basketball"], instructions: "Chain between-the-legs dribbles into a hesitation move, walking then at game speed." },
+      { name: "Change-of-Pace Attack Dribble", skillType: "Ball Handling", sports: ["Basketball"], equipment: ["Basketball", "Cones"], instructions: "Drive at a cone simulating a defender, decelerate hard, then explode past it at full speed." },
+      { name: "One-Hand Dribble Tag", skillType: "Ball Handling", sports: ["Basketball"], equipment: ["Basketball", "Partner"], instructions: "Two players dribble in a confined space, each trying to knock the other's ball away while protecting their own." },
+      { name: "Reaction Ball Handling", skillType: "Ball Handling", sports: ["Basketball"], equipment: ["Basketball", "Partner"], instructions: "Dribble while reacting to a partner's called-out direction or hand signal, forcing a live decision every few seconds." },
+      // Passing
+      { name: "Chest Pass Accuracy Reps", skillType: "Passing", sports: ["Basketball"], equipment: ["Basketball", "Wall"], instructions: "Snap crisp chest passes at a wall target, stepping into each pass with a full follow-through." },
+      { name: "Bounce Pass Under Pressure", skillType: "Passing", sports: ["Basketball"], equipment: ["Basketball", "Partner"], instructions: "Deliver a bounce pass around a passive defender's outstretched arm, landing it two-thirds of the way to the receiver." },
+      { name: "Outlet Pass Reps", skillType: "Passing", sports: ["Basketball"], equipment: ["Basketball", "Partner"], instructions: "Grab a rebound and fire a full-court outlet pass to a sprinting teammate before your feet fully reset." },
+      { name: "No-Look Pass Reps", skillType: "Passing", sports: ["Basketball"], equipment: ["Basketball", "Partner"], instructions: "Practice disguising the pass direction with eyes while still delivering it accurately to the real target." },
+      { name: "Skip Pass Reps", skillType: "Passing", sports: ["Basketball"], equipment: ["Basketball", "Partner"], instructions: "Fire a one-motion pass across the court to the far side, skipping the middle defender entirely." },
+      { name: "Pick-and-Roll Passing Reps", skillType: "Passing", sports: ["Basketball"], equipment: ["Basketball", "Partner"], instructions: "Read a rolling screener's angle to the rim and deliver a pocket pass timed to their stride, not their stop." },
+      { name: "Entry Pass to the Post", skillType: "Passing", sports: ["Basketball"], equipment: ["Basketball", "Partner"], instructions: "Deliver the ball to a post player on the correct hand (away from the defender) with a firm, one-motion pass." },
+      { name: "Pivot-and-Pass Reps", skillType: "Passing", sports: ["Basketball"], equipment: ["Basketball", "Partner"], instructions: "Catch, pivot to find an open passing lane, and deliver -- building the habit of surveying the floor before passing on autopilot." },
+      // Post Moves
+      { name: "Drop Step Finish", skillType: "Post Moves", sports: ["Basketball"], equipment: ["Basketball"], instructions: "From the block, feel the defender's position, drop-step to the open side, and finish strong at the rim." },
+      { name: "Up-and-Under Move", skillType: "Post Moves", sports: ["Basketball"], equipment: ["Basketball"], instructions: "Show a shot fake to draw the defender off their feet, then step through and finish underneath." },
+      { name: "Jump Hook Reps", skillType: "Post Moves", sports: ["Basketball"], equipment: ["Basketball"], instructions: "Seal position on the block and release a one-motion jump hook, keeping the ball high and away from the defender's reach." },
+      { name: "Post Spin Move", skillType: "Post Moves", sports: ["Basketball"], equipment: ["Basketball"], instructions: "Reverse pivot away from ball pressure into a spin that opens a clean path to the rim." },
+      { name: "Face-Up Post Attack", skillType: "Post Moves", sports: ["Basketball"], equipment: ["Basketball"], instructions: "Catch on the block, square up facing the basket, and attack with a single power dribble to the rim." },
+      { name: "Sealing and Positioning Drill", skillType: "Post Moves", sports: ["Basketball"], equipment: ["Basketball", "Partner"], instructions: "Practice using the lower body to seal a defender on their hip before the entry pass ever arrives." },
+      { name: "Two-Ball Post Touch Drill", skillType: "Post Moves", sports: ["Basketball"], equipment: ["Basketball"], instructions: "Catch back-to-back post feeds and finish each one with a different move to build a real post-move counter." },
+      { name: "Baby Hook Reps", skillType: "Post Moves", sports: ["Basketball"], equipment: ["Basketball"], instructions: "A short-range hook shot off one dribble from the block, releasing before the shoulder squares fully to the rim." },
+      // Defense
+      { name: "Defensive Slide Footwork", skillType: "Defense", sports: ["Basketball"], equipment: [], instructions: "Slide laterally in a low defensive stance without crossing the feet, staying square to an imaginary ball handler." },
+      { name: "Closeout Footwork", skillType: "Defense", sports: ["Basketball"], equipment: [], instructions: "Sprint out of a help position under control, chopping the feet down into a balanced stance with a hand up on arrival." },
+      { name: "On-Ball Containment Drill", skillType: "Defense", sports: ["Basketball"], equipment: ["Partner"], instructions: "Stay in front of a live ball handler for a set number of dribbles, mirroring their hips rather than the ball." },
+      { name: "Help-and-Recover Drill", skillType: "Defense", sports: ["Basketball"], equipment: ["Partner"], instructions: "Step into the driving lane to help, then sprint back out to close on your original assignment before the pass arrives." },
+      { name: "Box-Out Reps", skillType: "Defense", sports: ["Basketball"], equipment: ["Basketball", "Partner"], instructions: "Make contact and pivot into a low, wide base to seal a rebounder away from the ball before going to get it." },
+      { name: "Charge Take Drill", skillType: "Defense", sports: ["Basketball"], equipment: ["Partner"], instructions: "Establish position early and take contact with a set, low base rather than a late, off-balance lunge." },
+      { name: "Deny Position Footwork", skillType: "Defense", sports: ["Basketball"], equipment: ["Partner"], instructions: "Work on-ball-side denial positioning against an off-ball cutter, staying between the ball and the offensive player." },
+      { name: "Shell Drill", skillType: "Defense", sports: ["Basketball"], equipment: ["Basketball", "Partner"], instructions: "Four defenders rotate on the pass, practicing help-side positioning and closing out as the ball moves around the perimeter." },
+      { name: "Lateral Mirror Drill", skillType: "Defense", sports: ["Basketball"], equipment: ["Partner"], instructions: "Mirror a partner's random lateral movements in a defensive stance without a ball, purely for footwork and reaction." },
+
+      // ============ SOCCER (~45) ============
+      // Ball Control
+      { name: "First Touch - Ground Ball", skillType: "Ball Control", sports: ["Soccer"], equipment: ["Soccer Ball", "Wall"], instructions: "Receive a rolling pass and cushion it into your next stride in one touch, without it bouncing away." },
+      { name: "First Touch - Aerial Ball", skillType: "Ball Control", sports: ["Soccer"], equipment: ["Soccer Ball", "Partner"], instructions: "Cushion a dropping ball out of the air with the instep, chest, or thigh, killing its speed dead before the second touch." },
+      { name: "Juggling Reps", skillType: "Ball Control", sports: ["Soccer"], equipment: ["Soccer Ball"], instructions: "Keep the ball off the ground using feet, thighs, and chest for a target number of consecutive touches." },
+      { name: "Wall Passing - One Touch", skillType: "Ball Control", sports: ["Soccer"], equipment: ["Soccer Ball", "Wall"], instructions: "Pass into a wall and return it in one touch, alternating feet, to build fast, clean receiving under pressure of time." },
+      { name: "Turn and Control Under Pressure", skillType: "Ball Control", sports: ["Soccer"], equipment: ["Soccer Ball", "Partner"], instructions: "Receive with a defender closing from behind and use the first touch to turn away from pressure in one motion." },
+      { name: "Chest Control to Volley", skillType: "Ball Control", sports: ["Soccer"], equipment: ["Soccer Ball", "Partner"], instructions: "Cushion a thrown ball on the chest, let it drop, and strike a controlled volley before it hits the ground." },
+      { name: "Sole Roll Control", skillType: "Ball Control", sports: ["Soccer"], equipment: ["Soccer Ball"], instructions: "Trap a passed ball under the sole of the foot and immediately roll it into space away from a defender." },
+      { name: "Two-Touch Passing Circuit", skillType: "Ball Control", sports: ["Soccer"], equipment: ["Soccer Ball", "Partner"], instructions: "Limit every touch to control-then-pass, forcing a quick, decisive first touch on every rep." },
+      { name: "Back Pressure Shielding", skillType: "Ball Control", sports: ["Soccer"], equipment: ["Soccer Ball", "Partner"], instructions: "Receive with your body between the ball and a defender applying pressure from behind, protecting it until support arrives." },
+      // Dribbling
+      { name: "Cone Weave Dribbling", skillType: "Dribbling", sports: ["Soccer"], equipment: ["Soccer Ball", "Cones"], instructions: "Weave through a tight line of cones using the inside and outside of both feet, keeping the ball close." },
+      { name: "Step-Over Move", skillType: "Dribbling", sports: ["Soccer"], equipment: ["Soccer Ball"], instructions: "Circle the foot over the ball without touching it to sell a fake direction, then push off the opposite way." },
+      { name: "Cruyff Turn", skillType: "Dribbling", sports: ["Soccer"], equipment: ["Soccer Ball"], instructions: "Fake a pass or shot, then drag the ball behind the standing leg to reverse direction in one motion." },
+      { name: "1v1 Attacking Moves", skillType: "Dribbling", sports: ["Soccer"], equipment: ["Soccer Ball", "Partner"], instructions: "Attack a live defender in a small grid, working to beat them with a change of pace or direction rather than pure speed." },
+      { name: "Close Control Sprint", skillType: "Dribbling", sports: ["Soccer"], equipment: ["Soccer Ball"], instructions: "Push the ball with quick, light touches at a full sprint, keeping it within playing distance the entire way." },
+      { name: "Elastico Move", skillType: "Dribbling", sports: ["Soccer"], equipment: ["Soccer Ball"], instructions: "Push the ball out with the outside of the foot, then snap it back inside in one continuous motion to change direction." },
+      { name: "Change of Direction Dribbling", skillType: "Dribbling", sports: ["Soccer"], equipment: ["Soccer Ball", "Cones"], instructions: "Dribble at a cone, plant, and cut sharply away at a new angle without slowing the ball down more than necessary." },
+      { name: "Nutmeg Attempt Drill", skillType: "Dribbling", sports: ["Soccer"], equipment: ["Soccer Ball", "Partner"], instructions: "Work on selling a different move before slipping the ball through a defender's open stance." },
+      { name: "Ball Mastery Circuit", skillType: "Dribbling", sports: ["Soccer"], equipment: ["Soccer Ball"], instructions: "Chain toe taps, sole rolls, and inside-outside touches in a stationary circuit to build raw foot-ball familiarity." },
+      // Passing
+      { name: "Long Diagonal Passing", skillType: "Passing", sports: ["Soccer"], equipment: ["Soccer Ball", "Partner"], instructions: "Strike a driven ball across a long diagonal distance, focusing on weight and accuracy over pure power." },
+      { name: "Give-and-Go Passing", skillType: "Passing", sports: ["Soccer"], equipment: ["Soccer Ball", "Partner"], instructions: "Pass and immediately sprint into space to receive a return pass, building the timing of a one-two combination." },
+      { name: "Through Ball Passing", skillType: "Passing", sports: ["Soccer"], equipment: ["Soccer Ball", "Partner"], instructions: "Time a pass into the space behind a defensive line for a teammate's run, not to their current position." },
+      { name: "Switching the Field", skillType: "Passing", sports: ["Soccer"], equipment: ["Soccer Ball", "Partner"], instructions: "Strike a long, accurate pass from one side of the field to the other to change the point of attack." },
+      { name: "One-Touch Passing Square", skillType: "Passing", sports: ["Soccer"], equipment: ["Soccer Ball", "Cones"], instructions: "Four players pass one-touch around a square, forcing quick decisions and accurate weight on every ball." },
+      { name: "Driven Ball Passing", skillType: "Passing", sports: ["Soccer"], equipment: ["Soccer Ball", "Partner"], instructions: "Strike through the ball's center with a locked ankle to keep it low and firm over medium distance." },
+      { name: "Chip Pass Accuracy", skillType: "Passing", sports: ["Soccer"], equipment: ["Soccer Ball", "Partner"], instructions: "Get underneath the ball with a stabbing motion to loft it over a defender and drop it at a teammate's feet." },
+      { name: "Crossing from Wide Areas", skillType: "Passing", sports: ["Soccer"], equipment: ["Soccer Ball", "Partner"], instructions: "Deliver a driven or floated cross into the box from wide, aiming for a specific target zone in front of goal." },
+      { name: "Back Pass to Keeper", skillType: "Passing", sports: ["Soccer"], equipment: ["Soccer Ball", "Partner"], instructions: "Practice a firm, controlled pass back to the goalkeeper under pressure, angled away from an onrushing attacker." },
+      // Shooting
+      { name: "Instep Drive Shooting", skillType: "Shooting", sports: ["Soccer"], equipment: ["Soccer Ball", "Net"], instructions: "Strike through the ball's center with the laces, plant foot alongside the ball, for a powerful, low shot." },
+      { name: "Finesse Shot Placement", skillType: "Shooting", sports: ["Soccer"], equipment: ["Soccer Ball", "Net"], instructions: "Curl a shot with the inside of the foot toward a corner of the goal, prioritizing placement over power." },
+      { name: "First-Time Finishing", skillType: "Shooting", sports: ["Soccer"], equipment: ["Soccer Ball", "Partner"], instructions: "Strike a passed or crossed ball on the first touch without settling it, timing the run to the ball's arrival." },
+      { name: "Volley Shooting", skillType: "Shooting", sports: ["Soccer"], equipment: ["Soccer Ball", "Partner"], instructions: "Strike a ball out of the air before it touches the ground, keeping the body over the ball to stay low." },
+      { name: "Breakaway Finishing", skillType: "Shooting", sports: ["Soccer"], equipment: ["Soccer Ball", "Net"], instructions: "Attack one-on-one against a goalkeeper, working on composure and picking a corner rather than blasting at the keeper." },
+      { name: "Header Shooting Reps", skillType: "Shooting", sports: ["Soccer"], equipment: ["Soccer Ball", "Partner"], instructions: "Attack a crossed ball in the air, snapping the neck through contact to direct it downward on target." },
+      { name: "Penalty Kick Routine", skillType: "Shooting", sports: ["Soccer"], equipment: ["Soccer Ball", "Net"], instructions: "Repeat the exact same run-up and pick a target before the strike, building a reliable pressure routine." },
+      // Defending
+      { name: "1v1 Defending Stance", skillType: "Defending", sports: ["Soccer"], equipment: ["Soccer Ball", "Partner"], instructions: "Approach an attacker under control, staying goal-side and jockeying rather than diving in for a tackle." },
+      { name: "Slide Tackle Technique", skillType: "Defending", sports: ["Soccer"], equipment: ["Soccer Ball", "Partner"], instructions: "Time a slide tackle to win the ball cleanly, leading with the near foot and staying low through contact." },
+      { name: "Jockeying and Delay", skillType: "Defending", sports: ["Soccer"], equipment: ["Soccer Ball", "Partner"], instructions: "Delay an attacker's progress with a low, balanced stance, forcing them wide without committing to a tackle." },
+      { name: "Interception Reads", skillType: "Defending", sports: ["Soccer"], equipment: ["Soccer Ball", "Partner"], instructions: "Read a passing lane and step in front of it to intercept before the ball reaches its intended target." },
+      { name: "Defensive Line Shape Drill", skillType: "Defending", sports: ["Soccer"], equipment: ["Cones"], instructions: "Move as a unit to maintain a flat defensive line, stepping up together to catch attackers offside." },
+      { name: "Recovery Run Defending", skillType: "Defending", sports: ["Soccer"], equipment: ["Partner"], instructions: "Sprint back into a defensive position after being beaten, angling the run to cut off the attacker's path rather than chasing straight." },
+      // Goalkeeping
+      { name: "Diving Save Technique", skillType: "Goalkeeping", sports: ["Soccer"], equipment: ["Soccer Ball", "Partner"], instructions: "Push off the near foot to dive across the goal, leading with the hands and collapsing the body behind the ball." },
+      { name: "Low Shot Handling", skillType: "Goalkeeping", sports: ["Soccer"], equipment: ["Soccer Ball", "Partner"], instructions: "Get the body behind a low, driven shot, scooping with both hands rather than stabbing at it with one." },
+      { name: "Crosses and High Ball Claims", skillType: "Goalkeeping", sports: ["Soccer"], equipment: ["Soccer Ball", "Partner"], instructions: "Read the flight of a crossed ball and attack it at its highest point, catching with both hands framing a W shape." },
+
+      // ============ VOLLEYBALL (~35) ============
+      // Serving
+      { name: "Float Serve Technique", skillType: "Serving", sports: ["Volleyball"], equipment: ["Volleyball", "Net"], instructions: "Toss with minimal spin and strike the center of the ball flat-handed to produce an unpredictable, wobbling flight." },
+      { name: "Jump Serve Reps", skillType: "Serving", sports: ["Volleyball"], equipment: ["Volleyball", "Net"], instructions: "Toss out in front, approach, and strike at the peak of the jump like a spike, driving the ball down and deep." },
+      { name: "Serve Target Accuracy", skillType: "Serving", sports: ["Volleyball"], equipment: ["Volleyball", "Net", "Cones"], instructions: "Serve at marked zones on the court, prioritizing consistent placement over pure power." },
+      { name: "Underhand Serve Fundamentals", skillType: "Serving", sports: ["Volleyball"], equipment: ["Volleyball", "Net"], instructions: "Step into the serve and strike the ball with a straight, locked arm from below, ideal for a beginner's first reliable serve." },
+      { name: "Topspin Serve Reps", skillType: "Serving", sports: ["Volleyball"], equipment: ["Volleyball", "Net"], instructions: "Snap the wrist over the top of the ball on contact to generate forward spin that drops the ball sharply." },
+      { name: "Serve Under Fatigue", skillType: "Serving", sports: ["Volleyball"], equipment: ["Volleyball", "Net"], instructions: "Serve immediately after a short conditioning burst to build the habit of a repeatable routine even when tired." },
+      { name: "Serve Receive Pressure Drill", skillType: "Serving", sports: ["Volleyball"], equipment: ["Volleyball", "Net", "Partner"], instructions: "Serve at a specific back-row target to pressure-test a receiver's positioning and passing platform." },
+      // Passing/Digging
+      { name: "Forearm Passing Platform", skillType: "Passing", sports: ["Volleyball"], equipment: ["Volleyball", "Partner"], instructions: "Build a flat, stable forearm platform early and use the legs, not the arms, to direct the ball to target." },
+      { name: "Serve Receive Reps", skillType: "Passing", sports: ["Volleyball"], equipment: ["Volleyball", "Net", "Partner"], instructions: "Receive live serves and pass them to the target zone near the net, tracking the ball's spin and speed early." },
+      { name: "Digging Hard-Driven Balls", skillType: "Passing", sports: ["Volleyball"], equipment: ["Volleyball", "Partner"], instructions: "React to a hard-hit ball with a low, wide base, absorbing pace rather than swinging the platform at it." },
+      { name: "Pursuit Digging Drill", skillType: "Passing", sports: ["Volleyball"], equipment: ["Volleyball", "Partner"], instructions: "Chase down a ball hit outside your normal range, prioritizing getting a platform under it over perfect form." },
+      { name: "Emergency Dig - Overhead", skillType: "Passing", sports: ["Volleyball"], equipment: ["Volleyball", "Partner"], instructions: "Use an overhead tomahawk or pancake technique to save a ball that arrives too fast for a normal platform." },
+      { name: "Cross-Court Passing Reps", skillType: "Passing", sports: ["Volleyball"], equipment: ["Volleyball", "Partner"], instructions: "Angle the platform to redirect a ball arriving from one side back across the court to target." },
+      { name: "Passing Footwork Drill", skillType: "Footwork", sports: ["Volleyball"], equipment: [], instructions: "Shuffle into position ahead of the ball's arrival so the platform is set and still before contact, never reaching." },
+      // Setting
+      { name: "Overhead Set Technique", skillType: "Setting", sports: ["Volleyball"], equipment: ["Volleyball", "Net"], instructions: "Frame the ball with both hands above the forehead and extend through the legs and arms together for a soft, controlled set." },
+      { name: "Back Set Reps", skillType: "Setting", sports: ["Volleyball"], equipment: ["Volleyball", "Net"], instructions: "Set a ball behind you without turning the body, arching the back and extending upward to place it accurately." },
+      { name: "Jump Set Reps", skillType: "Setting", sports: ["Volleyball"], equipment: ["Volleyball", "Net"], instructions: "Set from a jump to disguise the set location from blockers, releasing the ball at the top of the jump." },
+      { name: "Setting Off a Bad Pass", skillType: "Setting", sports: ["Volleyball"], equipment: ["Volleyball", "Net", "Partner"], instructions: "Move quickly to a poorly passed ball and still deliver a hittable set, prioritizing recovery footwork over perfect hand position." },
+      { name: "Quick Set (Tempo) Reps", skillType: "Setting", sports: ["Volleyball"], equipment: ["Volleyball", "Net", "Partner"], instructions: "Deliver a fast, low set tight to the antenna, timed for a hitter already in their approach." },
+      { name: "Setter Footwork and Positioning", skillType: "Footwork", sports: ["Volleyball"], equipment: [], instructions: "Practice the setter's shuffle-and-square footwork to arrive under the ball with the body already facing the target." },
+      // Attacking
+      { name: "Approach and Armswing", skillType: "Attacking", sports: ["Volleyball"], equipment: ["Volleyball", "Net"], instructions: "Time a three-step approach into a full armswing, contacting the ball at the highest point in front of the hitting shoulder." },
+      { name: "Line and Cross-Court Hitting", skillType: "Attacking", sports: ["Volleyball"], equipment: ["Volleyball", "Net"], instructions: "Direct the same swing down the line or cross-court using shoulder rotation and wrist angle, not a different approach." },
+      { name: "Off-Speed Shot (Tip/Roll)", skillType: "Attacking", sports: ["Volleyball"], equipment: ["Volleyball", "Net"], instructions: "Disguise a full-speed approach into a soft tip or roll shot over or around the block." },
+      { name: "Back Row Attack Reps", skillType: "Attacking", sports: ["Volleyball"], equipment: ["Volleyball", "Net"], instructions: "Approach and hit from behind the 10-foot line, jumping from before the line to legally attack a back-row set." },
+      { name: "Hitting Against a Block", skillType: "Attacking", sports: ["Volleyball"], equipment: ["Volleyball", "Net", "Partner"], instructions: "Attack against a live single or double block, working to find the seam or tool the block out of bounds." },
+      { name: "Quick Attack (Middle) Timing", skillType: "Attacking", sports: ["Volleyball"], equipment: ["Volleyball", "Net", "Partner"], instructions: "Time the approach to arrive at the peak of the jump as the quick set arrives, a fraction of a second faster than an outside swing." },
+      { name: "Cut Shot Reps", skillType: "Attacking", sports: ["Volleyball"], equipment: ["Volleyball", "Net"], instructions: "Snap the wrist sharply to redirect the ball at a steep angle close to the net, rather than a full-power swing." },
+      // Blocking
+      { name: "Block Footwork - Lateral Slide", skillType: "Blocking", sports: ["Volleyball"], equipment: ["Net"], instructions: "Slide laterally along the net to get square to a hitter, planting the outside foot to jump straight up, not forward." },
+      { name: "Timing the Block Jump", skillType: "Blocking", sports: ["Volleyball"], equipment: ["Volleyball", "Net", "Partner"], instructions: "Read the hitter's approach and jump slightly after them, penetrating the hands over the net at the top of the swing." },
+      { name: "Double Block Coordination", skillType: "Blocking", sports: ["Volleyball"], equipment: ["Volleyball", "Net", "Partner"], instructions: "Two blockers close the seam between them and jump together, eliminating the gap a hitter could tool." },
+      { name: "Reading Hitter Approach for Block", skillType: "Blocking", sports: ["Volleyball"], equipment: ["Net", "Partner"], instructions: "Watch the hitter's shoulder angle and approach line pre-jump to predict shot direction before committing to block." },
+      { name: "Block-to-Transition Footwork", skillType: "Footwork", sports: ["Volleyball"], equipment: ["Net"], instructions: "Land from a block and immediately open the hips to transition backward off the net for the next attack." },
+
+      // ============ FOOTBALL (~40) ============
+      // Route Running
+      { name: "Slant Route Technique", skillType: "Route Running", sports: ["Football"], equipment: ["Football"], instructions: "Push off the line at full speed for 3 steps, then break sharply at a 45-degree angle without rounding the cut." },
+      { name: "Out Route Technique", skillType: "Route Running", sports: ["Football"], equipment: ["Football", "Cones"], instructions: "Sell a vertical stem before planting the outside foot and driving hard toward the sideline on a flat angle." },
+      { name: "Comeback Route Technique", skillType: "Route Running", sports: ["Football"], equipment: ["Football", "Cones"], instructions: "Push deep to sell a go route, then decelerate and drive back downhill toward the quarterback at a sharp angle." },
+      { name: "Release Package vs. Press", skillType: "Route Running", sports: ["Football"], equipment: ["Football", "Partner"], instructions: "Work hand-fighting and footwork releases against a jamming corner before the route stem even begins." },
+      { name: "Double Move Route Running", skillType: "Route Running", sports: ["Football"], equipment: ["Football"], instructions: "Sell a hard break on the first cut to freeze the defender before accelerating into the real, second-level route." },
+      { name: "Route Tree Cone Drill", skillType: "Route Running", sports: ["Football"], equipment: ["Football", "Cones"], instructions: "Run the full route tree off a single stem at each cone, building precise, repeatable breakpoints." },
+      { name: "Comeback Catch and Sideline Awareness", skillType: "Route Running", sports: ["Football"], equipment: ["Football", "Partner", "Cones"], instructions: "Catch a comeback route near a marked sideline, dragging the toes to stay in bounds." },
+      { name: "Post Route Timing", skillType: "Route Running", sports: ["Football"], equipment: ["Football", "Partner"], instructions: "Push vertical then break at a diagonal toward the goal post, timed to a deep-arm throw already in the air." },
+      { name: "Option Route Reads", skillType: "Route Running", sports: ["Football"], equipment: ["Football", "Partner"], instructions: "Read the leverage of the covering defender mid-route and break toward whichever side is open." },
+      // Blocking (Football)
+      { name: "Drive Block Technique", skillType: "Blocking (Football)", sports: ["Football"], equipment: ["Blocking Sled"], instructions: "Fire off the line with a low pad level, striking with both hands inside the frame and driving the legs through contact." },
+      { name: "Pass Protection Footwork", skillType: "Blocking (Football)", sports: ["Football"], equipment: ["Partner"], instructions: "Kick-slide backward staying square, mirroring a pass rusher's hips rather than their hands or shoulder fakes." },
+      { name: "Pull and Trap Block", skillType: "Blocking (Football)", sports: ["Football"], equipment: ["Blocking Sled"], instructions: "Pull laterally down the line and square up to seal a defender on a designed running lane." },
+      { name: "Combo Block Reps", skillType: "Blocking (Football)", sports: ["Football"], equipment: ["Blocking Sled", "Partner"], instructions: "Two linemen double-team a defensive lineman before one climbs off to the second level on the linebacker." },
+      { name: "Cut Block Technique", skillType: "Blocking (Football)", sports: ["Football"], equipment: ["Partner"], instructions: "Aim the shoulder low through the defender's outside hip to take out their legs on a designed cut block." },
+      // Tackling
+      { name: "Form Tackle - Head-Up", skillType: "Tackling", sports: ["Football"], equipment: ["Partner"], instructions: "Wrap up with the head across the front of the ball carrier, driving the legs through contact to finish the tackle." },
+      { name: "Open Field Tackling", skillType: "Tackling", sports: ["Football"], equipment: ["Partner"], instructions: "Break down into a short-stepped, balanced position before closing the final distance to a moving ball carrier." },
+      { name: "Angle Tackling Drill", skillType: "Tackling", sports: ["Football"], equipment: ["Partner"], instructions: "Take a proper pursuit angle to cut off a ball carrier's path rather than chasing straight from behind." },
+      { name: "Gang Tackling Reps", skillType: "Tackling", sports: ["Football"], equipment: ["Partner"], instructions: "Multiple defenders converge on a ball carrier, the first player breaking down to slow them for teammates arriving." },
+      { name: "Tackle Circuit - Sled and Bags", skillType: "Tackling", sports: ["Football"], equipment: ["Blocking Sled"], instructions: "Rep proper wrap, drive, and finish technique against a sled or bag before live contact work." },
+      // QB Mechanics
+      { name: "Five-Step Drop Technique", skillType: "QB Mechanics", sports: ["Football"], equipment: ["Football"], instructions: "Drop back on a consistent, balanced path, hitting the fifth step with the base already set to throw." },
+      { name: "Play-Action Fake and Reset", skillType: "QB Mechanics", sports: ["Football"], equipment: ["Football", "Partner"], instructions: "Sell a hand-off fake convincingly with the eyes and ball carriage before resetting the base to throw." },
+      { name: "Footwork Under Pressure", skillType: "QB Mechanics", sports: ["Football"], equipment: ["Football", "Partner"], instructions: "Climb the pocket or slide away from pressure while keeping the base under control and eyes downfield." },
+      { name: "Deep Ball Touch and Trajectory", skillType: "QB Mechanics", sports: ["Football"], equipment: ["Football", "Partner"], instructions: "Throw a deep ball with a high, arcing trajectory that drops into a receiver's stride rather than a flat line drive." },
+      { name: "Rollout Throwing Mechanics", skillType: "QB Mechanics", sports: ["Football"], equipment: ["Football", "Partner"], instructions: "Keep the shoulders square while rolling out, throwing off a set base rather than fully sideways momentum." },
+      { name: "Progression Reads Drill", skillType: "QB Mechanics", sports: ["Football"], equipment: ["Football", "Partner"], instructions: "Work through a full route progression at a fixed pace, forcing a decision by the last read rather than staring down one target." },
+      { name: "Release Point Consistency Reps", skillType: "QB Mechanics", sports: ["Football"], equipment: ["Football"], instructions: "Throw from a fixed spot at a target, focusing on a repeatable, high release point on every rep." },
+      // Kicking
+      { name: "Field Goal Approach and Plant", skillType: "Kicking", sports: ["Football"], equipment: ["Football", "Kicking Tee"], instructions: "Take a consistent angled approach, planting the non-kicking foot beside the ball at a fixed distance every time." },
+      { name: "Punt Drop and Contact", skillType: "Kicking", sports: ["Football"], equipment: ["Football"], instructions: "Drop the ball onto the foot from a consistent height and angle, striking through the laces for a clean spiral." },
+      { name: "Kickoff Technique", skillType: "Kicking", sports: ["Football"], equipment: ["Football", "Kicking Tee"], instructions: "Approach with a full run-up and strike through the lower third of the ball for maximum hang time and distance." },
+      { name: "Onside Kick Technique", skillType: "Kicking", sports: ["Football"], equipment: ["Football", "Kicking Tee"], instructions: "Strike down and through the top of the ball to produce a low, tumbling kick that becomes live at 10 yards." },
+
+      // ============ LACROSSE (~25) ============
+      // Stick Handling
+      { name: "Cradling Fundamentals", skillType: "Stick Handling", sports: ["Lacrosse"], equipment: ["Lacrosse Stick", "Balls"], instructions: "Rock the stick in a smooth wrist-and-forearm motion to keep the ball secure in the pocket while moving." },
+      { name: "Split Dodge", skillType: "Stick Handling", sports: ["Lacrosse"], equipment: ["Lacrosse Stick", "Balls"], instructions: "Switch the stick hand-to-hand in front of the body while changing direction to beat a defender head-on." },
+      { name: "Face Dodge", skillType: "Stick Handling", sports: ["Lacrosse"], equipment: ["Lacrosse Stick", "Balls"], instructions: "Bring the stick across the face to the opposite shoulder to protect it while cutting past a defender." },
+      { name: "Wall Ball Passing Reps", skillType: "Stick Handling", sports: ["Lacrosse"], equipment: ["Lacrosse Stick", "Balls", "Wall"], instructions: "Throw and catch off a wall at increasing speed, alternating hands to build stick skills on both sides." },
+      { name: "Cradle Under Pressure", skillType: "Stick Handling", sports: ["Lacrosse"], equipment: ["Lacrosse Stick", "Balls", "Partner"], instructions: "Cradle and protect the ball while a defender applies a check, keeping the stick head away from their reach." },
+      { name: "Catching on the Run", skillType: "Stick Handling", sports: ["Lacrosse"], equipment: ["Lacrosse Stick", "Balls", "Partner"], instructions: "Catch a pass in stride at full speed without breaking cadence, giving with the hands to absorb the ball's speed." },
+      { name: "Off-Hand Stick Work", skillType: "Stick Handling", sports: ["Lacrosse"], equipment: ["Lacrosse Stick", "Balls", "Wall"], instructions: "Repeat cradling and passing drills exclusively with the non-dominant hand to remove a predictable tendency." },
+      // Shooting
+      { name: "Overhand Shooting Technique", skillType: "Shooting", sports: ["Lacrosse"], equipment: ["Lacrosse Stick", "Balls", "Net"], instructions: "Snap the top hand through release like a throwing motion, driving the shot low and hard to a corner." },
+      { name: "Sidearm Shooting Reps", skillType: "Shooting", sports: ["Lacrosse"], equipment: ["Lacrosse Stick", "Balls", "Net"], instructions: "Rotate the hips and release the shot on a flat, sidearm plane to change the shot angle a goalie sees." },
+      { name: "Shooting on the Run", skillType: "Shooting", sports: ["Lacrosse"], equipment: ["Lacrosse Stick", "Balls", "Net"], instructions: "Catch and release a shot in one continuous motion while sprinting, without settling the feet first." },
+      { name: "Time and Room Shooting", skillType: "Shooting", sports: ["Lacrosse"], equipment: ["Lacrosse Stick", "Balls", "Net"], instructions: "From distance with no defender close, focus on picking a corner and full-power accuracy rather than a quick release." },
+      { name: "Bounce Shot Technique", skillType: "Shooting", sports: ["Lacrosse"], equipment: ["Lacrosse Stick", "Balls", "Net"], instructions: "Aim the shot to bounce a few feet in front of the goal, harder for a goalie to read than a direct line." },
+      { name: "Shooting Off a Dodge", skillType: "Shooting", sports: ["Lacrosse"], equipment: ["Lacrosse Stick", "Balls", "Net", "Partner"], instructions: "Chain a dodge move directly into a shot release without a pause, before the defense can recover." },
+      // Dodging
+      { name: "Roll Dodge Technique", skillType: "Dodging", sports: ["Lacrosse"], equipment: ["Lacrosse Stick", "Balls", "Partner"], instructions: "Plant and pivot the body around a defender, keeping the stick on the far side away from a check the whole way." },
+      { name: "Question Mark Dodge", skillType: "Dodging", sports: ["Lacrosse"], equipment: ["Lacrosse Stick", "Balls", "Partner"], instructions: "Approach on a curving path that looks like a question mark, changing speed to freeze the defender before attacking downhill." },
+      { name: "Bull Dodge", skillType: "Dodging", sports: ["Lacrosse"], equipment: ["Lacrosse Stick", "Balls", "Partner"], instructions: "Attack a defender directly at speed, using the shoulder and body to power through rather than around them." },
+      { name: "Change of Direction Dodging", skillType: "Dodging", sports: ["Lacrosse"], equipment: ["Lacrosse Stick", "Balls", "Cones"], instructions: "Chain multiple direction changes through cones while cradling at speed, simulating reading a shifting defense." },
+      { name: "Dodging Off the Catch", skillType: "Dodging", sports: ["Lacrosse"], equipment: ["Lacrosse Stick", "Balls", "Partner"], instructions: "Catch a pass already moving into a dodge, eliminating the pause that lets a defense reset." },
+      // Face-offs
+      { name: "Face-Off Clamp Technique", skillType: "Face-offs", sports: ["Lacrosse"], equipment: ["Lacrosse Stick", "Balls", "Partner"], instructions: "Snap the top hand down to trap the ball against the ground the instant the whistle sounds." },
+      { name: "Face-Off Exit Moves", skillType: "Face-offs", sports: ["Lacrosse"], equipment: ["Lacrosse Stick", "Balls", "Partner"], instructions: "Practice pulling the ball to space and controlling it in the same motion as winning the clamp." },
+      { name: "Face-Off Counter Moves", skillType: "Face-offs", sports: ["Lacrosse"], equipment: ["Lacrosse Stick", "Balls", "Partner"], instructions: "React to an opponent's clamp attempt with a rake or jam counter to still come away with possession." },
+      { name: "Face-Off Ground Ball Battle", skillType: "Face-offs", sports: ["Lacrosse"], equipment: ["Lacrosse Stick", "Balls", "Partner"], instructions: "Fight for a loose ball immediately after the clamp, simulating the wing players closing in." },
+      { name: "Face-Off Explosiveness Reps", skillType: "Face-offs", sports: ["Lacrosse"], equipment: ["Lacrosse Stick", "Balls"], instructions: "Repeat the clamp-and-explode motion for pure first-step speed off a stationary set position." },
+
+      // ============ ICE HOCKEY (~30) ============
+      // Skating
+      { name: "Forward Crossover Technique", skillType: "Skating", sports: ["Ice Hockey"], equipment: [], instructions: "Push laterally through a turn by crossing the outside skate over the inside one without losing speed." },
+      { name: "Backward Skating Technique", skillType: "Skating", sports: ["Ice Hockey"], equipment: [], instructions: "Push in a C-cut motion with each skate while keeping the knees bent and chest up to track a play backward." },
+      { name: "Stop-and-Start Acceleration", skillType: "Skating", sports: ["Ice Hockey"], equipment: [], instructions: "Snap to a hard stop and explode back to full speed immediately, simulating a live defensive read." },
+      { name: "Tight Turn Technique", skillType: "Skating", sports: ["Ice Hockey"], equipment: ["Cones"], instructions: "Lean into a tight turn around a cone or marker while maintaining speed, edges doing the work rather than the toes." },
+      { name: "Edge Work - Inside/Outside", skillType: "Skating", sports: ["Ice Hockey"], equipment: [], instructions: "Practice controlled inside- and outside-edge turns at varying speeds to build overall balance and control." },
+      { name: "Transition Skating (Forward-Backward)", skillType: "Skating", sports: ["Ice Hockey"], equipment: [], instructions: "Pivot cleanly from forward to backward skating and back without losing stride or speed through the transition." },
+      { name: "Explosive First-Stride Acceleration", skillType: "Skating", sports: ["Ice Hockey"], equipment: [], instructions: "From a stationary start, drive the first several strides low and choppy to build maximum acceleration off the line." },
+      // Stick Handling
+      { name: "Puck Handling in Tight Spaces", skillType: "Stick Handling", sports: ["Ice Hockey"], equipment: ["Hockey Stick", "Puck", "Cones"], instructions: "Weave the puck through a tight cone course, keeping the head up rather than watching the puck." },
+      { name: "Toe Drag Move", skillType: "Stick Handling", sports: ["Ice Hockey"], equipment: ["Hockey Stick", "Puck"], instructions: "Pull the puck back with the toe of the blade past a defender's stick check to change the attack angle." },
+      { name: "Saucer Pass Reps", skillType: "Stick Handling", sports: ["Ice Hockey"], equipment: ["Hockey Stick", "Puck", "Partner"], instructions: "Lift the puck slightly off the ice with a scooping motion to pass over a defender's stick and land flat for a teammate." },
+      { name: "Puck Protection Along the Boards", skillType: "Stick Handling", sports: ["Ice Hockey"], equipment: ["Hockey Stick", "Puck", "Partner"], instructions: "Position the body between the puck and a checking defender along the boards, using edges to hold the wall." },
+      { name: "One-Timer Reps", skillType: "Stick Handling", sports: ["Ice Hockey"], equipment: ["Hockey Stick", "Puck", "Partner"], instructions: "Redirect a passed puck directly into a shot without stopping it first, timing the blade to the pass's arrival." },
+      { name: "Deking Moves at Speed", skillType: "Stick Handling", sports: ["Ice Hockey"], equipment: ["Hockey Stick", "Puck", "Partner"], instructions: "Chain a fake shot or pass into a lateral puck move to beat a defender one-on-one." },
+      // Shooting
+      { name: "Wrist Shot Technique", skillType: "Shooting", sports: ["Ice Hockey"], equipment: ["Hockey Stick", "Puck", "Net"], instructions: "Roll the puck from heel to toe of the blade while transferring weight forward for a quick, accurate release." },
+      { name: "Slap Shot Technique", skillType: "Shooting", sports: ["Ice Hockey"], equipment: ["Hockey Stick", "Puck", "Net"], instructions: "Wind up and strike just behind the puck to flex the stick, loading power into a full-speed release." },
+      { name: "Snap Shot Technique", skillType: "Shooting", sports: ["Ice Hockey"], equipment: ["Hockey Stick", "Puck", "Net"], instructions: "A quicker, shorter-loading version of the slap shot, prioritizing release speed over maximum power." },
+      { name: "Backhand Shot Reps", skillType: "Shooting", sports: ["Ice Hockey"], equipment: ["Hockey Stick", "Puck", "Net"], instructions: "Cup the puck on the backhand side of the blade and release with a rolling wrist motion for a surprise angle." },
+      { name: "In-Tight Finishing Moves", skillType: "Shooting", sports: ["Ice Hockey"], equipment: ["Hockey Stick", "Puck", "Net"], instructions: "Work quick-release finishing moves from close range against a goaltender, prioritizing deception over power." },
+      // Goaltending
+      { name: "Butterfly Save Technique", skillType: "Goaltending", sports: ["Ice Hockey"], equipment: ["Hockey Stick", "Puck", "Partner"], instructions: "Drop both knees to the ice simultaneously, sealing the five-hole while keeping the upper body square to the shooter." },
+      { name: "Post-to-Post Movement", skillType: "Goaltending", sports: ["Ice Hockey"], equipment: [], instructions: "Push explosively from one post to the other on a cross-crease pass, arriving set before the shot." },
+      { name: "Rebound Control Reps", skillType: "Goaltending", sports: ["Ice Hockey"], equipment: ["Hockey Stick", "Puck", "Partner"], instructions: "Direct saved pucks to the corner or smother them rather than leaving a juicy rebound in the slot." },
+      { name: "Angle and Depth Positioning", skillType: "Goaltending", sports: ["Ice Hockey"], equipment: [], instructions: "Adjust depth in the crease to cut down the shooting angle without overcommitting and opening the far post." },
+      { name: "Tracking Screened Shots", skillType: "Goaltending", sports: ["Ice Hockey"], equipment: ["Hockey Stick", "Puck", "Partner"], instructions: "Move laterally to find a clear sightline around a screening player before the shot arrives." },
+
+      // ============ TENNIS (~25) ============
+      // Groundstrokes
+      { name: "Forehand Technique Reps", skillType: "Groundstrokes", sports: ["Tennis"], equipment: ["Tennis Racquet", "Balls"], instructions: "Take the racquet back early and drive through contact with a full hip and shoulder rotation." },
+      { name: "Two-Handed Backhand Reps", skillType: "Groundstrokes", sports: ["Tennis"], equipment: ["Tennis Racquet", "Balls"], instructions: "Turn the shoulders fully on the takeback and drive both hands through contact together." },
+      { name: "One-Handed Backhand Reps", skillType: "Groundstrokes", sports: ["Tennis"], equipment: ["Tennis Racquet", "Balls"], instructions: "Lead with the elbow on the takeback and extend fully through contact with a firm wrist." },
+      { name: "Topspin Groundstroke Drill", skillType: "Groundstrokes", sports: ["Tennis"], equipment: ["Tennis Racquet", "Balls"], instructions: "Brush up the back of the ball on contact to generate topspin that dips the shot in before the baseline." },
+      { name: "Cross-Court Rally Consistency", skillType: "Groundstrokes", sports: ["Tennis"], equipment: ["Tennis Racquet", "Balls", "Partner"], instructions: "Rally cross-court with a partner, prioritizing consecutive clean contacts over pace or winners." },
+      { name: "Down-the-Line Shot Reps", skillType: "Groundstrokes", sports: ["Tennis"], equipment: ["Tennis Racquet", "Balls", "Partner"], instructions: "Redirect a cross-court feed down the line, using an earlier contact point and a squarer stance." },
+      { name: "Approach Shot and Net Transition", skillType: "Groundstrokes", sports: ["Tennis"], equipment: ["Tennis Racquet", "Balls", "Partner"], instructions: "Hit a deep approach shot on the move and immediately close toward the net behind it." },
+      { name: "High Ball / Moon Ball Handling", skillType: "Groundstrokes", sports: ["Tennis"], equipment: ["Tennis Racquet", "Balls", "Partner"], instructions: "Take a high-bouncing ball at shoulder height with a full, controlled swing rather than backing away from it." },
+      // Serve
+      { name: "Serve Toss Consistency", skillType: "Serve", sports: ["Tennis"], equipment: ["Tennis Racquet", "Balls"], instructions: "Release the ball from a straight, extended arm to the same spot on every toss, without spinning it." },
+      { name: "Flat Serve Technique", skillType: "Serve", sports: ["Tennis"], equipment: ["Tennis Racquet", "Balls", "Net"], instructions: "Drive straight through contact at full extension for maximum pace with minimal spin." },
+      { name: "Kick Serve Technique", skillType: "Serve", sports: ["Tennis"], equipment: ["Tennis Racquet", "Balls", "Net"], instructions: "Brush up and across the back of the ball to generate a high, kicking bounce off the second serve." },
+      { name: "Slice Serve Technique", skillType: "Serve", sports: ["Tennis"], equipment: ["Tennis Racquet", "Balls", "Net"], instructions: "Brush across the side of the ball to curve the serve wide, pulling a returner off the court." },
+      { name: "Second Serve Reliability Reps", skillType: "Serve", sports: ["Tennis"], equipment: ["Tennis Racquet", "Balls", "Net"], instructions: "Hit second serves exclusively, prioritizing a high make-percentage with real spin over first-serve power." },
+      { name: "Serve Placement Targets", skillType: "Serve", sports: ["Tennis"], equipment: ["Tennis Racquet", "Balls", "Net", "Cones"], instructions: "Serve at marked targets in each service box to build precision to the body, T, and wide corners." },
+      // Net Play
+      { name: "Forehand Volley Technique", skillType: "Net Play", sports: ["Tennis"], equipment: ["Tennis Racquet", "Balls", "Partner"], instructions: "Punch through the volley with a short, firm stroke and minimal backswing, letting the incoming pace do the work." },
+      { name: "Backhand Volley Technique", skillType: "Net Play", sports: ["Tennis"], equipment: ["Tennis Racquet", "Balls", "Partner"], instructions: "Lead with the racquet edge and punch through contact with a locked wrist and short stroke." },
+      { name: "Overhead Smash Technique", skillType: "Net Play", sports: ["Tennis"], equipment: ["Tennis Racquet", "Balls", "Partner"], instructions: "Track a lob like a serve toss and drive through contact fully extended overhead." },
+      { name: "Half-Volley Reps", skillType: "Net Play", sports: ["Tennis"], equipment: ["Tennis Racquet", "Balls", "Partner"], instructions: "Block a ball bouncing right at the feet with a short, controlled stroke immediately after the bounce." },
+      { name: "Split Step Timing", skillType: "Footwork", sports: ["Tennis"], equipment: ["Partner"], instructions: "Land a small hop just as an opponent contacts the ball, loading the legs to explode toward the next shot." },
+      { name: "Net Approach Footwork", skillType: "Footwork", sports: ["Tennis"], equipment: [], instructions: "Close toward the net in controlled, balanced steps rather than a flat-out sprint, staying ready to volley or cover a lob." },
+
+      // ============ GOLF (~20) ============
+      // Full Swing
+      { name: "Full Swing - Driver", skillType: "Full Swing", sports: ["Golf"], equipment: ["Golf Clubs", "Balls"], instructions: "Build a wide, connected backswing and rotate through impact with the club face square to the target line." },
+      { name: "Iron Ball-Striking Reps", skillType: "Full Swing", sports: ["Golf"], equipment: ["Golf Clubs", "Balls"], instructions: "Focus on ball-then-turf contact, hitting down and through the ball on a descending strike." },
+      { name: "Tempo and Rhythm Drill", skillType: "Full Swing", sports: ["Golf"], equipment: ["Golf Clubs"], instructions: "Swing at 75% effort with an exaggerated pause at the top to build a consistent, unrushed tempo." },
+      { name: "Draw/Fade Shot Shaping", skillType: "Full Swing", sports: ["Golf"], equipment: ["Golf Clubs", "Balls"], instructions: "Adjust the swing path and face angle at address to intentionally curve the ball's flight one direction." },
+      { name: "Fairway Wood Reps", skillType: "Full Swing", sports: ["Golf"], equipment: ["Golf Clubs", "Balls"], instructions: "Sweep the ball off the turf with a shallower attack angle than an iron, staying level through the swing." },
+      { name: "Punch Shot Under Trouble", skillType: "Full Swing", sports: ["Golf"], equipment: ["Golf Clubs", "Balls"], instructions: "Shorten the backswing and finish to keep the ball flight low, useful under branches or into the wind." },
+      { name: "Alignment and Setup Fundamentals", skillType: "Full Swing", sports: ["Golf"], equipment: ["Golf Clubs"], instructions: "Check that the feet, hips, and shoulders are all square and parallel to the target line at address, every time." },
+      // Short Game
+      { name: "Chipping Technique", skillType: "Short Game", sports: ["Golf"], equipment: ["Golf Clubs", "Balls"], instructions: "Use a short, wrist-quiet stroke with weight favoring the front foot to get the ball rolling quickly on the green." },
+      { name: "Pitch Shot Distance Control", skillType: "Short Game", sports: ["Golf"], equipment: ["Golf Clubs", "Balls"], instructions: "Vary backswing length while keeping tempo constant to dial in specific yardages with a lofted club." },
+      { name: "Bunker Shot Technique", skillType: "Short Game", sports: ["Golf"], equipment: ["Golf Clubs", "Balls"], instructions: "Open the club face and strike the sand a couple inches behind the ball, letting the sand splash it out." },
+      { name: "Flop Shot Technique", skillType: "Short Game", sports: ["Golf"], equipment: ["Golf Clubs", "Balls"], instructions: "Open the face wide and swing fully through to pop the ball high and soft over an obstacle." },
+      { name: "Bump-and-Run Reps", skillType: "Short Game", sports: ["Golf"], equipment: ["Golf Clubs", "Balls"], instructions: "Use a lower-lofted club with a putting-style stroke to run the ball along the ground toward the hole." },
+      { name: "Up-and-Down Pressure Reps", skillType: "Short Game", sports: ["Golf"], equipment: ["Golf Clubs", "Balls"], instructions: "Chip from a random spot around the green and putt out, tracking how often you get down in two." },
+      // Putting
+      { name: "Putting Stroke Fundamentals", skillType: "Putting", sports: ["Golf"], equipment: ["Golf Clubs", "Balls"], instructions: "Keep the stroke a simple pendulum from the shoulders, with the head and lower body completely still." },
+      { name: "Distance Control Ladder Drill", skillType: "Putting", sports: ["Golf"], equipment: ["Golf Clubs", "Balls"], instructions: "Putt to progressively longer targets, matching stroke length to distance rather than changing the tempo." },
+      { name: "Breaking Putt Reads", skillType: "Putting", sports: ["Golf"], equipment: ["Golf Clubs", "Balls"], instructions: "Read the slope from behind the ball and behind the hole before committing to a line and speed." },
+      { name: "Short Pressure Putts", skillType: "Putting", sports: ["Golf"], equipment: ["Golf Clubs", "Balls"], instructions: "Make a set number of 3-foot putts in a row, starting over from zero on any miss to build pressure focus." },
+
+      // ============ WRESTLING (~25) ============
+      // Takedowns
+      { name: "Single Leg Takedown", skillType: "Takedowns", sports: ["Wrestling"], equipment: ["Wrestling Mat", "Partner"], instructions: "Penetrate deep on a level change, securing the leg tight to the chest before finishing to either side." },
+      { name: "Double Leg Takedown", skillType: "Takedowns", sports: ["Wrestling"], equipment: ["Wrestling Mat", "Partner"], instructions: "Shoot with a low level change, driving through both legs and finishing with the head up and hips low." },
+      { name: "High Crotch Takedown", skillType: "Takedowns", sports: ["Wrestling"], equipment: ["Wrestling Mat", "Partner"], instructions: "Secure one leg high near the hip and use a lift or trip to finish the takedown." },
+      { name: "Ankle Pick Technique", skillType: "Takedowns", sports: ["Wrestling"], equipment: ["Wrestling Mat", "Partner"], instructions: "Snap the head down to create an angle, then reach for the ankle on the same side as the opponent's weight." },
+      { name: "Duck Under Takedown", skillType: "Takedowns", sports: ["Wrestling"], equipment: ["Wrestling Mat", "Partner"], instructions: "Duck the head and shoulder under a tied-up arm to get to the opponent's back before they can react." },
+      { name: "Sprawl and Front Headlock", skillType: "Takedowns", sports: ["Wrestling"], equipment: ["Wrestling Mat", "Partner"], instructions: "Sprawl the hips back and down against a shot, then secure a front headlock as the opponent's head is exposed." },
+      { name: "Fireman's Carry", skillType: "Takedowns", sports: ["Wrestling"], equipment: ["Wrestling Mat", "Partner"], instructions: "Duck under an arm and load the opponent across the shoulders before driving them down to their back." },
+      { name: "Setup and Level Change Drilling", skillType: "Takedowns", sports: ["Wrestling"], equipment: ["Wrestling Mat", "Partner"], instructions: "Chain a hand-fighting setup directly into a level change and shot without a pause between the two." },
+      // Escapes
+      { name: "Stand-Up Escape", skillType: "Escapes", sports: ["Wrestling"], equipment: ["Wrestling Mat", "Partner"], instructions: "Post a hand and foot to drive up to a base, clearing the opponent's hands before standing fully." },
+      { name: "Sit-Out Escape", skillType: "Escapes", sports: ["Wrestling"], equipment: ["Wrestling Mat", "Partner"], instructions: "Extend the legs forward and hip out to create separation, then turn in to face the opponent." },
+      { name: "Switch Escape", skillType: "Escapes", sports: ["Wrestling"], equipment: ["Wrestling Mat", "Partner"], instructions: "Reach back for the far ankle while turning the hips through to reverse position underneath an opponent." },
+      { name: "Granby Roll Escape", skillType: "Escapes", sports: ["Wrestling"], equipment: ["Wrestling Mat", "Partner"], instructions: "Roll over the near shoulder from a sit-out position to reverse an opponent trying to ride from behind." },
+      // Par Terre / Positioning
+      { name: "Top Position Riding Technique", skillType: "Par Terre", sports: ["Wrestling"], equipment: ["Wrestling Mat", "Partner"], instructions: "Control the near wrist and far ankle from the top position, keeping weight driving forward through the opponent's hips." },
+      { name: "Half Nelson Turn", skillType: "Par Terre", sports: ["Wrestling"], equipment: ["Wrestling Mat", "Partner"], instructions: "Drive the arm under and across the opponent's far shoulder, using hip pressure to turn them toward their back." },
+      { name: "Cradle Turn Technique", skillType: "Par Terre", sports: ["Wrestling"], equipment: ["Wrestling Mat", "Partner"], instructions: "Lock the head and near knee together and roll the opponent's shoulders toward the mat for back points." },
+      { name: "Referee's Position Stance Drill", skillType: "Par Terre", sports: ["Wrestling"], equipment: ["Wrestling Mat"], instructions: "Build a strong, balanced base in the down or top starting position before the whistle, weight evenly distributed." },
+      { name: "Defensive Base Building", skillType: "Par Terre", sports: ["Wrestling"], equipment: ["Wrestling Mat", "Partner"], instructions: "Widen the base and drop the hips against a top-position rider to prevent being turned or broken down flat." },
+      { name: "Live Bottom Escape Series", skillType: "Escapes", sports: ["Wrestling"], equipment: ["Wrestling Mat", "Partner"], instructions: "Chain multiple escape attempts back-to-back against a live, resisting partner from the bottom position." },
+
+      // ============ TRACK & FIELD (~25) ============
+      // Sprint Mechanics
+      { name: "Arm Swing Mechanics Drill", skillType: "Sprint Mechanics", sports: ["Track & Field"], equipment: [], instructions: "Drive the elbows back with relaxed hands at 90 degrees, keeping the swing forward-and-back, never crossing the body." },
+      { name: "High Knee Drill", skillType: "Sprint Mechanics", sports: ["Track & Field"], equipment: [], instructions: "Drive the knee to hip height on each stride while maintaining a tall, upright posture and quick ground contact." },
+      { name: "Butt Kick Drill", skillType: "Sprint Mechanics", sports: ["Track & Field"], equipment: [], instructions: "Snap the heel up toward the glute on each stride to build hamstring recovery speed in the sprint cycle." },
+      { name: "A-Skip Drill", skillType: "Sprint Mechanics", sports: ["Track & Field"], equipment: [], instructions: "Skip while driving the knee up and punching the ground down and back, combining posture and ground contact cues in one drill." },
+      { name: "Wicket Sprint Drill", skillType: "Sprint Mechanics", sports: ["Track & Field"], equipment: ["Cones"], instructions: "Sprint over a series of low, evenly spaced hurdles to enforce consistent stride length and shin angle." },
+      { name: "Max Velocity Mechanics", skillType: "Sprint Mechanics", sports: ["Track & Field"], equipment: [], instructions: "Focus on tall posture, full extension, and minimal ground contact time during the top-speed phase of a sprint." },
+      { name: "Deceleration Mechanics", skillType: "Sprint Mechanics", sports: ["Track & Field"], equipment: [], instructions: "Practice controlled deceleration after a sprint, lowering the hips and shortening the stride rather than stopping abruptly." },
+      // Starts
+      { name: "Block Start Setup", skillType: "Starts", sports: ["Track & Field"], equipment: ["Starting Blocks"], instructions: "Set the blocks to a comfortable, powerful angle and practice the 'set' position with hips slightly above the shoulders." },
+      { name: "First Three Steps Drill", skillType: "Starts", sports: ["Track & Field"], equipment: ["Starting Blocks", "Stopwatch"], instructions: "Focus purely on the first three steps out of the blocks, driving low and powerful before standing up to sprint." },
+      { name: "Reaction Time Starts", skillType: "Starts", sports: ["Track & Field"], equipment: ["Starting Blocks", "Stopwatch", "Partner"], instructions: "Practice exploding out of the blocks off an unpredictable audible start signal from a partner." },
+      { name: "Standing Start Acceleration", skillType: "Starts", sports: ["Track & Field"], equipment: ["Stopwatch"], instructions: "Accelerate from a standing start with a strong forward lean and driving arms for the first 10-15 meters." },
+      { name: "Falling Start Drill", skillType: "Starts", sports: ["Track & Field"], equipment: [], instructions: "Lean forward from a tall standing position until forced to catch yourself with a sprint step, building the feel of forward drive." },
+      // Jumps & Throws
+      { name: "Long Jump Approach and Takeoff", skillType: "Jumps & Throws", sports: ["Track & Field"], equipment: [], instructions: "Build a consistent, accelerating approach run to a precise takeoff board hit without checking stride length late." },
+      { name: "High Jump Approach Curve", skillType: "Jumps & Throws", sports: ["Track & Field"], equipment: [], instructions: "Run a curved approach that leans the body inward, converting horizontal speed into vertical lift at takeoff." },
+      { name: "Shot Put Glide Technique", skillType: "Jumps & Throws", sports: ["Track & Field"], equipment: [], instructions: "Drive across the ring in a low glide before extending explosively through the release, keeping the shot tucked to the neck." },
+      { name: "Discus Spin Technique", skillType: "Jumps & Throws", sports: ["Track & Field"], equipment: [], instructions: "Build rotational speed through the spin while staying balanced over the middle of the ring, releasing at the front." },
+      { name: "Javelin Approach and Release", skillType: "Jumps & Throws", sports: ["Track & Field"], equipment: [], instructions: "Build momentum through a crossover approach before a whip-like release driven by the hips and shoulder, not just the arm." },
+      { name: "Pole Vault Plant and Takeoff", skillType: "Jumps & Throws", sports: ["Track & Field"], equipment: [], instructions: "Time the pole plant to the final stride and drive the takeoff knee upward to begin the swing-up phase." },
+      { name: "Triple Jump Phase Transitions", skillType: "Jumps & Throws", sports: ["Track & Field"], equipment: [], instructions: "Work the hop-step-jump rhythm, keeping each phase balanced rather than sacrificing the final jump for a bigger hop." },
+      { name: "Hurdle Trail Leg Technique", skillType: "Jumps & Throws", sports: ["Track & Field"], equipment: ["Cones"], instructions: "Snap the trail leg through tight and fast over the hurdle, minimizing time spent in the air over each barrier." },
+
+      // ============ CROSS-SPORT: ATHLETIC FOOTWORK & AGILITY (~22) ============
+      // Deliberate overlap -- the "bleed" the sport picker's accordion is
+      // built to surface, since a lateral shuffle or deceleration drill is
+      // genuinely the same skill whether it's trained for basketball,
+      // soccer, or football.
+      { name: "Lateral Shuffle Footwork", skillType: "Agility", sports: ["Basketball", "Football", "Soccer", "Tennis", "Volleyball"], equipment: [], instructions: "Shuffle laterally in an athletic stance without crossing the feet, staying low and quick over short distances." },
+      { name: "Backpedal to Sprint Transition", skillType: "Agility", sports: ["Football", "Basketball", "Soccer"], equipment: [], instructions: "Backpedal under control, then plant and explode forward into a full sprint on a called cue." },
+      { name: "5-10-5 Pro Agility Footwork", skillType: "Agility", sports: ["Football", "Basketball", "Soccer", "Ice Hockey", "Lacrosse"], equipment: ["Cones"], instructions: "Sprint 5 yards, plant and touch the line, sprint 10 yards the other way, plant, then sprint 5 yards back through the start." },
+      { name: "T-Drill Change of Direction", skillType: "Agility", sports: ["Basketball", "Soccer", "Football", "Volleyball"], equipment: ["Cones"], instructions: "Sprint forward, shuffle laterally to each side, then backpedal to the start in a T-shaped pattern." },
+      { name: "Mirror Drill - Reactive Footwork", skillType: "Agility", sports: ["Basketball", "Soccer", "Tennis", "Football"], equipment: ["Partner"], instructions: "Mirror a partner's random lateral and forward-backward movements as closely and quickly as possible." },
+      { name: "Ladder Drill - Icky Shuffle", skillType: "Footwork", sports: ["Football", "Basketball", "Soccer", "Track & Field"], equipment: ["Agility Ladder"], instructions: "Move through the ladder alternating a two-step-per-box pattern, staying light and quick on the balls of the feet." },
+      { name: "Ladder Drill - Lateral High Knees", skillType: "Footwork", sports: ["Football", "Basketball", "Soccer", "Ice Hockey"], equipment: ["Agility Ladder"], instructions: "Move sideways through the ladder driving the knees high with each step, staying square to the ladder throughout." },
+      { name: "Cone Zig-Zag Sprint", skillType: "Agility", sports: ["Soccer", "Football", "Basketball", "Lacrosse", "Field Hockey"], equipment: ["Cones"], instructions: "Sprint a zig-zag path between staggered cones, planting hard and cutting at each one without rounding the turn." },
+      { name: "Deceleration and Stick Landing", skillType: "Agility", sports: ["Basketball", "Soccer", "Football", "Volleyball", "Tennis"], equipment: [], instructions: "Sprint and decelerate to a dead stop within a set distance, landing balanced with the knees bent, not locked out." },
+      { name: "Reactive Cone Touch Drill", skillType: "Agility", sports: ["Basketball", "Soccer", "Football", "Tennis"], equipment: ["Cones", "Partner"], instructions: "React to a partner pointing at one of several cones and sprint to touch it as fast as possible." },
+      { name: "Carioca Footwork Drill", skillType: "Footwork", sports: ["Soccer", "Basketball", "Football", "Tennis"], equipment: [], instructions: "Cross the trail leg alternately in front of and behind the lead leg while moving laterally at speed." },
+      { name: "Box Drill Agility", skillType: "Agility", sports: ["Football", "Basketball", "Soccer", "Ice Hockey"], equipment: ["Cones"], instructions: "Sprint, shuffle, backpedal, and shuffle again around the four corners of a square, changing movement pattern at each cone." },
+      { name: "Reaction Ball Footwork", skillType: "Agility", sports: ["Basketball", "Soccer", "Tennis", "Football"], equipment: ["Medicine Ball", "Partner"], instructions: "React to an irregularly bouncing ball dropped by a partner, closing the distance with quick, controlled footwork." },
+      { name: "Overhand Throwing Mechanics", skillType: "Throwing", sports: ["Baseball", "Softball", "Football", "Volleyball", "Water Polo"], equipment: ["Balls"], instructions: "Load the throwing arm high with the elbow above the shoulder and drive through a full hip-to-shoulder rotation on release." },
+      { name: "Crossover Step Acceleration", skillType: "Agility", sports: ["Baseball", "Softball", "Football", "Basketball", "Tennis"], equipment: [], instructions: "Drive off a crossover first step to accelerate laterally, common to a fielder's first move, a defensive closeout, or a wide receiver's release." },
+      { name: "Reactive Start Drill", skillType: "Agility", sports: ["Football", "Basketball", "Soccer", "Track & Field", "Baseball"], equipment: ["Partner"], instructions: "Explode from a stationary athletic position on an unpredictable visual or audio cue from a partner." },
+      { name: "Single-Leg Balance and Stability", skillType: "Agility", sports: ["Soccer", "Basketball", "Ice Hockey", "Tennis", "Golf"], equipment: [], instructions: "Hold a single-leg balance position, adding a reach or perturbation once the base position is stable." },
+      { name: "Hip Turn and Open-Gate Drill", skillType: "Footwork", sports: ["Football", "Basketball", "Baseball", "Softball"], equipment: [], instructions: "Rotate the hips open to sprint at an angle without crossing the feet, common to a defensive back's turn or an infielder's first move." },
+      { name: "Multi-Directional Sprint Cone Drill", skillType: "Agility", sports: ["Soccer", "Football", "Lacrosse", "Field Hockey", "Ice Hockey"], equipment: ["Cones"], instructions: "Sprint to a randomly called cone in one of several directions, forcing a true reactive decision rather than a memorized pattern." },
+      { name: "Approach Run Rhythm Drill", skillType: "Footwork", sports: ["Volleyball", "Track & Field", "Football"], equipment: ["Cones"], instructions: "Build a consistent, rhythmic multi-step approach into a jump or kick, common to a volleyball attack approach or a track jump." },
+      { name: "Quick Feet In-Place Drill", skillType: "Footwork", sports: ["Basketball", "Football", "Boxing", "Tennis", "Soccer"], equipment: ["Agility Ladder"], instructions: "Rapidly alternate foot contacts in place for a set time, building the fast, light ground contact common across reactive sports." },
+      { name: "Change of Pace Running", skillType: "Sprint Mechanics", sports: ["Football", "Soccer", "Track & Field", "Baseball", "Softball"], equipment: [], instructions: "Alternate between a controlled jog and a full sprint burst on a called cue, building the ability to change gears without losing form." },
+    ];
+
+    for (const drill of multiSportSkillDrills) {
+      if (existingSkillNames.has(drill.name)) continue;
+      await storage.createSkillExercise(skillLibraryOwner.id, {
+        ...drill,
         videoUrl: skillVideoSearchUrl(drill.name),
       });
     }

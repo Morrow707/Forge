@@ -330,12 +330,26 @@ CREATE TABLE IF NOT EXISTS "skill_exercises" (
   "name" text NOT NULL,
   "skill_type" text NOT NULL DEFAULT 'Hitting',
   "sports" json,
-  "equipment" text,
+  "equipment" json,
   "video_url" text,
   "instructions" text,
   "created_at" timestamp NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS "skill_exercises_coach_idx" ON "skill_exercises" ("coach_id");
+-- equipment was a free-text "Bat, Balls, Screen" string until the skill
+-- picker got a real equipment filter -- converts any row still on the old
+-- text column to a real json array (comma-split), guarded by the column's
+-- actual current type so this is a no-op once already converted, safe to
+-- re-run forever like everything else in this file.
+DO $$ BEGIN
+  IF (SELECT data_type FROM information_schema.columns
+      WHERE table_name = 'skill_exercises' AND column_name = 'equipment') = 'text' THEN
+    ALTER TABLE "skill_exercises" ALTER COLUMN "equipment" TYPE json USING (
+      CASE WHEN equipment IS NULL OR equipment = '' THEN NULL
+      ELSE to_json(string_to_array(equipment, ', ')) END
+    );
+  END IF;
+END $$;
 
 -- Mirrors programs -> program_weeks -> program_days -> program_exercises ->
 -- assignments, but referencing skill_exercises and dropping the

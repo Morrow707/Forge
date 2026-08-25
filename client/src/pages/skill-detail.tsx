@@ -14,16 +14,21 @@ import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { ArrowLeft, Pencil, Trash2, Lock, Youtube } from "lucide-react";
 import type { SkillExerciseWithOwnership } from "@/lib/skill-types";
-import { SKILL_TYPES } from "@/lib/skill-taxonomy";
+import { SKILL_TYPES, SKILL_EQUIPMENT } from "@/lib/skill-taxonomy";
 import { SPORTS } from "@shared/exercise-taxonomy";
-import { SKILL_BADGE_CLASS, SKILL_FILTER_ACTIVE_CLASS, SPORT_FILTER_ACTIVE_CLASS } from "@/lib/exercise-colors";
+import {
+  SKILL_BADGE_CLASS,
+  SKILL_FILTER_ACTIVE_CLASS,
+  SPORT_FILTER_ACTIVE_CLASS,
+  EQUIPMENT_FILTER_ACTIVE_CLASS,
+} from "@/lib/exercise-colors";
 import { FilterChipGroup, RadioChipGroup } from "@/components/filter-chip-group";
 
 type SkillForm = {
   name: string;
   skillType: string;
   sports: Set<string>;
-  equipment: string;
+  equipment: Set<string>;
   videoUrl: string;
   instructions: string;
 };
@@ -32,7 +37,7 @@ const emptyForm: SkillForm = {
   name: "",
   skillType: "Hitting",
   sports: new Set(["Baseball"]),
-  equipment: "",
+  equipment: new Set(),
   videoUrl: "",
   instructions: "",
 };
@@ -42,7 +47,7 @@ function formFrom(sk: SkillExerciseWithOwnership): SkillForm {
     name: sk.name,
     skillType: sk.skillType,
     sports: new Set(sk.sports ?? []),
-    equipment: sk.equipment ?? "",
+    equipment: new Set(sk.equipment ?? []),
     videoUrl: sk.videoUrl ?? "",
     instructions: sk.instructions ?? "",
   };
@@ -75,7 +80,7 @@ export function SkillDetailPage({ apiBase, routeBase }: { apiBase: string; route
         name: form.name,
         skillType: form.skillType || "Hitting",
         sports: form.sports.size > 0 ? Array.from(form.sports) : null,
-        equipment: form.equipment || null,
+        equipment: form.equipment.size > 0 ? Array.from(form.equipment) : null,
         videoUrl: form.videoUrl || null,
         instructions: form.instructions || null,
       };
@@ -191,7 +196,10 @@ export function SkillDetailPage({ apiBase, routeBase }: { apiBase: string; route
             <CardContent className="space-y-4 p-5">
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
                 <Field label="Skill type" value={skill.skillType} />
-                <Field label="Equipment" value={skill.equipment || "—"} />
+                <Field
+                  label="Equipment"
+                  value={skill.equipment && skill.equipment.length > 0 ? skill.equipment.join(", ") : "—"}
+                />
               </div>
               {skill.sports && skill.sports.length > 0 && (
                 <div>
@@ -295,12 +303,29 @@ export function SkillDetailPage({ apiBase, routeBase }: { apiBase: string; route
                   </p>
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="sk-equipment">Equipment</Label>
-                  <Input
-                    id="sk-equipment"
-                    value={form.equipment}
-                    onChange={(e) => setForm((f) => ({ ...f, equipment: e.target.value }))}
-                    placeholder="e.g. Tee, batting cage"
+                  <FilterChipGroup
+                    label="Equipment"
+                    options={
+                      Array.from(form.equipment).some((e) => !SKILL_EQUIPMENT.includes(e))
+                        ? [...Array.from(form.equipment).filter((e) => !SKILL_EQUIPMENT.includes(e)), ...SKILL_EQUIPMENT]
+                        : SKILL_EQUIPMENT
+                    }
+                    selected={form.equipment}
+                    onToggle={(v) =>
+                      setForm((f) => {
+                        const next = new Set(f.equipment);
+                        if (next.has(v)) {
+                          next.delete(v);
+                        } else if (next.size >= 8) {
+                          toast.error("You can select up to 8 pieces of equipment");
+                          return f;
+                        } else {
+                          next.add(v);
+                        }
+                        return { ...f, equipment: next };
+                      })
+                    }
+                    colorClass={EQUIPMENT_FILTER_ACTIVE_CLASS}
                   />
                 </div>
                 <div className="space-y-1.5">

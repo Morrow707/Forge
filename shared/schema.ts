@@ -958,7 +958,14 @@ export const skillExercises = pgTable(
     // use the same overhead-throwing mechanics for serving/passing), so a
     // coach in either sport can still find it.
     sports: json("sports").$type<string[]>(),
-    equipment: text("equipment"),
+    // Array, not a single value -- a drill routinely needs several pieces
+    // at once (a live BP round needs a bat, balls, AND a screen), unlike an
+    // exercises.equipment row which only ever needs one. Was a free-text
+    // "Bat, Balls, Screen" string until the skill picker got a real
+    // equipment filter (see shared/skill-taxonomy.ts's SKILL_EQUIPMENT) --
+    // a compound string can't be filtered against a fixed button grid the
+    // way a real array can.
+    equipment: json("equipment").$type<string[]>(),
     videoUrl: text("video_url"),
     instructions: text("instructions"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -5006,12 +5013,12 @@ export const insertSkillExerciseSchema = createInsertSchema(skillExercises)
   .pick({
     name: true,
     skillType: true,
-    equipment: true,
     videoUrl: true,
     instructions: true,
   })
   .extend({
     sports: z.array(z.string().trim().min(1)).max(8, "You can select up to 8 sports").optional().nullable(),
+    equipment: z.array(z.string().trim().min(1)).max(8, "You can select up to 8 pieces of equipment").optional().nullable(),
   });
 
 // ---------- Skill Programs (fully separate from Programs) ----------
