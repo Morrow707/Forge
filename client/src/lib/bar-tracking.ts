@@ -545,14 +545,44 @@ function computeSpeeds(points: TrackedPoint[], positions: number[]): number[] {
 // being averaged in or reported as the set's peak effort.
 export const MAX_PLAUSIBLE_LIFT_VELOCITY_MPS = 3;
 
+// Below this, a frame's implement-tracker lock was too fresh/shaky to trust
+// its position (and therefore the speed computed from it) at all -- same
+// threshold computeArmDriveAsymmetry uses (as its own local constant,
+// before this was hoisted) for the identical judgment call on a
+// side-camera source, so robustPeakSpeed/plausibleMean's within-trace
+// filtering and that cross-source gate agree on what "too unconfident to
+// use" means. This is
+// the "cold" half of the hot/cold problem the physical-ceiling filter next
+// to it can't catch: MAX_PLAUSIBLE_LIFT_VELOCITY_MPS only rejects a frame
+// reading IMPOSSIBLY FAST (a spike); a brief lock-loss-and-recover instead
+// typically reads as an implausibly SLOW or FROZEN stretch, well under that
+// ceiling, that the old filter let straight through into the mean/peak.
+export const MIN_TRACKING_CONFIDENCE = 0.3;
+
 function robustPeakSpeed(
   speedsMps: number[],
   startIdx: number,
   endIdx: number,
+  confidences?: number[],
 ): { peak: number; peakIdx: number } {
   const samples: { v: number; idx: number }[] = [];
-  for (let i = startIdx; i <= endIdx; i++) samples.push({ v: speedsMps[i], idx: i });
-  if (samples.length === 0) return { peak: 0, peakIdx: startIdx };
+  for (let i = startIdx; i <= endIdx; i++) {
+    if (confidences && confidences[i] < MIN_TRACKING_CONFIDENCE) continue;
+    samples.push({ v: speedsMps[i], idx: i });
+  }
+  // Confidence filtering emptied the window (a genuinely bad stretch, not
+  // just a couple of low frames) -- fall back to every raw sample rather
+  // than reporting zero, same "never silently zero out a whole rep" stance
+  // as the ceiling filter below.
+  const pool0 =
+    samples.length > 0
+      ? samples
+      : (() => {
+          const raw: { v: number; idx: number }[] = [];
+          for (let i = startIdx; i <= endIdx; i++) raw.push({ v: speedsMps[i], idx: i });
+          return raw;
+        })();
+  if (pool0.length === 0) return { peak: 0, peakIdx: startIdx };
   // Filtered out BEFORE the percentile trim runs -- the 95th-percentile trim
   // alone assumes only a handful of frames are bad, which doesn't hold when a
   // contiguous smoothing-window edge effect corrupts several consecutive
@@ -562,8 +592,8 @@ function robustPeakSpeed(
   // an even worse case this ceiling can't rescue, but reporting SOMETHING
   // consistent with the rest of this function's "never just report zero"
   // stance beats silently zeroing out a whole rep.
-  const plausible = samples.filter((s) => s.v <= MAX_PLAUSIBLE_LIFT_VELOCITY_MPS);
-  const pool = plausible.length > 0 ? plausible : samples;
+  const plausible = pool0.filter((s) => s.v <= MAX_PLAUSIBLE_LIFT_VELOCITY_MPS);
+  const pool = plausible.length > 0 ? plausible : pool0;
   const sorted = [...pool].sort((a, b) => a.v - b.v);
   const peak = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))].v;
   const peakIdx = pool.find((s) => s.v >= peak)?.idx ?? startIdx;
@@ -571,15 +601,19 @@ function robustPeakSpeed(
 }
 
 // Same outlier-exclusion reasoning as robustPeakSpeed's own comment -- a
-// single physically-impossible frame shouldn't get to drag a phase's MEAN
-// speed off just because it wasn't extreme enough to be the reported peak.
-// Shared by summarizeTrackedSet's phaseStats and velocityForWindow below so
-// both mean calculations get the same protection robustPeakSpeed already
-// gives peak.
-function plausibleMean(speeds: number[]): number {
+// single physically-impossible OR untrustworthy-confidence frame shouldn't
+// get to drag a phase's MEAN speed off just because it wasn't extreme
+// enough to be the reported peak. Shared by summarizeTrackedSet's
+// phaseStats and velocityForWindow below so both mean calculations get the
+// same protection robustPeakSpeed already gives peak.
+function plausibleMean(speeds: number[], confidences?: number[]): number {
   if (speeds.length === 0) return 0;
-  const plausible = speeds.filter((v) => v <= MAX_PLAUSIBLE_LIFT_VELOCITY_MPS);
-  const pool = plausible.length > 0 ? plausible : speeds;
+  const confident = confidences
+    ? speeds.filter((_, i) => confidences[i] >= MIN_TRACKING_CONFIDENCE)
+    : speeds;
+  const pool0 = confident.length > 0 ? confident : speeds;
+  const plausible = pool0.filter((v) => v <= MAX_PLAUSIBLE_LIFT_VELOCITY_MPS);
+  const pool = plausible.length > 0 ? plausible : pool0;
   return pool.reduce((a, b) => a + b, 0) / pool.length;
 }
 
@@ -756,6 +790,11 @@ export function summarizeTrackedSet(
     points.map((p) => p.confidence ?? 1),
   );
   const speedsMps = computeSpeeds(points, ySmoothed);
+  // Same array robustPeakSpeed/plausibleMean already read for the physical-
+  // ceiling filter, indexed identically to speedsMps/points -- lets both
+  // also exclude a frame the implement tracker itself barely trusted, not
+  // just one that read impossibly fast.
+  const confidences = points.map((p) => p.confidence ?? 1);
 
   const minAmplitudeM = minRepAmplitudeCm / 100;
   const phases = segmentPhases(ySmoothed, minAmplitudeM);
@@ -763,12 +802,13 @@ export function summarizeTrackedSet(
 
   const phaseStats = phases.map((phase) => {
     const slice = speedsMps.slice(phase.startIdx, phase.endIdx + 1);
+    const confidenceSlice = confidences.slice(phase.startIdx, phase.endIdx + 1);
     const duration = (points[phase.endIdx].t - points[phase.startIdx].t) / 1000;
-    const mean = plausibleMean(slice);
+    const mean = plausibleMean(slice, confidenceSlice);
     // peak/peakIdx (index within the whole trace, used to report how long
     // it took to reach peak velocity, a standard VBT metric) come from
     // robustPeakSpeed rather than a raw max -- see its own comment above.
-    const { peak, peakIdx } = robustPeakSpeed(speedsMps, phase.startIdx, phase.endIdx);
+    const { peak, peakIdx } = robustPeakSpeed(speedsMps, phase.startIdx, phase.endIdx, confidences);
     return { peak, mean, duration, startIdx: phase.startIdx, endIdx: phase.endIdx, peakIdx };
   });
 
@@ -814,10 +854,18 @@ export function summarizeTrackedSet(
   // real rep silently vanishing with no explanation) than over-counted (a
   // spurious one, at least flagged "shaky" today). Only a phase that's
   // BOTH unusually short next to this same set's other reps AND directly
-  // overlaps a rejection event gets dropped; either signal alone isn't
-  // enough -- a genuinely fast rep with clean tracking has no rejection
-  // events near it, and a slower rep that happens to have one incidental
-  // rejection elsewhere in a long phase isn't anomalously short.
+  // overlaps a rejection event (a single-frame implausible-acceleration
+  // spike) OR was tracked at low average confidence throughout gets
+  // dropped; duration alone isn't enough -- a genuinely fast rep with
+  // clean tracking has neither signal near it, and a slower rep that
+  // happens to have one incidental rejection (or a brief confidence dip)
+  // elsewhere in a long phase isn't anomalously short. The confidence leg
+  // catches what a single-frame rejection event can't: a SUSTAINED
+  // low-lock stretch (the implement tracker never quite re-acquiring
+  // through a whole short phase, e.g. the bar low/occluded near the floor
+  // on a Pendlay row) that never trips a single-frame rejection but still
+  // isn't a real rep -- exactly the mechanism behind a set logging more
+  // reps than were actually performed.
   const concentricDurations = concentric.map((p) => p.duration).sort((a, b) => a - b);
   const medianConcentricDuration =
     concentricDurations.length > 0 ? concentricDurations[Math.floor(concentricDurations.length / 2)] : 0;
@@ -831,7 +879,11 @@ export function summarizeTrackedSet(
     if (phase.duration >= medianConcentricDuration * PHANTOM_DURATION_RATIO) return false;
     const startT = points[phase.startIdx].t;
     const endT = points[phase.endIdx].t;
-    return rejectionEvents.some((t) => t >= startT && t <= endT);
+    if (rejectionEvents.some((t) => t >= startT && t <= endT)) return true;
+    const phaseConfidences = confidences.slice(phase.startIdx, phase.endIdx + 1);
+    const avgConfidence =
+      phaseConfidences.length > 0 ? phaseConfidences.reduce((a, c) => a + c, 0) / phaseConfidences.length : 1;
+    return avgConfidence < MIN_TRACKING_CONFIDENCE;
   }
 
   // One entry per concentric phase, in chronological order -- rep 1, 2, 3...
@@ -913,7 +965,18 @@ export function summarizeTrackedSet(
   // (e.g. every phase got filtered as phantom) rather than computing
   // deviation over nothing.
   const activePoints = points.filter((p) => repBreakdown.some((r) => p.t >= r.startT && p.t <= r.endT));
-  const driftPoints = activePoints.length > 0 ? activePoints : points;
+  const repScopedPoints = activePoints.length > 0 ? activePoints : points;
+  // Same MIN_TRACKING_CONFIDENCE filter robustPeakSpeed/plausibleMean apply
+  // to velocity -- this metric had never had it: every point counted
+  // equally toward the median/percentile regardless of how much the
+  // implement tracker actually trusted it, so a stretch of low-lock frames
+  // (the bar low/occluded near the floor on a Pendlay row, same failure
+  // mode as the velocity one) could inflate the reported drift even though
+  // p90 already trims the most extreme 10%. Falls back to the unfiltered
+  // set if confidence filtering would leave nothing, same "never compute
+  // over an empty pool" stance as everywhere else this filter is applied.
+  const confidentPoints = repScopedPoints.filter((p) => (p.confidence ?? 1) >= MIN_TRACKING_CONFIDENCE);
+  const driftPoints = confidentPoints.length > 0 ? confidentPoints : repScopedPoints;
 
   const medianOf = (values: number[]) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
   const medianX = medianOf(driftPoints.map((p) => p.x));
@@ -1042,10 +1105,11 @@ function velocityForWindow(
     }
   }
   if (startIdx === -1 || endIdx === -1 || endIdx - startIdx < 3) return null;
-  const { peak } = robustPeakSpeed(speeds, startIdx, endIdx);
+  const { peak } = robustPeakSpeed(speeds, startIdx, endIdx, confidences);
   const windowSpeeds = speeds.slice(startIdx, endIdx + 1);
-  const mean = plausibleMean(windowSpeeds);
-  const confidence = confidences.slice(startIdx, endIdx + 1).reduce((a, c) => a + c, 0) / windowSpeeds.length;
+  const windowConfidences = confidences.slice(startIdx, endIdx + 1);
+  const mean = plausibleMean(windowSpeeds, windowConfidences);
+  const confidence = windowConfidences.reduce((a, c) => a + c, 0) / windowSpeeds.length;
   return { peak, mean, confidence };
 }
 
@@ -1156,12 +1220,13 @@ export function computeArmDriveAsymmetry(
   // wrist landmark alone -- same spirit as MIN_DRIVE_DURATION_SEC's own
   // floor in computeLegDriveAsymmetry, just expressed as confidence
   // instead of duration since that's what this source actually carries.
-  const MIN_WINDOW_CONFIDENCE = 0.3;
+  // Same threshold MIN_TRACKING_CONFIDENCE uses above, for the identical
+  // judgment call on the primary trace.
 
   return repWindows.map(({ startT, endT }) => {
     const left = velocityForWindow(leftSpeeds, leftPoints, leftConfidences, startT, endT);
     const right = velocityForWindow(rightSpeeds, rightPoints, rightConfidences, startT, endT);
-    if (!left || !right || left.confidence < MIN_WINDOW_CONFIDENCE || right.confidence < MIN_WINDOW_CONFIDENCE) {
+    if (!left || !right || left.confidence < MIN_TRACKING_CONFIDENCE || right.confidence < MIN_TRACKING_CONFIDENCE) {
       return null;
     }
 
