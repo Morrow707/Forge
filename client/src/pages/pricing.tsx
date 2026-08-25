@@ -8,6 +8,7 @@ import {
   BILLING_TIER_ORDER,
   BILLING_ADD_ONS,
   BILLING_ADD_ON_ORDER,
+  bandForAthleteCount,
   formatCents,
 } from "@shared/billing-tiers";
 import { FREE_AGENT_TIERS, FREE_AGENT_TIER_ORDER, FREE_AGENT_ADD_ONS, FREE_AGENT_ADD_ON_ORDER } from "@shared/free-agent-tiers";
@@ -35,24 +36,12 @@ export default function PricingPage() {
           </p>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-          {BILLING_TIER_ORDER.map((id) => {
+        <div className="grid gap-4 sm:grid-cols-2">
+          {BILLING_TIER_ORDER.slice(0, 2).map((id) => {
             const tier = BILLING_TIERS[id];
-            const featured = id === "growth";
             return (
-              <Card
-                key={id}
-                className={cn(
-                  "flex flex-col",
-                  featured && "border-primary shadow-[0_0_0_1px] shadow-primary/50",
-                )}
-              >
+              <Card key={id} className="flex flex-col">
                 <CardHeader>
-                  {featured && (
-                    <Badge className="mb-1 w-fit gap-1 bg-primary/15 text-primary hover:bg-primary/15">
-                      Most popular
-                    </Badge>
-                  )}
                   <CardTitle className="text-lg">{tier.label}</CardTitle>
                   <CardDescription>
                     <span className="text-2xl font-extrabold text-foreground">
@@ -65,27 +54,15 @@ export default function PricingPage() {
                   <ul className="space-y-2 text-sm">
                     <li className="flex items-start gap-2">
                       <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                      {tier.athleteCapIncluded === null
-                        ? "Unlimited athletes"
-                        : `${tier.athleteCapIncluded} athletes included`}
-                    </li>
-                    {tier.athleteCapIncluded !== null && (
-                      <li className="flex items-start gap-2 text-muted-foreground">
-                        <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                        +{formatCents(tier.perAthleteOverageCents)}/athlete beyond that
-                      </li>
-                    )}
-                    <li className="flex items-start gap-2">
-                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                      {tier.includesFullPersonalization
-                        ? "Full branding + personalization, included"
-                        : "Logo + primary color, free"}
+                      {`Up to ${tier.athleteCapIncluded} athletes`}
                     </li>
                     <li className="flex items-start gap-2">
                       <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                      {tier.includesMultiTeam
-                        ? "Multi-team branding"
-                        : "Single team branding"}
+                      Logo + primary color, free
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                      Single team branding
                     </li>
                   </ul>
                 </CardContent>
@@ -94,11 +71,42 @@ export default function PricingPage() {
           })}
         </div>
 
+        <div className="mt-8">
+          <Card>
+            <CardHeader>
+              <Badge className="mb-1 w-fit gap-1 bg-primary/15 text-primary hover:bg-primary/15">
+                Growing programs &amp; schools
+              </Badge>
+              <CardTitle className="text-lg">$10.00 base + $3.50/athlete</CardTitle>
+              <CardDescription>
+                One flat per-athlete rate, no volume discount, no roster-size ceiling -- price
+                scales with your program instead of stalling out at a flat cap. Full branding,
+                personalization, and multi-team support included above 30 athletes.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-4">
+                {[50, 100, 250, 500, 900].map((n) => {
+                  const band = bandForAthleteCount(n);
+                  return (
+                    <div key={n} className="flex items-center justify-between gap-2 rounded-md border border-border p-2">
+                      <span className="text-muted-foreground">~{n} athletes</span>
+                      <span className="font-semibold text-foreground">
+                        {formatCents(band.monthlyPriceCents)}/mo
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
         <div className="mt-12">
           <h2 className="mb-1 text-center text-xl font-bold">Add-ons</h2>
           <p className="mb-6 text-center text-sm text-muted-foreground">
-            Solo and Coach plans can add personalization à la carte -- Growth and above already
-            include all of it.
+            The two starter plans can add personalization à la carte -- programs above 30
+            athletes already include all of it.
           </p>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {BILLING_ADD_ON_ORDER.map((id) => {

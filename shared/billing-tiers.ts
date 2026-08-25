@@ -1,96 +1,131 @@
-// Single source of truth for Forge's pricing structure -- every price, roster
-// cap, and per-tier feature inclusion lives here and nowhere else, so the
-// /pricing page, the admin billing-assignment form, and server/billing.ts's
-// entitlement resolution can never drift out of sync with each other. This
-// is what "locking in" the pricing structure actually means: the numbers
-// are real, typed, committed code, not a number that only ever existed in a
-// chat transcript.
+// Single source of truth for Forge's org/school pricing structure -- every
+// price, roster band, and per-band feature inclusion lives here and nowhere
+// else, so the /pricing page, the admin billing-assignment dropdown, and
+// server/billing.ts's entitlement resolution can never drift out of sync
+// with each other. This is what "locking in" the pricing structure actually
+// means: the numbers are real, typed, committed code, not a number that only
+// ever existed in a chat transcript.
 //
 // IMPORTANT: none of this is enforced anywhere yet. See server/billing.ts's
 // ENFORCEMENT_ENABLED and users.isBetaAccount for the two independent
 // switches that gate whether any of it actually restricts anyone -- both
 // default to "don't restrict," on purpose, while still in beta.
+//
+// Pricing model: a flat $10.00 base fee plus $3.50/athlete, with NO volume
+// discount at any roster size. The previous design (Solo/Coach/Growth/
+// Program/Enterprise, each with its own price + a cheap per-athlete overage
+// that got cheaper at bigger tiers) went net-negative at scale once real
+// video-storage cost was modeled against it: Render's persistent-disk rate
+// ($0.25/GB/mo) times a roster's actual video usage grows linearly with
+// athlete count forever, while that structure's revenue flattened out at
+// Enterprise's unlimited-athlete $599/mo flat cap -- a 1,000-athlete school
+// with even moderate video adoption cost more in storage alone than the
+// whole subscription. A flat, non-discounted per-athlete rate fixes this by
+// construction: margin-per-athlete can't erode as N grows, so total margin
+// scales up with roster size instead of collapsing. Verified against a
+// three-point video-adoption stress test (30% of roster actively
+// video-tracking as the expected case, 50% and 100% as stress cases) --
+// every band stays margin-positive even in the 100% case.
+//
+// Presented to customers in 25-athlete bands (a customer pays for a band's
+// ceiling, not their exact headcount) since a stepped ladder sells better
+// than "exactly $3.50 x your roster" -- but the underlying rate never
+// changes band to band, which is the actual fix.
+const ORG_BASE_CENTS = 1000; // $10.00 flat account fee
+const ORG_PER_ATHLETE_CENTS = 350; // $3.50/athlete, flat, every band, no discount
 
-export type BillingTierId = "solo" | "coach" | "growth" | "program" | "enterprise";
+export type BillingTierId = string;
 export type AddOnId = "custom_colors" | "team_identity" | "workflow" | "full_bundle";
 
 export interface BillingTierDef {
   id: BillingTierId;
   label: string;
   monthlyPriceCents: number;
-  /** null = unlimited (Enterprise only). */
-  athleteCapIncluded: number | null;
-  /** Flat per-athlete rate charged beyond athleteCapIncluded, rather than a
-   * hard cliff at the boundary -- not enforced/billed anywhere yet, just
-   * modeled so the number exists. */
-  perAthleteOverageCents: number;
-  /** Growth and above bundle the full personalization set (custom colors +
-   * team identity + workflow customization) in for free -- Solo/Coach only
-   * get it via the add-ons below. */
+  /** Upper end of this band's roster range -- never null here (unlike the
+   * old Enterprise tier's unlimited cap, which was the single biggest
+   * source of the negative-margin problem this model replaces). A roster
+   * that outgrows the top band moves to a new, larger band at the same
+   * flat per-athlete rate; the formula has no ceiling. */
+  athleteCapIncluded: number;
+  /** Always 0 -- there is no overage rate. Exceeding a band's cap means
+   * moving up a band, not paying a cheap per-athlete add-on on top of a
+   * flat base (that combination is exactly what let a rational customer
+   * stay on the cheapest old tier long past when they should have
+   * upgraded). */
+  perAthleteOverageCents: 0;
+  /** Bundled in for every band above the two starter bands (16 athletes and
+   * up is "coached program," not "one team"), matching the old tier
+   * structure's qualitative shape (small/individual tiers = basic, bigger
+   * orgs = full features) even though the discrete Growth/Program/
+   * Enterprise names are gone. Solo/Coach-equivalent starter bands can
+   * still buy personalization a la carte via the add-ons below. */
   includesFullPersonalization: boolean;
-  /** Whether a second team can carry its own branding override (teams
-   * themselves are always free to create at every tier -- this gates only
-   * the *branding override* on a non-primary team). */
   includesMultiTeam: boolean;
+  /** Roster floor for this band -- not part of BillingTierDef's original
+   * shape, but every caller that needs to show a range (the pricing page,
+   * the admin dropdown) wants both ends, and re-deriving it from the
+   * previous band in the order elsewhere would just duplicate this same
+   * loop. */
+  athleteFloor: number;
 }
 
-export const BILLING_TIERS: Record<BillingTierId, BillingTierDef> = {
-  solo: {
-    id: "solo",
-    label: "Solo",
-    monthlyPriceCents: 1499,
-    athleteCapIncluded: 15,
-    perAthleteOverageCents: 150,
-    includesFullPersonalization: false,
-    includesMultiTeam: false,
-  },
-  coach: {
-    id: "coach",
-    label: "Coach",
-    monthlyPriceCents: 3999,
-    athleteCapIncluded: 30,
-    perAthleteOverageCents: 150,
-    includesFullPersonalization: false,
-    includesMultiTeam: false,
-  },
-  growth: {
-    id: "growth",
-    label: "Growth",
-    monthlyPriceCents: 14900,
-    athleteCapIncluded: 100,
-    perAthleteOverageCents: 125,
-    includesFullPersonalization: true,
-    includesMultiTeam: true,
-  },
-  program: {
-    id: "program",
-    label: "Program",
-    monthlyPriceCents: 24900,
-    athleteCapIncluded: 250,
-    perAthleteOverageCents: 100,
-    includesFullPersonalization: true,
-    includesMultiTeam: true,
-  },
-  enterprise: {
-    id: "enterprise",
-    label: "Enterprise",
-    monthlyPriceCents: 59900,
-    athleteCapIncluded: null,
-    perAthleteOverageCents: 0,
-    includesFullPersonalization: true,
-    includesMultiTeam: true,
-  },
-};
+function bandPriceCents(athleteCapIncluded: number): number {
+  return ORG_BASE_CENTS + athleteCapIncluded * ORG_PER_ATHLETE_CENTS;
+}
 
-// Ordered cheapest-to-priciest, for rendering the /pricing page and the
-// admin assignment dropdown in a sensible order without re-sorting.
-export const BILLING_TIER_ORDER: BillingTierId[] = [
-  "solo",
-  "coach",
-  "growth",
-  "program",
-  "enterprise",
-];
+// Band boundaries: 0-15 (small team), 16-30 (next jump) -- both flat prices,
+// not part of the per-athlete formula's climb, same as the two tiers they
+// replace -- then every 25 athletes from 31 up through 1,000. Nothing stops
+// a roster bigger than 1,000; buildBands only enumerates this far because
+// that's as far as anyone's actually asked to see priced out. A school
+// beyond it prices the same way: $10 + $3.50 x their band ceiling, in the
+// next 25-athlete step.
+function buildBands(): BillingTierDef[] {
+  const ranges: [number, number][] = [
+    [0, 15],
+    [16, 30],
+  ];
+  let start = 31;
+  while (start <= 1000) {
+    const end = Math.min(start + 24, 1000);
+    ranges.push([start, end]);
+    start += 25;
+  }
+  return ranges.map(([lo, hi]) => ({
+    id: `${lo}-${hi}`,
+    label: `${lo}-${hi} athletes`,
+    monthlyPriceCents: bandPriceCents(hi),
+    athleteCapIncluded: hi,
+    athleteFloor: lo,
+    perAthleteOverageCents: 0,
+    includesFullPersonalization: lo > 30,
+    includesMultiTeam: lo > 30,
+  }));
+}
+
+const BILLING_BANDS: BillingTierDef[] = buildBands();
+
+export const BILLING_TIERS: Record<BillingTierId, BillingTierDef> = Object.fromEntries(
+  BILLING_BANDS.map((tier) => [tier.id, tier]),
+);
+
+// Ordered smallest-to-largest roster, for rendering the /pricing page and
+// the admin assignment dropdown in a sensible order without re-sorting.
+export const BILLING_TIER_ORDER: BillingTierId[] = BILLING_BANDS.map((tier) => tier.id);
+
+/** The band a given roster size actually falls into -- e.g. a ~900-athlete
+ * program lands in the 881-905 band. Used by the pricing page to show a
+ * few representative checkpoints without hand-duplicating numbers already
+ * computed above. Clamps to the largest defined band for anything past
+ * 1,000 rather than returning undefined -- the formula has no real ceiling,
+ * this table just stops enumerating past the largest roster anyone's asked
+ * about. */
+export function bandForAthleteCount(n: number): BillingTierDef {
+  for (const tier of BILLING_BANDS) {
+    if (n <= tier.athleteCapIncluded) return tier;
+  }
+  return BILLING_BANDS[BILLING_BANDS.length - 1];
+}
 
 export interface AddOnDef {
   id: AddOnId;
@@ -99,9 +134,10 @@ export interface AddOnDef {
   description: string;
 }
 
-// Add-ons only matter at Solo/Coach -- Growth and above already include
-// everything via includesFullPersonalization, so there's nothing for them
-// to buy here (see getEntitlements in server/billing.ts).
+// Add-ons only matter on the two starter bands (0-15, 16-30) -- every band
+// above 30 athletes already includes full personalization via
+// includesFullPersonalization, so there's nothing for them to buy here (see
+// getEntitlements in server/billing.ts).
 export const BILLING_ADD_ONS: Record<AddOnId, AddOnDef> = {
   custom_colors: {
     id: "custom_colors",

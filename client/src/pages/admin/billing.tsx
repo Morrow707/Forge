@@ -266,8 +266,7 @@ export default function AdminBilling() {
                         <SelectItem value="none">No tier assigned</SelectItem>
                         {BILLING_TIER_ORDER.map((id) => (
                           <SelectItem key={id} value={id}>
-                            {BILLING_TIERS[id].label} -- {formatCents(BILLING_TIERS[id].monthlyPriceCents)}/mo,{" "}
-                            {BILLING_TIERS[id].athleteCapIncluded ?? "unlimited"} athletes
+                            {BILLING_TIERS[id].label} -- {formatCents(BILLING_TIERS[id].monthlyPriceCents)}/mo
                           </SelectItem>
                         ))}
                       </SelectContent>
