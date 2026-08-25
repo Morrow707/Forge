@@ -9,6 +9,13 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -23,6 +30,7 @@ import { getJson, resolveApiUrl } from "@/lib/queryClient";
 import { computeBrandingStyle, type EffectiveBranding } from "@/lib/branding-style";
 import { POWERED_BY_FORGE_LABEL } from "@/lib/branding-copy";
 import { derivePrivacyTier } from "@shared/privacy-tiers";
+import { SPORTS } from "@shared/exercise-taxonomy";
 
 /** Debounces a fast-changing value (here, the invite-code input) so a
  * lookup only fires once someone pauses typing, not on every keystroke. */
@@ -47,6 +55,13 @@ export default function SignupPage() {
   const [password, setPassword] = useState("");
   const [coachCode, setCoachCode] = useState(prefilledCode.toUpperCase());
   const [phone, setPhone] = useState("");
+  // Required for athletes -- this is the pair that gates the Skill Bank
+  // sport-paywall (see users.signupSport). Sport is a dropdown, not free
+  // text, so it lands on the exact SPORTS taxonomy string the skill
+  // library's `sports` tags use -- a typo'd sport would otherwise silently
+  // lock someone out of their own free content.
+  const [sport, setSport] = useState("");
+  const [position, setPosition] = useState("");
 
   // Looks up whichever coach/team invite code is currently typed in so
   // the page can re-skin itself before an account even exists -- the
@@ -118,6 +133,8 @@ export default function SignupPage() {
       phone: phone.trim() || undefined,
       dateOfBirth,
       guardianEmail: isMinorAthlete ? guardianEmail.trim() || undefined : undefined,
+      sport: role === "athlete" ? sport : undefined,
+      position: role === "athlete" ? position.trim() : undefined,
       agreedToTerms: true,
     });
   }
@@ -263,6 +280,35 @@ export default function SignupPage() {
                   </p>
                 </div>
               )}
+              {role === "athlete" && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="sport">Sport</Label>
+                  <Select value={sport} onValueChange={setSport}>
+                    <SelectTrigger id="sport">
+                      <SelectValue placeholder="Select your sport" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SPORTS.map((s) => (
+                        <SelectItem key={s} value={s}>
+                          {s}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              {role === "athlete" && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="position">Position</Label>
+                  <Input
+                    id="position"
+                    required
+                    value={position}
+                    onChange={(e) => setPosition(e.target.value)}
+                    placeholder="e.g. Linebacker"
+                  />
+                </div>
+              )}
               <div className="space-y-1.5">
                 <Label htmlFor="phone">Phone number (optional)</Label>
                 <Input
@@ -311,7 +357,8 @@ export default function SignupPage() {
                 disabled={
                   signupMutation.isPending ||
                   !agreedToTerms ||
-                  (isMinorAthlete && !guardianEmail.trim())
+                  (isMinorAthlete && !guardianEmail.trim()) ||
+                  (role === "athlete" && (!sport || !position.trim()))
                 }
               >
                 {signupMutation.isPending ? "Creating account…" : "Create Account"}

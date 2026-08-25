@@ -6,6 +6,7 @@
 export const TESTING_METRICS = [
   { key: "fortyYardDash", label: "40-Yard Dash", unit: "sec", lowerIsBetter: true },
   { key: "proAgilitySeconds", label: "Pro Agility", unit: "sec", lowerIsBetter: true },
+  { key: "threeConeSeconds", label: "3-Cone / L-Drill", unit: "sec", lowerIsBetter: true },
   { key: "verticalJumpIn", label: "Vertical Jump", unit: "in", lowerIsBetter: false },
   { key: "broadJumpIn", label: "Broad Jump", unit: "in", lowerIsBetter: false },
   { key: "benchMaxLbs", label: "Bench Max", unit: "lbs", lowerIsBetter: false },

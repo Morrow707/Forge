@@ -172,6 +172,7 @@ CREATE TABLE IF NOT EXISTS "users" (
   "vertical_jump_in" real,
   "broad_jump_in" real,
   "pro_agility_seconds" real,
+  "three_cone_seconds" real,
   "bench_max_lbs" real,
   "squat_max_lbs" real,
   "deadlift_max_lbs" real,
@@ -193,6 +194,7 @@ ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "forty_yard_dash" real;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "vertical_jump_in" real;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "broad_jump_in" real;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "pro_agility_seconds" real;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "three_cone_seconds" real;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "bench_max_lbs" real;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "squat_max_lbs" real;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "deadlift_max_lbs" real;
@@ -301,6 +303,7 @@ CREATE TABLE IF NOT EXISTS "exercises" (
   "body_region" text,
   "plane" text,
   "is_corrective" boolean NOT NULL DEFAULT false,
+  "video_eligible" boolean,
   "video_url" text,
   "instructions" text,
   "created_at" timestamp NOT NULL DEFAULT now()
@@ -311,6 +314,7 @@ ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "body_region" text;
 ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "plane" text;
 ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "movement_complexity" text;
 ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "is_corrective" boolean NOT NULL DEFAULT false;
+ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "video_eligible" boolean;
 ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "uses_weight" boolean NOT NULL DEFAULT true;
 ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "uses_bodyweight" boolean NOT NULL DEFAULT false;
 ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "uses_band" boolean NOT NULL DEFAULT false;
@@ -326,12 +330,30 @@ CREATE TABLE IF NOT EXISTS "skill_exercises" (
   "name" text NOT NULL,
   "skill_type" text NOT NULL DEFAULT 'Hitting',
   "sports" json,
-  "equipment" text,
+  "equipment" json,
   "video_url" text,
   "instructions" text,
-  "created_at" timestamp NOT NULL DEFAULT now()
+  "created_at" timestamp NOT NULL DEFAULT now(),
+  "video_eligible" boolean,
+  "cross_sport_free" boolean NOT NULL DEFAULT false
 );
 CREATE INDEX IF NOT EXISTS "skill_exercises_coach_idx" ON "skill_exercises" ("coach_id");
+ALTER TABLE "skill_exercises" ADD COLUMN IF NOT EXISTS "video_eligible" boolean;
+ALTER TABLE "skill_exercises" ADD COLUMN IF NOT EXISTS "cross_sport_free" boolean NOT NULL DEFAULT false;
+-- equipment was a free-text "Bat, Balls, Screen" string until the skill
+-- picker got a real equipment filter -- converts any row still on the old
+-- text column to a real json array (comma-split), guarded by the column's
+-- actual current type so this is a no-op once already converted, safe to
+-- re-run forever like everything else in this file.
+DO $$ BEGIN
+  IF (SELECT data_type FROM information_schema.columns
+      WHERE table_name = 'skill_exercises' AND column_name = 'equipment') = 'text' THEN
+    ALTER TABLE "skill_exercises" ALTER COLUMN "equipment" TYPE json USING (
+      CASE WHEN equipment IS NULL OR equipment = '' THEN NULL
+      ELSE to_json(string_to_array(equipment, ', ')) END
+    );
+  END IF;
+END $$;
 
 -- Mirrors programs -> program_weeks -> program_days -> program_exercises ->
 -- assignments, but referencing skill_exercises and dropping the
@@ -408,6 +430,7 @@ CREATE TABLE IF NOT EXISTS "skill_session_logs" (
   "tracking_level" tracking_level NOT NULL,
   "elapsed_seconds" real,
   "distance_yards" real,
+  "preset_id" text,
   "camera_angle" text,
   "faults" json,
   "hip_shoulder_separation_deg" real,
@@ -418,8 +441,12 @@ CREATE TABLE IF NOT EXISTS "skill_session_logs" (
   "well_sequenced" boolean,
   "video_url" text,
   "coach_annotation_url" text,
-  "created_at" timestamp NOT NULL DEFAULT now()
+  "created_at" timestamp NOT NULL DEFAULT now(),
+  "video_favorited" boolean NOT NULL DEFAULT false,
+  "pending_deletion_at" date
 );
+ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "video_favorited" boolean NOT NULL DEFAULT false;
+ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "pending_deletion_at" date;
 ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "hip_shoulder_separation_deg" real;
 ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "weight_transfer_pct" real;
 ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "hip_rotation_deg" real;
@@ -428,6 +455,7 @@ ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "coach_annotation_url"
 ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "arm_slot_deg" real;
 ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "arm_slot_label" text;
 ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "well_sequenced" boolean;
+ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "preset_id" text;
 CREATE INDEX IF NOT EXISTS "skill_session_logs_athlete_idx" ON "skill_session_logs" ("athlete_id");
 CREATE INDEX IF NOT EXISTS "skill_session_logs_assignment_idx" ON "skill_session_logs" ("skill_assignment_id");
 
@@ -799,6 +827,7 @@ CREATE TABLE IF NOT EXISTS "testing_results" (
   "vertical_jump_in" real,
   "broad_jump_in" real,
   "pro_agility_seconds" real,
+  "three_cone_seconds" real,
   "bench_max_lbs" real,
   "squat_max_lbs" real,
   "deadlift_max_lbs" real,
@@ -806,6 +835,7 @@ CREATE TABLE IF NOT EXISTS "testing_results" (
 );
 CREATE INDEX IF NOT EXISTS "testing_results_athlete_idx" ON "testing_results" ("athlete_id");
 CREATE UNIQUE INDEX IF NOT EXISTS "testing_results_athlete_date_idx" ON "testing_results" ("athlete_id", "date");
+ALTER TABLE "testing_results" ADD COLUMN IF NOT EXISTS "three_cone_seconds" real;
 
 CREATE TABLE IF NOT EXISTS "goniometer_readings" (
   "id" serial PRIMARY KEY,
@@ -1308,6 +1338,8 @@ ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "family_group_id" integer REFERENCE
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "video_favorited" boolean NOT NULL DEFAULT false;
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "video_uploaded_at" timestamp;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "has_video_storage_add_on" boolean NOT NULL DEFAULT false;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "signup_sport" text;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "unlocked_skill_sports" json;
 -- Backfill so a video saved before this column existed doesn't sort as
 -- "newest" (NULL sorts last under ASC) and get treated as the last thing
 -- retention eviction would ever touch -- one-time, idempotent (only fills
@@ -1670,6 +1702,22 @@ CREATE TABLE IF NOT EXISTS "favorite_skill_exercises" (
   "created_at" timestamp NOT NULL DEFAULT now()
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "favorite_skill_exercises_pair_idx" ON "favorite_skill_exercises" ("coach_id", "skill_exercise_id");
+
+CREATE TABLE IF NOT EXISTS "exercise_usage_log" (
+  "id" serial PRIMARY KEY,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "exercise_id" integer NOT NULL REFERENCES "exercises"("id") ON DELETE CASCADE,
+  "last_used_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "exercise_usage_log_pair_idx" ON "exercise_usage_log" ("coach_id", "exercise_id");
+
+CREATE TABLE IF NOT EXISTS "skill_exercise_usage_log" (
+  "id" serial PRIMARY KEY,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "skill_exercise_id" integer NOT NULL REFERENCES "skill_exercises"("id") ON DELETE CASCADE,
+  "last_used_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "skill_exercise_usage_log_pair_idx" ON "skill_exercise_usage_log" ("coach_id", "skill_exercise_id");
 
 -- Optional wearable-sourced recovery metrics on the daily check-in
 -- (shared/schema.ts wellnessCheckins.restingHeartRate/hrv).

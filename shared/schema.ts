@@ -250,6 +250,11 @@ export const users = pgTable(
     gender: genderEnum("gender"),
     heightIn: integer("height_in"),
     bodyWeightLbs: real("body_weight_lbs"),
+    // Required at signup (see signupSchema) and editable anytime afterward
+    // via ProfileFieldsForm -- an athlete switching sports updates this
+    // freely. signupSport above is the one that stays locked; this one
+    // doesn't. Nullable at the column level regardless, since every account
+    // created before signup required it still needs to load.
     sport: text("sport"),
     position: text("position"),
     seasonPhase: seasonPhaseEnum("season_phase"),
@@ -271,6 +276,11 @@ export const users = pgTable(
     verticalJumpIn: real("vertical_jump_in"),
     broadJumpIn: real("broad_jump_in"),
     proAgilitySeconds: real("pro_agility_seconds"),
+    // 3-cone drill / L-drill -- same single-line-tap course the Skills
+    // sprint tracker already times (see checkpointsForThreeConeTap in
+    // sprint-tracking.ts), just given its own combine-standard column
+    // instead of only living in that drill's skill-session-log row.
+    threeConeSeconds: real("three_cone_seconds"),
     benchMaxLbs: real("bench_max_lbs"),
     squatMaxLbs: real("squat_max_lbs"),
     deadliftMaxLbs: real("deadlift_max_lbs"),
@@ -439,6 +449,26 @@ export const users = pgTable(
     // route already used for a Free Agent's AI tier, since it already
     // resolves any athlete by email regardless of coached status.
     hasVideoStorageAddOn: boolean("has_video_storage_add_on").notNull().default(false),
+    // Which sport's Skill Bank content is free for this Free Agent --
+    // snapshotted from `sport` above ONCE at signup and never updated
+    // again, deliberately independent of the mutable `sport` profile field
+    // above it. An athlete who changes their profile sport later (a
+    // baseball player who also plays football in the fall) does NOT get
+    // football unlocked for free just by editing their profile -- that's
+    // the whole point of a separate column rather than reading `sport`
+    // live. Null for every account created before this existed and for
+    // non-Free-Agent accounts (meaningless for a coached athlete or a
+    // coach, same posture as freeAgentTier above). See
+    // storage.getVisibleSkillExercisesForFreeAgent for how this,
+    // unlockedSkillSports below, and skillExercises.crossSportFree
+    // combine to decide what's locked.
+    signupSport: text("signup_sport"),
+    // Additional sports this Free Agent has paid to unlock beyond
+    // signupSport, at $9.99/mo each (shared/free-agent-tiers.ts) -- same
+    // "framework only, no live purchase flow yet, admin assigns it" posture
+    // as freeAgentAddOns above, via the same /api/admin/athletes/:id/billing
+    // route. Empty/null means no additional sports unlocked.
+    unlockedSkillSports: json("unlocked_skill_sports").$type<string[]>(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({
@@ -857,6 +887,15 @@ export const exercises = pgTable("exercises", {
   usesBand: boolean("uses_band").notNull().default(false),
   usesBox: boolean("uses_box").notNull().default(false),
   isCorrective: boolean("is_corrective").notNull().default(false),
+  // Whether a coach can turn video/motion tracking on for this exercise in
+  // a program (see VideoTrackingToggle client-side). Nullable, not a plain
+  // default -- null/true both read as eligible, only an explicit false
+  // restricts it, so the same seed backfill that sets false on the
+  // library's non-canonical exercises (server/seed.ts) can never silently
+  // re-restrict one an admin later flipped back on. Storage cost scales
+  // with how many DISTINCT exercises this is true for, not with library
+  // size -- see the video-retention cost model this was built to control.
+  videoEligible: boolean("video_eligible"),
   videoUrl: text("video_url"),
   instructions: text("instructions"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -944,10 +983,35 @@ export const skillExercises = pgTable(
     // use the same overhead-throwing mechanics for serving/passing), so a
     // coach in either sport can still find it.
     sports: json("sports").$type<string[]>(),
-    equipment: text("equipment"),
+    // Array, not a single value -- a drill routinely needs several pieces
+    // at once (a live BP round needs a bat, balls, AND a screen), unlike an
+    // exercises.equipment row which only ever needs one. Was a free-text
+    // "Bat, Balls, Screen" string until the skill picker got a real
+    // equipment filter (see shared/skill-taxonomy.ts's SKILL_EQUIPMENT) --
+    // a compound string can't be filtered against a fixed button grid the
+    // way a real array can.
+    equipment: json("equipment").$type<string[]>(),
     videoUrl: text("video_url"),
     instructions: text("instructions"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
+    // Admin-editable per-drill gate on skillProgramExercises.trackingLevel,
+    // exact mirror of exercises.videoEligible (see that column's own
+    // comment): null/true both mean a coach can turn Sprint Timing or
+    // Mechanics tracking on for this drill, only an explicit false
+    // restricts it. Enforced server-side in storage.resolveSkillTrackingLevel,
+    // not just hidden client-side.
+    videoEligible: boolean("video_eligible"),
+    // Free for every Free Agent regardless of their own signupSport --
+    // the cross-sport "Athletic Footwork & Agility" bucket seeded in
+    // seed.ts (agility/footwork/sprint-mechanics drills genuinely shared
+    // across sports, see multiSportSkillDrills' own comment) plus any
+    // other drill an admin marks this way. NOT NULL/false default: unlike
+    // videoEligible's "default open, opt out" posture, this is an opt-in
+    // grant -- most drills are sport-specific and should stay behind
+    // whichever sport's paywall they belong to. See
+    // storage.getVisibleSkillExercisesForFreeAgent for how this combines
+    // with users.signupSport/unlockedSkillSports to decide what's locked.
+    crossSportFree: boolean("cross_sport_free").notNull().default(false),
   },
   (table) => ({
     coachIdx: index("skill_exercises_coach_idx").on(table.coachId),
@@ -992,6 +1056,55 @@ export const favoriteSkillExercises = pgTable(
   },
   (table) => ({
     pairIdx: uniqueIndex("favorite_skill_exercises_pair_idx").on(
+      table.coachId,
+      table.skillExerciseId,
+    ),
+  }),
+);
+
+// "Recently used" tracking for the exercise/skill picker's own quick-filter
+// -- one row per (coach, item), upserted to now() every time that coach
+// places it into a program/class they build (see storage.recordExerciseUsage
+// and its write-site call sites). Deliberately means "the coach's own
+// program-building activity," not "an athlete actually performed it" --
+// the latter would need a join across the whole roster's logs just to
+// answer "should this show near the top of MY picker," which is both a
+// heavier query and further from what a coach means by "I use this a lot."
+// A wipe-and-rebuild program save (see updateProgramStructure) bumps every
+// exercise still present in that save, not just ones the coach touched this
+// edit -- an accepted approximation, same posture as the video-retention
+// grace window's own "safe direction to fail" comment.
+export const exerciseUsageLog = pgTable(
+  "exercise_usage_log",
+  {
+    id: serial("id").primaryKey(),
+    coachId: integer("coach_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    exerciseId: integer("exercise_id")
+      .notNull()
+      .references(() => exercises.id, { onDelete: "cascade" }),
+    lastUsedAt: timestamp("last_used_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    pairIdx: uniqueIndex("exercise_usage_log_pair_idx").on(table.coachId, table.exerciseId),
+  }),
+);
+
+export const skillExerciseUsageLog = pgTable(
+  "skill_exercise_usage_log",
+  {
+    id: serial("id").primaryKey(),
+    coachId: integer("coach_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    skillExerciseId: integer("skill_exercise_id")
+      .notNull()
+      .references(() => skillExercises.id, { onDelete: "cascade" }),
+    lastUsedAt: timestamp("last_used_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    pairIdx: uniqueIndex("skill_exercise_usage_log_pair_idx").on(
       table.coachId,
       table.skillExerciseId,
     ),
@@ -1127,6 +1240,14 @@ export const skillSessionLogs = pgTable(
     trackingLevel: trackingLevelEnum("tracking_level").notNull(),
     elapsedSeconds: real("elapsed_seconds"),
     distanceYards: real("distance_yards"),
+    // Which SPRINT_PRESETS entry (sprint-tracking.ts) this capture used --
+    // "40yd", "5-10-5", "3-cone", etc. Distance alone can't disambiguate a
+    // preset (a 20-yard split and a 5-10-5 shuttle are both 20 total yards),
+    // and the route that snapshots a sprint result into the athlete's
+    // testing-history combine fields (see POST .../skill-session-logs) needs
+    // to know exactly which drill this was, not just how far it covered.
+    // Null for mechanics rows, which have no preset.
+    presetId: text("preset_id"),
     cameraAngle: text("camera_angle"),
     faults: json("faults"),
     // Mechanics-only fields (see mechanics-tracking.ts) -- null for sprint
@@ -1164,6 +1285,17 @@ export const skillSessionLogs = pgTable(
     videoUrl: text("video_url"),
     coachAnnotationUrl: text("coach_annotation_url"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
+    // Retention-management fields, exact mirror of workoutSetEntries'
+    // videoFavorited/pendingDeletionAt (see that column's own comment) --
+    // storage.sweepVideoRetentionCap applies the same per-(athlete,
+    // skillExercise) rolling cap here as it does for exercise sets, using
+    // the same shared/video-retention.ts limits and the same
+    // hasVideoStorageAddOn purchase. No videoUploadedAt equivalent needed:
+    // unlike a workout set, a skill session log is created once and never
+    // resubmitted/autosaved over, so createdAt is already a stable
+    // reference time.
+    videoFavorited: boolean("video_favorited").notNull().default(false),
+    pendingDeletionAt: date("pending_deletion_at"),
   },
   (table) => ({
     athleteIdx: index("skill_session_logs_athlete_idx").on(table.athleteId),
@@ -2126,6 +2258,7 @@ export const testingResults = pgTable(
     verticalJumpIn: real("vertical_jump_in"),
     broadJumpIn: real("broad_jump_in"),
     proAgilitySeconds: real("pro_agility_seconds"),
+    threeConeSeconds: real("three_cone_seconds"),
     benchMaxLbs: real("bench_max_lbs"),
     squatMaxLbs: real("squat_max_lbs"),
     deadliftMaxLbs: real("deadlift_max_lbs"),
@@ -2679,6 +2812,12 @@ export const claimProvisionalAthleteSchema = z.object({
   // guardianEmail field -- enforced in storage.claimProvisionalAthlete once
   // the tier is known, not here.
   guardianEmail: z.string().trim().email().optional(),
+  // Same "only required if the coach's intake didn't already capture one"
+  // pattern as dateOfBirth above -- see provisionalAthletes.sport/position.
+  // Whichever of the two is present is what becomes users.sport/position
+  // AND users.signupSport (see that column's own comment) once claimed.
+  sport: z.string().trim().min(1).max(60).optional(),
+  position: z.string().trim().min(1).max(60).optional(),
   agreedToTerms: z.literal(true, {
     errorMap: () => ({ message: "You must agree to the terms to create an account" }),
   }),
@@ -3826,6 +3965,7 @@ export const adminAthleteQueryFiltersSchema = z.object({
   verticalJumpIn: numericRangeSchema,
   broadJumpIn: numericRangeSchema,
   proAgilitySeconds: numericRangeSchema,
+  threeConeSeconds: numericRangeSchema,
   benchMaxLbs: numericRangeSchema,
   squatMaxLbs: numericRangeSchema,
   deadliftMaxLbs: numericRangeSchema,
@@ -4760,6 +4900,14 @@ export const signupSchema = z.object({
   // not just role, to know whether to enforce this) whenever the account
   // being created is a minor. See server/auth.ts's signup handler.
   guardianEmail: z.string().trim().email().optional(),
+  // Same "required by the route, not here" posture as guardianEmail above
+  // -- only athlete signups need these (a coach doesn't play the sport
+  // they coach), and the route is what knows role. See
+  // users.signupSport's own comment for why sport gets snapshotted into a
+  // separate immutable column at account-creation time rather than just
+  // reading this field later.
+  sport: z.string().trim().min(1).max(60).optional(),
+  position: z.string().trim().min(1).max(60).optional(),
   agreedToTerms: z.literal(true, {
     errorMap: () => ({ message: "You must agree to the terms to create an account" }),
   }),
@@ -4816,6 +4964,7 @@ export const updateProfileSchema = z.object({
   verticalJumpIn: z.number().min(0).max(60).optional().nullable(),
   broadJumpIn: z.number().min(0).max(200).optional().nullable(),
   proAgilitySeconds: z.number().min(0).max(20).optional().nullable(),
+  threeConeSeconds: z.number().min(0).max(20).optional().nullable(),
   benchMaxLbs: z.number().min(0).max(1500).optional().nullable(),
   squatMaxLbs: z.number().min(0).max(1500).optional().nullable(),
   deadliftMaxLbs: z.number().min(0).max(1500).optional().nullable(),
@@ -4930,6 +5079,9 @@ export const updateFreeAgentBillingSchema = z.object({
   isBetaAccount: z.boolean().optional(),
   // Applies regardless of coached status -- see users.hasVideoStorageAddOn.
   hasVideoStorageAddOn: z.boolean().optional(),
+  // Free text, not an enum -- same SPORTS-suggestions-not-enforcement
+  // posture as users.sport itself. See users.unlockedSkillSports.
+  unlockedSkillSports: z.array(z.string().trim().min(1).max(60)).optional(),
 });
 
 // Admin-only -- creates a new Family group and links these athletes to it
@@ -4968,18 +5120,28 @@ export const insertExerciseSchema = createInsertSchema(exercises)
     usesBodyweight: z.boolean().default(false),
     usesBand: z.boolean().default(false),
     usesBox: z.boolean().default(false),
+    // Admin-only in practice -- the edit form only renders this control on
+    // the /admin/exercises route (see exercise-detail.tsx), and it's a
+    // no-op for a coach's own private exercise either way since
+    // resolveVideoCheckEnabled only ever restricts it to false via the
+    // seed's curated Forge-library backfill. See the column's own comment
+    // in the exercises table above.
+    videoEligible: z.boolean().optional().nullable(),
   });
 
 export const insertSkillExerciseSchema = createInsertSchema(skillExercises)
   .pick({
     name: true,
     skillType: true,
-    equipment: true,
     videoUrl: true,
     instructions: true,
   })
   .extend({
     sports: z.array(z.string().trim().min(1)).max(8, "You can select up to 8 sports").optional().nullable(),
+    equipment: z.array(z.string().trim().min(1)).max(8, "You can select up to 8 pieces of equipment").optional().nullable(),
+    // Admin-only in practice via UI gating, same posture as
+    // insertExerciseSchema's videoEligible above.
+    videoEligible: z.boolean().optional().nullable(),
   });
 
 // ---------- Skill Programs (fully separate from Programs) ----------
@@ -5186,6 +5348,7 @@ export const createSkillSessionLogSchema = z.object({
   trackingLevel: z.enum(["sprint", "mechanics"]),
   elapsedSeconds: z.number().min(0).max(120).optional().nullable(),
   distanceYards: z.number().min(0).max(200).optional().nullable(),
+  presetId: z.string().trim().max(20).optional().nullable(),
   // "side"/"front_behind" are sprint's vocabulary, "face_on"/"down_the_line"
   // are mechanics' -- one shared text column (see skillSessionLogs), just
   // validated against whichever tracking level actually sent it.
@@ -5213,6 +5376,11 @@ export const createSkillSessionLogSchema = z.object({
   // Opt-in only -- set when the athlete explicitly chooses "Save clip for
   // coach" after a capture (see MechanicsTrackerDialog); absent otherwise.
   videoUrl: z.string().trim().max(500).optional().nullable(),
+  // Exact mirror of workoutSetEntries.videoFavorited -- the athlete's own
+  // "never auto-delete this one" choice, only meaningful (and only shown
+  // client-side) alongside videoUrl above. Ignored server-side when videoUrl
+  // is absent, same as the exercise side's equivalent field.
+  videoFavorited: z.boolean().optional(),
 });
 
 export const setSkillSessionAnnotationSchema = z.object({

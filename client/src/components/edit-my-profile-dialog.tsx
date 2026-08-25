@@ -46,6 +46,7 @@ export function EditMyProfileDialog({
         verticalJumpIn: user.verticalJumpIn != null ? String(user.verticalJumpIn) : "",
         broadJumpIn: user.broadJumpIn != null ? String(user.broadJumpIn) : "",
         proAgilitySeconds: user.proAgilitySeconds != null ? String(user.proAgilitySeconds) : "",
+        threeConeSeconds: user.threeConeSeconds != null ? String(user.threeConeSeconds) : "",
         benchMaxLbs: user.benchMaxLbs != null ? String(user.benchMaxLbs) : "",
         squatMaxLbs: user.squatMaxLbs != null ? String(user.squatMaxLbs) : "",
         deadliftMaxLbs: user.deadliftMaxLbs != null ? String(user.deadliftMaxLbs) : "",
@@ -72,6 +73,7 @@ export function EditMyProfileDialog({
         proAgilitySeconds: value.proAgilitySeconds.trim()
           ? Number(value.proAgilitySeconds)
           : null,
+        threeConeSeconds: value.threeConeSeconds.trim() ? Number(value.threeConeSeconds) : null,
         benchMaxLbs: value.benchMaxLbs.trim() ? Number(value.benchMaxLbs) : null,
         squatMaxLbs: value.squatMaxLbs.trim() ? Number(value.squatMaxLbs) : null,
         deadliftMaxLbs: value.deadliftMaxLbs.trim() ? Number(value.deadliftMaxLbs) : null,

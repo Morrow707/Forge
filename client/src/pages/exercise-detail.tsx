@@ -46,7 +46,7 @@ import {
   BODY_REGIONS,
   PLANES,
   MOVEMENT_COMPLEXITIES,
-} from "@/lib/exercise-taxonomy";
+} from "@shared/exercise-taxonomy";
 import {
   CATEGORY_BADGE_CLASS,
   CATEGORY_FILTER_ACTIVE_CLASS,
@@ -99,6 +99,11 @@ type ExerciseForm = {
   usesBodyweight: boolean;
   usesBand: boolean;
   usesBox: boolean;
+  // Admin-only control (see the checkbox's own render-site comment) --
+  // null/true both mean "a coach can turn video on for this," only an
+  // explicit false restricts it. See the column's own comment in
+  // shared/schema.ts.
+  videoEligible: boolean | null;
 };
 
 const emptyForm: ExerciseForm = {
@@ -120,6 +125,7 @@ const emptyForm: ExerciseForm = {
   usesBodyweight: false,
   usesBand: false,
   usesBox: false,
+  videoEligible: null,
 };
 
 function formFrom(ex: ExerciseWithOwnership): ExerciseForm {
@@ -142,6 +148,7 @@ function formFrom(ex: ExerciseWithOwnership): ExerciseForm {
     usesBodyweight: ex.usesBodyweight,
     usesBand: ex.usesBand,
     usesBox: ex.usesBox,
+    videoEligible: ex.videoEligible,
   };
 }
 
@@ -193,6 +200,7 @@ export function ExerciseDetailPage({
         usesBodyweight: form.usesBodyweight,
         usesBand: form.usesBand,
         usesBox: form.usesBox,
+        videoEligible: form.videoEligible,
       };
       if (isNew) {
         const res = await apiRequest("POST", `${apiBase}/exercises`, payload);
@@ -628,6 +636,23 @@ export function ExerciseDetailPage({
                   />
                   Available as a corrective
                 </label>
+                {/* Admin-only -- controls whether a coach sees a Video On/Off
+                    toggle for this exercise at all (see VideoTrackingToggle's
+                    gating in coach-day-edit-dialog.tsx/program-builder.tsx).
+                    Storage cost scales with how many exercises this is on
+                    for, not with library size -- see the exercise's own
+                    schema comment for the full reasoning. Meaningless for a
+                    coach's own private exercise (never restricted either
+                    way), so only shown on the admin Forge-library route. */}
+                {apiBase === "/api/admin" && (
+                  <label className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm">
+                    <Checkbox
+                      checked={form.videoEligible !== false}
+                      onCheckedChange={(c) => setForm((f) => ({ ...f, videoEligible: c === true }))}
+                    />
+                    Video check eligible (coaches can turn video on for this exercise)
+                  </label>
+                )}
                 <div className="space-y-1.5">
                   <Label htmlFor="ex-video">YouTube video URL</Label>
                   <Input

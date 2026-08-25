@@ -14,6 +14,8 @@ import {
   skillExercises,
   favoriteExercises,
   favoriteSkillExercises,
+  exerciseUsageLog,
+  skillExerciseUsageLog,
   skillPrograms,
   skillProgramWeeks,
   skillProgramDays,
@@ -198,6 +200,8 @@ import { ALL_TROPHY_DEFINITIONS } from "@shared/achievements";
 import { FAULT_CORRECTIVE_KEYWORDS } from "@shared/fault-correctives";
 import { resolveSkillFaultThresholds, type SkillFaultThresholds } from "@shared/skill-fault-thresholds";
 import { resolveCoachFeatures, type CoachFeature } from "@shared/team-features";
+import { EXERCISE_FAMILIES, EQUIPMENT_ORDER } from "@shared/exercise-family";
+import { MOVEMENT_TYPES } from "@shared/exercise-taxonomy";
 import type { CoachSection } from "@shared/coach-sections";
 import type { WidgetLayoutEntry } from "@shared/dashboard-widgets";
 import { askClaude, askClaudeStructured, askClaudeWithTools, askClaudeVision, askClaudeVisionStructured, aiEnabled, fastModel, type SystemPrompt } from "./ai";
@@ -373,6 +377,7 @@ const TESTING_FIELDS = [
   "verticalJumpIn",
   "broadJumpIn",
   "proAgilitySeconds",
+  "threeConeSeconds",
   "benchMaxLbs",
   "squatMaxLbs",
   "deadliftMaxLbs",
@@ -1817,6 +1822,9 @@ export const storage = {
         ...(values.hasVideoStorageAddOn !== undefined && {
           hasVideoStorageAddOn: values.hasVideoStorageAddOn,
         }),
+        ...(values.unlockedSkillSports !== undefined && {
+          unlockedSkillSports: values.unlockedSkillSports,
+        }),
       })
       .where(eq(users.id, athleteId))
       .returning({
@@ -1825,6 +1833,7 @@ export const storage = {
         freeAgentAddOns: users.freeAgentAddOns,
         isBetaAccount: users.isBetaAccount,
         hasVideoStorageAddOn: users.hasVideoStorageAddOn,
+        unlockedSkillSports: users.unlockedSkillSports,
       });
     return row ?? null;
   },
@@ -2748,6 +2757,7 @@ export const storage = {
         verticalJumpIn: users.verticalJumpIn,
         broadJumpIn: users.broadJumpIn,
         proAgilitySeconds: users.proAgilitySeconds,
+        threeConeSeconds: users.threeConeSeconds,
         benchMaxLbs: users.benchMaxLbs,
         squatMaxLbs: users.squatMaxLbs,
         deadliftMaxLbs: users.deadliftMaxLbs,
@@ -2784,6 +2794,7 @@ export const storage = {
         verticalJumpIn: users.verticalJumpIn,
         broadJumpIn: users.broadJumpIn,
         proAgilitySeconds: users.proAgilitySeconds,
+        threeConeSeconds: users.threeConeSeconds,
         benchMaxLbs: users.benchMaxLbs,
         squatMaxLbs: users.squatMaxLbs,
         deadliftMaxLbs: users.deadliftMaxLbs,
@@ -5684,22 +5695,76 @@ ${athleteContext}
   // program-builder picker.
   async getVisibleExercisesForCoach(coachId: number) {
     const { coachIds, ownerIds } = await this.getCoachAndAdminOwnerIds(coachId);
-    const [rows, favorites] = await Promise.all([
+    const [rows, favorites, usage] = await Promise.all([
       db.query.exercises.findMany({
         where: inArray(exercises.coachId, ownerIds),
         orderBy: desc(exercises.createdAt),
         with: { coach: true },
       }),
       db.query.favoriteExercises.findMany({ where: eq(favoriteExercises.coachId, coachId) }),
+      db.query.exerciseUsageLog.findMany({ where: eq(exerciseUsageLog.coachId, coachId) }),
     ]);
     const favoriteIds = new Set(favorites.map((f) => f.exerciseId));
+    // Keyed off THIS coach's own usage log -- see exerciseUsageLog's schema
+    // comment for what "recently used" means here (this coach's own
+    // program-building activity, not athlete logging).
+    const usageByExerciseId = new Map(usage.map((u) => [u.exerciseId, u.lastUsedAt]));
     // Favorites first (most-recently-created favorite first within that
     // group), everything else after in its normal order -- .sort is stable
     // in Node, so this doesn't need a secondary tiebreaker to preserve the
     // original createdAt ordering within each group.
     return rows
-      .map((ex) => ({ ...this.withOwnership(ex, coachId, coachIds), isFavorite: favoriteIds.has(ex.id) }))
+      .map((ex) => ({
+        ...this.withOwnership(ex, coachId, coachIds),
+        isFavorite: favoriteIds.has(ex.id),
+        lastUsedAt: usageByExerciseId.get(ex.id) ?? null,
+      }))
       .sort((a, b) => Number(b.isFavorite) - Number(a.isFavorite));
+  },
+
+  // Natural-language front door to the picker's accordion filters ("something
+  // for hip mobility with a band") -- Haiku maps the free-text query onto the
+  // SAME closed vocab the manual filter buttons use (EXERCISE_FAMILIES,
+  // EQUIPMENT_ORDER, MOVEMENT_TYPES), rather than returning exercise ids
+  // directly, so a query just presses the same buttons a coach would have
+  // clicked and the client's existing filter logic does the actual matching.
+  // Keeps this narrow/cheap (fastModel, small output) -- it's picking from
+  // three short enums, not reasoning about the exercise library itself.
+  async interpretExerciseSearchQuery(query: string): Promise<{
+    family: string | null;
+    equipment: string | null;
+    movementType: string | null;
+    searchText: string | null;
+  } | null> {
+    if (!aiEnabled) return null;
+    const system =
+      "You map a coach's freeform exercise search into filter criteria for an exercise picker. Only set a field when the query clearly implies it -- omit it entirely rather than guessing. searchText is a short plain-text fallback (e.g. a specific exercise name or muscle mentioned) to substring-match against exercise names when the family/equipment/movementType filters alone wouldn't narrow it enough; omit it if family/equipment/movementType already fully capture the query's intent.";
+    const tool = {
+      name: "report_search_filters",
+      description: "Reports which picker filters this query implies. Omit any field the query doesn't clearly imply -- do not guess.",
+      input_schema: {
+        type: "object",
+        properties: {
+          family: { type: "string", enum: [...EXERCISE_FAMILIES] },
+          equipment: { type: "string", enum: [...EQUIPMENT_ORDER] },
+          movementType: { type: "string", enum: [...MOVEMENT_TYPES] },
+          searchText: { type: "string" },
+        },
+      },
+    };
+    const result = await askClaudeStructured<{
+      family?: string;
+      equipment?: string;
+      movementType?: string;
+      searchText?: string;
+    }>(system, query, tool, { model: fastModel, maxTokens: 200 });
+    if (!result) return null;
+    return {
+      family: result.family ?? null,
+      equipment: result.equipment ?? null,
+      movementType: result.movementType ?? null,
+      searchText: result.searchText ?? null,
+    };
   },
 
   // The set of exercise/skill-exercise owner ids a given user is allowed to
@@ -5858,6 +5923,106 @@ ${athleteContext}
     return db.query.exercises.findFirst({ where: eq(exercises.id, id) });
   },
 
+  // Server-side enforcement counterpart to the client's VideoTrackingToggle
+  // gating -- a coach requesting video on for an exercise the admin has
+  // restricted (videoEligible === false) never actually gets it turned on,
+  // regardless of what the client sent. Batched (one query for however many
+  // exercises a day/program save touches) rather than a per-exercise
+  // lookup, since every program-exercises write path loops over a whole
+  // day's worth of rows. null/true both read as eligible -- see the
+  // column's own comment in shared/schema.ts for why this isn't a plain
+  // boolean default.
+  async resolveVideoCheckEnabled<T extends { exerciseId: number; videoCheckEnabled?: boolean }>(
+    items: T[],
+  ): Promise<Map<T, boolean>> {
+    const requestedOn = items.filter((i) => i.videoCheckEnabled);
+    const result = new Map<T, boolean>();
+    if (requestedOn.length === 0) {
+      for (const i of items) result.set(i, false);
+      return result;
+    }
+    const ids = Array.from(new Set(requestedOn.map((i) => i.exerciseId)));
+    const rows = await db
+      .select({ id: exercises.id, videoEligible: exercises.videoEligible })
+      .from(exercises)
+      .where(inArray(exercises.id, ids));
+    const eligibleById = new Map(rows.map((r) => [r.id, r.videoEligible !== false]));
+    for (const i of items) {
+      result.set(i, !!i.videoCheckEnabled && (eligibleById.get(i.exerciseId) ?? true));
+    }
+    return result;
+  },
+
+  // Server-side enforcement counterpart to the client's SprintTrackingToggle/
+  // TrackingToggle gating -- exact mirror of resolveVideoCheckEnabled above,
+  // adapted for skillExercises' tri-state trackingLevel ("none"/"sprint"/
+  // "mechanics") instead of a plain boolean. A coach requesting sprint or
+  // mechanics tracking on a drill the admin has restricted (videoEligible
+  // === false) always gets "none" back, regardless of what the client sent.
+  async resolveSkillTrackingLevel<T extends { skillExerciseId: number; trackingLevel?: string }>(
+    items: T[],
+  ): Promise<Map<T, "none" | "sprint" | "mechanics">> {
+    const requestedOn = items.filter((i) => i.trackingLevel && i.trackingLevel !== "none");
+    const result = new Map<T, "none" | "sprint" | "mechanics">();
+    if (requestedOn.length === 0) {
+      for (const i of items) result.set(i, "none");
+      return result;
+    }
+    const ids = Array.from(new Set(requestedOn.map((i) => i.skillExerciseId)));
+    const rows = await db
+      .select({ id: skillExercises.id, videoEligible: skillExercises.videoEligible })
+      .from(skillExercises)
+      .where(inArray(skillExercises.id, ids));
+    const eligibleById = new Map(rows.map((r) => [r.id, r.videoEligible !== false]));
+    for (const i of items) {
+      const requested = (i.trackingLevel ?? "none") as "none" | "sprint" | "mechanics";
+      result.set(
+        i,
+        requested !== "none" && (eligibleById.get(i.skillExerciseId) ?? true) ? requested : "none",
+      );
+    }
+    return result;
+  },
+
+  // "Recently used" bump -- see exerciseUsageLog's own schema comment for
+  // what this does and doesn't mean. Called from every program/class write
+  // path that persists a set of exerciseIds, with whatever distinct ids
+  // that save actually touched; upserts lastUsedAt to now() for each,
+  // one row per (coach, exercise) regardless of how many times or where
+  // in the structure it appears.
+  async recordExerciseUsage(coachId: number, exerciseIds: number[]) {
+    const ids = Array.from(new Set(exerciseIds));
+    if (ids.length === 0) return;
+    await Promise.all(
+      ids.map((exerciseId) =>
+        db
+          .insert(exerciseUsageLog)
+          .values({ coachId, exerciseId })
+          .onConflictDoUpdate({
+            target: [exerciseUsageLog.coachId, exerciseUsageLog.exerciseId],
+            set: { lastUsedAt: new Date() },
+          }),
+      ),
+    );
+  },
+
+  // Exact mirror of recordExerciseUsage above, for the skill track.
+  async recordSkillExerciseUsage(coachId: number, skillExerciseIds: number[]) {
+    const ids = Array.from(new Set(skillExerciseIds));
+    if (ids.length === 0) return;
+    await Promise.all(
+      ids.map((skillExerciseId) =>
+        db
+          .insert(skillExerciseUsageLog)
+          .values({ coachId, skillExerciseId })
+          .onConflictDoUpdate({
+            target: [skillExerciseUsageLog.coachId, skillExerciseUsageLog.skillExerciseId],
+            set: { lastUsedAt: new Date() },
+          }),
+      ),
+    );
+  },
+
   async createExercise(coachId: number, data: any) {
     const [row] = await db
       .insert(exercises)
@@ -5906,18 +6071,76 @@ ${athleteContext}
 
   async getVisibleSkillExercisesForCoach(coachId: number) {
     const { coachIds, ownerIds } = await this.getCoachAndAdminOwnerIds(coachId);
-    const [rows, favorites] = await Promise.all([
+    const [rows, favorites, usage] = await Promise.all([
       db.query.skillExercises.findMany({
         where: inArray(skillExercises.coachId, ownerIds),
         orderBy: desc(skillExercises.createdAt),
         with: { coach: true },
       }),
       db.query.favoriteSkillExercises.findMany({ where: eq(favoriteSkillExercises.coachId, coachId) }),
+      db.query.skillExerciseUsageLog.findMany({ where: eq(skillExerciseUsageLog.coachId, coachId) }),
     ]);
     const favoriteIds = new Set(favorites.map((f) => f.skillExerciseId));
+    const usageBySkillExerciseId = new Map(usage.map((u) => [u.skillExerciseId, u.lastUsedAt]));
     return rows
-      .map((ex) => ({ ...this.withOwnership(ex, coachId, coachIds), isFavorite: favoriteIds.has(ex.id) }))
+      .map((ex) => ({
+        ...this.withOwnership(ex, coachId, coachIds),
+        isFavorite: favoriteIds.has(ex.id),
+        lastUsedAt: usageBySkillExerciseId.get(ex.id) ?? null,
+      }))
       .sort((a, b) => Number(b.isFavorite) - Number(a.isFavorite));
+  },
+
+  // Free-Agent-specific wrapper around getVisibleSkillExercisesForCoach
+  // above -- adds a `locked: boolean` per drill instead of filtering
+  // anything out (see skill-picker-dialog.tsx's own comment on why locked
+  // stays visible rather than hidden -- functionally identical for storage
+  // cost either way, since a locked drill can never be selected into a
+  // program regardless, but visible-and-locked gives a real upgrade
+  // prompt instead of nothing). Free = the athlete's own signupSport, the
+  // cross-sport bucket (skillExercises.crossSportFree), or any sport
+  // they've separately paid to unlock (users.unlockedSkillSports). A
+  // pre-signupSport account (created before this feature existed) falls
+  // back to whatever `sport` is currently on their profile rather than
+  // locking everything -- nobody who signed up before this shipped should
+  // get a worse experience than they had yesterday.
+  async getVisibleSkillExercisesForFreeAgent(athleteId: number) {
+    const [list, athlete] = await Promise.all([
+      this.getVisibleSkillExercisesForCoach(athleteId),
+      this.getUser(athleteId),
+    ]);
+    const freeSport = athlete?.signupSport ?? athlete?.sport ?? null;
+    const unlockedSports = new Set(athlete?.unlockedSkillSports ?? []);
+    return list.map((sk) => {
+      const sports = sk.sports ?? [];
+      const unlocked =
+        sk.crossSportFree ||
+        (freeSport != null && sports.includes(freeSport)) ||
+        sports.some((s) => unlockedSports.has(s));
+      return { ...sk, locked: !unlocked };
+    });
+  },
+
+  // Server-side enforcement counterpart to the locked flag above -- a
+  // Free Agent's own skill-program save (POST/PUT /api/athlete/skill-
+  // programs) rejects outright if it references any drill locked for
+  // them, rather than silently letting a client bypass the picker's own
+  // disabled-selection UI. Returns the locked drills' names for a useful
+  // error message; empty means everything referenced is unlocked.
+  async assertSkillExercisesUnlockedForFreeAgent(
+    athleteId: number,
+    skillExerciseIds: number[],
+  ): Promise<string[]> {
+    const ids = Array.from(new Set(skillExerciseIds));
+    if (ids.length === 0) return [];
+    const list = await this.getVisibleSkillExercisesForFreeAgent(athleteId);
+    const byId = new Map(list.map((sk) => [sk.id, sk]));
+    const lockedNames: string[] = [];
+    for (const id of ids) {
+      const sk = byId.get(id);
+      if (sk?.locked) lockedNames.push(sk.name);
+    }
+    return lockedNames;
   },
 
   // Admin counterpart to getExercisesByCoach -- an admin's own skill bank
@@ -6072,6 +6295,9 @@ ${athleteContext}
       coachId,
       structure.weeks.flatMap((w) => w.days.flatMap((d) => d.exercises.map((ex) => ex.skillExerciseId))),
     );
+    const allSkillExercises = structure.weeks.flatMap((w) => w.days.flatMap((d) => d.exercises));
+    const trackingMap = await this.resolveSkillTrackingLevel(allSkillExercises);
+    await this.recordSkillExerciseUsage(coachId, allSkillExercises.map((ex) => ex.skillExerciseId));
     return db.transaction(async (tx) => {
       const [program] = await tx
         .insert(skillPrograms)
@@ -6112,7 +6338,7 @@ ${athleteContext}
               reps: ex.reps,
               restSeconds: ex.restSeconds ?? null,
               notes: ex.notes ?? null,
-              trackingLevel: ex.trackingLevel ?? "none",
+              trackingLevel: trackingMap.get(ex) ?? "none",
             });
           }
         }
@@ -6131,6 +6357,9 @@ ${athleteContext}
       requesterId,
       structure.weeks.flatMap((w) => w.days.flatMap((d) => d.exercises.map((ex) => ex.skillExerciseId))),
     );
+    const allSkillExercises = structure.weeks.flatMap((w) => w.days.flatMap((d) => d.exercises));
+    const trackingMap = await this.resolveSkillTrackingLevel(allSkillExercises);
+    await this.recordSkillExerciseUsage(requesterId, allSkillExercises.map((ex) => ex.skillExerciseId));
     return db.transaction(async (tx) => {
       await tx
         .update(skillPrograms)
@@ -6174,7 +6403,7 @@ ${athleteContext}
               reps: ex.reps,
               restSeconds: ex.restSeconds ?? null,
               notes: ex.notes ?? null,
-              trackingLevel: ex.trackingLevel ?? "none",
+              trackingLevel: trackingMap.get(ex) ?? "none",
             });
           }
         }
@@ -6246,6 +6475,7 @@ ${athleteContext}
         trackingLevel: input.trackingLevel,
         elapsedSeconds: input.elapsedSeconds ?? null,
         distanceYards: input.distanceYards ?? null,
+        presetId: input.presetId ?? null,
         cameraAngle: input.cameraAngle ?? null,
         faults: input.faults ?? null,
         hipShoulderSeparationDeg: input.hipShoulderSeparationDeg ?? null,
@@ -6261,6 +6491,10 @@ ${athleteContext}
         setPointPauseSeconds: input.setPointPauseSeconds ?? null,
         kneeBendDepthDeg: input.kneeBendDepthDeg ?? null,
         videoUrl: input.videoUrl ?? null,
+        // Only meaningful alongside a real videoUrl -- a favorite flag with
+        // no clip to exempt from the cap sweep is a no-op either way, so no
+        // extra guard needed here beyond what the client already does.
+        videoFavorited: input.videoUrl ? (input.videoFavorited ?? false) : false,
       })
       .returning();
     return row;
@@ -6407,6 +6641,13 @@ ${athleteContext}
     structure: ClassStructureInput,
     isForgeOfficial: boolean,
   ) {
+    const trackingMap = await this.resolveSkillTrackingLevel(
+      structure.lessons.flatMap((l) => l.exercises),
+    );
+    await this.recordSkillExerciseUsage(
+      coachId,
+      structure.lessons.flatMap((l) => l.exercises.map((ex) => ex.skillExerciseId)),
+    );
     return db.transaction(async (tx) => {
       const [cls] = await tx
         .insert(classes)
@@ -6452,7 +6693,7 @@ ${athleteContext}
             reps: ex.reps,
             restSeconds: ex.restSeconds ?? null,
             notes: ex.notes ?? null,
-            trackingLevel: ex.trackingLevel ?? "none",
+            trackingLevel: trackingMap.get(ex) ?? "none",
           });
         }
         const [newLesson] = await tx
@@ -6490,12 +6731,19 @@ ${athleteContext}
   },
 
   async updateClassStructure(classId: number, structure: ClassStructureInput) {
+    const trackingMap = await this.resolveSkillTrackingLevel(
+      structure.lessons.flatMap((l) => l.exercises),
+    );
     await db.transaction(async (tx) => {
       const cls = await tx.query.classes.findFirst({ where: eq(classes.id, classId) });
       if (!cls) throw new Error("Class not found");
       if (structure.prerequisiteClassId === classId) {
         throw new Error("A class can't be its own prerequisite.");
       }
+      await this.recordSkillExerciseUsage(
+        cls.coachId,
+        structure.lessons.flatMap((l) => l.exercises.map((ex) => ex.skillExerciseId)),
+      );
 
       await tx
         .update(classes)
@@ -6585,7 +6833,7 @@ ${athleteContext}
                 reps: ex.reps,
                 restSeconds: ex.restSeconds ?? null,
                 notes: ex.notes ?? null,
-                trackingLevel: ex.trackingLevel ?? "none",
+                trackingLevel: trackingMap.get(ex) ?? "none",
               });
             }
           }
@@ -6615,7 +6863,7 @@ ${athleteContext}
               reps: ex.reps,
               restSeconds: ex.restSeconds ?? null,
               notes: ex.notes ?? null,
-              trackingLevel: ex.trackingLevel ?? "none",
+              trackingLevel: trackingMap.get(ex) ?? "none",
             });
           }
           const [newLesson] = await tx
@@ -8393,10 +8641,13 @@ ${athleteContext}
     coachId: number,
     structure: ProgramStructureInput,
   ) {
+    const allExercises = structure.weeks.flatMap((w) => w.days.flatMap((d) => d.exercises));
     await this.assertExerciseIdsVisibleTo(
       coachId,
-      structure.weeks.flatMap((w) => w.days.flatMap((d) => d.exercises.map((ex) => ex.exerciseId))),
+      allExercises.map((ex) => ex.exerciseId),
     );
+    const videoCheckMap = await this.resolveVideoCheckEnabled(allExercises);
+    await this.recordExerciseUsage(coachId, allExercises.map((ex) => ex.exerciseId));
     return db.transaction(async (tx) => {
       const [program] = await tx
         .insert(programs)
@@ -8457,7 +8708,7 @@ ${athleteContext}
               supersetGroup: ex.supersetGroup ?? null,
               restAfterGroupOnly: ex.restAfterGroupOnly ?? false,
               trackingLevel: ex.trackingLevel ?? "none",
-              videoCheckEnabled: ex.videoCheckEnabled ?? false,
+              videoCheckEnabled: videoCheckMap.get(ex) ?? false,
             });
           }
         }
@@ -9075,10 +9326,13 @@ Respond to the user's latest message by calling ask_question or update_program.`
     structure: ProgramStructureInput,
     requesterId: number,
   ) {
+    const allExercises = structure.weeks.flatMap((w) => w.days.flatMap((d) => d.exercises));
     await this.assertExerciseIdsVisibleTo(
       requesterId,
-      structure.weeks.flatMap((w) => w.days.flatMap((d) => d.exercises.map((ex) => ex.exerciseId))),
+      allExercises.map((ex) => ex.exerciseId),
     );
+    const videoCheckMap = await this.resolveVideoCheckEnabled(allExercises);
+    await this.recordExerciseUsage(requesterId, allExercises.map((ex) => ex.exerciseId));
     return db.transaction(async (tx) => {
       await tx
         .update(programs)
@@ -9145,7 +9399,7 @@ Respond to the user's latest message by calling ask_question or update_program.`
               notes: ex.notes ?? null,
               supersetGroup: ex.supersetGroup ?? null,
               trackingLevel: ex.trackingLevel ?? "none",
-              videoCheckEnabled: ex.videoCheckEnabled ?? false,
+              videoCheckEnabled: videoCheckMap.get(ex) ?? false,
             });
           }
         }
@@ -11420,7 +11674,9 @@ ${entriesText}`;
     };
   },
 
-  async updateProgramDay(dayId: number, input: UpdateProgramDayInput) {
+  async updateProgramDay(dayId: number, input: UpdateProgramDayInput, coachId: number) {
+    const videoCheckMap = await this.resolveVideoCheckEnabled(input.exercises);
+    await this.recordExerciseUsage(coachId, input.exercises.map((ex) => ex.exerciseId));
     return db.transaction(async (tx) => {
       await tx
         .update(programDays)
@@ -11443,7 +11699,7 @@ ${entriesText}`;
             supersetGroup: ex.supersetGroup ?? null,
             restAfterGroupOnly: ex.restAfterGroupOnly ?? false,
             trackingLevel: ex.trackingLevel ?? "none",
-            videoCheckEnabled: ex.videoCheckEnabled ?? false,
+            videoCheckEnabled: videoCheckMap.get(ex) ?? false,
           })),
         );
       }
@@ -14601,7 +14857,18 @@ ${catalog}`;
       await Promise.all([deleteUploadedFile(row.videoUrl), deleteUploadedFile(row.coachAnnotationUrl)]);
       await db
         .update(skillSessionLogs)
-        .set({ videoUrl: null, coachAnnotationUrl: null })
+        .set({
+          videoUrl: null,
+          coachAnnotationUrl: null,
+          // Exact mirror of the "set" branch above's videoFavorited/
+          // pendingDeletionAt reset -- a favorited video CAN still reach
+          // here via the compliance-tier job (which doesn't check
+          // favorited status), and either flag is meaningless once the
+          // clip itself is gone, so both get cleared regardless of which
+          // caller triggered this delete.
+          videoFavorited: false,
+          pendingDeletionAt: null,
+        })
         .where(eq(skillSessionLogs.id, id));
       return { deleted: true, athleteId: row.athleteId };
     }
@@ -15621,7 +15888,7 @@ ${catalog}`;
     }
     const rosterList = roster.map((a) => `${a.id}: ${a.name}`).join("\n");
     const system =
-      "You are transcribing a photographed combine/testing-day results sheet for a strength coach. Read every row and report exactly the numbers written -- never estimate, round beyond what's shown, or fill in a blank cell. Match each row to the roster athlete it belongs to by name; only set athleteId when a name on the roster clearly matches, leave it out otherwise rather than guessing. 40-yard dash and pro-agility are seconds, vertical/broad jump are inches, bench/squat/deadlift are pounds -- if the sheet is unambiguously in different units (cm, kg), convert; otherwise report the raw number and flag the ambiguity in that row's note.";
+      "You are transcribing a photographed combine/testing-day results sheet for a strength coach. Read every row and report exactly the numbers written -- never estimate, round beyond what's shown, or fill in a blank cell. Match each row to the roster athlete it belongs to by name; only set athleteId when a name on the roster clearly matches, leave it out otherwise rather than guessing. 40-yard dash, pro-agility (5-10-5 shuttle), and 3-cone/L-drill are all seconds, vertical/broad jump are inches, bench/squat/deadlift are pounds -- if the sheet is unambiguously in different units (cm, kg), convert; otherwise report the raw number and flag the ambiguity in that row's note.";
     const tool = {
       name: "report_testing_day_results",
       description: "Reports each athlete's row transcribed from the testing sheet photo.",
@@ -15639,6 +15906,7 @@ ${catalog}`;
                 verticalJumpIn: { type: "number" },
                 broadJumpIn: { type: "number" },
                 proAgilitySeconds: { type: "number" },
+                threeConeSeconds: { type: "number" },
                 benchMaxLbs: { type: "number" },
                 squatMaxLbs: { type: "number" },
                 deadliftMaxLbs: { type: "number" },
@@ -16117,6 +16385,15 @@ ${catalog}`;
         error: "A parent or guardian's email is required to finish creating this account." as const,
       };
     }
+    // Same "whichever of the two actually has one" pattern as dateOfBirth
+    // above -- required even though this athlete is coach-provisioned
+    // (not a Free Agent today), since users.signupSport needs a real value
+    // in case this athlete ever leaves their coach and becomes one later.
+    const sport = provisional.sport ?? input.sport;
+    const position = provisional.position ?? input.position;
+    if (!sport || !position) {
+      return { error: "Sport and position are required to finish creating this account." as const };
+    }
     const passwordHash = await hashPassword(input.password);
     const user = await this.createUser({
       email: input.email,
@@ -16135,8 +16412,9 @@ ${catalog}`;
       gender: provisional.gender ?? undefined,
       heightIn: provisional.heightIn ?? undefined,
       bodyWeightLbs: provisional.bodyWeightLbs ?? undefined,
-      sport: provisional.sport ?? undefined,
-      position: provisional.position ?? undefined,
+      sport,
+      position,
+      signupSport: sport,
       agreedToTermsAt: new Date(),
       agreedToTermsText,
     });
@@ -16506,15 +16784,18 @@ ${catalog}`;
   // Video storage cap -- applies to BOTH coached athletes and Free Agents
   // alike (see shared/video-retention.ts's own comment), keyed off each
   // athlete's own getVideoRetentionLimits (beta/trial/add-on all resolve
-  // per-athlete same as everywhere else billing-related). Cap is per
-  // (athlete, exercise): that athlete's totalCap most recent unfavorited
-  // videos are kept, older unfavorited ones beyond that get a grace window
-  // (VIDEO_RETENTION_GRACE_DAYS) before actual deletion, and any favorited
-  // video is completely exempt -- see workoutSetEntries'
-  // isPr/videoFavorited/pendingDeletionAt comments. Returns what happened
-  // this run so the job file can log/notify without a second query.
+  // per-athlete same as everywhere else billing-related, and the SAME
+  // add-on purchase covers both tracks below -- one $9.99/mo purchase, not
+  // a separate one per track). Cap is per (athlete, exercise) AND
+  // separately per (athlete, skill exercise): that athlete's totalCap most
+  // recent unfavorited videos are kept for each, older unfavorited ones
+  // beyond that get a grace window (VIDEO_RETENTION_GRACE_DAYS) before
+  // actual deletion, and any favorited video is completely exempt -- see
+  // workoutSetEntries' isPr/videoFavorited/pendingDeletionAt comments (and
+  // skillSessionLogs' mirrored ones). Returns what happened this run so the
+  // job file can log/notify without a second query.
   async sweepVideoRetentionCap(): Promise<{
-    warned: { id: number; athleteId: number; exerciseName: string; link: string }[];
+    warned: { source: "set" | "skill"; id: number; athleteId: number; exerciseName: string; link: string }[];
     purged: number;
   }> {
     const VIDEO_RETENTION_GRACE_DAYS = 7;
@@ -16529,8 +16810,8 @@ ${catalog}`;
       .from(users)
       .where(eq(users.role, "athlete"));
     // Unlimited (beta/trial/enforcement-off) accounts have nothing to
-    // sweep -- skipped up front so the query below, and the per-row work
-    // after it, never touches a row that could never actually be evicted.
+    // sweep -- skipped up front so the queries below, and the per-row work
+    // after them, never touch a row that could never actually be evicted.
     const capByAthlete = new Map<number, number>();
     for (const a of athleteRows) {
       const limits = getVideoRetentionLimits(a);
@@ -16538,7 +16819,23 @@ ${catalog}`;
     }
     if (capByAthlete.size === 0) return { warned: [], purged: 0 };
 
-    const rows = await db
+    // Normalized shape both tracks feed into so the group/sort/evict pass
+    // below runs once instead of twice -- the two source queries differ
+    // (different join chains, different date columns), but eviction itself
+    // is identical logic either way.
+    type Candidate = {
+      source: "set" | "skill";
+      id: number;
+      pendingDeletionAt: string | null;
+      athleteId: number;
+      groupKey: string;
+      sortKey: string;
+      itemName: string;
+      link: string;
+    };
+    const candidates: Candidate[] = [];
+
+    const setRows = await db
       .select({
         id: workoutSetEntries.id,
         pendingDeletionAt: workoutSetEntries.pendingDeletionAt,
@@ -16561,36 +16858,86 @@ ${catalog}`;
           eq(workoutSetEntries.videoFavorited, false),
         ),
       );
-
-    const groups = new Map<string, typeof rows>();
-    for (const row of rows) {
-      const key = `${row.athleteId}-${row.exerciseId}`;
-      const group = groups.get(key);
-      if (group) group.push(row);
-      else groups.set(key, [row]);
+    for (const row of setRows) {
+      candidates.push({
+        source: "set",
+        id: row.id,
+        pendingDeletionAt: row.pendingDeletionAt,
+        athleteId: row.athleteId,
+        groupKey: `set-${row.athleteId}-${row.exerciseId}`,
+        // workoutLogs.date has no time component, so same-day sets compare
+        // equal on date alone -- id is appended as a deterministic tiebreak
+        // (see the sort comment below for why that matters).
+        sortKey: `${row.date}-${String(row.id).padStart(10, "0")}`,
+        itemName: row.exerciseName,
+        link: `/athlete/day/${row.assignmentId}/${row.programDayId}/${row.date}`,
+      });
     }
 
-    const warned: { id: number; athleteId: number; exerciseName: string; link: string }[] = [];
+    const skillRows = await db
+      .select({
+        id: skillSessionLogs.id,
+        pendingDeletionAt: skillSessionLogs.pendingDeletionAt,
+        athleteId: skillSessionLogs.athleteId,
+        createdAt: skillSessionLogs.createdAt,
+        skillExerciseId: skillExercises.id,
+        skillExerciseName: skillExercises.name,
+      })
+      .from(skillSessionLogs)
+      .innerJoin(skillProgramExercises, eq(skillSessionLogs.skillProgramExerciseId, skillProgramExercises.id))
+      .innerJoin(skillExercises, eq(skillProgramExercises.skillExerciseId, skillExercises.id))
+      .where(
+        and(
+          inArray(skillSessionLogs.athleteId, [...capByAthlete.keys()]),
+          isNotNull(skillSessionLogs.videoUrl),
+          eq(skillSessionLogs.videoFavorited, false),
+        ),
+      );
+    for (const row of skillRows) {
+      candidates.push({
+        source: "skill",
+        id: row.id,
+        pendingDeletionAt: row.pendingDeletionAt,
+        athleteId: row.athleteId,
+        groupKey: `skill-${row.athleteId}-${row.skillExerciseId}`,
+        sortKey: `${row.createdAt.toISOString()}-${String(row.id).padStart(10, "0")}`,
+        itemName: row.skillExerciseName,
+        // No standalone deep-linkable route exists for a single skill day
+        // (it's opened as a dialog off the athlete calendar/dashboard, not
+        // its own URL -- see SkillDayViewDialog's call sites), unlike the
+        // exercise side's /athlete/day/... route above. The calendar is the
+        // closest real destination.
+        link: "/athlete/calendar",
+      });
+    }
+
+    const groups = new Map<string, Candidate[]>();
+    for (const c of candidates) {
+      const group = groups.get(c.groupKey);
+      if (group) group.push(c);
+      else groups.set(c.groupKey, [c]);
+    }
+
+    const warned: { source: "set" | "skill"; id: number; athleteId: number; exerciseName: string; link: string }[] = [];
     let purged = 0;
     const todayMs = Date.now();
     const graceMs = VIDEO_RETENTION_GRACE_DAYS * 24 * 60 * 60 * 1000;
 
     for (const group of groups.values()) {
-      // Tiebreak on id, not just date: workoutLogs.date has no time
-      // component, so same-day sets compare equal on date alone, and
-      // without a deterministic tiebreak the query's row order (which SQL
-      // makes no guarantee about across runs) decides which one lands in
-      // "excess" -- one run flags set A as at-risk, the next flags set B
-      // instead and un-flags A, flip-flopping which video gets warned/
-      // reprieved from one sweep to the next for no reason a user could see.
-      group.sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
+      // Deterministic tiebreak baked into sortKey above -- without it, the
+      // query's row order (which SQL makes no guarantee about across runs)
+      // decides which same-date/same-timestamp item lands in "excess," so
+      // one run could flag item A as at-risk and the next flag item B
+      // instead, flip-flopping which video gets warned/reprieved from one
+      // sweep to the next for no reason a user could see.
+      group.sort((a, b) => a.sortKey.localeCompare(b.sortKey));
       const totalCap = capByAthlete.get(group[0].athleteId)!;
       const excess = group.slice(0, Math.max(0, group.length - totalCap));
       const excessIds = new Set(excess.map((r) => r.id));
 
-      for (const row of group) {
-        if (excessIds.has(row.id)) {
-          if (row.pendingDeletionAt == null) {
+      for (const c of group) {
+        if (excessIds.has(c.id)) {
+          if (c.pendingDeletionAt == null) {
             // Deliberately doesn't write pendingDeletionAt here. That only
             // happens once the caller confirms the warning notification
             // actually went out (see markVideoPendingDeletion below) --
@@ -16599,22 +16946,30 @@ ${catalog}`;
             // told about, and it'd get silently deleted with no warning
             // ever having reached them.
             warned.push({
-              id: row.id,
-              athleteId: row.athleteId,
-              exerciseName: row.exerciseName,
-              link: `/athlete/day/${row.assignmentId}/${row.programDayId}/${row.date}`,
+              source: c.source,
+              id: c.id,
+              athleteId: c.athleteId,
+              exerciseName: c.itemName,
+              link: c.link,
             });
-          } else if (todayMs - new Date(row.pendingDeletionAt).getTime() >= graceMs) {
-            const result = await this.deleteAdminVideo("set", row.id);
+          } else if (todayMs - new Date(c.pendingDeletionAt).getTime() >= graceMs) {
+            const result = await this.deleteAdminVideo(c.source, c.id);
             if (result.deleted) purged++;
           }
-        } else if (row.pendingDeletionAt != null) {
+        } else if (c.pendingDeletionAt != null) {
           // Fell back within the cap (older excess videos already purged
           // ahead of it) -- no longer at risk.
-          await db
-            .update(workoutSetEntries)
-            .set({ pendingDeletionAt: null })
-            .where(eq(workoutSetEntries.id, row.id));
+          if (c.source === "set") {
+            await db
+              .update(workoutSetEntries)
+              .set({ pendingDeletionAt: null })
+              .where(eq(workoutSetEntries.id, c.id));
+          } else {
+            await db
+              .update(skillSessionLogs)
+              .set({ pendingDeletionAt: null })
+              .where(eq(skillSessionLogs.id, c.id));
+          }
         }
       }
     }
@@ -16626,11 +16981,13 @@ ${catalog}`;
   // sweepVideoRetentionCap itself so the caller only calls this once the
   // cap-warning notification has actually been delivered (see that
   // function's comment on the "warned" list).
-  async markVideoPendingDeletion(setEntryId: number) {
-    await db
-      .update(workoutSetEntries)
-      .set({ pendingDeletionAt: new Date().toISOString().slice(0, 10) })
-      .where(eq(workoutSetEntries.id, setEntryId));
+  async markVideoPendingDeletion(source: "set" | "skill", id: number) {
+    const today = new Date().toISOString().slice(0, 10);
+    if (source === "set") {
+      await db.update(workoutSetEntries).set({ pendingDeletionAt: today }).where(eq(workoutSetEntries.id, id));
+    } else {
+      await db.update(skillSessionLogs).set({ pendingDeletionAt: today }).where(eq(skillSessionLogs.id, id));
+    }
   },
 
   // Verbatim program transcription -- see programPhotoDraftSchema's own

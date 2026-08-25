@@ -59,6 +59,9 @@ type LocalExercise = {
   restSeconds: string;
   notes: string;
   trackingLevel: SkillTrackingLevel;
+  // Admin-editable per-drill gate on TrackingToggle -- see
+  // skillExercises.videoEligible's own comment in shared/schema.ts.
+  videoEligible: boolean | null;
 };
 
 type LocalContentPage = {
@@ -149,6 +152,7 @@ function stateFromClass(cls: any) {
         restSeconds: pe.restSeconds != null ? String(pe.restSeconds) : "",
         notes: pe.notes ?? "",
         trackingLevel: (pe.trackingLevel ?? "none") as SkillTrackingLevel,
+        videoEligible: pe.skillExercise.videoEligible ?? null,
       })),
       content: (
         (l.content ?? []) as {
@@ -677,6 +681,7 @@ export function ClassBuilderPage({
                 restSeconds: "",
                 notes: "",
                 trackingLevel: "none",
+                videoEligible: skill.videoEligible ?? null,
               },
             ],
           }));
@@ -1176,17 +1181,22 @@ function LessonCard({
                   }
                 />
               </div>
-              <TrackingToggle
-                trackingLevel={ex.trackingLevel}
-                onChange={(trackingLevel) =>
-                  onChange((l) => ({
-                    ...l,
-                    exercises: l.exercises.map((e) =>
-                      e.key === ex.key ? { ...e, trackingLevel } : e,
-                    ),
-                  }))
-                }
-              />
+              {/* Hidden entirely for an admin-restricted drill -- unless it's
+                  already on, so a coach can still turn OFF a capture that
+                  predates the restriction. See videoEligible's own comment. */}
+              {(ex.videoEligible !== false || ex.trackingLevel !== "none") && (
+                <TrackingToggle
+                  trackingLevel={ex.trackingLevel}
+                  onChange={(trackingLevel) =>
+                    onChange((l) => ({
+                      ...l,
+                      exercises: l.exercises.map((e) =>
+                        e.key === ex.key ? { ...e, trackingLevel } : e,
+                      ),
+                    }))
+                  }
+                />
+              )}
             </div>
           ))}
         </div>

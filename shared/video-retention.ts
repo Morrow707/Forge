@@ -25,5 +25,10 @@ export const VIDEO_RETENTION: VideoRetentionLimits = {
 export const VIDEO_STORAGE_ADD_ON: VideoRetentionLimits & { monthlyPriceCents: number } = {
   favoritedCap: 10,
   totalCap: 20,
-  monthlyPriceCents: 499,
+  // Doubling the cap roughly doubles the storage this athlete uses -- at
+  // Render's persistent-disk rate, the marginal 10-videos-per-item this
+  // add-on unlocks costs a few dollars a month by itself (see the cost
+  // model this session worked out). $9.99 covers that with real margin,
+  // unlike $4.99 which was close to breakeven on storage alone.
+  monthlyPriceCents: 999,
 };

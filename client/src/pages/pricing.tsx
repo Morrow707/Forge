@@ -192,10 +192,11 @@ export default function PricingPage() {
               <span className="font-semibold text-foreground">
                 Extra video storage -- {formatCents(VIDEO_STORAGE_ADD_ON.monthlyPriceCents)}/mo
               </span>{" "}
-              -- every athlete keeps {VIDEO_RETENTION.favoritedCap} favorited form-check clips per
-              exercise, {VIDEO_RETENTION.totalCap} total on a rolling basis. This add-on bumps
+              -- every athlete keeps {VIDEO_RETENTION.favoritedCap} favorited clips per exercise or
+              skill drill, {VIDEO_RETENTION.totalCap} total on a rolling basis. This add-on bumps
               that to {VIDEO_STORAGE_ADD_ON.favoritedCap} favorited / {VIDEO_STORAGE_ADD_ON.totalCap}{" "}
-              total. Applies per athlete on any plan -- Free Agent or coached.
+              total, for both form-check videos and skill clips. Applies per athlete on any plan --
+              Free Agent or coached.
             </p>
           </div>
         </div>

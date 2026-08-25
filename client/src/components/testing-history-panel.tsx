@@ -27,6 +27,7 @@ type TestingResult = {
   verticalJumpIn: number | null;
   broadJumpIn: number | null;
   proAgilitySeconds: number | null;
+  threeConeSeconds: number | null;
   benchMaxLbs: number | null;
   squatMaxLbs: number | null;
   deadliftMaxLbs: number | null;

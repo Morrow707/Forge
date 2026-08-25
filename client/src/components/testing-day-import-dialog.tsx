@@ -31,6 +31,7 @@ type Row = {
   verticalJumpIn?: number | null;
   broadJumpIn?: number | null;
   proAgilitySeconds?: number | null;
+  threeConeSeconds?: number | null;
   benchMaxLbs?: number | null;
   squatMaxLbs?: number | null;
   deadliftMaxLbs?: number | null;
@@ -42,6 +43,7 @@ const FIELDS: [keyof Row, string][] = [
   ["verticalJumpIn", "Vert (in)"],
   ["broadJumpIn", "Broad (in)"],
   ["proAgilitySeconds", "Pro Agility (s)"],
+  ["threeConeSeconds", "3-Cone/L-Drill (s)"],
   ["benchMaxLbs", "Bench (lbs)"],
   ["squatMaxLbs", "Squat (lbs)"],
   ["deadliftMaxLbs", "Deadlift (lbs)"],
