@@ -39,6 +39,8 @@ import {
   BODY_REGION_FILTER_ACTIVE_CLASS,
   PLANE_FILTER_ACTIVE_CLASS,
   MOVEMENT_COMPLEXITY_FILTER_ACTIVE_CLASS,
+  FAMILY_FILTER_ACTIVE_CLASS,
+  EQUIPMENT_FILTER_ACTIVE_CLASS,
 } from "@/lib/exercise-colors";
 
 const CATEGORIES = ["strength", "conditioning", "olympic", "accessory", "mobility", "plyometric"];
@@ -318,7 +320,7 @@ export function ExercisePickerDialog({
                       className={cn(
                         "rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-40",
                         active
-                          ? "border-primary bg-primary/15 text-primary"
+                          ? FAMILY_FILTER_ACTIVE_CLASS[family]
                           : "border-border text-muted-foreground hover:border-primary/50 hover:text-primary",
                       )}
                     >
@@ -353,8 +355,8 @@ export function ExercisePickerDialog({
                           className={cn(
                             "rounded-full border px-2 py-1 text-[11px] font-medium leading-tight transition-colors disabled:opacity-30",
                             active
-                              ? "border-cyan-500 bg-cyan-500/15 text-cyan-400"
-                              : "border-border text-muted-foreground hover:border-cyan-500/50 hover:text-cyan-400",
+                              ? EQUIPMENT_FILTER_ACTIVE_CLASS
+                              : "border-border text-muted-foreground hover:border-yellow-500/50 hover:text-yellow-400",
                           )}
                         >
                           {eq} <span className="opacity-60">{count}</span>
@@ -460,7 +462,22 @@ export function ExercisePickerDialog({
             </div>
           )}
           <div className="space-y-1 border-t border-border pt-4">
-            {filtered.length === 0 && (
+            {filtered.length === 0 && search.trim() && (
+              // A plain keyword miss on real typed text is the exact moment
+              // the AI search button is for -- pointing at it here beats
+              // the generic empty state, which just reads as "broken" when
+              // someone's typed a whole sentence instead of a short name.
+              <div className="flex flex-col items-center gap-2 py-10 text-center text-sm text-muted-foreground">
+                <Sparkles className="h-8 w-8" />
+                <p>
+                  No exercises match "{search}" by name.
+                  <br />
+                  Try the <Sparkles className="mx-0.5 inline h-3.5 w-3.5" /> button above to describe what
+                  you're looking for instead.
+                </p>
+              </div>
+            )}
+            {filtered.length === 0 && !search.trim() && (
               <div className="flex flex-col items-center gap-2 py-10 text-center text-sm text-muted-foreground">
                 <Dumbbell className="h-8 w-8" />
                 No exercises found matching these filters.
@@ -490,8 +507,14 @@ export function ExercisePickerDialog({
                     isForgeOfficial={ex.isForgeOfficial}
                     ownerLabel={ex.ownerLabel}
                   />
+                  {/* Every visible row already matches activeFamily when
+                      one's selected (see matchesFamily above) -- showing
+                      the raw category badge here instead would be
+                      confusing rather than informative (e.g. "Conditioning"
+                      on every result under the Combination family, since
+                      that's how the seeded data happens to be tagged). */}
                   <Badge variant="secondary" className="capitalize">
-                    {ex.category}
+                    {activeFamily ?? ex.category}
                   </Badge>
                 </div>
               </button>

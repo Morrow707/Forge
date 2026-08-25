@@ -42,3 +42,30 @@ export const MOVEMENT_COMPLEXITY_FILTER_ACTIVE_CLASS = "border-orange-500 bg-ora
 // anywhere the two systems' UI might otherwise sit near each other.
 export const SKILL_BADGE_CLASS = "bg-teal-500/15 text-teal-400";
 export const SKILL_FILTER_ACTIVE_CLASS = "border-teal-500 bg-teal-500/15 text-teal-400";
+
+// One color per exercise-family accordion button (see shared/exercise-
+// family.ts) -- unlike the flat single-hue dimensions above, each family
+// gets its own color so the row of 9 buttons in the picker doesn't read as
+// one indistinct block, and Combination specifically gets a color that
+// pops (fuchsia) since it's the one family that didn't exist as a
+// filterable concept at all before this accordion. Mobility & Activation
+// intentionally reuses the "mobility" category's cyan -- the two concepts
+// already overlap in a coach's head, so matching color reinforces that
+// instead of fighting it.
+export const FAMILY_FILTER_ACTIVE_CLASS: Record<string, string> = {
+  "Upper Push": "border-blue-500 bg-blue-500/15 text-blue-400",
+  "Upper Pull": "border-indigo-500 bg-indigo-500/15 text-indigo-400",
+  "Lower Push": "border-lime-500 bg-lime-500/15 text-lime-400",
+  "Lower Pull": "border-green-500 bg-green-500/15 text-green-400",
+  Legs: "border-amber-500 bg-amber-500/15 text-amber-400",
+  Core: "border-pink-500 bg-pink-500/15 text-pink-400",
+  Combination: "border-fuchsia-500 bg-fuchsia-500/15 text-fuchsia-400",
+  "Mobility & Activation": "border-cyan-500 bg-cyan-500/15 text-cyan-400",
+  Conditioning: "border-red-500 bg-red-500/15 text-red-400",
+};
+
+// The equipment sub-filter grid's own single hue -- previously reused cyan,
+// which collides with both the "mobility" category badge and the
+// Correctives-only toggle it can appear alongside in the same "More
+// filters" disclosure. Yellow isn't claimed by anything else above.
+export const EQUIPMENT_FILTER_ACTIVE_CLASS = "border-yellow-500 bg-yellow-500/15 text-yellow-400";
