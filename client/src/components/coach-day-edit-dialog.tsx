@@ -52,6 +52,11 @@ type LocalExercise = {
   // VideoTrackingToggle) -- jump-style tracking for a plyometric exercise,
   // full bar tracking for everything else.
   category: string | null;
+  // null/true both mean eligible -- see the column's own comment in
+  // shared/schema.ts. Only an explicit false hides the VideoTrackingToggle
+  // button entirely (unless it's already on, so a coach can still turn off
+  // an existing capture -- see the render site).
+  videoEligible: boolean | null;
 };
 
 type LocalCorrective = {
@@ -198,6 +203,7 @@ export function CoachDayEditDialog({
             trackingLevel: pe.trackingLevel ?? "none",
             videoCheckEnabled: pe.videoCheckEnabled ?? false,
             category: pe.exercise.category ?? null,
+            videoEligible: pe.exercise.videoEligible ?? null,
           })),
         ),
       );
@@ -498,16 +504,22 @@ export function CoachDayEditDialog({
                             )}
                           </div>
                           <div className="mt-1.5 flex items-center gap-2">
-                            <VideoTrackingToggle
-                              trackingLevel={ex.trackingLevel}
-                              category={ex.category}
-                              exerciseName={ex.exerciseName}
-                              onChange={(patch) =>
-                                setExercises((prev) =>
-                                  prev.map((e) => (e.key === ex.key ? { ...e, ...patch } : e)),
-                                )
-                              }
-                            />
+                            {/* Hidden entirely for an admin-restricted exercise -- unless
+                                it's already on, so a coach can still turn OFF a capture
+                                that predates the restriction rather than getting stuck
+                                with no control at all. See videoEligible's own comment. */}
+                            {(ex.videoEligible !== false || ex.trackingLevel !== "none") && (
+                              <VideoTrackingToggle
+                                trackingLevel={ex.trackingLevel}
+                                category={ex.category}
+                                exerciseName={ex.exerciseName}
+                                onChange={(patch) =>
+                                  setExercises((prev) =>
+                                    prev.map((e) => (e.key === ex.key ? { ...e, ...patch } : e)),
+                                  )
+                                }
+                              />
+                            )}
                             {ex.trackingLevel !== "none" && athleteId != null && (
                               <button
                                 type="button"
@@ -909,6 +921,7 @@ export function CoachDayEditDialog({
               trackingLevel: "none",
               videoCheckEnabled: false,
               category: exercise.category ?? null,
+              videoEligible: exercise.videoEligible ?? null,
             },
           ]);
         }}

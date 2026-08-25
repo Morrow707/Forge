@@ -98,6 +98,10 @@ type LocalExercise = {
   // VideoTrackingToggle) -- jump-style tracking for a plyometric exercise,
   // full bar tracking for everything else.
   category: string | null;
+  // null/true both mean eligible -- see the column's own comment in
+  // shared/schema.ts. Only an explicit false hides the VideoTrackingToggle
+  // button entirely (unless it's already on -- see the render site).
+  videoEligible: boolean | null;
 };
 
 type LocalDay = {
@@ -239,6 +243,7 @@ function stateFromProgram(program: any) {
             trackingLevel: pe.trackingLevel ?? "none",
             videoCheckEnabled: pe.videoCheckEnabled ?? false,
             category: pe.exercise.category ?? null,
+            videoEligible: pe.exercise.videoEligible ?? null,
           })),
         ) as LocalExercise[],
       });
@@ -728,6 +733,7 @@ export function ProgramBuilderPage({
                 trackingLevel: "none",
                 videoCheckEnabled: false,
                 category: exercise.category ?? null,
+                videoEligible: exercise.videoEligible ?? null,
               },
             ],
           }));
@@ -1035,14 +1041,20 @@ function SortableExerciseRow({
           />
         )}
       </div>
-      <div className="mt-1.5">
-        <VideoTrackingToggle
-          trackingLevel={exercise.trackingLevel}
-          category={exercise.category}
-          exerciseName={exercise.exerciseName}
-          onChange={(patch) => onUpdate(patch)}
-        />
-      </div>
+      {/* Hidden entirely for an admin-restricted exercise -- unless it's
+          already on, so a coach can still turn OFF a capture that predates
+          the restriction rather than getting stuck with no control at all.
+          See videoEligible's own comment. */}
+      {(exercise.videoEligible !== false || exercise.trackingLevel !== "none") && (
+        <div className="mt-1.5">
+          <VideoTrackingToggle
+            trackingLevel={exercise.trackingLevel}
+            category={exercise.category}
+            exerciseName={exercise.exerciseName}
+            onChange={(patch) => onUpdate(patch)}
+          />
+        </div>
+      )}
     </div>
   );
 }

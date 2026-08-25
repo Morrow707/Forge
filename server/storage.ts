@@ -5908,6 +5908,36 @@ ${athleteContext}
     return db.query.exercises.findFirst({ where: eq(exercises.id, id) });
   },
 
+  // Server-side enforcement counterpart to the client's VideoTrackingToggle
+  // gating -- a coach requesting video on for an exercise the admin has
+  // restricted (videoEligible === false) never actually gets it turned on,
+  // regardless of what the client sent. Batched (one query for however many
+  // exercises a day/program save touches) rather than a per-exercise
+  // lookup, since every program-exercises write path loops over a whole
+  // day's worth of rows. null/true both read as eligible -- see the
+  // column's own comment in shared/schema.ts for why this isn't a plain
+  // boolean default.
+  async resolveVideoCheckEnabled<T extends { exerciseId: number; videoCheckEnabled?: boolean }>(
+    items: T[],
+  ): Promise<Map<T, boolean>> {
+    const requestedOn = items.filter((i) => i.videoCheckEnabled);
+    const result = new Map<T, boolean>();
+    if (requestedOn.length === 0) {
+      for (const i of items) result.set(i, false);
+      return result;
+    }
+    const ids = Array.from(new Set(requestedOn.map((i) => i.exerciseId)));
+    const rows = await db
+      .select({ id: exercises.id, videoEligible: exercises.videoEligible })
+      .from(exercises)
+      .where(inArray(exercises.id, ids));
+    const eligibleById = new Map(rows.map((r) => [r.id, r.videoEligible !== false]));
+    for (const i of items) {
+      result.set(i, !!i.videoCheckEnabled && (eligibleById.get(i.exerciseId) ?? true));
+    }
+    return result;
+  },
+
   async createExercise(coachId: number, data: any) {
     const [row] = await db
       .insert(exercises)
@@ -8444,10 +8474,12 @@ ${athleteContext}
     coachId: number,
     structure: ProgramStructureInput,
   ) {
+    const allExercises = structure.weeks.flatMap((w) => w.days.flatMap((d) => d.exercises));
     await this.assertExerciseIdsVisibleTo(
       coachId,
-      structure.weeks.flatMap((w) => w.days.flatMap((d) => d.exercises.map((ex) => ex.exerciseId))),
+      allExercises.map((ex) => ex.exerciseId),
     );
+    const videoCheckMap = await this.resolveVideoCheckEnabled(allExercises);
     return db.transaction(async (tx) => {
       const [program] = await tx
         .insert(programs)
@@ -8508,7 +8540,7 @@ ${athleteContext}
               supersetGroup: ex.supersetGroup ?? null,
               restAfterGroupOnly: ex.restAfterGroupOnly ?? false,
               trackingLevel: ex.trackingLevel ?? "none",
-              videoCheckEnabled: ex.videoCheckEnabled ?? false,
+              videoCheckEnabled: videoCheckMap.get(ex) ?? false,
             });
           }
         }
@@ -9126,10 +9158,12 @@ Respond to the user's latest message by calling ask_question or update_program.`
     structure: ProgramStructureInput,
     requesterId: number,
   ) {
+    const allExercises = structure.weeks.flatMap((w) => w.days.flatMap((d) => d.exercises));
     await this.assertExerciseIdsVisibleTo(
       requesterId,
-      structure.weeks.flatMap((w) => w.days.flatMap((d) => d.exercises.map((ex) => ex.exerciseId))),
+      allExercises.map((ex) => ex.exerciseId),
     );
+    const videoCheckMap = await this.resolveVideoCheckEnabled(allExercises);
     return db.transaction(async (tx) => {
       await tx
         .update(programs)
@@ -9196,7 +9230,7 @@ Respond to the user's latest message by calling ask_question or update_program.`
               notes: ex.notes ?? null,
               supersetGroup: ex.supersetGroup ?? null,
               trackingLevel: ex.trackingLevel ?? "none",
-              videoCheckEnabled: ex.videoCheckEnabled ?? false,
+              videoCheckEnabled: videoCheckMap.get(ex) ?? false,
             });
           }
         }
@@ -11472,6 +11506,7 @@ ${entriesText}`;
   },
 
   async updateProgramDay(dayId: number, input: UpdateProgramDayInput) {
+    const videoCheckMap = await this.resolveVideoCheckEnabled(input.exercises);
     return db.transaction(async (tx) => {
       await tx
         .update(programDays)
@@ -11494,7 +11529,7 @@ ${entriesText}`;
             supersetGroup: ex.supersetGroup ?? null,
             restAfterGroupOnly: ex.restAfterGroupOnly ?? false,
             trackingLevel: ex.trackingLevel ?? "none",
-            videoCheckEnabled: ex.videoCheckEnabled ?? false,
+            videoCheckEnabled: videoCheckMap.get(ex) ?? false,
           })),
         );
       }

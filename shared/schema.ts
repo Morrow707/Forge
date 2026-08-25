@@ -862,6 +862,15 @@ export const exercises = pgTable("exercises", {
   usesBand: boolean("uses_band").notNull().default(false),
   usesBox: boolean("uses_box").notNull().default(false),
   isCorrective: boolean("is_corrective").notNull().default(false),
+  // Whether a coach can turn video/motion tracking on for this exercise in
+  // a program (see VideoTrackingToggle client-side). Nullable, not a plain
+  // default -- null/true both read as eligible, only an explicit false
+  // restricts it, so the same seed backfill that sets false on the
+  // library's non-canonical exercises (server/seed.ts) can never silently
+  // re-restrict one an admin later flipped back on. Storage cost scales
+  // with how many DISTINCT exercises this is true for, not with library
+  // size -- see the video-retention cost model this was built to control.
+  videoEligible: boolean("video_eligible"),
   videoUrl: text("video_url"),
   instructions: text("instructions"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -4984,6 +4993,13 @@ export const insertExerciseSchema = createInsertSchema(exercises)
     usesBodyweight: z.boolean().default(false),
     usesBand: z.boolean().default(false),
     usesBox: z.boolean().default(false),
+    // Admin-only in practice -- the edit form only renders this control on
+    // the /admin/exercises route (see exercise-detail.tsx), and it's a
+    // no-op for a coach's own private exercise either way since
+    // resolveVideoCheckEnabled only ever restricts it to false via the
+    // seed's curated Forge-library backfill. See the column's own comment
+    // in the exercises table above.
+    videoEligible: z.boolean().optional().nullable(),
   });
 
 export const insertSkillExerciseSchema = createInsertSchema(skillExercises)

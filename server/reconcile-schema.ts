@@ -303,6 +303,7 @@ CREATE TABLE IF NOT EXISTS "exercises" (
   "body_region" text,
   "plane" text,
   "is_corrective" boolean NOT NULL DEFAULT false,
+  "video_eligible" boolean,
   "video_url" text,
   "instructions" text,
   "created_at" timestamp NOT NULL DEFAULT now()
@@ -313,6 +314,7 @@ ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "body_region" text;
 ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "plane" text;
 ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "movement_complexity" text;
 ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "is_corrective" boolean NOT NULL DEFAULT false;
+ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "video_eligible" boolean;
 ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "uses_weight" boolean NOT NULL DEFAULT true;
 ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "uses_bodyweight" boolean NOT NULL DEFAULT false;
 ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "uses_band" boolean NOT NULL DEFAULT false;

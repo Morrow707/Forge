@@ -3012,6 +3012,55 @@ async function main() {
       if (!seedCorrectiveNames.has(existingEx.name)) continue;
       await storage.updateExercise(existingEx.id, { isCorrective: true });
     }
+
+    // Video-check eligibility default: which exercises a coach can turn
+    // video/motion tracking on for (see VideoTrackingToggle client-side).
+    // Storage cost scales with how many DISTINCT exercises this is true
+    // for, not with library size (see the video-retention cost model), so
+    // this stays a curated "canonical main lift" set rather than every
+    // squat/press/row variant the library carries.
+    //
+    // Only ~15% of these are ANY named variant of a pattern -- Olympic
+    // lifts are the one exception kept in full: each is a genuinely
+    // distinct skill (Power Clean vs. Hang Clean vs. Split Jerk), not
+    // alternate versions of the same movement the way bench-press variants
+    // (Board Press, Spoto Press, Larsen Press...) are of Bench Press.
+    const CANONICAL_VIDEO_ELIGIBLE_NAMES = new Set([
+      // Strength -- the canonical version of each main-lift pattern only
+      "Back Squat", "Front Squat", "Box Squat", "Goblet Squat", "Trap Bar Squat",
+      "Deadlift", "Romanian Deadlift", "Sumo Deadlift", "Hex Bar Deadlift", "Hip Thrust",
+      "Overhead Press", "Push Press", "Dumbbell Shoulder Press", "Arnold Press",
+      "Bench Press", "Incline Barbell Bench Press", "Close-Grip Bench Press", "Dumbbell Bench Press",
+      "Bent-Over Row", "T-Bar Row", "Single-Arm Dumbbell Row", "Pendlay Row",
+      // Olympic -- every lift
+      "Block Clean", "Block Snatch", "Clean & Jerk", "Clean High Pull", "Clean Pull",
+      "Hang Clean", "Hang Power Clean", "Hang Power Snatch", "Hang Snatch", "Jerk Balance",
+      "Muscle Clean", "Muscle Snatch", "Overhead Squat", "Pause Clean", "Power Clean",
+      "Power Snatch", "Push Jerk", "Snatch", "Snatch Balance", "Snatch Pull",
+      "Snatch-Grip High Pull", "Split Jerk", "Tall Clean", "Tall Snatch",
+      // Plyometric -- the standard, most commonly programmed ones
+      "Box Jump", "Broad Jump", "Depth Jump", "Countermovement Jump",
+      "Squat Jump", "Tuck Jump", "Standing Long Jump", "Lateral Bound",
+    ]);
+    const videoRestrictedNames = new Set(
+      [...seedExercises, ...combinationExercises, ...expansionExercises]
+        .map((ex) => ex.name)
+        .filter((name) => !CANONICAL_VIDEO_ELIGIBLE_NAMES.has(name)),
+    );
+    let videoRestricted = 0;
+    for (const existingEx of await storage.getAllExercises()) {
+      // Nullable, not boolean-default -- see the column's own comment in
+      // shared/schema.ts. Only ever touches a row still at null, so an
+      // admin's explicit edit (in either direction) always wins over a
+      // future reseed, same posture as isCorrective/sports above.
+      if (existingEx.videoEligible !== null) continue;
+      if (!videoRestrictedNames.has(existingEx.name)) continue;
+      await storage.updateExercise(existingEx.id, { videoEligible: false });
+      videoRestricted++;
+    }
+    if (videoRestricted > 0) {
+      console.log(`Set videoEligible=false on ${videoRestricted} exercise(s) outside the canonical main-lift list.`);
+    }
   }
 
   // One-time production fixup: promote scott.morrow@live.com to admin and
