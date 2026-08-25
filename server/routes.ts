@@ -808,6 +808,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(list);
   });
 
+  // Natural-language front door to the picker's accordion filters -- see
+  // storage.interpretExerciseSearchQuery's own comment. Returns filter
+  // criteria for the client to apply, never exercise rows directly, so a
+  // failed/unconfigured AI call just means the button does nothing rather
+  // than something the caller has to specially handle.
+  app.post("/api/coach/exercises/ai-search", requireRole("coach"), async (req, res) => {
+    const parsed = z.object({ query: z.string().trim().min(1).max(200) }).safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    const result = await storage.interpretExerciseSearchQuery(parsed.data.query);
+    if (!result) return res.status(422).json({ message: "Couldn't interpret that search -- try the filters below instead." });
+    res.json(result);
+  });
+
   app.get("/api/coach/exercises/:id", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     const id = Number(req.params.id);
@@ -3312,6 +3325,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           verticalJumpIn: z.number().min(0).max(60).optional().nullable(),
           broadJumpIn: z.number().min(0).max(200).optional().nullable(),
           proAgilitySeconds: z.number().min(0).max(20).optional().nullable(),
+          threeConeSeconds: z.number().min(0).max(20).optional().nullable(),
           benchMaxLbs: z.number().min(0).max(1500).optional().nullable(),
           squatMaxLbs: z.number().min(0).max(1500).optional().nullable(),
           deadliftMaxLbs: z.number().min(0).max(1500).optional().nullable(),
@@ -5891,6 +5905,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   );
 
   // ---------------- Athlete: skill camera sessions (sprint/agility) ----------------
+  // Which SPRINT_PRESETS id (client/src/lib/sprint-tracking.ts) rolls up into
+  // which combine-standard testing field -- only the three named presets
+  // with a real combine equivalent. "10yd"/"20yd" splits and "custom" have
+  // no standard column to land in, so they stay Skills-session-only.
+  const SPRINT_PRESET_TESTING_FIELD: Record<
+    string,
+    "fortyYardDash" | "proAgilitySeconds" | "threeConeSeconds"
+  > = {
+    "40yd": "fortyYardDash",
+    "5-10-5": "proAgilitySeconds",
+    "3-cone": "threeConeSeconds",
+  };
+
   app.post("/api/athlete/skill-session-logs", requireRole("athlete"), async (req, res) => {
     const user = currentUser(req);
     const parsed = createSkillSessionLogSchema.safeParse(req.body);
@@ -5908,6 +5935,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     );
     if (!detail) return res.status(404).json({ message: "Skill session not found" });
     const log = await storage.createSkillSessionLog(user.id, parsed.data);
+
+    // Push a recognized combine-drill sprint capture into the same testing-
+    // history snapshot a coach's manual roster edit already drives (see
+    // updateUserProfile's testingResults snapshot logic) -- so a video-timed
+    // 40 or 5-10-5 shows up on the team leaderboard/trend chart without the
+    // coach re-typing a number they just watched the app measure.
+    if (parsed.data.trackingLevel === "sprint" && parsed.data.presetId && parsed.data.elapsedSeconds != null) {
+      const testingField = SPRINT_PRESET_TESTING_FIELD[parsed.data.presetId];
+      if (testingField) {
+        await storage.updateUserProfile(user.id, { [testingField]: parsed.data.elapsedSeconds });
+      }
+    }
 
     // Same "flag it for the coach" treatment the strength side's leg-drive
     // asymmetry check gets (see evaluateLegDriveAsymmetryFlags below) -- a

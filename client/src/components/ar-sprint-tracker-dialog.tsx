@@ -461,6 +461,7 @@ export function ArSprintTrackerDialog({
         trackingLevel: "sprint",
         elapsedSeconds: result.totalElapsedSeconds,
         distanceYards: result.totalDistanceYards || null,
+        presetId,
         cameraAngle,
         faults,
         videoUrl: uploadedVideoUrl,

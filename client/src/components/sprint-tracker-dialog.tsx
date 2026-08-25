@@ -566,6 +566,7 @@ export function SprintTrackerDialog({
         trackingLevel: "sprint",
         elapsedSeconds: result.totalElapsedSeconds,
         distanceYards: result.totalDistanceYards || null,
+        presetId,
         cameraAngle,
         faults,
         videoUrl: uploadedVideoUrl,

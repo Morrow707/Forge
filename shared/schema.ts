@@ -271,6 +271,11 @@ export const users = pgTable(
     verticalJumpIn: real("vertical_jump_in"),
     broadJumpIn: real("broad_jump_in"),
     proAgilitySeconds: real("pro_agility_seconds"),
+    // 3-cone drill / L-drill -- same single-line-tap course the Skills
+    // sprint tracker already times (see checkpointsForThreeConeTap in
+    // sprint-tracking.ts), just given its own combine-standard column
+    // instead of only living in that drill's skill-session-log row.
+    threeConeSeconds: real("three_cone_seconds"),
     benchMaxLbs: real("bench_max_lbs"),
     squatMaxLbs: real("squat_max_lbs"),
     deadliftMaxLbs: real("deadlift_max_lbs"),
@@ -1127,6 +1132,14 @@ export const skillSessionLogs = pgTable(
     trackingLevel: trackingLevelEnum("tracking_level").notNull(),
     elapsedSeconds: real("elapsed_seconds"),
     distanceYards: real("distance_yards"),
+    // Which SPRINT_PRESETS entry (sprint-tracking.ts) this capture used --
+    // "40yd", "5-10-5", "3-cone", etc. Distance alone can't disambiguate a
+    // preset (a 20-yard split and a 5-10-5 shuttle are both 20 total yards),
+    // and the route that snapshots a sprint result into the athlete's
+    // testing-history combine fields (see POST .../skill-session-logs) needs
+    // to know exactly which drill this was, not just how far it covered.
+    // Null for mechanics rows, which have no preset.
+    presetId: text("preset_id"),
     cameraAngle: text("camera_angle"),
     faults: json("faults"),
     // Mechanics-only fields (see mechanics-tracking.ts) -- null for sprint
@@ -2126,6 +2139,7 @@ export const testingResults = pgTable(
     verticalJumpIn: real("vertical_jump_in"),
     broadJumpIn: real("broad_jump_in"),
     proAgilitySeconds: real("pro_agility_seconds"),
+    threeConeSeconds: real("three_cone_seconds"),
     benchMaxLbs: real("bench_max_lbs"),
     squatMaxLbs: real("squat_max_lbs"),
     deadliftMaxLbs: real("deadlift_max_lbs"),
@@ -3826,6 +3840,7 @@ export const adminAthleteQueryFiltersSchema = z.object({
   verticalJumpIn: numericRangeSchema,
   broadJumpIn: numericRangeSchema,
   proAgilitySeconds: numericRangeSchema,
+  threeConeSeconds: numericRangeSchema,
   benchMaxLbs: numericRangeSchema,
   squatMaxLbs: numericRangeSchema,
   deadliftMaxLbs: numericRangeSchema,
@@ -4816,6 +4831,7 @@ export const updateProfileSchema = z.object({
   verticalJumpIn: z.number().min(0).max(60).optional().nullable(),
   broadJumpIn: z.number().min(0).max(200).optional().nullable(),
   proAgilitySeconds: z.number().min(0).max(20).optional().nullable(),
+  threeConeSeconds: z.number().min(0).max(20).optional().nullable(),
   benchMaxLbs: z.number().min(0).max(1500).optional().nullable(),
   squatMaxLbs: z.number().min(0).max(1500).optional().nullable(),
   deadliftMaxLbs: z.number().min(0).max(1500).optional().nullable(),
@@ -5186,6 +5202,7 @@ export const createSkillSessionLogSchema = z.object({
   trackingLevel: z.enum(["sprint", "mechanics"]),
   elapsedSeconds: z.number().min(0).max(120).optional().nullable(),
   distanceYards: z.number().min(0).max(200).optional().nullable(),
+  presetId: z.string().trim().max(20).optional().nullable(),
   // "side"/"front_behind" are sprint's vocabulary, "face_on"/"down_the_line"
   // are mechanics' -- one shared text column (see skillSessionLogs), just
   // validated against whichever tracking level actually sent it.

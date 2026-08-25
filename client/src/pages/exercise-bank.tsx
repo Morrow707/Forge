@@ -18,7 +18,7 @@ import {
   BODY_REGIONS,
   PLANES,
   MOVEMENT_COMPLEXITIES,
-} from "@/lib/exercise-taxonomy";
+} from "@shared/exercise-taxonomy";
 import { FilterChipGroup, toggleInSet } from "@/components/filter-chip-group";
 import {
   CATEGORY_BADGE_CLASS,

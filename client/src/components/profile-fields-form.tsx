@@ -30,6 +30,7 @@ export type ProfileFieldsValue = {
   verticalJumpIn: string;
   broadJumpIn: string;
   proAgilitySeconds: string;
+  threeConeSeconds: string;
   benchMaxLbs: string;
   squatMaxLbs: string;
   deadliftMaxLbs: string;
@@ -50,6 +51,7 @@ export const emptyProfileFields: ProfileFieldsValue = {
   verticalJumpIn: "",
   broadJumpIn: "",
   proAgilitySeconds: "",
+  threeConeSeconds: "",
   benchMaxLbs: "",
   squatMaxLbs: "",
   deadliftMaxLbs: "",
@@ -295,6 +297,20 @@ export function ProfileFieldsForm({
               value={value.proAgilitySeconds}
               onChange={(e) => onChange({ ...value, proAgilitySeconds: e.target.value })}
               placeholder="e.g. 4.5"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor={`${idPrefix}-three-cone`}>3-Cone / L-Drill (sec)</Label>
+            <Input
+              id={`${idPrefix}-three-cone`}
+              type="number"
+              inputMode="decimal"
+              step="0.01"
+              min={0}
+              max={20}
+              value={value.threeConeSeconds}
+              onChange={(e) => onChange({ ...value, threeConeSeconds: e.target.value })}
+              placeholder="e.g. 6.9"
             />
           </div>
           <div className="space-y-1.5">

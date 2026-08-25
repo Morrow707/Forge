@@ -46,7 +46,7 @@ import {
   BODY_REGIONS,
   PLANES,
   MOVEMENT_COMPLEXITIES,
-} from "@/lib/exercise-taxonomy";
+} from "@shared/exercise-taxonomy";
 import {
   CATEGORY_BADGE_CLASS,
   CATEGORY_FILTER_ACTIVE_CLASS,

@@ -172,6 +172,7 @@ CREATE TABLE IF NOT EXISTS "users" (
   "vertical_jump_in" real,
   "broad_jump_in" real,
   "pro_agility_seconds" real,
+  "three_cone_seconds" real,
   "bench_max_lbs" real,
   "squat_max_lbs" real,
   "deadlift_max_lbs" real,
@@ -193,6 +194,7 @@ ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "forty_yard_dash" real;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "vertical_jump_in" real;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "broad_jump_in" real;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "pro_agility_seconds" real;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "three_cone_seconds" real;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "bench_max_lbs" real;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "squat_max_lbs" real;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "deadlift_max_lbs" real;
@@ -408,6 +410,7 @@ CREATE TABLE IF NOT EXISTS "skill_session_logs" (
   "tracking_level" tracking_level NOT NULL,
   "elapsed_seconds" real,
   "distance_yards" real,
+  "preset_id" text,
   "camera_angle" text,
   "faults" json,
   "hip_shoulder_separation_deg" real,
@@ -428,6 +431,7 @@ ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "coach_annotation_url"
 ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "arm_slot_deg" real;
 ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "arm_slot_label" text;
 ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "well_sequenced" boolean;
+ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "preset_id" text;
 CREATE INDEX IF NOT EXISTS "skill_session_logs_athlete_idx" ON "skill_session_logs" ("athlete_id");
 CREATE INDEX IF NOT EXISTS "skill_session_logs_assignment_idx" ON "skill_session_logs" ("skill_assignment_id");
 
@@ -799,6 +803,7 @@ CREATE TABLE IF NOT EXISTS "testing_results" (
   "vertical_jump_in" real,
   "broad_jump_in" real,
   "pro_agility_seconds" real,
+  "three_cone_seconds" real,
   "bench_max_lbs" real,
   "squat_max_lbs" real,
   "deadlift_max_lbs" real,
@@ -806,6 +811,7 @@ CREATE TABLE IF NOT EXISTS "testing_results" (
 );
 CREATE INDEX IF NOT EXISTS "testing_results_athlete_idx" ON "testing_results" ("athlete_id");
 CREATE UNIQUE INDEX IF NOT EXISTS "testing_results_athlete_date_idx" ON "testing_results" ("athlete_id", "date");
+ALTER TABLE "testing_results" ADD COLUMN IF NOT EXISTS "three_cone_seconds" real;
 
 CREATE TABLE IF NOT EXISTS "goniometer_readings" (
   "id" serial PRIMARY KEY,

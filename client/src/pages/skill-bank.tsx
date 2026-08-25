@@ -12,7 +12,7 @@ import { Plus, Trash2, Target, Search, Video, SlidersHorizontal, Star } from "lu
 import { cn } from "@/lib/utils";
 import type { SkillExerciseWithOwnership } from "@/lib/skill-types";
 import { SKILL_TYPES } from "@/lib/skill-taxonomy";
-import { SPORTS } from "@/lib/exercise-taxonomy";
+import { SPORTS } from "@shared/exercise-taxonomy";
 import { FilterChipGroup, toggleInSet } from "@/components/filter-chip-group";
 import {
   SKILL_BADGE_CLASS,

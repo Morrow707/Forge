@@ -198,6 +198,8 @@ import { ALL_TROPHY_DEFINITIONS } from "@shared/achievements";
 import { FAULT_CORRECTIVE_KEYWORDS } from "@shared/fault-correctives";
 import { resolveSkillFaultThresholds, type SkillFaultThresholds } from "@shared/skill-fault-thresholds";
 import { resolveCoachFeatures, type CoachFeature } from "@shared/team-features";
+import { EXERCISE_FAMILIES, EQUIPMENT_ORDER } from "@shared/exercise-family";
+import { MOVEMENT_TYPES } from "@shared/exercise-taxonomy";
 import type { CoachSection } from "@shared/coach-sections";
 import type { WidgetLayoutEntry } from "@shared/dashboard-widgets";
 import { askClaude, askClaudeStructured, askClaudeWithTools, askClaudeVision, askClaudeVisionStructured, aiEnabled, fastModel, type SystemPrompt } from "./ai";
@@ -373,6 +375,7 @@ const TESTING_FIELDS = [
   "verticalJumpIn",
   "broadJumpIn",
   "proAgilitySeconds",
+  "threeConeSeconds",
   "benchMaxLbs",
   "squatMaxLbs",
   "deadliftMaxLbs",
@@ -2748,6 +2751,7 @@ export const storage = {
         verticalJumpIn: users.verticalJumpIn,
         broadJumpIn: users.broadJumpIn,
         proAgilitySeconds: users.proAgilitySeconds,
+        threeConeSeconds: users.threeConeSeconds,
         benchMaxLbs: users.benchMaxLbs,
         squatMaxLbs: users.squatMaxLbs,
         deadliftMaxLbs: users.deadliftMaxLbs,
@@ -2784,6 +2788,7 @@ export const storage = {
         verticalJumpIn: users.verticalJumpIn,
         broadJumpIn: users.broadJumpIn,
         proAgilitySeconds: users.proAgilitySeconds,
+        threeConeSeconds: users.threeConeSeconds,
         benchMaxLbs: users.benchMaxLbs,
         squatMaxLbs: users.squatMaxLbs,
         deadliftMaxLbs: users.deadliftMaxLbs,
@@ -5702,6 +5707,51 @@ ${athleteContext}
       .sort((a, b) => Number(b.isFavorite) - Number(a.isFavorite));
   },
 
+  // Natural-language front door to the picker's accordion filters ("something
+  // for hip mobility with a band") -- Haiku maps the free-text query onto the
+  // SAME closed vocab the manual filter buttons use (EXERCISE_FAMILIES,
+  // EQUIPMENT_ORDER, MOVEMENT_TYPES), rather than returning exercise ids
+  // directly, so a query just presses the same buttons a coach would have
+  // clicked and the client's existing filter logic does the actual matching.
+  // Keeps this narrow/cheap (fastModel, small output) -- it's picking from
+  // three short enums, not reasoning about the exercise library itself.
+  async interpretExerciseSearchQuery(query: string): Promise<{
+    family: string | null;
+    equipment: string | null;
+    movementType: string | null;
+    searchText: string | null;
+  } | null> {
+    if (!aiEnabled) return null;
+    const system =
+      "You map a coach's freeform exercise search into filter criteria for an exercise picker. Only set a field when the query clearly implies it -- omit it entirely rather than guessing. searchText is a short plain-text fallback (e.g. a specific exercise name or muscle mentioned) to substring-match against exercise names when the family/equipment/movementType filters alone wouldn't narrow it enough; omit it if family/equipment/movementType already fully capture the query's intent.";
+    const tool = {
+      name: "report_search_filters",
+      description: "Reports which picker filters this query implies. Omit any field the query doesn't clearly imply -- do not guess.",
+      input_schema: {
+        type: "object",
+        properties: {
+          family: { type: "string", enum: [...EXERCISE_FAMILIES] },
+          equipment: { type: "string", enum: [...EQUIPMENT_ORDER] },
+          movementType: { type: "string", enum: [...MOVEMENT_TYPES] },
+          searchText: { type: "string" },
+        },
+      },
+    };
+    const result = await askClaudeStructured<{
+      family?: string;
+      equipment?: string;
+      movementType?: string;
+      searchText?: string;
+    }>(system, query, tool, { model: fastModel, maxTokens: 200 });
+    if (!result) return null;
+    return {
+      family: result.family ?? null,
+      equipment: result.equipment ?? null,
+      movementType: result.movementType ?? null,
+      searchText: result.searchText ?? null,
+    };
+  },
+
   // The set of exercise/skill-exercise owner ids a given user is allowed to
   // reference -- their own coach network (or, for an athlete/Free Agent,
   // their coach(es)') plus every admin (Forge-official content). Returns
@@ -6246,6 +6296,7 @@ ${athleteContext}
         trackingLevel: input.trackingLevel,
         elapsedSeconds: input.elapsedSeconds ?? null,
         distanceYards: input.distanceYards ?? null,
+        presetId: input.presetId ?? null,
         cameraAngle: input.cameraAngle ?? null,
         faults: input.faults ?? null,
         hipShoulderSeparationDeg: input.hipShoulderSeparationDeg ?? null,
@@ -15621,7 +15672,7 @@ ${catalog}`;
     }
     const rosterList = roster.map((a) => `${a.id}: ${a.name}`).join("\n");
     const system =
-      "You are transcribing a photographed combine/testing-day results sheet for a strength coach. Read every row and report exactly the numbers written -- never estimate, round beyond what's shown, or fill in a blank cell. Match each row to the roster athlete it belongs to by name; only set athleteId when a name on the roster clearly matches, leave it out otherwise rather than guessing. 40-yard dash and pro-agility are seconds, vertical/broad jump are inches, bench/squat/deadlift are pounds -- if the sheet is unambiguously in different units (cm, kg), convert; otherwise report the raw number and flag the ambiguity in that row's note.";
+      "You are transcribing a photographed combine/testing-day results sheet for a strength coach. Read every row and report exactly the numbers written -- never estimate, round beyond what's shown, or fill in a blank cell. Match each row to the roster athlete it belongs to by name; only set athleteId when a name on the roster clearly matches, leave it out otherwise rather than guessing. 40-yard dash, pro-agility (5-10-5 shuttle), and 3-cone/L-drill are all seconds, vertical/broad jump are inches, bench/squat/deadlift are pounds -- if the sheet is unambiguously in different units (cm, kg), convert; otherwise report the raw number and flag the ambiguity in that row's note.";
     const tool = {
       name: "report_testing_day_results",
       description: "Reports each athlete's row transcribed from the testing sheet photo.",
@@ -15639,6 +15690,7 @@ ${catalog}`;
                 verticalJumpIn: { type: "number" },
                 broadJumpIn: { type: "number" },
                 proAgilitySeconds: { type: "number" },
+                threeConeSeconds: { type: "number" },
                 benchMaxLbs: { type: "number" },
                 squatMaxLbs: { type: "number" },
                 deadliftMaxLbs: { type: "number" },

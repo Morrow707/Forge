@@ -6,7 +6,7 @@ import { Search, Target } from "lucide-react";
 import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
 import type { SkillExerciseWithOwnership as SkillExercise } from "@/lib/skill-types";
 import { SKILL_TYPES } from "@/lib/skill-taxonomy";
-import { SPORTS } from "@/lib/exercise-taxonomy";
+import { SPORTS } from "@shared/exercise-taxonomy";
 import { FilterChipGroup, toggleInSet } from "@/components/filter-chip-group";
 import { SKILL_FILTER_ACTIVE_CLASS, SPORT_FILTER_ACTIVE_CLASS } from "@/lib/exercise-colors";
 

@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { RadioChipGroup } from "@/components/filter-chip-group";
 import { apiRequest, getJson } from "@/lib/queryClient";
-import { MOVEMENT_TYPES } from "@/lib/exercise-taxonomy";
+import { MOVEMENT_TYPES } from "@shared/exercise-taxonomy";
 import { format, parseISO } from "date-fns";
 import { toast } from "sonner";
 import { Send, Sparkles, Loader2, Camera, Eye, Video } from "lucide-react";

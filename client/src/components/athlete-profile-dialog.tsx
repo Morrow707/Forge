@@ -34,6 +34,7 @@ export type ProfileAthlete = {
   verticalJumpIn?: number | null;
   broadJumpIn?: number | null;
   proAgilitySeconds?: number | null;
+  threeConeSeconds?: number | null;
   benchMaxLbs?: number | null;
   squatMaxLbs?: number | null;
   deadliftMaxLbs?: number | null;
@@ -56,6 +57,8 @@ function toFormValue(athlete: ProfileAthlete | null): ProfileFieldsValue {
     broadJumpIn: athlete.broadJumpIn != null ? String(athlete.broadJumpIn) : "",
     proAgilitySeconds:
       athlete.proAgilitySeconds != null ? String(athlete.proAgilitySeconds) : "",
+    threeConeSeconds:
+      athlete.threeConeSeconds != null ? String(athlete.threeConeSeconds) : "",
     benchMaxLbs: athlete.benchMaxLbs != null ? String(athlete.benchMaxLbs) : "",
     squatMaxLbs: athlete.squatMaxLbs != null ? String(athlete.squatMaxLbs) : "",
     deadliftMaxLbs: athlete.deadliftMaxLbs != null ? String(athlete.deadliftMaxLbs) : "",
@@ -97,6 +100,7 @@ export function AthleteProfileDialog({
         proAgilitySeconds: value.proAgilitySeconds.trim()
           ? Number(value.proAgilitySeconds)
           : null,
+        threeConeSeconds: value.threeConeSeconds.trim() ? Number(value.threeConeSeconds) : null,
         benchMaxLbs: value.benchMaxLbs.trim() ? Number(value.benchMaxLbs) : null,
         squatMaxLbs: value.squatMaxLbs.trim() ? Number(value.squatMaxLbs) : null,
         deadliftMaxLbs: value.deadliftMaxLbs.trim() ? Number(value.deadliftMaxLbs) : null,
