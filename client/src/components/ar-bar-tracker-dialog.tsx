@@ -455,7 +455,19 @@ export function ArBarTrackerDialog({
           ? {
               x: (wristConf * wristWorld.x + barConf * (implement ? implement.x : 0)) / total,
               y: (wristConf * wristWorld.y + barConf * (implement ? implement.y : 0)) / total,
-              confidence: Math.min(1, total / 2),
+              // barConf alone, not a wrist-diluted blend -- wristConf above is
+              // a constant 1 (this function's own comment explains why:
+              // ARKit's body skeleton has no graduated per-joint confidence),
+              // so averaging it in here floors this value at 0.5 regardless
+              // of how weak the actual implement lock is. That floor is
+              // exactly why every MIN_TRACKING_CONFIDENCE gate reading this
+              // (bar-tracking.ts's velocity/drift filtering, this file's own
+              // tilt gate below) was never actually excluding anything on
+              // this path -- the value could never drop low enough to fail
+              // them. barConf is the one real, graduated signal available:
+              // 0 with no implement lock at all, ramping toward 1 as
+              // ArImplementTracker's own lock streak holds.
+              confidence: barConf,
             }
           : null;
       // Same MAX_PLAUSIBLE_VELOCITY_MPS-style frame-to-frame check
