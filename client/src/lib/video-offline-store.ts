@@ -125,11 +125,22 @@ export function isVideoOfflinePersistenceSupported() {
 // athlete's phone plan at the gym, not a laptop browser tab, and
 // @capacitor/network's web fallback is a best-effort guess anyway (the
 // underlying Network Information API isn't universally supported).
+//
+// Treats "unknown" the same as "wifi", not the same as "cellular" --
+// @capacitor/network's ConnectionType is 'wifi' | 'cellular' | 'none' |
+// 'unknown', and "unknown" is iOS's own honest "couldn't classify this"
+// signal (NWPathMonitor genuinely returns it, especially with a weak/
+// marginal Wi-Fi signal keeping cellular active alongside it -- a real gym
+// scenario, not a rare edge case), not proof the connection is actually
+// cellular. Treating it as "not wifi" was queuing a clip on a device that
+// was demonstrably on Wi-Fi (full Wi-Fi bars in the status bar) the moment
+// this got checked. Same "fail open, never block an upload over a check
+// this app can't fully trust" reasoning as the catch below already uses.
 export async function isOnWifi(): Promise<boolean> {
   if (!Capacitor.isNativePlatform()) return true;
   try {
     const status = await Network.getStatus();
-    return status.connectionType === "wifi";
+    return status.connectionType !== "cellular" && status.connectionType !== "none";
   } catch {
     return true; // fail open -- never block an upload because the check itself broke
   }
@@ -351,7 +362,13 @@ export function startOfflineVideoSync() {
   flushPendingVideos();
   window.addEventListener("online", flushPendingVideos);
   Network.addListener("networkStatusChange", (status) => {
-    if (status.connectionType === "wifi") flushPendingVideos();
+    // Same "unknown" tolerance as isOnWifi() -- flushPendingVideos() below
+    // re-checks isOnWifi() itself before actually uploading anything, so
+    // this is just the trigger to re-attempt; requiring an exact "wifi"
+    // match here on top of that meant a reconnect that iOS reports as
+    // "unknown" (marginal signal, both radios up) never even prompted a
+    // retry, and had to wait for the next app resume/foreground instead.
+    if (status.connectionType !== "cellular" && status.connectionType !== "none") flushPendingVideos();
   });
   App.addListener("resume", flushPendingVideos);
 }
