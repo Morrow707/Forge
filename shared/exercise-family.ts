@@ -82,4 +82,19 @@ export const EQUIPMENT_ORDER = [
   "Foam Roller",
   "Rope",
   "Jump Rope",
+  // Added with the 231->413 library expansion's Conditioning bucket and a
+  // handful of Strength/Accessory variants -- appended after the original
+  // 14 rather than interleaved, so every equipment button that already
+  // existed keeps the exact same grid position it always had.
+  "Plate",
+  "Landmine",
+  "Sled",
+  "Sandbag",
+  "Battle Rope",
+  "Tire",
+  "Assault Bike",
+  "Ski Erg",
+  "Agility Ladder",
+  "Cones",
 ] as const;
+
