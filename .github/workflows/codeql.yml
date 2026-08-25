@@ -1,0 +1,114 @@
+name: "CodeQL"
+
+# Advanced setup, replacing the repo's previous "default setup" -- needed
+# because default setup's generic `autobuild` for Swift can't build this
+# project: it runs a bare `xcodebuild build` with no Swift Package Manager
+# resolution step first, and Capacitor 7+ wires in every native plugin via
+# SPM (ios/App/CapApp-SPM), not CocoaPods. That's the exact same failure
+# mode ios-testflight.yml's own "Resolve Swift Package dependencies" step
+# exists to avoid -- this workflow's swift job mirrors that proven build
+# sequence up through compiling (no signing, archiving, or upload needed
+# just to let CodeQL trace the build). javascript-typescript/ruby/actions
+# stay build-mode: none (nothing to compile); java-kotlin stays autobuild,
+# same as default setup used -- Swift was the only language actually
+# failing to run at all.
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  schedule:
+    - cron: "27 6 * * 3"
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: ${{ matrix.language == 'swift' && 60 || 30 }}
+    permissions:
+      security-events: write
+      packages: read
+      actions: read
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: javascript-typescript
+            build-mode: none
+            os: ubuntu-latest
+          - language: java-kotlin
+            build-mode: autobuild
+            os: ubuntu-latest
+          - language: ruby
+            build-mode: none
+            os: ubuntu-latest
+          - language: actions
+            build-mode: none
+            os: ubuntu-latest
+          - language: swift
+            build-mode: manual
+            os: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+
+      # Same three steps as ios-testflight.yml's own build job, up through
+      # `cap sync` -- gets the native iOS project into a buildable state
+      # (bundled web assets + synced Capacitor platform) before Xcode ever
+      # touches it.
+      - name: Set up Node.js
+        if: matrix.language == 'swift'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install JS dependencies
+        if: matrix.language == 'swift'
+        run: npm ci
+
+      - name: Build web app
+        if: matrix.language == 'swift'
+        run: npm run build
+
+      - name: Sync Capacitor iOS platform
+        if: matrix.language == 'swift'
+        run: npx cap sync ios
+
+      # The step default setup's autobuild was missing -- see this file's
+      # top comment. Without it, xcodebuild fails before compiling a single
+      # source file, which is why CodeQL "exited with errors" rather than
+      # just being slow.
+      - name: Resolve Swift Package dependencies
+        if: matrix.language == 'swift'
+        working-directory: ios/App
+        run: xcodebuild -resolvePackageDependencies -project App.xcodeproj
+
+      # Manual build-mode: CodeQL traces whatever command runs between
+      # init and analyze. No signing/archiving/upload -- this only needs
+      # the compiler to actually run so CodeQL can extract source-level
+      # facts from it, unlike ios-testflight.yml's fastlane lane which
+      # produces a real distributable build.
+      - name: Build (traced by CodeQL)
+        if: matrix.language == 'swift'
+        working-directory: ios/App
+        run: |
+          xcodebuild build \
+            -project App.xcodeproj \
+            -target App \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
