@@ -2,16 +2,13 @@ name: "CodeQL"
 
 # Advanced setup, replacing the repo's previous "default setup" -- needed
 # because default setup's generic `autobuild` can't build either native
-# platform on its own: Swift needs SPM package resolution + a scheme (not
-# target) build first (see the swift-specific comments below), and
-# java-kotlin's Gradle build needs the Capacitor Android platform synced
-# first -- without it, capacitor.build.gradle references
-# android/capacitor-cordova-android-plugins/cordova.variables.gradle,
-# which doesn't exist until `cap sync android` generates it, so autobuild
-# fails outright (default setup only ever managed a degraded partial
-# scan here, never a clean one). Both native jobs mirror their respective
-# proven-working CI lane (ios-testflight.yml, android-release.yml) up
-# through getting the platform into a buildable state.
+# platform on its own (it only ever managed a degraded partial scan for
+# java-kotlin, and failed outright for swift). Both native jobs instead
+# build manually, mirroring their respective proven-working CI lane
+# (ios-testflight.yml, android-release.yml) up through getting the
+# platform into a buildable state and compiling a debug-only build --
+# see the swift/java-kotlin-specific comments below for exactly what
+# each platform needed that plain autobuild didn't do.
 # javascript-typescript/ruby/actions stay build-mode: none (nothing to
 # compile).
 on:
@@ -41,7 +38,7 @@ jobs:
             build-mode: none
             os: ubuntu-latest
           - language: java-kotlin
-            build-mode: autobuild
+            build-mode: manual
             os: ubuntu-latest
           - language: ruby
             build-mode: none
@@ -146,6 +143,20 @@ jobs:
             -destination 'generic/platform=iOS' \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO
+
+      # autobuild's generic `assemble` task builds every variant,
+      # including release -- which android-release.yml itself only ever
+      # attempts when a real signing keystore secret is configured (see
+      # its own has_signing check), and fails here with "SigningConfig
+      # 'release' is missing required property 'storeFile'" since this CI
+      # environment has none. assembleDebug alone is exactly what
+      # android-release.yml's own always-runs step builds (debug-signed,
+      # no keystore needed) -- plenty for CodeQL to extract from, same as
+      # Swift's build above needing no real signing either.
+      - name: Build (traced by CodeQL)
+        if: matrix.language == 'java-kotlin'
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
