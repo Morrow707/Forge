@@ -38,6 +38,7 @@ import {
 import { summarizeJumpSet, type JumpSetMetrics } from "@/lib/jump-tracking";
 import type { TrackedPoint } from "@/lib/bar-tracking";
 import { videoFilenameForBlob } from "@/lib/video-recording";
+import { useDistanceUnit, formatDistanceCm } from "@/lib/distance-unit";
 
 /** ARKit-native jump tracking (vertical/broad/box) -- the first tracker
  * mode converted off MediaPipe (jump, then sprint, then bar_path/full --
@@ -129,6 +130,7 @@ export function ArJumpTrackerDialog({
   jumpHeightOutlierPercent?: number | null;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [distanceUnit] = useDistanceUnit();
   const [tracking, setTracking] = useState(false);
   const [supported, setSupported] = useState<boolean | null>(null);
   const [supportError, setSupportError] = useState<string | undefined>(undefined);
@@ -502,7 +504,7 @@ export function ArJumpTrackerDialog({
               <div className="absolute left-1/2 top-[max(0.75rem,env(safe-area-inset-top))] flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5 text-sm font-bold text-white backdrop-blur-sm">
                 <Circle className="h-2.5 w-2.5 animate-pulse fill-destructive text-destructive" />
                 {recordedReps} jump{recordedReps === 1 ? "" : "s"}
-                {lastJumpCm != null && ` · last ${lastJumpCm}cm`}
+                {lastJumpCm != null && ` · last ${formatDistanceCm(lastJumpCm, distanceUnit)}`}
               </div>
             )}
 

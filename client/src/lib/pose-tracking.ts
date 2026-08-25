@@ -5,6 +5,7 @@
 // Runs entirely client-side (WASM/WebGL), same privacy story as before:
 // only derived numbers ever leave the device, never video or frames.
 import { FilesetResolver, PoseLandmarker, type Landmark, type NormalizedLandmark } from "@mediapipe/tasks-vision";
+import { formatDistanceCm, loadDistanceUnitPref } from "./distance-unit";
 
 // Self-hosted (see scripts/copy-mediapipe-wasm.mjs) rather than pointed at a
 // public CDN -- same-origin, no external dependency at runtime, and the PWA
@@ -1119,6 +1120,12 @@ export function detectFormFaults(
   thresholdOverrides?: Partial<Record<keyof FormFaultThresholds, number | null>> | null,
 ): FormFault[] {
   const faults: FormFault[] = [];
+  // Every distance-based fault label below respects the same device-level
+  // cm/in preference distance-unit.ts already drives for jump height --
+  // defaults to inches (see loadDistanceUnitPref's own comment), same as
+  // this app's lbs-first posture everywhere else. Read once per call
+  // rather than per-fault since it can't change mid-computation.
+  const distanceUnit = loadDistanceUnitPref();
   const activeFrames =
     repWindows && repWindows.length > 0
       ? frames.filter((f) => repWindows.some((w) => f.t >= w.startT && f.t <= w.endT))
@@ -1395,7 +1402,7 @@ export function detectFormFaults(
   if (usesSharedBar && barPathDeviationCm > thresholds.barPathDeviationMaxCm) {
     faults.push({
       code: "bar_path_drift",
-      label: `Bar drifted ${barPathDeviationCm}cm off a straight vertical line`,
+      label: `Bar drifted ${formatDistanceCm(barPathDeviationCm, distanceUnit)} off a straight vertical line`,
     });
   }
 
@@ -1430,7 +1437,7 @@ export function detectFormFaults(
     if (widest - narrowest > 0.08) {
       faults.push({
         code: "grip_shift",
-        label: `Grip width shifted ~${Math.round((widest - narrowest) * 100)}cm during the set`,
+        label: `Grip width shifted ~${formatDistanceCm((widest - narrowest) * 100, distanceUnit)} during the set`,
       });
     }
   }
@@ -1452,7 +1459,7 @@ export function detectFormFaults(
       const higherSide = topLeftWristCorrectedY < topRightWristCorrectedY ? "left" : "right";
       faults.push({
         code: "lockout_symmetry",
-        label: `One arm locked out ~${Math.round(symmetryDiffM * 100)}cm higher than the other (${higherSide})`,
+        label: `One arm locked out ~${formatDistanceCm(symmetryDiffM * 100, distanceUnit)} higher than the other (${higherSide})`,
       });
     }
   }
