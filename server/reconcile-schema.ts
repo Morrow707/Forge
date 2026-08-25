@@ -1699,6 +1699,22 @@ CREATE TABLE IF NOT EXISTS "favorite_skill_exercises" (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "favorite_skill_exercises_pair_idx" ON "favorite_skill_exercises" ("coach_id", "skill_exercise_id");
 
+CREATE TABLE IF NOT EXISTS "exercise_usage_log" (
+  "id" serial PRIMARY KEY,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "exercise_id" integer NOT NULL REFERENCES "exercises"("id") ON DELETE CASCADE,
+  "last_used_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "exercise_usage_log_pair_idx" ON "exercise_usage_log" ("coach_id", "exercise_id");
+
+CREATE TABLE IF NOT EXISTS "skill_exercise_usage_log" (
+  "id" serial PRIMARY KEY,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "skill_exercise_id" integer NOT NULL REFERENCES "skill_exercises"("id") ON DELETE CASCADE,
+  "last_used_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "skill_exercise_usage_log_pair_idx" ON "skill_exercise_usage_log" ("coach_id", "skill_exercise_id");
+
 -- Optional wearable-sourced recovery metrics on the daily check-in
 -- (shared/schema.ts wellnessCheckins.restingHeartRate/hrv).
 ALTER TABLE "wellness_checkins" ADD COLUMN IF NOT EXISTS "resting_heart_rate" real;

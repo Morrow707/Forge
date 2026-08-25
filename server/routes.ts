@@ -4830,7 +4830,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
-    await storage.updateProgramDay(id, parsed.data);
+    await storage.updateProgramDay(id, parsed.data, user.id);
     const updated = await storage.getProgramDayForCoach(user.id, id);
     res.json(updated);
   });

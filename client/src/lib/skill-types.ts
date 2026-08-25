@@ -5,4 +5,7 @@ export type SkillExerciseWithOwnership = SkillExercise & {
   isForgeOfficial: boolean;
   editable: boolean;
   isFavorite?: boolean;
+  /** Last time this coach placed it into a program/class they built -- see
+   * skillExerciseUsageLog's schema comment. Null if never used. */
+  lastUsedAt?: string | null;
 };

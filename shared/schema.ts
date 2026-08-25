@@ -1026,6 +1026,55 @@ export const favoriteSkillExercises = pgTable(
   }),
 );
 
+// "Recently used" tracking for the exercise/skill picker's own quick-filter
+// -- one row per (coach, item), upserted to now() every time that coach
+// places it into a program/class they build (see storage.recordExerciseUsage
+// and its write-site call sites). Deliberately means "the coach's own
+// program-building activity," not "an athlete actually performed it" --
+// the latter would need a join across the whole roster's logs just to
+// answer "should this show near the top of MY picker," which is both a
+// heavier query and further from what a coach means by "I use this a lot."
+// A wipe-and-rebuild program save (see updateProgramStructure) bumps every
+// exercise still present in that save, not just ones the coach touched this
+// edit -- an accepted approximation, same posture as the video-retention
+// grace window's own "safe direction to fail" comment.
+export const exerciseUsageLog = pgTable(
+  "exercise_usage_log",
+  {
+    id: serial("id").primaryKey(),
+    coachId: integer("coach_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    exerciseId: integer("exercise_id")
+      .notNull()
+      .references(() => exercises.id, { onDelete: "cascade" }),
+    lastUsedAt: timestamp("last_used_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    pairIdx: uniqueIndex("exercise_usage_log_pair_idx").on(table.coachId, table.exerciseId),
+  }),
+);
+
+export const skillExerciseUsageLog = pgTable(
+  "skill_exercise_usage_log",
+  {
+    id: serial("id").primaryKey(),
+    coachId: integer("coach_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    skillExerciseId: integer("skill_exercise_id")
+      .notNull()
+      .references(() => skillExercises.id, { onDelete: "cascade" }),
+    lastUsedAt: timestamp("last_used_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    pairIdx: uniqueIndex("skill_exercise_usage_log_pair_idx").on(
+      table.coachId,
+      table.skillExerciseId,
+    ),
+  }),
+);
+
 // Skill Programs mirror the shape of Programs (program -> weeks -> days ->
 // exercises -> assignments) but reference skillExercises, not exercises,
 // and deliberately drop the strength-specific concepts that don't apply to

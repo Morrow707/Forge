@@ -9,7 +9,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { Search, Dumbbell, Stethoscope, Sparkles, ChevronDown } from "lucide-react";
+import { Search, Dumbbell, Stethoscope, Sparkles, ChevronDown, Star, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { apiRequest } from "@/lib/queryClient";
 import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
@@ -71,7 +71,13 @@ export function ExercisePickerDialog({
     queryKey: [`${apiBase}/exercises`],
     enabled: open,
   });
+  // Same admin exclusion as exercise-bank.tsx's canFavorite -- favoriting/
+  // recently-used are a coach's own shortlist/history, not concepts that
+  // apply to an admin curating the shared Forge library.
+  const canFavorite = apiBase === "/api/coach";
   const [search, setSearch] = useState("");
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [recentlyUsedOnly, setRecentlyUsedOnly] = useState(false);
   // Accordion state -- see shared/exercise-family.ts. activeFamily/
   // equipmentFilter drive both the visible buttons AND the actual filtering
   // (search only hides the buttons, it never disables the filters
@@ -181,6 +187,8 @@ export function ExercisePickerDialog({
           sportFilter.size === 0 || (ex.sports ?? []).some((s) => sportFilter.has(s));
         const matchesOwner = ownerFilter.size === 0 || ownerFilter.has(ex.ownerLabel);
         const matchesCorrective = !onlyCorrectives || ex.isCorrective;
+        const matchesFavorite = !favoritesOnly || !!ex.isFavorite;
+        const matchesRecentlyUsed = !recentlyUsedOnly || ex.lastUsedAt != null;
         return (
           matchesSearch &&
           matchesFamily &&
@@ -194,7 +202,9 @@ export function ExercisePickerDialog({
           matchesComplexity &&
           matchesSport &&
           matchesOwner &&
-          matchesCorrective
+          matchesCorrective &&
+          matchesFavorite &&
+          matchesRecentlyUsed
         );
       }),
     [
@@ -212,8 +222,21 @@ export function ExercisePickerDialog({
       sportFilter,
       ownerFilter,
       onlyCorrectives,
+      favoritesOnly,
+      recentlyUsedOnly,
     ],
   );
+
+  // Only reorders (never re-filters) -- see exercise-bank.tsx's identical
+  // comment on its own displayed useMemo.
+  const displayed = useMemo(() => {
+    if (!recentlyUsedOnly) return filtered;
+    return [...filtered].sort((a, b) => {
+      const at = a.lastUsedAt ? new Date(a.lastUsedAt).getTime() : 0;
+      const bt = b.lastUsedAt ? new Date(b.lastUsedAt).getTime() : 0;
+      return bt - at;
+    });
+  }, [filtered, recentlyUsedOnly]);
 
   // Natural-language front door to the same accordion filters -- see
   // storage.interpretExerciseSearchQuery's own comment server-side. Applies
@@ -282,6 +305,42 @@ export function ExercisePickerDialog({
               <Sparkles className={cn("h-4 w-4", aiSearchMutation.isPending && "animate-pulse")} />
             </button>
           </div>
+          {/* Always visible, even while typing -- unlike the family/equipment
+              accordion below (which search hides), these compose with a
+              text search rather than getting out of its way, so a coach can
+              search AND restrict to favorites/recently-used at once. */}
+          {canFavorite && (
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                onClick={() => setFavoritesOnly((v) => !v)}
+                aria-pressed={favoritesOnly}
+                className={cn(
+                  "flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+                  favoritesOnly
+                    ? "border-amber-500 bg-amber-500/15 text-amber-400"
+                    : "border-border text-muted-foreground hover:border-amber-500/50 hover:text-amber-400",
+                )}
+              >
+                <Star className={cn("h-3.5 w-3.5", favoritesOnly && "fill-amber-400")} />
+                Favorites
+              </button>
+              <button
+                type="button"
+                onClick={() => setRecentlyUsedOnly((v) => !v)}
+                aria-pressed={recentlyUsedOnly}
+                className={cn(
+                  "flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+                  recentlyUsedOnly
+                    ? "border-teal-500 bg-teal-500/15 text-teal-400"
+                    : "border-border text-muted-foreground hover:border-teal-500/50 hover:text-teal-400",
+                )}
+              >
+                <Clock className="h-3.5 w-3.5" />
+                Recently Used
+              </button>
+            </div>
+          )}
         </div>
         {/* Filters and results now share ONE scrollable region instead of
             two (a fixed-height filter panel above a separately-scrolling
@@ -462,7 +521,7 @@ export function ExercisePickerDialog({
             </div>
           )}
           <div className="space-y-1 border-t border-border pt-4">
-            {filtered.length === 0 && search.trim() && (
+            {displayed.length === 0 && search.trim() && (
               // A plain keyword miss on real typed text is the exact moment
               // the AI search button is for -- pointing at it here beats
               // the generic empty state, which just reads as "broken" when
@@ -477,13 +536,13 @@ export function ExercisePickerDialog({
                 </p>
               </div>
             )}
-            {filtered.length === 0 && !search.trim() && (
+            {displayed.length === 0 && !search.trim() && (
               <div className="flex flex-col items-center gap-2 py-10 text-center text-sm text-muted-foreground">
                 <Dumbbell className="h-8 w-8" />
                 No exercises found matching these filters.
               </div>
             )}
-            {filtered.map((ex) => (
+            {displayed.map((ex) => (
               <button
                 key={ex.id}
                 type="button"

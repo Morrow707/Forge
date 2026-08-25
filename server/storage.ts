@@ -14,6 +14,8 @@ import {
   skillExercises,
   favoriteExercises,
   favoriteSkillExercises,
+  exerciseUsageLog,
+  skillExerciseUsageLog,
   skillPrograms,
   skillProgramWeeks,
   skillProgramDays,
@@ -5689,21 +5691,30 @@ ${athleteContext}
   // program-builder picker.
   async getVisibleExercisesForCoach(coachId: number) {
     const { coachIds, ownerIds } = await this.getCoachAndAdminOwnerIds(coachId);
-    const [rows, favorites] = await Promise.all([
+    const [rows, favorites, usage] = await Promise.all([
       db.query.exercises.findMany({
         where: inArray(exercises.coachId, ownerIds),
         orderBy: desc(exercises.createdAt),
         with: { coach: true },
       }),
       db.query.favoriteExercises.findMany({ where: eq(favoriteExercises.coachId, coachId) }),
+      db.query.exerciseUsageLog.findMany({ where: eq(exerciseUsageLog.coachId, coachId) }),
     ]);
     const favoriteIds = new Set(favorites.map((f) => f.exerciseId));
+    // Keyed off THIS coach's own usage log -- see exerciseUsageLog's schema
+    // comment for what "recently used" means here (this coach's own
+    // program-building activity, not athlete logging).
+    const usageByExerciseId = new Map(usage.map((u) => [u.exerciseId, u.lastUsedAt]));
     // Favorites first (most-recently-created favorite first within that
     // group), everything else after in its normal order -- .sort is stable
     // in Node, so this doesn't need a secondary tiebreaker to preserve the
     // original createdAt ordering within each group.
     return rows
-      .map((ex) => ({ ...this.withOwnership(ex, coachId, coachIds), isFavorite: favoriteIds.has(ex.id) }))
+      .map((ex) => ({
+        ...this.withOwnership(ex, coachId, coachIds),
+        isFavorite: favoriteIds.has(ex.id),
+        lastUsedAt: usageByExerciseId.get(ex.id) ?? null,
+      }))
       .sort((a, b) => Number(b.isFavorite) - Number(a.isFavorite));
   },
 
@@ -5969,6 +5980,45 @@ ${athleteContext}
     return result;
   },
 
+  // "Recently used" bump -- see exerciseUsageLog's own schema comment for
+  // what this does and doesn't mean. Called from every program/class write
+  // path that persists a set of exerciseIds, with whatever distinct ids
+  // that save actually touched; upserts lastUsedAt to now() for each,
+  // one row per (coach, exercise) regardless of how many times or where
+  // in the structure it appears.
+  async recordExerciseUsage(coachId: number, exerciseIds: number[]) {
+    const ids = Array.from(new Set(exerciseIds));
+    if (ids.length === 0) return;
+    await Promise.all(
+      ids.map((exerciseId) =>
+        db
+          .insert(exerciseUsageLog)
+          .values({ coachId, exerciseId })
+          .onConflictDoUpdate({
+            target: [exerciseUsageLog.coachId, exerciseUsageLog.exerciseId],
+            set: { lastUsedAt: new Date() },
+          }),
+      ),
+    );
+  },
+
+  // Exact mirror of recordExerciseUsage above, for the skill track.
+  async recordSkillExerciseUsage(coachId: number, skillExerciseIds: number[]) {
+    const ids = Array.from(new Set(skillExerciseIds));
+    if (ids.length === 0) return;
+    await Promise.all(
+      ids.map((skillExerciseId) =>
+        db
+          .insert(skillExerciseUsageLog)
+          .values({ coachId, skillExerciseId })
+          .onConflictDoUpdate({
+            target: [skillExerciseUsageLog.coachId, skillExerciseUsageLog.skillExerciseId],
+            set: { lastUsedAt: new Date() },
+          }),
+      ),
+    );
+  },
+
   async createExercise(coachId: number, data: any) {
     const [row] = await db
       .insert(exercises)
@@ -6017,17 +6067,23 @@ ${athleteContext}
 
   async getVisibleSkillExercisesForCoach(coachId: number) {
     const { coachIds, ownerIds } = await this.getCoachAndAdminOwnerIds(coachId);
-    const [rows, favorites] = await Promise.all([
+    const [rows, favorites, usage] = await Promise.all([
       db.query.skillExercises.findMany({
         where: inArray(skillExercises.coachId, ownerIds),
         orderBy: desc(skillExercises.createdAt),
         with: { coach: true },
       }),
       db.query.favoriteSkillExercises.findMany({ where: eq(favoriteSkillExercises.coachId, coachId) }),
+      db.query.skillExerciseUsageLog.findMany({ where: eq(skillExerciseUsageLog.coachId, coachId) }),
     ]);
     const favoriteIds = new Set(favorites.map((f) => f.skillExerciseId));
+    const usageBySkillExerciseId = new Map(usage.map((u) => [u.skillExerciseId, u.lastUsedAt]));
     return rows
-      .map((ex) => ({ ...this.withOwnership(ex, coachId, coachIds), isFavorite: favoriteIds.has(ex.id) }))
+      .map((ex) => ({
+        ...this.withOwnership(ex, coachId, coachIds),
+        isFavorite: favoriteIds.has(ex.id),
+        lastUsedAt: usageBySkillExerciseId.get(ex.id) ?? null,
+      }))
       .sort((a, b) => Number(b.isFavorite) - Number(a.isFavorite));
   },
 
@@ -6185,6 +6241,7 @@ ${athleteContext}
     );
     const allSkillExercises = structure.weeks.flatMap((w) => w.days.flatMap((d) => d.exercises));
     const trackingMap = await this.resolveSkillTrackingLevel(allSkillExercises);
+    await this.recordSkillExerciseUsage(coachId, allSkillExercises.map((ex) => ex.skillExerciseId));
     return db.transaction(async (tx) => {
       const [program] = await tx
         .insert(skillPrograms)
@@ -6246,6 +6303,7 @@ ${athleteContext}
     );
     const allSkillExercises = structure.weeks.flatMap((w) => w.days.flatMap((d) => d.exercises));
     const trackingMap = await this.resolveSkillTrackingLevel(allSkillExercises);
+    await this.recordSkillExerciseUsage(requesterId, allSkillExercises.map((ex) => ex.skillExerciseId));
     return db.transaction(async (tx) => {
       await tx
         .update(skillPrograms)
@@ -6530,6 +6588,10 @@ ${athleteContext}
     const trackingMap = await this.resolveSkillTrackingLevel(
       structure.lessons.flatMap((l) => l.exercises),
     );
+    await this.recordSkillExerciseUsage(
+      coachId,
+      structure.lessons.flatMap((l) => l.exercises.map((ex) => ex.skillExerciseId)),
+    );
     return db.transaction(async (tx) => {
       const [cls] = await tx
         .insert(classes)
@@ -6622,6 +6684,10 @@ ${athleteContext}
       if (structure.prerequisiteClassId === classId) {
         throw new Error("A class can't be its own prerequisite.");
       }
+      await this.recordSkillExerciseUsage(
+        cls.coachId,
+        structure.lessons.flatMap((l) => l.exercises.map((ex) => ex.skillExerciseId)),
+      );
 
       await tx
         .update(classes)
@@ -8525,6 +8591,7 @@ ${athleteContext}
       allExercises.map((ex) => ex.exerciseId),
     );
     const videoCheckMap = await this.resolveVideoCheckEnabled(allExercises);
+    await this.recordExerciseUsage(coachId, allExercises.map((ex) => ex.exerciseId));
     return db.transaction(async (tx) => {
       const [program] = await tx
         .insert(programs)
@@ -9209,6 +9276,7 @@ Respond to the user's latest message by calling ask_question or update_program.`
       allExercises.map((ex) => ex.exerciseId),
     );
     const videoCheckMap = await this.resolveVideoCheckEnabled(allExercises);
+    await this.recordExerciseUsage(requesterId, allExercises.map((ex) => ex.exerciseId));
     return db.transaction(async (tx) => {
       await tx
         .update(programs)
@@ -11550,8 +11618,9 @@ ${entriesText}`;
     };
   },
 
-  async updateProgramDay(dayId: number, input: UpdateProgramDayInput) {
+  async updateProgramDay(dayId: number, input: UpdateProgramDayInput, coachId: number) {
     const videoCheckMap = await this.resolveVideoCheckEnabled(input.exercises);
+    await this.recordExerciseUsage(coachId, input.exercises.map((ex) => ex.exerciseId));
     return db.transaction(async (tx) => {
       await tx
         .update(programDays)

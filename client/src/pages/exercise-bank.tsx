@@ -9,7 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
 import { apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
-import { Plus, Trash2, Dumbbell, Search, Video, Stethoscope, Star } from "lucide-react";
+import { Plus, Trash2, Dumbbell, Search, Video, Stethoscope, Star, Clock } from "lucide-react";
 import type { ExerciseWithOwnership } from "@/lib/exercise-types";
 import {
   MOVEMENT_TYPES,
@@ -74,8 +74,14 @@ export function ExerciseBankPage({
   const { data: exercises = [], isLoading } = useQuery<ExerciseWithOwnership[]>({
     queryKey: [`${apiBase}/exercises`],
   });
+  // Admin's Forge-library browse doesn't get favoriting/recently-used --
+  // both are a coach's own shortlist/history for building their programs
+  // faster, not concepts that apply to curating the shared library.
+  const canFavorite = apiBase === "/api/coach";
 
   const [search, setSearch] = useState("");
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [recentlyUsedOnly, setRecentlyUsedOnly] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<Set<string>>(new Set());
   const [movementFilter, setMovementFilter] = useState<Set<string>>(new Set());
   const [muscleGroupFilter, setMuscleGroupFilter] = useState<Set<string>>(new Set());
@@ -128,6 +134,8 @@ export function ExerciseBankPage({
         sportFilter.size === 0 || (ex.sports ?? []).some((s) => sportFilter.has(s));
       const matchesOwner = ownerFilter.size === 0 || ownerFilter.has(ex.ownerLabel);
       const matchesCorrective = !correctivesOnly || ex.isCorrective;
+      const matchesFavorite = !favoritesOnly || !!ex.isFavorite;
+      const matchesRecentlyUsed = !recentlyUsedOnly || ex.lastUsedAt != null;
       return (
         matchesSearch &&
         matchesCategory &&
@@ -139,7 +147,9 @@ export function ExerciseBankPage({
         matchesComplexity &&
         matchesSport &&
         matchesOwner &&
-        matchesCorrective
+        matchesCorrective &&
+        matchesFavorite &&
+        matchesRecentlyUsed
       );
     });
   }, [
@@ -155,7 +165,22 @@ export function ExerciseBankPage({
     sportFilter,
     ownerFilter,
     correctivesOnly,
+    favoritesOnly,
+    recentlyUsedOnly,
   ]);
+
+  // Only reorders (never re-filters) -- most-recently-used first, so
+  // tapping "Recently Used" surfaces a coach's own go-to list at a glance
+  // instead of leaving them to scan the whole (still favorites-first)
+  // default order for the ones with a real lastUsedAt.
+  const displayed = useMemo(() => {
+    if (!recentlyUsedOnly) return filtered;
+    return [...filtered].sort((a, b) => {
+      const at = a.lastUsedAt ? new Date(a.lastUsedAt).getTime() : 0;
+      const bt = b.lastUsedAt ? new Date(b.lastUsedAt).getTime() : 0;
+      return bt - at;
+    });
+  }, [filtered, recentlyUsedOnly]);
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
@@ -168,10 +193,6 @@ export function ExerciseBankPage({
     onError: (err: ApiError) => toast.error(err.message || "Could not delete exercise"),
   });
 
-  // Admin's Forge-library browse doesn't get this -- favoriting is a
-  // coach's own shortlist for building their programs faster, not a
-  // concept that applies to curating the shared library.
-  const canFavorite = apiBase === "/api/coach";
   const favoriteMutation = useMutation({
     mutationFn: async ({ id, next }: { id: number; next: boolean }) => {
       await apiRequest(next ? "POST" : "DELETE", `${apiBase}/exercises/${id}/favorite`);
@@ -203,6 +224,38 @@ export function ExerciseBankPage({
             className="pl-9"
           />
         </div>
+        {canFavorite && (
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              onClick={() => setFavoritesOnly((v) => !v)}
+              aria-pressed={favoritesOnly}
+              className={cn(
+                "flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+                favoritesOnly
+                  ? "border-amber-500 bg-amber-500/15 text-amber-400"
+                  : "border-border text-muted-foreground hover:border-amber-500/50 hover:text-amber-400",
+              )}
+            >
+              <Star className={cn("h-3.5 w-3.5", favoritesOnly && "fill-amber-400")} />
+              Favorites
+            </button>
+            <button
+              type="button"
+              onClick={() => setRecentlyUsedOnly((v) => !v)}
+              aria-pressed={recentlyUsedOnly}
+              className={cn(
+                "flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+                recentlyUsedOnly
+                  ? "border-teal-500 bg-teal-500/15 text-teal-400"
+                  : "border-border text-muted-foreground hover:border-teal-500/50 hover:text-teal-400",
+              )}
+            >
+              <Clock className="h-3.5 w-3.5" />
+              Recently Used
+            </button>
+          </div>
+        )}
         {/* flex-wrap, not a fixed-column grid -- a grid column stays as wide
             as its widest sibling even when a group like Laterality only has
             two short chips in it, which left big dead gaps next to short
@@ -291,7 +344,7 @@ export function ExerciseBankPage({
         />
       </div>
 
-      {!isLoading && filtered.length === 0 && (
+      {!isLoading && displayed.length === 0 && (
         <Card>
           <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
             <Dumbbell className="h-10 w-10 text-muted-foreground" />
@@ -309,7 +362,7 @@ export function ExerciseBankPage({
       )}
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {filtered.map((ex) => (
+        {displayed.map((ex) => (
           <Link key={ex.id} href={`${routeBase}/${ex.id}`}>
             <Card className="flex cursor-pointer flex-col transition-colors hover:border-primary/50">
               <CardContent className="flex flex-1 flex-col gap-3 p-4">

@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { Search, Target } from "lucide-react";
+import { Search, Target, Star, Clock } from "lucide-react";
 import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
 import type { SkillExerciseWithOwnership as SkillExercise } from "@/lib/skill-types";
 import { SKILL_TYPES, SKILL_EQUIPMENT } from "@/lib/skill-taxonomy";
@@ -41,10 +41,14 @@ export function SkillPickerDialog({
     queryKey: [`${apiBase}/skill-exercises`],
     enabled: open,
   });
+  // Same admin exclusion as skill-bank.tsx's canFavorite.
+  const canFavorite = apiBase === "/api/coach";
   const [search, setSearch] = useState("");
   const [activeSport, setActiveSport] = useState<string | null>(null);
   const [skillTypeFilter, setSkillTypeFilter] = useState<Set<string>>(new Set());
   const [equipmentFilter, setEquipmentFilter] = useState<Set<string>>(new Set());
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [recentlyUsedOnly, setRecentlyUsedOnly] = useState(false);
 
   // Clicking the active sport again clears back to a fresh state, same as
   // the family accordion; switching to a different sport discards whatever
@@ -105,10 +109,30 @@ export function SkillPickerDialog({
         const matchesSkillType = skillTypeFilter.size === 0 || skillTypeFilter.has(sk.skillType);
         const matchesEquipment =
           equipmentFilter.size === 0 || (sk.equipment ?? []).some((e) => equipmentFilter.has(e));
-        return matchesSearch && matchesSport && matchesSkillType && matchesEquipment;
+        const matchesFavorite = !favoritesOnly || !!sk.isFavorite;
+        const matchesRecentlyUsed = !recentlyUsedOnly || sk.lastUsedAt != null;
+        return (
+          matchesSearch &&
+          matchesSport &&
+          matchesSkillType &&
+          matchesEquipment &&
+          matchesFavorite &&
+          matchesRecentlyUsed
+        );
       }),
-    [skills, search, activeSport, skillTypeFilter, equipmentFilter],
+    [skills, search, activeSport, skillTypeFilter, equipmentFilter, favoritesOnly, recentlyUsedOnly],
   );
+
+  // Only reorders (never re-filters) -- see exercise-bank.tsx's identical
+  // comment on its own displayed useMemo.
+  const displayed = useMemo(() => {
+    if (!recentlyUsedOnly) return filtered;
+    return [...filtered].sort((a, b) => {
+      const at = a.lastUsedAt ? new Date(a.lastUsedAt).getTime() : 0;
+      const bt = b.lastUsedAt ? new Date(b.lastUsedAt).getTime() : 0;
+      return bt - at;
+    });
+  }, [filtered, recentlyUsedOnly]);
 
   const isBrowsing = !search.trim();
 
@@ -129,6 +153,41 @@ export function SkillPickerDialog({
               className="pl-9"
             />
           </div>
+          {/* Always visible, even while typing -- see
+              exercise-picker-dialog.tsx's identical comment on its own
+              favorites/recently-used row. */}
+          {canFavorite && (
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                onClick={() => setFavoritesOnly((v) => !v)}
+                aria-pressed={favoritesOnly}
+                className={cn(
+                  "flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+                  favoritesOnly
+                    ? "border-amber-500 bg-amber-500/15 text-amber-400"
+                    : "border-border text-muted-foreground hover:border-amber-500/50 hover:text-amber-400",
+                )}
+              >
+                <Star className={cn("h-3.5 w-3.5", favoritesOnly && "fill-amber-400")} />
+                Favorites
+              </button>
+              <button
+                type="button"
+                onClick={() => setRecentlyUsedOnly((v) => !v)}
+                aria-pressed={recentlyUsedOnly}
+                className={cn(
+                  "flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+                  recentlyUsedOnly
+                    ? "border-teal-500 bg-teal-500/15 text-teal-400"
+                    : "border-border text-muted-foreground hover:border-teal-500/50 hover:text-teal-400",
+                )}
+              >
+                <Clock className="h-3.5 w-3.5" />
+                Recently Used
+              </button>
+            </div>
+          )}
         </div>
         {/* Filters and results share ONE scrollable region -- see
             exercise-picker-dialog.tsx's own comment on this same layout:
@@ -226,13 +285,13 @@ export function SkillPickerDialog({
             </div>
           )}
           <div className="space-y-1 border-t border-border pt-4">
-            {filtered.length === 0 && (
+            {displayed.length === 0 && (
               <div className="flex flex-col items-center gap-2 py-10 text-center text-sm text-muted-foreground">
                 <Target className="h-8 w-8" />
                 No skill drills found matching these filters.
               </div>
             )}
-            {filtered.map((sk) => (
+            {displayed.map((sk) => (
               <button
                 key={sk.id}
                 type="button"

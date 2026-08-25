@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
 import { SkillFaultThresholdsDialog } from "@/components/skill-fault-thresholds-dialog";
 import { apiRequest } from "@/lib/queryClient";
-import { Plus, Trash2, Target, Search, Video, SlidersHorizontal, Star } from "lucide-react";
+import { Plus, Trash2, Target, Search, Video, SlidersHorizontal, Star, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { SkillExerciseWithOwnership } from "@/lib/skill-types";
 import { SKILL_TYPES } from "@/lib/skill-taxonomy";
@@ -54,10 +54,14 @@ export function SkillBankPage({
     queryKey: [`${apiBase}/skill-exercises`],
   });
 
+  const canFavorite = apiBase === "/api/coach";
+
   const [search, setSearch] = useState("");
   const [skillTypeFilter, setSkillTypeFilter] = useState<Set<string>>(new Set());
   const [sportFilter, setSportFilter] = useState<Set<string>>(new Set());
   const [ownerFilter, setOwnerFilter] = useState<Set<string>>(new Set());
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [recentlyUsedOnly, setRecentlyUsedOnly] = useState(false);
 
   const skillTypeOptions = useMemo(
     () => Array.from(new Set([...SKILL_TYPES, ...skills.map((s) => s.skillType)])).sort(),
@@ -82,9 +86,29 @@ export function SkillBankPage({
       const matchesSkillType = skillTypeFilter.size === 0 || skillTypeFilter.has(sk.skillType);
       const matchesSport = sportFilter.size === 0 || (sk.sports ?? []).some((s) => sportFilter.has(s));
       const matchesOwner = ownerFilter.size === 0 || ownerFilter.has(sk.ownerLabel);
-      return matchesSearch && matchesSkillType && matchesSport && matchesOwner;
+      const matchesFavorite = !favoritesOnly || !!sk.isFavorite;
+      const matchesRecentlyUsed = !recentlyUsedOnly || sk.lastUsedAt != null;
+      return (
+        matchesSearch &&
+        matchesSkillType &&
+        matchesSport &&
+        matchesOwner &&
+        matchesFavorite &&
+        matchesRecentlyUsed
+      );
     });
-  }, [skills, search, skillTypeFilter, sportFilter, ownerFilter]);
+  }, [skills, search, skillTypeFilter, sportFilter, ownerFilter, favoritesOnly, recentlyUsedOnly]);
+
+  // Only reorders (never re-filters) -- see exercise-bank.tsx's identical
+  // comment on its own displayed useMemo.
+  const displayed = useMemo(() => {
+    if (!recentlyUsedOnly) return filtered;
+    return [...filtered].sort((a, b) => {
+      const at = a.lastUsedAt ? new Date(a.lastUsedAt).getTime() : 0;
+      const bt = b.lastUsedAt ? new Date(b.lastUsedAt).getTime() : 0;
+      return bt - at;
+    });
+  }, [filtered, recentlyUsedOnly]);
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
@@ -97,7 +121,6 @@ export function SkillBankPage({
     onError: (err: ApiError) => toast.error(err.message || "Could not delete skill drill"),
   });
 
-  const canFavorite = apiBase === "/api/coach";
   const favoriteMutation = useMutation({
     mutationFn: async ({ id, next }: { id: number; next: boolean }) => {
       await apiRequest(next ? "POST" : "DELETE", `${apiBase}/skill-exercises/${id}/favorite`);
@@ -144,6 +167,38 @@ export function SkillBankPage({
             className="pl-9"
           />
         </div>
+        {canFavorite && (
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              onClick={() => setFavoritesOnly((v) => !v)}
+              aria-pressed={favoritesOnly}
+              className={cn(
+                "flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+                favoritesOnly
+                  ? "border-amber-500 bg-amber-500/15 text-amber-400"
+                  : "border-border text-muted-foreground hover:border-amber-500/50 hover:text-amber-400",
+              )}
+            >
+              <Star className={cn("h-3.5 w-3.5", favoritesOnly && "fill-amber-400")} />
+              Favorites
+            </button>
+            <button
+              type="button"
+              onClick={() => setRecentlyUsedOnly((v) => !v)}
+              aria-pressed={recentlyUsedOnly}
+              className={cn(
+                "flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+                recentlyUsedOnly
+                  ? "border-teal-500 bg-teal-500/15 text-teal-400"
+                  : "border-border text-muted-foreground hover:border-teal-500/50 hover:text-teal-400",
+              )}
+            >
+              <Clock className="h-3.5 w-3.5" />
+              Recently Used
+            </button>
+          </div>
+        )}
         <div className="flex flex-wrap gap-x-6 gap-y-2">
           <FilterChipGroup
             label="Skill Type"
@@ -169,7 +224,7 @@ export function SkillBankPage({
         </div>
       </div>
 
-      {!isLoading && filtered.length === 0 && (
+      {!isLoading && displayed.length === 0 && (
         <Card>
           <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
             <Target className="h-10 w-10 text-muted-foreground" />
@@ -187,7 +242,7 @@ export function SkillBankPage({
       )}
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {filtered.map((sk) => (
+        {displayed.map((sk) => (
           <Link key={sk.id} href={`${routeBase}/${sk.id}`}>
             <Card className="flex cursor-pointer flex-col transition-colors hover:border-teal-500/50">
               <CardContent className="flex flex-1 flex-col gap-3 p-4">
