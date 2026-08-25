@@ -1277,14 +1277,24 @@ export function detectFormFaults(
   // Only a squat/hinge/lunge-pattern movement bends the knee this much --
   // skip lower-body checks entirely for presses, rows, etc. where knees
   // barely move, so those never get a nonsensical "shallow depth" flag.
-  // When movementType is known, it's the hard gate (a Press never gets a
-  // knee fault no matter how noisy the angle estimate got); the ROM check
-  // alone is only a fallback for callers that don't have movementType yet.
-  const romSuggestsKneeDriven = kneeRangeOfMotion > 25;
+  // movementType, when known, is a HARD gate, not just a tiebreaker: a
+  // Press never gets a knee/forward-lean/pelvic-drop fault no matter how
+  // noisy the angle estimate got. There used to be a ROM-only fallback for
+  // callers without movementType, but every current caller (bar-tracker-
+  // dialog.tsx, ar-bar-tracker-dialog.tsx, ar-jump-tracker-dialog.tsx) does
+  // pass it -- the only way this now reads as null is a real data gap (an
+  // exercise saved through the coach edit form with Movement left blank).
+  // Guessing "knee-driven" from ROM alone in that case is exactly backwards
+  // for a lift lying flat on a bench: gravity-relative torso angle reads as
+  // ~80-90deg from vertical by construction (the athlete IS horizontal),
+  // and pose noise while supine easily crosses the 25deg ROM bar on its
+  // own -- producing a squat-pattern "excessive forward lean"/"hip dropped"
+  // fault on a bench press. Skipping the guess when movementType is
+  // genuinely unknown is the safer failure mode here (a missed fault on a
+  // rare unclassified exercise) than guessing wrong and reporting a fault
+  // that contradicts the exercise's own name.
   const isKneeDrivenMovement =
-    movementType != null
-      ? LOWER_BODY_MOVEMENT_TYPES.has(movementType) && romSuggestsKneeDriven
-      : romSuggestsKneeDriven;
+    movementType != null && LOWER_BODY_MOVEMENT_TYPES.has(movementType) && kneeRangeOfMotion > 25;
 
   // "Overhead" for the SET as a whole: most tracked frames had both wrists
   // above the nose (see frameIsOverhead in the loop above) -- an overhead
