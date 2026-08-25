@@ -971,13 +971,28 @@ export function summarizeTrackedSet(
   // Both are real, correctly-tracked motion, not noise, but neither is bar
   // drift: a 2m step back out of a rack reads as a bigger "deviation from
   // center" than any real rep's bar path ever would, and dominates the
-  // median/percentile below if left in. Scoping to repBreakdown's own
-  // windows (each already spans its full rep, per RepBreakdown's own
-  // comment) keeps the deviation measurement to motion that was actually
-  // part of a rep. Falls back to the full trace when repBreakdown is empty
-  // (e.g. every phase got filtered as phantom) rather than computing
-  // deviation over nothing.
-  const activePoints = points.filter((p) => repBreakdown.some((r) => p.t >= r.startT && p.t <= r.endT));
+  // median/percentile below if left in.
+  //
+  // Scoped to the CONCENTRIC portion of each rep specifically, not
+  // repBreakdown's full rep window (which also covers the eccentric return
+  // and, for a dead-stop lift like a Pendlay row, a real pause sitting on
+  // the floor between reps). A bar that isn't moving has no "path" to judge
+  // straightness on -- any apparent scatter during a static hold is pure
+  // tracking noise, not drift -- and a floor-level dead stop is also
+  // exactly where the implement tracker is worst (occluded by legs/floor),
+  // so including it let the single worst-tracked, least meaningful stretch
+  // of the whole set dominate the reported number. Concentric is also
+  // already this function's definition of "the lift" for every other
+  // per-rep number (peakVelocityMps/meanVelocityMps below are concentric-
+  // only), so scoping drift to match keeps every rep-level metric
+  // answering the same question. Falls back to the full trace when there's
+  // no concentric data at all (e.g. every phase got filtered as phantom)
+  // rather than computing deviation over nothing.
+  const concentricPhases = phaseStats.filter((phase, i) => isConcentric[i] && !isPhantomPhase(phase));
+  const activePoints: TrackedPoint[] = [];
+  for (const phase of concentricPhases) {
+    for (let idx = phase.startIdx; idx <= phase.endIdx; idx++) activePoints.push(points[idx]);
+  }
   const repScopedPoints = activePoints.length > 0 ? activePoints : points;
   // Same MIN_TRACKING_CONFIDENCE filter robustPeakSpeed/plausibleMean apply
   // to velocity -- this metric had never had it: every point counted

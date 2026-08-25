@@ -19,6 +19,7 @@ import {
   buildPathTrace,
   interpolateOcclusionGap,
   heightScaledAmplitudeCm,
+  MIN_TRACKING_CONFIDENCE,
   type TrackedPoint,
   type RepMetrics,
   type VelocitySample,
@@ -1553,9 +1554,19 @@ export function BarTrackerDialog({
         // to mean anything (same MIN_BAR_GRIP_SEPARATION_M-style reasoning
         // tiltDegreesFromPoints already applies). See LIVE_TILT_HISTORY_SIZE's
         // own comment for why this feeds a rolling median rather than
-        // setting state straight from one frame.
+        // setting state straight from one frame. Also requires both sides'
+        // own confidence to clear MIN_TRACKING_CONFIDENCE -- tilt is a
+        // two-point angle, so a single barely-reacquired side (present, but
+        // not really trusted) is enough to swing the whole reading, the same
+        // failure mode that gate already protects velocity/bar-path drift
+        // from elsewhere in this file.
         const rawTilt =
-          fusedLeft && fusedRight ? tiltDegreesFromPoints(fusedLeft, fusedRight, verticalSignRef.current) : null;
+          fusedLeft &&
+          fusedRight &&
+          leftConfidence >= MIN_TRACKING_CONFIDENCE &&
+          rightConfidence >= MIN_TRACKING_CONFIDENCE
+            ? tiltDegreesFromPoints(fusedLeft, fusedRight, verticalSignRef.current)
+            : null;
         if (rawTilt != null) {
           liveTiltHistoryRef.current.push(rawTilt);
           if (liveTiltHistoryRef.current.length > LIVE_TILT_HISTORY_SIZE) liveTiltHistoryRef.current.shift();

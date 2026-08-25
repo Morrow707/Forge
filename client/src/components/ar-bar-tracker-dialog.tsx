@@ -47,6 +47,7 @@ import {
   interpolateOcclusionGap,
   computeArmDriveAsymmetry,
   computeRepTrustScores,
+  MIN_TRACKING_CONFIDENCE,
   type RepMetrics,
   type TrackedPoint,
   type VelocitySample,
@@ -479,7 +480,22 @@ export function ArBarTrackerDialog({
     const fusedLeft = fuseSide(leftWristWorld, frame.leftImplement, prevFusedLeftRef, leftVelocitySamplesRef);
     const fusedRight = fuseSide(rightWristWorld, frame.rightImplement, prevFusedRightRef, rightVelocitySamplesRef);
 
-    if (usesSharedBar && fusedLeft && fusedRight) {
+    // Both sides need to actually be confident this frame, not just present
+    // -- fusedLeft/fusedRight go non-null the moment either the wrist OR the
+    // implement tracker contributes anything (see fuseSide's `total > 0`
+    // above), which includes a barely-reacquired implement lock. Tilt is a
+    // two-point angle, so unlike the primary trace (which degrades
+    // gracefully toward a single confident point) a single low-confidence
+    // side here is enough to swing the whole angle -- the same failure mode
+    // bar-tracking.ts's own MIN_TRACKING_CONFIDENCE gate protects velocity
+    // and bar-path drift from, just never applied here before.
+    if (
+      usesSharedBar &&
+      fusedLeft &&
+      fusedRight &&
+      fusedLeft.confidence >= MIN_TRACKING_CONFIDENCE &&
+      fusedRight.confidence >= MIN_TRACKING_CONFIDENCE
+    ) {
       const rawTilt = tiltDegreesFromPoints(fusedLeft, fusedRight, verticalSignRef.current);
       if (rawTilt != null) {
         liveTiltHistoryRef.current.push(rawTilt);
