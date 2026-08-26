@@ -936,6 +936,17 @@ CREATE TABLE IF NOT EXISTS "athlete_trophies" (
 CREATE INDEX IF NOT EXISTS "athlete_trophies_athlete_idx" ON "athlete_trophies" ("athlete_id");
 CREATE UNIQUE INDEX IF NOT EXISTS "athlete_trophies_athlete_key_idx" ON "athlete_trophies" ("athlete_id", "key");
 
+-- ACWR red-zone coach-alert dedup (shared/schema.ts acwrRiskAlerts) -- see
+-- that table's own comment.
+CREATE TABLE IF NOT EXISTS "acwr_risk_alerts" (
+  "id" serial PRIMARY KEY,
+  "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "date" date NOT NULL,
+  "ratio" real NOT NULL,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "acwr_risk_alerts_athlete_date_idx" ON "acwr_risk_alerts" ("athlete_id", "date");
+
 -- Performance pass -- Postgres never auto-indexes foreign key columns, and
 -- these hot-path lookups (workout history, comment threads, notification
 -- inbox/unread-count polling, roster/calendar joins) had none.

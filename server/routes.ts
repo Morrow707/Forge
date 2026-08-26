@@ -6252,6 +6252,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         "/coach/analytics",
       );
     }
+    // ACWR was previously purely pull-based -- a coach only ever saw a
+    // red-zone ratio by opening the roster page or the per-athlete history
+    // chart themselves. This is the proactive counterpart, same
+    // dedup-via-unique-index reasoning as evaluateAcwrRiskFlag's own
+    // comment: fires once per athlete on the day their ratio first lands
+    // in the red zone, not on every set logged while it stays there.
+    const acwrFlag = await storage.evaluateAcwrRiskFlag(parsed.data.assignmentId, user.id);
+    if (acwrFlag) {
+      await notifyUser(
+        acwrFlag.coachId,
+        "acwr_risk",
+        `${user.name}'s training load is in the high-risk zone`,
+        `Acute:chronic workload ratio is ${acwrFlag.ratio.toFixed(2)} today -- their recent training volume has spiked well above what they've been adapting to. Worth a look before their next session.`,
+        "/coach/analytics",
+      );
+    }
     // Ensures a session exists before touching/closing it -- see
     // ensureCaraTrainingSessionOpen's own comment for why this can no
     // longer just rely on the wellness check-in route having already

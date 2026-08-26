@@ -2966,6 +2966,33 @@ export const athleteTrophies = pgTable(
 
 export type AthleteTrophy = typeof athleteTrophies.$inferSelect;
 
+// Dedup record for the ACWR red-zone coach alert -- ACWR itself is never
+// persisted (computed fresh from workoutLogs on every read, see
+// shared/load.ts), so without this a coach would get re-notified on every
+// single set an athlete logs while their ratio stays in the red zone,
+// not just the day it first crosses into one. One row per athlete per
+// calendar date the alert actually fired; the unique index is what makes
+// "insert, and only notify if the insert wasn't a no-op conflict" safe to
+// call on every workout-log save.
+export const acwrRiskAlerts = pgTable(
+  "acwr_risk_alerts",
+  {
+    id: serial("id").primaryKey(),
+    athleteId: integer("athlete_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    date: date("date").notNull(),
+    ratio: real("ratio").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    athleteDateIdx: uniqueIndex("acwr_risk_alerts_athlete_date_idx").on(
+      table.athleteId,
+      table.date,
+    ),
+  }),
+);
+
 // AI-generated, one per athlete per date, cached permanently once written
 // (same lazy-materialize-then-cache pattern as testingResults above) rather
 // than regenerated on every view -- a day's wellness check-in and RPE

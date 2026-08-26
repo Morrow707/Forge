@@ -56,6 +56,7 @@ import {
   injuryHistory,
   caraSessions,
   athleteTrophies,
+  acwrRiskAlerts,
   readinessBriefings,
   athleteDigests,
   coachDigests,
@@ -15461,6 +15462,42 @@ ${catalog}`;
       });
     }
     return summary.sort((a, b) => a.athleteName.localeCompare(b.athleteName));
+  },
+
+  // Same self-assigned gate as evaluateFormFaultFlags/
+  // evaluateLegDriveAsymmetryFlags -- no coach to tell if this is a Free
+  // Agent or admin training themselves. Unlike those two, ACWR isn't
+  // derived from the sets just saved; it's the athlete's whole rolling
+  // 7-vs-28-day load picture as of today, so this recomputes it fresh
+  // (same buildAcwrSeries math getRosterAcwrSummary/the per-athlete
+  // history chart already use) rather than looking at anything in
+  // `entries`. Returns null when today isn't newly red, OR when it's red
+  // but acwrRiskAlerts already has a row for (athleteId, today) -- the
+  // insert below is the actual dedup mechanism: its unique index makes a
+  // second call on the same day a no-op conflict rather than a duplicate
+  // alert, so a coach gets pinged once per athlete per day their ratio is
+  // in the red zone, not once per set.
+  async evaluateAcwrRiskFlag(assignmentId: number, athleteId: number) {
+    const assignment = await db.query.assignments.findFirst({
+      where: eq(assignments.id, assignmentId),
+    });
+    if (!assignment || assignment.coachId === assignment.athleteId) return null;
+
+    const today = formatISO(new Date(), { representation: "date" });
+    const sinceDate = formatISO(subDays(new Date(), 34), { representation: "date" });
+    const dailyLoads = await this.getDailyLoadSeriesForAthlete(athleteId, sinceDate);
+    const series = buildAcwrSeries(dailyLoads, today, 1);
+    const { ratio, level } = series[series.length - 1];
+    if (level !== "red" || ratio == null) return null;
+
+    const [inserted] = await db
+      .insert(acwrRiskAlerts)
+      .values({ athleteId, date: today, ratio })
+      .onConflictDoNothing({ target: [acwrRiskAlerts.athleteId, acwrRiskAlerts.date] })
+      .returning();
+    if (!inserted) return null;
+
+    return { coachId: assignment.coachId, ratio, level };
   },
 
   // ---------- Leaderboard (coach-only) ----------
