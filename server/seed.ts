@@ -5,6 +5,7 @@ import { hashPassword } from "./auth-utils";
 import {
   users,
   programs,
+  programExercises,
   exercises,
   classes,
   classLessons,
@@ -5727,13 +5728,26 @@ async function main() {
                 dayNumber: 3,
                 title: "Bar Speed & Jump Lab",
                 isRestDay: false,
+                // videoCheckEnabled paired with every trackingLevel below --
+                // written pre-unification (see video-tracking-toggle.tsx's
+                // own comment), when "tracking on, video off" was still a
+                // reachable state. Turning tracking on has meant capturing
+                // video too ever since that toggle collapsed to one control,
+                // so leaving these unpaired silently ran a real AR/MediaPipe
+                // tracked set that never saved a clip -- same trap
+                // (VideoTrackingToggle still *displays* "Video: On" for any
+                // non-"none" trackingLevel, whatever videoCheckEnabled
+                // actually holds) that toggle's comment already warns about
+                // for legacy data, just reproduced here instead of pre-dating
+                // the refactor by luck. Matches Week 2's "Kitchen Sink Day"
+                // below, which already pairs the two correctly.
                 exercises: [
-                  { exerciseId: testExerciseId("Back Squat"), orderIndex: 0, sets: 5, reps: "3", weight: "245 lbs", restSeconds: 180, trackingLevel: "full" },
-                  { exerciseId: testExerciseId("Bench Press"), orderIndex: 1, sets: 5, reps: "3", weight: "205 lbs", restSeconds: 180, trackingLevel: "full" },
-                  { exerciseId: testExerciseId("Deadlift"), orderIndex: 2, sets: 3, reps: "5", weight: "315 lbs", restSeconds: 180, trackingLevel: "bar_path" },
-                  { exerciseId: testExerciseId("Box Jump"), orderIndex: 3, sets: 4, reps: "5", weight: "Bodyweight", restSeconds: 90, trackingLevel: "jump" },
-                  { exerciseId: testExerciseId("Broad Jump"), orderIndex: 4, sets: 3, reps: "3", weight: "Bodyweight", restSeconds: 90, trackingLevel: "jump" },
-                  { exerciseId: testExerciseId("Hex Bar Jump"), orderIndex: 5, sets: 4, reps: "5", weight: "Bodyweight", restSeconds: 90, trackingLevel: "jump" },
+                  { exerciseId: testExerciseId("Back Squat"), orderIndex: 0, sets: 5, reps: "3", weight: "245 lbs", restSeconds: 180, trackingLevel: "full", videoCheckEnabled: true },
+                  { exerciseId: testExerciseId("Bench Press"), orderIndex: 1, sets: 5, reps: "3", weight: "205 lbs", restSeconds: 180, trackingLevel: "full", videoCheckEnabled: true },
+                  { exerciseId: testExerciseId("Deadlift"), orderIndex: 2, sets: 3, reps: "5", weight: "315 lbs", restSeconds: 180, trackingLevel: "bar_path", videoCheckEnabled: true },
+                  { exerciseId: testExerciseId("Box Jump"), orderIndex: 3, sets: 4, reps: "5", weight: "Bodyweight", restSeconds: 90, trackingLevel: "jump", videoCheckEnabled: true },
+                  { exerciseId: testExerciseId("Broad Jump"), orderIndex: 4, sets: 3, reps: "3", weight: "Bodyweight", restSeconds: 90, trackingLevel: "jump", videoCheckEnabled: true },
+                  { exerciseId: testExerciseId("Hex Bar Jump"), orderIndex: 5, sets: 4, reps: "5", weight: "Bodyweight", restSeconds: 90, trackingLevel: "jump", videoCheckEnabled: true },
                 ],
               },
               { dayNumber: 4, title: "Rest Day", isRestDay: true, exercises: [] },
@@ -5849,6 +5863,52 @@ async function main() {
       }
 
       console.log(`Created "Test Program" (id ${testProgram.id}), owned by Forge identity ${forgeIdentity.id}.`);
+    }
+  }
+
+  // One-time production fixup for "Bar Speed & Jump Lab" specifically: when
+  // that day was first seeded (2026-08-05, commit a0381a4) its
+  // trackingLevel-on exercises didn't set videoCheckEnabled -- still a valid
+  // independent choice at the time, since the coach-facing camera control
+  // didn't collapse the two into one toggle until later that same day (see
+  // video-tracking-toggle.tsx's own comment on the refactor and the legacy
+  // state it left reachable). Ever since, turning tracking on has always
+  // meant capturing video too, so any environment whose "Test Program" got
+  // created before the literal fix above landed is stuck with a day that
+  // silently never saves a clip no matter how many sets get tracked on it --
+  // the toggle still *displays* "Video: On" for it (isOn there reads
+  // trackingLevel alone), so nothing about the coach UI reveals the gap.
+  // This is the exact trap a coach hit testing the AR bar tracker on Jordan
+  // Athlete's seeded Bench Press set (that assignment is created above,
+  // straight onto the demo athlete's real roster -- see "Assigned by the
+  // demo coach" comment there). Runs on every deploy forever, like the
+  // fixups above; each no-ops once applied. Scoped to this one named day of
+  // this one seeded program, never a real coach's own data -- and routed
+  // through resolveVideoCheckEnabled so a since-restricted exercise still
+  // can't be flipped on here either.
+  {
+    const testProgramRow = await db.query.programs.findFirst({ where: eq(programs.name, "Test Program") });
+    if (testProgramRow) {
+      const full = await storage.getProgramFull(testProgramRow.id);
+      const staleDay = full?.weeks.flatMap((w) => w.days).find((d) => d.title === "Bar Speed & Jump Lab");
+      const staleExercises = (staleDay?.exercises ?? []).filter(
+        (ex) => ex.trackingLevel !== "none" && !ex.videoCheckEnabled,
+      );
+      if (staleExercises.length > 0) {
+        const requests = staleExercises.map((ex) => ({ ref: ex, exerciseId: ex.exerciseId, videoCheckEnabled: true }));
+        const videoCheckMap = await storage.resolveVideoCheckEnabled(requests);
+        let fixed = 0;
+        for (const req of requests) {
+          if (!videoCheckMap.get(req)) continue;
+          await db.update(programExercises).set({ videoCheckEnabled: true }).where(eq(programExercises.id, req.ref.id));
+          fixed++;
+        }
+        if (fixed > 0) {
+          console.log(
+            `Backfilled videoCheckEnabled=true on ${fixed} stale "Bar Speed & Jump Lab" exercise(s) in "Test Program" (id ${testProgramRow.id}).`,
+          );
+        }
+      }
     }
   }
 
