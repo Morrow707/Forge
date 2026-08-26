@@ -29,6 +29,7 @@ import { TestingDataImportDialog } from "@/components/testing-data-import-dialog
 import { PlayerIntakeImportDialog } from "@/components/player-intake-import-dialog";
 import { ProvisionalRosterPanel } from "@/components/provisional-roster-panel";
 import { Skeleton } from "@/components/skeleton";
+import { Sparkline } from "@/components/stat-tile";
 import {
   HealthStatusToggle,
   WellnessBadge,
@@ -188,6 +189,14 @@ export default function CoachRoster() {
     refetchInterval: 60_000,
   });
   const acwrByAthlete = new Map(acwrToday.map((w) => [w.athleteId, w]));
+  // Object keyed by athleteId (see the route's comment for why it's not a
+  // Map over the wire) of each athlete's last-7-days daily training load --
+  // an athlete with nothing logged this week just has no key, so the row
+  // renders no sparkline rather than a fabricated flat line.
+  const { data: loadTrendByAthlete = {} } = useQuery<Record<string, number[]>>({
+    queryKey: ["/api/coach/roster-load-trend"],
+    refetchInterval: 60_000,
+  });
 
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignAthleteIds, setAssignAthleteIds] = useState<number[]>([]);
@@ -635,6 +644,13 @@ export default function CoachRoster() {
                         })}
                         <th
                           scope="col"
+                          className="sticky z-10 border-b border-white/10 bg-card/85 px-3 py-2 shadow-[0_1px_0_0_rgba(255,255,255,0.06),0_8px_20px_-16px_rgba(0,0,0,0.6)] backdrop-blur-xl backdrop-saturate-150"
+                          style={{ top: "var(--app-shell-sticky-height, 0px)" }}
+                        >
+                          <span className="label-xs">7-Day Load</span>
+                        </th>
+                        <th
+                          scope="col"
                           className="sticky z-10 border-b border-white/10 bg-card/85 px-3 py-2 text-right shadow-[0_1px_0_0_rgba(255,255,255,0.06),0_8px_20px_-16px_rgba(0,0,0,0.6)] backdrop-blur-xl backdrop-saturate-150"
                           style={{ top: "var(--app-shell-sticky-height, 0px)" }}
                         >
@@ -690,6 +706,13 @@ export default function CoachRoster() {
                             </td>
                             <td className="max-w-[220px] truncate px-3 py-2 text-muted-foreground">
                               {a.email}
+                            </td>
+                            <td className="px-3 py-2">
+                              {loadTrendByAthlete[a.id] ? (
+                                <Sparkline values={loadTrendByAthlete[a.id]} />
+                              ) : (
+                                <span className="text-muted-foreground">-</span>
+                              )}
                             </td>
                             <td className="px-3 py-2 text-right">
                               {!selectMode && (
@@ -1093,9 +1116,10 @@ export default function CoachRoster() {
 
 /** Placeholder for one roster table row while `/api/coach/roster` is still
  * in flight -- shaped to the real row's columns (name/sport/position/
- * health/email/actions) so the table doesn't jump around once real rows
- * swap in. Takes showCheckbox rather than reading selectMode itself so it
- * matches whichever mode the page is already in the instant data arrives. */
+ * health/email/load-trend/actions) so the table doesn't jump around once
+ * real rows swap in. Takes showCheckbox rather than reading selectMode
+ * itself so it matches whichever mode the page is already in the instant
+ * data arrives. */
 function RosterRowSkeleton({ showCheckbox }: { showCheckbox: boolean }) {
   return (
     <tr className="border-b border-border/50">
@@ -1118,6 +1142,9 @@ function RosterRowSkeleton({ showCheckbox }: { showCheckbox: boolean }) {
       </td>
       <td className="px-3 py-2">
         <Skeleton className="h-4 w-32" />
+      </td>
+      <td className="px-3 py-2">
+        <Skeleton className="h-5 w-14" />
       </td>
       <td className="px-3 py-2 text-right">
         <Skeleton className="ml-auto h-7 w-16 rounded-md" />
