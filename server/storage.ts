@@ -14006,7 +14006,12 @@ ${catalog}`;
       }
     }
     const athlete = await db.query.users.findFirst({ where: eq(users.id, athleteId) });
-    const weightUnit = athlete?.preferredWeightUnit ?? "lbs";
+    // Fallback only -- each entry can carry its own weightUnit (see
+    // logEntryInputSchema's comment: a superset can legitimately pair a
+    // lbs lift with a kg lift), so this account-level default is what an
+    // entry falls back to when it didn't send one at all, not the value
+    // every set in this save uses uniformly like it used to.
+    const defaultWeightUnit = athlete?.preferredWeightUnit ?? "lbs";
     const retentionLimits = getVideoRetentionLimits({
       hasVideoStorageAddOn: athlete?.hasVideoStorageAddOn ?? false,
       isBetaAccount: athlete?.isBetaAccount ?? true,
@@ -14122,6 +14127,10 @@ ${catalog}`;
 
         if (entry.sets.length > 0) {
           const exerciseKey = entry.programExerciseId != null ? `pe:${entry.programExerciseId}` : `c:${entry.correctiveId}`;
+          // This exercise's own unit -- see logEntryInputSchema's comment.
+          // Falls back to the athlete's account-level default only when
+          // this entry didn't send one.
+          const entryWeightUnit = entry.weightUnit ?? defaultWeightUnit;
 
           // Auto "PR" badge -- see workoutSetEntries.isPr's own comment.
           // Only numeric-weight exercise entries have a meaningful PR at
@@ -14139,7 +14148,7 @@ ${catalog}`;
             if (programExercise) {
               for (const s of entry.sets) {
                 if (!s.weight || !s.reps) continue;
-                const key = `${weightUnit}-${s.reps}`;
+                const key = `${entryWeightUnit}-${s.reps}`;
                 if (priorBestByKey.has(key)) continue;
                 const rows = await tx
                   .select({ weight: workoutSetEntries.weight })
@@ -14151,7 +14160,7 @@ ${catalog}`;
                     and(
                       eq(workoutLogs.athleteId, athleteId),
                       eq(programExercises.exerciseId, programExercise.exerciseId),
-                      eq(workoutSetEntries.weightUnit, weightUnit),
+                      eq(workoutSetEntries.weightUnit, entryWeightUnit),
                       eq(workoutSetEntries.reps, s.reps),
                       lt(workoutLogs.date, input.date),
                     ),
@@ -14171,14 +14180,14 @@ ${catalog}`;
               const prior = priorVideoByKey.get(`${exerciseKey}:${s.setNumber}`);
               const isSameVideo = Boolean(s.formCheckVideoUrl) && prior?.url === s.formCheckVideoUrl;
               const weightNum = s.weight ? parseFloat(s.weight) : NaN;
-              const priorBest = priorBestByKey.get(`${weightUnit}-${s.reps ?? ""}`);
+              const priorBest = priorBestByKey.get(`${entryWeightUnit}-${s.reps ?? ""}`);
               const isPr = !Number.isNaN(weightNum) && priorBest != null && weightNum > priorBest;
               return {
                 logEntryId: entryRow.id,
                 setNumber: s.setNumber,
                 reps: s.reps ?? null,
                 weight: s.weight ?? null,
-                weightUnit: entry.weightMode === "numeric" && s.weight ? weightUnit : null,
+                weightUnit: entry.weightMode === "numeric" && s.weight ? entryWeightUnit : null,
                 bandColor: s.bandColor ?? null,
                 boxHeight: s.boxHeight ?? null,
                 boxHeightUnit: s.boxHeightUnit ?? null,

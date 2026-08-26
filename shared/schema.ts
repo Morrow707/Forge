@@ -5671,6 +5671,13 @@ export const logEntryInputSchema = z
     programExerciseId: z.number().optional(),
     correctiveId: z.number().optional(),
     weightMode: z.enum(["numeric", "bodyweight", "band", "box"]).default("numeric"),
+    // Per-exercise, not per-account -- a superset can legitimately pair a
+    // dumbbell lift (lbs) with a kettlebell lift (kg) in the same session.
+    // Optional/nullable so an older cached client (or a bodyweight/band/box
+    // entry with no numeric weight at all) still falls back to the
+    // athlete's account-level preferredWeightUnit, same as before this
+    // field existed -- see submitWorkoutLog's own comment.
+    weightUnit: z.enum(["lbs", "kg"]).optional().nullable(),
     rpe: z.number().optional().nullable(),
     notes: z.string().optional().nullable(),
     sets: z.array(setLogInputSchema).default([]),

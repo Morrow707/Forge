@@ -30,7 +30,7 @@ import { SetVideoPreviewDialog, SetVideoCompareDialog } from "@/components/set-v
 import { extractVideoFrames } from "@/lib/video-frames";
 import type { RepMetrics } from "@/lib/bar-tracking";
 import type { JumpSetMetrics } from "@/lib/jump-tracking";
-import { toKg } from "@/lib/bar-tracking";
+import { toKg, fromKg } from "@/lib/bar-tracking";
 import { useDistanceUnit, formatDistanceCm } from "@/lib/distance-unit";
 import { DistanceUnitToggle } from "@/components/distance-unit-toggle";
 import { useAuth } from "@/hooks/use-auth";
@@ -82,7 +82,7 @@ import {
   ShieldAlert,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
-import type { PublicUser, MovementProfile } from "@shared/schema";
+import type { MovementProfile } from "@shared/schema";
 import { parseProgression } from "@/lib/progression";
 import { PlateCalculatorDialog } from "@/components/plate-calculator-dialog";
 import { ReadinessBanner } from "@/components/readiness-banner";
@@ -341,6 +341,7 @@ type LogEntry = {
     setNumber: number;
     reps: string | null;
     weight: string | null;
+    weightUnit: WeightUnit | null;
     bandColor: string | null;
     boxHeight: string | null;
     boxHeightUnit: BoxHeightUnit | null;
@@ -414,6 +415,11 @@ export type ItemState = {
   setHistory: SetHistoryPoint[];
   materials: Materials;
   weightMode: WeightMode;
+  // Per-exercise, not a single page-wide setting -- a superset can pair a
+  // dumbbell lift (lbs) with a kettlebell lift (kg) in the same session.
+  // Defaults from the athlete's account preference when this item is first
+  // built (see buildItem), then toggled independently per card from there.
+  weightUnit: WeightUnit;
   athleteNotes: string;
   rpe: string;
   sets: SetRow[];
@@ -425,6 +431,7 @@ function buildItem(
   prescribed: PrescribedExercise | PrescribedCorrective,
   existing: LogEntry | undefined,
   weekNumber: number,
+  defaultUnit: WeightUnit,
 ): ItemState {
   const sets: SetRow[] = Array.from({ length: prescribed.sets }, (_, i) => {
     const setNumber = i + 1;
@@ -497,6 +504,11 @@ function buildItem(
     setHistory: prescribed.setHistory,
     materials,
     weightMode: deriveWeightMode(materials),
+    // Every set within one exercise shares a single unit (see
+    // submitWorkoutLog's entryWeightUnit), so any set's stored value is the
+    // whole entry's -- falls back to the athlete's account default when this
+    // exercise has no logged history yet.
+    weightUnit: existing?.sets[0]?.weightUnit ?? defaultUnit,
     athleteNotes: existing?.notes ?? "",
     rpe: existing?.rpe != null ? String(existing.rpe) : "",
     sets,
@@ -666,9 +678,15 @@ function isPageComplete(page: Page) {
   );
 }
 
-function computeStats(items: ItemState[]) {
+// displayUnit is only for the aggregate total shown here -- individual
+// exercises can each be logged in their own unit (see ItemState.weightUnit),
+// so every set's volume is normalized to kg before summing, then the total
+// is converted back to whichever unit the page wants to display it in.
+// Summing raw numbers across mixed units would silently produce a
+// meaningless total.
+function computeStats(items: ItemState[], displayUnit: WeightUnit) {
   let totalReps = 0;
-  let totalVolume = 0;
+  let totalVolumeKg = 0;
   let totalSets = 0;
   let completeSets = 0;
   for (const item of items) {
@@ -680,12 +698,12 @@ function computeStats(items: ItemState[]) {
         totalReps += repsNum;
         if (item.weightMode === "numeric") {
           const weightNum = parseFloat(set.weight);
-          if (!Number.isNaN(weightNum)) totalVolume += repsNum * weightNum;
+          if (!Number.isNaN(weightNum)) totalVolumeKg += repsNum * toKg(weightNum, item.weightUnit);
         }
       }
     }
   }
-  return { totalReps, totalVolume, totalSets, completeSets };
+  return { totalReps, totalVolume: fromKg(totalVolumeKg, displayUnit), totalSets, completeSets };
 }
 
 export function WorkoutPage({
@@ -793,12 +811,14 @@ export function WorkoutPage({
 
   useEffect(() => {
     if (data && !hydrated) {
+      const defaultUnit: WeightUnit = user?.preferredWeightUnit ?? "lbs";
       const correctiveItems = data.correctives.map((c) =>
         buildItem(
           "corrective",
           c,
           data.log?.entries.find((e) => e.correctiveId === c.id),
           data.day.weekNumber,
+          defaultUnit,
         ),
       );
       const exerciseItems = data.day.exercises.map((pe) =>
@@ -807,26 +827,27 @@ export function WorkoutPage({
           pe,
           data.log?.entries.find((e) => e.programExerciseId === pe.id),
           data.day.weekNumber,
+          defaultUnit,
         ),
       );
       setItems([...correctiveItems, ...exerciseItems]);
       setHydrated(true);
       setPageIndex(0);
     }
-  }, [data, hydrated]);
+  }, [data, hydrated, user]);
 
-  const unitMutation = useMutation({
-    mutationFn: async (unit: "lbs" | "kg") => {
-      const res = await apiRequest("PATCH", `${apiBase}/preferences`, {
-        preferredWeightUnit: unit,
-      });
-      return res.json();
-    },
-    onSuccess: (updatedUser: PublicUser) => {
-      qc.setQueryData(["/api/auth/me"], updatedUser);
-    },
-    onError: (err: ApiError) => toast.error(err.message || "Could not update preference"),
-  });
+  // Per-exercise, not an account-wide PATCH like this used to be -- a
+  // superset can pair a lbs lift with a kg lift, so switching one card's
+  // unit only touches that card's own item state (autosaved like any other
+  // edit), never the athlete's account-level default.
+  function setItemWeightUnit(key: string, weightUnit: WeightUnit) {
+    let nextItems: ItemState[] = [];
+    setItems((prev) => {
+      nextItems = prev.map((it) => (it.key === key ? { ...it, weightUnit } : it));
+      return nextItems;
+    });
+    scheduleAutosave(nextItems);
+  }
 
   // Shared by every save path (explicit button taps, debounced autosave, and
   // the flush-on-close beacon) so they can never drift out of sync with each
@@ -844,6 +865,7 @@ export function WorkoutPage({
         programExerciseId: it.kind === "exercise" ? it.refId : undefined,
         correctiveId: it.kind === "corrective" ? it.refId : undefined,
         weightMode: it.weightMode,
+        weightUnit: it.weightUnit,
         rpe: it.rpe ? Number(it.rpe) : null,
         notes: it.athleteNotes || null,
         sets: it.sets.map((s) => ({
@@ -1356,8 +1378,12 @@ export function WorkoutPage({
 
   const pages = buildPages(items);
   const currentPage = pages[Math.min(pageIndex, pages.length - 1)];
+  // Display-only default for the page-wide total below (and the share
+  // card) -- individual exercises each carry their own unit now (see
+  // ItemState.weightUnit), this is just what the combined total is shown
+  // in, not a setting that changes what any exercise actually saves.
   const unit = user?.preferredWeightUnit ?? "lbs";
-  const stats = computeStats(items);
+  const stats = computeStats(items, unit);
   const exerciseCount = pages.reduce((sum, p) => sum + p.items.length, 0);
 
   async function handleShareWorkout() {
@@ -1431,25 +1457,11 @@ export function WorkoutPage({
           ) : null
         }
       actions={
-        <div className="flex items-center gap-2">
-          {items.some((i) => i.trackingLevel === "jump") && <DistanceUnitToggle />}
-          <div className="flex items-center gap-1 rounded-md bg-secondary p-1">
-            {(["lbs", "kg"] as const).map((u) => (
-              <button
-                key={u}
-                onClick={() => unitMutation.mutate(u)}
-                className={cn(
-                  "rounded px-2.5 py-1 text-xs font-semibold uppercase transition-colors",
-                  unit === u
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {u}
-              </button>
-            ))}
-          </div>
-        </div>
+        // The lbs/kg toggle used to live here as one page-wide switch --
+        // moved into each exercise card instead (see ExerciseLogContent's
+        // own unit toggle), since a superset can pair a lbs lift with a kg
+        // lift in the same session.
+        items.some((i) => i.trackingLevel === "jump") ? <DistanceUnitToggle /> : undefined
       }
     >
       {(offline || pendingSync) && (
@@ -1690,7 +1702,8 @@ export function WorkoutPage({
                         item={item}
                         linked={currentPage.kind === "exercise" && currentPage.items.length > 1}
                         badgeLabel={currentPage.labels[item.key]}
-                        unit={unit}
+                        unit={item.weightUnit}
+                        onUnitChange={(u) => setItemWeightUnit(item.key, u)}
                         assignmentId={Number(assignmentId)}
                         programDayId={Number(programDayId)}
                         date={date}
@@ -1791,6 +1804,7 @@ function ExerciseLogContent({
   linked,
   badgeLabel,
   unit,
+  onUnitChange,
   assignmentId,
   programDayId,
   date,
@@ -1808,6 +1822,7 @@ function ExerciseLogContent({
   linked: boolean;
   badgeLabel: string;
   unit: "lbs" | "kg";
+  onUnitChange: (unit: "lbs" | "kg") => void;
   assignmentId: number;
   programDayId: number;
   date: string;
@@ -2060,6 +2075,28 @@ function ExerciseLogContent({
             {linked && <Link2 className="h-4 w-4 shrink-0 text-primary" />}
           </div>
           <div className="flex shrink-0 items-center gap-1.5 pt-1.5">
+            {item.materials.usesWeight && (
+              // Per-exercise, not the old page-wide toggle -- a paired
+              // exercise in the same superset might genuinely need a
+              // different unit (e.g. dumbbells in lbs, a kettlebell in kg).
+              <div className="flex items-center gap-0.5 rounded-md bg-secondary p-0.5">
+                {(["lbs", "kg"] as const).map((u) => (
+                  <button
+                    key={u}
+                    type="button"
+                    onClick={() => onUnitChange(u)}
+                    className={cn(
+                      "rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase transition-colors",
+                      unit === u
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {u}
+                  </button>
+                ))}
+              </div>
+            )}
             <Badge variant="outline">{item.muscleGroup}</Badge>
             {canSubstituteExercise && !isCorrective && (
               <button

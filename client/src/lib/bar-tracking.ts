@@ -59,6 +59,14 @@ export function toKg(weight: number, unit: "lbs" | "kg"): number {
   return unit === "kg" ? weight : weight / LBS_PER_KG;
 }
 
+// Inverse of toKg -- for summing weights entered in different units (e.g. a
+// superset with one exercise logged in lbs and another in kg) into a single
+// display unit: normalize each to kg with toKg, sum, then convert the total
+// back with this.
+export function fromKg(weightKg: number, unit: "lbs" | "kg"): number {
+  return unit === "kg" ? weightKg : weightKg * LBS_PER_KG;
+}
+
 // One "rep" = one concentric (lifting) phase plus whatever phase precedes
 // it -- matches how the live rep counter already counts reps (on the start
 // of each upward movement). depthDeg and velocityCurve are left undefined
