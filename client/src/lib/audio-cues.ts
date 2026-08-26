@@ -50,6 +50,36 @@ export function playSuccessChime() {
   }
 }
 
+/** Rising four-note arpeggio (triangle wave) -- reads as "leveling up"
+ * rather than the flat repeated-pitch "done/good" success chime above, so a
+ * streak milestone (see STREAK_TIERS in streak-badge.tsx) is audibly its
+ * own thing, not just another success ding. Distinct on three axes from
+ * playSuccessChime: melodic contour (ascending run vs. one repeated pitch),
+ * waveform (triangle vs. sine), and rhythm (four notes speeding up vs.
+ * three evenly-spaced beeps). */
+export function playStreakMilestoneChime() {
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    // C5 -> E5 -> G5 -> C6, gaps shrinking slightly so the run feels like
+    // it's building momentum instead of ticking off a metronome.
+    const notes: [freq: number, offset: number][] = [
+      [523.25, 0],
+      [659.25, 0.13],
+      [783.99, 0.24],
+      [1046.5, 0.34],
+    ];
+    notes.forEach(([freq, offset], i) => {
+      const isLast = i === notes.length - 1;
+      tone(ctx, freq, now + offset, isLast ? 0.35 : 0.16, "triangle", isLast ? 0.4 : 0.3);
+    });
+    setTimeout(() => ctx.close(), 900);
+  } catch {
+    // Web Audio isn't available in every environment -- cues just stay silent.
+  }
+}
+
 /** Alternating two-tone alarm (not the "success" chime above) -- longer,
  * louder, and lower-pitched so "rest is over, get moving" doesn't read as
  * the same light "nice rep" cue used everywhere else. Meant to be called on
