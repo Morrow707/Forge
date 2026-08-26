@@ -4207,15 +4207,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Escape hatch for a coach/admin locked out by MFA (lost their
   // authenticator device and all their backup codes) -- see
-  // storage.adminResetMfa's own comment. No dedicated admin UI for this
-  // yet; it's meant to be rare enough that a direct call is fine until
-  // there's a real admin user-management page to hang a button on.
+  // storage.adminResetMfa's own comment. Surfaced as a button on the admin
+  // user-management page below.
   app.post("/api/admin/users/:id/reset-mfa", requireRole("admin"), async (req, res) => {
     const userId = Number(req.params.id);
     if (!Number.isInteger(userId)) return res.status(400).json({ message: "Invalid user id" });
     const ok = await storage.adminResetMfa(userId);
     if (!ok) return res.status(404).json({ message: "User not found" });
     res.json({ ok: true });
+  });
+
+  // ---------- Admin user management ----------
+  // A searchable/browsable directory of every account on the platform --
+  // the coach/athlete "lookup" tools elsewhere in admin (billing.tsx) only
+  // work if you already know the exact email, so this is the only place an
+  // admin can find an account from a partial name/email, or just browse.
+  app.get("/api/admin/users", requireRole("admin"), async (req, res) => {
+    const search = typeof req.query.search === "string" ? req.query.search : undefined;
+    const roleParam = typeof req.query.role === "string" ? req.query.role : undefined;
+    const role =
+      roleParam && ["coach", "athlete", "admin", "guardian"].includes(roleParam)
+        ? (roleParam as "coach" | "athlete" | "admin" | "guardian")
+        : undefined;
+    const rows = await storage.getUsersForAdmin({ search, role });
+    res.json({ users: rows, limit: storage.USER_SEARCH_LIMIT });
+  });
+
+  app.get("/api/admin/users/:id", requireRole("admin"), async (req, res) => {
+    const userId = Number(req.params.id);
+    if (!Number.isInteger(userId)) return res.status(400).json({ message: "Invalid user id" });
+    const detail = await storage.getUserDetailForAdmin(userId);
+    if (!detail) return res.status(404).json({ message: "User not found" });
+    res.json(detail);
+  });
+
+  // Corrects a mis-set role (e.g. someone who signed up as the wrong role,
+  // or provisioning a new admin) -- excludes "guardian" on purpose, same as
+  // storage.setUserRole's own type: a guardian account carries family-group
+  // linkage that a bare role flip would leave dangling, so that conversion
+  // (if it's ever needed) belongs in its own dedicated flow, not this
+  // generic one. An admin can't demote their own account here -- that's a
+  // lockout waiting to happen with no one else in the room to undo it.
+  app.patch("/api/admin/users/:id/role", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const userId = Number(req.params.id);
+    if (!Number.isInteger(userId)) return res.status(400).json({ message: "Invalid user id" });
+    if (userId === user.id) {
+      return res.status(400).json({ message: "You can't change your own role" });
+    }
+    const schema = z.object({ role: z.enum(["coach", "athlete", "admin"]) });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "role must be coach, athlete, or admin" });
+    }
+    const target = await storage.getUser(userId);
+    if (!target) return res.status(404).json({ message: "User not found" });
+    if (target.role === "guardian") {
+      return res.status(400).json({
+        message: "Guardian accounts can't be converted here -- their family-group linkage needs its own flow",
+      });
+    }
+    const updated = await storage.setUserRole(userId, parsed.data.role);
+    res.json({ id: updated.id, role: updated.role });
   });
 
   app.put("/api/coach/features", requireRole("coach"), async (req, res) => {

@@ -1730,6 +1730,51 @@ export const storage = {
     });
   },
 
+  // Backs the admin user-management page's search/browse list -- the
+  // coach/athlete "lookup by exact email" tools elsewhere in admin only
+  // work if you already know the account, so this is the only place an
+  // admin can actually find an account from a partial name or email, or
+  // just browse who's on the platform. Capped rather than paginated (a
+  // coaching platform's user count doesn't call for real pagination yet;
+  // a search narrows past the cap long before that stops being true).
+  USER_SEARCH_LIMIT: 200,
+  async getUsersForAdmin(params: { search?: string; role?: "coach" | "athlete" | "admin" | "guardian" }) {
+    const conditions = [];
+    if (params.role) conditions.push(eq(users.role, params.role));
+    if (params.search?.trim()) {
+      const q = `%${params.search.trim()}%`;
+      conditions.push(or(ilike(users.name, q), ilike(users.email, q)));
+    }
+    const rows = await db
+      .select({
+        id: users.id,
+        name: users.name,
+        email: users.email,
+        role: users.role,
+        createdAt: users.createdAt,
+        lastActivityAt: users.lastActivityAt,
+        emailVerified: users.emailVerified,
+        mfaEnabled: users.mfaEnabled,
+        sport: users.sport,
+      })
+      .from(users)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(users.createdAt))
+      .limit(this.USER_SEARCH_LIMIT);
+    return rows;
+  },
+
+  // Fuller single-account view for the admin user-management page's detail
+  // panel -- same passwordHash/mfaSecret/mfaBackupCodeHashes stripping as
+  // toPublicUser (auth.ts), since this is admin tooling, not the account's
+  // own /api/auth/me.
+  async getUserDetailForAdmin(id: number) {
+    const user = await this.getUser(id);
+    if (!user) return null;
+    const { passwordHash, mfaSecret, mfaBackupCodeHashes, agreedToTermsText, ...rest } = user;
+    return rest;
+  },
+
   // Admin-only (see /api/admin/coaches* in routes.ts) -- the only way a
   // real billingTier/billingAddOns/isBetaAccount gets set anywhere in this
   // codebase right now, since there's no self-serve checkout yet.
@@ -2302,8 +2347,29 @@ export const storage = {
     return row;
   },
 
+  // Converting INTO "coach" needs both invite codes generated on the spot
+  // (createUser only does this at signup time) -- otherwise a promoted
+  // account would land with coachCode/staffInviteCode both null, unable to
+  // invite an athlete or another coach until something else happened to
+  // trigger the lazy staffInviteCode backfill (see toPublicUserWithSections
+  // in auth.ts). coachCode has no such lazy path, so this is the only place
+  // it gets backfilled for a role change.
   async setUserRole(userId: number, role: "coach" | "athlete" | "admin") {
-    const [row] = await db.update(users).set({ role }).where(eq(users.id, userId)).returning();
+    const values: Partial<InsertUser> = { role };
+    if (role === "coach") {
+      const current = await this.getUser(userId);
+      if (!current?.coachCode) {
+        let code = generateCoachCode();
+        while (await this.getUserByCoachCode(code)) code = generateCoachCode();
+        values.coachCode = code;
+      }
+      if (!current?.staffInviteCode) {
+        let staffCode = generateStaffInviteCode();
+        while (await this.getUserByStaffInviteCode(staffCode)) staffCode = generateStaffInviteCode();
+        values.staffInviteCode = staffCode;
+      }
+    }
+    const [row] = await db.update(users).set(values).where(eq(users.id, userId)).returning();
     return row;
   },
 

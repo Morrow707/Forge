@@ -161,6 +161,7 @@ const adminNav: NavItem[] = [
   { href: "/admin/movement-knowledge", label: "Teach Movement AI", icon: Camera, overflow: true },
   { href: "/admin/platform-trends", label: "Platform Trends", icon: BarChart3, overflow: true },
   { href: "/admin/billing", label: "Billing", icon: CreditCard, overflow: true },
+  { href: "/admin/users", label: "Users", icon: Users, overflow: true },
   { href: "/admin/videos", label: "Video Storage", icon: HardDrive, overflow: true },
   { href: "/admin/legal-agreement", label: "Legal Agreement", icon: FileText, overflow: true },
   { href: "/admin/documents", label: "Documents", icon: ShieldCheck, overflow: true },
