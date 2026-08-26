@@ -20,6 +20,7 @@ import { ArMechanicsTrackerDialog } from "@/components/ar-mechanics-tracker-dial
 import { FormVideoRecorderDialog } from "@/components/form-video-recorder-dialog";
 import { WorkoutCommentThread } from "@/components/workout-comment-thread";
 import type { MechanicsMode } from "@/lib/mechanics-tracking";
+import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import { Link } from "wouter";
 
@@ -85,6 +86,7 @@ export function SkillDayViewDialog({
     | { kind: "athlete"; skillAssignmentId: number; skillProgramDayId: number; date: string };
 }) {
   const qc = useQueryClient();
+  const { user } = useAuth();
   const { data: coachProgram } = useQuery<any>({
     queryKey: ["/api/coach/skill-programs", source.kind === "coach" ? source.skillProgramId : null],
     queryFn: () => getJson(`/api/coach/skill-programs/${source.kind === "coach" ? source.skillProgramId : ""}`),
@@ -256,7 +258,9 @@ export function SkillDayViewDialog({
                           <Film className="h-3 w-3" /> Watch demo
                         </a>
                       )}
-                      {ex.trackingLevel === "sprint" && source.kind === "athlete" && (
+                      {ex.trackingLevel === "sprint" &&
+                        source.kind === "athlete" &&
+                        !user?.trackingOptOut && (
                         <Button
                           size="sm"
                           variant="secondary"
@@ -267,7 +271,9 @@ export function SkillDayViewDialog({
                           Record Sprint
                         </Button>
                       )}
-                      {ex.trackingLevel === "mechanics" && source.kind === "athlete" && (
+                      {ex.trackingLevel === "mechanics" &&
+                        source.kind === "athlete" &&
+                        !user?.trackingOptOut && (
                         <Button
                           size="sm"
                           variant="secondary"

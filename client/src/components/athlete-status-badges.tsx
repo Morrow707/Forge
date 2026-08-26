@@ -1,10 +1,12 @@
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { HeartPulse, HeartCrack, Gauge, Activity, ShieldAlert } from "lucide-react";
+import { HeartPulse, HeartCrack, Gauge, Activity, ShieldAlert, VideoOff, Video } from "lucide-react";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { READINESS_LABEL, type ReadinessLevel } from "@shared/wellness";
 import { ACWR_RISK_LABEL, type AcwrRiskLevel } from "@shared/load";
 import { READINESS_CLASSNAME } from "@/components/wellness-history-dialog";
 import { ACWR_RISK_CLASSNAME } from "@/components/acwr-history-dialog";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -158,5 +160,83 @@ export function HealthStatusToggle({
       {isHealthy ? <HeartPulse className="h-3 w-3" /> : <HeartCrack className="h-3 w-3" />}
       {isHealthy ? "Healthy" : "Hurt"}
     </button>
+  );
+}
+
+// Relays a parent/guardian's request to stop future camera-tracking
+// collection for this athlete (see users.trackingOptOut's own comment in
+// shared/schema.ts). Turning it ON is the sensitive direction -- it stops
+// new tracked video/metrics from being collected at all -- so that one step
+// goes through a confirm dialog; turning it back off doesn't, since re-
+// enabling isn't the destructive edge. Existing data is never touched
+// either way; this only affects collection going forward.
+export function TrackingOptOutToggle({
+  athleteId,
+  trackingOptOut,
+}: {
+  athleteId: number;
+  trackingOptOut: boolean;
+}) {
+  const qc = useQueryClient();
+  const [confirming, setConfirming] = useState(false);
+
+  const mutation = useMutation({
+    mutationFn: async (next: boolean) => {
+      await apiRequest("POST", `/api/coach/roster/${athleteId}/tracking-opt-out`, {
+        trackingOptOut: next,
+      });
+    },
+    onSuccess: (_data, next) => {
+      qc.invalidateQueries({ queryKey: ["/api/coach/roster"] });
+      qc.invalidateQueries({ queryKey: [`/api/coach/roster/${athleteId}`] });
+      toast.success(next ? "Camera tracking turned off for this athlete" : "Camera tracking turned back on");
+      setConfirming(false);
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Could not update"),
+  });
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          if (trackingOptOut) {
+            mutation.mutate(false);
+          } else {
+            setConfirming(true);
+          }
+        }}
+        disabled={mutation.isPending}
+        aria-label={
+          trackingOptOut
+            ? "Camera tracking is off for this athlete -- click to turn back on"
+            : "Camera tracking is on -- click to turn off at a parent/guardian's request"
+        }
+        title={
+          trackingOptOut
+            ? "Camera tracking is off for this athlete at a parent/guardian's request -- click to turn back on"
+            : "Turn off camera-tracking collection for this athlete (parent/guardian request)"
+        }
+        className={cn(
+          "flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold transition-colors",
+          trackingOptOut
+            ? "bg-amber-500/15 text-amber-500 hover:bg-amber-500/25"
+            : "bg-surface text-muted-foreground hover:bg-surface-elevated",
+        )}
+      >
+        {trackingOptOut ? <VideoOff className="h-3 w-3" /> : <Video className="h-3 w-3" />}
+        {trackingOptOut ? "Tracking off" : "Tracking on"}
+      </button>
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title="Turn off camera tracking?"
+        description="This stops all future camera-tracked video and tracking metrics (bar speed, jump height, swing mechanics, and the like) from being collected for this athlete going forward, at a parent or guardian's request. It does not delete anything already recorded, and doesn't affect the rest of their account -- they can still log workouts normally."
+        confirmLabel="Turn off tracking"
+        onConfirm={() => mutation.mutate(true)}
+        isPending={mutation.isPending}
+      />
+    </>
   );
 }

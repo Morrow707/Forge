@@ -22,7 +22,7 @@ import { TrophyCase, type AthleteTrophyView } from "@/components/trophy-case";
 import { WellnessHistoryDialog } from "@/components/wellness-history-dialog";
 import { AcwrHistoryDialog } from "@/components/acwr-history-dialog";
 import { TrainingHistoryExportDialog } from "@/components/training-history-export-dialog";
-import { HealthStatusToggle, WellnessBadge, AcwrBadge, GuardianNoticeBadge, type HealthStatus } from "@/components/athlete-status-badges";
+import { HealthStatusToggle, WellnessBadge, AcwrBadge, GuardianNoticeBadge, TrackingOptOutToggle, type HealthStatus } from "@/components/athlete-status-badges";
 import { formatHeight } from "@/components/profile-fields-form";
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { shareOrDownloadFile } from "@/lib/share-file";
@@ -63,6 +63,7 @@ type Athlete = {
   squatMaxLbs?: number | null;
   deadliftMaxLbs?: number | null;
   healthStatus?: HealthStatus;
+  trackingOptOut?: boolean | null;
 };
 
 const GENDER_LABEL: Record<string, string> = {
@@ -256,6 +257,7 @@ export default function AthleteDetailPage() {
                   <WellnessBadge entry={wellness} onClick={() => setWellnessOpen(true)} />
                   <AcwrBadge entry={acwr} onClick={() => setAcwrOpen(true)} />
                   <GuardianNoticeBadge athleteId={athlete.id} />
+                  <TrackingOptOutToggle athleteId={athlete.id} trackingOptOut={athlete.trackingOptOut ?? false} />
                 </div>
                 <p className="text-sm text-muted-foreground">{athlete.email}</p>
                 {(athlete.sport || athlete.position) && (

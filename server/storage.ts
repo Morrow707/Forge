@@ -2753,6 +2753,7 @@ export const storage = {
         seasonPhase: users.seasonPhase,
         trainingStylePreference: users.trainingStylePreference,
         healthStatus: users.healthStatus,
+        trackingOptOut: users.trackingOptOut,
         fortyYardDash: users.fortyYardDash,
         verticalJumpIn: users.verticalJumpIn,
         broadJumpIn: users.broadJumpIn,
@@ -2790,6 +2791,7 @@ export const storage = {
         seasonPhase: users.seasonPhase,
         trainingStylePreference: users.trainingStylePreference,
         healthStatus: users.healthStatus,
+        trackingOptOut: users.trackingOptOut,
         fortyYardDash: users.fortyYardDash,
         verticalJumpIn: users.verticalJumpIn,
         broadJumpIn: users.broadJumpIn,
@@ -2819,6 +2821,21 @@ export const storage = {
       .set({ healthStatus })
       .where(eq(users.id, athleteId))
       .returning({ id: users.id, healthStatus: users.healthStatus });
+    return updated;
+  },
+
+  // Coach/admin-relayed flip of a parent/guardian's request to stop future
+  // camera-tracking collection -- see users.trackingOptOut's own comment in
+  // shared/schema.ts. Same roster-check-then-set shape as
+  // updateAthleteHealthStatus just above.
+  async setTrackingOptOut(coachId: number, athleteId: number, trackingOptOut: boolean) {
+    const onRoster = await this.getRosterAthleteForCoach(coachId, athleteId);
+    if (!onRoster) return null;
+    const [updated] = await db
+      .update(users)
+      .set({ trackingOptOut })
+      .where(eq(users.id, athleteId))
+      .returning({ id: users.id, trackingOptOut: users.trackingOptOut });
     return updated;
   },
 

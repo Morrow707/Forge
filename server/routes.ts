@@ -51,6 +51,7 @@ import {
   updateProfileSchema,
   updateNotificationPrefsSchema,
   updateHealthStatusSchema,
+  setTrackingOptOutSchema,
   pushSubscribeSchema,
   apnsSubscribeSchema,
   createWorkoutCommentSchema,
@@ -446,6 +447,35 @@ async function requireFreeAgent(req: any, res: any, next: any) {
       .json({ message: "This AI feature is only available while you don't have a coach yet." });
   }
   next();
+}
+
+// A set entry carries tracked (camera-derived) data the moment any one of
+// these headline fields is set -- each is the one field every tracker's own
+// summarize function always populates for a real capture (formCheckVideoUrl
+// for a saved clip, peakVelocityMps for a lift, jumpHeightCm for a jump,
+// swingSeparationDeg for a swing/rotation capture), so checking these four
+// catches every tracking mode without needing to enumerate every optional
+// metric field setLogInputSchema carries.
+function setHasTrackedData(set: { formCheckVideoUrl?: string | null; peakVelocityMps?: number | null; jumpHeightCm?: number | null; swingSeparationDeg?: number | null }): boolean {
+  return (
+    set.formCheckVideoUrl != null ||
+    set.peakVelocityMps != null ||
+    set.jumpHeightCm != null ||
+    set.swingSeparationDeg != null
+  );
+}
+
+// Server-side backstop for a parent's request to stop future camera-tracking
+// collection (see users.trackingOptOut's own comment) -- checked fresh
+// against the DB, not the session's cached user object, so an admin/coach
+// flipping this mid-session takes effect on the athlete's very next tracked
+// save rather than only after their next login. Only blocks the tracked
+// portion of a submission; a plain (non-tracked) set/log still goes through
+// untouched, since the parent's concern is the camera data, not whether
+// their kid can log a workout at all.
+async function isTrackingOptedOut(athleteId: number): Promise<boolean> {
+  const athlete = await storage.getUser(athleteId);
+  return Boolean(athlete?.trackingOptOut);
 }
 
 // TestFlight-phase-only bypass -- flips every paywall below open for every
@@ -2995,6 +3025,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!GUARDIAN_NOTICE_LIVE) return res.status(400).json({ message: "Not available yet" });
       await storage.acknowledgeGuardianNotice(athleteId, user.id);
       res.json(await storage.getGuardianNoticeStatus(athleteId));
+    },
+  );
+
+  // A parent/guardian's request, relayed by the coach, to stop future
+  // camera-tracking collection for this athlete -- see users.trackingOptOut's
+  // own comment in shared/schema.ts. This only toggles the flag; the actual
+  // enforcement lives server-side in isTrackingOptedOut, checked on every
+  // route that accepts tracked video or tracking metrics.
+  app.get(
+    "/api/coach/roster/:athleteId/tracking-opt-out",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      const onRoster = await storage.getRosterAthleteForCoach(user.id, athleteId);
+      if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
+      res.json({ trackingOptOut: Boolean(onRoster.trackingOptOut) });
+    },
+  );
+
+  app.post(
+    "/api/coach/roster/:athleteId/tracking-opt-out",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      const parsed = setTrackingOptOutSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      const updated = await storage.setTrackingOptOut(user.id, athleteId, parsed.data.trackingOptOut);
+      if (!updated) return res.status(404).json({ message: "Athlete not found" });
+      res.json(updated);
     },
   );
 
@@ -5925,6 +5988,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
+    if (await isTrackingOptedOut(user.id)) {
+      return res
+        .status(403)
+        .json({ message: "Camera-tracking collection is turned off for this athlete at a parent/guardian's request." });
+    }
     // Confirms this assignment is actually the requesting athlete's own --
     // getSkillDayForAthlete already does this same check for reads, this is
     // the write-path equivalent so a session log can't be attributed to an
@@ -6071,6 +6139,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
+    const hasTrackedSet = parsed.data.entries.some((entry) => entry.sets.some(setHasTrackedData));
+    if (hasTrackedSet && (await isTrackingOptedOut(user.id))) {
+      return res
+        .status(403)
+        .json({ message: "Camera-tracking collection is turned off for this athlete at a parent/guardian's request." });
+    }
     const log = await storage.submitWorkoutLog(user.id, parsed.data);
     if (!log) return res.status(404).json({ message: "Assignment not found" });
     const legDriveFlag = await storage.evaluateLegDriveAsymmetryFlags(
@@ -6135,6 +6209,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const parsed = attachVideoToSetSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    if (await isTrackingOptedOut(user.id)) {
+      return res
+        .status(403)
+        .json({ message: "Camera-tracking collection is turned off for this athlete at a parent/guardian's request." });
     }
     const attached = await storage.attachVideoToLoggedSet(user.id, parsed.data);
     res.json({ attached });

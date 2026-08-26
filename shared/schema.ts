@@ -247,6 +247,18 @@ export const users = pgTable(
     // legal sign-off, instead of that decision being made silently by
     // omission.
     requiresGuardianNotice: boolean("requires_guardian_notice").notNull().default(false),
+    // A parent/guardian's explicit request to stop ANY future camera-tracking
+    // collection for this athlete -- not account deletion (that already
+    // exists and removes everything), this specifically blocks new tracked
+    // video and tracking-derived metrics (bar-path velocity, joint angles,
+    // jump height, and the like) going forward while leaving the athlete's
+    // account, program, and any already-logged plain (non-tracked) sets
+    // untouched. Set by a coach or admin on the parent's behalf -- there's
+    // no parent-facing login in this app, so this is relayed, not
+    // self-service. Enforced server-side on every route that accepts
+    // tracked video or tracking metrics (see requireTrackingNotOptedOut in
+    // routes.ts), not just hidden client-side.
+    trackingOptOut: boolean("tracking_opt_out").notNull().default(false),
     gender: genderEnum("gender"),
     heightIn: integer("height_in"),
     bodyWeightLbs: real("body_weight_lbs"),
@@ -5684,6 +5696,11 @@ export const updateHealthStatusSchema = z.object({
   healthStatus: z.enum(["healthy", "hurt"]),
 });
 export type UpdateHealthStatusInput = z.infer<typeof updateHealthStatusSchema>;
+
+export const setTrackingOptOutSchema = z.object({
+  trackingOptOut: z.boolean(),
+});
+export type SetTrackingOptOutInput = z.infer<typeof setTrackingOptOutSchema>;
 
 export const updateCoachFeaturesSchema = z.object(
   Object.fromEntries(COACH_FEATURES.map((key) => [key, z.boolean().optional()])) as Record<

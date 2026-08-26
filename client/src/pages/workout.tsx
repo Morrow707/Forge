@@ -2320,7 +2320,7 @@ function ExerciseLogContent({
                         Same as Set {prevSet!.setNumber} ({prevSet!.weight} {unit})
                       </button>
                     )}
-                    {item.trackingLevel !== "none" && (
+                    {item.trackingLevel !== "none" && !user?.trackingOptOut && (
                       <button
                         type="button"
                         onClick={() => setTrackingSet(set.setNumber)}
@@ -2349,7 +2349,9 @@ function ExerciseLogContent({
                         records the video (see BarTrackerDialog's recordVideo
                         prop below) -- a second, separate video button here
                         would just be the same set recorded twice. */}
-                    {videoRequired && !mergedTracking && (
+                    {videoRequired &&
+                      !mergedTracking &&
+                      (set.formCheckVideoUrl || !user?.trackingOptOut) && (
                       <button
                         type="button"
                         onClick={() =>

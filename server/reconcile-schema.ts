@@ -1859,6 +1859,11 @@ ALTER TABLE "coach_staff" ADD COLUMN IF NOT EXISTS "staff_title" text;
 ALTER TABLE "teams" ADD COLUMN IF NOT EXISTS "brand_logo_url" text;
 ALTER TABLE "teams" ADD COLUMN IF NOT EXISTS "brand_primary_color" text;
 ALTER TABLE "teams" ADD COLUMN IF NOT EXISTS "brand_secondary_color" text;
+
+-- A parent/guardian's request to stop future camera-tracking collection for
+-- this athlete (shared/schema.ts users.trackingOptOut) -- see that column's
+-- own comment for the full reasoning.
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "tracking_opt_out" boolean NOT NULL DEFAULT false;
 `;
 
 async function main() {

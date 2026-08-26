@@ -54,13 +54,13 @@ We may suspend or terminate an account that violates these Terms. You may stop u
 The Service is provided "as is," without warranties of any kind, to the fullest extent the law allows.
 
 12. LIMITATION OF LIABILITY
-To the fullest extent the law allows, Forge Athletic Technologies LLC is not liable for indirect, incidental, or consequential damages arising from use of the Service, including injuries arising from training activity -- athletic training carries inherent physical risk that using this app does not create or increase.
+To the fullest extent the law allows, Forge Performance Systems LLC is not liable for indirect, incidental, or consequential damages arising from use of the Service, including injuries arising from training activity -- athletic training carries inherent physical risk that using this app does not create or increase.
 
 13. ASSUMPTION OF RISK
 Athletic training -- including weightlifting, sprinting, jumping, and other movements tracked or programmed through Forge -- carries inherent risks of physical injury, up to and including severe injury or death. By using the Service, you expressly acknowledge and assume these risks. As stated in Section 3, Forge's camera-based tracking, AI-generated suggestions, and form-fault flags are informational aids only; they do not guarantee safety, correct execution of any movement, or the absence of injury. A coach using the Service remains responsible for appropriately supervising and modifying training for their own athletes.
 
 14. INDEMNIFICATION
-You agree to defend, indemnify, and hold harmless Forge Athletic Technologies LLC, its affiliates, officers, and employees from any claim, damage, liability, or expense (including reasonable attorneys' fees) arising from: (a) your use of the Service, (b) your violation of these Terms, or (c) injury or harm arising from athletic training you directed, supervised, or performed. This section does not extend to a claim arising from Forge's own gross negligence or willful misconduct. [Placeholder -- confirm with counsel whether and how this section can apply where the person being asked to indemnify is a minor athlete or their parent/guardian; several states limit or void an indemnification obligation imposed on a minor.]
+You agree to defend, indemnify, and hold harmless Forge Performance Systems LLC, its affiliates, officers, and employees from any claim, damage, liability, or expense (including reasonable attorneys' fees) arising from: (a) your use of the Service, (b) your violation of these Terms, or (c) injury or harm arising from athletic training you directed, supervised, or performed. This section does not extend to a claim arising from Forge's own gross negligence or willful misconduct. [Placeholder -- confirm with counsel whether and how this section can apply where the person being asked to indemnify is a minor athlete or their parent/guardian; several states limit or void an indemnification obligation imposed on a minor.]
 
 15. DISPUTE RESOLUTION AND BINDING ARBITRATION
 Except as set out below, any dispute, claim, or controversy arising out of or relating to these Terms or your use of the Service will be resolved by binding arbitration administered by the American Arbitration Association under its Consumer Arbitration Rules, instead of in court, except that either party may bring an individual claim in small-claims court where eligible. You and Forge each waive any right to a jury trial.
@@ -70,7 +70,7 @@ Class Action Waiver: Any arbitration or proceeding will be conducted only on an 
 Minors: This arbitration and class-action-waiver section applies only to a user who is 18 or older at the time a dispute arises. For a dispute involving an athlete under 18, this section does not apply, and the dispute may instead be brought in a court of competent jurisdiction, unless a parent or legal guardian separately and knowingly agrees to arbitration on the athlete's behalf in a signed writing. [Placeholder -- confirm this carve-out with counsel; state law on arbitration involving minors varies and this approach has not been reviewed.]
 
 16. GOVERNING LAW
-[Placeholder -- to be set once the company's home jurisdiction is finalized.]
+These Terms and any action related to them are governed by the laws of the State of Arizona, without regard to its conflict-of-laws provisions. Exclusive jurisdiction and venue for any dispute not subject to arbitration under Section 15 lie in the state and federal courts located in Maricopa County, Arizona.
 
 17. CHANGES TO THESE TERMS
 We may update these Terms; continued use after an update means you accept the revised Terms. Material changes will be reflected in the version an athlete is asked to accept at signup.
@@ -83,7 +83,7 @@ export const PRIVACY_POLICY_DRAFT = `${DRAFT_NOTICE}
 FORGE -- PRIVACY POLICY (DRAFT)
 
 1. OVERVIEW
-This Privacy Policy describes what Forge Athletic Technologies LLC ("Forge") collects through the Forge app and website, why, and what control you have over it.
+This Privacy Policy describes what Forge Performance Systems LLC ("Forge") collects through the Forge app and website, why, and what control you have over it.
 
 2. INFORMATION WE COLLECT
 - Account/profile: name, email, role, sport, position, age/date of birth, height, weight, season phase.
