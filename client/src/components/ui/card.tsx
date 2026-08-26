@@ -6,7 +6,14 @@ const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElemen
     <div
       ref={ref}
       className={cn(
-        "rounded-xl border border-white/10 bg-card/55 text-card-foreground shadow-[inset_0_1px_0_0_rgba(255,255,255,0.08),0_8px_30px_-12px_rgba(0,0,0,0.6)] backdrop-blur-xl backdrop-saturate-150",
+        // bg-card/55 read as basically flush with the page background on a
+        // plain, quiet screen (a calendar grid, an empty dashboard) -- there
+        // was nothing behind the card for backdrop-blur to differentiate
+        // against, so the "frosted glass" only ever showed up over busy
+        // content. Matched to the /85 opacity + stronger border/shadow that
+        // dialog.tsx/popover.tsx already use (which DID read clearly), so
+        // Card now has real presence even sitting directly on --background.
+        "rounded-xl border border-white/15 bg-card/85 text-card-foreground shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1),0_12px_36px_-14px_rgba(0,0,0,0.75)] backdrop-blur-xl backdrop-saturate-150",
         className,
       )}
       {...props}
