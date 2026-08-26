@@ -15709,7 +15709,21 @@ ${catalog}`;
       for (const entry of log.entries) {
         const exercise = entry.programExercise?.exercise ?? entry.corrective?.exercise;
         if (!exercise) continue;
-        const setCount = entry.sets.length;
+        // Every prescribed set gets a placeholder row the moment an athlete
+        // opens the day (see workout.tsx's buildItem/buildLogPayload) --
+        // entry.sets.length alone is "sets ASSIGNED," not "sets actually
+        // performed." Only count a set once it has the reps (and, per the
+        // exercise's own material flags, weight/band/box reading) an athlete
+        // would have had to actually fill in -- same completeness rule the
+        // client uses (isSetComplete) to decide the green-check state.
+        const completedSets = entry.sets.filter((s) => {
+          if (!s.reps?.trim()) return false;
+          if (exercise.usesWeight && !s.weight?.trim()) return false;
+          if (exercise.usesBand && !s.bandColor?.trim()) return false;
+          if (exercise.usesBox && !s.boxHeight?.trim()) return false;
+          return true;
+        });
+        const setCount = completedSets.length;
         if (setCount === 0) continue;
         tally[exercise.muscleGroup] = (tally[exercise.muscleGroup] ?? 0) + setCount;
         for (const secondary of exercise.secondaryMuscles ?? []) {
