@@ -4179,10 +4179,13 @@ export type ConsentRecord = typeof consentRecords.$inferSelect;
 // counterpart to aggregateDataAccessLog above, which only ever covers
 // bulk/aggregate views with no single athlete to name. Built for a lawyer
 // (or an admin) to review, not as a claim that this covers every access
-// path in the app yet: today it's wired into the admin video-management
-// page only (list-viewed and delete events) -- see
-// getRecordAccessAuditLog's own comment in storage.ts for the honest
-// scope of what is and isn't instrumented.
+// path in the app yet: it's wired into the admin video-management page
+// (list-viewed and delete events) and, via the /uploads streaming hook in
+// routes.ts, into a coach/admin actually watching an athlete's form-check
+// or skill-session video anywhere in the app -- see getRecordAccessAuditLog's
+// own comment in storage.ts for the honest scope of what is and isn't
+// instrumented, including the one real gap (iOS native's dropped session
+// cookie) that hook can't close.
 export const recordAccessActionEnum = pgEnum("record_access_action", [
   "viewed",
   "streamed",

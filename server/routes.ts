@@ -196,6 +196,13 @@ const uploadFormVideo = multer({
 const SKILL_VIDEOS_DIR = path.join(process.cwd(), "server", "uploads", "skill-videos");
 fs.mkdirSync(SKILL_VIDEOS_DIR, { recursive: true });
 
+// Which gated /uploads directories the record-access audit log's streaming
+// hook (below, near the /uploads mount) treats as "an athlete's video" --
+// annotations included since those are coach-drawn overlays on frames of
+// that same footage, problem-reports deliberately excluded since a report
+// screenshot isn't training footage of anyone in particular.
+const VIDEO_AUDIT_DIRS = new Set(["form-videos", "skill-videos", "annotations"]);
+
 const uploadSkillVideo = multer({
   storage: multer.diskStorage({
     destination: SKILL_VIDEOS_DIR,
@@ -767,6 +774,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const pathname = `/uploads${req.path}`;
     if (!verifyMediaUrl(pathname, req.query.exp, req.query.sig)) {
       return res.status(403).json({ message: "This link has expired. Reload the page and try again." });
+    }
+    next();
+  });
+  // Extends recordAccessAuditLogs past the admin video-management page
+  // (list/delete only, see the routes above) into the actual streaming
+  // path -- the far more common and far more sensitive way a coach/admin
+  // ever sees an athlete's footage, since it's how every <video src> in the
+  // app (set review, skill session review, comment threads) actually loads
+  // one. Fire-and-forget, athlete-self-views excluded (this table is
+  // specifically "staff touching someone else's record"), and only the
+  // request that starts playback is logged -- a <video> element's own
+  // range-request seeking would otherwise turn one review into dozens of
+  // near-duplicate rows. Best-effort, not complete: signed media URLs exist
+  // precisely because the session cookie doesn't reliably travel with a
+  // bare <video src> fetch on iOS native (see media-url-signing.ts's own
+  // comment), so a request with no deserializable session here logs
+  // nothing -- there's no reliable "who" to attribute it to.
+  app.use("/uploads", (req, res, next) => {
+    const viewer = req.isAuthenticated() ? currentUser(req) : null;
+    if (viewer && (viewer.role === "coach" || viewer.role === "admin")) {
+      const pathname = `/uploads${req.path}`;
+      const range = req.get("range");
+      const isPlaybackStart = !range || range.startsWith("bytes=0-");
+      const match = /^\/uploads\/([^/]+)\/[^/]+$/.exec(pathname);
+      if (isPlaybackStart && match && VIDEO_AUDIT_DIRS.has(match[1])) {
+        storage
+          .getUploadedFileOwnerId(pathname)
+          .then((ownerId) => {
+            if (ownerId == null || ownerId === viewer.id) return;
+            return storage.logRecordAccess({
+              userId: viewer.id,
+              targetAthleteId: ownerId,
+              actionType: "streamed",
+              resourceType: `uploads:${match[1]}`,
+              resourceId: pathname,
+              ipAddress: req.ip,
+              userAgent: req.get("user-agent") ?? undefined,
+            });
+          })
+          .catch(() => {});
+      }
     }
     next();
   });

@@ -2574,6 +2574,17 @@ export const storage = {
     }
   },
 
+  // Who uploaded this file, if it's tracked at all -- backs the /uploads
+  // streaming audit hook in routes.ts (a coach/admin actually watching a
+  // specific athlete's video, not just seeing it listed). Null for an
+  // untracked or non-gated path; the caller treats that as "nothing to
+  // attribute this view to," not an error.
+  async getUploadedFileOwnerId(path: string): Promise<number | null> {
+    const pathname = path.split("?")[0];
+    const [row] = await db.select().from(uploadedFiles).where(eq(uploadedFiles.path, pathname));
+    return row?.uploadedBy ?? null;
+  },
+
   // Resolves the full set of coach ids that should see identical data --
   // this coach's own id, plus every other coach sharing the same staff (see
   // coachStaff in shared/schema.ts, and the "Coaching staff" section below).
@@ -15328,11 +15339,15 @@ ${catalog}`;
 
   // Real names on both sides deliberately, unlike the redacted aggregate
   // views elsewhere in this file -- an accountability log that hides WHO
-  // looked at WHOSE record defeats its own purpose. Honest scope: today
-  // this only has rows for the admin video-management page's list/delete
-  // actions (see the two call sites in routes.ts). It is not yet wired
-  // into every place a coach or admin can view an athlete's video across
-  // the app -- that's real remaining work, not silently assumed done.
+  // looked at WHOSE record defeats its own purpose. Honest scope: rows come
+  // from the admin video-management page's list/delete actions, AND from
+  // the /uploads streaming hook in routes.ts, which fires whenever a coach
+  // or admin's session actually loads a gated video/annotation file (the
+  // real "watching," not just "it showed up in a list"). What that hook
+  // still can't see: a request with no deserializable session -- most
+  // notably iOS native, where the session cookie doesn't reliably travel
+  // with a bare <video src> fetch (see media-url-signing.ts). That's a real
+  // remaining gap, not silently assumed closed.
   async getRecordAccessAuditLog(limit = 200): Promise<
     (RecordAccessAuditLog & { userName: string | null; targetAthleteName: string | null })[]
   > {
