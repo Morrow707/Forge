@@ -2183,11 +2183,16 @@ export const foodLogEntries = pgTable(
     // Same "athletes specifically" micro set as nutritionTargets above (not
     // a full multivitamin panel) -- mirrors that table's column naming so
     // a logged entry's micros can be compared directly against the
-    // athlete's targets. Unlike the macro-ish fields above, no lookup path
-    // populates these automatically yet (Open Food Facts/USDA barcode
-    // lookups could in principle, but weren't wired up here) -- they're
-    // filled by the AI photo-analysis path (see analyzeMealPhoto) or
-    // manual entry/edit. Missing means "not provided," never coerced to 0.
+    // athlete's targets. Populated by whichever logging path found a value:
+    // the Open Food Facts/USDA barcode and name-search lookups compute
+    // these too (see server/food-lookup.ts's FoodCandidate, carried through
+    // food-scanner-dialog.tsx's confirm screen), the AI photo-analysis path
+    // estimates them (see analyzeMealPhoto), or they're typed in by hand.
+    // Missing means "not provided," never coerced to 0. See
+    // food-lookup.ts's own comments for how much confidence to place in a
+    // lookup-sourced micro value specifically -- the unit-scale conversion
+    // on the Open Food Facts side in particular is still unverified against
+    // a live response.
     calciumMg: real("calcium_mg"),
     ironMg: real("iron_mg"),
     vitaminDMcg: real("vitamin_d_mcg"),

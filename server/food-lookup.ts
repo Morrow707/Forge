@@ -47,17 +47,93 @@ function round(n: number | null | undefined, digits = 1): number | null {
   return Math.round(n * factor) / factor;
 }
 
+// Neither lookup below has ever been verified against a live API response --
+// see this file's earlier comments on why -- confirmed directly (not just
+// assumed) by running the exact fetch() calls below from a dev sandbox: both
+// world.openfoodfacts.org and api.nal.usda.gov are rejected at the network
+// layer itself ("Host not in allowlist"), before a single byte of a real
+// response was ever seen. A wrong nutrientName string fails safe (the field
+// comes back null, same as "food has no data for this"), but a wrong unit-
+// scale assumption -- the offMicrosMg *1000 conversion below is the one
+// actual guess in this file, everything else either needs no conversion or
+// was confirmed against a real USDA sample response -- fails silently and
+// wrong by a factor of 1000, indistinguishable from a correct value until a
+// human notices a preposterous number. These two checks are the fallback for
+// that: they can't tell you the mapping IS right, only flag it loudly the
+// first time it's obviously wrong, in an environment that can actually reach
+// these APIs (e.g. once deployed, or a dev environment with these two hosts
+// allowlisted). Nothing here blocks or corrects a candidate -- same
+// "flag, don't decide" pattern as the rest of this app -- it's diagnostic
+// only, meant to be caught by whoever's watching server logs.
+const PLAUSIBLE_MAX: Partial<Record<keyof FoodCandidate, number>> = {
+  caloriesKcal: 2000,
+  proteinG: 150,
+  carbsG: 200,
+  fatG: 150,
+  fiberG: 50,
+  sodiumMg: 5000,
+  calciumMg: 2500,
+  ironMg: 50,
+  vitaminDMcg: 250,
+  potassiumMg: 5000,
+  magnesiumMg: 1000,
+  vitaminB12Mcg: 100,
+  zincMg: 50,
+};
+
+function flagImplausibleValues(source: string, candidate: FoodCandidate): void {
+  for (const [field, max] of Object.entries(PLAUSIBLE_MAX) as [keyof FoodCandidate, number][]) {
+    const value = candidate[field];
+    if (typeof value === "number" && value > max) {
+      console.warn(
+        `${source} food lookup: implausible ${field}=${value} for "${candidate.description}"` +
+          ` (barcode ${candidate.barcode ?? "n/a"}) -- likely a wrong unit-scale assumption in food-lookup.ts, not a real value. Not auto-corrected; flagging only.`,
+      );
+    }
+  }
+}
+
+function flagIfNoNutrientsMatched(
+  source: string,
+  candidate: FoodCandidate,
+  rawNutrientKeysPresent: string[],
+): void {
+  const coreFieldsAllNull =
+    candidate.caloriesKcal == null &&
+    candidate.proteinG == null &&
+    candidate.carbsG == null &&
+    candidate.fatG == null;
+  if (coreFieldsAllNull && rawNutrientKeysPresent.length > 0) {
+    console.warn(
+      `${source} food lookup: none of this file's expected nutrient keys matched a real response for` +
+        ` "${candidate.description}" even though the response carried nutrient data -- the field-name` +
+        ` mapping in food-lookup.ts is likely wrong. Raw keys the API actually returned:`,
+      rawNutrientKeysPresent.join(", "),
+    );
+  }
+}
+
 // Open Food Facts' nutriments object stores most nutrients pre-normalized
 // to a taxonomy-defined default unit per nutrient, not uniformly in grams --
 // sodium above is the existing proof of this (its raw _100g/_serving value
 // is grams, hence the *1000 to mg). The mineral fields below (calcium, iron,
 // potassium, magnesium, zinc) follow that same grams-by-default convention;
 // vitamin D and B12 are the opposite case -- OFF's default unit for those is
-// already micrograms, so no conversion. NOTE: this mapping is based on
-// Open Food Facts' documented nutrient taxonomy, not a live-verified API
-// response -- outbound access to openfoodfacts.org was blocked by this
-// sandbox's egress policy while this was written. Spot-check a few real
-// barcode scans against known label values before trusting this fully.
+// already micrograms, so no conversion. STILL UNVERIFIED as of 2026-08-26:
+// this is the single riskiest guess in this file -- a wrong unit-scale
+// assumption here is a silent 1000x-wrong number, not a missing one, and
+// research (docs, sample responses, third-party API write-ups) couldn't
+// pin down OFF's per-nutrient default-unit table precisely enough to
+// confirm it. world.openfoodfacts.org (and every openfoodfacts.org
+// subdomain tried) is unreachable from this dev sandbox -- confirmed
+// directly, including a raw fetch() identical to the one this file makes,
+// rejected at the network layer with "Host not in allowlist," not a
+// curl/tooling issue. flagImplausibleValues below is the fallback for this
+// specific failure mode (a scaling error usually produces an absurd
+// number, e.g. a food supposedly carrying 50 grams of iron); confirming
+// this for real needs either allowlisting these two hosts for a dev
+// session, or checking server logs once this runs somewhere with real
+// network access.
 function offMicrosMg(n: Record<string, number | undefined>, key: string): number | null {
   const raw = n[`${key}_serving`] ?? n[`${key}_100g`];
   return raw == null ? null : round(raw * 1000, 1);
@@ -79,7 +155,7 @@ async function lookupBarcodeOpenFoodFacts(barcode: string): Promise<FoodCandidat
     const p = data.product;
     const n = p.nutriments ?? {};
     const servingSize = p.serving_size ? String(p.serving_size) : null;
-    return {
+    const candidate: FoodCandidate = {
       description: p.product_name?.trim() || p.generic_name?.trim() || "Unknown product",
       brand: p.brands?.split(",")[0]?.trim() || null,
       servingDescription: servingSize,
@@ -98,6 +174,9 @@ async function lookupBarcodeOpenFoodFacts(barcode: string): Promise<FoodCandidat
       zincMg: offMicrosMg(n, "zinc"),
       barcode,
     };
+    flagImplausibleValues("Open Food Facts", candidate);
+    flagIfNoNutrientsMatched("Open Food Facts", candidate, Object.keys(n));
+    return candidate;
   } catch (err) {
     console.error("Open Food Facts lookup failed:", err);
     return null;
@@ -107,15 +186,24 @@ async function lookupBarcodeOpenFoodFacts(barcode: string): Promise<FoodCandidat
 // USDA FoodData Central reports each nutrient in its own practical unit
 // already (nutrientName here is what to look up; sodium's existing
 // unconverted mapping below is the proof -- USDA's "Sodium, Na" is already
-// mg, unlike Open Food Facts' gram-default). Same caveat as
-// offMicrosMg/offMicrosMcg above: nutrient names below are FDC's documented
-// standard names, not verified against a live response in this sandbox
-// (api.nal.usda.gov was also unreachable here) -- spot-check before
-// trusting fully.
+// mg, unlike Open Food Facts' gram-default). Partially verified as of
+// 2026-08-26: a real, live-fetched FDC API sample response confirmed
+// "Energy", "Protein", "Total lipid (fat)", "Carbohydrate, by difference",
+// "Fiber, total dietary", "Sodium, Na", "Calcium, Ca", and "Iron, Fe" exactly
+// as used below (via a public example response, not a call made from this
+// repo). The remaining five -- Vitamin D, Potassium, Magnesium, Vitamin
+// B-12, Zinc -- follow the same "Name, Symbol"/USDA-standard-name pattern as
+// the confirmed ones but were not seen in a real response; api.nal.usda.gov
+// is unreachable from this dev sandbox (confirmed directly, including a raw
+// fetch() call identical to the one below -- rejected at the network layer,
+// not just a curl/tooling issue), so this couldn't be closed out further
+// from here. flagIfNoNutrientsMatched below is the fallback: it can't
+// confirm the mapping is right, only flag loudly the first time real
+// traffic proves it's wrong.
 function usdaFoodToCandidate(food: any, barcode: string | null): FoodCandidate {
   const nutrientValue = (name: string) =>
     food.foodNutrients?.find((n: any) => n.nutrientName === name)?.value ?? null;
-  return {
+  const candidate: FoodCandidate = {
     description: food.description?.trim() || "Unknown food",
     brand: food.brandOwner?.trim() || food.brandName?.trim() || null,
     servingDescription:
@@ -137,6 +225,13 @@ function usdaFoodToCandidate(food: any, barcode: string | null): FoodCandidate {
     zincMg: round(nutrientValue("Zinc, Zn")),
     barcode,
   };
+  flagImplausibleValues("USDA", candidate);
+  flagIfNoNutrientsMatched(
+    "USDA",
+    candidate,
+    (food.foodNutrients ?? []).map((n: any) => n.nutrientName),
+  );
+  return candidate;
 }
 
 async function lookupBarcodeUsda(barcode: string): Promise<FoodCandidate | null> {
