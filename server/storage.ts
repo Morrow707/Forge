@@ -186,7 +186,7 @@ import { getEntitlements, getVideoRetentionLimits } from "./billing";
 import type { VideoRetentionLimits } from "@shared/video-retention";
 import { lookupBarcode, searchFoodsByName, type FoodCandidate } from "./food-lookup";
 import { TESTING_METRICS, testingMetricLowerIsBetter } from "@shared/testing-metrics";
-import { computeReadiness, BODY_PAIN_PARTS } from "@shared/wellness";
+import { computeReadiness, BODY_PAIN_PARTS, type BodyPainPart } from "@shared/wellness";
 import { isExerciseRiskyForPainParts } from "@shared/injury-matching";
 import {
   buildAcwrSeries,
@@ -3896,6 +3896,28 @@ export const storage = {
       where: eq(injuryHistory.athleteId, athleteId),
       orderBy: desc(injuryHistory.occurredOn),
     });
+  },
+
+  // Feeds the same deterministic isExerciseRiskyForPainParts filter today's
+  // wellness check-in pain map already gates "generate a modified workout"
+  // with -- an unresolved injury logged weeks ago used to only ever reach
+  // an AI prompt as a paragraph of context it was asked (not required) to
+  // weigh correctly; this makes it a hard exclusion the same way today's
+  // flagged soreness already is. injuryHistory.bodyPart isn't DB-enforced
+  // against the BodyPainPart vocabulary (see that column's own comment),
+  // so this filters to only values that actually match one of the 16 known
+  // keys rather than trusting free text -- an unrecognized value is
+  // silently dropped, not guessed at.
+  async getUnresolvedInjuryPainParts(athleteId: number): Promise<BodyPainPart[]> {
+    const knownKeys = new Set(BODY_PAIN_PARTS.map((p) => p.key));
+    const rows = await db.query.injuryHistory.findMany({
+      where: and(eq(injuryHistory.athleteId, athleteId), eq(injuryHistory.resolved, false)),
+    });
+    const parts = new Set<BodyPainPart>();
+    for (const row of rows) {
+      if (knownKeys.has(row.bodyPart as BodyPainPart)) parts.add(row.bodyPart as BodyPainPart);
+    }
+    return Array.from(parts);
   },
 
   // Scoped to this athlete's own rows -- returns null (so the caller can
@@ -13420,14 +13442,18 @@ ${entriesText}`;
       return { ...c, lastPerformance, setHistory };
     });
 
-    // Today's self-reported pain map (see wellness check-ins) is what
-    // decides whether "generate a modified workout" is worth offering --
-    // recomputed against the exercises as CURRENTLY shown (post-override),
-    // so a day that's already been fully modified doesn't keep nagging.
-    const checkin = await db.query.wellnessCheckins.findFirst({
-      where: and(eq(wellnessCheckins.athleteId, athleteId), eq(wellnessCheckins.date, date)),
-    });
-    const todayPainParts = checkin?.bodyPainMap ?? [];
+    // Today's self-reported pain map (see wellness check-ins) OR any
+    // still-unresolved injury on file decides whether "generate a modified
+    // workout" is worth offering -- recomputed against the exercises as
+    // CURRENTLY shown (post-override), so a day that's already been fully
+    // modified doesn't keep nagging.
+    const [checkin, injuryPainParts] = await Promise.all([
+      db.query.wellnessCheckins.findFirst({
+        where: and(eq(wellnessCheckins.athleteId, athleteId), eq(wellnessCheckins.date, date)),
+      }),
+      this.getUnresolvedInjuryPainParts(athleteId),
+    ]);
+    const todayPainParts = Array.from(new Set([...(checkin?.bodyPainMap ?? []), ...injuryPainParts]));
     const hasModifiableRisk =
       todayPainParts.length > 0 &&
       exercisesWithHistory.some((e) => isExerciseRiskyForPainParts(e.exercise, todayPainParts));
@@ -13529,12 +13555,15 @@ ${entriesText}`;
     });
     if (!assignment) return fail("Couldn't find that workout anymore.");
 
-    const checkin = await db.query.wellnessCheckins.findFirst({
-      where: and(eq(wellnessCheckins.athleteId, athleteId), eq(wellnessCheckins.date, date)),
-    });
-    const painParts = checkin?.bodyPainMap ?? [];
+    const [checkin, injuryPainParts] = await Promise.all([
+      db.query.wellnessCheckins.findFirst({
+        where: and(eq(wellnessCheckins.athleteId, athleteId), eq(wellnessCheckins.date, date)),
+      }),
+      this.getUnresolvedInjuryPainParts(athleteId),
+    ]);
+    const painParts = Array.from(new Set([...(checkin?.bodyPainMap ?? []), ...injuryPainParts]));
     if (painParts.length === 0) {
-      return fail("No pain flagged in today's check-in -- nothing to modify.");
+      return fail("No pain flagged in today's check-in, and no unresolved injury on file -- nothing to modify.");
     }
 
     const day = await db.query.programDays.findFirst({
