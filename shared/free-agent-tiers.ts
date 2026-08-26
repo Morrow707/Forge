@@ -95,10 +95,13 @@ export const FREE_AGENT_ADD_ON_ORDER: FreeAgentAddOnId[] = ["golf_swing", "hitti
 
 // Skill Bank sport-unlock pricing -- a separate dimension from the add-ons
 // above (those are 3 specific unbuilt AI specialties; this is "any of the
-// SPORTS taxonomy's sports," already-real content). A Free Agent's Skill
-// Bank is free for their own signup sport (users.signupSport) plus the
-// cross-sport bucket (skillExercises.crossSportFree); unlocking any other
-// sport's drills costs this per sport, same "framework only, admin assigns
-// it via users.unlockedSkillSports until a real purchase flow exists"
-// posture as everything else in this file.
+// SPORTS taxonomy's sports"). A Free Agent's Skill Bank is free for their
+// own signup sport (users.signupSport) plus the cross-sport bucket
+// (skillExercises.crossSportFree); unlocking any other sport's drills
+// costs this per sport, same "framework only, admin assigns it via
+// users.unlockedSkillSports until a real purchase flow exists" posture as
+// everything else in this file. NOT every SPORTS entry actually has real
+// drill content behind it yet -- see storage.getSportsWithSkillContent,
+// which the admin billing tool uses to only offer an unlock for a sport
+// that has something real to unlock.
 export const SKILL_SPORT_UNLOCK_MONTHLY_PRICE_CENTS = 999;

@@ -6205,6 +6205,23 @@ ${athleteContext}
   // back to whatever `sport` is currently on their profile rather than
   // locking everything -- nobody who signed up before this shipped should
   // get a worse experience than they had yesterday.
+  // Which of shared/exercise-taxonomy.ts's ~30 SPORTS actually have any
+  // Skill Bank drill content at all -- the free-agent-tiers.ts sport-unlock
+  // price ($9.99/mo) is offered for every sport in that taxonomy, but real
+  // seeded/coach-authored drill content only exists for a subset of them.
+  // Used to keep the admin billing tool (and, someday, a real purchase
+  // flow) from selling an unlock for a sport with nothing behind it. Any
+  // real content counts, however small -- this isn't a "is the coverage
+  // good" bar, just "is there anything at all to unlock."
+  async getSportsWithSkillContent(): Promise<Set<string>> {
+    const rows = await db.select({ sports: skillExercises.sports }).from(skillExercises);
+    const withContent = new Set<string>();
+    for (const row of rows) {
+      for (const sport of row.sports ?? []) withContent.add(sport);
+    }
+    return withContent;
+  },
+
   async getVisibleSkillExercisesForFreeAgent(athleteId: number) {
     const [list, athlete] = await Promise.all([
       this.getVisibleSkillExercisesForCoach(athleteId),

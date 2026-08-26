@@ -2001,6 +2001,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
+  // Which SPORTS taxonomy entries have any real Skill Bank drill content --
+  // the admin billing tool uses this to keep from unlocking (and someday
+  // selling) a sport with nothing behind it. See
+  // storage.getSportsWithSkillContent's own comment.
+  app.get("/api/admin/skill-sports-with-content", requireRole("admin"), async (_req, res) => {
+    const sports = await storage.getSportsWithSkillContent();
+    res.json({ sports: Array.from(sports) });
+  });
+
   app.patch("/api/admin/athletes/:id/billing", requireRole("admin"), async (req, res) => {
     const athleteId = Number(req.params.id);
     const target = await storage.getUser(athleteId);
@@ -2010,6 +2019,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const parsed = updateFreeAgentBillingSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    if (parsed.data.unlockedSkillSports) {
+      const sportsWithContent = await storage.getSportsWithSkillContent();
+      const empty = parsed.data.unlockedSkillSports.filter((s) => !sportsWithContent.has(s));
+      if (empty.length > 0) {
+        return res.status(400).json({
+          message: `${empty.join(", ")} ${empty.length === 1 ? "has" : "have"} no Skill Bank content yet -- nothing to unlock.`,
+        });
+      }
     }
     const updated = await storage.updateFreeAgentBilling(athleteId, parsed.data);
     res.json(updated);

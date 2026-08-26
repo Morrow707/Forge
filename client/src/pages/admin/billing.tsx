@@ -102,6 +102,17 @@ export default function AdminBilling() {
     queryFn: () => getJson("/api/admin/redeem-codes"),
   });
 
+  // Only a subset of shared/exercise-taxonomy.ts's ~30 sports have any real
+  // Skill Bank drill content -- filters the unlock picker below so this
+  // page can't be used to sell/assign an unlock for a sport with nothing
+  // behind it (the server enforces this too, see PATCH .../billing's own
+  // check; this is just so the admin never sees the dead option at all).
+  const { data: skillSportsWithContent } = useQuery<{ sports: string[] }>({
+    queryKey: ["/api/admin/skill-sports-with-content"],
+    queryFn: () => getJson("/api/admin/skill-sports-with-content"),
+  });
+  const sportsWithSkillContent = SPORTS.filter((s) => skillSportsWithContent?.sports.includes(s));
+
   const createCodeMutation = useMutation({
     mutationFn: async () => {
       await apiRequest("POST", "/api/admin/redeem-codes", {
@@ -464,10 +475,12 @@ export default function AdminBilling() {
                 <p className="text-xs text-muted-foreground">
                   Every Free Agent gets their own signup sport's Skill Bank free -- toggle on any
                   other sport here to unlock it manually (${(SKILL_SPORT_UNLOCK_MONTHLY_PRICE_CENTS / 100).toFixed(2)}/mo each, no live checkout yet).
+                  Only sports with real drill content are listed -- there's nothing to unlock for
+                  the rest of the taxonomy yet.
                 </p>
                 <FilterChipGroup
                   label="Sports"
-                  options={SPORTS}
+                  options={sportsWithSkillContent}
                   selected={unlockedSkillSports}
                   onToggle={(v) => toggleInSet(setUnlockedSkillSports, v)}
                 />
