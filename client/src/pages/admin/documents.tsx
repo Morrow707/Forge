@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { apiRequest, resolveApiUrl, ApiError } from "@/lib/queryClient";
+import { apiRequest, ApiError } from "@/lib/queryClient";
+import { shareOrDownloadFile } from "@/lib/share-file";
 import { toast } from "sonner";
 import { Download, ShieldAlert, Save, Mail } from "lucide-react";
 
@@ -46,6 +47,14 @@ const TIER_LABEL: Record<string, string> = {
   tier2_teen_13_17: "Tier 2 -- Teen (13-17)",
   tier3_adult_18plus: "Tier 3 -- Adult (18+)",
   unknown: "Unknown (no date of birth on file)",
+};
+
+const DOC_LABEL: Record<LegalDocType, string> = {
+  terms_of_service: "Terms of Service",
+  privacy_policy: "Privacy Policy",
+  biometric_waiver: "Biometric Waiver",
+  parental_notice: "Notice to Parent or Guardian",
+  institutional_agreement: "Institutional Agreement",
 };
 
 const CONSENT_LABEL: Record<string, string> = {
@@ -97,12 +106,12 @@ export default function AdminDocuments() {
             <CardDescription>Age-tier and consent-logging system, current state.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Button asChild variant="outline" size="sm">
-              <a href={resolveApiUrl("/api/admin/compliance-report.pdf")} download>
-                <Download className="h-4 w-4" />
-                Download printable PDF
-              </a>
-            </Button>
+            <DownloadButton
+              url="/api/admin/compliance-report.pdf"
+              filename="forge-compliance-report.pdf"
+              shareTitle="Forge Compliance Report"
+              label="Download printable PDF"
+            />
 
             {complianceLoading || !compliance ? (
               <p className="text-sm text-muted-foreground">Loading…</p>
@@ -162,12 +171,12 @@ export default function AdminDocuments() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <Button asChild variant="outline" size="sm">
-              <a href={resolveApiUrl("/api/admin/audit-log.csv")} download>
-                <Download className="h-4 w-4" />
-                Download CSV
-              </a>
-            </Button>
+            <DownloadButton
+              url="/api/admin/audit-log.csv"
+              filename="forge-audit-log.csv"
+              shareTitle="Forge Audit Log"
+              label="Download CSV"
+            />
             {auditLoading || !auditLog ? (
               <p className="text-sm text-muted-foreground">Loading…</p>
             ) : auditLog.length === 0 ? (
@@ -335,12 +344,12 @@ function LegalDocEditor({ docType }: { docType: LegalDocType }) {
           <Save className="h-4 w-4" />
           {saveMutation.isPending ? "Saving…" : "Save"}
         </Button>
-        <Button asChild size="sm" variant="outline">
-          <a href={resolveApiUrl(`/api/admin/legal-documents/${docType}.pdf`)} download>
-            <Download className="h-4 w-4" />
-            Print / Download PDF
-          </a>
-        </Button>
+        <DownloadButton
+          url={`/api/admin/legal-documents/${docType}.pdf`}
+          filename={`forge-${docType.replace(/_/g, "-")}.pdf`}
+          shareTitle={DOC_LABEL[docType]}
+          label="Print / Download PDF"
+        />
         <div className="flex items-center gap-1.5">
           <Input
             type="email"
@@ -361,6 +370,41 @@ function LegalDocEditor({ docType }: { docType: LegalDocType }) {
         </div>
       </div>
     </div>
+  );
+}
+
+/** A plain `<a download>` is a no-op inside the native app -- WKWebView has
+ * no download manager and ignores it (see share-file.ts's own comment).
+ * Every "download" on this page routes through shareOrDownloadFile instead:
+ * fetches the file with the request's normal auth, then hands it to the
+ * native share sheet on-device or falls back to a real browser download on
+ * web, so the same button works in both places. */
+function DownloadButton({
+  url,
+  filename,
+  shareTitle,
+  label,
+}: {
+  url: string;
+  filename: string;
+  shareTitle: string;
+  label: string;
+}) {
+  const mutation = useMutation({
+    mutationFn: () => shareOrDownloadFile(url, filename, shareTitle),
+    onError: (err: Error) => toast.error(err.message || "Couldn't generate that file"),
+  });
+
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={() => mutation.mutate()}
+      disabled={mutation.isPending}
+    >
+      <Download className="h-4 w-4" />
+      {mutation.isPending ? "Preparing…" : label}
+    </Button>
   );
 }
 
