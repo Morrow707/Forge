@@ -147,11 +147,17 @@ function StrengthLeaderboard() {
             <SelectValue placeholder="Pick an exercise" />
           </SelectTrigger>
           <SelectContent>
-            {exercises.map((e) => (
-              <SelectItem key={e.id} value={String(e.id)}>
-                {e.name}
+            {exercises.length === 0 ? (
+              <SelectItem value="_none" disabled>
+                No exercises assigned yet
               </SelectItem>
-            ))}
+            ) : (
+              exercises.map((e) => (
+                <SelectItem key={e.id} value={String(e.id)}>
+                  {e.name}
+                </SelectItem>
+              ))
+            )}
           </SelectContent>
         </Select>
       </div>
@@ -233,11 +239,17 @@ function SpeedLeaderboard() {
             <SelectValue placeholder="Pick a timed drill" />
           </SelectTrigger>
           <SelectContent>
-            {exercises.map((e) => (
-              <SelectItem key={e.id} value={String(e.id)}>
-                {e.name}
+            {exercises.length === 0 ? (
+              <SelectItem value="_none" disabled>
+                No timed drills assigned yet
               </SelectItem>
-            ))}
+            ) : (
+              exercises.map((e) => (
+                <SelectItem key={e.id} value={String(e.id)}>
+                  {e.name}
+                </SelectItem>
+              ))
+            )}
           </SelectContent>
         </Select>
       </div>
