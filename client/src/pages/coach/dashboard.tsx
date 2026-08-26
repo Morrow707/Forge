@@ -356,7 +356,6 @@ export default function CoachDashboard() {
           </DndContext>
         </div>
       </div>
-      </div>
 
       <CoachDayEditDialog
         programDayId={editing?.programDayId ?? null}
