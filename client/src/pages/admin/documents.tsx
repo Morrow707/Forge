@@ -6,9 +6,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { apiRequest, ApiError } from "@/lib/queryClient";
-import { shareOrDownloadFile } from "@/lib/share-file";
+import { DownloadButton } from "@/components/download-button";
 import { toast } from "sonner";
-import { Download, ShieldAlert, Save, Mail } from "lucide-react";
+import { ShieldAlert, Save, Mail } from "lucide-react";
 
 type LegalDocType =
   | "terms_of_service"
@@ -370,41 +370,6 @@ function LegalDocEditor({ docType }: { docType: LegalDocType }) {
         </div>
       </div>
     </div>
-  );
-}
-
-/** A plain `<a download>` is a no-op inside the native app -- WKWebView has
- * no download manager and ignores it (see share-file.ts's own comment).
- * Every "download" on this page routes through shareOrDownloadFile instead:
- * fetches the file with the request's normal auth, then hands it to the
- * native share sheet on-device or falls back to a real browser download on
- * web, so the same button works in both places. */
-function DownloadButton({
-  url,
-  filename,
-  shareTitle,
-  label,
-}: {
-  url: string;
-  filename: string;
-  shareTitle: string;
-  label: string;
-}) {
-  const mutation = useMutation({
-    mutationFn: () => shareOrDownloadFile(url, filename, shareTitle),
-    onError: (err: Error) => toast.error(err.message || "Couldn't generate that file"),
-  });
-
-  return (
-    <Button
-      variant="outline"
-      size="sm"
-      onClick={() => mutation.mutate()}
-      disabled={mutation.isPending}
-    >
-      <Download className="h-4 w-4" />
-      {mutation.isPending ? "Preparing…" : label}
-    </Button>
   );
 }
 

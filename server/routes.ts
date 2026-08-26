@@ -2532,6 +2532,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ content });
   });
 
+  // Printable/shareable copy of the signup clickwrap itself -- the other
+  // five legal documents already had this (see buildLegalDocumentPdf below),
+  // this one hadn't been given the same treatment yet.
+  app.get("/api/admin/legal-agreement.pdf", requireRole("admin"), async (_req, res) => {
+    const content = await storage.getLegalAgreement();
+    const pdf = await buildLegalDocumentPdf("Forge -- Signup Agreement", content);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="forge-signup-agreement.pdf"`);
+    res.send(pdf);
+  });
+
   // Draft Terms of Service / Privacy Policy / Biometric Waiver / Parental
   // Notice -- see legalDocuments' own schema comment: separate from
   // legalAgreement above, not wired into signup or any live consent-

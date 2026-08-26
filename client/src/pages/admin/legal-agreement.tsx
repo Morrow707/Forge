@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { apiRequest, ApiError } from "@/lib/queryClient";
+import { DownloadButton } from "@/components/download-button";
 import { toast } from "sonner";
 import { Save, ShieldAlert } from "lucide-react";
 
@@ -69,13 +70,21 @@ export default function AdminLegalAgreement() {
             className="font-mono text-sm"
             placeholder="Loading…"
           />
-          <Button
-            onClick={() => saveMutation.mutate()}
-            disabled={saveMutation.isPending || !content.trim() || isLoading}
-          >
-            <Save className="h-4 w-4" />
-            {saveMutation.isPending ? "Saving…" : "Save"}
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              onClick={() => saveMutation.mutate()}
+              disabled={saveMutation.isPending || !content.trim() || isLoading}
+            >
+              <Save className="h-4 w-4" />
+              {saveMutation.isPending ? "Saving…" : "Save"}
+            </Button>
+            <DownloadButton
+              url="/api/admin/legal-agreement.pdf"
+              filename="forge-signup-agreement.pdf"
+              shareTitle="Forge Signup Agreement"
+              label="Print / Download PDF"
+            />
+          </div>
         </CardContent>
       </Card>
     </AppShell>
