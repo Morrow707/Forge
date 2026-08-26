@@ -94,7 +94,7 @@ function RosterRow({
       >
         {rank < 3 ? <Medal className="h-4 w-4" /> : rank + 1}
       </div>
-      <AthleteAvatar name={name} size="sm" />
+      <AthleteAvatar name={name} size="sm" currentStreak={currentStreak} />
       <div className="min-w-0 flex-1">
         <p className="truncate font-semibold">{name}</p>
         <div className="mt-1 flex flex-wrap gap-1.5">
