@@ -1546,7 +1546,7 @@ export function WorkoutPage({
             <div className="rounded-lg border border-border bg-surface p-4">
               <div className="mb-3 flex items-baseline gap-8">
                 <div>
-                  <p className="font-display text-3xl font-extrabold leading-none">
+                  <p className="font-display text-3xl font-extrabold leading-none tabular-nums">
                     {stats.totalReps}
                   </p>
                   <p className="mt-1 text-[10px] font-semibold uppercase text-muted-foreground">
@@ -1554,7 +1554,7 @@ export function WorkoutPage({
                   </p>
                 </div>
                 <div>
-                  <p className="font-display text-3xl font-extrabold leading-none">
+                  <p className="font-display text-3xl font-extrabold leading-none tabular-nums">
                     {stats.totalVolume.toLocaleString()}
                   </p>
                   <p className="mt-1 text-[10px] font-semibold uppercase text-muted-foreground">

@@ -25,7 +25,7 @@ export function StatTile({
             <Icon className="h-5 w-5" />
           </div>
           <div className="min-w-0">
-            <p className="font-display text-2xl font-bold md:text-3xl">{value}</p>
+            <p className="font-display text-2xl font-bold tabular-nums md:text-3xl">{value}</p>
             <p className="truncate text-sm text-muted-foreground">{label}</p>
           </div>
         </CardContent>

@@ -116,7 +116,7 @@ function RosterRow({
         </div>
       </div>
       <div className="shrink-0 text-right">
-        <p className="font-display text-lg font-bold">{statValue}</p>
+        <p className="font-display text-lg font-bold tabular-nums">{statValue}</p>
         <p className="text-xs text-muted-foreground">{statCaption}</p>
       </div>
     </div>
