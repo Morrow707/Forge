@@ -28,6 +28,7 @@ import { InjuryIntakeImportDialog } from "@/components/injury-intake-import-dial
 import { TestingDataImportDialog } from "@/components/testing-data-import-dialog";
 import { PlayerIntakeImportDialog } from "@/components/player-intake-import-dialog";
 import { ProvisionalRosterPanel } from "@/components/provisional-roster-panel";
+import { Skeleton } from "@/components/skeleton";
 import {
   HealthStatusToggle,
   WellnessBadge,
@@ -70,6 +71,9 @@ import {
   Download,
   CheckSquare,
   ArrowRightLeft,
+  ChevronUp,
+  ChevronDown,
+  ChevronsUpDown,
 } from "lucide-react";
 
 type PhotoImportKind = "testing-day" | "weigh-in" | "nutrition" | "injury" | "testing-data" | "player-intake";
@@ -123,10 +127,38 @@ type TeamEntry = {
 };
 type ProgramSummary = { id: number; name: string };
 
+type RosterSortColumn = "name" | "sport" | "position" | "health" | "email";
+
+const ROSTER_SORT_COLUMNS: { column: RosterSortColumn; label: string }[] = [
+  { column: "name", label: "Name" },
+  { column: "sport", label: "Sport" },
+  { column: "position", label: "Position" },
+  { column: "health", label: "Health" },
+  { column: "email", label: "Email" },
+];
+
+// String key each column sorts by -- blanks (no sport/position on file)
+// always sort to the end regardless of direction, rather than clumping at
+// the top on an ascending sort the way an empty string naturally would.
+function rosterSortValue(a: RosterEntry, column: RosterSortColumn): string {
+  switch (column) {
+    case "name":
+      return a.name;
+    case "sport":
+      return a.sport ?? "";
+    case "position":
+      return a.position ?? "";
+    case "health":
+      return a.healthStatus ?? "healthy";
+    case "email":
+      return a.email;
+  }
+}
+
 export default function CoachRoster() {
   const qc = useQueryClient();
   const [, navigate] = useLocation();
-  const { data: roster = [] } = useQuery<RosterEntry[]>({
+  const { data: roster = [], isLoading: rosterLoading } = useQuery<RosterEntry[]>({
     queryKey: ["/api/coach/roster"],
   });
   const { data: teams = [] } = useQuery<TeamEntry[]>({
@@ -185,6 +217,22 @@ export default function CoachRoster() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [bulkAddTeamId, setBulkAddTeamId] = useState("");
 
+  // Roster table sort -- client-side over whatever's already in `roster`
+  // (no separate API param; the whole roster is fetched up front already).
+  // Defaults to Name ascending so the list has a stable, predictable order
+  // before a coach ever taps a header.
+  const [sortColumn, setSortColumn] = useState<RosterSortColumn>("name");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+
+  function toggleSort(column: RosterSortColumn) {
+    if (sortColumn === column) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortColumn(column);
+      setSortDir("asc");
+    }
+  }
+
   function toggleSelected(athleteId: number) {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -213,6 +261,15 @@ export default function CoachRoster() {
       (a.sport ?? "").toLowerCase().includes(q) ||
       (a.position ?? "").toLowerCase().includes(q)
     );
+  });
+
+  const sortedRoster = [...filteredRoster].sort((a, b) => {
+    const av = rosterSortValue(a, sortColumn);
+    const bv = rosterSortValue(b, sortColumn);
+    if (av === "" && bv !== "") return 1;
+    if (bv === "" && av !== "") return -1;
+    const cmp = av.localeCompare(bv, undefined, { sensitivity: "base" });
+    return sortDir === "asc" ? cmp : -cmp;
   });
 
   const createTeamMutation = useMutation({
@@ -346,7 +403,7 @@ export default function CoachRoster() {
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => exportRosterCsv(selectedIds.size > 0 ? filteredRoster.filter((a) => selectedIds.has(a.id)) : filteredRoster)}
+                  onClick={() => exportRosterCsv(selectedIds.size > 0 ? sortedRoster.filter((a) => selectedIds.has(a.id)) : sortedRoster)}
                 >
                   <Download className="h-3.5 w-3.5" />
                   Export CSV
@@ -423,7 +480,17 @@ export default function CoachRoster() {
           <div className="mb-4">
             <ProvisionalRosterPanel />
           </div>
-          {roster.length === 0 ? (
+          {rosterLoading ? (
+            <div className="overflow-x-auto rounded-lg border border-border">
+              <table className="w-full min-w-[760px] text-left text-sm">
+                <tbody>
+                  {Array.from({ length: 8 }).map((_, i) => (
+                    <RosterRowSkeleton key={i} showCheckbox={selectMode} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : roster.length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
                 <Users className="h-10 w-10 text-muted-foreground" />
@@ -488,7 +555,7 @@ export default function CoachRoster() {
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => setSelectedIds(new Set(filteredRoster.map((a) => a.id)))}
+                    onClick={() => setSelectedIds(new Set(sortedRoster.map((a) => a.id)))}
                   >
                     Select all ({filteredRoster.length})
                   </Button>
@@ -504,68 +571,146 @@ export default function CoachRoster() {
                     : `No ${healthFilter} athletes match your search.`}
                 </p>
               ) : (
-                <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-                  {filteredRoster.map((a) => {
-                    const isSelected = selectedIds.has(a.id);
-                    return (
-                    <Card
-                      key={a.id}
-                      className={cn(
-                        "cursor-pointer transition-colors hover:border-primary/50",
-                        isSelected && "border-primary bg-primary/5",
-                      )}
-                      onClick={() =>
-                        selectMode ? toggleSelected(a.id) : navigate(`/coach/roster/${a.id}`)
-                      }
-                    >
-                      <CardContent className="flex flex-col gap-2 p-3">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            {selectMode && (
-                              <Checkbox
-                                checked={isSelected}
-                                onCheckedChange={() => toggleSelected(a.id)}
-                                onClick={(e) => e.stopPropagation()}
-                                aria-label={`Select ${a.name}`}
-                              />
+                // Wrapped in its own overflow-x-auto container (per AppShell's
+                // "wide content scrolls inside itself" convention) rather than
+                // ever growing the page past the viewport width on a narrow
+                // phone -- the table itself has a min-width so columns don't
+                // crush down to unreadable slivers.
+                //
+                // The header row's `<th>` cells are individually sticky
+                // (matching the sticky-left-column idiom already used in
+                // game-days-panel.tsx) rather than the `<tr>` itself, for the
+                // same cross-browser-safe reason. Their `top` reads the
+                // --app-shell-sticky-height custom property AppShell publishes
+                // for exactly this purpose (see app-shell.tsx) -- the page
+                // itself scrolls here (roster doesn't opt into AppShell's
+                // fitScreen), and that variable tracks AppShell's own sticky
+                // brand/title/tabs bar's *real* rendered height live, so this
+                // header always lands directly below it instead of overlapping
+                // it or leaving a gap, however tall that bar happens to be at
+                // the moment (title/actions wrapped on mobile, the mobile nav
+                // panel open, a coach's branding logo, etc.).
+                <div className="overflow-x-auto rounded-lg border border-border">
+                  <table className="w-full min-w-[760px] text-left text-sm">
+                    <thead>
+                      <tr>
+                        {selectMode && (
+                          <th
+                            scope="col"
+                            className="sticky z-10 w-10 border-b border-white/10 bg-card/85 px-3 py-2 shadow-[0_1px_0_0_rgba(255,255,255,0.06),0_8px_20px_-16px_rgba(0,0,0,0.6)] backdrop-blur-xl backdrop-saturate-150"
+                            style={{ top: "var(--app-shell-sticky-height, 0px)" }}
+                          />
+                        )}
+                        {ROSTER_SORT_COLUMNS.map(({ column, label }) => {
+                          const active = sortColumn === column;
+                          return (
+                            <th
+                              key={column}
+                              scope="col"
+                              className="sticky z-10 border-b border-white/10 bg-card/85 px-3 py-2 shadow-[0_1px_0_0_rgba(255,255,255,0.06),0_8px_20px_-16px_rgba(0,0,0,0.6)] backdrop-blur-xl backdrop-saturate-150"
+                              style={{ top: "var(--app-shell-sticky-height, 0px)" }}
+                            >
+                              <button
+                                type="button"
+                                onClick={() => toggleSort(column)}
+                                className={cn(
+                                  "label-xs flex items-center gap-1 whitespace-nowrap transition-colors hover:text-foreground",
+                                  active && "text-foreground",
+                                )}
+                                aria-label={`Sort by ${label}${active ? `, currently ${sortDir === "asc" ? "ascending" : "descending"}` : ""}`}
+                              >
+                                {label}
+                                {active ? (
+                                  sortDir === "asc" ? (
+                                    <ChevronUp className="h-3 w-3" />
+                                  ) : (
+                                    <ChevronDown className="h-3 w-3" />
+                                  )
+                                ) : (
+                                  <ChevronsUpDown className="h-3 w-3 opacity-40" />
+                                )}
+                              </button>
+                            </th>
+                          );
+                        })}
+                        <th
+                          scope="col"
+                          className="sticky z-10 border-b border-white/10 bg-card/85 px-3 py-2 text-right shadow-[0_1px_0_0_rgba(255,255,255,0.06),0_8px_20px_-16px_rgba(0,0,0,0.6)] backdrop-blur-xl backdrop-saturate-150"
+                          style={{ top: "var(--app-shell-sticky-height, 0px)" }}
+                        >
+                          <span className="label-xs">Actions</span>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sortedRoster.map((a) => {
+                        const isSelected = selectedIds.has(a.id);
+                        return (
+                          <tr
+                            key={a.id}
+                            onClick={() =>
+                              selectMode ? toggleSelected(a.id) : navigate(`/coach/roster/${a.id}`)
+                            }
+                            className={cn(
+                              "cursor-pointer border-b border-border/50 transition-colors",
+                              isSelected ? "bg-primary/5" : "hover:bg-surface-elevated",
                             )}
-                            <span className="truncate text-sm font-semibold">{a.name}</span>
-                          </div>
-                          <HealthStatusToggle athleteId={a.id} status={a.healthStatus ?? "healthy"} />
-                          <p className="mt-1 truncate text-[11px] text-muted-foreground">{a.email}</p>
-                          {(a.sport || a.position) && (
-                            <div className="mt-1 flex flex-wrap gap-1">
-                              {a.sport && (
+                          >
+                            {selectMode && (
+                              <td className="px-3 py-2">
+                                <Checkbox
+                                  checked={isSelected}
+                                  onCheckedChange={() => toggleSelected(a.id)}
+                                  onClick={(e) => e.stopPropagation()}
+                                  aria-label={`Select ${a.name}`}
+                                />
+                              </td>
+                            )}
+                            <td className="max-w-[220px] truncate px-3 py-2 font-semibold">{a.name}</td>
+                            <td className="px-3 py-2">
+                              {a.sport ? (
                                 <Badge variant="secondary" className="text-[10px]">
                                   {a.sport}
                                 </Badge>
+                              ) : (
+                                <span className="text-muted-foreground">-</span>
                               )}
-                              {a.position && (
+                            </td>
+                            <td className="px-3 py-2">
+                              {a.position ? (
                                 <Badge variant="outline" className="text-[10px]">
                                   {a.position}
                                 </Badge>
+                              ) : (
+                                <span className="text-muted-foreground">-</span>
                               )}
-                            </div>
-                          )}
-                        </div>
-                        {!selectMode && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="self-start"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openAssignFor([a.id]);
-                            }}
-                          >
-                            <Send className="h-3.5 w-3.5" />
-                            Assign
-                          </Button>
-                        )}
-                      </CardContent>
-                    </Card>
-                    );
-                  })}
+                            </td>
+                            <td className="px-3 py-2">
+                              <HealthStatusToggle athleteId={a.id} status={a.healthStatus ?? "healthy"} />
+                            </td>
+                            <td className="max-w-[220px] truncate px-3 py-2 text-muted-foreground">
+                              {a.email}
+                            </td>
+                            <td className="px-3 py-2 text-right">
+                              {!selectMode && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openAssignFor([a.id]);
+                                  }}
+                                >
+                                  <Send className="h-3.5 w-3.5" />
+                                  Assign
+                                </Button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               )}
             </>
@@ -943,6 +1088,41 @@ export default function CoachRoster() {
       />
       </AppShell>
     </Tabs>
+  );
+}
+
+/** Placeholder for one roster table row while `/api/coach/roster` is still
+ * in flight -- shaped to the real row's columns (name/sport/position/
+ * health/email/actions) so the table doesn't jump around once real rows
+ * swap in. Takes showCheckbox rather than reading selectMode itself so it
+ * matches whichever mode the page is already in the instant data arrives. */
+function RosterRowSkeleton({ showCheckbox }: { showCheckbox: boolean }) {
+  return (
+    <tr className="border-b border-border/50">
+      {showCheckbox && (
+        <td className="px-3 py-2">
+          <Skeleton className="h-4 w-4 rounded" />
+        </td>
+      )}
+      <td className="px-3 py-2">
+        <Skeleton className="h-4 w-28" />
+      </td>
+      <td className="px-3 py-2">
+        <Skeleton className="h-4 w-14 rounded-full" />
+      </td>
+      <td className="px-3 py-2">
+        <Skeleton className="h-4 w-14 rounded-full" />
+      </td>
+      <td className="px-3 py-2">
+        <Skeleton className="h-4 w-16 rounded-full" />
+      </td>
+      <td className="px-3 py-2">
+        <Skeleton className="h-4 w-32" />
+      </td>
+      <td className="px-3 py-2 text-right">
+        <Skeleton className="ml-auto h-7 w-16 rounded-md" />
+      </td>
+    </tr>
   );
 }
 

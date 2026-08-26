@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Capacitor } from "@capacitor/core";
 import { useQuery } from "@tanstack/react-query";
@@ -193,6 +193,26 @@ export function AppShell({
 }) {
   const { user, logoutMutation } = useAuth();
   const [location] = useLocation();
+  // Measured height of the sticky brand/nav/title/subheader bar just below,
+  // published as a CSS var on the root element -- lets a page nest its own
+  // sticky element (e.g. a sticky table header) underneath this bar without
+  // hardcoding a pixel offset that would drift out of sync the moment the
+  // bar's real height changes (title/actions wrapping to two lines on a
+  // narrow phone, the mobile nav panel opening, a coach's branding logo
+  // loading in). ResizeObserver keeps it correct through all of that, not
+  // just on mount.
+  const stickyBarRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = stickyBarRef.current;
+    if (!el) return;
+    const publishHeight = () => {
+      document.documentElement.style.setProperty("--app-shell-sticky-height", `${el.offsetHeight}px`);
+    };
+    publishHeight();
+    const observer = new ResizeObserver(publishHeight);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [notifSettingsOpen, setNotifSettingsOpen] = useState(false);
@@ -348,6 +368,7 @@ export function AppShell({
           extends up under the iPhone notch/Dynamic Island instead of leaving
           a gap -- only the content below needs pushing down, not the bar. */}
       <div
+        ref={stickyBarRef}
         className="sticky top-0 z-30 shrink-0 border-b border-white/10 bg-surface/70 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)] backdrop-blur-xl backdrop-saturate-150"
         style={{
           paddingTop: "env(safe-area-inset-top)",
