@@ -30,6 +30,7 @@ import {
   FREE_AGENT_TIER_ORDER,
   FREE_AGENT_ADD_ONS,
   FREE_AGENT_ADD_ON_ORDER,
+  BUILT_FREE_AGENT_ADD_ONS,
   type FreeAgentTierId,
   type FreeAgentAddOnId,
 } from "@shared/free-agent-tiers";
@@ -205,8 +206,12 @@ export default function AdminBilling() {
 
   function toggleFreeAgentAddOn(id: FreeAgentAddOnId) {
     const next = new Set(freeAgentAddOns);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
+    if (next.has(id)) {
+      next.delete(id);
+    } else {
+      if (!BUILT_FREE_AGENT_ADD_ONS.has(id)) return;
+      next.add(id);
+    }
     setFreeAgentAddOns(next);
   }
 
@@ -454,19 +459,33 @@ export default function AdminBilling() {
               <div className="space-y-1.5">
                 <Label>Sport add-ons</Label>
                 <p className="text-xs text-muted-foreground">
-                  Pricing only -- none of these sport-specialist coaches are built yet, so
-                  assigning one here doesn't unlock anything today.
+                  Pricing only -- none of these sport-specialist coaches are built yet, so none
+                  can be assigned. Each one unlocks here the moment that coach actually ships.
                 </p>
                 <div className="space-y-2">
-                  {FREE_AGENT_ADD_ON_ORDER.map((id) => (
-                    <label key={id} className="flex items-center gap-2 text-sm hover:cursor-pointer">
-                      <Checkbox
-                        checked={freeAgentAddOns.has(id)}
-                        onCheckedChange={() => toggleFreeAgentAddOn(id)}
-                      />
-                      {FREE_AGENT_ADD_ONS[id].label} -- {formatCents(FREE_AGENT_ADD_ONS[id].monthlyPriceCents)}/mo
-                    </label>
-                  ))}
+                  {FREE_AGENT_ADD_ON_ORDER.map((id) => {
+                    const built = BUILT_FREE_AGENT_ADD_ONS.has(id);
+                    const checked = freeAgentAddOns.has(id);
+                    // Disabled only for turning ON an unbuilt add-on -- if
+                    // one somehow got checked before this guard existed,
+                    // unchecking it (cleanup) still needs to work.
+                    const disabled = !built && !checked;
+                    return (
+                      <label
+                        key={id}
+                        className="flex items-center gap-2 text-sm hover:cursor-pointer aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
+                        aria-disabled={disabled}
+                      >
+                        <Checkbox
+                          checked={checked}
+                          disabled={disabled}
+                          onCheckedChange={() => toggleFreeAgentAddOn(id)}
+                        />
+                        {FREE_AGENT_ADD_ONS[id].label} -- {formatCents(FREE_AGENT_ADD_ONS[id].monthlyPriceCents)}/mo
+                        {!built && <span className="text-muted-foreground">(not built yet)</span>}
+                      </label>
+                    );
+                  })}
                 </div>
               </div>
 

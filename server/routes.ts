@@ -34,6 +34,7 @@ import { widgetLayoutSchema } from "@shared/dashboard-widgets";
 import { notifyUser } from "./notify";
 import { findGoniometerMovement } from "@shared/goniometer";
 import { NOTIFICATION_CATEGORIES } from "@shared/notification-categories";
+import { FREE_AGENT_ADD_ONS, BUILT_FREE_AGENT_ADD_ONS } from "@shared/free-agent-tiers";
 import {
   insertExerciseSchema,
   insertSkillExerciseSchema,
@@ -2078,6 +2079,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (empty.length > 0) {
         return res.status(400).json({
           message: `${empty.join(", ")} ${empty.length === 1 ? "has" : "have"} no Skill Bank content yet -- nothing to unlock.`,
+        });
+      }
+    }
+    if (parsed.data.freeAgentAddOns) {
+      const unbuilt = parsed.data.freeAgentAddOns.filter((id) => !BUILT_FREE_AGENT_ADD_ONS.has(id));
+      if (unbuilt.length > 0) {
+        const labels = unbuilt.map((id) => FREE_AGENT_ADD_ONS[id].label).join(", ");
+        return res.status(400).json({
+          message: `${labels} ${unbuilt.length === 1 ? "isn't" : "aren't"} built yet -- nothing to assign.`,
         });
       }
     }

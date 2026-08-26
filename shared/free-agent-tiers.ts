@@ -91,6 +91,18 @@ export const FREE_AGENT_ADD_ONS: Record<FreeAgentAddOnId, FreeAgentAddOnDef> = {
   },
 };
 
+// Which of the three above have an actual feature behind them -- same
+// "framework only, don't sell what doesn't exist" gate the Skill Bank
+// sport-unlock already enforces (see getSportsWithSkillContent in
+// storage.ts). Every add-on here is still empty, so this starts empty; add
+// an id the moment that specific sport-specialist coach actually ships,
+// which is the one-line change that flips its checkbox from disabled to
+// assignable in the admin billing UI and lifts the 400 the billing route
+// throws for it today. Empty (not just "framework only") is a stronger
+// claim than the Skill Bank case, where some sports already had real drill
+// content and only the empty ones were blocked.
+export const BUILT_FREE_AGENT_ADD_ONS: Set<FreeAgentAddOnId> = new Set([]);
+
 export const FREE_AGENT_ADD_ON_ORDER: FreeAgentAddOnId[] = ["golf_swing", "hitting", "pitching"];
 
 // Skill Bank sport-unlock pricing -- a separate dimension from the add-ons
