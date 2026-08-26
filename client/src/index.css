@@ -97,6 +97,15 @@
   --input: 222 17% 24%;
   --ring: 14 85% 42%;
 
+  /* Border/inset-highlight color for the frosted glass surfaces (Card,
+     Dialog, Popover, Select) -- kept separate from --border (the flat,
+     always-neutral 1px rule used elsewhere) because a coach's personal
+     accent color (see branding-style.ts) tints this one but must never
+     tint --border, or every plain divider and input outline in the app
+     would shift with it. Plain white by default, matching the original
+     literal white/30 rim before it became a token. */
+  --rim: 0 0% 100%;
+
   --radius: 0.6rem;
 }
 

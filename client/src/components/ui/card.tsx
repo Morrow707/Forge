@@ -17,7 +17,13 @@ const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElemen
         // the shadow itself was confirmed still too subtle to read against
         // --background at any reasonable opacity -- a brighter rim doesn't
         // depend on shadow contrast the way the glow underneath it does.
-        "rounded-xl border border-white/30 bg-card/85 text-card-foreground shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1),0_12px_36px_-14px_rgba(0,0,0,0.75)] backdrop-blur-xl backdrop-saturate-150",
+        // Rim + inset highlight now key off --rim (white by default) rather
+        // than a literal white, so a coach's personal accent color can tint
+        // this edge -- the elevation shadow itself stays plain black; that
+        // part is what actually reads as depth against a dark background
+        // (see index.css's comment on the neutral ladder) and tinting it
+        // would undo that.
+        "rounded-xl border border-[hsl(var(--rim)/0.3)] bg-card/85 text-card-foreground shadow-[inset_0_1px_0_0_hsl(var(--rim)/0.1),0_12px_36px_-14px_rgba(0,0,0,0.75)] backdrop-blur-xl backdrop-saturate-150",
         className,
       )}
       {...props}

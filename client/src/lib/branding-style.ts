@@ -18,11 +18,13 @@ export type EffectiveBranding = {
  * re-skin) and the signup page (a pre-login preview from a typed invite
  * code) so the two can't drift on which tokens get overridden or how.
  * personalAccentColor only ever applies to the viewer's own session (see
- * users.personalAccentColor) -- it overrides --ring/--accent on top of
- * the org's --primary, so a coach's personal touch never changes what
- * the org's own brand color actually is for buttons/badges, just their
- * own hover/focus highlight. Returns undefined when there's nothing to
- * override, so callers can spread it straight into a style prop. */
+ * users.personalAccentColor) -- a coach's own pick, set on their own
+ * account, and it now overrides everything the org's branding would
+ * otherwise set (--primary/--ring/--accent/--rim), not just the
+ * hover/focus ring: buttons, "today" highlights, PR/streak numbers, and
+ * the frosted-card border all key off the same handful of tokens, so one
+ * color change reaches all of them. It's still purely local to that
+ * coach's own view -- nothing here touches what anyone else sees. */
 export function computeBrandingStyle(
   branding: EffectiveBranding | null | undefined,
   personalAccentColor?: string | null,
@@ -43,8 +45,10 @@ export function computeBrandingStyle(
   if (personalAccentColor) {
     const hsl = hexToHslTriplet(personalAccentColor);
     if (hsl) {
+      vars["--primary"] = hsl;
       vars["--ring"] = hsl;
       vars["--accent"] = hsl;
+      vars["--rim"] = hsl;
     }
   }
   return Object.keys(vars).length > 0 ? (vars as React.CSSProperties) : undefined;

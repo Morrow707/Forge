@@ -14,7 +14,8 @@ import { Label } from "@/components/ui/label";
 import { ColorField } from "@/components/color-field";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { Ticket } from "lucide-react";
+import { Ticket, AlertTriangle } from "lucide-react";
+import { contrastForegroundHsl, meetsWcagAA, nearestAccessibleColor } from "@/lib/color";
 import type { PublicUser } from "@shared/schema";
 
 /** Account-level self-service: name, email, and password, none of which
@@ -90,6 +91,9 @@ export function AccountSettingsDialog({
     },
     onError: (err: ApiError) => toast.error(err.message || "Couldn't update accent color"),
   });
+  const accentContrastOk =
+    !accentColor ||
+    meetsWcagAA(accentColor, contrastForegroundHsl(accentColor).endsWith("100%") ? "#ffffff" : "#000000");
 
   const [redeemCode, setRedeemCode] = useState("");
   const redeemMutation = useMutation({
@@ -198,11 +202,28 @@ export function AccountSettingsDialog({
           {user.role === "coach" && (
             <div className="space-y-1.5 border-t border-border pt-4">
               <p className="text-xs text-muted-foreground">
-                Your own accent color for hover/focus highlights -- just for your view, on top of
-                whatever your program's branding already sets. Leave blank to use the program's own
-                color.
+                Your own color, just for your view -- buttons, focus rings, card outlines, "today"
+                highlights, and PR/stat numbers all pick it up, on top of whatever your program's
+                branding already sets. Type an exact hex if you know it, or use the picker for a full
+                color wheel. Leave blank to use the program's own color.
               </p>
               <ColorField label="Personal accent" value={accentColor || "#F65B23"} onChange={setAccentColor} />
+              {!accentContrastOk && (
+                <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+                  <div className="space-y-1.5">
+                    <p>This color is too light/dark to read clearly as button text.</p>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setAccentColor(nearestAccessibleColor(accentColor) ?? accentColor)}
+                    >
+                      Use a readable version of this color
+                    </Button>
+                  </div>
+                </div>
+              )}
               <div className="flex gap-2">
                 <Button
                   type="button"
