@@ -810,7 +810,15 @@ export function AppShell({
                   {user?.staffTitle || (isFreeAgent ? "Free Agent" : user?.role)}
                 </p>
               </div>
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              {/* One uniform full-width row per item (matching the desktop
+                  dropdown just above) rather than a flex-wrap grid -- at
+                  varying label lengths ("2FA" vs. "Report a problem") a
+                  wrapping grid reads as an inconsistent jumble instead of a
+                  single clean list. Log out and Delete account are pinned
+                  last (in that order) and get the same destructive-color
+                  treatment as the desktop dropdown; every other item shares
+                  one identical row style regardless of role. */}
+              <div className="flex flex-col">
                 {user && (
                   <button
                     type="button"
@@ -818,7 +826,7 @@ export function AppShell({
                       setAccountSettingsOpen(true);
                       setMobileNavOpen(false);
                     }}
-                    className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground"
+                    className="flex w-full items-center gap-2 py-2 text-left text-sm font-semibold text-foreground"
                   >
                     <UserCog className="h-4 w-4" />
                     Account
@@ -831,7 +839,7 @@ export function AppShell({
                       setProfileOpen(true);
                       setMobileNavOpen(false);
                     }}
-                    className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground"
+                    className="flex w-full items-center gap-2 py-2 text-left text-sm font-semibold text-foreground"
                   >
                     <UserCircle className="h-4 w-4" />
                     Profile
@@ -844,7 +852,7 @@ export function AppShell({
                       setNotifSettingsOpen(true);
                       setMobileNavOpen(false);
                     }}
-                    className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground"
+                    className="flex w-full items-center gap-2 py-2 text-left text-sm font-semibold text-foreground"
                   >
                     <Settings className="h-4 w-4" />
                     Notifications
@@ -856,7 +864,7 @@ export function AppShell({
                     setReportProblemOpen(true);
                     setMobileNavOpen(false);
                   }}
-                  className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground"
+                  className="flex w-full items-center gap-2 py-2 text-left text-sm font-semibold text-foreground"
                 >
                   <Flag className="h-4 w-4" />
                   Report a problem
@@ -867,7 +875,7 @@ export function AppShell({
                     setActiveSessionsOpen(true);
                     setMobileNavOpen(false);
                   }}
-                  className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground"
+                  className="flex w-full items-center gap-2 py-2 text-left text-sm font-semibold text-foreground"
                 >
                   <MonitorSmartphone className="h-4 w-4" />
                   Devices
@@ -878,7 +886,7 @@ export function AppShell({
                     setChangePasswordOpen(true);
                     setMobileNavOpen(false);
                   }}
-                  className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground"
+                  className="flex w-full items-center gap-2 py-2 text-left text-sm font-semibold text-foreground"
                 >
                   <KeyRound className="h-4 w-4" />
                   Password
@@ -890,7 +898,7 @@ export function AppShell({
                       setMfaSettingsOpen(true);
                       setMobileNavOpen(false);
                     }}
-                    className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground"
+                    className="flex w-full items-center gap-2 py-2 text-left text-sm font-semibold text-foreground"
                   >
                     <ShieldCheck className="h-4 w-4" />
                     2FA
@@ -903,7 +911,7 @@ export function AppShell({
                       setCoachingStaffOpen(true);
                       setMobileNavOpen(false);
                     }}
-                    className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground"
+                    className="flex w-full items-center gap-2 py-2 text-left text-sm font-semibold text-foreground"
                   >
                     <UserPlus className="h-4 w-4" />
                     Staff
@@ -916,20 +924,25 @@ export function AppShell({
                       setBrandingOpen(true);
                       setMobileNavOpen(false);
                     }}
-                    className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground"
+                    className="flex w-full items-center gap-2 py-2 text-left text-sm font-semibold text-foreground"
                   >
                     <Palette className="h-4 w-4" />
                     Branding
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={() => logoutMutation.mutate()}
-                  className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground"
-                >
-                  <LogOut className="h-4 w-4" />
-                  Log out
-                </button>
+                {user?.role === "coach" && user.isPrimaryCoach && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNavCustomizeOpen(true);
+                      setMobileNavOpen(false);
+                    }}
+                    className="flex w-full items-center gap-2 py-2 text-left text-sm font-semibold text-foreground"
+                  >
+                    <SlidersHorizontal className="h-4 w-4" />
+                    Customize navigation
+                  </button>
+                )}
                 {user?.role === "athlete" && (
                   <button
                     type="button"
@@ -937,11 +950,21 @@ export function AppShell({
                       setGuardianAccessOpen(true);
                       setMobileNavOpen(false);
                     }}
-                    className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground"
+                    className="flex w-full items-center gap-2 py-2 text-left text-sm font-semibold text-foreground"
                   >
                     <ShieldCheck className="h-4 w-4" />
                     Guardian access
                   </button>
+                )}
+                {Capacitor.getPlatform() === "ios" && (
+                  <Link
+                    href="/dev/ar-preview-test"
+                    onClick={() => setMobileNavOpen(false)}
+                    className="flex w-full items-center gap-2 py-2 text-left text-sm font-semibold text-foreground"
+                  >
+                    <Camera className="h-4 w-4" />
+                    ARKit preview test
+                  </Link>
                 )}
                 <button
                   type="button"
@@ -949,10 +972,18 @@ export function AppShell({
                     setDeleteAccountOpen(true);
                     setMobileNavOpen(false);
                   }}
-                  className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground"
+                  className="flex w-full items-center gap-2 border-t border-border py-2 pt-3 text-left text-sm font-semibold text-destructive/70"
                 >
                   <Trash2 className="h-4 w-4" />
                   Delete account
+                </button>
+                <button
+                  type="button"
+                  onClick={() => logoutMutation.mutate()}
+                  className="flex w-full items-center gap-2 py-2 text-left text-sm font-semibold text-destructive"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Log out
                 </button>
               </div>
             </div>
