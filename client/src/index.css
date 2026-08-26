@@ -48,34 +48,36 @@
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-display: "Barlow Condensed", "Inter", ui-sans-serif, system-ui, sans-serif;
 
-  --background: 220 15% 7%;
+  /* Whole neutral scale deepened and re-saturated for a richer, less
+     washed-out-blue-gray look (the previous 220/1x%/low-L values read as
+     flat even after the elevation-contrast fix below) -- background pushed
+     toward a genuinely deep, slightly saturated near-black rather than a
+     pale charcoal, with every other surface tier re-spaced off it so nothing
+     collapses back into looking flush against its neighbor. --surface used
+     to be numerically IDENTICAL to --card (both 11%) -- an actual bug, not
+     just "subtle": a plain surface fill and an elevated Card had zero
+     lightness difference to begin with. Fixed the whole ladder at once:
+     background(5) < surface(11) < card/popover(16) < surface-elevated(21). */
+  --background: 222 20% 5%;
   --foreground: 0 0% 96%;
 
-  /* A shadow can't create contrast it doesn't have room for -- against
-     --background's 7% lightness, the previous 11% here left only 4 points
-     of headroom, and a box-shadow can only darken further, which is
-     already nearly maxed out that close to black. Raised the surface
-     itself instead of leaning harder on opacity/shadow tuning (tried
-     once already, still read as flat) -- this is what dark-theme "tonal
-     elevation" actually depends on: a lighter surface, not a darker
-     shadow, since there's nowhere left for the shadow to go. */
-  --card: 220 14% 17%;
-  --card-foreground: 0 0% 96%;
+  --card: 222 17% 16%;
+  --card-foreground: 0 0% 97%;
 
-  --popover: 220 14% 17%;
-  --popover-foreground: 0 0% 96%;
+  --popover: 222 17% 16%;
+  --popover-foreground: 0 0% 97%;
 
-  --surface: 220 14% 11%;
-  --surface-elevated: 220 13% 15%;
+  --surface: 222 16% 11%;
+  --surface-elevated: 222 16% 21%;
 
   --primary: 16 92% 55%;
   --primary-foreground: 0 0% 100%;
 
-  --secondary: 220 12% 18%;
+  --secondary: 222 15% 20%;
   --secondary-foreground: 0 0% 92%;
 
-  --muted: 220 10% 18%;
-  --muted-foreground: 220 9% 62%;
+  --muted: 222 13% 19%;
+  --muted-foreground: 220 9% 64%;
 
   --accent: 16 92% 55%;
   --accent-foreground: 0 0% 100%;
@@ -86,8 +88,8 @@
   --success: 142 71% 45%;
   --success-foreground: 0 0% 100%;
 
-  --border: 220 12% 20%;
-  --input: 220 12% 20%;
+  --border: 222 17% 24%;
+  --input: 222 17% 24%;
   --ring: 16 92% 55%;
 
   --radius: 0.6rem;
