@@ -26,7 +26,11 @@ const TabsTrigger = React.forwardRef<
   <TabsPrimitive.Trigger
     ref={ref}
     className={cn(
-      "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-2.5 py-1 text-xs font-semibold transition-all focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow",
+      // duration-200/ease-out (not transition-all's bare default) plus a
+      // primary-tinted glow and a hair of scale on the active pill -- reads
+      // via hsl(var(--primary)) so it still tracks a team's own branding
+      // color instead of a hardcoded hex.
+      "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-2.5 py-1 text-xs font-semibold transition-all duration-200 ease-out focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 data-[state=active]:scale-[1.02] data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-[0_0_14px_-2px_hsl(var(--primary)/0.65)]",
       className,
     )}
     {...props}
@@ -40,7 +44,10 @@ const TabsContent = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <TabsPrimitive.Content
     ref={ref}
-    className={cn("mt-4 focus-visible:outline-none", className)}
+    className={cn(
+      "mt-4 focus-visible:outline-none data-[state=active]:animate-in data-[state=active]:fade-in-0 data-[state=active]:duration-200",
+      className,
+    )}
     {...props}
   />
 ));

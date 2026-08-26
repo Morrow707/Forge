@@ -4,6 +4,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Timer, BellRing } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { playRestOverAlarm } from "@/lib/audio-cues";
+import { hapticLight } from "@/lib/haptics";
 import { apiRequest } from "@/lib/queryClient";
 
 // Backs up the in-page countdown with a real OS push notification so a
@@ -76,6 +77,9 @@ export const RestTimerControl = forwardRef<RestTimerHandle, { defaultSeconds?: n
       setRinging(true);
       return;
     }
+    // A light tick in the last 5 seconds -- felt through a pocket the way
+    // the visual pulse below is seen, without needing eyes on the screen.
+    if (remaining <= 5) hapticLight();
     timeoutRef.current = setTimeout(() => setRemaining((r) => (r !== null ? r - 1 : null)), 1000);
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -186,7 +190,20 @@ export const RestTimerControl = forwardRef<RestTimerHandle, { defaultSeconds?: n
               <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Resting
               </p>
-              <p className="font-display text-7xl font-extrabold leading-none tabular-nums text-primary">
+              {/* Heartbeat glow quickens as the clock runs low -- a "get
+                  ready" cue that doesn't need eyes on the screen to notice
+                  (see the matching haptic tick above and rest-heartbeat's
+                  own comment in index.css). */}
+              <p
+                className={cn(
+                  "rounded-full font-display text-7xl font-extrabold leading-none tabular-nums text-primary",
+                  remaining <= 5
+                    ? "animate-[rest-heartbeat_0.6s_ease-in-out_infinite]"
+                    : remaining <= 15
+                      ? "animate-[rest-heartbeat_1.3s_ease-in-out_infinite]"
+                      : "",
+                )}
+              >
                 {formatClock(remaining)}
               </p>
               <button

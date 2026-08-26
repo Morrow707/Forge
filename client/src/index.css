@@ -134,3 +134,17 @@ html.ar-camera-active .app-shell-root {
     font-size: 16px;
   }
 }
+
+/* Rest timer's countdown "heartbeat" -- a glow pulse whose speed quickens
+   as the clock runs low (see rest-timer.tsx), giving a phone in a pocket
+   something to feel/see accelerate without looking at the screen. Reads
+   hsl(var(--primary)) so it still tracks a team's own branding color. */
+@keyframes rest-heartbeat {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 hsl(var(--primary) / 0.45);
+  }
+  50% {
+    box-shadow: 0 0 0 18px hsl(var(--primary) / 0);
+  }
+}
