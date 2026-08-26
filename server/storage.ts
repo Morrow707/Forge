@@ -16011,6 +16011,40 @@ ${catalog}`;
       .sort((a, b) => a.elapsedSeconds - b.elapsedSeconds);
   },
 
+  // ---------- Athlete-facing leaderboard (read-only view onto the coach
+  // leaderboard above) ----------
+  // The strength and speed leaderboards were coach-only despite this app
+  // already showing teammates each other's numbers elsewhere (team
+  // challenges' per-athlete contribution breakdown) -- these are thin
+  // wrappers that resolve the athlete's own coach and reuse the exact same
+  // ranking logic verbatim, rather than a parallel implementation. A Free
+  // Agent (no coach) has no roster to rank against; null here means "not
+  // applicable," same convention as CARA's null cap.
+
+  async getLeaderboardExercisesForAthlete(athleteId: number) {
+    const coaches = await this.getCoachesForAthlete(athleteId);
+    if (coaches.length === 0) return null;
+    return this.getLeaderboardExercisesForCoach(coaches[0].id);
+  },
+
+  async getLeaderboardForAthleteView(athleteId: number, exerciseId: number) {
+    const coaches = await this.getCoachesForAthlete(athleteId);
+    if (coaches.length === 0) return null;
+    return this.getLeaderboardForExercise(coaches[0].id, exerciseId);
+  },
+
+  async getSpeedLeaderboardExercisesForAthlete(athleteId: number) {
+    const coaches = await this.getCoachesForAthlete(athleteId);
+    if (coaches.length === 0) return null;
+    return this.getSpeedLeaderboardExercisesForCoach(coaches[0].id);
+  },
+
+  async getSpeedLeaderboardForAthleteView(athleteId: number, skillExerciseId: number) {
+    const coaches = await this.getCoachesForAthlete(athleteId);
+    if (coaches.length === 0) return null;
+    return this.getSpeedLeaderboardForExercise(coaches[0].id, skillExerciseId);
+  },
+
   // ---------- Platform trends (admin-only, anonymized) ----------
 
   async getPlatformTrends() {

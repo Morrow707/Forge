@@ -136,6 +136,9 @@ const athleteNav: NavItem[] = [
   { href: "/athlete/nutrition", label: "Nutrition", icon: Apple },
   { href: "/athlete/team-board", label: "Team Board", icon: MessagesSquare },
   { href: "/athlete/chat", label: "AI Chat", icon: Sparkles },
+  // Overflow, not primary -- same "engagement nicety, not daily-use" call
+  // as the coach nav's own Leaderboard entry, which already lives there.
+  { href: "/athlete/leaderboard", label: "Leaderboard", icon: Trophy, overflow: true },
   { href: "/athlete/about", label: "About", icon: Info },
 ];
 

@@ -5283,6 +5283,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ---------------- Athlete ----------------
 
+  // Read-only counterpart to the coach leaderboard above -- see
+  // storage.getLeaderboardForAthleteView's own comment. null (not an
+  // empty array) means "no coach, nothing to rank against," which the
+  // client renders differently from "coach roster exists but nobody's
+  // logged this lift yet."
+  app.get("/api/athlete/leaderboard/exercises", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const list = await storage.getLeaderboardExercisesForAthlete(user.id);
+    res.json(list);
+  });
+
+  app.get("/api/athlete/leaderboard", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const schema = z.object({ exerciseId: z.coerce.number() });
+    const parsed = schema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "exerciseId query param required" });
+    }
+    const rows = await storage.getLeaderboardForAthleteView(user.id, parsed.data.exerciseId);
+    res.json(rows);
+  });
+
+  app.get("/api/athlete/leaderboard/skill-exercises", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const list = await storage.getSpeedLeaderboardExercisesForAthlete(user.id);
+    res.json(list);
+  });
+
+  app.get("/api/athlete/leaderboard/speed", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const schema = z.object({ skillExerciseId: z.coerce.number() });
+    const parsed = schema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "skillExerciseId query param required" });
+    }
+    const rows = await storage.getSpeedLeaderboardForAthleteView(user.id, parsed.data.skillExerciseId);
+    res.json(rows);
+  });
+
   // The whole server-side job for a StoreKit 2 purchase, unlike Stripe
   // Checkout: there's no separate "start checkout" route to build here
   // (that happens entirely client-side via StoreKit itself) -- the app
