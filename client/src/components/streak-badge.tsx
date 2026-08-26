@@ -2,7 +2,10 @@ import { Flame, Award } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 const MILESTONE_TIERS = [100, 50, 25, 10, 5];
-const STREAK_TIERS = [20, 10, 5, 3];
+// Exported so other "is this athlete on a real streak" UI (e.g. the avatar
+// ring in athlete-avatar.tsx) reuses these exact thresholds instead of
+// drifting out of sync with the badge shown right next to it.
+export const STREAK_TIERS = [20, 10, 5, 3];
 
 /** Icon + text badges derived from workout counts/streaks -- never
  * color-only, and only the single highest tier reached is shown so a

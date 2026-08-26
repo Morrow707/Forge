@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { STREAK_TIERS } from "@/components/streak-badge";
 
 // One color per bucket, keyed by a hash of the name -- same person always
 // gets the same color, spread across enough buckets that two athletes in
@@ -29,11 +30,48 @@ function colorFor(name: string): string {
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length]!;
 }
 
+// Ring treatment for a real streak milestone, indexed in the same order as
+// STREAK_TIERS (imported from streak-badge.tsx so the two never disagree
+// about where a tier starts). Each step is a strictly thicker/hotter ring
+// than the last -- ring-2 in place of the resting ring-1, climbing from a
+// faint primary tint to the full-strength brand color -- so the badge and
+// the avatar tell the same story about how far along a streak someone is.
+// The top tier (20+) additionally gets a slow pulse (paused for
+// prefers-reduced-motion via motion-safe:) reusing rest-timer's
+// rest-heartbeat keyframe, since an avatar this hot deserves to actually
+// move, not just sit brighter than its neighbors.
+const STREAK_RING_CLASSES = [
+  "ring-2 ring-primary motion-safe:animate-[rest-heartbeat_2.4s_ease-in-out_infinite]",
+  "ring-2 ring-primary/70",
+  "ring-2 ring-primary/45",
+  "ring-2 ring-primary/25",
+];
+
+function streakRingFor(currentStreak: number | undefined): string | undefined {
+  if (!currentStreak) return undefined;
+  const tierIndex = STREAK_TIERS.findIndex((t) => currentStreak >= t);
+  return tierIndex === -1 ? undefined : STREAK_RING_CLASSES[tierIndex];
+}
+
 /** Initials-only identity badge -- deliberately never a photo upload. The
  * roster includes underage athletes, so a real profile-photo feature isn't
  * appropriate here; this gives every name in a list something more than
- * plain text to identify itself by, without that risk. */
-export function AthleteAvatar({ name, size = "md" }: { name: string; size?: "sm" | "md" }) {
+ * plain text to identify itself by, without that risk.
+ *
+ * `currentStreak` is optional and purely cosmetic: pass it wherever the
+ * caller already has it (e.g. a roster/leaderboard row) and an athlete who
+ * has hit a real STREAK_TIERS threshold gets a stronger ring so they stand
+ * out in a list; omit it (or stay under the lowest tier) and the avatar
+ * renders exactly as it always has. */
+export function AthleteAvatar({
+  name,
+  size = "md",
+  currentStreak,
+}: {
+  name: string;
+  size?: "sm" | "md";
+  currentStreak?: number;
+}) {
   const dims = size === "sm" ? "h-8 w-8 text-xs" : "h-10 w-10 text-sm";
   return (
     <span
@@ -41,6 +79,7 @@ export function AthleteAvatar({ name, size = "md" }: { name: string; size?: "sm"
         "flex shrink-0 items-center justify-center rounded-full font-display font-bold ring-1",
         dims,
         colorFor(name),
+        streakRingFor(currentStreak),
       )}
       aria-hidden="true"
     >
