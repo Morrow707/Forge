@@ -31,6 +31,7 @@ import { shouldTouchLastSeen } from "./session-tracking";
 import { COACH_SECTIONS } from "@shared/coach-sections";
 import { widgetLayoutSchema } from "@shared/dashboard-widgets";
 import { notifyUser } from "./notify";
+import { findGoniometerMovement } from "@shared/goniometer";
 import {
   insertExerciseSchema,
   insertSkillExerciseSchema,
@@ -3274,6 +3275,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const onRoster = await storage.getRosterAthleteForCoach(user.id, athleteId);
       if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
       await storage.deleteGoniometerReading(athleteId, Number(req.params.readingId));
+      res.status(204).end();
+    },
+  );
+
+  // Per-athlete goniometer baseline overrides -- see the goniometerBaselines
+  // schema comment and classifyGoniometerReading's normalDegreesOverride
+  // parameter for why these exist.
+  app.get(
+    "/api/coach/roster/:athleteId/goniometer/baselines",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      const onRoster = await storage.getRosterAthleteForCoach(user.id, athleteId);
+      if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
+      const map = await storage.getGoniometerBaselinesForAthlete(athleteId);
+      res.json(Array.from(map.entries()).map(([key, normalDegrees]) => {
+        const [joint, movement] = key.split(":");
+        return { joint, movement, normalDegrees };
+      }));
+    },
+  );
+
+  app.put(
+    "/api/coach/roster/:athleteId/goniometer/baseline/:joint/:movement",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      const onRoster = await storage.getRosterAthleteForCoach(user.id, athleteId);
+      if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
+      const joint = String(req.params.joint);
+      const movement = String(req.params.movement);
+      if (!findGoniometerMovement(joint, movement)) {
+        return res.status(400).json({ message: "Unknown joint/movement" });
+      }
+      const normalDegrees = Number(req.body?.normalDegrees);
+      if (!Number.isFinite(normalDegrees) || normalDegrees <= 0) {
+        return res.status(400).json({ message: "normalDegrees must be a positive number" });
+      }
+      const row = await storage.setGoniometerBaseline(athleteId, joint, movement, normalDegrees, user.id);
+      res.status(200).json(row);
+    },
+  );
+
+  app.delete(
+    "/api/coach/roster/:athleteId/goniometer/baseline/:joint/:movement",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      const onRoster = await storage.getRosterAthleteForCoach(user.id, athleteId);
+      if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
+      await storage.clearGoniometerBaseline(
+        athleteId,
+        String(req.params.joint),
+        String(req.params.movement),
+      );
       res.status(204).end();
     },
   );

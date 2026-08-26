@@ -2993,6 +2993,38 @@ export const acwrRiskAlerts = pgTable(
   }),
 );
 
+// Per-athlete override of the population-normal reference angle a
+// goniometer reading is classified against (see classifyGoniometerReading
+// in shared/goniometer.ts) -- e.g. a pitcher's throwing shoulder external
+// rotation sits well above the population norm as a matter of course, and
+// flagging it "hypermobile" on every reading is noise once a coach has
+// confirmed that's just how this athlete measures. One row per athlete per
+// joint+movement; setting a baseline again overwrites rather than
+// appending, since there's only ever one active override at a time.
+export const goniometerBaselines = pgTable(
+  "goniometer_baselines",
+  {
+    id: serial("id").primaryKey(),
+    athleteId: integer("athlete_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    joint: text("joint").notNull(),
+    movement: text("movement").notNull(),
+    normalDegrees: real("normal_degrees").notNull(),
+    setByCoachId: integer("set_by_coach_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    athleteJointMovementIdx: uniqueIndex("goniometer_baselines_athlete_joint_movement_idx").on(
+      table.athleteId,
+      table.joint,
+      table.movement,
+    ),
+  }),
+);
+
 // AI-generated, one per athlete per date, cached permanently once written
 // (same lazy-materialize-then-cache pattern as testingResults above) rather
 // than regenerated on every view -- a day's wellness check-in and RPE

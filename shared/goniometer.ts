@@ -114,15 +114,23 @@ const HYPERMOBILE_ABOVE_PCT = 1.15;
 /** "restricted" meaningfully below the reference angle, "hypermobile"
  * meaningfully above it (not inherently a problem, just worth noting
  * alongside an asymmetry check against the other side), "normal" close to
- * it either way. */
+ * it either way.
+ *
+ * normalDegreesOverride replaces the population-normal reference with a
+ * coach-confirmed baseline for this specific athlete (see
+ * goniometerBaselines in shared/schema.ts) -- e.g. a throwing shoulder's
+ * external rotation, which sits well above the population norm as a matter
+ * of course for a pitcher. Same band, different center. */
 export function classifyGoniometerReading(
   jointKey: string,
   movementKey: string,
   angleDegrees: number,
+  normalDegreesOverride?: number | null,
 ): "restricted" | "normal" | "hypermobile" | null {
   const movement = findGoniometerMovement(jointKey, movementKey);
   if (!movement) return null;
-  if (angleDegrees < movement.normalDegrees * RESTRICTED_BELOW_PCT) return "restricted";
-  if (angleDegrees > movement.normalDegrees * HYPERMOBILE_ABOVE_PCT) return "hypermobile";
+  const normalDegrees = normalDegreesOverride ?? movement.normalDegrees;
+  if (angleDegrees < normalDegrees * RESTRICTED_BELOW_PCT) return "restricted";
+  if (angleDegrees > normalDegrees * HYPERMOBILE_ABOVE_PCT) return "hypermobile";
   return "normal";
 }

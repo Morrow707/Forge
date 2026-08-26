@@ -947,6 +947,19 @@ CREATE TABLE IF NOT EXISTS "acwr_risk_alerts" (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "acwr_risk_alerts_athlete_date_idx" ON "acwr_risk_alerts" ("athlete_id", "date");
 
+-- Per-athlete goniometer normal-angle override (shared/schema.ts
+-- goniometerBaselines) -- see that table's own comment.
+CREATE TABLE IF NOT EXISTS "goniometer_baselines" (
+  "id" serial PRIMARY KEY,
+  "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "joint" text NOT NULL,
+  "movement" text NOT NULL,
+  "normal_degrees" real NOT NULL,
+  "set_by_coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "updated_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "goniometer_baselines_athlete_joint_movement_idx" ON "goniometer_baselines" ("athlete_id", "joint", "movement");
+
 -- Performance pass -- Postgres never auto-indexes foreign key columns, and
 -- these hot-path lookups (workout history, comment threads, notification
 -- inbox/unread-count polling, roster/calendar joins) had none.

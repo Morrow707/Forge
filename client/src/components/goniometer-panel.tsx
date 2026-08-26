@@ -16,7 +16,7 @@ import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { format, parseISO, formatISO } from "date-fns";
-import { Plus, Trash2, Ruler, Camera } from "lucide-react";
+import { Plus, Trash2, Ruler, Camera, X } from "lucide-react";
 import {
   GONIOMETER_JOINTS,
   classifyGoniometerReading,
@@ -35,6 +35,8 @@ type GoniometerReading = {
   angleDegrees: number;
   notes: string | null;
 };
+
+type GoniometerBaseline = { joint: string; movement: string; normalDegrees: number };
 
 const STATUS_BADGE_CLASS: Record<string, string> = {
   restricted: "bg-destructive/15 text-destructive",
@@ -57,7 +59,10 @@ function jointLabel(key: string) {
  * one assessment session can cover any subset of joints. Each reading is
  * classified against the standard clinical normal-range reference in
  * shared/goniometer.ts, purely as a starting signal (population norms, not
- * this athlete's own baseline) -- never a diagnosis. */
+ * this athlete's own baseline) -- never a diagnosis. A coach can override
+ * that reference per joint+movement ("This is normal for this athlete") for
+ * cases like a pitcher's throwing shoulder, where the population norm is
+ * the wrong comparison on every single reading. */
 export function GoniometerPanel({ athleteId }: { athleteId: number }) {
   const qc = useQueryClient();
   const fetchUrl = `/api/coach/roster/${athleteId}/goniometer`;
@@ -71,6 +76,35 @@ export function GoniometerPanel({ athleteId }: { athleteId: number }) {
   const { data: readings = [], isLoading } = useQuery<GoniometerReading[]>({
     queryKey: [fetchUrl],
     queryFn: () => getJson(fetchUrl),
+  });
+
+  const baselinesUrl = `${fetchUrl}/baselines`;
+  const { data: baselines = [] } = useQuery<GoniometerBaseline[]>({
+    queryKey: [baselinesUrl],
+    queryFn: () => getJson(baselinesUrl),
+  });
+  const baselineMap = new Map(baselines.map((b) => [`${b.joint}:${b.movement}`, b.normalDegrees]));
+
+  const setBaselineMutation = useMutation({
+    mutationFn: async ({ joint, movement, normalDegrees }: GoniometerBaseline) => {
+      await apiRequest("PUT", `${fetchUrl}/baseline/${joint}/${movement}`, { normalDegrees });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [baselinesUrl] });
+      toast.success("Baseline set for this athlete");
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Could not set baseline"),
+  });
+
+  const clearBaselineMutation = useMutation({
+    mutationFn: async ({ joint, movement }: { joint: string; movement: string }) => {
+      await apiRequest("DELETE", `${fetchUrl}/baseline/${joint}/${movement}`);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [baselinesUrl] });
+      toast.success("Baseline reset to population normal");
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Could not reset baseline"),
   });
 
   const joint = GONIOMETER_JOINTS.find((j) => j.key === jointKey)!;
@@ -111,7 +145,8 @@ export function GoniometerPanel({ athleteId }: { athleteId: number }) {
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
         Joint range-of-motion readings from a goniometer, compared against standard clinical
-        normal ranges as a starting signal -- not a diagnosis.
+        normal ranges as a starting signal -- not a diagnosis. Flag a reading as this athlete's
+        own normal to stop re-flagging it going forward.
       </p>
 
       {!showForm ? (
@@ -229,8 +264,12 @@ export function GoniometerPanel({ athleteId }: { athleteId: number }) {
       ) : (
         <div className="max-h-96 space-y-2 overflow-y-auto">
           {readings.map((r) => {
-            const status = classifyGoniometerReading(r.joint, r.movement, r.angleDegrees);
+            const key = `${r.joint}:${r.movement}`;
+            const baseline = baselineMap.get(key);
+            const status = classifyGoniometerReading(r.joint, r.movement, r.angleDegrees, baseline);
             const movement = findGoniometerMovement(r.joint, r.movement);
+            const canSetAsNormal =
+              (status === "restricted" || status === "hypermobile") && baseline !== r.angleDegrees;
             return (
               <div
                 key={r.id}
@@ -247,6 +286,34 @@ export function GoniometerPanel({ athleteId }: { athleteId: number }) {
                       {format(parseISO(r.date), "MMM d, yyyy")}
                     </p>
                     {r.notes && <p className="mt-1 text-xs text-muted-foreground">{r.notes}</p>}
+                    {baseline != null && (
+                      <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <span>Custom baseline for this athlete: {baseline}&deg;</span>
+                        <button
+                          type="button"
+                          aria-label="Reset to population normal"
+                          onClick={() => clearBaselineMutation.mutate({ joint: r.joint, movement: r.movement })}
+                          className="hover:text-destructive"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    )}
+                    {canSetAsNormal && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setBaselineMutation.mutate({
+                            joint: r.joint,
+                            movement: r.movement,
+                            normalDegrees: r.angleDegrees,
+                          })
+                        }
+                        className="mt-1 text-xs font-medium text-primary hover:underline"
+                      >
+                        This is normal for this athlete
+                      </button>
+                    )}
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">

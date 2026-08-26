@@ -49,6 +49,7 @@ import {
   bodyMetrics,
   testingResults,
   goniometerReadings,
+  goniometerBaselines,
   weaknessReports,
   nutritionTargets,
   goals,
@@ -3506,6 +3507,48 @@ export const storage = {
     return Array.from(latestByKey.values());
   },
 
+  // Coach-confirmed per-athlete normal-angle overrides, keyed
+  // "${joint}:${movement}" -- see classifyGoniometerReading's
+  // normalDegreesOverride parameter and the goniometerBaselines schema
+  // comment for why this exists (population norms are a starting signal,
+  // not every athlete's actual normal).
+  async getGoniometerBaselinesForAthlete(athleteId: number): Promise<Map<string, number>> {
+    const rows = await db.query.goniometerBaselines.findMany({
+      where: eq(goniometerBaselines.athleteId, athleteId),
+    });
+    return new Map(rows.map((r) => [`${r.joint}:${r.movement}`, r.normalDegrees]));
+  },
+
+  async setGoniometerBaseline(
+    athleteId: number,
+    joint: string,
+    movement: string,
+    normalDegrees: number,
+    coachId: number,
+  ) {
+    const [row] = await db
+      .insert(goniometerBaselines)
+      .values({ athleteId, joint, movement, normalDegrees, setByCoachId: coachId })
+      .onConflictDoUpdate({
+        target: [goniometerBaselines.athleteId, goniometerBaselines.joint, goniometerBaselines.movement],
+        set: { normalDegrees, setByCoachId: coachId, updatedAt: new Date() },
+      })
+      .returning();
+    return row;
+  },
+
+  async clearGoniometerBaseline(athleteId: number, joint: string, movement: string) {
+    await db
+      .delete(goniometerBaselines)
+      .where(
+        and(
+          eq(goniometerBaselines.athleteId, athleteId),
+          eq(goniometerBaselines.joint, joint),
+          eq(goniometerBaselines.movement, movement),
+        ),
+      );
+  },
+
   // ---------- Movement Screen ----------
   // A coach/PT-administered functional-movement battery -- see
   // shared/movement-screen.ts for the seeded "Forge Standard Screen" test
@@ -4570,8 +4613,17 @@ Based on this athlete's actual rate of improvement, suggest a realistic target v
             .join("; ")
         : "none set";
 
+    const goniometerBaselineMap = await this.getGoniometerBaselinesForAthlete(athleteId);
     const restrictedGoniometer = latestGoniometer
-      .map((r) => ({ ...r, status: classifyGoniometerReading(r.joint, r.movement, r.angleDegrees) }))
+      .map((r) => ({
+        ...r,
+        status: classifyGoniometerReading(
+          r.joint,
+          r.movement,
+          r.angleDegrees,
+          goniometerBaselineMap.get(`${r.joint}:${r.movement}`),
+        ),
+      }))
       .filter((r) => r.status === "restricted" || r.status === "hypermobile");
     const goniometerText =
       restrictedGoniometer.length > 0
@@ -4917,8 +4969,17 @@ Write a short (2-4 sentence) plain-language weekly training summary for this ath
     if (!athlete) return null;
     const forgeAiContext = await this.buildForgeAiContext(athlete, "weakness_report");
 
+    const weaknessGoniometerBaselineMap = await this.getGoniometerBaselinesForAthlete(athleteId);
     const restrictedGoniometer = latestGoniometer
-      .map((r) => ({ ...r, status: classifyGoniometerReading(r.joint, r.movement, r.angleDegrees) }))
+      .map((r) => ({
+        ...r,
+        status: classifyGoniometerReading(
+          r.joint,
+          r.movement,
+          r.angleDegrees,
+          weaknessGoniometerBaselineMap.get(`${r.joint}:${r.movement}`),
+        ),
+      }))
       .filter((r) => r.status === "restricted" || r.status === "hypermobile");
 
     const acwrNow = acwrHistory.length > 0 ? acwrHistory[acwrHistory.length - 1] : null;
