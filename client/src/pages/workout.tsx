@@ -36,6 +36,7 @@ import { DistanceUnitToggle } from "@/components/distance-unit-toggle";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import { hapticLight, hapticSuccess } from "@/lib/haptics";
+import { playSuccessChime } from "@/lib/audio-cues";
 import {
   VIDEO_REATTACHED_EVENT,
   type VideoReattachedDetail,
@@ -988,6 +989,7 @@ export function WorkoutPage({
         toast.success(payload.completed ? "Workout marked complete" : "Progress saved");
         qc.invalidateQueries({ queryKey: ["/api/athlete/trophies"] });
         for (const trophy of data?.newlyUnlockedTrophies ?? []) {
+          playSuccessChime();
           toast.success(`🏆 New trophy: ${trophy.label}`, {
             description: `${trophy.tier[0].toUpperCase()}${trophy.tier.slice(1)}`,
           });
@@ -997,6 +999,7 @@ export function WorkoutPage({
         // is worth marking, not worth interrupting the athlete with.
         for (const pr of data?.newPRs ?? []) {
           hapticSuccess();
+          playSuccessChime();
           toast.success(`New PR — ${pr.exerciseName}`, {
             description: `${pr.weight} ${pr.unit} × ${pr.reps}`,
           });
