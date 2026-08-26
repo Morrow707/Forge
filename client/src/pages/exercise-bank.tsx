@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { SwipeableRow } from "@/components/swipeable-row";
 import { apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { Plus, Trash2, Dumbbell, Search, Video, Stethoscope, Star, Clock, ChevronDown } from "lucide-react";
@@ -348,7 +349,7 @@ export function ExerciseBankPage({
             </div>
             {activeFamily && (
               <div className="rounded-md border border-border/60 bg-surface p-2.5">
-                <p className="mb-1.5 text-[10px] font-semibold uppercase text-muted-foreground">
+                <p className="label-xs mb-1.5">
                   Equipment
                 </p>
                 <div className="grid grid-cols-2 gap-1 sm:grid-cols-4">
@@ -497,82 +498,94 @@ export function ExerciseBankPage({
       )}
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {displayed.map((ex) => (
-          <Link key={ex.id} href={`${routeBase}/${ex.id}`}>
-            <Card className="flex cursor-pointer flex-col transition-colors hover:border-primary/50">
-              <CardContent className="flex flex-1 flex-col gap-3 p-4">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex min-w-0 items-start gap-1.5">
-                    {canFavorite && (
-                      <button
-                        type="button"
-                        aria-label={ex.isFavorite ? `Unfavorite ${ex.name}` : `Favorite ${ex.name}`}
-                        aria-pressed={!!ex.isFavorite}
+        {displayed.map((ex) => {
+          const card = (
+            <Link href={`${routeBase}/${ex.id}`}>
+              <Card className="flex cursor-pointer flex-col transition-colors hover:border-primary/50">
+                <CardContent className="flex flex-1 flex-col gap-3 p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex min-w-0 items-start gap-1.5">
+                      {canFavorite && (
+                        <button
+                          type="button"
+                          aria-label={ex.isFavorite ? `Unfavorite ${ex.name}` : `Favorite ${ex.name}`}
+                          aria-pressed={!!ex.isFavorite}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            favoriteMutation.mutate({ id: ex.id, next: !ex.isFavorite });
+                          }}
+                          className="mt-0.5 shrink-0 text-muted-foreground hover:text-amber-400"
+                        >
+                          <Star className={cn("h-4 w-4", ex.isFavorite && "fill-amber-400 text-amber-400")} />
+                        </button>
+                      )}
+                      <div className="min-w-0">
+                        <p className="font-semibold leading-tight">{ex.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {ex.muscleGroup}
+                          {ex.movementType ? ` · ${ex.movementType}` : ""}
+                          {ex.plane ? ` (${ex.plane})` : ""}
+                          {ex.laterality ? ` · ${ex.laterality}` : ""}
+                          {ex.bodyRegion ? ` · ${ex.bodyRegion}` : ""}
+                          {ex.movementComplexity ? ` · ${ex.movementComplexity}` : ""}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 flex-col items-end gap-1">
+                      <ExerciseOwnershipBadge
+                        isForgeOfficial={ex.isForgeOfficial}
+                        ownerLabel={ex.ownerLabel}
+                      />
+                      <Badge className={CATEGORY_BADGE_CLASS[ex.category]} variant="default">
+                        {ex.category}
+                      </Badge>
+                      {ex.isCorrective && (
+                        <Badge variant="secondary" className="gap-1">
+                          <Stethoscope className="h-3 w-3" />
+                          Corrective
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                  {ex.instructions && (
+                    <p className="line-clamp-2 text-xs text-muted-foreground">{ex.instructions}</p>
+                  )}
+                  <div className="mt-auto flex items-center justify-between pt-2">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <span>{ex.equipment}</span>
+                      {ex.videoUrl && <Video className="h-3.5 w-3.5 text-primary" />}
+                    </div>
+                    {ex.editable && (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        aria-label={`Delete ${ex.name}`}
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
-                          favoriteMutation.mutate({ id: ex.id, next: !ex.isFavorite });
+                          setDeleteTarget(ex);
                         }}
-                        className="mt-0.5 shrink-0 text-muted-foreground hover:text-amber-400"
                       >
-                        <Star className={cn("h-4 w-4", ex.isFavorite && "fill-amber-400 text-amber-400")} />
-                      </button>
-                    )}
-                    <div className="min-w-0">
-                      <p className="font-semibold leading-tight">{ex.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {ex.muscleGroup}
-                        {ex.movementType ? ` · ${ex.movementType}` : ""}
-                        {ex.plane ? ` (${ex.plane})` : ""}
-                        {ex.laterality ? ` · ${ex.laterality}` : ""}
-                        {ex.bodyRegion ? ` · ${ex.bodyRegion}` : ""}
-                        {ex.movementComplexity ? ` · ${ex.movementComplexity}` : ""}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 flex-col items-end gap-1">
-                    <ExerciseOwnershipBadge
-                      isForgeOfficial={ex.isForgeOfficial}
-                      ownerLabel={ex.ownerLabel}
-                    />
-                    <Badge className={CATEGORY_BADGE_CLASS[ex.category]} variant="default">
-                      {ex.category}
-                    </Badge>
-                    {ex.isCorrective && (
-                      <Badge variant="secondary" className="gap-1">
-                        <Stethoscope className="h-3 w-3" />
-                        Corrective
-                      </Badge>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
                     )}
                   </div>
-                </div>
-                {ex.instructions && (
-                  <p className="line-clamp-2 text-xs text-muted-foreground">{ex.instructions}</p>
-                )}
-                <div className="mt-auto flex items-center justify-between pt-2">
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <span>{ex.equipment}</span>
-                    {ex.videoUrl && <Video className="h-3.5 w-3.5 text-primary" />}
-                  </div>
-                  {ex.editable && (
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      aria-label={`Delete ${ex.name}`}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setDeleteTarget(ex);
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </Link>
-        ))}
+                </CardContent>
+              </Card>
+            </Link>
+          );
+          // Swipe-to-delete only makes sense where the trash icon it mirrors
+          // is already available -- a Free Agent or an admin viewing a
+          // non-owned exercise has editable: false and no delete path at all.
+          return ex.editable ? (
+            <SwipeableRow key={ex.id} onDelete={() => setDeleteTarget(ex)}>
+              {card}
+            </SwipeableRow>
+          ) : (
+            <div key={ex.id}>{card}</div>
+          );
+        })}
       </div>
 
       <ConfirmDialog

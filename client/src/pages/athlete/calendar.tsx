@@ -7,7 +7,14 @@ import { CalendarLinkDialog } from "@/components/calendar-link-dialog";
 import { SkillDayViewDialog } from "@/components/skill-day-view-dialog";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { CalendarDays } from "lucide-react";
+import { usePullToRefresh } from "@/hooks/use-pull-to-refresh";
+import { cn } from "@/lib/utils";
+import { CalendarDays, ChevronDown, Loader2 } from "lucide-react";
+
+// Kept in sync with the hook call below -- shared so the indicator's own
+// "have we crossed the threshold yet" styling matches what actually
+// triggers the refresh.
+const PULL_REFRESH_THRESHOLD = 60;
 
 /** Just the calendar -- schedule/training-plan browsing only. Everything
  * that isn't literally "what's on the calendar" (pending coach requests,
@@ -23,7 +30,7 @@ export default function AthleteCalendar() {
     date: string;
   } | null>(null);
 
-  const { data: entries = [] } = useQuery<CalendarEntry[]>({
+  const { data: entries = [], refetch } = useQuery<CalendarEntry[]>({
     queryKey: ["/api/athlete/calendar", range.start, range.end],
     queryFn: async () => {
       const res = await apiRequest(
@@ -37,6 +44,15 @@ export default function AthleteCalendar() {
     refetchOnWindowFocus: true,
   });
 
+  // Pull-to-refresh re-fetches whatever range is currently on screen --
+  // there's no separate "refresh" endpoint, just re-running the same query.
+  const { containerRef, pullDistance, isRefreshing } = usePullToRefresh(
+    async () => {
+      await refetch();
+    },
+    { threshold: PULL_REFRESH_THRESHOLD },
+  );
+
   return (
     <AppShell
       title="My Calendar"
@@ -47,23 +63,49 @@ export default function AthleteCalendar() {
         </Button>
       }
     >
-      <CalendarView
-        entries={entries}
-        initialView="day"
-        onRangeChange={(start, end) => setRange({ start, end })}
-        onEntryClick={(e) =>
-          e.kind === "skill"
-            ? setViewingSkill({
-                skillAssignmentId: e.assignmentId,
-                skillProgramDayId: e.programDayId,
-                date: e.date,
-              })
-            : navigate(`/athlete/day/${e.assignmentId}/${e.programDayId}/${e.date}`)
-        }
-        dayPreviewFetchUrl={(e) =>
-          `/api/athlete/day-preview?assignmentId=${e.assignmentId}&programDayId=${e.programDayId}`
-        }
-      />
+      <div ref={containerRef} className="relative">
+        {/* Grows from 0 as the user pulls down from the top of the list --
+            purely visual, so it's hidden from screen readers; the refetch
+            itself is announced however the query's own consumers already
+            surface loading/error state. */}
+        <div
+          aria-hidden="true"
+          className="flex items-center justify-center overflow-hidden transition-[height] duration-150 ease-out"
+          style={{ height: pullDistance }}
+        >
+          {isRefreshing ? (
+            <Loader2 className="h-5 w-5 animate-spin text-primary" />
+          ) : (
+            <ChevronDown
+              className={cn(
+                "h-5 w-5 transition-transform duration-150",
+                pullDistance >= PULL_REFRESH_THRESHOLD ? "text-primary" : "text-muted-foreground",
+              )}
+              style={{
+                transform: `rotate(${Math.min(1, pullDistance / PULL_REFRESH_THRESHOLD) * 180}deg)`,
+              }}
+            />
+          )}
+        </div>
+
+        <CalendarView
+          entries={entries}
+          initialView="day"
+          onRangeChange={(start, end) => setRange({ start, end })}
+          onEntryClick={(e) =>
+            e.kind === "skill"
+              ? setViewingSkill({
+                  skillAssignmentId: e.assignmentId,
+                  skillProgramDayId: e.programDayId,
+                  date: e.date,
+                })
+              : navigate(`/athlete/day/${e.assignmentId}/${e.programDayId}/${e.date}`)
+          }
+          dayPreviewFetchUrl={(e) =>
+            `/api/athlete/day-preview?assignmentId=${e.assignmentId}&programDayId=${e.programDayId}`
+          }
+        />
+      </div>
 
       <CalendarLinkDialog
         open={syncOpen}
