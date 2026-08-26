@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Dialog,
@@ -95,6 +96,48 @@ function makeEndpointDot(opts: { dataLength: number; color: string; radius?: num
   };
 }
 
+/** Custom <Legend> content so hovering a series highlights it in the app's
+ * accent color -- the same hover language buttons/tabs/badges already use --
+ * which Recharts' built-in legend content has no hook for. Mirrors
+ * ChartTooltipContent's swatch-dot + label shape, just made hoverable. */
+function ChartLegendContent({
+  payload,
+  fontSize = 11,
+}: {
+  payload?: Array<{ value?: string; color?: string; dataKey?: string | number }>;
+  fontSize?: number;
+}) {
+  const [hovered, setHovered] = useState<string | null>(null);
+  if (!payload?.length) return null;
+  return (
+    <div className="flex flex-wrap items-center justify-center gap-4" style={{ fontSize }}>
+      {payload.map((entry, i) => {
+        const key = String(entry.dataKey ?? entry.value ?? i);
+        const isHovered = hovered === key;
+        return (
+          <div
+            key={key}
+            className="flex cursor-default items-center gap-1.5"
+            onMouseEnter={() => setHovered(key)}
+            onMouseLeave={() => setHovered(null)}
+          >
+            <span
+              className="h-2 w-2 shrink-0 rounded-full transition-colors"
+              style={{ backgroundColor: isHovered ? "hsl(var(--primary))" : entry.color }}
+            />
+            <span
+              className={cn("transition-colors", isHovered ? "font-semibold" : "text-muted-foreground")}
+              style={isHovered ? { color: "hsl(var(--primary))" } : undefined}
+            >
+              {entry.value}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 /** Read-only -- ACWR is derived purely from logged training volume (see
  * shared/load.ts), never edited directly from either side. A day with no
  * ratio yet (not enough history behind it) just shows no line for that
@@ -182,7 +225,7 @@ export function AcwrHistoryDialog({
                       content={<ChartTooltipContent />}
                       cursor={{ stroke: "hsl(var(--border))", strokeWidth: 1 }}
                     />
-                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                    <Legend content={<ChartLegendContent />} />
                     <Area
                       type="monotone"
                       dataKey="acute"
