@@ -6252,10 +6252,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         "/coach/analytics",
       );
     }
-    // Every save while a CARA training session is open is "still actively
-    // training" evidence -- completion closes it outright, anything else
-    // just resets the idle clock. Both are no-ops when there's no open
-    // session (most days, for most coaches, since this is opt-in).
+    // Ensures a session exists before touching/closing it -- see
+    // ensureCaraTrainingSessionOpen's own comment for why this can no
+    // longer just rely on the wellness check-in route having already
+    // started one. Every save while a CARA training session is open is
+    // "still actively training" evidence -- completion closes it outright,
+    // anything else just resets the idle clock. Both remain no-ops when
+    // CARA isn't enabled for this athlete's coach (most days, for most
+    // coaches, since this is opt-in).
+    await storage.ensureCaraTrainingSessionOpen(user.id);
     let newlyUnlockedTrophies: Awaited<ReturnType<typeof storage.checkAndAwardTrophies>>["newlyUnlocked"] = [];
     if (parsed.data.completed) {
       await storage.closeCaraSessionOnCompletion(user.id);

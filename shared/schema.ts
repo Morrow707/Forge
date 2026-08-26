@@ -2619,10 +2619,18 @@ export const goals = pgTable(
   }),
 );
 
-// A mandatory once-per-day self-report -- the athlete can't use the rest of
-// the app on a given calendar date until a row exists for that date (gated
-// client-side by WellnessGate). Re-submitting the same date updates that
-// day's answers in place rather than creating a second row.
+// A once-per-day self-report -- NOT a blocking gate, despite the name
+// WellnessGate: the component of that name shows this inline above the
+// day's workout and stays fully usable either way (see its own comment).
+// An athlete can train on a given calendar date with no row for it at all.
+// One real thing does depend on this running first, though: a CARA
+// training-time session (see caraSessions) starts on the day's first
+// submission here if the athlete's coach has a weekly cap set -- but
+// ensureCaraTrainingSessionOpen in storage.ts is the real backstop for
+// that now, called again from the workout-log route, so CARA tracking no
+// longer silently depends on this ever having run. Re-submitting the same
+// date updates that day's answers in place rather than creating a second
+// row.
 export const wellnessCheckins = pgTable(
   "wellness_checkins",
   {

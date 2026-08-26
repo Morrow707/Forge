@@ -4321,6 +4321,23 @@ Based on this athlete's actual rate of improvement, suggest a realistic target v
     return row;
   },
 
+  // Fixes a real gap, not just a doc mismatch: startCaraTrainingSession used
+  // to be called ONLY from the wellness check-in route, on that day's first
+  // submission. Wellness check-in is (correctly, per WellnessGate's own
+  // comment) never actually mandatory, so an athlete who trains without
+  // checking in first got zero CARA time tracked for that session even
+  // though touchCaraSession/closeCaraSessionOnCompletion ran on every save
+  // -- there was simply never a session open for either to act on. Called
+  // from the workout-log route before either of those, so a session exists
+  // to touch/close regardless of whether wellness check-in happened to run
+  // first. Still opt-in and still a no-op for the common case (no cap set
+  // for this athlete's coach) -- this doesn't change who gets tracked, only
+  // makes tracking not silently depend on an unrelated self-report.
+  async ensureCaraTrainingSessionOpen(athleteId: number): Promise<void> {
+    if ((await this.getCaraCapMinutesForAthlete(athleteId)) == null) return;
+    await this.startCaraTrainingSession(athleteId);
+  },
+
   // Called on every set save while a training session might be open --
   // this is the "you're still actually training" signal the idle sweep
   // measures against. A no-op if there's no open session (most saves, most
