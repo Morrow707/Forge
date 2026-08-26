@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { ArrowLeft, Lock, GraduationCap, CheckCircle2, Circle } from "lucide-react";
+import { ArrowLeft, Lock, GraduationCap, CheckCircle2, Circle, Unlock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AcademyQuiz } from "@/components/academy-quiz";
 
@@ -44,10 +44,17 @@ type TrackDetail = {
  * hasCoachesCornerAccess in routes.ts). The catalog itself is always
  * visible so a locked coach still sees a real teaser, not an empty page;
  * lesson content only comes through once unlocked. */
+type TrackSort = "unlocked" | "title";
+const TRACK_SORT_OPTIONS: { value: TrackSort; label: string }[] = [
+  { value: "unlocked", label: "Unlocked first" },
+  { value: "title", label: "Title" },
+];
+
 export default function CoachesCorner() {
   const qc = useQueryClient();
   const [selectedTrackId, setSelectedTrackId] = useState<number | null>(null);
   const [selectedLessonId, setSelectedLessonId] = useState<number | null>(null);
+  const [sort, setSort] = useState<TrackSort>("unlocked");
 
   const { data: tracks = [], isLoading } = useQuery<TrackSummary[]>({
     queryKey: ["/api/coach/academy/tracks"],
@@ -200,8 +207,35 @@ export default function CoachesCorner() {
           </CardContent>
         </Card>
       )}
+      {tracks.length > 1 && (
+        <div className="mb-4 flex items-center gap-1 rounded-md bg-secondary p-1">
+          {TRACK_SORT_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => setSort(opt.value)}
+              className={cn(
+                "rounded px-2.5 py-1 text-xs font-semibold transition-colors",
+                sort === opt.value
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {tracks.map((track) => (
+        {[...tracks]
+          .sort((a, b) => {
+            if (sort === "unlocked") {
+              if (a.unlocked !== b.unlocked) return a.unlocked ? -1 : 1;
+              return a.title.localeCompare(b.title);
+            }
+            return a.title.localeCompare(b.title);
+          })
+          .map((track) => (
           <Card
             key={track.id}
             className={cn(
@@ -215,7 +249,14 @@ export default function CoachesCorner() {
                 <h3 className="font-display text-base font-bold uppercase tracking-wide">
                   {track.title}
                 </h3>
-                {!track.unlocked && <Lock className="h-4 w-4 shrink-0 text-muted-foreground" />}
+                {track.unlocked ? (
+                  <Badge variant="success" className="shrink-0 gap-1 text-[10px]">
+                    <Unlock className="h-2.5 w-2.5" />
+                    UNLOCKED
+                  </Badge>
+                ) : (
+                  <Lock className="h-4 w-4 shrink-0 text-muted-foreground" />
+                )}
               </div>
               <p className="text-sm text-muted-foreground">{track.description}</p>
               <Badge variant="secondary" className="w-fit">

@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
@@ -16,7 +17,7 @@ import { Label } from "@/components/ui/label";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { GraduationCap, ListOrdered, ArrowRight, Search, Trophy, Lock } from "lucide-react";
+import { GraduationCap, ListOrdered, ArrowRight, Search, Trophy, Lock, Unlock } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type EnrolledClass = {
@@ -40,7 +41,17 @@ type BrowsableClass = {
   prerequisiteClassId: number | null;
   prerequisiteName: string | null;
   prerequisiteSatisfied: boolean;
+  // True when every lesson in the class is free -- see
+  // storage.getVisibleClassesForFreeAgent.
+  unlocked?: boolean;
 };
+
+type ClassSort = "unlocked" | "name" | "newest";
+const CLASS_SORT_OPTIONS: { value: ClassSort; label: string }[] = [
+  { value: "unlocked", label: "Unlocked first" },
+  { value: "name", label: "Name" },
+  { value: "newest", label: "Newest" },
+];
 
 /** Classes -- "My Classes" (enrolled, works for any athlete regardless of
  * having a coach) plus, only for a Free Agent, a Forge catalog to browse
@@ -68,17 +79,27 @@ export default function AthleteClasses() {
   const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [sort, setSort] = useState<ClassSort>("unlocked");
 
   const unenrolledCatalog = catalog.filter((c) => !enrolledIds.has(c.id));
   const categories = Array.from(
     new Set(unenrolledCatalog.map((c) => c.category?.trim()).filter((c): c is string => !!c)),
   ).sort();
-  const filteredCatalog = unenrolledCatalog.filter((c) => {
-    if (activeCategory && c.category !== activeCategory) return false;
-    if (!search.trim()) return true;
-    const q = search.trim().toLowerCase();
-    return c.name.toLowerCase().includes(q) || (c.description ?? "").toLowerCase().includes(q);
-  });
+  const filteredCatalog = unenrolledCatalog
+    .filter((c) => {
+      if (activeCategory && c.category !== activeCategory) return false;
+      if (!search.trim()) return true;
+      const q = search.trim().toLowerCase();
+      return c.name.toLowerCase().includes(q) || (c.description ?? "").toLowerCase().includes(q);
+    })
+    .sort((a, b) => {
+      if (sort === "unlocked") {
+        if (!!a.unlocked !== !!b.unlocked) return a.unlocked ? -1 : 1;
+        return b.id - a.id;
+      }
+      if (sort === "newest") return b.id - a.id;
+      return a.name.localeCompare(b.name);
+    });
 
   const enrollMutation = useMutation({
     mutationFn: async () => {
@@ -160,14 +181,33 @@ export default function AthleteClasses() {
             )}
             {catalog.length > 0 && (
               <div className="mb-4 space-y-2">
-                <div className="relative max-w-sm">
-                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search classes…"
-                    className="pl-8"
-                  />
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="relative max-w-sm flex-1">
+                    <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      placeholder="Search classes…"
+                      className="pl-8"
+                    />
+                  </div>
+                  <div className="flex items-center gap-1 rounded-md bg-secondary p-1">
+                    {CLASS_SORT_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setSort(opt.value)}
+                        className={cn(
+                          "rounded px-2.5 py-1 text-xs font-semibold transition-colors",
+                          sort === opt.value
+                            ? "bg-primary text-primary-foreground"
+                            : "text-muted-foreground hover:text-foreground",
+                        )}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
                 {categories.length > 0 && (
                   <div className="flex flex-wrap gap-1.5">
@@ -209,7 +249,15 @@ export default function AthleteClasses() {
               {filteredCatalog.map((c) => (
                 <Card key={c.id} className="flex flex-col">
                   <CardContent className="flex flex-1 flex-col gap-3 p-5">
-                    <p className="font-display text-xl font-bold uppercase tracking-wide">{c.name}</p>
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="font-display text-xl font-bold uppercase tracking-wide">{c.name}</p>
+                      {c.unlocked && (
+                        <Badge variant="success" className="shrink-0 gap-1 text-[10px]">
+                          <Unlock className="h-2.5 w-2.5" />
+                          UNLOCKED
+                        </Badge>
+                      )}
+                    </div>
                     {c.category && (
                       <p className="-mt-2 text-xs font-semibold uppercase tracking-wide text-primary">
                         {c.category}

@@ -19,7 +19,7 @@ import { EnrollInClassDialog } from "@/components/enroll-in-class-dialog";
 import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { Plus, GraduationCap, Trash2, Users, ListOrdered, UserPlus, Search, Eye, EyeOff } from "lucide-react";
+import { Plus, GraduationCap, Trash2, Users, ListOrdered, UserPlus, Search, Eye, EyeOff, Unlock } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type ClassSummary = {
@@ -33,7 +33,17 @@ type ClassSummary = {
   ownerLabel?: string;
   editable?: boolean;
   isDraft?: boolean;
+  // True when every lesson in the class is free -- nothing inside will ever
+  // prompt an athlete to pay. See storage.getVisibleClassesForCoach.
+  unlocked?: boolean;
 };
+
+type ClassSort = "unlocked" | "name" | "newest";
+const CLASS_SORT_OPTIONS: { value: ClassSort; label: string }[] = [
+  { value: "unlocked", label: "Unlocked first" },
+  { value: "name", label: "Name" },
+  { value: "newest", label: "Newest" },
+];
 
 type RosterEntry = { id: number; name: string; email: string };
 
@@ -75,18 +85,30 @@ export function ClassListPage({
   const [enrollClassId, setEnrollClassId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [sort, setSort] = useState<ClassSort>("unlocked");
 
   // Chips are derived from whatever categories actually exist rather than a
   // hardcoded list -- see classes.category in shared/schema.ts.
   const categories = Array.from(
     new Set(classes.map((c) => c.category?.trim()).filter((c): c is string => !!c)),
   ).sort();
-  const filteredClasses = classes.filter((c) => {
-    if (activeCategory && c.category !== activeCategory) return false;
-    if (!search.trim()) return true;
-    const q = search.trim().toLowerCase();
-    return c.name.toLowerCase().includes(q) || (c.description ?? "").toLowerCase().includes(q);
-  });
+  const filteredClasses = classes
+    .filter((c) => {
+      if (activeCategory && c.category !== activeCategory) return false;
+      if (!search.trim()) return true;
+      const q = search.trim().toLowerCase();
+      return c.name.toLowerCase().includes(q) || (c.description ?? "").toLowerCase().includes(q);
+    })
+    .sort((a, b) => {
+      if (sort === "unlocked") {
+        // Unlocked classes first; within each group, newest first -- id is
+        // a reliable stand-in for createdAt ordering (serial PK).
+        if (!!a.unlocked !== !!b.unlocked) return a.unlocked ? -1 : 1;
+        return b.id - a.id;
+      }
+      if (sort === "newest") return b.id - a.id;
+      return a.name.localeCompare(b.name);
+    });
 
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -157,14 +179,33 @@ export function ClassListPage({
 
       {classes.length > 0 && (
         <div className="mb-4 space-y-2">
-          <div className="relative max-w-sm">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search classes…"
-              className="pl-8"
-            />
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative max-w-sm flex-1">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search classes…"
+                className="pl-8"
+              />
+            </div>
+            <div className="flex items-center gap-1 rounded-md bg-secondary p-1">
+              {CLASS_SORT_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setSort(opt.value)}
+                  className={cn(
+                    "rounded px-2.5 py-1 text-xs font-semibold transition-colors",
+                    sort === opt.value
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
           </div>
           {categories.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
@@ -215,6 +256,12 @@ export function ClassListPage({
                     {c.isDraft && (
                       <Badge variant="secondary" className="text-[10px]">
                         DRAFT
+                      </Badge>
+                    )}
+                    {c.unlocked && (
+                      <Badge variant="success" className="gap-1 text-[10px]">
+                        <Unlock className="h-2.5 w-2.5" />
+                        UNLOCKED
                       </Badge>
                     )}
                     {c.ownerLabel && (

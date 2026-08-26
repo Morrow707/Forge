@@ -6963,6 +6963,11 @@ ${athleteContext}
         ...ownership,
         lessonCount: lessons.length,
         enrolledAthleteCount: new Set(enrollments.map((e) => e.athleteId)).size,
+        // Every lesson free -- see getVisibleClassesForFreeAgent's identical
+        // comment. Access itself is never gated for a coach (they can
+        // already browse/enroll their roster into anything here); this is
+        // purely "will an athlete hit a purchase prompt inside this one."
+        unlocked: lessons.every((l) => l.priceCents == null),
       };
     });
   },
@@ -7403,6 +7408,11 @@ ${athleteContext}
       prerequisiteClassId: c.prerequisiteClassId,
       prerequisiteName: c.prerequisiteClassId ? (prereqNameById.get(c.prerequisiteClassId) ?? null) : null,
       prerequisiteSatisfied: c.prerequisiteClassId ? completedPrereqIds.has(c.prerequisiteClassId) : true,
+      // Every lesson free -- nothing in this class will ever prompt a
+      // purchase. A class with even one priced lesson (see
+      // classLessons.priceCents) isn't, regardless of how many free
+      // lessons come before it.
+      unlocked: c.lessons.every((l) => l.priceCents == null),
     }));
   },
 
