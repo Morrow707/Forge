@@ -250,6 +250,7 @@ import {
   formatISO,
   isWithinInterval,
   startOfWeek,
+  addWeeks,
   differenceInCalendarDays,
   differenceInCalendarMonths,
 } from "date-fns";
@@ -4540,6 +4541,79 @@ Based on this athlete's actual rate of improvement, suggest a realistic target v
       }),
     );
     return { capMinutes: coach.cap, athletes: rows };
+  },
+
+  // Flat, roster-wide session log for an audit export -- unlike
+  // getCaraSessionsForAthlete (one athlete, one query), this is what backs
+  // the compliance PDF/CSV, which needs every athlete's activity in a
+  // single date range at once. Sweeps every athlete's session first so a
+  // still-open one closes at its real last-activity time rather than
+  // showing up open (or missing) in a document meant to leave the app.
+  async getCaraSessionsForCoach(coachId: number, from: Date, to: Date) {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    const roster = await db
+      .selectDistinct({ id: users.id, name: users.name })
+      .from(coachAthletes)
+      .innerJoin(users, eq(coachAthletes.athleteId, users.id))
+      .where(inArray(coachAthletes.coachId, coachIds));
+    if (roster.length === 0) return [];
+    const athleteIds = roster.map((r) => r.id);
+    const nameById = new Map(roster.map((r) => [r.id, r.name]));
+    await Promise.all(athleteIds.map((id) => this.sweepStaleCaraSession(id)));
+    const rows = await db.query.caraSessions.findMany({
+      where: and(
+        inArray(caraSessions.athleteId, athleteIds),
+        gte(caraSessions.startedAt, from),
+        lt(caraSessions.startedAt, to),
+      ),
+      orderBy: [desc(caraSessions.startedAt)],
+    });
+    return rows.map((r) => ({ ...r, athleteName: nameById.get(r.athleteId) ?? "Unknown" }));
+  },
+
+  // Weekly totals-vs-cap for every roster athlete across a date range --
+  // the summary table the compliance export leads with, before the raw
+  // session log. Buckets each session by its own start time's week (a
+  // session spanning a week boundary counts entirely toward the week it
+  // started in), the same per-session, non-split accounting
+  // getCaraWeeklyMinutesForAthlete already uses for a single week.
+  async getCaraWeeklyBreakdownForCoach(coachId: number, from: Date, to: Date) {
+    const [coach] = await db.select({ cap: users.caraWeeklyCapMinutes }).from(users).where(eq(users.id, coachId));
+    if (!coach?.cap) return null;
+    const capMinutes = coach.cap;
+    const sessions = await this.getCaraSessionsForCoach(coachId, from, to);
+
+    const weekStarts: Date[] = [];
+    for (let w = startOfWeek(from); w < to; w = addWeeks(w, 1)) weekStarts.push(w);
+
+    const minutesByWeekAthlete = new Map<string, number>();
+    const now = Date.now();
+    for (const s of sessions) {
+      const weekStart = startOfWeek(s.startedAt);
+      const key = `${weekStart.toISOString()}:${s.athleteId}`;
+      const end = s.endedAt ?? new Date(now);
+      const minutes = Math.max(0, end.getTime() - s.startedAt.getTime()) / 60_000;
+      minutesByWeekAthlete.set(key, (minutesByWeekAthlete.get(key) ?? 0) + minutes);
+    }
+
+    const athletes = Array.from(new Map(sessions.map((s) => [s.athleteId, s.athleteName])).entries());
+
+    const weeks = weekStarts.map((weekStart) => ({
+      weekStart,
+      weekEnd: addWeeks(weekStart, 1),
+      athletes: athletes.map(([athleteId, name]) => {
+        const minutes = Math.round(minutesByWeekAthlete.get(`${weekStart.toISOString()}:${athleteId}`) ?? 0);
+        return {
+          athleteId,
+          name,
+          minutes,
+          overCap: minutes > capMinutes,
+          atRisk: minutes >= capMinutes * 0.8,
+        };
+      }),
+    }));
+
+    return { capMinutes, weeks, sessions };
   },
 
   // ---------- AI context assembly ----------

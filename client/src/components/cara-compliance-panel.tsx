@@ -14,7 +14,8 @@ import {
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { ShieldCheck, ClipboardPlus, AlertTriangle, Timer } from "lucide-react";
+import { ShieldCheck, ClipboardPlus, AlertTriangle, Timer, Download } from "lucide-react";
+import { shareOrDownloadFile } from "@/lib/share-file";
 
 type ComplianceRow = {
   athleteId: number;
@@ -41,6 +42,7 @@ const ACTIVITY_TYPES = [
 export function CaraCompliancePanel({ roster }: { roster: { id: number; name: string }[] }) {
   const qc = useQueryClient();
   const [capInput, setCapInput] = useState("");
+  const [exporting, setExporting] = useState<"csv" | "pdf" | null>(null);
   const [logOpen, setLogOpen] = useState(false);
   const [logAthleteId, setLogAthleteId] = useState<number | "">("");
   const [logActivityType, setLogActivityType] =
@@ -92,6 +94,21 @@ export function CaraCompliancePanel({ roster }: { roster: { id: number; name: st
     },
     onError: (err: ApiError) => toast.error(err.message || "Couldn't log that activity"),
   });
+
+  async function handleExport(format: "csv" | "pdf") {
+    setExporting(format);
+    try {
+      await shareOrDownloadFile(
+        `/api/coach/cara/compliance-report.${format}`,
+        `cara-compliance.${format}`,
+        "CARA Compliance Report",
+      );
+    } catch {
+      toast.error("Couldn't generate that export");
+    } finally {
+      setExporting(null);
+    }
+  }
 
   if (!settings?.capMinutes) {
     return (
@@ -145,6 +162,24 @@ export function CaraCompliancePanel({ roster }: { roster: { id: number; name: st
             <ClipboardPlus className="h-3.5 w-3.5" />
             Log Activity
           </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={exporting !== null}
+            onClick={() => handleExport("csv")}
+          >
+            <Download className="h-3.5 w-3.5" />
+            {exporting === "csv" ? "Exporting..." : "CSV"}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={exporting !== null}
+            onClick={() => handleExport("pdf")}
+          >
+            <Download className="h-3.5 w-3.5" />
+            {exporting === "pdf" ? "Exporting..." : "PDF"}
+          </Button>
           <Button size="sm" variant="outline" onClick={() => saveCapMutation.mutate(null)}>
             Turn Off
           </Button>
@@ -152,7 +187,8 @@ export function CaraCompliancePanel({ roster }: { roster: { id: number; name: st
       </CardHeader>
       <CardContent className="space-y-2">
         <p className="text-xs text-muted-foreground">
-          Weekly cap: {Math.round(settings.capMinutes / 60)} hours. Resets Sunday.
+          Weekly cap: {Math.round(settings.capMinutes / 60)} hours. Resets Sunday. Exports cover
+          the last 12 weeks for an audit record.
         </p>
         {compliance?.athletes.length === 0 ? (
           <p className="py-4 text-center text-sm text-muted-foreground">No athletes yet.</p>

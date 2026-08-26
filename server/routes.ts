@@ -19,6 +19,7 @@ import { usdaFoodLookupEnabled } from "./food-lookup";
 import { buildProgressReportEmail } from "./progress-report";
 import { buildRecruitingProfilePdf } from "./recruiting-profile";
 import { buildTrainingHistoryCsv, buildTrainingHistoryPdf, csvField } from "./training-history-export";
+import { buildCaraComplianceCsv, buildCaraCompliancePdf } from "./cara-export";
 import { buildMovementScreenSheetPdf } from "./movement-screen-export";
 import { readUploadedFile } from "./uploaded-files";
 import { buildComplianceReportPdf } from "./compliance-report";
@@ -4222,6 +4223,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const weekEnd = addWeeks(weekStart, 1);
     const report = await storage.getCaraComplianceForCoach(user.id, weekStart, weekEnd);
     res.json(report ?? { capMinutes: null, athletes: [] });
+  });
+
+  // Audit-ready export of the compliance dashboard's underlying data --
+  // defaults to the last 12 weeks (a season-sized window) since an auditor
+  // wants a real record to hand over, not just this week's live snapshot.
+  // ?from=YYYY-MM-DD&to=YYYY-MM-DD overrides the range.
+  function resolveCaraExportRange(req: any) {
+    const to = req.query.to ? new Date(String(req.query.to)) : new Date();
+    const from = req.query.from
+      ? new Date(String(req.query.from))
+      : addWeeks(startOfWeek(to), -12);
+    return { from, to };
+  }
+
+  app.get("/api/coach/cara/compliance-report.csv", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const { from, to } = resolveCaraExportRange(req);
+    const breakdown = await storage.getCaraWeeklyBreakdownForCoach(user.id, from, to);
+    if (!breakdown) return res.status(404).json({ message: "CARA tracking is not turned on" });
+    const csv = buildCaraComplianceCsv(breakdown.sessions);
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", `attachment; filename="cara-compliance-${to.toISOString().slice(0, 10)}.csv"`);
+    res.send(csv);
+  });
+
+  app.get("/api/coach/cara/compliance-report.pdf", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const { from, to } = resolveCaraExportRange(req);
+    const breakdown = await storage.getCaraWeeklyBreakdownForCoach(user.id, from, to);
+    if (!breakdown) return res.status(404).json({ message: "CARA tracking is not turned on" });
+    const pdf = await buildCaraCompliancePdf({
+      coachName: user.name,
+      from,
+      to,
+      capMinutes: breakdown.capMinutes,
+      weeks: breakdown.weeks,
+      sessions: breakdown.sessions,
+    });
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="cara-compliance-${to.toISOString().slice(0, 10)}.pdf"`);
+    res.send(pdf);
   });
 
   app.get(
