@@ -16,6 +16,7 @@ import { Trophy, Medal, Timer } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { formatHeight } from "@/components/profile-fields-form";
 import { StreakBadges } from "@/components/streak-badge";
+import { AthleteAvatar } from "@/components/athlete-avatar";
 import { cn } from "@/lib/utils";
 
 type LeaderboardExercise = { id: number; name: string };
@@ -92,6 +93,7 @@ function RosterRow({
       >
         {rank < 3 ? <Medal className="h-4 w-4" /> : rank + 1}
       </div>
+      <AthleteAvatar name={name} size="sm" />
       <div className="min-w-0 flex-1">
         <p className="truncate font-semibold">{name}</p>
         <div className="mt-1 flex flex-wrap gap-1.5">
