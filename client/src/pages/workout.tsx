@@ -678,6 +678,23 @@ function isPageComplete(page: Page) {
   );
 }
 
+// Names of exercises with at least one unfinished set (missing reps, or a
+// missing weight/band/box reading for materials that need one -- see
+// isSetComplete) across the given pages -- used to tell an athlete exactly
+// what they skipped instead of silently dropping them back at the overview
+// with nothing but an unfilled circle to go on.
+function incompleteExerciseNames(pages: Page[]): string[] {
+  const names: string[] = [];
+  for (const page of pages) {
+    for (const it of page.items) {
+      if (it.sets.length === 0 || it.sets.some((s) => !isSetComplete(it, s))) {
+        names.push(it.exerciseName);
+      }
+    }
+  }
+  return names;
+}
+
 // displayUnit is only for the aggregate total shown here -- individual
 // exercises can each be logged in their own unit (see ItemState.weightUnit),
 // so every set's volume is normalized to kg before summing, then the total
@@ -1728,6 +1745,15 @@ export function WorkoutPage({
                     className="flex-1"
                     onClick={() => {
                       autosaveNow(items);
+                      // Doesn't block leaving the page -- an athlete who
+                      // genuinely couldn't finish a set should still be able
+                      // to move on -- but names exactly what's unfinished
+                      // instead of silently dropping them at the overview
+                      // with nothing but an unfilled circle to explain why.
+                      const missing = incompleteExerciseNames([currentPage]);
+                      if (missing.length > 0) {
+                        toast.warning(`Saved, but not fully logged: ${missing.join(", ")}.`);
+                      }
                       setViewMode("overview");
                     }}
                     disabled={submitMutation.isPending}
@@ -1740,6 +1766,10 @@ export function WorkoutPage({
                     className="flex-1"
                     onClick={() => {
                       queueSave({ completed: true, itemsSnapshot: items, silent: false });
+                      const missing = incompleteExerciseNames(pages);
+                      if (missing.length > 0) {
+                        toast.warning(`Marked complete, but not fully logged: ${missing.join(", ")}.`);
+                      }
                       setViewMode("overview");
                     }}
                     disabled={submitMutation.isPending}
