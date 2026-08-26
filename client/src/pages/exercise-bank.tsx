@@ -9,7 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
 import { apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
-import { Plus, Trash2, Dumbbell, Search, Video, Stethoscope, Star, Clock } from "lucide-react";
+import { Plus, Trash2, Dumbbell, Search, Video, Stethoscope, Star, Clock, ChevronDown } from "lucide-react";
 import type { ExerciseWithOwnership } from "@/lib/exercise-types";
 import {
   MOVEMENT_TYPES,
@@ -19,6 +19,12 @@ import {
   PLANES,
   MOVEMENT_COMPLEXITIES,
 } from "@shared/exercise-taxonomy";
+import {
+  EXERCISE_FAMILIES,
+  EQUIPMENT_ORDER,
+  getExerciseFamily,
+  type ExerciseFamily,
+} from "@shared/exercise-family";
 import { FilterChipGroup, toggleInSet } from "@/components/filter-chip-group";
 import {
   CATEGORY_BADGE_CLASS,
@@ -31,6 +37,8 @@ import {
   BODY_REGION_FILTER_ACTIVE_CLASS,
   PLANE_FILTER_ACTIVE_CLASS,
   MOVEMENT_COMPLEXITY_FILTER_ACTIVE_CLASS,
+  FAMILY_FILTER_ACTIVE_CLASS,
+  EQUIPMENT_FILTER_ACTIVE_CLASS,
 } from "@/lib/exercise-colors";
 import { toast } from "sonner";
 import { ApiError } from "@/lib/queryClient";
@@ -82,6 +90,12 @@ export function ExerciseBankPage({
   const [search, setSearch] = useState("");
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [recentlyUsedOnly, setRecentlyUsedOnly] = useState(false);
+  // Accordion state -- see shared/exercise-family.ts and the identical
+  // pattern in exercise-picker-dialog.tsx (the reference implementation
+  // this was ported from).
+  const [activeFamily, setActiveFamily] = useState<ExerciseFamily | null>(null);
+  const [equipmentFilter, setEquipmentFilter] = useState<Set<string>>(new Set());
+  const [showMoreFilters, setShowMoreFilters] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<Set<string>>(new Set());
   const [movementFilter, setMovementFilter] = useState<Set<string>>(new Set());
   const [muscleGroupFilter, setMuscleGroupFilter] = useState<Set<string>>(new Set());
@@ -92,6 +106,20 @@ export function ExerciseBankPage({
   const [sportFilter, setSportFilter] = useState<Set<string>>(new Set());
   const [ownerFilter, setOwnerFilter] = useState<Set<string>>(new Set());
   const [correctivesOnly, setCorrectivesOnly] = useState(false);
+
+  // Clicking the active family again clears back to a fresh state; clicking
+  // a different family discards whatever equipment was selected under the
+  // previous one, since that selection was scoped to a family that's no
+  // longer open. Same behavior as exercise-picker-dialog.tsx.
+  function handleFamilyClick(family: ExerciseFamily) {
+    if (activeFamily === family) {
+      setActiveFamily(null);
+      setEquipmentFilter(new Set());
+    } else {
+      setActiveFamily(family);
+      setEquipmentFilter(new Set());
+    }
+  }
 
   const bodyParts = useMemo(
     () =>
@@ -111,6 +139,27 @@ export function ExerciseBankPage({
     [exercises],
   );
 
+  // Counts shown on the family/equipment buttons -- see the identical
+  // comment in exercise-picker-dialog.tsx.
+  const familyCounts = useMemo(() => {
+    const counts = new Map<ExerciseFamily, number>();
+    for (const ex of exercises) {
+      const family = getExerciseFamily(ex);
+      counts.set(family, (counts.get(family) ?? 0) + 1);
+    }
+    return counts;
+  }, [exercises]);
+  const equipmentCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    const scoped = activeFamily
+      ? exercises.filter((ex) => getExerciseFamily(ex) === activeFamily)
+      : exercises;
+    for (const ex of scoped) {
+      counts.set(ex.equipment, (counts.get(ex.equipment) ?? 0) + 1);
+    }
+    return counts;
+  }, [exercises, activeFamily]);
+
   const filtered = useMemo(() => {
     return exercises.filter((ex) => {
       const matchesSearch =
@@ -118,6 +167,8 @@ export function ExerciseBankPage({
         ex.name.toLowerCase().includes(search.toLowerCase()) ||
         ex.muscleGroup.toLowerCase().includes(search.toLowerCase()) ||
         (ex.sports ?? []).some((s) => s.toLowerCase().includes(search.toLowerCase()));
+      const matchesFamily = !activeFamily || getExerciseFamily(ex) === activeFamily;
+      const matchesEquipment = equipmentFilter.size === 0 || equipmentFilter.has(ex.equipment);
       const matchesCategory = categoryFilter.size === 0 || categoryFilter.has(ex.category);
       const matchesMovement =
         movementFilter.size === 0 || (ex.movementType != null && movementFilter.has(ex.movementType));
@@ -138,6 +189,8 @@ export function ExerciseBankPage({
       const matchesRecentlyUsed = !recentlyUsedOnly || ex.lastUsedAt != null;
       return (
         matchesSearch &&
+        matchesFamily &&
+        matchesEquipment &&
         matchesCategory &&
         matchesMovement &&
         matchesMuscleGroup &&
@@ -155,6 +208,8 @@ export function ExerciseBankPage({
   }, [
     exercises,
     search,
+    activeFamily,
+    equipmentFilter,
     categoryFilter,
     movementFilter,
     muscleGroupFilter,
@@ -200,6 +255,8 @@ export function ExerciseBankPage({
     onSuccess: () => qc.invalidateQueries({ queryKey: [`${apiBase}/exercises`] }),
     onError: () => toast.error("Couldn't update favorite"),
   });
+
+  const isBrowsing = !search.trim();
 
   return (
     <AppShell
@@ -256,92 +313,167 @@ export function ExerciseBankPage({
             </button>
           </div>
         )}
-        {/* flex-wrap, not a fixed-column grid -- a grid column stays as wide
-            as its widest sibling even when a group like Laterality only has
-            two short chips in it, which left big dead gaps next to short
-            groups. This lets each group take only the width its own chips
-            need and wrap naturally. */}
-        <div className="flex flex-wrap gap-x-6 gap-y-2">
-          <FilterChipGroup
-            label="Category"
-            options={[...CATEGORIES]}
-            selected={categoryFilter}
-            onToggle={(v) => toggleInSet(setCategoryFilter, v)}
-            optionColorClass={(v) => CATEGORY_FILTER_ACTIVE_CLASS[v]}
-          />
-          <FilterChipGroup
-            label="Movement"
-            options={MOVEMENT_TYPES}
-            selected={movementFilter}
-            onToggle={(v) => toggleInSet(setMovementFilter, v)}
-            colorClass={MOVEMENT_FILTER_ACTIVE_CLASS}
-          />
-          <div className="space-y-2">
-            <FilterChipGroup
-              label="Laterality"
-              options={["bilateral", "unilateral"]}
-              selected={lateralityFilter}
-              onToggle={(v) => toggleInSet(setLateralityFilter, v)}
-              colorClass={LATERALITY_FILTER_ACTIVE_CLASS}
-            />
+        {/* isBrowsing hides the family/equipment/more-filters accordion once
+            the coach is typing a direct search -- see the identical pattern
+            (and its full rationale) in exercise-picker-dialog.tsx. Every
+            filter set here keeps applying underneath even while hidden. */}
+        {isBrowsing && (
+          <div className="space-y-3">
+            <div className="flex flex-wrap gap-1.5">
+              {EXERCISE_FAMILIES.map((family) => {
+                const active = activeFamily === family;
+                const count = familyCounts.get(family) ?? 0;
+                return (
+                  <button
+                    key={family}
+                    type="button"
+                    onClick={() => handleFamilyClick(family)}
+                    aria-pressed={active}
+                    disabled={count === 0}
+                    className={cn(
+                      "rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-40",
+                      active
+                        ? FAMILY_FILTER_ACTIVE_CLASS[family]
+                        : "border-border text-muted-foreground hover:border-primary/50 hover:text-primary",
+                    )}
+                  >
+                    {family}
+                    <span className="ml-1 font-normal opacity-70">{count}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {activeFamily && (
+              <div className="rounded-md border border-border/60 bg-surface p-2.5">
+                <p className="mb-1.5 text-[10px] font-semibold uppercase text-muted-foreground">
+                  Equipment
+                </p>
+                <div className="grid grid-cols-2 gap-1 sm:grid-cols-4">
+                  {EQUIPMENT_ORDER.map((eq) => {
+                    const count = equipmentCounts.get(eq) ?? 0;
+                    const active = equipmentFilter.has(eq);
+                    return (
+                      <button
+                        key={eq}
+                        type="button"
+                        disabled={count === 0}
+                        onClick={() => toggleInSet(setEquipmentFilter, eq)}
+                        aria-pressed={active}
+                        className={cn(
+                          "rounded-full border px-2 py-1 text-[11px] font-medium leading-tight transition-colors disabled:opacity-30",
+                          active
+                            ? EQUIPMENT_FILTER_ACTIVE_CLASS
+                            : "border-border text-muted-foreground hover:border-yellow-500/50 hover:text-yellow-400",
+                        )}
+                      >
+                        {eq} <span className="opacity-60">{count}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
             <button
               type="button"
-              onClick={() => setCorrectivesOnly((v) => !v)}
-              aria-pressed={correctivesOnly}
-              className={cn(
-                "flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-medium transition-colors",
-                correctivesOnly
-                  ? "border-cyan-500 bg-cyan-500/15 text-cyan-400"
-                  : "border-border text-muted-foreground hover:border-cyan-500/50 hover:text-cyan-400",
-              )}
+              onClick={() => setShowMoreFilters((v) => !v)}
+              className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-primary"
             >
-              <Stethoscope className="h-3 w-3" />
-              Correctives only
+              <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", showMoreFilters && "rotate-180")} />
+              More filters
             </button>
+            {showMoreFilters && (
+              <div className="space-y-2">
+                {/* flex-wrap, not a fixed-column grid -- a grid column stays
+                    as wide as its widest sibling even when a group like
+                    Laterality only has two short chips in it, which left
+                    big dead gaps next to short groups. This lets each group
+                    take only the width its own chips need and wrap
+                    naturally. */}
+                <div className="flex flex-wrap gap-x-6 gap-y-2 border-t border-border pt-3">
+                  <FilterChipGroup
+                    label="Category"
+                    options={[...CATEGORIES]}
+                    selected={categoryFilter}
+                    onToggle={(v) => toggleInSet(setCategoryFilter, v)}
+                    optionColorClass={(v) => CATEGORY_FILTER_ACTIVE_CLASS[v]}
+                  />
+                  <FilterChipGroup
+                    label="Movement"
+                    options={MOVEMENT_TYPES}
+                    selected={movementFilter}
+                    onToggle={(v) => toggleInSet(setMovementFilter, v)}
+                    colorClass={MOVEMENT_FILTER_ACTIVE_CLASS}
+                  />
+                  <div className="space-y-2">
+                    <FilterChipGroup
+                      label="Laterality"
+                      options={["bilateral", "unilateral"]}
+                      selected={lateralityFilter}
+                      onToggle={(v) => toggleInSet(setLateralityFilter, v)}
+                      colorClass={LATERALITY_FILTER_ACTIVE_CLASS}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setCorrectivesOnly((v) => !v)}
+                      aria-pressed={correctivesOnly}
+                      className={cn(
+                        "flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-medium transition-colors",
+                        correctivesOnly
+                          ? "border-cyan-500 bg-cyan-500/15 text-cyan-400"
+                          : "border-border text-muted-foreground hover:border-cyan-500/50 hover:text-cyan-400",
+                      )}
+                    >
+                      <Stethoscope className="h-3 w-3" />
+                      Correctives only
+                    </button>
+                  </div>
+                  <FilterChipGroup
+                    label="Created By"
+                    options={ownerOptions}
+                    selected={ownerFilter}
+                    onToggle={(v) => toggleInSet(setOwnerFilter, v)}
+                    colorClass={OWNER_FILTER_ACTIVE_CLASS}
+                  />
+                  <FilterChipGroup
+                    label="Body Region"
+                    options={BODY_REGIONS}
+                    selected={bodyRegionFilter}
+                    onToggle={(v) => toggleInSet(setBodyRegionFilter, v)}
+                    colorClass={BODY_REGION_FILTER_ACTIVE_CLASS}
+                  />
+                  <FilterChipGroup
+                    label="Plane"
+                    options={PLANES}
+                    selected={planeFilter}
+                    onToggle={(v) => toggleInSet(setPlaneFilter, v)}
+                    colorClass={PLANE_FILTER_ACTIVE_CLASS}
+                  />
+                  <FilterChipGroup
+                    label="Complexity"
+                    options={MOVEMENT_COMPLEXITIES}
+                    selected={complexityFilter}
+                    onToggle={(v) => toggleInSet(setComplexityFilter, v)}
+                    colorClass={MOVEMENT_COMPLEXITY_FILTER_ACTIVE_CLASS}
+                  />
+                </div>
+                <FilterChipGroup
+                  label="Muscle"
+                  options={bodyParts}
+                  selected={muscleGroupFilter}
+                  onToggle={(v) => toggleInSet(setMuscleGroupFilter, v)}
+                  colorClass={MUSCLE_FILTER_ACTIVE_CLASS}
+                />
+                <FilterChipGroup
+                  label="Sport"
+                  options={sportOptions}
+                  selected={sportFilter}
+                  onToggle={(v) => toggleInSet(setSportFilter, v)}
+                  colorClass={SPORT_FILTER_ACTIVE_CLASS}
+                />
+              </div>
+            )}
           </div>
-          <FilterChipGroup
-            label="Created By"
-            options={ownerOptions}
-            selected={ownerFilter}
-            onToggle={(v) => toggleInSet(setOwnerFilter, v)}
-            colorClass={OWNER_FILTER_ACTIVE_CLASS}
-          />
-          <FilterChipGroup
-            label="Body Region"
-            options={BODY_REGIONS}
-            selected={bodyRegionFilter}
-            onToggle={(v) => toggleInSet(setBodyRegionFilter, v)}
-            colorClass={BODY_REGION_FILTER_ACTIVE_CLASS}
-          />
-          <FilterChipGroup
-            label="Plane"
-            options={PLANES}
-            selected={planeFilter}
-            onToggle={(v) => toggleInSet(setPlaneFilter, v)}
-            colorClass={PLANE_FILTER_ACTIVE_CLASS}
-          />
-          <FilterChipGroup
-            label="Complexity"
-            options={MOVEMENT_COMPLEXITIES}
-            selected={complexityFilter}
-            onToggle={(v) => toggleInSet(setComplexityFilter, v)}
-            colorClass={MOVEMENT_COMPLEXITY_FILTER_ACTIVE_CLASS}
-          />
-        </div>
-        <FilterChipGroup
-          label="Muscle"
-          options={bodyParts}
-          selected={muscleGroupFilter}
-          onToggle={(v) => toggleInSet(setMuscleGroupFilter, v)}
-          colorClass={MUSCLE_FILTER_ACTIVE_CLASS}
-        />
-        <FilterChipGroup
-          label="Sport"
-          options={sportOptions}
-          selected={sportFilter}
-          onToggle={(v) => toggleInSet(setSportFilter, v)}
-          colorClass={SPORT_FILTER_ACTIVE_CLASS}
-        />
+        )}
       </div>
 
       {!isLoading && displayed.length === 0 && (
