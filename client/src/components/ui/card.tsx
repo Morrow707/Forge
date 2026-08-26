@@ -13,7 +13,11 @@ const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElemen
         // content. Matched to the /85 opacity + stronger border/shadow that
         // dialog.tsx/popover.tsx already use (which DID read clearly), so
         // Card now has real presence even sitting directly on --background.
-        "rounded-xl border border-white/15 bg-card/85 text-card-foreground shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1),0_12px_36px_-14px_rgba(0,0,0,0.75)] backdrop-blur-xl backdrop-saturate-150",
+        // border bumped again (white/15 -> white/30, "+ light rim") once
+        // the shadow itself was confirmed still too subtle to read against
+        // --background at any reasonable opacity -- a brighter rim doesn't
+        // depend on shadow contrast the way the glow underneath it does.
+        "rounded-xl border border-white/30 bg-card/85 text-card-foreground shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1),0_12px_36px_-14px_rgba(0,0,0,0.75)] backdrop-blur-xl backdrop-saturate-150",
         className,
       )}
       {...props}

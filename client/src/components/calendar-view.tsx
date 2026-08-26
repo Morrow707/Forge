@@ -564,7 +564,8 @@ function MonthGrid({
               className={cn(
                 "flex min-h-16 flex-col gap-1 rounded-md border border-border p-1 sm:min-h-28 sm:gap-1 sm:p-2",
                 !inMonth && "opacity-30",
-                isToday(day) && "border-primary",
+                isToday(day) &&
+                  "border-primary/40 bg-primary/5 shadow-[0_0_0_1px_hsl(var(--primary)/0.15),0_8px_22px_-10px_hsl(var(--primary)/0.5)]",
               )}
             >
               {onDayClick && dayEntries.length > 0 ? (
@@ -805,7 +806,9 @@ function WeekRow({
               aria-current={today ? "date" : undefined}
               className={cn(
                 "flex min-h-36 flex-col gap-1.5 rounded-lg border p-2.5 transition-colors",
-                today ? "border-primary bg-primary/5" : "border-border",
+                today
+                  ? "border-primary/40 bg-primary/5 shadow-[0_0_0_1px_hsl(var(--primary)/0.15),0_8px_22px_-10px_hsl(var(--primary)/0.5)]"
+                  : "border-border",
               )}
             >
               <div className="flex items-baseline justify-between">

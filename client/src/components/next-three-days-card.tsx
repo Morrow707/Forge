@@ -58,7 +58,15 @@ export function NextThreeDaysCard({
             const shown = dayEntries.slice(0, 3);
             const overflow = dayEntries.length - shown.length;
             return (
-              <div key={dateStr} className="rounded-md border border-border p-2">
+              <div
+                key={dateStr}
+                className={cn(
+                  "rounded-md border p-2",
+                  isToday(day)
+                    ? "border-primary/40 bg-primary/10 shadow-[0_0_0_1px_hsl(var(--primary)/0.15),0_8px_22px_-10px_hsl(var(--primary)/0.5)]"
+                    : "border-border",
+                )}
+              >
                 <div className="mb-1.5 flex items-baseline justify-between">
                   <span
                     className={cn(

@@ -70,7 +70,12 @@
   --surface: 222 16% 11%;
   --surface-elevated: 222 16% 21%;
 
-  --primary: 16 92% 55%;
+  /* "Deep ember" -- pulled back from the original 16 92% 55% (too bright/
+     neon per feedback against the deepened palette above) toward a richer,
+     less saturated orange-red that reads as premium rather than loud,
+     picked live against the app's real components in the Color & Depth Lab
+     artifact rather than guessed in isolation. */
+  --primary: 14 85% 42%;
   --primary-foreground: 0 0% 100%;
 
   --secondary: 222 15% 20%;
@@ -79,7 +84,7 @@
   --muted: 222 13% 19%;
   --muted-foreground: 220 9% 64%;
 
-  --accent: 16 92% 55%;
+  --accent: 14 85% 42%;
   --accent-foreground: 0 0% 100%;
 
   --destructive: 0 72% 51%;
@@ -90,7 +95,7 @@
 
   --border: 222 17% 24%;
   --input: 222 17% 24%;
-  --ring: 16 92% 55%;
+  --ring: 14 85% 42%;
 
   --radius: 0.6rem;
 }

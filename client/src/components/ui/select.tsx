@@ -35,7 +35,9 @@ const SelectContent = React.forwardRef<
     <SelectPrimitive.Content
       ref={ref}
       className={cn(
-        "relative z-50 max-h-96 min-w-[8rem] overflow-hidden rounded-md border border-border bg-popover text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+        // Same frosted-glass language as Card/Dialog/Popover -- this was the
+        // one overlay surface still shipping a flat, unblurred bg-popover.
+        "relative z-50 max-h-96 min-w-[8rem] overflow-hidden rounded-md border border-white/30 bg-card/85 text-popover-foreground shadow-[inset_0_1px_0_0_rgba(255,255,255,0.08),0_16px_40px_-16px_rgba(0,0,0,0.7)] backdrop-blur-xl backdrop-saturate-150 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
         position === "popper" && "translate-y-1",
         className,
       )}
