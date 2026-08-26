@@ -9,6 +9,7 @@ import { CoachDayEditDialog } from "@/components/coach-day-edit-dialog";
 import { SkillDayViewDialog } from "@/components/skill-day-view-dialog";
 import { CoachDigestBanner } from "@/components/coach-digest-banner";
 import { WeeklyDigestCard } from "@/components/weekly-digest-card";
+import { TeamPrWallCard } from "@/components/team-pr-wall-card";
 import { ReengagementBanner } from "@/components/reengagement-banner";
 import { SortableHideableWidget } from "@/components/sortable-hideable-widget";
 import { NextThreeDaysCard } from "@/components/next-three-days-card";
@@ -287,6 +288,7 @@ export default function CoachDashboard() {
       <div className="flex flex-col gap-3">
         <CoachDigestBanner />
         <WeeklyDigestCard />
+        <TeamPrWallCard />
         <ReengagementBanner />
 
         <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
