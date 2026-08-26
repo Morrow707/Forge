@@ -4608,6 +4608,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
+  // Bulk version of the single-athlete /nudge route above, scoped to
+  // whoever on the roster hasn't logged today's wellness check-in yet
+  // (same "missing means absent, not a real zero" roster/wellness join as
+  // getRosterWellnessToday, which is what the roster page's own coverage
+  // count is built from -- so this always nudges exactly who the coach sees
+  // as outstanding). One notifyUser per athlete via notifyEach, so one
+  // athlete's bad push token/email can't stop the rest from being nudged.
+  app.post("/api/coach/roster/nudge-wellness", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const today = todayIso();
+    const [roster, checkedInToday] = await Promise.all([
+      storage.getRosterForCoach(user.id),
+      storage.getRosterWellnessToday(user.id, today),
+    ]);
+    const checkedInIds = new Set(checkedInToday.map((w) => w.athleteId));
+    const missing = roster.filter((a) => !checkedInIds.has(a.id));
+
+    await notifyEach(missing, (athlete) =>
+      notifyUser(
+        athlete.id,
+        "wellness_nudge",
+        "Log today's wellness check-in",
+        `${user.name} noticed you haven't logged today's wellness check-in yet -- it only takes a minute.`,
+        "/athlete",
+      ),
+    );
+
+    res.json({ nudged: missing.length });
+  });
+
   app.get("/api/coach/teams", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     const teamList = await storage.getTeamsForCoach(user.id);
