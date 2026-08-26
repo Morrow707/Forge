@@ -15,6 +15,7 @@ import { PendingVideosBanner } from "@/components/pending-videos-banner";
 import { SortableHideableWidget } from "@/components/sortable-hideable-widget";
 import { NextThreeDaysCard } from "@/components/next-three-days-card";
 import { StatTile } from "@/components/stat-tile";
+import { ReadinessBanner } from "@/components/readiness-banner";
 import { useWidgetVisibility } from "@/hooks/use-widget-visibility";
 import { resolveWidgetOrder } from "@/lib/widget-layout";
 import {
@@ -83,6 +84,7 @@ export default function AthleteDashboard() {
   const days = [0, 1, 2].map((offset) => addDays(new Date(), offset));
   const rangeStart = formatISO(days[0], { representation: "date" });
   const rangeEnd = formatISO(days[days.length - 1], { representation: "date" });
+  const today = rangeStart;
   const { data: upcoming = [] } = useQuery<CalendarEntry[]>({
     queryKey: ["/api/athlete/calendar", rangeStart, rangeEnd],
     queryFn: async () => {
@@ -224,6 +226,7 @@ export default function AthleteDashboard() {
             </CardContent>
           </Card>
         )}
+        <ReadinessBanner date={today} />
         <PendingCoachRequests />
         <PendingVideosBanner />
         <DigestBanner />
