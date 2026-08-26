@@ -36,7 +36,7 @@ import { DistanceUnitToggle } from "@/components/distance-unit-toggle";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import { hapticLight, hapticSuccess } from "@/lib/haptics";
-import { playSuccessChime } from "@/lib/audio-cues";
+import { playSuccessChime, playStreakMilestoneChime } from "@/lib/audio-cues";
 import {
   VIDEO_REATTACHED_EVENT,
   type VideoReattachedDetail,
@@ -989,7 +989,19 @@ export function WorkoutPage({
         toast.success(payload.completed ? "Workout marked complete" : "Progress saved");
         qc.invalidateQueries({ queryKey: ["/api/athlete/trophies"] });
         for (const trophy of data?.newlyUnlockedTrophies ?? []) {
-          playSuccessChime();
+          // A "streak" trophy is checkAndAwardTrophies newly crossing one of
+          // STREAK_TROPHIES' thresholds (shared/achievements.ts -- 3/5/10/20
+          // days match STREAK_TIERS in streak-badge.tsx, plus 50/100 beyond
+          // it), inserted once ever per athlete, so this fires exactly once
+          // at the moment that tier is newly reached. Gets its own cue
+          // instead of the generic success chime so a coach glancing away
+          // can tell "streak milestone" apart from an ordinary trophy by
+          // ear.
+          if (trophy.category === "streak") {
+            playStreakMilestoneChime();
+          } else {
+            playSuccessChime();
+          }
           toast.success(`🏆 New trophy: ${trophy.label}`, {
             description: `${trophy.tier[0].toUpperCase()}${trophy.tier.slice(1)}`,
           });
