@@ -4091,6 +4091,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(rows.map((r) => ({ ...r, ...computeReadiness(r) })));
   });
 
+  // Last 7 days of the same "Flagged today" count above, one number per day
+  // -- backs the dashboard stat tile's sparkline.
+  app.get("/api/coach/roster-wellness-trend", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const trend = await storage.getRosterFlaggedTrend(user.id, 7);
+    res.json(trend);
+  });
+
+  // Coach dashboard's "This Week" digest card -- roster-wide counts of new
+  // PRs, missed workouts, and wellness flags. See getCoachWeeklyDigest's own
+  // comment in storage.ts for what window each count uses and why.
+  app.get("/api/coach/weekly-digest", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const digest = await storage.getCoachWeeklyDigest(user.id);
+    res.json(digest);
+  });
+
   // ---------- CARA (countable athletically-related activity) compliance ----------
   // Opt-in per coach (see caraWeeklyCapMinutes) -- most coaches never touch
   // any of this.

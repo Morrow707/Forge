@@ -17,6 +17,7 @@ import { format, parseISO } from "date-fns";
 import { formatHeight } from "@/components/profile-fields-form";
 import { StreakBadges } from "@/components/streak-badge";
 import { AthleteAvatar } from "@/components/athlete-avatar";
+import { Skeleton } from "@/components/skeleton";
 import { cn } from "@/lib/utils";
 
 type LeaderboardExercise = { id: number; name: string };
@@ -125,6 +126,26 @@ function RosterRow({
   );
 }
 
+/** Placeholder for one RosterRow while its query is still in flight --
+ * mirrors that row's own shape (rank circle, avatar circle, name + badge
+ * line, right-aligned stat block) rather than a generic gray bar. */
+function RosterRowSkeleton() {
+  return (
+    <div className="flex items-center gap-4 p-4">
+      <Skeleton className="h-8 w-8 shrink-0 rounded-full" />
+      <Skeleton className="h-8 w-8 shrink-0 rounded-full" />
+      <div className="min-w-0 flex-1 space-y-1.5">
+        <Skeleton className="h-4 w-32" />
+        <Skeleton className="h-3 w-20" />
+      </div>
+      <div className="shrink-0 space-y-1.5 text-right">
+        <Skeleton className="ml-auto h-5 w-14" />
+        <Skeleton className="ml-auto h-3 w-24" />
+      </div>
+    </div>
+  );
+}
+
 function StrengthLeaderboard() {
   const [exerciseId, setExerciseId] = useState<string>("");
 
@@ -171,6 +192,16 @@ function StrengthLeaderboard() {
             <p className="text-muted-foreground">
               Pick an exercise to rank your roster by best estimated 1RM.
             </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {exerciseId && isLoading && entries.length === 0 && (
+        <Card>
+          <CardContent className="divide-y divide-border p-0">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <RosterRowSkeleton key={i} />
+            ))}
           </CardContent>
         </Card>
       )}
@@ -263,6 +294,16 @@ function SpeedLeaderboard() {
             <p className="text-muted-foreground">
               Pick a drill to rank your roster by best camera-timed sprint.
             </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {skillExerciseId && isLoading && entries.length === 0 && (
+        <Card>
+          <CardContent className="divide-y divide-border p-0">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <RosterRowSkeleton key={i} />
+            ))}
           </CardContent>
         </Card>
       )}

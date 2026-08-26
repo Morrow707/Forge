@@ -8,6 +8,7 @@ import type { CalendarEntry } from "@/components/calendar-view";
 import { CoachDayEditDialog } from "@/components/coach-day-edit-dialog";
 import { SkillDayViewDialog } from "@/components/skill-day-view-dialog";
 import { CoachDigestBanner } from "@/components/coach-digest-banner";
+import { WeeklyDigestCard } from "@/components/weekly-digest-card";
 import { ReengagementBanner } from "@/components/reengagement-banner";
 import { SortableHideableWidget } from "@/components/sortable-hideable-widget";
 import { NextThreeDaysCard } from "@/components/next-three-days-card";
@@ -87,6 +88,12 @@ export default function CoachDashboard() {
     queryKey: ["/api/coach/roster-wellness"],
   });
   const flaggedToday = wellnessToday.filter((w) => w.level === "red").length;
+  // Real last-7-days flagged counts, bucketed server-side from the same
+  // wellnessCheckins rows "Flagged today" itself reads -- see
+  // getRosterFlaggedTrend in server/storage.ts.
+  const { data: flaggedTrend = [] } = useQuery<number[]>({
+    queryKey: ["/api/coach/roster-wellness-trend"],
+  });
 
   const days = [0, 1, 2].map((offset) => addDays(new Date(), offset));
   const rangeStart = formatISO(days[0], { representation: "date" });
@@ -189,6 +196,7 @@ export default function CoachDashboard() {
             label="Flagged today"
             value={flaggedToday}
             href="/coach/roster"
+            trend={flaggedTrend}
           />
         </div>
       </SortableHideableWidget>
@@ -217,9 +225,14 @@ export default function CoachDashboard() {
           </CardHeader>
           <CardContent className="space-y-2 p-3 pt-0 md:p-4 md:pt-0">
             {programs.length === 0 && (
-              <p className="py-6 text-center text-sm text-muted-foreground">
-                No programs yet. Build your first one to start assigning workouts.
-              </p>
+              <div className="flex flex-col items-center gap-2 py-6 text-center">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <ListChecks className="h-5 w-5" />
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  No programs yet. Build your first one to start assigning workouts.
+                </p>
+              </div>
             )}
             {programs.slice(0, 5).map((p) => (
               <Link key={p.id} href={`/coach/programs/${p.id}`}>
@@ -273,6 +286,7 @@ export default function CoachDashboard() {
     >
       <div className="flex flex-col gap-3">
         <CoachDigestBanner />
+        <WeeklyDigestCard />
         <ReengagementBanner />
 
         <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
@@ -353,9 +367,14 @@ function TeamInviteCard({
       </CardHeader>
       <CardContent className="space-y-2 p-3 pt-0 md:p-4 md:pt-0">
         {codeOptions.length === 0 && (
-          <p className="text-sm text-muted-foreground">
-            Create a team on the Roster page to get a shareable code.
-          </p>
+          <div className="flex items-center gap-3 rounded-md border border-dashed border-border p-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <Users className="h-4 w-4" />
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Create a team on the Roster page to get a shareable code.
+            </p>
+          </div>
         )}
         {codeOptions.map((opt) => (
           <div

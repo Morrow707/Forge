@@ -15,6 +15,27 @@
   .label-xs {
     @apply text-xs font-semibold uppercase text-muted-foreground;
   }
+
+  /* Shimmering placeholder block for still-loading content (see
+     components/skeleton.tsx) -- a moving highlight band swept across a flat
+     base tone via background-position, themed to this app's own dark
+     surfaces rather than a generic gray box. Callers size/shape it entirely
+     through className (h-4 w-32 rounded for a text line, h-10 w-10
+     rounded-full for an avatar circle, etc.); this class only supplies the
+     tone + motion. Animation lives outside this layer (see
+     skeleton-shimmer-sweep below) so its reduced-motion override can win
+     regardless of layer ordering. */
+  .skeleton-shimmer {
+    @apply bg-surface-elevated;
+    background-image: linear-gradient(
+      100deg,
+      transparent 25%,
+      hsl(0 0% 100% / 0.06) 50%,
+      transparent 75%
+    );
+    background-size: 400% 100%;
+    background-position: 100% 0;
+  }
 }
 
 /*
@@ -150,6 +171,64 @@ html.ar-camera-active .app-shell-root {
   }
 }
 
+/* Sonner toast surfaces -----------------------------------------------
+   Sonner (see the <Toaster theme="dark" richColors .../> block in
+   App.tsx) ships its own flat/opaque default styling and reads every
+   color off CSS custom properties it sets on
+   [data-sonner-toaster][data-theme="dark"] (confirmed against the
+   installed sonner@1.7.4's own dist/styles.css) -- --normal-bg/
+   --normal-border/--normal-text for a plain toast, plus --success-*/
+   --error-*/--warning-*/--info-* that richColors switches a toast to via
+   [data-rich-colors="true"][data-sonner-toast][data-type="..."] rules
+   which read those same variables. Overriding the variables (rather than
+   fighting the "background: var(--success-bg)" declaration that reads
+   them) is what lets the rich-color semantics stay intact underneath.
+
+   Values below reuse this app's own --success/--destructive/--card
+   tokens (translucent) for success/error/normal; warning/info have no
+   app token to reuse (see :root above), so they're hand-picked amber/
+   blue hues instead, called out here for the same reason.
+
+   backdrop-filter can't be carried by a custom property, so the blur +
+   the inset-highlight/shadow are added as a plain rule instead -- same
+   frosted-glass treatment as Card/Dialog/Popover (see dialog.tsx's
+   identical comment), layered on top of, not replacing, the colors above.
+
+   Sonner injects its stylesheet into <head> at runtime (on module
+   load), so its position relative to this bundled CSS isn't guaranteed.
+   The leading `html` combinator below is specificity insurance --
+   (0,2,1) vs sonner's own (0,2,0) selector -- so this always wins
+   regardless of which stylesheet lands in <head> first. */
+html [data-sonner-toaster][data-theme="dark"] {
+  --normal-bg: hsl(var(--card) / 0.85);
+  --normal-border: hsl(0 0% 100% / 0.1);
+  --normal-text: hsl(var(--foreground));
+
+  --success-bg: hsl(142 45% 9% / 0.8);
+  --success-border: hsl(var(--success) / 0.45);
+  --success-text: hsl(142 76% 78%);
+
+  --error-bg: hsl(0 45% 10% / 0.8);
+  --error-border: hsl(var(--destructive) / 0.45);
+  --error-text: hsl(0 100% 84%);
+
+  --warning-bg: hsl(38 55% 9% / 0.8);
+  --warning-border: hsl(38 92% 50% / 0.45);
+  --warning-text: hsl(45 96% 74%);
+
+  --info-bg: hsl(217 55% 10% / 0.8);
+  --info-border: hsl(217 91% 60% / 0.45);
+  --info-text: hsl(213 94% 80%);
+}
+
+[data-sonner-toast][data-styled="true"] {
+  backdrop-filter: blur(24px) saturate(1.5);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.08),
+    0 16px 40px -16px rgba(0, 0, 0, 0.7);
+}
+
 /* Rest timer's countdown "heartbeat" -- a glow pulse whose speed quickens
    as the clock runs low (see rest-timer.tsx), giving a phone in a pocket
    something to feel/see accelerate without looking at the screen. Reads
@@ -161,5 +240,25 @@ html.ar-camera-active .app-shell-root {
   }
   50% {
     box-shadow: 0 0 0 18px hsl(var(--primary) / 0);
+  }
+}
+
+/* Drives .skeleton-shimmer above -- sweeps the highlight band across the
+   block by animating background-position over the oversized (400%-wide)
+   gradient, right to left. */
+@keyframes skeleton-shimmer-sweep {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+.skeleton-shimmer {
+  animation: skeleton-shimmer-sweep 1.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-shimmer {
+    animation: none;
   }
 }

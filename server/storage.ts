@@ -4428,6 +4428,165 @@ Based on this athlete's actual rate of improvement, suggest a realistic target v
     return rows;
   },
 
+  // Last 7 days of "Flagged today" (see getRosterWellnessToday above) for
+  // the coach dashboard's sparkline -- same roster join and the same
+  // computeReadiness red/yellow/green call, just widened from one date to a
+  // week and bucketed per day, so it stays exactly consistent with what
+  // "Flagged today" itself counts. No new table -- wellnessCheckins already
+  // holds one real row per athlete per day.
+  async getRosterFlaggedTrend(coachId: number, days = 7) {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    const today = new Date();
+    const dates = Array.from({ length: days }, (_, i) =>
+      formatISO(subDays(today, days - 1 - i), { representation: "date" }),
+    );
+    const rows = await db
+      .select({
+        date: wellnessCheckins.date,
+        sleepHours: wellnessCheckins.sleepHours,
+        soreness: wellnessCheckins.soreness,
+        stress: wellnessCheckins.stress,
+        hydration: wellnessCheckins.hydration,
+        mentalFocus: wellnessCheckins.mentalFocus,
+        bodyPainMap: wellnessCheckins.bodyPainMap,
+      })
+      .from(coachAthletes)
+      .innerJoin(wellnessCheckins, eq(wellnessCheckins.athleteId, coachAthletes.athleteId))
+      .where(and(inArray(coachAthletes.coachId, coachIds), gte(wellnessCheckins.date, dates[0])));
+    const flaggedByDate = new Map<string, number>();
+    for (const row of rows) {
+      if (computeReadiness(row).level !== "red") continue;
+      flaggedByDate.set(row.date, (flaggedByDate.get(row.date) ?? 0) + 1);
+    }
+    return dates.map((d) => flaggedByDate.get(d) ?? 0);
+  },
+
+  // Coach dashboard's "This Week" digest -- three roster-wide counts meant to
+  // surface what changed without a trip into Analytics. Each metric picks
+  // its own honest window rather than sharing one blindly:
+  //  - newPRs / wellnessFlags cover the rolling last 7 calendar days
+  //    INCLUDING today, since a PR or a red check-in logged already
+  //    happened and belongs in the tally the moment it's saved.
+  //  - missedWorkouts deliberately EXCLUDES today -- a day that's still in
+  //    progress can't yet be judged missed, so its window is the 7 days
+  //    before today (yesterday back through 7 days ago).
+  // newPRs/missedWorkouts scope the roster via assignments.coachId (same
+  // join pattern as getLeaderboardExercisesForCoach/getTotalPrCountForAthlete
+  // above); wellnessFlags scopes via coachAthletes, matching
+  // getRosterWellnessToday just above -- both resolve to the same roster,
+  // this just follows whichever join the sibling query for that table
+  // already established.
+  async getCoachWeeklyDigest(
+    coachId: number,
+  ): Promise<{ newPRs: number; missedWorkouts: number; wellnessFlags: number }> {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    const today = new Date();
+    const todayStr = formatISO(today, { representation: "date" });
+    const last7Start = formatISO(subDays(today, 6), { representation: "date" });
+    const priorWindowEnd = formatISO(subDays(today, 1), { representation: "date" });
+    const priorWindowStart = formatISO(subDays(today, 7), { representation: "date" });
+
+    const [prRows, wellnessRows, roster] = await Promise.all([
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(workoutSetEntries)
+        .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
+        .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
+        .innerJoin(assignments, eq(workoutLogs.assignmentId, assignments.id))
+        .where(
+          and(
+            inArray(assignments.coachId, coachIds),
+            eq(workoutSetEntries.isPr, true),
+            gte(workoutLogs.date, last7Start),
+            lte(workoutLogs.date, todayStr),
+          ),
+        ),
+      db
+        .select({
+          athleteId: wellnessCheckins.athleteId,
+          sleepHours: wellnessCheckins.sleepHours,
+          soreness: wellnessCheckins.soreness,
+          stress: wellnessCheckins.stress,
+          hydration: wellnessCheckins.hydration,
+          mentalFocus: wellnessCheckins.mentalFocus,
+          bodyPainMap: wellnessCheckins.bodyPainMap,
+        })
+        .from(coachAthletes)
+        .innerJoin(wellnessCheckins, eq(wellnessCheckins.athleteId, coachAthletes.athleteId))
+        .where(
+          and(
+            inArray(coachAthletes.coachId, coachIds),
+            gte(wellnessCheckins.date, last7Start),
+            lte(wellnessCheckins.date, todayStr),
+          ),
+        ),
+      this.getRosterForCoach(coachId),
+    ]);
+
+    const newPRs = prRows[0]?.count ?? 0;
+    const wellnessFlags = wellnessRows.filter((w) => computeReadiness(w).level === "red").length;
+    const missedWorkouts = await this.countMissedWorkoutsForRoster(
+      roster.map((a) => a.id),
+      priorWindowStart,
+      priorWindowEnd,
+    );
+
+    return { newPRs, missedWorkouts, wellnessFlags };
+  },
+
+  // Assigned-but-incomplete training days for a set of athletes within
+  // [windowStart, windowEnd] (both inclusive date strings) -- same schedule
+  // expansion as computeStreaks above (program weeks -> resolveAssignmentDate,
+  // rest days excluded since they were never "assigned" in the first place),
+  // just counting the gaps in a bounded window instead of walking an
+  // unbounded streak.
+  async countMissedWorkoutsForRoster(
+    athleteIds: number[],
+    windowStart: string,
+    windowEnd: string,
+  ): Promise<number> {
+    if (athleteIds.length === 0) return 0;
+    const athleteAssignments = await db.query.assignments.findMany({
+      where: inArray(assignments.athleteId, athleteIds),
+      with: { program: { with: { weeks: { with: { days: true } } } } },
+    });
+    if (athleteAssignments.length === 0) return 0;
+
+    const scheduled: { assignmentId: number; programDayId: number; date: string }[] = [];
+    for (const a of athleteAssignments) {
+      for (const { week, calendarWeekNumber, isFirstCycle } of assignmentWeekOccurrences(
+        a.program.weeks,
+        a.durationWeeks,
+      )) {
+        for (const day of week.days) {
+          if (day.isRestDay) continue;
+          const dateStr = formatISO(
+            resolveAssignmentDate(a, calendarWeekNumber, day.dayNumber, day.id, isFirstCycle),
+            { representation: "date" },
+          );
+          if (dateStr >= windowStart && dateStr <= windowEnd) {
+            scheduled.push({ assignmentId: a.id, programDayId: day.id, date: dateStr });
+          }
+        }
+      }
+    }
+    if (scheduled.length === 0) return 0;
+
+    const assignmentIds = athleteAssignments.map((a) => a.id);
+    const logs = await db.query.workoutLogs.findMany({
+      where: and(
+        inArray(workoutLogs.assignmentId, assignmentIds),
+        eq(workoutLogs.completed, true),
+        gte(workoutLogs.date, windowStart),
+        lte(workoutLogs.date, windowEnd),
+      ),
+    });
+    const completedKeys = new Set(logs.map((l) => `${l.assignmentId}:${l.programDayId}:${l.date}`));
+
+    return scheduled.filter((s) => !completedKeys.has(`${s.assignmentId}:${s.programDayId}:${s.date}`))
+      .length;
+  },
+
   // ---------- CARA (countable athletically-related activity) time tracking ----------
   // See caraSessions in shared/schema.ts for the full design rationale.
   // Idle threshold: the client prompts "still working out?" once a session
@@ -14841,11 +15000,25 @@ ${catalog}`;
     const monthPrefix = new Date().toISOString().slice(0, 7);
     const workoutsThisMonth = completedLogs.filter((l) => l.date.startsWith(monthPrefix)).length;
 
+    // Real daily completion counts for the dashboard's Day Streak / Workouts
+    // This Month sparklines -- bucketed from the completedLogs rows already
+    // fetched above (no extra query, no persisted snapshot). Oldest first,
+    // today last.
+    const last7Dates = Array.from({ length: 7 }, (_, i) =>
+      formatISO(subDays(new Date(), 6 - i), { representation: "date" }),
+    );
+    const completedCountByDate = new Map<string, number>();
+    for (const log of completedLogs) {
+      completedCountByDate.set(log.date, (completedCountByDate.get(log.date) ?? 0) + 1);
+    }
+    const last7DaysCompleted = last7Dates.map((d) => completedCountByDate.get(d) ?? 0);
+
     return {
       totalWorkoutsCompleted: completedLogs.length,
       workoutsThisMonth,
       recentPRs,
       currentLifts,
+      last7DaysCompleted,
     };
   },
 
@@ -16375,10 +16548,10 @@ ${catalog}`;
   // to pay for.
   async getAdminPlatformStats() {
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    const [[coachRow], [athleteRow], [newSignupRow], [freeAgentRow]] = await Promise.all([
+    const [[coachRow], [athleteRow], newSignupRows, [freeAgentRow]] = await Promise.all([
       db.select({ count: count() }).from(users).where(eq(users.role, "coach")),
       db.select({ count: count() }).from(users).where(eq(users.role, "athlete")),
-      db.select({ count: count() }).from(users).where(gte(users.createdAt, sevenDaysAgo)),
+      db.select({ createdAt: users.createdAt }).from(users).where(gte(users.createdAt, sevenDaysAgo)),
       // Free Agent = an athlete with zero coachAthletes rows -- same
       // definition requireFreeAgent (routes.ts) and getCoachesForAthlete
       // use per-athlete, just as a platform-wide set difference instead of
@@ -16396,10 +16569,24 @@ ${catalog}`;
           ),
         ),
     ]);
+    // Real per-day signup counts for the "New signups this week" sparkline --
+    // bucketed from the same users.createdAt rows the headcount above already
+    // fetched, not a new query or any persisted snapshot.
+    const today = new Date();
+    const last7Dates = Array.from({ length: 7 }, (_, i) =>
+      formatISO(subDays(today, 6 - i), { representation: "date" }),
+    );
+    const signupCountByDate = new Map<string, number>();
+    for (const row of newSignupRows) {
+      const d = formatISO(row.createdAt, { representation: "date" });
+      signupCountByDate.set(d, (signupCountByDate.get(d) ?? 0) + 1);
+    }
+    const newSignupsTrend = last7Dates.map((d) => signupCountByDate.get(d) ?? 0);
     return {
       totalCoaches: coachRow?.count ?? 0,
       totalAthletes: athleteRow?.count ?? 0,
-      newSignupsThisWeek: newSignupRow?.count ?? 0,
+      newSignupsThisWeek: newSignupRows.length,
+      newSignupsTrend,
       freeAgentCount: freeAgentRow?.count ?? 0,
     };
   },

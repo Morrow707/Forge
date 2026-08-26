@@ -82,6 +82,7 @@ import { ACWR_RISK_LABEL, type AcwrRiskLevel } from "@shared/load";
 import { ACWR_RISK_CLASSNAME } from "@/components/acwr-history-dialog";
 import { MuscleHeatMap } from "@/components/muscle-heat-map";
 import { GoalsPanel } from "@/components/goals-panel";
+import { Skeleton } from "@/components/skeleton";
 
 type RosterEntry = { id: number; name: string; email: string };
 type TrackedExercise = { id: number; name: string };
@@ -944,6 +945,16 @@ export default function CoachAnalytics() {
               )}
             </CardContent>
           </Card>
+        </div>
+      )}
+
+      {athleteId && exerciseId && isLoading && chartData.length === 0 && (
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <Skeleton className="h-7 w-48" />
+            <Skeleton className="h-8 w-64 rounded-md" />
+          </div>
+          <Skeleton className="h-72 w-full rounded-md" />
         </div>
       )}
 
@@ -2369,7 +2380,23 @@ function AcwrTrendCard({ athleteId }: { athleteId: string }) {
   const hasEnoughData = history.some((p) => p.acuteLoad > 0 || p.chronicLoad > 0);
 
   if (isLoading && history.length === 0) {
-    return <div className="h-24 animate-pulse rounded-md bg-surface" />;
+    return (
+      <Card>
+        <CardHeader>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="space-y-2">
+              <Skeleton className="h-5 w-48" />
+              <Skeleton className="h-4 w-72 max-w-full" />
+            </div>
+            <Skeleton className="h-7 w-48 rounded-md" />
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Skeleton className="h-12 w-full rounded-md" />
+          <Skeleton className="h-56 w-full rounded-md" />
+        </CardContent>
+      </Card>
+    );
   }
 
   return (
@@ -2504,7 +2531,22 @@ function WeeklyLoadTrendCard({ athleteId }: { athleteId: string }) {
   const hasEnoughData = series.some((p) => p.totalVolume > 0);
 
   if (isLoading && series.length === 0) {
-    return <div className="h-24 animate-pulse rounded-md bg-surface" />;
+    return (
+      <Card>
+        <CardHeader>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="space-y-2">
+              <Skeleton className="h-5 w-44" />
+              <Skeleton className="h-4 w-80 max-w-full" />
+            </div>
+            <Skeleton className="h-7 w-48 rounded-md" />
+          </div>
+        </CardHeader>
+        <CardContent>
+          <Skeleton className="h-64 w-full rounded-md" />
+        </CardContent>
+      </Card>
+    );
   }
 
   return (
@@ -2637,7 +2679,17 @@ function TeamTrends() {
         }}
       />
 
-      {!isLoading && athletes.length === 0 ? (
+      {isLoading ? (
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-5 w-56" />
+            <Skeleton className="h-4 w-72 max-w-full" />
+          </CardHeader>
+          <CardContent>
+            <Skeleton className="h-80 w-full rounded-md" />
+          </CardContent>
+        </Card>
+      ) : athletes.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
             <TrendingUp className="h-10 w-10 text-muted-foreground" />
@@ -2800,7 +2852,30 @@ function CoachClassAnalyticsTab() {
     queryKey: ["/api/coach/classes/analytics"],
   });
 
-  if (isLoading) return <p className="text-sm text-muted-foreground">Loading...</p>;
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          {[0, 1, 2].map((i) => (
+            <Card key={i}>
+              <CardContent className="flex items-center gap-4 p-5">
+                <Skeleton className="h-11 w-11 shrink-0 rounded-md" />
+                <div className="space-y-2">
+                  <Skeleton className="h-7 w-12" />
+                  <Skeleton className="h-4 w-28" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        <div className="space-y-2">
+          {[0, 1, 2].map((i) => (
+            <Skeleton key={i} className="h-14 w-full rounded-md" />
+          ))}
+        </div>
+      </div>
+    );
+  }
   if (!data || data.totalClasses === 0) {
     return (
       <Card>

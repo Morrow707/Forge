@@ -48,6 +48,11 @@ type ProgressSummary = {
   currentStreak: number;
   totalCompleted: number;
   recentPRs: { exerciseId: number; exerciseName: string }[];
+  // Real daily-completed-workout counts for the last 7 days (oldest first),
+  // bucketed server-side from the athlete's own workoutLogs rows -- backs
+  // the Day Streak / Workouts This Month sparklines below. See
+  // getAthleteProgressSummary in server/storage.ts.
+  last7DaysCompleted: number[];
 };
 
 export default function AthleteDashboard() {
@@ -168,13 +173,19 @@ export default function AthleteDashboard() {
             label="Day streak"
             value={progress?.currentStreak ?? 0}
             href="/athlete/progress"
+            trend={progress?.last7DaysCompleted}
           />
           <StatTile
             icon={CalendarCheck}
             label="Workouts this month"
             value={progress?.workoutsThisMonth ?? 0}
             href="/athlete/progress"
+            trend={progress?.last7DaysCompleted}
           />
+          {/* No trend here on purpose -- totalCompleted is an all-time
+              counter, and the same last7DaysCompleted series already drives
+              the two tiles above it. A third copy of it wouldn't tell a
+              coach anything new about "total," just repeat the same week. */}
           <StatTile
             icon={ListChecks}
             label="Total completed"

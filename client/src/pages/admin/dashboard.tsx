@@ -3,6 +3,7 @@ import { Link, useLocation } from "wouter";
 import { AppShell } from "@/components/app-shell";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Sparkline } from "@/components/stat-tile";
 import { useAuth } from "@/hooks/use-auth";
 import { apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
@@ -29,6 +30,10 @@ type PlatformStats = {
   totalCoaches: number;
   totalAthletes: number;
   newSignupsThisWeek: number;
+  // Real per-day signup counts for the last 7 days (oldest first), bucketed
+  // server-side from users.createdAt -- backs the sparkline below. See
+  // getAdminPlatformStats in server/storage.ts.
+  newSignupsTrend: number[];
   freeAgentCount: number;
 };
 type SystemStatus = {
@@ -163,6 +168,7 @@ export default function AdminDashboard() {
             icon={UserPlus}
             label="New signups this week"
             value={platformStats?.newSignupsThisWeek ?? 0}
+            trend={platformStats?.newSignupsTrend}
           />
           <StatTile icon={Compass} label="Free Agents" value={platformStats?.freeAgentCount ?? 0} />
         </div>
@@ -258,10 +264,12 @@ function StatTile({
   icon: Icon,
   label,
   value,
+  trend,
 }: {
   icon: typeof Users;
   label: string;
   value: number;
+  trend?: number[];
 }) {
   return (
     <Card>
@@ -269,8 +277,11 @@ function StatTile({
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary/15 text-primary">
           <Icon className="h-5 w-5" />
         </div>
-        <div className="min-w-0">
-          <p className="font-display text-2xl font-bold md:text-3xl">{value}</p>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <p className="font-display text-2xl font-bold md:text-3xl">{value}</p>
+            {trend && <Sparkline values={trend} className="mb-1 shrink-0" />}
+          </div>
           <p className="truncate text-sm text-muted-foreground">{label}</p>
         </div>
       </CardContent>
