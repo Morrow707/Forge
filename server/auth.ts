@@ -123,6 +123,11 @@ async function toPublicUserWithSections(user: any): Promise<PublicUser> {
     publicUser.staffTitle = await storage.getStaffTitleForCoach(user.id);
     const coachIds = await storage.getEffectiveCoachIds(user.id);
     publicUser.isPrimaryCoach = coachIds[0] === user.id;
+    // Lazy backfill for any coach account created before staffInviteCode
+    // existed (see that column's own comment in schema.ts) -- fresh
+    // signups already get one via storage.createUser.
+    publicUser.staffInviteCode =
+      user.staffInviteCode ?? (await storage.getOrCreateStaffInviteCode(user.id));
   }
   return publicUser;
 }

@@ -234,6 +234,7 @@ import { z } from "zod";
 import { diffLines } from "diff";
 import {
   generateCoachCode,
+  generateStaffInviteCode,
   generateResetToken,
   hashResetToken,
   generateCalendarToken,
@@ -1884,6 +1885,36 @@ export const storage = {
     });
   },
 
+  async getUserByStaffInviteCode(code: string) {
+    return db.query.users.findFirst({
+      where: eq(users.staffInviteCode, code.toUpperCase()),
+    });
+  },
+
+  // Lazy backfill for any coach account created before staffInviteCode
+  // existed -- same pattern as getOrCreateCalendarToken below. Fresh coach
+  // accounts already get one at signup (see createUser), so this is only
+  // ever a real write for a pre-existing account's first fetch.
+  async getOrCreateStaffInviteCode(coachId: number): Promise<string> {
+    const user = await this.getUser(coachId);
+    if (user?.staffInviteCode) return user.staffInviteCode;
+    let code = generateStaffInviteCode();
+    while (await this.getUserByStaffInviteCode(code)) code = generateStaffInviteCode();
+    await db.update(users).set({ staffInviteCode: code }).where(eq(users.id, coachId));
+    return code;
+  },
+
+  // Rotates a coach's staff-invite code -- e.g. after removing a staff
+  // member who shouldn't be able to rejoin with the old one, or if the code
+  // is suspected to have leaked. Doesn't touch coachCode (the athlete
+  // signup code), which is a separate credential on purpose.
+  async regenerateStaffInviteCode(coachId: number): Promise<string> {
+    let code = generateStaffInviteCode();
+    while (await this.getUserByStaffInviteCode(code)) code = generateStaffInviteCode();
+    await db.update(users).set({ staffInviteCode: code }).where(eq(users.id, coachId));
+    return code;
+  },
+
   async getUserByCalendarToken(token: string) {
     return db.query.users.findFirst({ where: eq(users.calendarToken, token) });
   },
@@ -1897,7 +1928,7 @@ export const storage = {
     return token;
   },
 
-  async createUser(data: Omit<InsertUser, "coachCode">) {
+  async createUser(data: Omit<InsertUser, "coachCode" | "staffInviteCode">) {
     const values: InsertUser = { ...data, email: data.email.toLowerCase() };
     if (data.role === "coach") {
       let code = generateCoachCode();
@@ -1906,6 +1937,11 @@ export const storage = {
         code = generateCoachCode();
       }
       values.coachCode = code;
+      let staffCode = generateStaffInviteCode();
+      while (await this.getUserByStaffInviteCode(staffCode)) {
+        staffCode = generateStaffInviteCode();
+      }
+      values.staffInviteCode = staffCode;
     }
     const [user] = await db.insert(users).values(values).returning();
     return user;
@@ -2914,13 +2950,15 @@ export const storage = {
   // how membership changes visibility everywhere. This section is just the
   // join/leave/remove/list surface.
 
-  // A coach joins another coach's staff using that coach's own coachCode --
-  // the same code an athlete would use to find them -- rather than a
-  // separate invite-code system. If the code's owner is themselves staff
-  // under someone else, this resolves to that person's actual primary so
-  // the whole org always converges on one head coach.
+  // A coach joins another coach's staff using that coach's staffInviteCode
+  // -- a separate credential from coachCode (the athlete self-signup code,
+  // which gets posted publicly and must never double as a staff-access
+  // key -- see staffInviteCode's own comment in schema.ts). If the code's
+  // owner is themselves staff under someone else, this resolves to that
+  // person's actual primary so the whole org always converges on one head
+  // coach.
   async joinCoachStaffByCode(joiningCoachId: number, code: string) {
-    const target = await this.getUserByCoachCode(code);
+    const target = await this.getUserByStaffInviteCode(code);
     if (!target || target.role !== "coach") return null;
     if (target.id === joiningCoachId) return null;
     const asStaff = await db.query.coachStaff.findFirst({

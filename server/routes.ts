@@ -2859,6 +2859,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.status(204).end();
   });
 
+  // Rotates the calling coach's own staff-invite code -- e.g. after
+  // removing a staff member who shouldn't be able to rejoin with the old
+  // one. Any coach can regenerate their own (not just a primary), since the
+  // join flow resolves through to the true primary regardless of whose
+  // code was used to join.
+  app.post("/api/coach/staff/invite-code/regenerate", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const staffInviteCode = await storage.regenerateStaffInviteCode(user.id);
+    res.json({ staffInviteCode });
+  });
+
   // Primary coach only -- storage.setStaffHiddenSections already scopes its
   // WHERE to (primaryCoachId=this coach, staffCoachId=target), so a coach
   // who isn't actually this staff member's primary just silently updates

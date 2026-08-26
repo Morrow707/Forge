@@ -219,6 +219,16 @@ export const users = pgTable(
     name: text("name").notNull(),
     role: roleEnum("role").notNull(),
     coachCode: text("coach_code"),
+    // A coach's OWN, separate invite code for another coach to join their
+    // staff -- deliberately not coachCode, which is the athlete self-signup
+    // code and gets posted publicly (flyers, a branded QR/signup link, every
+    // recruit). Reusing that code for staff access would mean anyone who
+    // ever saw the athlete signup code could sign up as a coach and join as
+    // full staff (default hiddenSections is empty = full roster/program/
+    // analytics access) -- see joinCoachStaffByCode's own comment in
+    // storage.ts. This code is only ever shown inside the Coaching Staff
+    // dialog, never on a public signup surface.
+    staffInviteCode: text("staff_invite_code"),
     preferredWeightUnit: weightUnitEnum("preferred_weight_unit")
       .notNull()
       .default("lbs"),
@@ -486,6 +496,7 @@ export const users = pgTable(
   (table) => ({
     emailIdx: uniqueIndex("users_email_idx").on(table.email),
     coachCodeIdx: uniqueIndex("users_coach_code_idx").on(table.coachCode),
+    staffInviteCodeIdx: uniqueIndex("users_staff_invite_code_idx").on(table.staffInviteCode),
     calendarTokenIdx: uniqueIndex("users_calendar_token_idx").on(table.calendarToken),
   }),
 );
@@ -793,9 +804,10 @@ export const createTeamGameDaySchema = z.object({
 // "this coach's data" is widened to the whole staff list via
 // getEffectiveCoachIds (server/storage.ts), so it doesn't matter which
 // staff member created a given athlete link, program, or exercise --
-// everyone on the staff sees the same thing. Joining reuses the primary
-// coach's existing coachCode (the same code an athlete would use to find
-// them) rather than a separate invite-code system.
+// everyone on the staff sees the same thing. Joining uses a coach's own
+// staffInviteCode (users.staffInviteCode) -- a separate credential from
+// coachCode, which gets shared publicly for athlete self-signup and must
+// never double as a full-access staff key.
 // Every named value here is one toggleable slice of the app -- see
 // COACH_SECTION_LABELS (shared/coach-sections.ts) for the human label of
 // each. "dashboard" is deliberately not one of these: a staff coach always

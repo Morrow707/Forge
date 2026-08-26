@@ -1893,6 +1893,12 @@ ALTER TABLE "teams" ADD COLUMN IF NOT EXISTS "brand_secondary_color" text;
 -- this athlete (shared/schema.ts users.trackingOptOut) -- see that column's
 -- own comment for the full reasoning.
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "tracking_opt_out" boolean NOT NULL DEFAULT false;
+
+-- A coach's own staff-invite code (shared/schema.ts users.staffInviteCode),
+-- separate from coach_code -- see that column's own comment for why joining
+-- a coaching staff can no longer reuse the athlete self-signup code.
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "staff_invite_code" text;
+CREATE UNIQUE INDEX IF NOT EXISTS "users_staff_invite_code_idx" ON "users" ("staff_invite_code");
 `;
 
 async function main() {

@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { apiRequest, getJson, ApiError } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
-import { UserMinus, Copy, Settings2, ChevronDown } from "lucide-react";
+import { UserMinus, Copy, Settings2, ChevronDown, RefreshCw } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { COACH_SECTIONS, COACH_SECTION_LABEL, type CoachSection } from "@shared/coach-sections";
 import { cn } from "@/lib/utils";
@@ -35,9 +35,10 @@ const STAFF_TITLE_PRESETS = ["Nutritionist", "Strength Coach", "Athletic Trainer
 /** Lets a whole coaching staff (assistant/position coaches) share one
  * roster/programs/exercises/analytics instead of one coach owning
  * everything alone -- built for programs where "everyone needs access"
- * (e.g. a college staff), not just a solo coach. Joining reuses the
- * primary coach's existing coachCode rather than a separate invite-code
- * system, so there's only one code per program to keep track of. */
+ * (e.g. a college staff), not just a solo coach. Joining uses the primary
+ * coach's own staffInviteCode -- a separate credential from their
+ * athlete-facing coachCode, since that one gets posted publicly (flyers, a
+ * branded signup link) and must never double as a full-access staff key. */
 export function CoachingStaffDialog({
   open,
   onOpenChange,
@@ -102,6 +103,18 @@ export function CoachingStaffDialog({
     onError: (err: ApiError) => toast.error(err.message || "Couldn't remove"),
   });
 
+  const regenerateMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/coach/staff/invite-code/regenerate");
+      return res.json() as Promise<{ staffInviteCode: string }>;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/auth/me"] });
+      toast.success("New invite code generated -- the old one no longer works");
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't generate a new code"),
+  });
+
   const leaveMutation = useMutation({
     mutationFn: async () => {
       await apiRequest("POST", "/api/coach/staff/leave");
@@ -119,8 +132,8 @@ export function CoachingStaffDialog({
   });
 
   function copyCode() {
-    if (!user?.coachCode) return;
-    navigator.clipboard.writeText(user.coachCode);
+    if (!user?.staffInviteCode) return;
+    navigator.clipboard.writeText(user.staffInviteCode);
     toast.success("Copied");
   }
 
@@ -142,16 +155,27 @@ export function CoachingStaffDialog({
           <div className="space-y-5">
             {isPrimary ? (
               <div className="space-y-1.5">
-                <Label>Your invite code</Label>
+                <Label>Your staff invite code</Label>
                 <div className="flex items-center gap-2">
-                  <Input readOnly value={user?.coachCode ?? ""} className="font-mono" />
+                  <Input readOnly value={user?.staffInviteCode ?? ""} className="font-mono" />
                   <Button type="button" variant="outline" size="icon" onClick={copyCode}>
                     <Copy className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    aria-label="Generate a new invite code"
+                    onClick={() => regenerateMutation.mutate()}
+                    disabled={regenerateMutation.isPending}
+                  >
+                    <RefreshCw className="h-4 w-4" />
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground">
                   Share this with another coach -- when they enter it below, they join your staff
-                  and see everything you do.
+                  and see everything you do. This is a different code from your athlete signup
+                  invite, so sharing it with athletes or recruits doesn't grant them staff access.
                 </p>
               </div>
             ) : (
@@ -316,7 +340,7 @@ export function CoachingStaffDialog({
                     id="join-code"
                     value={joinCode}
                     onChange={(e) => setJoinCode(e.target.value)}
-                    placeholder="Their invite code"
+                    placeholder="Their staff invite code"
                     className="font-mono uppercase"
                   />
                   <Button

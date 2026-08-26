@@ -59,3 +59,17 @@ export function generateClaimCode(): string {
   }
   return code;
 }
+
+// Same length/entropy as generateClaimCode, not generateCoachCode -- unlike
+// a coach code (meant to be handed out publicly for athlete self-signup),
+// this one grants full staff access to a roster/programs/analytics the
+// moment it's entered, so it gets the same longer alphabet as a claim code
+// rather than the shorter "which coach to join" one.
+export function generateStaffInviteCode(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let code = "";
+  for (let i = 0; i < 8; i++) {
+    code += chars[randomInt(chars.length)];
+  }
+  return code;
+}
