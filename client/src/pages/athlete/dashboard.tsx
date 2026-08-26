@@ -17,7 +17,9 @@ import { NextThreeDaysCard } from "@/components/next-three-days-card";
 import { StatTile } from "@/components/stat-tile";
 import { ReadinessBanner } from "@/components/readiness-banner";
 import { useWidgetVisibility } from "@/hooks/use-widget-visibility";
+import { usePullToRefresh } from "@/hooks/use-pull-to-refresh";
 import { resolveWidgetOrder } from "@/lib/widget-layout";
+import { cn } from "@/lib/utils";
 import {
   DndContext,
   closestCenter,
@@ -40,7 +42,14 @@ import {
   CalendarCheck,
   Trophy,
   MessageSquareText,
+  ChevronDown,
+  Loader2,
 } from "lucide-react";
+
+// Kept in sync with the hook call below -- shared so the indicator's own
+// "have we crossed the threshold yet" styling matches what actually
+// triggers the refresh.
+const PULL_REFRESH_THRESHOLD = 60;
 
 type ProgressSummary = {
   totalWorkoutsCompleted: number;
@@ -68,18 +77,22 @@ export default function AthleteDashboard() {
   // Same query AppShell already makes for its own CSS-var re-skin --
   // React Query dedupes the identical in-flight request, so reading it
   // again here for the welcome banner costs nothing extra.
-  const { data: branding } = useQuery<{ brandWelcomeMessage?: string | null }>({
+  const { data: branding, refetch: refetchBranding } = useQuery<{
+    brandWelcomeMessage?: string | null;
+  }>({
     queryKey: ["/api/branding/me"],
     queryFn: () => getJson("/api/branding/me"),
   });
 
-  const { data: coaches = [], isLoading: coachesLoading } = useQuery<
-    { id: number; name: string; coachCode: string }[]
-  >({
+  const {
+    data: coaches = [],
+    isLoading: coachesLoading,
+    refetch: refetchCoaches,
+  } = useQuery<{ id: number; name: string; coachCode: string }[]>({
     queryKey: ["/api/athlete/coaches"],
   });
 
-  const { data: progress } = useQuery<ProgressSummary>({
+  const { data: progress, refetch: refetchProgress } = useQuery<ProgressSummary>({
     queryKey: ["/api/athlete/progress"],
   });
 
@@ -90,7 +103,7 @@ export default function AthleteDashboard() {
   const rangeStart = formatISO(days[0], { representation: "date" });
   const rangeEnd = formatISO(days[days.length - 1], { representation: "date" });
   const today = rangeStart;
-  const { data: upcoming = [] } = useQuery<CalendarEntry[]>({
+  const { data: upcoming = [], refetch: refetchUpcoming } = useQuery<CalendarEntry[]>({
     queryKey: ["/api/athlete/calendar", rangeStart, rangeEnd],
     queryFn: async () => {
       const res = await apiRequest(
@@ -100,6 +113,21 @@ export default function AthleteDashboard() {
       return res.json();
     },
   });
+
+  // Pull-to-refresh re-fetches every query this dashboard's widgets read
+  // from, rather than a single "the" query -- there's no one endpoint that
+  // backs the whole page.
+  const { containerRef, pullDistance, isRefreshing } = usePullToRefresh(
+    async () => {
+      await Promise.all([
+        refetchBranding(),
+        refetchCoaches(),
+        refetchProgress(),
+        refetchUpcoming(),
+      ]);
+    },
+    { threshold: PULL_REFRESH_THRESHOLD },
+  );
 
   // Team Chat only ever renders for a coached athlete (a Free Agent has no
   // team) -- excluded from the sortable set entirely when it wouldn't
@@ -228,6 +256,31 @@ export default function AthleteDashboard() {
         </Button>
       }
     >
+      <div ref={containerRef} className="relative">
+        {/* Grows from 0 as the user pulls down from the top of the list --
+            purely visual, so it's hidden from screen readers; the refetch
+            itself is announced however the query's own consumers already
+            surface loading/error state. */}
+        <div
+          aria-hidden="true"
+          className="flex items-center justify-center overflow-hidden transition-[height] duration-150 ease-out"
+          style={{ height: pullDistance }}
+        >
+          {isRefreshing ? (
+            <Loader2 className="h-5 w-5 animate-spin text-primary" />
+          ) : (
+            <ChevronDown
+              className={cn(
+                "h-5 w-5 transition-transform duration-150",
+                pullDistance >= PULL_REFRESH_THRESHOLD ? "text-primary" : "text-muted-foreground",
+              )}
+              style={{
+                transform: `rotate(${Math.min(1, pullDistance / PULL_REFRESH_THRESHOLD) * 180}deg)`,
+              }}
+            />
+          )}
+        </div>
+
       <div className="flex flex-col gap-4">
         {branding?.brandWelcomeMessage && (
           <Card className="border-primary/30 bg-primary/5">
@@ -289,6 +342,7 @@ export default function AthleteDashboard() {
             </CardContent>
           </Card>
         )}
+      </div>
       </div>
 
       {viewingSkill && (

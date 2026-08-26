@@ -40,6 +40,7 @@ import type { ReadinessLevel } from "@shared/wellness";
 import type { AcwrRiskLevel } from "@shared/load";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
+import { usePullToRefresh } from "@/hooks/use-pull-to-refresh";
 import { toast } from "sonner";
 import { toCsv } from "@/lib/csv";
 import { shareOrDownloadBlob } from "@/lib/share-file";
@@ -75,6 +76,7 @@ import {
   ChevronUp,
   ChevronDown,
   ChevronsUpDown,
+  Loader2,
 } from "lucide-react";
 
 type PhotoImportKind = "testing-day" | "weigh-in" | "nutrition" | "injury" | "testing-data" | "player-intake";
@@ -130,6 +132,11 @@ type ProgramSummary = { id: number; name: string };
 
 type RosterSortColumn = "name" | "sport" | "position" | "health" | "email";
 
+// Kept in sync with the hook call below -- shared so the indicator's own
+// "have we crossed the threshold yet" styling matches what actually
+// triggers the refresh.
+const PULL_REFRESH_THRESHOLD = 60;
+
 const ROSTER_SORT_COLUMNS: { column: RosterSortColumn; label: string }[] = [
   { column: "name", label: "Name" },
   { column: "sport", label: "Sport" },
@@ -159,16 +166,20 @@ function rosterSortValue(a: RosterEntry, column: RosterSortColumn): string {
 export default function CoachRoster() {
   const qc = useQueryClient();
   const [, navigate] = useLocation();
-  const { data: roster = [], isLoading: rosterLoading } = useQuery<RosterEntry[]>({
+  const {
+    data: roster = [],
+    isLoading: rosterLoading,
+    refetch: refetchRoster,
+  } = useQuery<RosterEntry[]>({
     queryKey: ["/api/coach/roster"],
   });
-  const { data: teams = [] } = useQuery<TeamEntry[]>({
+  const { data: teams = [], refetch: refetchTeams } = useQuery<TeamEntry[]>({
     queryKey: ["/api/coach/teams"],
   });
-  const { data: programs = [] } = useQuery<ProgramSummary[]>({
+  const { data: programs = [], refetch: refetchPrograms } = useQuery<ProgramSummary[]>({
     queryKey: ["/api/coach/programs"],
   });
-  const { data: wellnessToday = [] } = useQuery<
+  const { data: wellnessToday = [], refetch: refetchWellnessToday } = useQuery<
     {
       athleteId: number;
       sleepHours: number;
@@ -182,7 +193,7 @@ export default function CoachRoster() {
     refetchInterval: 60_000,
   });
   const wellnessByAthlete = new Map(wellnessToday.map((w) => [w.athleteId, w]));
-  const { data: acwrToday = [] } = useQuery<
+  const { data: acwrToday = [], refetch: refetchAcwrToday } = useQuery<
     { athleteId: number; athleteName: string; ratio: number | null; level: AcwrRiskLevel }[]
   >({
     queryKey: ["/api/coach/roster-acwr"],
@@ -197,6 +208,22 @@ export default function CoachRoster() {
     queryKey: ["/api/coach/roster-load-trend"],
     refetchInterval: 60_000,
   });
+
+  // Pull-to-refresh re-fetches every query this page reads from, rather
+  // than a single "the" query -- roster/teams/programs/wellness/ACWR all
+  // feed the visible tabs.
+  const { containerRef, pullDistance, isRefreshing } = usePullToRefresh(
+    async () => {
+      await Promise.all([
+        refetchRoster(),
+        refetchTeams(),
+        refetchPrograms(),
+        refetchWellnessToday(),
+        refetchAcwrToday(),
+      ]);
+    },
+    { threshold: PULL_REFRESH_THRESHOLD },
+  );
 
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignAthleteIds, setAssignAthleteIds] = useState<number[]>([]);
@@ -485,6 +512,31 @@ export default function CoachRoster() {
           </div>
         }
       >
+        <div ref={containerRef} className="relative">
+        {/* Grows from 0 as the user pulls down from the top of the list --
+            purely visual, so it's hidden from screen readers; the refetch
+            itself is announced however the query's own consumers already
+            surface loading/error state. */}
+        <div
+          aria-hidden="true"
+          className="flex items-center justify-center overflow-hidden transition-[height] duration-150 ease-out"
+          style={{ height: pullDistance }}
+        >
+          {isRefreshing ? (
+            <Loader2 className="h-5 w-5 animate-spin text-primary" />
+          ) : (
+            <ChevronDown
+              className={cn(
+                "h-5 w-5 transition-transform duration-150",
+                pullDistance >= PULL_REFRESH_THRESHOLD ? "text-primary" : "text-muted-foreground",
+              )}
+              style={{
+                transform: `rotate(${Math.min(1, pullDistance / PULL_REFRESH_THRESHOLD) * 180}deg)`,
+              }}
+            />
+          )}
+        </div>
+
         <TabsContent value="roster">
           <div className="mb-4">
             <ProvisionalRosterPanel />
@@ -936,6 +988,7 @@ export default function CoachRoster() {
         <TabsContent value="compliance">
           <CaraCompliancePanel roster={roster} />
         </TabsContent>
+        </div>
 
       <Dialog open={teamDialogOpen} onOpenChange={setTeamDialogOpen}>
         <DialogContent>

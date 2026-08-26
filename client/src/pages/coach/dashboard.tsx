@@ -15,7 +15,9 @@ import { SortableHideableWidget } from "@/components/sortable-hideable-widget";
 import { NextThreeDaysCard } from "@/components/next-three-days-card";
 import { StatTile } from "@/components/stat-tile";
 import { useWidgetVisibility } from "@/hooks/use-widget-visibility";
+import { usePullToRefresh } from "@/hooks/use-pull-to-refresh";
 import { resolveWidgetOrder } from "@/lib/widget-layout";
+import { cn } from "@/lib/utils";
 import {
   DndContext,
   closestCenter,
@@ -53,9 +55,16 @@ import {
   Mail,
   QrCode,
   HeartPulse,
+  ChevronDown,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { addDays, formatISO } from "date-fns";
+
+// Kept in sync with the hook call below -- shared so the indicator's own
+// "have we crossed the threshold yet" styling matches what actually
+// triggers the refresh.
+const PULL_REFRESH_THRESHOLD = 60;
 
 type ProgramSummary = {
   id: number;
@@ -73,26 +82,28 @@ type TeamSummary = { id: number; name: string; code: string | null };
 export default function CoachDashboard() {
   const { user } = useAuth();
   const widgetVisibility = useWidgetVisibility("coach");
-  const { data: programs = [] } = useQuery<ProgramSummary[]>({
+  const { data: programs = [], refetch: refetchPrograms } = useQuery<ProgramSummary[]>({
     queryKey: ["/api/coach/programs"],
   });
-  const { data: roster = [] } = useQuery<RosterEntry[]>({
+  const { data: roster = [], refetch: refetchRoster } = useQuery<RosterEntry[]>({
     queryKey: ["/api/coach/roster"],
   });
-  const { data: exercises = [] } = useQuery<ExerciseSummary[]>({
+  const { data: exercises = [], refetch: refetchExercises } = useQuery<ExerciseSummary[]>({
     queryKey: ["/api/coach/exercises"],
   });
-  const { data: teams = [] } = useQuery<TeamSummary[]>({
+  const { data: teams = [], refetch: refetchTeams } = useQuery<TeamSummary[]>({
     queryKey: ["/api/coach/teams"],
   });
-  const { data: wellnessToday = [] } = useQuery<{ level: "green" | "yellow" | "red" }[]>({
+  const { data: wellnessToday = [], refetch: refetchWellnessToday } = useQuery<
+    { level: "green" | "yellow" | "red" }[]
+  >({
     queryKey: ["/api/coach/roster-wellness"],
   });
   const flaggedToday = wellnessToday.filter((w) => w.level === "red").length;
   // Real last-7-days flagged counts, bucketed server-side from the same
   // wellnessCheckins rows "Flagged today" itself reads -- see
   // getRosterFlaggedTrend in server/storage.ts.
-  const { data: flaggedTrend = [] } = useQuery<number[]>({
+  const { data: flaggedTrend = [], refetch: refetchFlaggedTrend } = useQuery<number[]>({
     queryKey: ["/api/coach/roster-wellness-trend"],
   });
 
@@ -100,7 +111,7 @@ export default function CoachDashboard() {
   const rangeStart = formatISO(days[0], { representation: "date" });
   const rangeEnd = formatISO(days[days.length - 1], { representation: "date" });
 
-  const { data: upcoming = [] } = useQuery<CalendarEntry[]>({
+  const { data: upcoming = [], refetch: refetchUpcoming } = useQuery<CalendarEntry[]>({
     queryKey: ["/api/coach/calendar", rangeStart, rangeEnd],
     queryFn: async () => {
       const res = await apiRequest(
@@ -110,6 +121,24 @@ export default function CoachDashboard() {
       return res.json();
     },
   });
+
+  // Pull-to-refresh re-fetches every query this dashboard's widgets read
+  // from, rather than a single "the" query -- there's no one endpoint that
+  // backs the whole page.
+  const { containerRef, pullDistance, isRefreshing } = usePullToRefresh(
+    async () => {
+      await Promise.all([
+        refetchPrograms(),
+        refetchRoster(),
+        refetchExercises(),
+        refetchTeams(),
+        refetchWellnessToday(),
+        refetchFlaggedTrend(),
+        refetchUpcoming(),
+      ]);
+    },
+    { threshold: PULL_REFRESH_THRESHOLD },
+  );
 
   const [editing, setEditing] = useState<{
     programDayId: number;
@@ -285,21 +314,48 @@ export default function CoachDashboard() {
         </Button>
       }
     >
-      <div className="flex flex-col gap-3">
-        <CoachDigestBanner />
-        <WeeklyDigestCard />
-        <TeamPrWallCard />
-        <ReengagementBanner />
+      <div ref={containerRef} className="relative">
+        {/* Grows from 0 as the user pulls down from the top of the list --
+            purely visual, so it's hidden from screen readers; the refetch
+            itself is announced however the query's own consumers already
+            surface loading/error state. */}
+        <div
+          aria-hidden="true"
+          className="flex items-center justify-center overflow-hidden transition-[height] duration-150 ease-out"
+          style={{ height: pullDistance }}
+        >
+          {isRefreshing ? (
+            <Loader2 className="h-5 w-5 animate-spin text-primary" />
+          ) : (
+            <ChevronDown
+              className={cn(
+                "h-5 w-5 transition-transform duration-150",
+                pullDistance >= PULL_REFRESH_THRESHOLD ? "text-primary" : "text-muted-foreground",
+              )}
+              style={{
+                transform: `rotate(${Math.min(1, pullDistance / PULL_REFRESH_THRESHOLD) * 180}deg)`,
+              }}
+            />
+          )}
+        </div>
 
-        <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <SortableContext items={widgetOrder} strategy={verticalListSortingStrategy}>
-            {widgetOrder.map((id) => (
-              <div key={id} style={{ display: "contents" }}>
-                {widgetsById[id]}
-              </div>
-            ))}
-          </SortableContext>
-        </DndContext>
+        <div className="flex flex-col gap-3">
+          <CoachDigestBanner />
+          <WeeklyDigestCard />
+          <TeamPrWallCard />
+          <ReengagementBanner />
+
+          <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={widgetOrder} strategy={verticalListSortingStrategy}>
+              {widgetOrder.map((id) => (
+                <div key={id} style={{ display: "contents" }}>
+                  {widgetsById[id]}
+                </div>
+              ))}
+            </SortableContext>
+          </DndContext>
+        </div>
+      </div>
       </div>
 
       <CoachDayEditDialog
