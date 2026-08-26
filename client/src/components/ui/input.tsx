@@ -11,6 +11,12 @@ export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> 
 // visible with a spelled-out value like "Aug 25, 2007"). `block` sidesteps
 // it; these types don't need flex for icon/affix layout the way a plain
 // text input sometimes does.
+//
+// iOS WebKit also ignores h-10 on these specific types and renders its own,
+// noticeably taller native chrome regardless of the height set here --
+// appearance-none strips that default rendering back down to a plain box
+// that actually respects h-10, without losing the native tap-to-open picker
+// (WebKit still opens the date/time wheel on tap with appearance: none set).
 const NATIVE_PICKER_TYPES = new Set(["date", "time", "datetime-local", "month", "week"]);
 
 const Input = React.forwardRef<HTMLInputElement, InputProps>(
@@ -19,7 +25,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
       <input
         type={type}
         className={cn(
-          NATIVE_PICKER_TYPES.has(type ?? "") ? "block" : "flex",
+          NATIVE_PICKER_TYPES.has(type ?? "") ? "block appearance-none" : "flex",
           "h-10 w-full rounded-md border border-input bg-surface px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
           className,
         )}
