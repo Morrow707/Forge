@@ -51,10 +51,18 @@
   --background: 220 15% 7%;
   --foreground: 0 0% 96%;
 
-  --card: 220 14% 11%;
+  /* A shadow can't create contrast it doesn't have room for -- against
+     --background's 7% lightness, the previous 11% here left only 4 points
+     of headroom, and a box-shadow can only darken further, which is
+     already nearly maxed out that close to black. Raised the surface
+     itself instead of leaning harder on opacity/shadow tuning (tried
+     once already, still read as flat) -- this is what dark-theme "tonal
+     elevation" actually depends on: a lighter surface, not a darker
+     shadow, since there's nowhere left for the shadow to go. */
+  --card: 220 14% 17%;
   --card-foreground: 0 0% 96%;
 
-  --popover: 220 14% 11%;
+  --popover: 220 14% 17%;
   --popover-foreground: 0 0% 96%;
 
   --surface: 220 14% 11%;
