@@ -211,6 +211,12 @@ function Router() {
 
   return (
     <Suspense fallback={<FullScreenSpinner />}>
+      {/* Keyed on location so React remounts this wrapper -- not the routes
+          inside it -- on every navigation, replaying the fade/slide-in each
+          time. motion-safe: (rather than a plain class) makes the animation
+          disappear entirely under prefers-reduced-motion instead of just
+          running at zero duration. */}
+      <div key={location} className="motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-1 motion-safe:duration-200">
       <Switch>
         <Route path="/" component={HomeRedirect} />
         <Route path="/login" component={LoginPage} />
@@ -445,6 +451,7 @@ function Router() {
         </Route>
         <Route component={NotFound} />
       </Switch>
+      </div>
     </Suspense>
   );
 }

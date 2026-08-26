@@ -1010,6 +1010,11 @@ export function WorkoutPage({
     },
     onError: (err: ApiError, { silent }) => {
       if (!silent) {
+        // The only non-silent save is a "Mark Workout Complete" tap, so a
+        // genuine rejection here means that optimistic flip was wrong --
+        // put the button back to actionable rather than leaving it stuck
+        // showing "Completed" for a save that never landed.
+        setJustCompleted(false);
         toast.error(err.message || "Could not save workout");
         return;
       }
@@ -1067,6 +1072,17 @@ export function WorkoutPage({
     dayCompletedRef.current = data?.log?.completed ?? false;
   }, [data?.log?.completed]);
 
+  // Drives the "Mark Workout Complete" button's own visual state, separate
+  // from dayCompletedRef -- flips true the instant the button is tapped
+  // (before the round trip even starts) so there's no visible gap where the
+  // button just sits disabled waiting on the network. Synced from the real
+  // server value once known (mount, or any later refetch) so reopening an
+  // already-completed day shows it correctly without needing a tap first.
+  const [justCompleted, setJustCompleted] = useState(false);
+  useEffect(() => {
+    if (data?.log?.completed) setJustCompleted(true);
+  }, [data?.log?.completed]);
+
   // Every save -- debounced autosave, immediate autosave, and an explicit
   // "Mark Workout Complete" tap alike -- funnels through this single
   // in-flight queue so at most one /log POST is ever outstanding at once.
@@ -1116,6 +1132,16 @@ export function WorkoutPage({
 
   function queueSave(args: { completed: boolean; itemsSnapshot: ItemState[]; silent: boolean }) {
     queueRawSave({ payload: buildLogPayload(args.itemsSnapshot, args.completed), silent: args.silent });
+  }
+
+  // Both "Mark Workout Complete" taps (overview and the last logging page)
+  // route through here so the optimistic flip and the actual save can never
+  // drift apart. onError below rolls justCompleted back for a genuine
+  // rejection; a network failure instead queues offline and still counts as
+  // "complete" from the athlete's perspective, so it deliberately stays.
+  function markWorkoutComplete(itemsSnapshot: ItemState[]) {
+    setJustCompleted(true);
+    queueSave({ completed: true, itemsSnapshot, silent: false });
   }
 
   // Claims this day for as long as it's the one open here, and resolves any
@@ -1685,11 +1711,11 @@ export function WorkoutPage({
                   </Button>
                   <Button
                     className="flex-1"
-                    onClick={() => queueSave({ completed: true, itemsSnapshot: items, silent: false })}
-                    disabled={submitMutation.isPending}
+                    onClick={() => markWorkoutComplete(items)}
+                    disabled={justCompleted}
                   >
                     <CheckCircle2 className="h-4 w-4" />
-                    Mark Workout Complete
+                    {justCompleted ? "Workout Complete" : "Mark Workout Complete"}
                   </Button>
                 </div>
               )}
@@ -1777,17 +1803,17 @@ export function WorkoutPage({
                   <Button
                     className="flex-1"
                     onClick={() => {
-                      queueSave({ completed: true, itemsSnapshot: items, silent: false });
+                      markWorkoutComplete(items);
                       const missing = incompleteExerciseNames(pages);
                       if (missing.length > 0) {
                         toast.warning(`Marked complete, but not fully logged: ${missing.join(", ")}.`);
                       }
                       setViewMode("overview");
                     }}
-                    disabled={submitMutation.isPending}
+                    disabled={justCompleted}
                   >
                     <CheckCircle2 className="h-4 w-4" />
-                    Mark Workout Complete
+                    {justCompleted ? "Workout Complete" : "Mark Workout Complete"}
                   </Button>
                 )}
               </div>
