@@ -4534,6 +4534,64 @@ Based on this athlete's actual rate of improvement, suggest a realistic target v
     return { newPRs, missedWorkouts, wellnessFlags };
   },
 
+  // Coach dashboard's "Team PR Wall" card -- the most recent isPr-flagged
+  // sets across the coach's whole roster, newest first. Same join spine as
+  // getCoachWeeklyDigest's newPRs count just above (workoutSetEntries ->
+  // workoutLogEntries -> workoutLogs -> assignments, scoped via
+  // assignments.coachId), plus the athlete/exercise names a feed actually
+  // needs to display. No corrective-exercise union like
+  // getLeaderboardExercisesForCoach/getLeaderboardForExercise use --
+  // submitWorkoutLog only ever sets isPr on programExerciseId entries (see
+  // its own comment ~line 14311), so a corrective join would only add rows
+  // that can never match isPr = true.
+  // windowDays keeps a PR from a year ago from surfacing as "recent" forever
+  // (defaults to 30); limit keeps the card compact (defaults to 15). Ordered
+  // by workout date, then set id as a stable tiebreaker for same-day PRs.
+  async getRecentPrsForCoach(coachId: number, limit = 15, windowDays = 30) {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    const windowStart = formatISO(subDays(new Date(), windowDays), { representation: "date" });
+
+    const rows = await db
+      .select({
+        id: workoutSetEntries.id,
+        athleteId: assignments.athleteId,
+        athleteName: users.name,
+        exerciseId: exercises.id,
+        exerciseName: exercises.name,
+        date: workoutLogs.date,
+        reps: workoutSetEntries.reps,
+        weight: workoutSetEntries.weight,
+        weightUnit: workoutSetEntries.weightUnit,
+      })
+      .from(workoutSetEntries)
+      .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
+      .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
+      .innerJoin(assignments, eq(workoutLogs.assignmentId, assignments.id))
+      .innerJoin(users, eq(assignments.athleteId, users.id))
+      .innerJoin(programExercises, eq(workoutLogEntries.programExerciseId, programExercises.id))
+      .innerJoin(exercises, eq(programExercises.exerciseId, exercises.id))
+      .where(
+        and(
+          inArray(assignments.coachId, coachIds),
+          eq(workoutSetEntries.isPr, true),
+          gte(workoutLogs.date, windowStart),
+        ),
+      )
+      .orderBy(desc(workoutLogs.date), desc(workoutSetEntries.id))
+      .limit(limit);
+
+    return rows.map((r) => ({
+      id: r.id,
+      athleteId: r.athleteId,
+      athleteName: r.athleteName,
+      exerciseName: r.exerciseName,
+      date: r.date,
+      reps: r.reps,
+      weight: r.weight,
+      weightUnit: r.weightUnit ?? "lbs",
+    }));
+  },
+
   // Assigned-but-incomplete training days for a set of athletes within
   // [windowStart, windowEnd] (both inclusive date strings) -- same schedule
   // expansion as computeStreaks above (program weeks -> resolveAssignmentDate,

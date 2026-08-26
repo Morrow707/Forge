@@ -4119,6 +4119,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(digest);
   });
 
+  // Coach dashboard's "Team PR Wall" card -- most recent isPr-flagged sets
+  // across the whole roster. See getRecentPrsForCoach's own comment in
+  // storage.ts for the join pattern and its windowDays/limit defaults.
+  app.get("/api/coach/recent-prs", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const prs = await storage.getRecentPrsForCoach(user.id);
+    res.json(prs);
+  });
+
   // ---------- CARA (countable athletically-related activity) compliance ----------
   // Opt-in per coach (see caraWeeklyCapMinutes) -- most coaches never touch
   // any of this.
