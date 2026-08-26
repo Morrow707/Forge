@@ -176,9 +176,10 @@ html.ar-camera-active .app-shell-root {
    App.tsx) ships its own flat/opaque default styling and reads every
    color off CSS custom properties it sets on
    [data-sonner-toaster][data-theme="dark"] (confirmed against the
-   installed sonner@1.7.4's own dist/styles.css) -- --normal-bg/
-   --normal-border/--normal-text for a plain toast, plus --success-*/
-   --error-*/--warning-*/--info-* that richColors switches a toast to via
+   installed sonner@1.7.4's own dist/styles.css) -- --normal-bg,
+   --normal-border, --normal-text for a plain toast, plus the
+   --success-, --error-, --warning-, and --info- prefixed variables that
+   richColors switches a toast to via
    [data-rich-colors="true"][data-sonner-toast][data-type="..."] rules
    which read those same variables. Overriding the variables (rather than
    fighting the "background: var(--success-bg)" declaration that reads
