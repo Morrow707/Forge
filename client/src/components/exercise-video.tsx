@@ -36,7 +36,13 @@ export function ExerciseVideoThumb({
   if (!url) return null;
   const videoId = extractYouTubeId(url);
   const isLg = size === "lg";
-  const frameClass = isLg ? "aspect-video w-full rounded-lg" : "h-20 w-28 shrink-0 rounded-md";
+  // Capped and centered, not a full-bleed hero -- tapping it already gets an
+  // athlete to a fullscreen player (the iframe's own allowFullScreen below),
+  // so the inline thumbnail doesn't need to dominate the card just to be a
+  // legible tap target.
+  const frameClass = isLg
+    ? "aspect-video w-full max-w-xs sm:max-w-sm mx-auto rounded-lg"
+    : "h-20 w-28 shrink-0 rounded-md";
 
   if (expanded && videoId) {
     return (

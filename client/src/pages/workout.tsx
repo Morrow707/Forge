@@ -2848,22 +2848,21 @@ function ExerciseLogContent({
         />
       )}
 
-      <div className="flex items-center justify-center gap-4 pt-1">
-        <button
-          type="button"
-          onClick={onRemoveSet}
-          disabled={item.sets.length <= 1}
-          aria-label="Remove set"
-          className="flex h-8 w-8 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:border-destructive/50 hover:text-destructive disabled:pointer-events-none disabled:opacity-30"
-        >
-          <Minus className="h-4 w-4" />
-        </button>
-        <span className="text-xs font-semibold text-muted-foreground">Set</span>
-        {/* The coach set this program's prescribed sets -- an athlete
-            changing that count isn't theirs to do, even though they can
-            still remove a set they physically couldn't complete. Admin/coach
-            self-training (the other callers of this page) keep the button. */}
-        {user?.role !== "athlete" && (
+      {/* The coach set this program's prescribed sets -- changing that
+          count, in either direction, isn't an athlete's to do. Admin/coach
+          self-training (the other callers of this page) keep both buttons. */}
+      {user?.role !== "athlete" && (
+        <div className="flex items-center justify-center gap-4 pt-1">
+          <button
+            type="button"
+            onClick={onRemoveSet}
+            disabled={item.sets.length <= 1}
+            aria-label="Remove set"
+            className="flex h-8 w-8 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:border-destructive/50 hover:text-destructive disabled:pointer-events-none disabled:opacity-30"
+          >
+            <Minus className="h-4 w-4" />
+          </button>
+          <span className="text-xs font-semibold text-muted-foreground">Set</span>
           <button
             type="button"
             onClick={onAddSet}
@@ -2872,8 +2871,8 @@ function ExerciseLogContent({
           >
             <Plus className="h-4 w-4" />
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       <div className="space-y-2 rounded-lg border border-border bg-surface-elevated p-3">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
