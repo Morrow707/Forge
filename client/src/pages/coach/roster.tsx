@@ -77,6 +77,7 @@ import {
   ChevronDown,
   ChevronsUpDown,
   Loader2,
+  BellRing,
 } from "lucide-react";
 
 type PhotoImportKind = "testing-day" | "weigh-in" | "nutrition" | "injury" | "testing-data" | "player-intake";
@@ -193,6 +194,11 @@ export default function CoachRoster() {
     refetchInterval: 60_000,
   });
   const wellnessByAthlete = new Map(wellnessToday.map((w) => [w.athleteId, w]));
+  // Roster athletes with no row in wellnessToday -- same "absent means not
+  // checked in yet, not a real zero" convention getRosterWellnessToday
+  // itself documents -- backs both the "Nudge N athletes" toolbar button's
+  // count and its disabled state below.
+  const missingWellnessCount = roster.filter((a) => !wellnessByAthlete.has(a.id)).length;
   const { data: acwrToday = [], refetch: refetchAcwrToday } = useQuery<
     { athleteId: number; athleteName: string; ratio: number | null; level: AcwrRiskLevel }[]
   >({
@@ -337,6 +343,25 @@ export default function CoachRoster() {
     onError: (err: ApiError) => toast.error(err.message || "Could not send that invite"),
   });
 
+  // One-click bulk nudge -- pings every roster athlete missing today's
+  // wellness check-in (see missingWellnessCount above) via the server's own
+  // roster/wellness join, so this always matches what the toolbar button's
+  // count shows a coach right before they click it.
+  const nudgeWellnessMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/coach/roster/nudge-wellness");
+      return res.json() as Promise<{ nudged: number }>;
+    },
+    onSuccess: ({ nudged }) => {
+      toast.success(
+        nudged > 0
+          ? `Nudged ${nudged} athlete${nudged === 1 ? "" : "s"} to check in`
+          : "Everyone's already checked in today",
+      );
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't send nudges"),
+  });
+
   const addToTeamMutation = useMutation({
     mutationFn: async ({ teamId, athleteId }: { teamId: number; athleteId: number }) => {
       await apiRequest("POST", `/api/coach/teams/${teamId}/members`, { athleteId });
@@ -444,6 +469,19 @@ export default function CoachRoster() {
                   <Download className="h-3.5 w-3.5" />
                   Export CSV
                 </Button>
+                {missingWellnessCount > 0 && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={nudgeWellnessMutation.isPending}
+                    onClick={() => nudgeWellnessMutation.mutate()}
+                  >
+                    <BellRing className="h-3.5 w-3.5" />
+                    {nudgeWellnessMutation.isPending
+                      ? "Nudging..."
+                      : `Nudge ${missingWellnessCount} athlete${missingWellnessCount === 1 ? "" : "s"}`}
+                  </Button>
+                )}
               </>
             )}
             <Button size="sm" variant="outline" onClick={() => setAddFreeAgentOpen(true)}>

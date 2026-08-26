@@ -52,9 +52,9 @@ export const NOTIFICATION_CATEGORIES: NotificationCategory[] = [
   {
     key: "summaries",
     label: "Summaries",
-    description: "Your weekly digest and re-engagement nudges.",
+    description: "Your weekly digest, re-engagement nudges, and wellness check-in reminders.",
     roles: ["coach", "athlete"],
-    types: ["digest", "reengagement"],
+    types: ["digest", "reengagement", "wellness_nudge"],
   },
 ];
 
