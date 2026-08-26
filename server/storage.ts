@@ -14038,6 +14038,13 @@ ${catalog}`;
     // client still sent back once the new rows are in.
     let priorVideoUrls = new Set<string>();
 
+    // Collected during the entries loop below, returned alongside the log
+    // so the client can show a real celebration for a newly-set PR the
+    // moment this save lands -- same "collect during the transaction,
+    // attach to the response after" shape as newlyUnlockedTrophies at this
+    // function's own call site in routes.ts.
+    const newPRs: { exerciseName: string; weight: string; unit: "lbs" | "kg"; reps: string }[] = [];
+
     const log = await db.transaction(async (tx) => {
       let log = await tx.query.workoutLogs.findFirst({
         where: and(
@@ -14150,12 +14157,15 @@ ${catalog}`;
           // several sets sharing a rep count would otherwise re-run the
           // identical prior-best lookup.
           const priorBestByKey = new Map<string, number | null>();
+          let exerciseNameForPr: string | null = null;
           if (entry.weightMode === "numeric" && entry.programExerciseId != null) {
             const [programExercise] = await tx
-              .select({ exerciseId: programExercises.exerciseId })
+              .select({ exerciseId: programExercises.exerciseId, exerciseName: exercises.name })
               .from(programExercises)
+              .innerJoin(exercises, eq(programExercises.exerciseId, exercises.id))
               .where(eq(programExercises.id, entry.programExerciseId));
             if (programExercise) {
+              exerciseNameForPr = programExercise.exerciseName;
               for (const s of entry.sets) {
                 if (!s.weight || !s.reps) continue;
                 const key = `${entryWeightUnit}-${s.reps}`;
@@ -14192,6 +14202,9 @@ ${catalog}`;
               const weightNum = s.weight ? parseFloat(s.weight) : NaN;
               const priorBest = priorBestByKey.get(`${entryWeightUnit}-${s.reps ?? ""}`);
               const isPr = !Number.isNaN(weightNum) && priorBest != null && weightNum > priorBest;
+              if (isPr && exerciseNameForPr && s.weight && s.reps) {
+                newPRs.push({ exerciseName: exerciseNameForPr, weight: s.weight, unit: entryWeightUnit, reps: s.reps });
+              }
               return {
                 logEntryId: entryRow.id,
                 setNumber: s.setNumber,
@@ -14258,7 +14271,7 @@ ${catalog}`;
       if (!newVideoUrls.has(url)) await deleteUploadedFile(url);
     }
 
-    return log;
+    return { ...log, newPRs };
   },
 
   async attachVideoToLoggedSet(athleteId: number, input: AttachVideoToSetInput): Promise<boolean> {

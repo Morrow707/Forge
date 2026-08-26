@@ -992,6 +992,15 @@ export function WorkoutPage({
             description: `${trophy.tier[0].toUpperCase()}${trophy.tier.slice(1)}`,
           });
         }
+        // A distinct (stronger) haptic than the generic save confirmation
+        // above, but still just a toast -- no animated overlay. The moment
+        // is worth marking, not worth interrupting the athlete with.
+        for (const pr of data?.newPRs ?? []) {
+          hapticSuccess();
+          toast.success(`New PR — ${pr.exerciseName}`, {
+            description: `${pr.weight} ${pr.unit} × ${pr.reps}`,
+          });
+        }
       } else {
         toast.info("You're offline — saved on this device, will sync automatically");
       }
