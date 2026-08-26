@@ -194,7 +194,50 @@ Your teen's own coach can see their training data and tracked metrics, the same 
 5. YOUR ROLE AND YOUR OPTIONS
 You don't need to do anything for the account to keep working. If you'd rather review what's on file, ask questions, or have the account deleted, you (or your teen) can do that -- see Section 9 of the Privacy Policy ("Your Rights and Choices") for how. Deleting the account removes it and any saved video permanently.
 
-6. QUESTIONS
-[Placeholder -- add a real contact email once one exists, the same one referenced in the Terms of Service and Privacy Policy.]
+If you don't want the account deleted but also don't want any new camera-tracked video or movement metrics collected going forward, you can turn that off without affecting anything else about the account -- your teen's programs, workout logs, and everything else keep working normally. If you set up your own guardian account through the link in this email, you can turn it off yourself at any time from your dashboard; otherwise, ask your teen's coach to do it on your behalf.
 
-[Placeholder -- how and when this notice is actually delivered to a parent (email at signup? a coach-relayed message? something else) is exactly what GUARDIAN_NOTICE_LIVE and the "not yet built" delivery channel in the compliance report refer to -- this is the content that channel would send, not a decision that the channel itself is ready.]`;
+6. QUESTIONS
+[Placeholder -- add a real contact email once one exists, the same one referenced in the Terms of Service and Privacy Policy.]`;
+
+// Distinct from the four documents above in one important way: those are
+// aimed at an individual coach or athlete and (mostly) just describe what
+// Forge already does. This one is aimed at a paying institutional customer
+// (a school, club, or program on an org billing tier -- see
+// shared/billing-tiers.ts) and is meant to actually shift liability onto
+// that institution, not just disclose behavior. That makes it a real
+// negotiated-contract instrument, not a clickwrap disclosure -- the stakes
+// of shipping unreviewed language are meaningfully higher here than for the
+// other four. Do not present this to an actual paying institution, or
+// describe it to one as binding, until a lawyer has drafted or approved the
+// substantive terms, not just proofread this draft. Presented for
+// acceptance by whoever holds the institution's primary coach account (see
+// storage.setTrackingOptOut's "primary, not staff" pattern for how that's
+// resolved elsewhere) -- there being no separate institutional-user
+// concept in Forge yet, that account is standing in for the institution
+// itself here, on the assumption that whoever an admin assigned org billing
+// to is also who's authorized to accept an agreement on the institution's
+// behalf. That assumption itself needs confirming, not just the clauses.
+export const INSTITUTIONAL_AGREEMENT_DRAFT = `${DRAFT_NOTICE} This document in particular has NOT been drafted by a lawyer -- it was assembled from patterns in Forge's own consumer Terms of Service as a starting outline only. Do not send this to a real institutional customer as a proposed or binding agreement.
+
+FORGE -- INSTITUTIONAL SERVICE AGREEMENT (DRAFT)
+
+1. PARTIES AND SCOPE
+This Institutional Service Agreement ("Agreement") supplements, and does not replace, the individual Terms of Service that every coach and athlete using the Service under your program separately accepts. It applies specifically to your organization's ("Institution's," "you're") use of Forge as a paying institutional customer -- a school, club, or program on an organizational billing plan -- and takes effect when an authorized representative of the Institution accepts it.
+
+2. AUTHORITY TO ACCEPT
+By accepting this Agreement, you represent that you have the authority to bind the Institution to its terms. If you're not sure whether you have that authority, don't accept on the Institution's behalf -- have whoever does accept it instead.
+
+3. PARENTAL/GUARDIAN CONSENT IS THE INSTITUTION'S RESPONSIBILITY
+Forge's own signup flow captures a parent or guardian's email for a minor athlete and, for an athlete under 13, requires a coach to provision the account rather than allowing direct self-signup (see the Terms of Service and Biometric Waiver for what that involves). That is not a substitute for whatever consent, notice, or waiver the Institution is independently required to obtain from a minor athlete's parent or guardian under applicable law (including COPPA) or the Institution's own policies before that athlete uses Forge as part of the Institution's program. The Institution is solely responsible for obtaining and documenting that consent. [Placeholder -- counsel should confirm exactly what allocation of this responsibility is enforceable, and whether any additional Forge-side mechanism is needed to support it, rather than assuming a contract clause alone resolves it.]
+
+4. INDEMNIFICATION
+The Institution agrees to defend, indemnify, and hold harmless Forge Performance Systems LLC, its affiliates, officers, and employees from any claim, damage, liability, or expense (including reasonable attorneys' fees) arising from: (a) the Institution's failure to obtain any parental or guardian consent required under Section 3; (b) the Institution's use of the Service outside the scope described in the Terms of Service; or (c) the Institution's own negligent supervision of its athletes' use of the Service. This section does not extend to a claim arising from Forge's own gross negligence or willful misconduct. [Placeholder -- this is the core liability-shifting mechanism of the whole Agreement and the single clause most in need of real counsel drafting; the consumer Terms of Service's own indemnification section carries a similar, still-unresolved flag for minor athletes, and that issue is not solved by moving the obligation onto the Institution instead.]
+
+5. DATA HANDLING
+Forge's handling of data collected from the Institution's athletes -- what's collected, how long it's kept, and what's deleted automatically -- is governed by the Privacy Policy and Biometric Waiver, unchanged by this Agreement. If the Institution is a school subject to FERPA or a similar student-records law, the Institution is responsible for its own compliance with that law with respect to its use of Forge; this Agreement does not make Forge a "school official" or equivalent under any such law unless a separate, specific written agreement says so. [Placeholder -- if the Institution's use case actually requires FERPA school-official status or a signed data-processing agreement, that is separate, unbuilt work, not something this paragraph accomplishes by itself.]
+
+6. TERM
+This Agreement is in effect for as long as the Institution's account remains on an organizational billing plan, and does not apply retroactively to anything that happened before the Institution accepted it.
+
+7. GOVERNING LAW
+Same as the Terms of Service: the laws of the State of Arizona, without regard to its conflict-of-laws provisions, with exclusive jurisdiction and venue in the state and federal courts located in Maricopa County, Arizona.`;

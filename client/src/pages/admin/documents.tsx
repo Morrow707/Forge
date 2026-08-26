@@ -9,7 +9,12 @@ import { apiRequest, resolveApiUrl, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { Download, ShieldAlert, Save, Mail } from "lucide-react";
 
-type LegalDocType = "terms_of_service" | "privacy_policy" | "biometric_waiver" | "parental_notice";
+type LegalDocType =
+  | "terms_of_service"
+  | "privacy_policy"
+  | "biometric_waiver"
+  | "parental_notice"
+  | "institutional_agreement";
 type LegalDocument = { docType: LegalDocType; content: string; updatedAt: string };
 
 type ComplianceReportData = {
@@ -48,6 +53,7 @@ const CONSENT_LABEL: Record<string, string> = {
   biometric_waiver: "Biometric Waiver",
   coach_coppa_consent: "Coach/Program Consent (Tier 1 agent)",
   parental_notice_ack: "Parental Notice Acknowledgment",
+  institutional_agreement: "Institutional Agreement",
 };
 
 /** Everything built tonight for legal review lives here, in one place --
@@ -244,15 +250,33 @@ export default function AdminDocuments() {
           <CardHeader>
             <CardTitle className="text-base">Notice to Parent or Guardian (Draft)</CardTitle>
             <CardDescription>
-              Addressed to a parent, not the athlete -- what a Tier 2 (13-17, self-registering)
-              athlete's parent/guardian would actually receive. This is the content half of the
-              guardian-notice system (see users.requiresGuardianNotice and GUARDIAN_NOTICE_LIVE in
-              shared/privacy-tiers.ts); the delivery channel (email at signup? something else?)
-              still doesn't exist. Not reviewed by counsel, not sent to anyone yet.
+              Addressed to a parent, not the athlete -- what a Tier 2 (13-17, self-registering) or
+              Tier 1 (under-13, coach-provisioned) athlete's parent/guardian would actually
+              receive. This is the content half of the guardian-notice system (see
+              users.requiresGuardianNotice and GUARDIAN_NOTICE_LIVE in shared/privacy-tiers.ts);
+              its content is embedded and delivered today in the guardian-invite email sent at
+              signup (see issueGuardianInviteIfNeeded in server/auth.ts). Not reviewed by counsel.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <LegalDocEditor docType="parental_notice" />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Institutional Agreement (Draft)</CardTitle>
+            <CardDescription>
+              A different kind of document from the four above -- addressed to a paying
+              institutional customer (a school, club, or program on an org billing plan) rather
+              than an individual coach or athlete, and meant to actually shift liability onto that
+              institution rather than just disclose behavior. Real negotiated-contract stakes, not
+              clickwrap stakes -- do not send to a real institution as binding until a lawyer has
+              drafted or approved the substantive terms.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <LegalDocEditor docType="institutional_agreement" />
           </CardContent>
         </Card>
       </div>

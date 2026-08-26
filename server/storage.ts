@@ -10208,14 +10208,24 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
   },
 
   async getLegalDocument(
-    docType: "terms_of_service" | "privacy_policy" | "biometric_waiver" | "parental_notice",
+    docType:
+      | "terms_of_service"
+      | "privacy_policy"
+      | "biometric_waiver"
+      | "parental_notice"
+      | "institutional_agreement",
   ): Promise<LegalDocument | null> {
     const [row] = await db.select().from(legalDocuments).where(eq(legalDocuments.docType, docType));
     return row ?? null;
   },
 
   async updateLegalDocument(
-    docType: "terms_of_service" | "privacy_policy" | "biometric_waiver" | "parental_notice",
+    docType:
+      | "terms_of_service"
+      | "privacy_policy"
+      | "biometric_waiver"
+      | "parental_notice"
+      | "institutional_agreement",
     content: string,
   ): Promise<LegalDocument> {
     const [row] = await db
@@ -15874,8 +15884,9 @@ ${catalog}`;
       provisionedViaCoachConsentCount: provisionedCount,
       requiresGuardianNoticeCount: guardianNoticeCount,
       notYetBuilt: [
-        "Parental-notice delivery content and channel for Tier 2 accounts (requiresGuardianNotice is tracked; nothing sends or shows a notice yet).",
+        "Parental Notice content is delivered today, embedded in the guardian-invite email sent at signup (issueGuardianInviteIfNeeded in server/auth.ts) -- but check whether RESEND_FROM_EMAIL is set to a verified sending domain in production; while it's on Resend's sandbox default, that email silently fails to reach any address other than the Resend account's own verified inbox (see server/email.ts's own startup warning for this).",
         "Biometric waiver consent copy exists as a draft now (see /admin/documents), but hasn't been reviewed by counsel and isn't wired into any live consent-collection flow yet -- consentRecords has no real rows of this type until both of those happen.",
+        "Institutional Service Agreement (org billing customers) exists as a draft and is now presented for acceptance to a primary coach's account on an org billing tier, but its substantive liability-shifting language hasn't been drafted or reviewed by counsel -- do not present it to a real institution as binding yet.",
         "Legal review confirming the tier thresholds, retention windows, and coach-consent mechanism actually satisfy COPPA, any state Age-Appropriate Design Code, BIPA, or other applicable law.",
         "Any accounts created before dateOfBirth existed remain tier \"unknown\" until that field is backfilled.",
       ],
@@ -16425,6 +16436,18 @@ ${catalog}`;
       // true for the claim-code path, not just for Tier 1.
       provisionedViaCoachConsent: true,
       requiresGuardianNotice: tier === "tier2_teen_13_17",
+      // A coach's own attestation (coach_coppa_consent, logged just below)
+      // is the only consent behind a Tier-1 account -- not a parent's own
+      // verified say-so, since there's no verified-parent step in this
+      // flow. Defaulting camera-tracking collection to off until the
+      // parent/guardian who's already required to have an email on file
+      // (see the guardianEmail check above) turns it on themselves, either
+      // through their own guardian-dashboard toggle once they claim their
+      // invite (see setTrackingOptOutForGuardian) or by telling the coach
+      // to. Tier 2/3 keep the normal default -- their guardianEmail
+      // requirement (Tier 2) or lack of one (Tier 3, self-consenting adult)
+      // isn't the same "nobody but the coach has said yes yet" gap.
+      trackingOptOut: tier === "tier1_under13",
       age: provisional.age ?? undefined,
       gender: provisional.gender ?? undefined,
       heightIn: provisional.heightIn ?? undefined,
@@ -16598,6 +16621,7 @@ ${catalog}`;
         position: users.position,
         seasonPhase: users.seasonPhase,
         trainingStylePreference: users.trainingStylePreference,
+        trackingOptOut: users.trackingOptOut,
         fortyYardDash: users.fortyYardDash,
         verticalJumpIn: users.verticalJumpIn,
         broadJumpIn: users.broadJumpIn,
@@ -16610,6 +16634,20 @@ ${catalog}`;
       .innerJoin(users, eq(guardianLinks.athleteId, users.id))
       .where(eq(guardianLinks.guardianId, guardianId));
     return row ?? null;
+  },
+
+  // A guardian's own self-service equivalent of the coach-facing
+  // setTrackingOptOut above -- authorized via guardianLinks instead of a
+  // coach roster, otherwise the same shape.
+  async setTrackingOptOutForGuardian(guardianId: number, trackingOptOut: boolean) {
+    const link = await db.query.guardianLinks.findFirst({ where: eq(guardianLinks.guardianId, guardianId) });
+    if (!link) return null;
+    const [updated] = await db
+      .update(users)
+      .set({ trackingOptOut })
+      .where(eq(users.id, link.athleteId))
+      .returning({ id: users.id, trackingOptOut: users.trackingOptOut });
+    return updated;
   },
 
   async getGuardianLinkForAthlete(athleteId: number) {
@@ -16709,9 +16747,60 @@ ${catalog}`;
     });
   },
 
+  // Status for the Institutional Service Agreement banner/route (see
+  // shared/schema.ts consentTypeEnum's "institutional_agreement" value and
+  // server/seed-data/legal-documents-draft.ts's INSTITUTIONAL_AGREEMENT_DRAFT
+  // for the content this is tracking acceptance of). Only meaningful for the
+  // PRIMARY coach of an org billing account -- required is false for
+  // anyone else, same "not applicable, not just unaccepted" distinction
+  // getGuardianNoticeStatus makes for a non-flagged athlete.
+  async getInstitutionalAgreementStatus(
+    coachId: number,
+  ): Promise<{ required: boolean; accepted: boolean; acceptedAt: Date | null }> {
+    const coach = await this.getUser(coachId);
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    const isPrimary = coachIds[0] === coachId;
+    if (!isPrimary || !coach?.billingTier) return { required: false, accepted: false, acceptedAt: null };
+    const [accepted] = await db
+      .select({ createdAt: consentRecords.createdAt })
+      .from(consentRecords)
+      .where(and(eq(consentRecords.userId, coachId), eq(consentRecords.consentType, "institutional_agreement")))
+      .orderBy(desc(consentRecords.createdAt))
+      .limit(1);
+    return { required: true, accepted: Boolean(accepted), acceptedAt: accepted?.createdAt ?? null };
+  },
+
+  async acceptInstitutionalAgreement(
+    coachId: number,
+    consentContext?: { ipAddress?: string; userAgent?: string },
+  ): Promise<{ required: boolean; accepted: boolean; acceptedAt: Date | null } | { error: string }> {
+    const coach = await this.getUser(coachId);
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    if (coachIds[0] !== coachId) {
+      return { error: "The institutional agreement is accepted by the primary coach of an org, not a staff member." };
+    }
+    if (!coach?.billingTier) {
+      return { error: "This account isn't on an organizational billing plan." };
+    }
+    const doc = await this.getLegalDocument("institutional_agreement");
+    await this.logConsentRecord({
+      userId: coachId,
+      consentType: "institutional_agreement",
+      documentText: doc?.content ?? "",
+      ipAddress: consentContext?.ipAddress,
+      userAgent: consentContext?.userAgent,
+    });
+    return this.getInstitutionalAgreementStatus(coachId);
+  },
+
   async logConsentRecord(input: {
     userId: number;
-    consentType: "terms_of_service" | "biometric_waiver" | "coach_coppa_consent" | "parental_notice_ack";
+    consentType:
+      | "terms_of_service"
+      | "biometric_waiver"
+      | "coach_coppa_consent"
+      | "parental_notice_ack"
+      | "institutional_agreement";
     documentText: string;
     givenByUserId?: number;
     ipAddress?: string;

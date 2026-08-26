@@ -1914,6 +1914,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const coachIds = await storage.getEffectiveCoachIds(coach.id);
     const isPrimary = coachIds[0] === coach.id;
     const roster = await storage.getRosterForCoach(coach.id);
+    const institutionalAgreement = await storage.getInstitutionalAgreementStatus(coach.id);
     res.json({
       id: coach.id,
       name: coach.name,
@@ -1923,6 +1924,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       billingTier: coach.billingTier,
       billingAddOns: coach.billingAddOns ?? [],
       isBetaAccount: coach.isBetaAccount,
+      institutionalAgreement,
     });
   });
 
@@ -2461,6 +2463,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "privacy_policy",
     "biometric_waiver",
     "parental_notice",
+    "institutional_agreement",
   ] as const;
   type LegalDocType = (typeof LEGAL_DOC_TYPES)[number];
   const isLegalDocType = (v: string): v is LegalDocType => (LEGAL_DOC_TYPES as readonly string[]).includes(v);
@@ -2469,6 +2472,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     privacy_policy: "Privacy Policy",
     biometric_waiver: "Biometric Information Consent and Release",
     parental_notice: "Notice to Parent or Guardian",
+    institutional_agreement: "Institutional Service Agreement",
   };
 
   // Publicly browsable (App Store Connect and any visitor need a working
@@ -3027,6 +3031,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(await storage.getGuardianNoticeStatus(athleteId));
     },
   );
+
+  // Institutional Service Agreement -- a paying org's primary coach account
+  // accepting the liability-shifting agreement scoped to their org billing
+  // plan (see server/seed-data/legal-documents-draft.ts's
+  // INSTITUTIONAL_AGREEMENT_DRAFT for what this is and its own "not
+  // reviewed by counsel" warning). "required" comes back false for a staff
+  // coach or an account with no billing tier assigned -- storage's own
+  // getInstitutionalAgreementStatus is what decides that, not this route.
+  app.get("/api/coach/institutional-agreement", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const status = await storage.getInstitutionalAgreementStatus(user.id);
+    const doc = status.required ? await storage.getLegalDocument("institutional_agreement") : null;
+    res.json({ ...status, documentText: doc?.content ?? "" });
+  });
+
+  app.post("/api/coach/institutional-agreement/accept", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const result = await storage.acceptInstitutionalAgreement(user.id, {
+      ipAddress: req.ip,
+      userAgent: req.get("user-agent") ?? undefined,
+    });
+    if ("error" in result) return res.status(400).json({ message: result.error });
+    res.json(result);
+  });
 
   // A parent/guardian's request, relayed by the coach, to stop future
   // camera-tracking collection for this athlete -- see users.trackingOptOut's
@@ -7304,6 +7332,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const updated = await storage.updateUserProfile(athlete.id, parsed.data);
     const { passwordHash, ...publicAthlete } = updated;
     res.json(publicAthlete);
+  });
+
+  // The one write a "read-mostly" guardian account makes beyond their own
+  // profile edits above -- stopping future camera-tracking collection for
+  // their own linked athlete (see users.trackingOptOut's own comment in
+  // shared/schema.ts). A real authenticated guardian account acting on
+  // their own linked athlete, so no separate confirmation step the way the
+  // coach-relayed version needs -- this *is* the parent's own action.
+  app.patch("/api/guardian/athlete/tracking-opt-out", requireRole("guardian"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = setTrackingOptOutSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const updated = await storage.setTrackingOptOutForGuardian(user.id, parsed.data.trackingOptOut);
+    if (!updated) return res.status(404).json({ message: "No athlete linked to this account." });
+    res.json(updated);
   });
 
   // Shared by both sides of the link -- a guardian can always give up their

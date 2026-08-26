@@ -47,6 +47,7 @@ type CoachLookup = {
   billingTier: string | null;
   billingAddOns: string[];
   isBetaAccount: boolean;
+  institutionalAgreement: { required: boolean; accepted: boolean; acceptedAt: string | null };
 };
 
 type RedeemCode = {
@@ -256,6 +257,20 @@ export default function AdminBilling() {
                 </p>
               ) : (
                 <>
+                  {coach.institutionalAgreement.required && (
+                    <p className="text-xs text-muted-foreground">
+                      Institutional Service Agreement:{" "}
+                      {coach.institutionalAgreement.accepted ? (
+                        <span className="text-success">
+                          accepted{" "}
+                          {coach.institutionalAgreement.acceptedAt &&
+                            new Date(coach.institutionalAgreement.acceptedAt).toLocaleDateString()}
+                        </span>
+                      ) : (
+                        <span className="text-amber-500">not yet accepted</span>
+                      )}
+                    </p>
+                  )}
                   <div className="space-y-1.5">
                     <Label>Tier</Label>
                     <Select value={tier} onValueChange={setTier}>

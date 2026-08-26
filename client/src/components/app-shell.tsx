@@ -54,6 +54,7 @@ import { ActiveSessionsDialog } from "@/components/active-sessions-dialog";
 import { ChangePasswordDialog } from "@/components/change-password-dialog";
 import { EmailVerificationBanner } from "@/components/email-verification-banner";
 import { DateOfBirthBanner } from "@/components/date-of-birth-banner";
+import { InstitutionalAgreementBanner } from "@/components/institutional-agreement-banner";
 import { NotificationBell } from "@/components/notification-bell";
 import { NotificationSettingsDialog } from "@/components/notification-settings-dialog";
 import { CoachingStaffDialog } from "@/components/coaching-staff-dialog";
@@ -978,6 +979,7 @@ export function AppShell({
 
       {user && !user.emailVerified && <EmailVerificationBanner />}
       {user && user.role === "athlete" && !user.dateOfBirth && <DateOfBirthBanner />}
+      {user && user.role === "coach" && <InstitutionalAgreementBanner />}
 
       <div className={cn("flex w-full flex-col", fitScreen ? "flex-1 md:min-h-0" : "flex-1")}>
         <main

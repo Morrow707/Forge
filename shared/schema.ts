@@ -4053,6 +4053,7 @@ export const consentTypeEnum = pgEnum("consent_type", [
   "biometric_waiver",
   "coach_coppa_consent",
   "parental_notice_ack",
+  "institutional_agreement",
 ]);
 
 export const consentRecords = pgTable(
@@ -4254,6 +4255,7 @@ export const legalDocumentTypeEnum = pgEnum("legal_document_type", [
   "privacy_policy",
   "biometric_waiver",
   "parental_notice",
+  "institutional_agreement",
 ]);
 
 export const legalDocuments = pgTable("legal_documents", {

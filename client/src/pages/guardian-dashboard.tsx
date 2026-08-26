@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { ForgeMark } from "@/components/forge-mark";
-import { LogOut, CheckCircle2, Circle } from "lucide-react";
+import { LogOut, CheckCircle2, Circle, Video, VideoOff } from "lucide-react";
 
 type GuardianAthlete = {
   id: number;
@@ -22,6 +22,7 @@ type GuardianAthlete = {
   bodyWeightLbs: number | null;
   seasonPhase: string | null;
   trainingStylePreference: string | null;
+  trackingOptOut: boolean | null;
 };
 
 type CalendarEntry = {
@@ -75,6 +76,24 @@ export default function GuardianDashboardPage() {
       setEditing(false);
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not save"),
+  });
+
+  const trackingMutation = useMutation({
+    mutationFn: async (trackingOptOut: boolean) => {
+      const res = await apiRequest("PATCH", "/api/guardian/athlete/tracking-opt-out", {
+        trackingOptOut,
+      });
+      return (await res.json()) as { trackingOptOut: boolean };
+    },
+    onSuccess: (result) => {
+      qc.setQueryData<GuardianAthlete | undefined>(["/api/guardian/athlete"], (prev) =>
+        prev ? { ...prev, trackingOptOut: result.trackingOptOut } : prev,
+      );
+      toast.success(
+        result.trackingOptOut ? "Camera tracking turned off" : "Camera tracking turned back on",
+      );
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Could not update"),
   });
 
   function startEditing() {
@@ -206,6 +225,43 @@ export default function GuardianDashboardPage() {
                     <dd>{athlete.seasonPhase?.replace(/_/g, " ") ?? "—"}</dd>
                   </dl>
                 )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Camera tracking</CardTitle>
+                <CardDescription>
+                  {athlete.trackingOptOut
+                    ? "Off -- no new tracked video, bar speed, jump height, or swing/sprint mechanics are being recorded for " +
+                      athlete.name +
+                      "."
+                    : athlete.name + " can use Forge's camera-tracking features during workouts."}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex items-center justify-between gap-3">
+                <p className="text-sm text-muted-foreground">
+                  This only affects future collection -- it doesn't delete anything already
+                  recorded, and doesn't affect the rest of {athlete.name}'s account.
+                </p>
+                <Button
+                  variant={athlete.trackingOptOut ? "outline" : "secondary"}
+                  size="sm"
+                  className="shrink-0 gap-1.5"
+                  disabled={trackingMutation.isPending}
+                  onClick={() => trackingMutation.mutate(!athlete.trackingOptOut)}
+                >
+                  {athlete.trackingOptOut ? (
+                    <Video className="h-4 w-4" />
+                  ) : (
+                    <VideoOff className="h-4 w-4" />
+                  )}
+                  {trackingMutation.isPending
+                    ? "Saving…"
+                    : athlete.trackingOptOut
+                      ? "Turn back on"
+                      : "Turn off"}
+                </Button>
               </CardContent>
             </Card>
 

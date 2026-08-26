@@ -40,14 +40,17 @@ export const TIER2_VIDEO_RETENTION_DAYS = 90;
 // "this athlete is a minor, get a parent/guardian waiver on file" nudge --
 // see users.requiresGuardianNotice and the "parental_notice_ack" consent
 // type, both already live). Built in full -- the notification, the coach-
-// facing badge, the "mark waiver on file" acknowledgment -- but held off
-// by explicit request until a future build turns it on. Flipping this to
-// true is the entire rollout: nothing else needs to change. Never
+// facing badge, the "mark waiver on file" acknowledgment. Live as of
+// 2026-08-26. Note this does NOT control whether the Parental Notice
+// document itself gets emailed to a guardian -- that already happens
+// unconditionally at signup (see issueGuardianInviteIfNeeded in
+// server/auth.ts); this only controls the separate coach-facing nudge and
+// whether a coach's "waiver on file" acknowledgment gets logged. Never
 // described to a coach as "Forge requires a waiver" -- the wording used
 // throughout is deliberately a recommendation, not an enforced
 // requirement, same as every other "flag, don't decide" signal in this
 // app (health status, movement-screen flags).
-export const GUARDIAN_NOTICE_LIVE = false;
+export const GUARDIAN_NOTICE_LIVE = true;
 
 export function videoRetentionDaysForTier(tier: PrivacyTier): number | null {
   switch (tier) {
