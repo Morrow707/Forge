@@ -996,11 +996,6 @@ export function AppShell({
           {children}
           {showWatermark && <PoweredByFooter />}
         </main>
-        {showWatermark && (
-          <div className="shrink-0 px-4 md:px-8">
-            <PoweredByFooter />
-          </div>
-        )}
       </div>
 
       {user && (

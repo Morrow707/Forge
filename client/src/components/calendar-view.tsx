@@ -594,9 +594,13 @@ function MonthGrid({
 
               {/* Mobile: icon-only dots so a full month fits on one screen
                   without scrolling -- tapping still opens that entry (or,
-                  once grouped, the full day detail). Sized to a real touch
-                  target (not just a legible dot) since these are the only
-                  way to open an entry on a phone in this view. */}
+                  once grouped, the full day detail). h-8 w-8 (32px) rather
+                  than a smaller "legible dot" size -- these are the only way
+                  to open an entry on a phone in this view, so they need to
+                  actually be tappable, not just visible. Cells wrap to a new
+                  row (flex-wrap) rather than shrinking to fit three across,
+                  so a day with multiple entries grows the cell taller
+                  instead of shrinking the target back down. */}
               <div className="flex flex-1 flex-wrap items-end gap-1 sm:hidden">
                 {dayGroups.slice(0, 3).map((group) => {
                   const e = group[0];
@@ -611,7 +615,7 @@ function MonthGrid({
                       aria-label={e.title}
                       title={e.title}
                       className={cn(
-                        "flex h-6 w-6 shrink-0 items-center justify-center rounded-full",
+                        "flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
                         e.isRestDay
                           ? "bg-secondary text-muted-foreground"
                           : e.kind === "skill"
@@ -623,7 +627,7 @@ function MonthGrid({
                                 : "bg-primary/25 text-primary",
                       )}
                     >
-                      {entryIcon(e, "h-3.5 w-3.5")}
+                      {entryIcon(e, "h-4 w-4")}
                     </button>
                   );
                 })}

@@ -4,7 +4,7 @@ import path from "path";
 import fs from "fs";
 import multer from "multer";
 import rateLimit from "express-rate-limit";
-import { setupAuth, requireAuth, requireRole, attachNativeTokenAuth } from "./auth";
+import { setupAuth, requireAuth, requireRole } from "./auth";
 import { hashPassword, comparePasswords } from "./auth-utils";
 import { getEntitlements, type Entitlements, getFreeAgentEntitlements } from "./billing";
 import { uploadsLimiter } from "./rate-limiters";
@@ -710,13 +710,14 @@ async function notifyNewlyUnlockedLessons(
 
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
-  app.use(attachNativeTokenAuth);
+  // attachNativeTokenAuth is mounted inside setupAuth itself now (before the
+  // auth routes it needs to cover) -- see its own comment there for why.
   // Keeps "see who's logged in"'s lastSeenAt reasonably fresh -- reads
   // whichever session id the request is actually using (native, set by
-  // attachNativeTokenAuth just above; web, set on req.session at login --
-  // see auth.ts's trackNewSession) and, throttled, fires an un-awaited
-  // update. Never blocks the request on it: a session's "last active"
-  // display lagging by up to shouldTouchLastSeen's own window is a
+  // attachNativeTokenAuth inside setupAuth; web, set on req.session at
+  // login -- see auth.ts's trackNewSession) and, throttled, fires an
+  // un-awaited update. Never blocks the request on it: a session's "last
+  // active" display lagging by up to shouldTouchLastSeen's own window is a
   // cosmetic gap, not a correctness one.
   app.use((req, res, next) => {
     const sessionRecordId = (req as any).nativeSessionRecordId ?? (req.session as any)?.sessionRecordId;

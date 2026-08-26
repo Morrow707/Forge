@@ -295,6 +295,21 @@ export function setupAuth(app: Express) {
   // in rate-limiters.ts for why mounting it any later (routes.ts, after
   // setupAuth returns) would silently cover none of these.
   app.use("/api", apiLimiter);
+  // Same "before every route below, including the ones in this very
+  // function" reasoning as apiLimiter just above -- this used to be mounted
+  // in routes.ts, after registerRoutes calls setupAuth(app), which meant
+  // every requireAuth/requireRole route registered INSIDE setupAuth (signup,
+  // login, MFA setup/disable, session list/revoke, account delete/password-
+  // change, backfill-date-of-birth, resend-verification, join-coach, and
+  // /api/auth/me itself) never got a chance to see this fallback: their
+  // requireAuth check ran before this middleware ever populated req.user
+  // from a native bearer token, so every one of them 401'd on iOS native
+  // with a perfectly valid, still-logged-in session. Most of the app never
+  // surfaced this because the native client seeds its user data from the
+  // login response body directly rather than re-fetching /api/auth/me (see
+  // attachNativeTokenAuth's own comment) -- but any route in that list that
+  // actually gets called mid-session hit it, silently.
+  app.use(attachNativeTokenAuth);
 
   // Any validly-shaped hash.salt string -- see the timing-safety comment
   // at its use below. Its own "password" is never checked against
