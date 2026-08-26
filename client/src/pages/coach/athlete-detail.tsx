@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AthleteProfileDialog } from "@/components/athlete-profile-dialog";
+import { AthleteSwitcher } from "@/components/athlete-switcher";
 import { CalendarLinkDialog } from "@/components/calendar-link-dialog";
 import { BodyMetricsPanel } from "@/components/body-metrics-panel";
 import { TestingHistoryPanel } from "@/components/testing-history-panel";
@@ -239,7 +240,12 @@ export default function AthleteDetailPage() {
 
   return (
     <AppShell
-      title={athlete.name}
+      title={
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="min-w-0 flex-1 truncate">{athlete.name}</span>
+          <AthleteSwitcher currentAthleteId={athlete.id} />
+        </span>
+      }
       actions={
         <Button variant="outline" onClick={() => navigate("/coach/roster")}>
           <ArrowLeft className="h-4 w-4" />
