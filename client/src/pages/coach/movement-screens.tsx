@@ -279,6 +279,7 @@ function BatteryEditorDialog({ batteryId, onClose }: { batteryId: number; onClos
                     onChange={(e) => updateTest(i, { instructions: e.target.value })}
                     placeholder="Instructions shown on the print sheet"
                     rows={2}
+                    autoResize
                     className="text-xs"
                   />
                 </div>

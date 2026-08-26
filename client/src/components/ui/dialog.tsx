@@ -48,7 +48,11 @@ const DialogContent = React.forwardRef<
     >
       {children}
       {!hideClose && (
-        <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring">
+        // p-2 around the same visual icon (offset pulled in from right-4/
+        // top-4 to right-2/top-2 to compensate) turns a 16x16 hit target --
+        // well under the ~44pt touch minimum -- into a real 32x32 one,
+        // without moving where the X actually sits on screen.
+        <DialogPrimitive.Close className="absolute right-2 top-2 rounded-sm p-2 opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring">
           <X className="h-4 w-4" />
           <span className="sr-only">Close</span>
         </DialogPrimitive.Close>

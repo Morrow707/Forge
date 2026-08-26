@@ -796,9 +796,7 @@ export default function CoachAnalytics() {
           onSearchChange={setAthleteSearch}
         />
         <div className="space-y-1.5">
-          <label className="text-xs font-semibold uppercase text-muted-foreground">
-            Exercise (optional)
-          </label>
+          <label className="text-xs font-semibold uppercase text-muted-foreground">Exercise</label>
           {athleteId ? (
             <PinnedExercisePicker
               options={exercises.map((e) => e.name)}
@@ -832,6 +830,16 @@ export default function CoachAnalytics() {
 
       {athleteId && !exerciseId && (
         <div className="space-y-4">
+          <HideableWidget
+            id="acwr-trend"
+            label="Training Load (ACWR)"
+            editMode={widgetVisibility.editMode}
+            isHidden={widgetVisibility.hidden.has("acwr-trend")}
+            onToggle={widgetVisibility.setHidden}
+          >
+            <AcwrTrendCard athleteId={athleteId} />
+          </HideableWidget>
+
           <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleTopWidgetDragEnd}>
             <SortableContext items={topWidgetOrder} strategy={verticalListSortingStrategy}>
               {topWidgetOrder.map((id) => (
@@ -923,18 +931,6 @@ export default function CoachAnalytics() {
               </div>
             </CardContent>
           </Card>
-
-          {/* Bottom of the page, deliberately -- useful context, not the
-              first thing a coach needs to see when they pick an athlete. */}
-          <HideableWidget
-            id="acwr-trend"
-            label="Training Load (ACWR)"
-            editMode={widgetVisibility.editMode}
-            isHidden={widgetVisibility.hidden.has("acwr-trend")}
-            onToggle={widgetVisibility.setHidden}
-          >
-            <AcwrTrendCard athleteId={athleteId} />
-          </HideableWidget>
         </div>
       )}
 

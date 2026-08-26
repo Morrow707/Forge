@@ -58,16 +58,33 @@ export function SkillBankPage({
   const canFavorite = apiBase === "/api/coach";
 
   const [search, setSearch] = useState("");
+  // Sport is now the top-level accordion axis (single-select) instead of a
+  // multi-select filter chip group -- see the identical pattern (and full
+  // rationale) in skill-picker-dialog.tsx, the reference this was ported
+  // from. Skill Type and Created By become the secondary buttons revealed
+  // once a sport is chosen.
+  const [activeSport, setActiveSport] = useState<string | null>(null);
   const [skillTypeFilter, setSkillTypeFilter] = useState<Set<string>>(new Set());
-  const [sportFilter, setSportFilter] = useState<Set<string>>(new Set());
   const [ownerFilter, setOwnerFilter] = useState<Set<string>>(new Set());
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [recentlyUsedOnly, setRecentlyUsedOnly] = useState(false);
+
+  // Clicking the active sport again clears back to a fresh state; switching
+  // to a different sport discards whatever skill-type/owner selections were
+  // scoped to the previous one. Same as skill-picker-dialog.tsx.
+  function handleSportClick(sport: string) {
+    setActiveSport((prev) => (prev === sport ? null : sport));
+    setSkillTypeFilter(new Set());
+    setOwnerFilter(new Set());
+  }
 
   const skillTypeOptions = useMemo(
     () => Array.from(new Set([...SKILL_TYPES, ...skills.map((s) => s.skillType)])).sort(),
     [skills],
   );
+  // Alphabetical, not SPORTS's curated display order -- the accordion is a
+  // 30+ button lookup list, not a ranked list, so alphabetical is what
+  // actually lets a coach scan-and-find a specific sport quickly.
   const sportOptions = useMemo(
     () => Array.from(new Set([...SPORTS, ...skills.flatMap((s) => s.sports ?? [])])).sort(),
     [skills],
@@ -77,6 +94,22 @@ export function SkillBankPage({
     [skills],
   );
 
+  // Counts shown on the sport buttons -- see the identical comment in
+  // skill-picker-dialog.tsx.
+  const sportCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const sk of skills) {
+      for (const sp of sk.sports ?? []) {
+        counts.set(sp, (counts.get(sp) ?? 0) + 1);
+      }
+    }
+    return counts;
+  }, [skills]);
+  const scopedToSport = useMemo(
+    () => (activeSport ? skills.filter((sk) => (sk.sports ?? []).includes(activeSport)) : skills),
+    [skills, activeSport],
+  );
+
   const filtered = useMemo(() => {
     return skills.filter((sk) => {
       const matchesSearch =
@@ -84,21 +117,21 @@ export function SkillBankPage({
         sk.name.toLowerCase().includes(search.toLowerCase()) ||
         sk.skillType.toLowerCase().includes(search.toLowerCase()) ||
         (sk.sports ?? []).some((s) => s.toLowerCase().includes(search.toLowerCase()));
+      const matchesSport = !activeSport || (sk.sports ?? []).includes(activeSport);
       const matchesSkillType = skillTypeFilter.size === 0 || skillTypeFilter.has(sk.skillType);
-      const matchesSport = sportFilter.size === 0 || (sk.sports ?? []).some((s) => sportFilter.has(s));
       const matchesOwner = ownerFilter.size === 0 || ownerFilter.has(sk.ownerLabel);
       const matchesFavorite = !favoritesOnly || !!sk.isFavorite;
       const matchesRecentlyUsed = !recentlyUsedOnly || sk.lastUsedAt != null;
       return (
         matchesSearch &&
-        matchesSkillType &&
         matchesSport &&
+        matchesSkillType &&
         matchesOwner &&
         matchesFavorite &&
         matchesRecentlyUsed
       );
     });
-  }, [skills, search, skillTypeFilter, sportFilter, ownerFilter, favoritesOnly, recentlyUsedOnly]);
+  }, [skills, search, activeSport, skillTypeFilter, ownerFilter, favoritesOnly, recentlyUsedOnly]);
 
   // Only reorders (never re-filters) -- see exercise-bank.tsx's identical
   // comment on its own displayed useMemo.
@@ -129,6 +162,8 @@ export function SkillBankPage({
     onSuccess: () => qc.invalidateQueries({ queryKey: [`${apiBase}/skill-exercises`] }),
     onError: () => toast.error("Couldn't update favorite"),
   });
+
+  const isBrowsing = !search.trim();
 
   return (
     <AppShell
@@ -200,29 +235,56 @@ export function SkillBankPage({
             </button>
           </div>
         )}
-        <div className="flex flex-wrap gap-x-6 gap-y-2">
-          <FilterChipGroup
-            label="Skill Type"
-            options={skillTypeOptions}
-            selected={skillTypeFilter}
-            onToggle={(v) => toggleInSet(setSkillTypeFilter, v)}
-            colorClass={SKILL_FILTER_ACTIVE_CLASS}
-          />
-          <FilterChipGroup
-            label="Sport"
-            options={sportOptions}
-            selected={sportFilter}
-            onToggle={(v) => toggleInSet(setSportFilter, v)}
-            colorClass={SPORT_FILTER_ACTIVE_CLASS}
-          />
-          <FilterChipGroup
-            label="Created By"
-            options={ownerOptions}
-            selected={ownerFilter}
-            onToggle={(v) => toggleInSet(setOwnerFilter, v)}
-            colorClass={OWNER_FILTER_ACTIVE_CLASS}
-          />
-        </div>
+        {/* isBrowsing hides the sport/skill-type/owner accordion once the
+            coach is typing a direct search -- see the identical pattern
+            (and its full rationale) in skill-picker-dialog.tsx and
+            exercise-bank.tsx. */}
+        {isBrowsing && (
+          <div className="space-y-3">
+            <div className="flex flex-wrap gap-1.5">
+              {sportOptions.map((sport) => {
+                const active = activeSport === sport;
+                const count = sportCounts.get(sport) ?? 0;
+                return (
+                  <button
+                    key={sport}
+                    type="button"
+                    onClick={() => handleSportClick(sport)}
+                    aria-pressed={active}
+                    disabled={count === 0}
+                    className={cn(
+                      "rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-40",
+                      active
+                        ? SPORT_FILTER_ACTIVE_CLASS
+                        : "border-border text-muted-foreground hover:border-primary/50 hover:text-primary",
+                    )}
+                  >
+                    {sport}
+                    <span className="ml-1 font-normal opacity-70">{count}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {activeSport && (
+              <div className="space-y-2 rounded-md border border-border/60 bg-surface p-2.5">
+                <FilterChipGroup
+                  label="Skill Type"
+                  options={skillTypeOptions}
+                  selected={skillTypeFilter}
+                  onToggle={(v) => toggleInSet(setSkillTypeFilter, v)}
+                  colorClass={SKILL_FILTER_ACTIVE_CLASS}
+                />
+                <FilterChipGroup
+                  label="Created By"
+                  options={ownerOptions}
+                  selected={ownerFilter}
+                  onToggle={(v) => toggleInSet(setOwnerFilter, v)}
+                  colorClass={OWNER_FILTER_ACTIVE_CLASS}
+                />
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {!isLoading && displayed.length === 0 && (
