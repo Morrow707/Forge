@@ -4493,6 +4493,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(rows);
   });
 
+  // Last 7 days of daily training load per roster athlete -- backs the
+  // roster table's per-row trend sparkline. One batched query for the
+  // whole roster (see getRosterLoadTrend) rather than one request per row.
+  // Serialized as an object keyed by athleteId since a Map isn't JSON-safe.
+  app.get("/api/coach/roster-load-trend", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const trend = await storage.getRosterLoadTrend(user.id);
+    res.json(Object.fromEntries(trend));
+  });
+
   app.get(
     "/api/coach/roster/:athleteId/acwr-history",
     requireRole("coach"),

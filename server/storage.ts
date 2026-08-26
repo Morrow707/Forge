@@ -15983,6 +15983,58 @@ ${catalog}`;
     return summary.sort((a, b) => a.athleteName.localeCompare(b.athleteName));
   },
 
+  // Last 7 days of daily training load (sum of reps*weight across numeric-
+  // weight sets, same convention as getDailyLoadSeriesForAthlete/
+  // getRosterAcwrSummary above) for every roster athlete, keyed by
+  // athleteId -- backs the roster table's per-row trend sparkline. One
+  // batched query across the whole roster (same join shape as
+  // getRosterAcwrSummary) rather than one query per athlete, then zero-fills
+  // each athlete's own 7-day date range client-side (same date-array
+  // approach as getRosterFlaggedTrend above) so a rest day shows as a real
+  // zero, not a gap. An athlete with nothing logged in the window is simply
+  // absent from the map -- same "absent means no data yet" convention the
+  // rest of this file uses -- so the roster row just renders no sparkline.
+  async getRosterLoadTrend(coachId: number, days = 7): Promise<Map<number, number[]>> {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    const today = new Date();
+    const dates = Array.from({ length: days }, (_, i) =>
+      formatISO(subDays(today, days - 1 - i), { representation: "date" }),
+    );
+    const rows = await db
+      .select({
+        athleteId: coachAthletes.athleteId,
+        date: workoutLogs.date,
+        weightMode: workoutLogEntries.weightMode,
+        reps: workoutSetEntries.reps,
+        weight: workoutSetEntries.weight,
+      })
+      .from(coachAthletes)
+      .innerJoin(workoutLogs, eq(workoutLogs.athleteId, coachAthletes.athleteId))
+      .innerJoin(workoutLogEntries, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
+      .innerJoin(workoutSetEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
+      .where(and(inArray(coachAthletes.coachId, coachIds), gte(workoutLogs.date, dates[0])));
+
+    const loadByAthleteAndDate = new Map<number, Map<string, number>>();
+    for (const row of rows) {
+      const reps = row.reps ? parseInt(row.reps, 10) : NaN;
+      if (Number.isNaN(reps) || row.weightMode !== "numeric" || !row.weight) continue;
+      const w = parseFloat(row.weight);
+      if (Number.isNaN(w)) continue;
+      const byDate = loadByAthleteAndDate.get(row.athleteId) ?? new Map<string, number>();
+      byDate.set(row.date, (byDate.get(row.date) ?? 0) + reps * w);
+      loadByAthleteAndDate.set(row.athleteId, byDate);
+    }
+
+    const trendByAthlete = new Map<number, number[]>();
+    for (const [athleteId, byDate] of loadByAthleteAndDate) {
+      trendByAthlete.set(
+        athleteId,
+        dates.map((d) => byDate.get(d) ?? 0),
+      );
+    }
+    return trendByAthlete;
+  },
+
   // Same self-assigned gate as evaluateFormFaultFlags/
   // evaluateLegDriveAsymmetryFlags -- no coach to tell if this is a Free
   // Agent or admin training themselves. Unlike those two, ACWR isn't
