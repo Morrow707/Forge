@@ -1561,7 +1561,7 @@ export function WorkoutPage({
                   <p className="font-display text-3xl font-extrabold leading-none tabular-nums">
                     {stats.totalReps}
                   </p>
-                  <p className="mt-1 text-[10px] font-semibold uppercase text-muted-foreground">
+                  <p className="label-xs mt-1">
                     Reps
                   </p>
                 </div>
@@ -1569,7 +1569,7 @@ export function WorkoutPage({
                   <p className="font-display text-3xl font-extrabold leading-none tabular-nums">
                     {stats.totalVolume.toLocaleString()}
                   </p>
-                  <p className="mt-1 text-[10px] font-semibold uppercase text-muted-foreground">
+                  <p className="label-xs mt-1">
                     {unit}
                   </p>
                 </div>
@@ -1636,7 +1636,7 @@ export function WorkoutPage({
                       >
                         <div className="min-w-0 flex-1 space-y-2">
                           {page.kind === "corrective" && (
-                            <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-cyan-400">
+                            <p className="label-xs flex items-center gap-1.5 text-cyan-400">
                               <Stethoscope className="h-3.5 w-3.5 shrink-0" />
                               Correctives
                             </p>
@@ -1710,7 +1710,7 @@ export function WorkoutPage({
                 </button>
               </div>
               {currentPage.kind === "corrective" && (
-                <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-cyan-400">
+                <p className="label-xs flex items-center gap-1.5 text-cyan-400">
                   <Stethoscope className="h-3.5 w-3.5" />
                   Correctives
                 </p>
@@ -2261,16 +2261,16 @@ function ExerciseLogContent({
           className="grid items-center gap-2 px-0.5 pb-1"
           style={{ gridTemplateColumns: gridTemplate }}
         >
-          <span className="text-[10px] font-semibold uppercase text-muted-foreground">Set</span>
-          <span className="text-[10px] font-semibold uppercase text-muted-foreground">Reps</span>
+          <span className="label-xs">Set</span>
+          <span className="label-xs">Reps</span>
           {isBodyweightOnly ? (
-            <span className="text-[10px] font-semibold uppercase text-muted-foreground">
+            <span className="label-xs">
               Bodyweight
             </span>
           ) : (
             valueColumns.map((col) => (
               <div key={col.type} className="flex items-center gap-1">
-                <span className="text-[10px] font-semibold uppercase text-muted-foreground">
+                <span className="label-xs">
                   {col.label}
                 </span>
                 {col.type === "box" && (
@@ -2954,7 +2954,7 @@ function ExerciseLogContent({
       )}
 
       <div className="space-y-2 rounded-lg border border-border bg-surface-elevated p-3">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <p className="label-xs">
           How did that set feel? (RPE / RIR)
         </p>
         <div className="grid grid-cols-5 gap-1.5">

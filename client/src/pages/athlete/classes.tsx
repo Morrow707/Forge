@@ -259,7 +259,7 @@ export default function AthleteClasses() {
                       )}
                     </div>
                     {c.category && (
-                      <p className="-mt-2 text-xs font-semibold uppercase tracking-wide text-primary">
+                      <p className="label-xs -mt-2 text-primary">
                         {c.category}
                       </p>
                     )}

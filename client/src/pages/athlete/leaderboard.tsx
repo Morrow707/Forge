@@ -164,7 +164,7 @@ function StrengthLeaderboard({ myId }: { myId: number }) {
   return (
     <>
       <div className="mb-6 max-w-xs space-y-1.5">
-        <label className="text-xs font-semibold uppercase text-muted-foreground">Exercise</label>
+        <label className="label-xs">Exercise</label>
         <Select value={exerciseId} onValueChange={setExerciseId}>
           <SelectTrigger>
             <SelectValue placeholder="Pick an exercise" />
@@ -254,7 +254,7 @@ function SpeedLeaderboard({ myId }: { myId: number }) {
   return (
     <>
       <div className="mb-6 max-w-xs space-y-1.5">
-        <label className="text-xs font-semibold uppercase text-muted-foreground">Drill</label>
+        <label className="label-xs">Drill</label>
         <Select value={skillExerciseId} onValueChange={setSkillExerciseId}>
           <SelectTrigger>
             <SelectValue placeholder="Pick a timed drill" />

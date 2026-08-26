@@ -363,7 +363,7 @@ function TeamInviteCard({
             className="flex items-center justify-between rounded-md bg-surface-elevated px-3 py-1.5"
           >
             <div className="min-w-0">
-              <p className="truncate text-[10px] font-semibold uppercase text-muted-foreground">
+              <p className="label-xs truncate">
                 {opt.label}
               </p>
               <p className="font-display text-lg font-bold tracking-widest text-primary">

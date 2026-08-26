@@ -214,7 +214,7 @@ export function SkillDetailPage({ apiBase, routeBase }: { apiBase: string; route
               </div>
               {skill.sports && skill.sports.length > 0 && (
                 <div>
-                  <p className="text-xs font-semibold uppercase text-muted-foreground">Sports</p>
+                  <p className="label-xs">Sports</p>
                   <div className="mt-1.5 flex flex-wrap gap-1.5">
                     {skill.sports.map((s) => (
                       <span
@@ -229,7 +229,7 @@ export function SkillDetailPage({ apiBase, routeBase }: { apiBase: string; route
               )}
               {skill.instructions && (
                 <div>
-                  <p className="text-xs font-semibold uppercase text-muted-foreground">Instructions</p>
+                  <p className="label-xs">Instructions</p>
                   <p className="mt-1 text-sm">{skill.instructions}</p>
                 </div>
               )}
@@ -416,7 +416,7 @@ export function SkillDetailPage({ apiBase, routeBase }: { apiBase: string; route
 function Field({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="text-[10px] font-semibold uppercase text-muted-foreground">{label}</p>
+      <p className="label-xs">{label}</p>
       <p className="text-sm font-medium capitalize">{value}</p>
     </div>
   );

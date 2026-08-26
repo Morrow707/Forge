@@ -273,7 +273,7 @@ export function ClassListPage({
                   </div>
                 </div>
                 {c.category && (
-                  <p className="mt-0.5 text-xs font-semibold uppercase tracking-wide text-primary">
+                  <p className="label-xs mt-0.5 text-primary">
                     {c.category}
                   </p>
                 )}

@@ -274,7 +274,7 @@ export default function AthleteDetailPage() {
             </Card>
 
             <section className="space-y-2">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <h3 className="label-xs">
                 Profile Details
               </h3>
               <Card>
@@ -322,7 +322,7 @@ export default function AthleteDetailPage() {
             </section>
 
             <section className="space-y-2">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <h3 className="label-xs">
                 Communication &amp; Sharing
               </h3>
               <div className="grid grid-cols-2 gap-2">
@@ -350,7 +350,7 @@ export default function AthleteDetailPage() {
             </section>
 
             <section className="space-y-2">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-destructive">
+              <h3 className="label-xs text-destructive">
                 Danger Zone
               </h3>
               <Card className="border-destructive/40">

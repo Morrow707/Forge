@@ -9,8 +9,8 @@ import {
 import { getJson } from "@/lib/queryClient";
 import { format, parseISO } from "date-fns";
 import {
-  LineChart,
-  Line,
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -35,6 +35,65 @@ export const ACWR_RISK_CLASSNAME: Record<AcwrRiskLevel, string> = {
   yellow: "bg-amber-400/20 text-amber-400",
   red: "bg-destructive/15 text-destructive",
 };
+
+/** Dark-theme tooltip content -- Recharts' default <Tooltip> ships
+ * light-mode inline styles, so a chart-native custom content is needed to
+ * read cleanly against this app's dark surfaces. Mirrors the frosted-glass
+ * language already used by Card/Popover (see components/ui/popover.tsx). */
+function ChartTooltipContent({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: Array<{ dataKey?: string | number; name?: string | number; value?: string | number; color?: string }>;
+  label?: string;
+}) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-md border border-white/10 bg-card/95 px-3 py-2 text-xs shadow-[inset_0_1px_0_0_rgba(255,255,255,0.08),0_16px_40px_-16px_rgba(0,0,0,0.7)] backdrop-blur-xl backdrop-saturate-150">
+      {label && <p className="mb-1 font-medium text-foreground">{label}</p>}
+      <div className="space-y-0.5">
+        {payload.map((entry, i) => (
+          <div key={`${entry.dataKey ?? i}`} className="flex items-center gap-3">
+            <span className="flex items-center gap-1.5 text-muted-foreground">
+              <span
+                className="h-2 w-2 shrink-0 rounded-full"
+                style={{ backgroundColor: entry.color }}
+              />
+              {entry.name}
+            </span>
+            <span className="ml-auto font-semibold text-foreground">{entry.value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Builds a Recharts custom `dot` renderer that keeps the area otherwise
+ * dot-free and draws a larger, outlined dot only on the most recent point,
+ * so the eye lands on "where things are right now." */
+function makeEndpointDot(opts: { dataLength: number; color: string; radius?: number }) {
+  const { dataLength, color, radius = 5 } = opts;
+  return (props: { cx?: number; cy?: number; index?: number }) => {
+    const { cx, cy, index = -1 } = props;
+    if (cx == null || cy == null || index !== dataLength - 1) {
+      return <circle cx={cx ?? 0} cy={cy ?? 0} r={0} fill="none" key={`endpoint-dot-${index}`} />;
+    }
+    return (
+      <circle
+        key={`endpoint-dot-${index}`}
+        cx={cx}
+        cy={cy}
+        r={radius}
+        fill={color}
+        stroke="hsl(var(--card))"
+        strokeWidth={2}
+      />
+    );
+  };
+}
 
 /** Read-only -- ACWR is derived purely from logged training volume (see
  * shared/load.ts), never edited directly from either side. A day with no
@@ -105,35 +164,47 @@ export function AcwrHistoryDialog({
             {chartData.length >= 2 && (
               <div className="h-40">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData} margin={{ left: 4, right: 12 }}>
+                  <AreaChart data={chartData} margin={{ left: 4, right: 12 }}>
+                    <defs>
+                      <linearGradient id="acwrHistoryAcuteFill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.35} />
+                        <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                      </linearGradient>
+                      <linearGradient id="acwrHistoryChronicFill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="hsl(var(--muted-foreground))" stopOpacity={0.18} />
+                        <stop offset="95%" stopColor="hsl(var(--muted-foreground))" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                     <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                     <YAxis tick={{ fontSize: 11 }} width={32} />
                     <Tooltip
-                      contentStyle={{
-                        background: "hsl(var(--card))",
-                        border: "1px solid hsl(var(--border))",
-                      }}
+                      content={<ChartTooltipContent />}
+                      cursor={{ stroke: "hsl(var(--border))", strokeWidth: 1 }}
                     />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
-                    <Line
+                    <Area
                       type="monotone"
                       dataKey="acute"
                       name="Acute (7d)"
                       stroke="hsl(var(--primary))"
                       strokeWidth={2}
-                      dot={false}
+                      fill="url(#acwrHistoryAcuteFill)"
+                      dot={makeEndpointDot({ dataLength: chartData.length, color: "hsl(var(--primary))", radius: 5 })}
+                      activeDot={{ r: 5, fill: "hsl(var(--primary))", stroke: "hsl(var(--card))", strokeWidth: 2 }}
                     />
-                    <Line
+                    <Area
                       type="monotone"
                       dataKey="chronic"
                       name="Chronic (28d avg)"
                       stroke="hsl(var(--muted-foreground))"
                       strokeWidth={2}
                       strokeDasharray="4 3"
-                      dot={false}
+                      fill="url(#acwrHistoryChronicFill)"
+                      dot={makeEndpointDot({ dataLength: chartData.length, color: "hsl(var(--muted-foreground))", radius: 4 })}
+                      activeDot={{ r: 4, fill: "hsl(var(--muted-foreground))", stroke: "hsl(var(--card))", strokeWidth: 2 }}
                     />
-                  </LineChart>
+                  </AreaChart>
                 </ResponsiveContainer>
               </div>
             )}

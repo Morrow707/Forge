@@ -2,6 +2,21 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer components {
+  /* Small uppercase section/filter label that sits above a form field,
+     filter-chip group, or stat number (e.g. "MUSCLE", "EXERCISE", "REPS").
+     This single class replaces dozens of hand-typed variants that had
+     drifted out of sync across the app -- text-xs vs text-[10px],
+     tracking-wide present or missing, font-semibold vs font-medium. The
+     spec below is the combination already used most often codebase-wide,
+     chosen so most existing labels don't visually shift. Apply on top of
+     any file-specific extras (color override, margin, etc.), not in place
+     of them. */
+  .label-xs {
+    @apply text-xs font-semibold uppercase text-muted-foreground;
+  }
+}
+
 /*
   Forge theme tokens.
   PLACEHOLDER PALETTE — swap these HSL values once exact adapt-ptp.com

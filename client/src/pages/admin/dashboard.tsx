@@ -109,7 +109,7 @@ export default function AdminDashboard() {
                     <div className="mb-1.5 flex items-baseline justify-between">
                       <span
                         className={cn(
-                          "text-xs font-semibold uppercase text-muted-foreground",
+                          "label-xs",
                           isToday(day) && "text-primary",
                         )}
                       >

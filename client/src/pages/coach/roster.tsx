@@ -730,7 +730,7 @@ export default function CoachRoster() {
                   {team.code && (
                     <div className="mb-3 flex items-center justify-between rounded-md bg-surface-elevated px-3 py-2">
                       <div>
-                        <p className="text-[10px] font-semibold uppercase text-muted-foreground">
+                        <p className="label-xs">
                           Team invite code
                         </p>
                         <p className="font-display text-lg font-bold tracking-widest text-primary">

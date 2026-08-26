@@ -32,7 +32,7 @@ export function FilterChipGroup({
 }) {
   return (
     <div className={cn("space-y-1.5", className)}>
-      <p className="text-[10px] font-semibold uppercase text-muted-foreground">{label}</p>
+      <p className="label-xs">{label}</p>
       <div className="flex flex-wrap gap-1">
         {options.map((opt) => {
           const active = selected.has(opt);
@@ -85,7 +85,7 @@ export function RadioChipGroup({
 }) {
   return (
     <div className={cn("space-y-1.5", className)}>
-      <p className="text-[10px] font-semibold uppercase text-muted-foreground">{label}</p>
+      <p className="label-xs">{label}</p>
       <div className="flex flex-wrap gap-1">
         {options.map((opt) => {
           const active = value === opt;
