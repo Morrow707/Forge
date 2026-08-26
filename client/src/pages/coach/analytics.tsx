@@ -649,6 +649,7 @@ export default function CoachAnalytics() {
     queryFn: () => getJson(`/api/coach/analytics/overview?athleteId=${athleteId}&limit=100`),
     enabled: !!athleteId && !exerciseId,
   });
+  const [showAllSessions, setShowAllSessions] = useState(false);
 
   const { data: points = [], isLoading } = useQuery<AnalyticsPoint[]>({
     queryKey: ["/api/coach/analytics", athleteId, exerciseId],
@@ -761,6 +762,7 @@ export default function CoachAnalytics() {
   function handleAthleteChange(value: string) {
     setAthleteId(value);
     setExerciseId("");
+    setShowAllSessions(false);
   }
 
   return (
@@ -906,7 +908,7 @@ export default function CoachAnalytics() {
                 </div>
               )}
               <div className="space-y-2">
-                {overview.map((s) => (
+                {(showAllSessions ? overview : overview.slice(0, 5)).map((s) => (
                   <div
                     key={s.date}
                     className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border p-3"
@@ -929,6 +931,15 @@ export default function CoachAnalytics() {
                   </div>
                 ))}
               </div>
+              {overview.length > 5 && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllSessions((v) => !v)}
+                  className="mt-3 w-full text-center text-xs font-semibold text-primary hover:underline"
+                >
+                  {showAllSessions ? "Show fewer" : `Show ${overview.length - 5} more`}
+                </button>
+              )}
             </CardContent>
           </Card>
         </div>
