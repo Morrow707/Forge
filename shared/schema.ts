@@ -2919,6 +2919,7 @@ export const trophyCategoryEnum = pgEnum("trophy_category", [
   "streak",
   "pr_count",
   "speed",
+  "nutrition_streak",
 ]);
 
 export const trophyTierEnum = pgEnum("trophy_tier", ["bronze", "silver", "gold"]);

@@ -104,6 +104,9 @@ EXCEPTION WHEN duplicate_object THEN null; END $$;
 -- tracking_level 'sprint') -- see the comment on trophyCategoryEnum in
 -- shared/schema.ts.
 ALTER TYPE "trophy_category" ADD VALUE IF NOT EXISTS 'speed';
+-- 'nutrition_streak' counts consecutive calendar days with a food-log
+-- entry -- see shared/achievements.ts's NUTRITION_STREAK_TROPHIES comment.
+ALTER TYPE "trophy_category" ADD VALUE IF NOT EXISTS 'nutrition_streak';
 
 DO $$ BEGIN
   CREATE TYPE "trophy_tier" AS ENUM ('bronze', 'silver', 'gold');

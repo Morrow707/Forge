@@ -366,10 +366,16 @@ export function FoodScannerDialog({
       });
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ["/api/athlete/food-log"] });
       toast.success("Logged");
       onOpenChange(false);
+      qc.invalidateQueries({ queryKey: ["/api/athlete/trophies"] });
+      for (const trophy of result?.newlyUnlockedTrophies ?? []) {
+        toast.success(`🏆 New trophy: ${trophy.label}`, {
+          description: `${trophy.tier[0].toUpperCase()}${trophy.tier.slice(1)}`,
+        });
+      }
     },
     onError: () => toast.error("Couldn't log that -- try again"),
   });
@@ -426,8 +432,14 @@ export function FoodScannerDialog({
       // what's actually still unlogged, instead of re-posting (and
       // duplicating) whatever already made it through before the failure.
       const itemsToLog = photoItems;
+      // Every item in the batch runs its own checkAndAwardTrophies pass
+      // server-side (see the food-log POST route), so whichever POST in the
+      // loop actually crosses a threshold is the one that comes back with a
+      // non-empty newlyUnlockedTrophies -- collected across the whole batch
+      // since it's not necessarily the last one.
+      const newlyUnlockedTrophies: { label: string; tier: string }[] = [];
       for (const item of itemsToLog) {
-        await apiRequest("POST", "/api/athlete/food-log", {
+        const res = await apiRequest("POST", "/api/athlete/food-log", {
           date,
           description: item.description,
           brand: item.brand,
@@ -448,14 +460,22 @@ export function FoodScannerDialog({
           source: "photo",
           barcode: null,
         });
+        const logged = await res.json();
+        newlyUnlockedTrophies.push(...(logged?.newlyUnlockedTrophies ?? []));
         setPhotoItems((items) => items.filter((it) => it !== item));
       }
-      return itemsToLog.length;
+      return { loggedCount: itemsToLog.length, newlyUnlockedTrophies };
     },
-    onSuccess: (loggedCount) => {
+    onSuccess: ({ loggedCount, newlyUnlockedTrophies }) => {
       qc.invalidateQueries({ queryKey: ["/api/athlete/food-log"] });
       toast.success(loggedCount > 1 ? `Logged ${loggedCount} items` : "Logged");
       onOpenChange(false);
+      qc.invalidateQueries({ queryKey: ["/api/athlete/trophies"] });
+      for (const trophy of newlyUnlockedTrophies) {
+        toast.success(`🏆 New trophy: ${trophy.label}`, {
+          description: `${trophy.tier[0].toUpperCase()}${trophy.tier.slice(1)}`,
+        });
+      }
     },
     onError: () => toast.error("Couldn't log one or more of those items -- try again"),
   });

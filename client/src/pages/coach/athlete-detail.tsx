@@ -468,6 +468,7 @@ export default function AthleteDetailPage() {
                       editable
                       foodLogUrl={`/api/coach/roster/${athlete.id}/food-log`}
                       foodLogEditable={false}
+                      trendUrl={`/api/coach/roster/${athlete.id}/nutrition/trend`}
                     />
                   </CardContent>
                 </Card>

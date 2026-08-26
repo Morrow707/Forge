@@ -1,5 +1,5 @@
 export type TrophyTier = "bronze" | "silver" | "gold";
-export type TrophyCategory = "workout_count" | "streak" | "pr_count" | "speed";
+export type TrophyCategory = "workout_count" | "streak" | "pr_count" | "speed" | "nutrition_streak";
 
 export type TrophyDefinition = {
   key: string;
@@ -54,11 +54,29 @@ export const SPEED_TROPHIES: TrophyDefinition[] = [
   { key: "speed_100", category: "speed", tier: "gold", threshold: 100, label: "100 Sprints Timed" },
 ];
 
+// Consecutive CALENDAR days with at least one food-log entry, walked back
+// from today -- deliberately simpler than the workout streak's logic, which
+// only counts a day against the athlete if it was actually a scheduled
+// training day (see computeStreaks' own comment in server/storage.ts).
+// Nutrition has no equivalent schedule/rest-day concept to exempt against,
+// so every day counts here; a single missed day breaks it, same as most
+// nutrition-tracking apps. Thresholds are a bit more spread out than
+// STREAK_TROPHIES to account for that stricter, no-forgiveness rule.
+export const NUTRITION_STREAK_TROPHIES: TrophyDefinition[] = [
+  { key: "nutrition_streak_3", category: "nutrition_streak", tier: "bronze", threshold: 3, label: "3-Day Logging Streak" },
+  { key: "nutrition_streak_7", category: "nutrition_streak", tier: "bronze", threshold: 7, label: "7-Day Logging Streak" },
+  { key: "nutrition_streak_14", category: "nutrition_streak", tier: "silver", threshold: 14, label: "14-Day Logging Streak" },
+  { key: "nutrition_streak_30", category: "nutrition_streak", tier: "silver", threshold: 30, label: "30-Day Logging Streak" },
+  { key: "nutrition_streak_60", category: "nutrition_streak", tier: "gold", threshold: 60, label: "60-Day Logging Streak" },
+  { key: "nutrition_streak_100", category: "nutrition_streak", tier: "gold", threshold: 100, label: "100-Day Logging Streak" },
+];
+
 export const ALL_TROPHY_DEFINITIONS: TrophyDefinition[] = [
   ...WORKOUT_COUNT_TROPHIES,
   ...STREAK_TROPHIES,
   ...PR_COUNT_TROPHIES,
   ...SPEED_TROPHIES,
+  ...NUTRITION_STREAK_TROPHIES,
 ];
 
 export const TROPHY_DEFINITIONS_BY_KEY = new Map(
@@ -72,4 +90,5 @@ export const TROPHY_CATEGORY_LABEL: Record<TrophyCategory, string> = {
   streak: "Consistency Streaks",
   pr_count: "Personal Records",
   speed: "Speed & Agility",
+  nutrition_streak: "Nutrition Logging",
 };

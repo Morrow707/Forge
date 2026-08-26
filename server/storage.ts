@@ -3225,6 +3225,90 @@ export const storage = {
     );
   },
 
+  // Weekly rollup for the trend view on both the athlete's own nutrition
+  // page and a coach's athlete-detail nutrition tab -- getFoodLogForDate
+  // above stays single-day (it also returns the full entry list, which this
+  // doesn't need), this is the multi-day totals-only counterpart. Always
+  // returns exactly `days` calendar days, oldest first, including days with
+  // no entries at all (zeros, not gaps), so a trend chart never has to
+  // reason about missing dates itself.
+  //
+  // "daysHitTarget" is a simple, clearly-labeled heuristic, not a clinical
+  // adherence score: a day counts as hit if it has at least one logged
+  // entry AND (no calorie target is set, or that day's calories land within
+  // +/-15% of it) AND (no protein target is set, or that day's protein is
+  // at least 90% of it) -- protein gets a floor instead of a band since
+  // under-hitting it is the failure mode that actually matters for an
+  // athlete, over-hitting isn't. null (not 0) when the athlete has neither
+  // target set at all -- there's nothing to be "on track" against, that's
+  // a different fact than "off track every day."
+  async getNutritionTrendForAthlete(athleteId: number, days = 7) {
+    const today = new Date();
+    const startDateStr = formatISO(subDays(today, days - 1), { representation: "date" });
+    const rows = await db
+      .select({
+        date: foodLogEntries.date,
+        // sum() over an integer column (caloriesKcal) produces Postgres
+        // bigint, which node-postgres returns as a string, not a number, to
+        // avoid silent precision loss on huge sums -- irrelevant at this
+        // table's scale, but without the ::real cast every value here would
+        // come back as e.g. "800" instead of 800, silently breaking the
+        // arithmetic (and the bar-height math) downstream. The real-typed
+        // macro columns don't have this problem, but are cast too for a
+        // consistent, unsurprising return type across every field here.
+        caloriesKcal: sql<number>`coalesce(sum(${foodLogEntries.caloriesKcal}), 0)::real`,
+        proteinG: sql<number>`coalesce(sum(${foodLogEntries.proteinG}), 0)::real`,
+        carbsG: sql<number>`coalesce(sum(${foodLogEntries.carbsG}), 0)::real`,
+        fatG: sql<number>`coalesce(sum(${foodLogEntries.fatG}), 0)::real`,
+        entryCount: sql<number>`count(*)::int`,
+      })
+      .from(foodLogEntries)
+      .where(and(eq(foodLogEntries.athleteId, athleteId), gte(foodLogEntries.date, startDateStr)))
+      .groupBy(foodLogEntries.date);
+    const byDate = new Map(rows.map((r) => [r.date, r]));
+
+    const targets = await this.getNutritionTargetsForAthlete(athleteId);
+    const hasAnyTarget = Boolean(targets?.caloriesKcal || targets?.proteinG);
+    // Computed per day, not just as an aggregate count, so the client (a
+    // day-by-day trend chart) never has to re-derive this same "hit" rule
+    // itself and risk drifting from it -- null means "nothing to score
+    // against" for that day (no target set at all), same as the aggregate
+    // daysHitTarget below, not a silent false.
+    function dayHit(caloriesKcal: number, proteinG: number, loggedEntryCount: number): boolean | null {
+      if (!hasAnyTarget) return null;
+      if (loggedEntryCount === 0) return false;
+      const calOk =
+        !targets?.caloriesKcal ||
+        (caloriesKcal >= targets.caloriesKcal * 0.85 && caloriesKcal <= targets.caloriesKcal * 1.15);
+      const proteinOk = !targets?.proteinG || proteinG >= targets.proteinG * 0.9;
+      return calOk && proteinOk;
+    }
+
+    const dayList = Array.from({ length: days }, (_, i) => {
+      const dateStr = formatISO(subDays(today, days - 1 - i), { representation: "date" });
+      const row = byDate.get(dateStr);
+      const caloriesKcal = row?.caloriesKcal ?? 0;
+      const proteinG = row?.proteinG ?? 0;
+      const loggedEntryCount = row?.entryCount ?? 0;
+      return {
+        date: dateStr,
+        caloriesKcal,
+        proteinG,
+        carbsG: row?.carbsG ?? 0,
+        fatG: row?.fatG ?? 0,
+        loggedEntryCount,
+        hit: dayHit(caloriesKcal, proteinG, loggedEntryCount),
+      };
+    });
+
+    return {
+      days: dayList,
+      targets: targets ?? null,
+      daysLogged: dayList.filter((d) => d.loggedEntryCount > 0).length,
+      daysHitTarget: hasAnyTarget ? dayList.filter((d) => d.hit).length : null,
+    };
+  },
+
   async addFoodLogEntry(athleteId: number, input: CreateFoodLogEntryInput) {
     const [row] = await db
       .insert(foodLogEntries)
@@ -15488,6 +15572,54 @@ ${catalog}`;
     return result;
   },
 
+  // Nutrition's own streak, deliberately simpler than computeStreaks above --
+  // there's no schedule/rest-day concept for food logging the way a program
+  // day is or isn't a scheduled training day, so this just walks consecutive
+  // CALENDAR days with at least one entry, no exemptions. That also means it
+  // diverges from the workout streak in a way worth being explicit about:
+  // foodLogEntries.date is athlete-editable (the food log lets you navigate
+  // to and log against any past date), so this is in principle gameable by
+  // back-filling a missed day after the fact -- accepted as out of scope,
+  // same tradeoff most nutrition-tracking apps make, rather than anchoring
+  // to loggedAt and creating a confusing mismatch with the date the entry is
+  // actually filed under everywhere else in the UI.
+  async getFoodLogStreakForAthlete(athleteId: number) {
+    const rows = await db
+      .selectDistinct({ date: foodLogEntries.date })
+      .from(foodLogEntries)
+      .where(eq(foodLogEntries.athleteId, athleteId));
+    const loggedDates = new Set(rows.map((r) => r.date));
+    if (loggedDates.size === 0) return { currentStreak: 0, longestStreak: 0, totalDaysLogged: 0 };
+
+    const today = new Date();
+    let currentStreak = 0;
+    for (let i = 0; ; i++) {
+      const dateStr = formatISO(subDays(today, i), { representation: "date" });
+      if (loggedDates.has(dateStr)) currentStreak++;
+      else break;
+    }
+
+    // Longest streak ever, walked chronologically across every logged date
+    // (not just a fixed recent window) -- same "a broken streak still
+    // counts toward a trophy earned back then" reasoning as computeStreaks.
+    const sortedAsc = Array.from(loggedDates).sort();
+    let longestStreak = 0;
+    let run = 0;
+    let prevDate: string | null = null;
+    for (const dateStr of sortedAsc) {
+      const isConsecutive = prevDate != null && formatISO(addDays(parseISO(prevDate), 1), { representation: "date" }) === dateStr;
+      run = isConsecutive ? run + 1 : 1;
+      longestStreak = Math.max(longestStreak, run);
+      prevDate = dateStr;
+    }
+
+    return {
+      currentStreak,
+      longestStreak: Math.max(longestStreak, currentStreak),
+      totalDaysLogged: loggedDates.size,
+    };
+  },
+
   // Total number of times this athlete has ever set a weight PR at a given
   // rep count, across every exercise -- same "best-by-(exercise, unit, reps)
   // walked chronologically" logic used for the athlete's own Recent PRs list
@@ -15551,10 +15683,11 @@ ${catalog}`;
   // is never removed even if the underlying stat later regresses (a broken
   // streak keeps the streak trophies it already earned).
   async checkAndAwardTrophies(athleteId: number) {
-    const [{ longestStreak, totalCompleted }, totalPRs, totalSprintCaptures, existing] = await Promise.all([
+    const [{ longestStreak, totalCompleted }, totalPRs, totalSprintCaptures, { longestStreak: longestNutritionStreak }, existing] = await Promise.all([
       this.getStreakForAthlete(athleteId),
       this.getTotalPrCountForAthlete(athleteId),
       this.getTotalSprintCaptureCountForAthlete(athleteId),
+      this.getFoodLogStreakForAthlete(athleteId),
       db.query.athleteTrophies.findMany({ where: eq(athleteTrophies.athleteId, athleteId) }),
     ]);
     const existingKeys = new Set(existing.map((t) => t.key));
@@ -15563,6 +15696,7 @@ ${catalog}`;
       streak: longestStreak,
       pr_count: totalPRs,
       speed: totalSprintCaptures,
+      nutrition_streak: longestNutritionStreak,
     };
 
     const toInsert = ALL_TROPHY_DEFINITIONS.filter(

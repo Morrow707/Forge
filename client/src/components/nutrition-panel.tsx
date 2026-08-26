@@ -9,6 +9,7 @@ import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { Sparkles, Apple, Target } from "lucide-react";
 import { FoodLogPanel } from "@/components/food-log-panel";
+import { NutritionTrendPanel } from "@/components/nutrition-trend-panel";
 import { NUTRITION_GOALS, NUTRITION_GOAL_LABEL, type NutritionGoal } from "@shared/schema";
 
 type NutritionGoalState = { nutritionGoal: NutritionGoal | null; nutritionGoalNote: string | null };
@@ -85,6 +86,7 @@ export function NutritionPanel({
   goalUrl,
   foodLogUrl,
   foodLogEditable,
+  trendUrl,
 }: {
   nutritionUrl: string;
   editable: boolean;
@@ -102,6 +104,11 @@ export function NutritionPanel({
    * logs their own food (foodLogEditable=true) on their own page. */
   foodLogUrl?: string;
   foodLogEditable?: boolean;
+  /** Trailing 7-day rollup -- always read-only regardless of foodLogEditable,
+   * same "always visible, never itself an edit surface" role as the food
+   * log's own progress bars. Optional since not every foodLogUrl caller
+   * has gotten a matching trend endpoint (yet). */
+  trendUrl?: string;
 }) {
   const qc = useQueryClient();
   const [form, setForm] = useState<FormState>(emptyForm());
@@ -375,6 +382,8 @@ export function NutritionPanel({
           )}
         </div>
       )}
+
+      {trendUrl && <NutritionTrendPanel fetchUrl={trendUrl} />}
 
       {foodLogUrl && (
         <FoodLogPanel

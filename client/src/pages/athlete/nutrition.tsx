@@ -82,6 +82,7 @@ export default function AthleteNutrition() {
         goalUrl={isFreeAgent ? "/api/athlete/nutrition/goal" : undefined}
         foodLogUrl="/api/athlete/food-log"
         foodLogEditable
+        trendUrl="/api/athlete/nutrition/trend"
       />
     </AppShell>
   );

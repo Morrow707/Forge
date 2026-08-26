@@ -15,6 +15,10 @@ import {
   Timer,
   Wind,
   Gauge,
+  Apple,
+  Utensils,
+  Salad,
+  ChefHat,
   type LucideIcon,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
@@ -56,7 +60,7 @@ const TIER_STYLES: Record<TrophyTier, { border: string; bg: string; text: string
   },
 };
 
-const CATEGORY_ORDER: TrophyCategory[] = ["workout_count", "streak", "pr_count", "speed"];
+const CATEGORY_ORDER: TrophyCategory[] = ["workout_count", "streak", "pr_count", "speed", "nutrition_streak"];
 
 // Deliberately varied per trophy instead of the same Trophy glyph repeated
 // 18 times -- escalates in "weight" within each category (a flag for the
@@ -87,6 +91,12 @@ const TROPHY_ICON_BY_KEY: Record<string, LucideIcon> = {
   speed_25: Gauge,
   speed_50: Rocket,
   speed_100: Crown,
+  nutrition_streak_3: Apple,
+  nutrition_streak_7: Utensils,
+  nutrition_streak_14: Salad,
+  nutrition_streak_30: ChefHat,
+  nutrition_streak_60: Sparkles,
+  nutrition_streak_100: Crown,
 };
 
 function criteriaText(def: TrophyDefinition): string {
@@ -99,6 +109,8 @@ function criteriaText(def: TrophyDefinition): string {
       return `Log ${def.threshold} personal record${def.threshold === 1 ? "" : "s"}`;
     case "speed":
       return `Record ${def.threshold} sprint time${def.threshold === 1 ? "" : "s"}`;
+    case "nutrition_streak":
+      return `Reach a ${def.threshold}-day food-logging streak`;
   }
 }
 

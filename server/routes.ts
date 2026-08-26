@@ -3141,6 +3141,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   );
 
   app.get(
+    "/api/coach/roster/:athleteId/nutrition/trend",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      const onRoster = await storage.getRosterAthleteForCoach(user.id, athleteId);
+      if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
+      const result = await storage.getNutritionTrendForAthlete(athleteId);
+      res.json(result);
+    },
+  );
+
+  app.get(
     "/api/coach/roster/:athleteId/calendar-link",
     requireRole("coach"),
     async (req, res) => {
@@ -5441,6 +5454,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(result);
   });
 
+  // Trailing 7-day rollup -- see getNutritionTrendForAthlete's own comment
+  // for exactly what "daysHitTarget" does and doesn't mean.
+  app.get("/api/athlete/nutrition/trend", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const result = await storage.getNutritionTrendForAthlete(user.id);
+    res.json(result);
+  });
+
   app.post("/api/athlete/food-log", requireRole("athlete"), async (req, res) => {
     const user = currentUser(req);
     const parsed = createFoodLogEntrySchema.safeParse(req.body);
@@ -5448,7 +5469,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
     const entry = await storage.addFoodLogEntry(user.id, parsed.data);
-    res.status(201).json(entry);
+    // Logging a food entry is the one moment the nutrition_streak trophy
+    // category's stat can newly cross a threshold, same reasoning as the
+    // workout-log route's own newlyUnlockedTrophies -- see that route's
+    // comment. A plain trophy-case refetch never re-announces something
+    // already earned, so this is the one place worth surfacing it for a
+    // celebratory toast.
+    const { newlyUnlocked: newlyUnlockedTrophies } = await storage.checkAndAwardTrophies(user.id);
+    res.status(201).json({ ...entry, newlyUnlockedTrophies });
   });
 
   app.patch("/api/athlete/food-log/:id", requireRole("athlete"), async (req, res) => {
