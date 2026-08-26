@@ -7,7 +7,7 @@
 // MediaPipe's own world-landmark estimate, so this one module backs both
 // the ARKit-native and MediaPipe swing dialogs without duplication.
 import type { Landmark } from "@mediapipe/tasks-vision";
-import { POSE_LANDMARKS, type PoseFrame } from "./pose-tracking";
+import { POSE_LANDMARKS, percentile, type PoseFrame } from "./pose-tracking";
 
 const MIN_VISIBILITY = 0.5;
 
@@ -65,9 +65,26 @@ export function summarizeRotation(frames: PoseFrame[]): RotationSummary | null {
   }
   if (trace.length < 6) return null;
 
+  // 95th percentile of |separation|, not a raw max -- same protection
+  // mechanics-tracking.ts's near-identical hipShoulderSeparationDeg already
+  // has for the same "X-Factor" concept applied to a throw/jump-shot
+  // instead of a swing. This is the headline number a coach reads off a
+  // golf/baseball swing, so a single misdetected frame distorting it is
+  // worse here than almost anywhere else in this app.
+  const magnitudes = trace.map((s) => Math.abs(s.separationDeg));
+  const peakMagnitude = percentile(magnitudes, 0.95);
+  // The actual (signed) sample closest to that trimmed magnitude, rather
+  // than just reporting the number itself, so peakSeparationT still points
+  // at a real frame the review UI can scrub to -- same pairing
+  // bar-tracking.ts's robustPeakSpeed does for its own peakIdx.
   let peak = trace[0];
+  let closestDiff = Infinity;
   for (const s of trace) {
-    if (Math.abs(s.separationDeg) > Math.abs(peak.separationDeg)) peak = s;
+    const diff = Math.abs(Math.abs(s.separationDeg) - peakMagnitude);
+    if (diff < closestDiff) {
+      closestDiff = diff;
+      peak = s;
+    }
   }
 
   return {

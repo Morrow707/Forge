@@ -11,7 +11,7 @@
 // distance between checkpoints comes from the coach (marker/known-distance
 // calibration), not from the camera.
 import type { Landmark, NormalizedLandmark } from "@mediapipe/tasks-vision";
-import { POSE_LANDMARKS, percentile, visible } from "./pose-tracking";
+import { POSE_LANDMARKS, MIN_VISIBILITY, percentile, visible } from "./pose-tracking";
 import {
   DEFAULT_SKILL_FAULT_THRESHOLDS,
   type SkillFaultThresholds,
@@ -64,7 +64,30 @@ export type SprintResult = {
   totalDistanceYards: number;
   splits: SprintSplit[];
   avgSpeedYardsPerSec: number;
+  // True when this result (or any one split within it) implies a speed no
+  // human has ever run -- almost always a checkpoint-crossing glitch (a
+  // false detection, a reference-point jump), not a real time. Flagged, not
+  // rejected outright: same "warn, don't silently decide" precedent as
+  // jump-tracking.ts's likelyTrackingGlitch, since this function runs fresh
+  // on every live-capture frame (see detectSprintCrossings' callers) --
+  // returning null here instead of a flagged result risks the same
+  // corrupted early points producing the same rejected crossing forever,
+  // silently hanging the capture with no feedback. A flagged-but-visible
+  // result the athlete can see and choose to retake is strictly better than
+  // a capture that never finishes.
+  likelyGlitch: boolean;
 };
+
+// Usain Bolt's peak instantaneous speed (~12.4 m/s) is the fastest speed
+// any human has ever been recorded moving under their own power. This is
+// set well above that -- generous the same way bar-tracking.ts's own
+// physical ceilings are generous -- so it only ever catches a genuine
+// tracking glitch (a checkpoint falsely detected a frame or two off,
+// producing a near-zero elapsed time for real ground covered), never a
+// real elite sprint. Untuned against real footage (this sandbox has no
+// camera to test against) -- same caveat as every other plausibility
+// ceiling in this app.
+export const MAX_PLAUSIBLE_SPRINT_SPEED_YARDS_PER_SEC = 15;
 
 // Hip midpoint in normalized (0-1) image space -- a stable single reference
 // point for tracking horizontal position across a sprint, the same way the
@@ -73,7 +96,14 @@ export function deriveSprintReferencePoint(landmarks: NormalizedLandmark[]): { x
   const leftHip = landmarks[POSE_LANDMARKS.LEFT_HIP];
   const rightHip = landmarks[POSE_LANDMARKS.RIGHT_HIP];
   if (!leftHip || !rightHip) return null;
-  if ((leftHip.visibility ?? 1) < 0.4 || (rightHip.visibility ?? 1) < 0.4) return null;
+  // MIN_VISIBILITY, not a locally-hardcoded threshold -- this used to be
+  // its own 0.4 cutoff, inconsistent with the 0.5 bar-tracking, jump-
+  // tracking, mechanics-tracking, and rotation-tracking all use for the
+  // identical "trust this frame's landmark" judgment call, with no comment
+  // explaining the divergence. A less-strict bar here meant a sprint's
+  // checkpoint-crossing reference point could trust a shakier hip reading
+  // than every other tracker in the app would.
+  if ((leftHip.visibility ?? 1) < MIN_VISIBILITY || (rightHip.visibility ?? 1) < MIN_VISIBILITY) return null;
   return { x: (leftHip.x + rightHip.x) / 2 };
 }
 
@@ -142,11 +172,22 @@ export function detectSprintCrossings(
     Math.round(((crossingTimes[crossingTimes.length - 1] - crossingTimes[0]) / 1000) * 1000) / 1000;
   if (totalElapsedSeconds <= 0) return null;
 
+  const avgSpeedYardsPerSec = Math.round((totalDistanceYards / totalElapsedSeconds) * 100) / 100;
+  // Checked against the whole run AND each individual split -- a shuttle or
+  // 3-cone drill's overall average can look reasonable while one glitched
+  // leg (a checkpoint crossed a frame too early) is individually impossible.
+  const likelyGlitch =
+    avgSpeedYardsPerSec > MAX_PLAUSIBLE_SPRINT_SPEED_YARDS_PER_SEC ||
+    splits.some(
+      (s) => s.elapsedSeconds > 0 && s.distanceYards / s.elapsedSeconds > MAX_PLAUSIBLE_SPRINT_SPEED_YARDS_PER_SEC,
+    );
+
   return {
     totalElapsedSeconds,
     totalDistanceYards,
     splits,
-    avgSpeedYardsPerSec: Math.round((totalDistanceYards / totalElapsedSeconds) * 100) / 100,
+    avgSpeedYardsPerSec,
+    likelyGlitch,
   };
 }
 

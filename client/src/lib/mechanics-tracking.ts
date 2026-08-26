@@ -170,6 +170,17 @@ export type MechanicsResult = {
   kneeBendDepthDeg: number | null;
 };
 
+// Peer-reviewed pitching-biomechanics studies put elite throwing-wrist
+// linear speed at release in roughly the 6-12 m/s range (well below ball
+// speed itself, which comes from the whole kinetic chain whipping through
+// the fingertips beyond the wrist). Set generously above that -- same
+// "well above even an elite real effort" margin bar-tracking.ts's own
+// physical ceilings use -- so this only ever catches a genuine frame-to-
+// frame tracking glitch (a misdetected wrist landmark jumping across the
+// frame), never a real throw. Untuned against real footage (this sandbox
+// has no camera to test against).
+const MAX_PLAUSIBLE_WRIST_SPEED_MPS = 20;
+
 export function analyzeMechanics(
   frames: MechanicsFrame[],
   mode: MechanicsMode,
@@ -251,7 +262,20 @@ export function analyzeMechanics(
         speed: Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z) / dtSeconds,
       });
     }
-    const wristSpeeds = wristSpeedSamples.map((s) => s.speed);
+    // Filtered against the physical ceiling BEFORE the percentile trim, same
+    // ordering as bar-tracking.ts's robustPeakSpeed -- a percentile trim
+    // alone assumes only a handful of samples are bad, which doesn't hold
+    // if a landmark glitch corrupts a contiguous run of frames near the
+    // wrist's fastest real moment (exactly where a percentile cut is least
+    // protective). Falls back to the raw pool rather than reporting nothing
+    // if every sample somehow exceeds the ceiling, same "never silently
+    // report zero/null over a real capture" stance used throughout this app
+    // -- though at that point the whole capture is more likely corrupt than
+    // this one number being wrong.
+    const plausibleWristSpeeds = wristSpeedSamples
+      .map((s) => s.speed)
+      .filter((v) => v <= MAX_PLAUSIBLE_WRIST_SPEED_MPS);
+    const wristSpeeds = plausibleWristSpeeds.length > 0 ? plausibleWristSpeeds : wristSpeedSamples.map((s) => s.speed);
     peakWristSpeedMps = wristSpeeds.length > 0 ? Math.round(percentile(wristSpeeds, 0.95) * 100) / 100 : null;
 
     const armAnglesRaw = frames.map((f) => {

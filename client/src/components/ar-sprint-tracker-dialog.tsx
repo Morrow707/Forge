@@ -708,6 +708,14 @@ export function ArSprintTrackerDialog({
               </div>
             </div>
 
+            {result.likelyGlitch && (
+              <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-2.5 text-sm text-amber-200">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                This time looks faster than any human has ever run -- almost certainly a tracking glitch,
+                not a real split. Recommend retaking before saving.
+              </div>
+            )}
+
             {faults.length > 0 ? (
               <div className="space-y-2">
                 {faults.map((f) => (
