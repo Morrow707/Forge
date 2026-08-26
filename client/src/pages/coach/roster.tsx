@@ -39,6 +39,16 @@ import type { AcwrRiskLevel } from "@shared/load";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { toCsv } from "@/lib/csv";
+import { shareOrDownloadBlob } from "@/lib/share-file";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Users,
   UserPlus,
@@ -57,6 +67,9 @@ import {
   Gauge,
   UserPlus2,
   Palette,
+  Download,
+  CheckSquare,
+  ArrowRightLeft,
 } from "lucide-react";
 
 type PhotoImportKind = "testing-day" | "weigh-in" | "nutrition" | "injury" | "testing-data" | "player-intake";
@@ -164,6 +177,29 @@ export default function CoachRoster() {
   const [healthFilter, setHealthFilter] = useState<"all" | HealthStatus>("all");
   const [activeTab, setActiveTab] = useState<"roster" | "teams" | "compliance">("roster");
 
+  // Bulk selection on the Roster grid -- Assign Program, Add to Team, and
+  // CSV export all work off this set. Off by default so the grid stays a
+  // plain click-to-open-profile list until a coach actually wants to act on
+  // more than one athlete at once.
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkAddTeamId, setBulkAddTeamId] = useState("");
+
+  function toggleSelected(athleteId: number) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(athleteId)) next.delete(athleteId);
+      else next.add(athleteId);
+      return next;
+    });
+  }
+
+  function exitSelectMode() {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+    setBulkAddTeamId("");
+  }
+
   const healthyCount = roster.filter((a) => (a.healthStatus ?? "healthy") === "healthy").length;
   const hurtCount = roster.filter((a) => a.healthStatus === "hurt").length;
 
@@ -218,6 +254,57 @@ export default function CoachRoster() {
     },
   });
 
+  const bulkAddToTeamMutation = useMutation({
+    mutationFn: async ({ teamId, athleteIds }: { teamId: number; athleteIds: number[] }) => {
+      await Promise.all(
+        athleteIds.map((athleteId) =>
+          apiRequest("POST", `/api/coach/teams/${teamId}/members`, { athleteId }),
+        ),
+      );
+    },
+    onSuccess: (_, { athleteIds }) => {
+      qc.invalidateQueries({ queryKey: ["/api/coach/teams"] });
+      toast.success(`Added ${athleteIds.length} athlete${athleteIds.length === 1 ? "" : "s"} to team`);
+      exitSelectMode();
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't add everyone to that team"),
+  });
+
+  // Moves one athlete from their current team straight to another --
+  // distinct from add/remove, which each only touch one side of the
+  // membership. teamMembers has no exclusivity constraint (an athlete can
+  // technically be on more than one team), but "move" is still the common
+  // real request: swap a kid from JV to Varsity in one action instead of
+  // two separate roster edits that could be left half-done.
+  const moveToTeamMutation = useMutation({
+    mutationFn: async ({
+      fromTeamId,
+      toTeamId,
+      athleteId,
+    }: {
+      fromTeamId: number;
+      toTeamId: number;
+      athleteId: number;
+    }) => {
+      await apiRequest("POST", `/api/coach/teams/${toTeamId}/members`, { athleteId });
+      await apiRequest("DELETE", `/api/coach/teams/${fromTeamId}/members/${athleteId}`);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/coach/teams"] });
+      toast.success("Moved to new team");
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't move that athlete"),
+  });
+
+  function exportRosterCsv(rows: RosterEntry[]) {
+    const csv = toCsv(
+      ["Name", "Email", "Sport", "Position", "Health Status"],
+      rows.map((a) => [a.name, a.email, a.sport ?? "", a.position ?? "", a.healthStatus ?? "healthy"]),
+    );
+    const blob = new Blob([csv], { type: "text/csv" });
+    shareOrDownloadBlob(blob, "roster.csv", "Roster Export");
+  }
+
   const removeFromTeamMutation = useMutation({
     mutationFn: async ({ teamId, athleteId }: { teamId: number; athleteId: number }) => {
       await apiRequest("DELETE", `/api/coach/teams/${teamId}/members/${athleteId}`);
@@ -246,6 +333,26 @@ export default function CoachRoster() {
         title="Roster & Teams"
         actions={
           <div className="flex flex-wrap gap-2">
+            {activeTab === "roster" && roster.length > 0 && (
+              <>
+                <Button
+                  size="sm"
+                  variant={selectMode ? "default" : "outline"}
+                  onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}
+                >
+                  <CheckSquare className="h-3.5 w-3.5" />
+                  {selectMode ? "Cancel Select" : "Select"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => exportRosterCsv(selectedIds.size > 0 ? filteredRoster.filter((a) => selectedIds.has(a.id)) : filteredRoster)}
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Export CSV
+                </Button>
+              </>
+            )}
             <Button size="sm" variant="outline" onClick={() => setAddFreeAgentOpen(true)}>
               <UserPlus className="h-3.5 w-3.5" />
               Add Free Agent
@@ -337,6 +444,59 @@ export default function CoachRoster() {
                   aria-label="Search athletes"
                 />
               </div>
+              {selectMode && (
+                <div className="mb-4 flex flex-wrap items-center gap-2 rounded-md border border-primary/30 bg-primary/5 p-2.5">
+                  <span className="text-xs font-semibold text-muted-foreground">
+                    {selectedIds.size} selected
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={selectedIds.size === 0}
+                    onClick={() => openAssignFor(Array.from(selectedIds))}
+                  >
+                    <Send className="h-3.5 w-3.5" />
+                    Assign Program
+                  </Button>
+                  <div className="flex items-center gap-1.5">
+                    <Select value={bulkAddTeamId} onValueChange={setBulkAddTeamId}>
+                      <SelectTrigger className="h-8 w-40 text-xs">
+                        <SelectValue placeholder="Add to team..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {teams.map((t) => (
+                          <SelectItem key={t.id} value={String(t.id)}>
+                            {t.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={selectedIds.size === 0 || !bulkAddTeamId || bulkAddToTeamMutation.isPending}
+                      onClick={() =>
+                        bulkAddToTeamMutation.mutate({
+                          teamId: Number(bulkAddTeamId),
+                          athleteIds: Array.from(selectedIds),
+                        })
+                      }
+                    >
+                      Add
+                    </Button>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setSelectedIds(new Set(filteredRoster.map((a) => a.id)))}
+                  >
+                    Select all ({filteredRoster.length})
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={exitSelectMode}>
+                    Done
+                  </Button>
+                </div>
+              )}
               {filteredRoster.length === 0 ? (
                 <p className="py-8 text-center text-sm text-muted-foreground">
                   {healthFilter === "all"
@@ -345,15 +505,30 @@ export default function CoachRoster() {
                 </p>
               ) : (
                 <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-                  {filteredRoster.map((a) => (
+                  {filteredRoster.map((a) => {
+                    const isSelected = selectedIds.has(a.id);
+                    return (
                     <Card
                       key={a.id}
-                      className="cursor-pointer transition-colors hover:border-primary/50"
-                      onClick={() => navigate(`/coach/roster/${a.id}`)}
+                      className={cn(
+                        "cursor-pointer transition-colors hover:border-primary/50",
+                        isSelected && "border-primary bg-primary/5",
+                      )}
+                      onClick={() =>
+                        selectMode ? toggleSelected(a.id) : navigate(`/coach/roster/${a.id}`)
+                      }
                     >
                       <CardContent className="flex flex-col gap-2 p-3">
                         <div className="min-w-0">
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-1.5">
+                            {selectMode && (
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={() => toggleSelected(a.id)}
+                                onClick={(e) => e.stopPropagation()}
+                                aria-label={`Select ${a.name}`}
+                              />
+                            )}
                             <span className="truncate text-sm font-semibold">{a.name}</span>
                           </div>
                           <HealthStatusToggle athleteId={a.id} status={a.healthStatus ?? "healthy"} />
@@ -373,21 +548,24 @@ export default function CoachRoster() {
                             </div>
                           )}
                         </div>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="self-start"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openAssignFor([a.id]);
-                          }}
-                        >
-                          <Send className="h-3.5 w-3.5" />
-                          Assign
-                        </Button>
+                        {!selectMode && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="self-start"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openAssignFor([a.id]);
+                            }}
+                          >
+                            <Send className="h-3.5 w-3.5" />
+                            Assign
+                          </Button>
+                        )}
                       </CardContent>
                     </Card>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </>
@@ -502,6 +680,35 @@ export default function CoachRoster() {
                             </Badge>
                           )}
                         </div>
+                        {teams.length > 1 && (
+                          <Select
+                            value=""
+                            onValueChange={(toTeamId) =>
+                              moveToTeamMutation.mutate({
+                                fromTeamId: team.id,
+                                toTeamId: Number(toTeamId),
+                                athleteId: m.athlete.id,
+                              })
+                            }
+                          >
+                            <SelectTrigger
+                              className="h-7 w-28 shrink-0 gap-1 px-2 text-[11px]"
+                              aria-label={`Move ${m.athlete.name} to another team`}
+                            >
+                              <ArrowRightLeft className="h-3 w-3 shrink-0 text-muted-foreground" />
+                              <SelectValue placeholder="Move to..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {teams
+                                .filter((t) => t.id !== team.id)
+                                .map((t) => (
+                                  <SelectItem key={t.id} value={String(t.id)}>
+                                    {t.name}
+                                  </SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
+                        )}
                         <button
                           type="button"
                           aria-label={`Remove ${m.athlete.name} from ${team.name}`}
