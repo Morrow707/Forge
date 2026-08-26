@@ -314,6 +314,12 @@ export const users = pgTable(
     phone: text("phone"),
     notifyEmail: boolean("notify_email").notNull().default(true),
     notifySms: boolean("notify_sms").notNull().default(false),
+    // Per-category push opt-out (shared/notification-categories.ts) -- keyed
+    // by NotificationCategoryKey, missing key or null means "on" (the
+    // default), same "empty means full access" convention as
+    // hiddenSections/coachStaff elsewhere in this table. Push-channel only:
+    // notifyEmail/notifySms above are unrelated, unaffected global toggles.
+    pushNotificationCategoryPrefs: json("push_notification_category_prefs").$type<Record<string, boolean>>(),
     // Coach-only injury/availability flag -- see healthStatusEnum above.
     healthStatus: healthStatusEnum("health_status").notNull().default("healthy"),
     // Unguessable, unauthenticated URL token for the .ics calendar
@@ -5079,6 +5085,14 @@ export const updateNotificationPrefsSchema = z.object({
   notifySms: z.boolean(),
 });
 
+// Keys are validated against NOTIFICATION_CATEGORIES (shared/notification-
+// categories.ts) at the route, not here -- z.record's key type can't
+// express that closed set, and the route already has to 400 on an unknown
+// key either way.
+export const updatePushCategoryPrefsSchema = z.object({
+  categories: z.record(z.string(), z.boolean()),
+});
+
 // #RRGGBB only -- the exact-color ask this whole feature is built around,
 // not a loose CSS-color-name/rgb() acceptor. Logo upload is handled as its
 // own multipart route, not through this schema.
@@ -5742,6 +5756,7 @@ export type AttachVideoToSetInput = z.infer<typeof attachVideoToSetSchema>;
 export type UpdatePreferencesInput = z.infer<typeof updatePreferencesSchema>;
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 export type UpdateNotificationPrefsInput = z.infer<typeof updateNotificationPrefsSchema>;
+export type UpdatePushCategoryPrefsInput = z.infer<typeof updatePushCategoryPrefsSchema>;
 export type UpdateBrandingInput = z.infer<typeof updateBrandingSchema>;
 export type UpdateTeamBrandingInput = z.infer<typeof updateTeamBrandingSchema>;
 export type UpdateStaffTitleInput = z.infer<typeof updateStaffTitleSchema>;

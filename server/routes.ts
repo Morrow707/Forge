@@ -33,6 +33,7 @@ import { COACH_SECTIONS } from "@shared/coach-sections";
 import { widgetLayoutSchema } from "@shared/dashboard-widgets";
 import { notifyUser } from "./notify";
 import { findGoniometerMovement } from "@shared/goniometer";
+import { NOTIFICATION_CATEGORIES } from "@shared/notification-categories";
 import {
   insertExerciseSchema,
   insertSkillExerciseSchema,
@@ -52,6 +53,7 @@ import {
   updatePreferencesSchema,
   updateProfileSchema,
   updateNotificationPrefsSchema,
+  updatePushCategoryPrefsSchema,
   updateHealthStatusSchema,
   setTrackingOptOutSchema,
   pushSubscribeSchema,
@@ -4864,7 +4866,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           `📢 Announcement from ${user.name}`,
           parsed.data.body,
           "/athlete/team-board",
-          { bypassEmailPref: true },
+          { bypassEmailPref: true, bypassPushCategoryPref: true },
         ),
       );
     } else {
@@ -7423,6 +7425,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
     const updated = await storage.updateNotificationPrefs(user.id, parsed.data);
+    const { passwordHash, healthStatus, ...publicUser } = updated;
+    res.json(publicUser);
+  });
+
+  // Push-channel-only category opt-out -- see shared/notification-
+  // categories.ts. Validated here (not in the zod schema) against
+  // NOTIFICATION_CATEGORIES since z.record can't express a closed key set.
+  app.patch("/api/notification-prefs/push-categories", requireAuth, async (req, res) => {
+    const user = currentUser(req);
+    const parsed = updatePushCategoryPrefsSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const validKeys = new Set(NOTIFICATION_CATEGORIES.map((c) => c.key));
+    const unknown = Object.keys(parsed.data.categories).filter((k) => !validKeys.has(k as any));
+    if (unknown.length > 0) {
+      return res.status(400).json({ message: `Unknown notification categories: ${unknown.join(", ")}` });
+    }
+    const updated = await storage.updateNotificationPushCategoryPrefs(user.id, parsed.data.categories);
     const { passwordHash, healthStatus, ...publicUser } = updated;
     res.json(publicUser);
   });

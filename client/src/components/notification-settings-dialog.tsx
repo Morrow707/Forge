@@ -15,6 +15,7 @@ import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { Mail, MessageCircle, Bell, ScanFace, Watch } from "lucide-react";
 import type { PublicUser } from "@shared/schema";
+import { notificationCategoriesForRole } from "@shared/notification-categories";
 import {
   isPushSupported,
   getCurrentPushSubscription,
@@ -72,12 +73,19 @@ export function NotificationSettingsDialog({
   // paired is a property of this phone, not the account.
   const [healthSyncEnabled, setHealthSyncEnabledState] = useState(false);
   const [healthSyncBusy, setHealthSyncBusy] = useState(false);
+  // Push-channel category prefs -- saved immediately per-toggle, same
+  // "no batching, no separate Save step" treatment as push/bio-lock/health
+  // sync above, not the phone/email/sms group below.
+  const [categoryPrefs, setCategoryPrefs] = useState<Record<string, boolean>>({});
+  const categories =
+    user.role === "coach" || user.role === "athlete" ? notificationCategoriesForRole(user.role) : [];
 
   useEffect(() => {
     if (open) {
       setPhone(user.phone ?? "");
       setNotifyEmail(user.notifyEmail);
       setNotifySms(user.notifySms);
+      setCategoryPrefs(user.pushNotificationCategoryPrefs ?? {});
       if (isNativePushSupported()) {
         getNativePushPermissionGranted().then(setPushSubscribed);
       } else if (isPushSupported()) {
@@ -135,6 +143,20 @@ export function NotificationSettingsDialog({
     }
   }
 
+  const categoryPrefMutation = useMutation({
+    mutationFn: async (categories: Record<string, boolean>) => {
+      const res = await apiRequest("PATCH", "/api/notification-prefs/push-categories", { categories });
+      return (await res.json()) as PublicUser;
+    },
+    onSuccess: (updatedUser) => qc.setQueryData(["/api/auth/me"], updatedUser),
+    onError: (err: ApiError) => toast.error(err.message || "Could not save that preference"),
+  });
+
+  function toggleCategory(key: string, enabled: boolean) {
+    setCategoryPrefs((prev) => ({ ...prev, [key]: enabled }));
+    categoryPrefMutation.mutate({ [key]: enabled });
+  }
+
   const saveMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("PATCH", "/api/notification-prefs", {
@@ -159,9 +181,8 @@ export function NotificationSettingsDialog({
           <DialogTitle>Notification Settings</DialogTitle>
         </DialogHeader>
         <p className="text-sm text-muted-foreground">
-          {user.role === "coach"
-            ? "You'll only ever hear about an athlete's comment or video upload -- never program completions or routine team board activity."
-            : "You'll only ever hear about your coach's reply or an emergency team announcement -- never program completions or routine team board activity."}
+          Choose which categories reach you by push, on top of enabling push itself below. An
+          urgent team announcement always gets through regardless of what you mute here.
         </p>
         <div className="space-y-4">
           {pushSupported && (
@@ -180,6 +201,25 @@ export function NotificationSettingsDialog({
                 </span>
               </span>
             </label>
+          )}
+          {categories.length > 0 && (
+            <div className="ml-6 space-y-2 border-l border-border pl-3">
+              {categories.map((cat) => {
+                const enabled = categoryPrefs[cat.key] !== false;
+                return (
+                  <label key={cat.key} className="flex items-start gap-2.5 text-sm">
+                    <Checkbox
+                      checked={enabled}
+                      onCheckedChange={(checked) => toggleCategory(cat.key, checked === true)}
+                    />
+                    <span>
+                      <span className="font-medium">{cat.label}</span>
+                      <span className="block text-xs text-muted-foreground">{cat.description}</span>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
           )}
           {bioLockAvailable && (
             <label className="flex items-start gap-2.5 text-sm">

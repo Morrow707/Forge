@@ -1899,6 +1899,10 @@ ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "tracking_opt_out" boolean NOT NULL
 -- a coaching staff can no longer reuse the athlete self-signup code.
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "staff_invite_code" text;
 CREATE UNIQUE INDEX IF NOT EXISTS "users_staff_invite_code_idx" ON "users" ("staff_invite_code");
+
+-- Per-category push opt-out (shared/schema.ts users.pushNotificationCategoryPrefs
+-- and shared/notification-categories.ts) -- see that column's own comment.
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "push_notification_category_prefs" json;
 `;
 
 async function main() {

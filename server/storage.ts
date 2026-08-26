@@ -12659,6 +12659,23 @@ ${entriesText}`;
     return row;
   },
 
+  // Merges rather than replaces -- a client only ever sends the categories
+  // actually visible to that role (see notificationCategoriesForRole), so a
+  // plain overwrite would silently wipe out any prefs saved under a
+  // category the current page didn't render (there is no such category
+  // today, but this is the same "don't let a partial payload erase state it
+  // never saw" caution as setStaffHiddenSections elsewhere in this file).
+  async updateNotificationPushCategoryPrefs(userId: number, categories: Record<string, boolean>) {
+    const user = await this.getUser(userId);
+    const merged = { ...(user?.pushNotificationCategoryPrefs ?? {}), ...categories };
+    const [row] = await db
+      .update(users)
+      .set({ pushNotificationCategoryPrefs: merged })
+      .where(eq(users.id, userId))
+      .returning();
+    return row;
+  },
+
   // ---------- White-label branding ----------
   // Org-wide identity lives on the primary coach's own users row and
   // applies to their whole staff (see getEffectiveCoachIds) -- a coach
