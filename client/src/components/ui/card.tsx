@@ -22,8 +22,12 @@ const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElemen
         // this edge -- the elevation shadow itself stays plain black; that
         // part is what actually reads as depth against a dark background
         // (see index.css's comment on the neutral ladder) and tinting it
-        // would undo that.
-        "rounded-xl border border-[hsl(var(--rim)/0.3)] bg-card/85 text-card-foreground shadow-[inset_0_1px_0_0_hsl(var(--rim)/0.1),0_12px_36px_-14px_rgba(0,0,0,0.75)] backdrop-blur-xl backdrop-saturate-150",
+        // would undo that. A third, much softer shadow layer carries the
+        // ambient --glow instead -- invisible by default (--glow-alpha: 0),
+        // so this is a no-op until a coach picks a personal accent, at
+        // which point "the shadow" visibly picks up their color too
+        // without touching the black layer that does the actual depth work.
+        "rounded-xl border border-[hsl(var(--rim)/0.3)] bg-card/85 text-card-foreground shadow-[inset_0_1px_0_0_hsl(var(--rim)/0.1),0_12px_36px_-14px_rgba(0,0,0,0.75),0_20px_48px_-10px_hsl(var(--glow)/var(--glow-alpha))] backdrop-blur-xl backdrop-saturate-150",
         className,
       )}
       {...props}

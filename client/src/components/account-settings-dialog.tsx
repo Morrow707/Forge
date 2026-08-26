@@ -16,7 +16,20 @@ import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { Ticket, AlertTriangle } from "lucide-react";
 import { contrastForegroundHsl, meetsWcagAA, nearestAccessibleColor } from "@/lib/color";
+import { cn } from "@/lib/utils";
 import type { PublicUser } from "@shared/schema";
+
+// Same five hues shown in the "Coach Themes" concept deck -- named presets
+// for the common case, with an exact-number field right next to them for
+// anyone who wants a precise value. Ink (222) matches the app's own
+// default neutral hue, so picking it is equivalent to clearing the override.
+const BACKGROUND_HUE_PRESETS = [
+  { label: "Ink", hue: 222 },
+  { label: "Slate", hue: 210 },
+  { label: "Forest", hue: 150 },
+  { label: "Wine", hue: 350 },
+  { label: "Plum", hue: 280 },
+];
 
 /** Account-level self-service: name, email, and password, none of which
  * had any in-app edit path before -- a coach in particular had no way to
@@ -81,19 +94,33 @@ export function AccountSettingsDialog({
   });
 
   const [accentColor, setAccentColor] = useState(user.personalAccentColor ?? "");
-  const accentMutation = useMutation({
-    mutationFn: async (next: string | null) => {
-      await apiRequest("PATCH", "/api/coach/personal-accent", { accentColor: next });
+  const [secondaryColor, setSecondaryColor] = useState(user.personalSecondaryColor ?? "");
+  const [backgroundHue, setBackgroundHue] = useState(user.personalBackgroundHue ?? 222);
+
+  // One endpoint for all three personal-theme fields -- each still gets its
+  // own Save/Clear below (matching this dialog's existing per-field pattern
+  // for Name/Email/Password), just sending only the one key that changed so
+  // the other two are left untouched server-side.
+  const themeMutation = useMutation({
+    mutationFn: async (next: {
+      accentColor?: string | null;
+      secondaryColor?: string | null;
+      backgroundHue?: number | null;
+    }) => {
+      await apiRequest("PATCH", "/api/coach/personal-theme", next);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/auth/me"] });
-      toast.success("Personal accent updated");
+      toast.success("Personal theme updated");
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't update accent color"),
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't update your theme"),
   });
   const accentContrastOk =
     !accentColor ||
     meetsWcagAA(accentColor, contrastForegroundHsl(accentColor).endsWith("100%") ? "#ffffff" : "#000000");
+  const secondaryContrastOk =
+    !secondaryColor ||
+    meetsWcagAA(secondaryColor, contrastForegroundHsl(secondaryColor).endsWith("100%") ? "#ffffff" : "#000000");
 
   const [redeemCode, setRedeemCode] = useState("");
   const redeemMutation = useMutation({
@@ -200,53 +227,168 @@ export function AccountSettingsDialog({
           </div>
 
           {user.role === "coach" && (
-            <div className="space-y-1.5 border-t border-border pt-4">
-              <p className="text-xs text-muted-foreground">
-                Your own color, just for your view -- buttons, focus rings, card outlines, "today"
-                highlights, and PR/stat numbers all pick it up, on top of whatever your program's
-                branding already sets. Type an exact hex if you know it, or use the picker for a full
-                color wheel. Leave blank to use the program's own color.
-              </p>
-              <ColorField label="Personal accent" value={accentColor || "#F65B23"} onChange={setAccentColor} />
-              {!accentContrastOk && (
-                <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-                  <div className="space-y-1.5">
-                    <p>This color is too light/dark to read clearly as button text.</p>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setAccentColor(nearestAccessibleColor(accentColor) ?? accentColor)}
-                    >
-                      Use a readable version of this color
-                    </Button>
+            <div className="space-y-5 border-t border-border pt-4">
+              <div className="space-y-1.5">
+                <Label>Personal theme</Label>
+                <p className="text-xs text-muted-foreground">
+                  Yours alone -- everything below is layered on top of whatever your program's own
+                  branding already sets, only in your own view, and never touches what your athletes
+                  or other coaches see. Type an exact hex/number if you know it, or use the pickers.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <p className="text-xs text-muted-foreground">
+                  Accent -- buttons, focus rings, card outlines, "today" highlights, PR/stat numbers,
+                  and the ambient glow under every card.
+                </p>
+                <ColorField label="Accent" value={accentColor || "#F65B23"} onChange={setAccentColor} />
+                {!accentContrastOk && (
+                  <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+                    <div className="space-y-1.5">
+                      <p>This color is too light/dark to read clearly as button text.</p>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setAccentColor(nearestAccessibleColor(accentColor) ?? accentColor)}
+                      >
+                        Use a readable version of this color
+                      </Button>
+                    </div>
                   </div>
-                </div>
-              )}
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="flex-1"
-                  onClick={() => accentMutation.mutate(accentColor || null)}
-                  disabled={accentMutation.isPending}
-                >
-                  Save accent color
-                </Button>
-                {user.personalAccentColor && (
+                )}
+                <div className="flex gap-2">
                   <Button
                     type="button"
-                    variant="ghost"
-                    onClick={() => {
-                      setAccentColor("");
-                      accentMutation.mutate(null);
-                    }}
-                    disabled={accentMutation.isPending}
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => themeMutation.mutate({ accentColor: accentColor || null })}
+                    disabled={themeMutation.isPending}
                   >
-                    Clear
+                    Save accent
                   </Button>
+                  {user.personalAccentColor && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => {
+                        setAccentColor("");
+                        themeMutation.mutate({ accentColor: null });
+                      }}
+                      disabled={themeMutation.isPending}
+                    >
+                      Clear
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <p className="text-xs text-muted-foreground">
+                  Secondary -- your own second color, independent of your accent (mirrors your
+                  program's own primary + secondary pair).
+                </p>
+                <ColorField label="Secondary" value={secondaryColor || "#4C6B8A"} onChange={setSecondaryColor} />
+                {!secondaryContrastOk && (
+                  <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+                    <div className="space-y-1.5">
+                      <p>This color is too light/dark to read clearly as text.</p>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setSecondaryColor(nearestAccessibleColor(secondaryColor) ?? secondaryColor)}
+                      >
+                        Use a readable version of this color
+                      </Button>
+                    </div>
+                  </div>
                 )}
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => themeMutation.mutate({ secondaryColor: secondaryColor || null })}
+                    disabled={themeMutation.isPending}
+                  >
+                    Save secondary
+                  </Button>
+                  {user.personalSecondaryColor && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => {
+                        setSecondaryColor("");
+                        themeMutation.mutate({ secondaryColor: null });
+                      }}
+                      disabled={themeMutation.isPending}
+                    >
+                      Clear
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <p className="text-xs text-muted-foreground">
+                  Background tint -- shifts the whole app's neutral surfaces (background, cards,
+                  borders) toward a hue of your choice, keeping the exact same contrast already tuned
+                  for legibility.
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {BACKGROUND_HUE_PRESETS.map((preset) => (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      onClick={() => setBackgroundHue(preset.hue)}
+                      className={cn(
+                        "rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors",
+                        backgroundHue === preset.hue
+                          ? "border-primary bg-primary/10 text-foreground"
+                          : "border-border text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                  <Input
+                    type="number"
+                    min={0}
+                    max={359}
+                    value={backgroundHue}
+                    onChange={(e) => setBackgroundHue(Math.min(359, Math.max(0, Number(e.target.value) || 0)))}
+                    className="h-auto w-20 py-1.5 text-xs"
+                    aria-label="Exact background hue, 0-359"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => themeMutation.mutate({ backgroundHue })}
+                    disabled={themeMutation.isPending}
+                  >
+                    Save background tint
+                  </Button>
+                  {user.personalBackgroundHue != null && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => {
+                        setBackgroundHue(222);
+                        themeMutation.mutate({ backgroundHue: null });
+                      }}
+                      disabled={themeMutation.isPending}
+                    >
+                      Clear
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
           )}

@@ -57,18 +57,26 @@
      to be numerically IDENTICAL to --card (both 11%) -- an actual bug, not
      just "subtle": a plain surface fill and an elevated Card had zero
      lightness difference to begin with. Fixed the whole ladder at once:
-     background(5) < surface(11) < card/popover(16) < surface-elevated(21). */
-  --background: 222 20% 5%;
+     background(5) < surface(11) < card/popover(16) < surface-elevated(21).
+
+     The hue (222) is pulled out into its own --neutral-hue token, referenced
+     from inside each triple below rather than repeated as a literal, so a
+     coach's personal backgroundHue (see branding-style.ts) can retint the
+     whole ladder at once by overriding this one variable -- every triple
+     here still resolves through hsl(var(--background)) etc exactly as
+     before, just with its first component indirected. */
+  --neutral-hue: 222;
+  --background: var(--neutral-hue) 20% 5%;
   --foreground: 0 0% 96%;
 
-  --card: 222 17% 16%;
+  --card: var(--neutral-hue) 17% 16%;
   --card-foreground: 0 0% 97%;
 
-  --popover: 222 17% 16%;
+  --popover: var(--neutral-hue) 17% 16%;
   --popover-foreground: 0 0% 97%;
 
-  --surface: 222 16% 11%;
-  --surface-elevated: 222 16% 21%;
+  --surface: var(--neutral-hue) 16% 11%;
+  --surface-elevated: var(--neutral-hue) 16% 21%;
 
   /* "Deep ember" -- pulled back from the original 16 92% 55% (too bright/
      neon per feedback against the deepened palette above) toward a richer,
@@ -78,10 +86,15 @@
   --primary: 14 85% 42%;
   --primary-foreground: 0 0% 100%;
 
-  --secondary: 222 15% 20%;
+  /* Rides --neutral-hue by default (same family as the rest of the ladder)
+     but is still its own token so a coach's personal secondaryColor -- or
+     org branding's own brandSecondaryColor -- can override it to a genuine
+     second accent (e.g. a program's actual gold), independent of the
+     neutral tint. */
+  --secondary: var(--neutral-hue) 15% 20%;
   --secondary-foreground: 0 0% 92%;
 
-  --muted: 222 13% 19%;
+  --muted: var(--neutral-hue) 13% 19%;
   --muted-foreground: 220 9% 64%;
 
   --accent: 14 85% 42%;
@@ -93,18 +106,31 @@
   --success: 142 71% 45%;
   --success-foreground: 0 0% 100%;
 
-  --border: 222 17% 24%;
-  --input: 222 17% 24%;
+  --border: var(--neutral-hue) 17% 24%;
+  --input: var(--neutral-hue) 17% 24%;
   --ring: 14 85% 42%;
 
   /* Border/inset-highlight color for the frosted glass surfaces (Card,
      Dialog, Popover, Select) -- kept separate from --border (the flat,
      always-neutral 1px rule used elsewhere) because a coach's personal
-     accent color (see branding-style.ts) tints this one but must never
+     ACCENT color (see branding-style.ts) tints this one but must never
      tint --border, or every plain divider and input outline in the app
-     would shift with it. Plain white by default, matching the original
-     literal white/30 rim before it became a token. */
+     would shift with it. (--border DOES still ride --neutral-hue above --
+     that's the separate, coarser "background tint" knob, not the accent.)
+     Plain white by default, matching the original literal white/30 rim
+     before it became a token. */
   --rim: 0 0% 100%;
+
+  /* Ambient accent-tinted glow, layered under Card/Dialog/Popover/Select's
+     always-black elevation shadow (see card.tsx's own comment on why that
+     one stays plain black -- a colored shadow can't read as depth against
+     a near-black background). --glow-alpha is 0 by default so this layer
+     is fully invisible until a coach sets a personal accentColor, at which
+     point both this and --glow-alpha get set together -- letting "the
+     shadow" visibly pick up their color without touching the shadow that
+     actually does the elevation work. */
+  --glow: 0 0% 100%;
+  --glow-alpha: 0;
 
   --radius: 0.6rem;
 }

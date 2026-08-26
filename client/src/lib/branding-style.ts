@@ -11,23 +11,40 @@ export type EffectiveBranding = {
   brandWelcomeMessage?: string | null;
 };
 
-/** Converts an effective branding record (plus an optional personal
- * accent color layered on top) into this app's CSS custom-property
- * overrides (see index.css's --primary etc, all raw "H S% L%" triplets,
- * not literal colors). Shared between AppShell (a logged-in user's own
+// Mirrors users.personalAccentColor/personalSecondaryColor/
+// personalBackgroundHue -- see that column's own comment in
+// shared/schema.ts for what each one drives.
+export type PersonalTheme = {
+  accentColor?: string | null;
+  secondaryColor?: string | null;
+  backgroundHue?: number | null;
+};
+
+/** Converts an effective branding record (plus an optional personal theme
+ * layered on top) into this app's CSS custom-property overrides (see
+ * index.css's --primary etc, all raw "H S% L%" triplets, not literal
+ * colors -- --neutral-hue and --glow-alpha are the two exceptions, which
+ * are bare numbers). Shared between AppShell (a logged-in user's own
  * re-skin) and the signup page (a pre-login preview from a typed invite
  * code) so the two can't drift on which tokens get overridden or how.
- * personalAccentColor only ever applies to the viewer's own session (see
- * users.personalAccentColor) -- a coach's own pick, set on their own
- * account, and it now overrides everything the org's branding would
- * otherwise set (--primary/--ring/--accent/--rim), not just the
- * hover/focus ring: buttons, "today" highlights, PR/streak numbers, and
- * the frosted-card border all key off the same handful of tokens, so one
- * color change reaches all of them. It's still purely local to that
- * coach's own view -- nothing here touches what anyone else sees. */
+ *
+ * `personal` only ever applies to the viewer's own session (see the
+ * PersonalTheme fields' own comments in shared/schema.ts) -- a coach's own
+ * picks, set on their own account, applied on top of whatever the org's
+ * branding already set. It's still purely local to that coach's own view --
+ * nothing here touches what anyone else sees.
+ *  - accentColor overrides --primary/--ring/--accent/--rim (buttons,
+ *    "today" highlights, PR/streak numbers, and the frosted-card border) --
+ *    plus lights up the ambient --glow layer those same surfaces already
+ *    carry at zero opacity, so "the shadow" visibly picks up the color too.
+ *  - secondaryColor overrides --secondary alone, same as brandSecondaryColor
+ *    below -- a coach's own second color, independent of their accent.
+ *  - backgroundHue overrides --neutral-hue, retinting the whole neutral
+ *    surface ladder (background/card/surface/border/etc) while every
+ *    token keeps its own already-tuned saturation/lightness. */
 export function computeBrandingStyle(
   branding: EffectiveBranding | null | undefined,
-  personalAccentColor?: string | null,
+  personal?: PersonalTheme | null,
 ): React.CSSProperties | undefined {
   const vars: Record<string, string> = {};
   if (branding?.brandPrimaryColor) {
@@ -42,14 +59,23 @@ export function computeBrandingStyle(
     const hsl = hexToHslTriplet(branding.brandSecondaryColor);
     if (hsl) vars["--secondary"] = hsl;
   }
-  if (personalAccentColor) {
-    const hsl = hexToHslTriplet(personalAccentColor);
+  if (personal?.accentColor) {
+    const hsl = hexToHslTriplet(personal.accentColor);
     if (hsl) {
       vars["--primary"] = hsl;
       vars["--ring"] = hsl;
       vars["--accent"] = hsl;
       vars["--rim"] = hsl;
+      vars["--glow"] = hsl;
+      vars["--glow-alpha"] = "0.22";
     }
+  }
+  if (personal?.secondaryColor) {
+    const hsl = hexToHslTriplet(personal.secondaryColor);
+    if (hsl) vars["--secondary"] = hsl;
+  }
+  if (typeof personal?.backgroundHue === "number") {
+    vars["--neutral-hue"] = String(personal.backgroundHue);
   }
   return Object.keys(vars).length > 0 ? (vars as React.CSSProperties) : undefined;
 }

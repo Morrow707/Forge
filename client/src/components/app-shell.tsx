@@ -246,11 +246,16 @@ export function AppShell({
   // custom properties, so overriding them here on the shell's own root
   // recolors every bg-primary/text-primary/border-ring use inside it --
   // active nav tab, buttons, focus rings -- without touching each
-  // component individually. See computeBrandingStyle's own comment for why
-  // --secondary is deliberately left alone.
+  // component individually.
   const brandingStyle = computeBrandingStyle(
     branding,
-    user?.role === "coach" ? user.personalAccentColor : null,
+    user?.role === "coach"
+      ? {
+          accentColor: user.personalAccentColor,
+          secondaryColor: user.personalSecondaryColor,
+          backgroundHue: user.personalBackgroundHue,
+        }
+      : null,
   );
 
   // Best-effort branded icon: swaps the browser tab favicon and (in

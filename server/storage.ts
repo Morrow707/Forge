@@ -2023,12 +2023,23 @@ export const storage = {
     await db.update(users).set({ passwordHash }).where(eq(users.id, userId));
   },
 
-  async updatePersonalAccentColor(userId: number, accentColor: string | null) {
+  async updatePersonalTheme(
+    userId: number,
+    theme: { accentColor?: string | null; secondaryColor?: string | null; backgroundHue?: number | null },
+  ) {
+    const patch: Partial<typeof users.$inferInsert> = {};
+    if ("accentColor" in theme) patch.personalAccentColor = theme.accentColor ?? null;
+    if ("secondaryColor" in theme) patch.personalSecondaryColor = theme.secondaryColor ?? null;
+    if ("backgroundHue" in theme) patch.personalBackgroundHue = theme.backgroundHue ?? null;
     const [row] = await db
       .update(users)
-      .set({ personalAccentColor: accentColor })
+      .set(patch)
       .where(eq(users.id, userId))
-      .returning({ personalAccentColor: users.personalAccentColor });
+      .returning({
+        personalAccentColor: users.personalAccentColor,
+        personalSecondaryColor: users.personalSecondaryColor,
+        personalBackgroundHue: users.personalBackgroundHue,
+      });
     return row ?? null;
   },
 

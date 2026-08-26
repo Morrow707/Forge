@@ -72,7 +72,7 @@ import {
   updateAccountNameSchema,
   updateAccountEmailSchema,
   updateAccountPasswordSchema,
-  updatePersonalAccentSchema,
+  updatePersonalThemeSchema,
   updateCoachBillingSchema,
   createRedeemCodeSchema,
   redeemCodeInputSchema,
@@ -7586,14 +7586,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Any staff member's own personal touch, not gated to the primary the
   // way org branding is -- see personalAccentColor's comment on the users
-  // table in shared/schema.ts.
-  app.patch("/api/coach/personal-accent", requireRole("coach"), async (req, res) => {
+  // table in shared/schema.ts for what each of the three fields drives.
+  app.patch("/api/coach/personal-theme", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
-    const parsed = updatePersonalAccentSchema.safeParse(req.body);
+    const parsed = updatePersonalThemeSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
-    const updated = await storage.updatePersonalAccentColor(user.id, parsed.data.accentColor ?? null);
+    const updated = await storage.updatePersonalTheme(user.id, parsed.data);
     res.json(updated);
   });
 

@@ -420,12 +420,22 @@ export const users = pgTable(
     // the About page) in that this is meant to read like a note from the
     // coach, not a program description.
     brandWelcomeMessage: text("brand_welcome_message"),
-    // Any staff member's own personal touch -- overrides --ring/--accent
-    // (hover/focus highlight) on top of whatever the org's brandPrimaryColor
-    // already set for --primary, so a program's identity stays coherent
-    // while each coach still gets one personalization knob that's theirs
-    // alone, not gated to the primary the way org branding is.
+    // Any staff member's own personal touch -- three independent knobs a
+    // coach can set on their own account, none gated to the primary coach
+    // the way org branding is (see computeBrandingStyle for exactly which
+    // CSS custom properties each one drives). accentColor overrides
+    // --primary/--ring/--accent/--rim (buttons, focus highlight, PR/streak
+    // numbers, and the frosted-card outline+glow); secondaryColor overrides
+    // --secondary alone, mirroring org branding's own primary+secondary
+    // pair; backgroundHue shifts only the hue of the whole neutral surface
+    // ladder (background/card/surface/border/etc, see index.css's
+    // --neutral-hue) while keeping the exact saturation/lightness spacing
+    // already tuned for contrast -- deliberately hue-only rather than a
+    // free color, since letting a coach set an arbitrary background color
+    // could break legibility across the whole app.
     personalAccentColor: text("personal_accent_color"),
+    personalSecondaryColor: text("personal_secondary_color"),
+    personalBackgroundHue: integer("personal_background_hue"),
     // Primary-coach-only (same gate as hiddenNavSections): renames a
     // coachNav item's label without touching its route or icon -- e.g.
     // "Team Board" -> "Locker Room". Keyed by the nav item's href, same
@@ -5155,9 +5165,11 @@ export const updateAccountPasswordSchema = z.object({
 
 // Any staff member's own personal touch (not gated to the primary the
 // way org branding is) -- see personalAccentColor's comment on the users
-// table.
-export const updatePersonalAccentSchema = z.object({
+// table for what each of these three actually drives.
+export const updatePersonalThemeSchema = z.object({
   accentColor: hexColor.optional().nullable(),
+  secondaryColor: hexColor.optional().nullable(),
+  backgroundHue: z.number().int().min(0).max(359).optional().nullable(),
 });
 
 // Admin-only -- see server/billing.ts and shared/billing-tiers.ts. Enum
@@ -5771,7 +5783,7 @@ export type UpdateNavPrefsInput = z.infer<typeof updateNavPrefsSchema>;
 export type UpdateAccountNameInput = z.infer<typeof updateAccountNameSchema>;
 export type UpdateAccountEmailInput = z.infer<typeof updateAccountEmailSchema>;
 export type UpdateAccountPasswordInput = z.infer<typeof updateAccountPasswordSchema>;
-export type UpdatePersonalAccentInput = z.infer<typeof updatePersonalAccentSchema>;
+export type UpdatePersonalThemeInput = z.infer<typeof updatePersonalThemeSchema>;
 export type UpdateCoachBillingInput = z.infer<typeof updateCoachBillingSchema>;
 export type CreateRedeemCodeInput = z.infer<typeof createRedeemCodeSchema>;
 export type RedeemCodeInput = z.infer<typeof redeemCodeInputSchema>;

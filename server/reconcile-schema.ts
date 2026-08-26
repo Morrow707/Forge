@@ -1317,6 +1317,8 @@ ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "brand_mission" text;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "brand_contact_email" text;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "brand_welcome_message" text;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "personal_accent_color" text;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "personal_secondary_color" text;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "personal_background_hue" integer;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "nav_label_overrides" json;
 
 -- Pricing/billing structure (see shared/billing-tiers.ts, server/billing.ts).
