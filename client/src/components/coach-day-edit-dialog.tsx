@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { ExercisePickerDialog } from "@/components/exercise-picker-dialog";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { WorkoutCommentThread } from "@/components/workout-comment-thread";
 import { RadioChipGroup } from "@/components/filter-chip-group";
 import { ProgressionButton } from "@/components/progression-button";
@@ -182,6 +183,7 @@ export function CoachDayEditDialog({
   const [correctivePickerOpen, setCorrectivePickerOpen] = useState(false);
   const [copyTargets, setCopyTargets] = useState<Set<number>>(new Set());
   const [copyOpen, setCopyOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   useEffect(() => {
     if (data && hydratedFor !== data.id) {
@@ -290,6 +292,7 @@ export function CoachDayEditDialog({
     onSuccess: () => {
       invalidateCalendars();
       toast.success("Workout deleted — day cleared to rest");
+      setDeleteConfirmOpen(false);
       onOpenChange(false);
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not delete workout"),
@@ -864,11 +867,7 @@ export function CoachDayEditDialog({
               type="button"
               variant="ghost"
               className="text-destructive hover:text-destructive"
-              onClick={() => {
-                if (confirm("Delete this workout? It will be cleared to a rest day for every athlete on this program.")) {
-                  deleteMutation.mutate();
-                }
-              }}
+              onClick={() => setDeleteConfirmOpen(true)}
               disabled={!data || deleteMutation.isPending}
             >
               <Trash2 className="h-4 w-4" />
@@ -945,6 +944,16 @@ export function CoachDayEditDialog({
             },
           ]);
         }}
+      />
+
+      <ConfirmDialog
+        open={deleteConfirmOpen}
+        onOpenChange={setDeleteConfirmOpen}
+        title="Delete this workout?"
+        description="It will be cleared to a rest day for every athlete on this program."
+        confirmLabel="Delete"
+        isPending={deleteMutation.isPending}
+        onConfirm={() => deleteMutation.mutate()}
       />
     </>
   );

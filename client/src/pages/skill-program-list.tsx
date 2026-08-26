@@ -15,6 +15,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { AssignSkillProgramDialog } from "@/components/assign-skill-program-dialog";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
@@ -79,6 +80,7 @@ export function SkillProgramListPage({
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [assignProgramId, setAssignProgramId] = useState<number | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<SkillProgramSummary | null>(null);
   const [selfAssignProgramId, setSelfAssignProgramId] = useState<number | null>(null);
   const [selfAssignDate, setSelfAssignDate] = useState(() =>
     new Date().toISOString().slice(0, 10),
@@ -130,6 +132,7 @@ export function SkillProgramListPage({
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [`${apiBase}/skill-programs`] });
       toast.success("Skill program deleted");
+      setDeleteTarget(null);
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not delete skill program"),
   });
@@ -250,11 +253,7 @@ export function SkillProgramListPage({
                         size="icon"
                         variant="ghost"
                         aria-label={`Delete ${p.name}`}
-                        onClick={() => {
-                          if (confirm(`Delete "${p.name}"? This cannot be undone.`)) {
-                            deleteMutation.mutate(p.id);
-                          }
-                        }}
+                        onClick={() => setDeleteTarget(p)}
                       >
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
@@ -390,6 +389,16 @@ export function SkillProgramListPage({
           </DialogContent>
         </Dialog>
       )}
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onOpenChange={(o) => !o && setDeleteTarget(null)}
+        title="Delete skill program?"
+        description={deleteTarget ? `Delete "${deleteTarget.name}"? This cannot be undone.` : ""}
+        confirmLabel="Delete"
+        isPending={deleteMutation.isPending}
+        onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+      />
     </AppShell>
   );
 }

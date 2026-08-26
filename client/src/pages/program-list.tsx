@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { AssignProgramDialog } from "@/components/assign-program-dialog";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
 import { RadioChipGroup } from "@/components/filter-chip-group";
 import { apiRequest, ApiError } from "@/lib/queryClient";
@@ -122,6 +123,7 @@ export function ProgramListPage({
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [assignProgramId, setAssignProgramId] = useState<number | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ProgramSummary | null>(null);
   const [aiDialogOpen, setAiDialogOpen] = useState(false);
   const [photoImportOpen, setPhotoImportOpen] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
@@ -175,6 +177,7 @@ export function ProgramListPage({
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [`${apiBase}/programs`] });
       toast.success("Program deleted");
+      setDeleteTarget(null);
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not delete program"),
   });
@@ -375,11 +378,7 @@ export function ProgramListPage({
                         size="icon"
                         variant="ghost"
                         aria-label={`Delete ${p.name}`}
-                        onClick={() => {
-                          if (confirm(`Delete "${p.name}"? This cannot be undone.`)) {
-                            deleteMutation.mutate(p.id);
-                          }
-                        }}
+                        onClick={() => setDeleteTarget(p)}
                       >
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
@@ -672,6 +671,16 @@ export function ProgramListPage({
           routeBase={routeBase}
         />
       )}
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onOpenChange={(o) => !o && setDeleteTarget(null)}
+        title="Delete program?"
+        description={deleteTarget ? `Delete "${deleteTarget.name}"? This cannot be undone.` : ""}
+        confirmLabel="Delete"
+        isPending={deleteMutation.isPending}
+        onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+      />
     </AppShell>
   );
 }

@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
 import { SkillFaultThresholdsDialog } from "@/components/skill-fault-thresholds-dialog";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { apiRequest } from "@/lib/queryClient";
 import { Plus, Trash2, Target, Search, Video, SlidersHorizontal, Star, Clock, Lock } from "lucide-react";
 import { SKILL_SPORT_UNLOCK_MONTHLY_PRICE_CENTS } from "@shared/free-agent-tiers";
@@ -68,6 +69,7 @@ export function SkillBankPage({
   const [ownerFilter, setOwnerFilter] = useState<Set<string>>(new Set());
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [recentlyUsedOnly, setRecentlyUsedOnly] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<SkillExerciseWithOwnership | null>(null);
 
   // Clicking the active sport again clears back to a fresh state; switching
   // to a different sport discards whatever skill-type/owner selections were
@@ -151,6 +153,7 @@ export function SkillBankPage({
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [`${apiBase}/skill-exercises`] });
       toast.success("Skill drill deleted");
+      setDeleteTarget(null);
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not delete skill drill"),
   });
@@ -370,9 +373,7 @@ export function SkillBankPage({
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        if (confirm(`Delete "${sk.name}"?`)) {
-                          deleteMutation.mutate(sk.id);
-                        }
+                        setDeleteTarget(sk);
                       }}
                     >
                       <Trash2 className="h-4 w-4 text-destructive" />
@@ -384,6 +385,16 @@ export function SkillBankPage({
           </Link>
         ))}
       </div>
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onOpenChange={(o) => !o && setDeleteTarget(null)}
+        title="Delete skill drill?"
+        description={deleteTarget ? `Delete "${deleteTarget.name}"?` : ""}
+        confirmLabel="Delete"
+        isPending={deleteMutation.isPending}
+        onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+      />
     </AppShell>
   );
 }

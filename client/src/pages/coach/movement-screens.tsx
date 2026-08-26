@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { shareOrDownloadFile } from "@/lib/share-file";
 import { toast } from "sonner";
@@ -39,6 +40,7 @@ function slugify(label: string) {
 export default function MovementScreensPage() {
   const qc = useQueryClient();
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Battery | null>(null);
 
   const { data: batteries = [], isLoading } = useQuery<Battery[]>({
     queryKey: ["/api/coach/movement-screens/batteries"],
@@ -65,6 +67,7 @@ export default function MovementScreensPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/coach/movement-screens/batteries"] });
       toast.success("Deleted");
+      setDeleteTarget(null);
     },
     onError: (err: ApiError) => toast.error(err.message || "Couldn't delete that battery"),
   });
@@ -120,9 +123,7 @@ export default function MovementScreensPage() {
                     size="sm"
                     variant="ghost"
                     className="text-destructive hover:text-destructive"
-                    onClick={() => {
-                      if (confirm(`Delete "${b.name}"? This reverts to any Forge default.`)) remove.mutate(b.id);
-                    }}
+                    onClick={() => setDeleteTarget(b)}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
@@ -134,6 +135,18 @@ export default function MovementScreensPage() {
       </div>
 
       {editingId != null && <BatteryEditorDialog batteryId={editingId} onClose={() => setEditingId(null)} />}
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onOpenChange={(o) => !o && setDeleteTarget(null)}
+        title="Delete battery?"
+        description={
+          deleteTarget ? `Delete "${deleteTarget.name}"? This reverts to any Forge default.` : ""
+        }
+        confirmLabel="Delete"
+        isPending={remove.isPending}
+        onConfirm={() => deleteTarget && remove.mutate(deleteTarget.id)}
+      />
     </AppShell>
   );
 }

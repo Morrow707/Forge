@@ -25,6 +25,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { extractYouTubeId } from "@/components/exercise-video";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
@@ -234,6 +235,7 @@ export function ExerciseDetailPage({
   });
 
   const [reportOpen, setReportOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   if (!isNew && isLoading) {
     return (
@@ -405,9 +407,7 @@ export function ExerciseDetailPage({
                   <Button
                     variant="ghost"
                     className="text-destructive hover:text-destructive"
-                    onClick={() => {
-                      if (confirm(`Delete "${exercise.name}"?`)) deleteMutation.mutate();
-                    }}
+                    onClick={() => setDeleteConfirmOpen(true)}
                   >
                     <Trash2 className="h-4 w-4" />
                     Delete
@@ -706,6 +706,18 @@ export function ExerciseDetailPage({
           apiBase={apiBase}
           exerciseId={exercise.id}
           onReported={() => qc.invalidateQueries({ queryKey: [`${apiBase}/exercises/${id}`] })}
+        />
+      )}
+
+      {!isNew && exercise && (
+        <ConfirmDialog
+          open={deleteConfirmOpen}
+          onOpenChange={setDeleteConfirmOpen}
+          title="Delete exercise?"
+          description={`Delete "${exercise.name}"?`}
+          confirmLabel="Delete"
+          isPending={deleteMutation.isPending}
+          onConfirm={() => deleteMutation.mutate()}
         />
       )}
     </AppShell>

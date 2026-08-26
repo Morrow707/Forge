@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { Plus, Trash2, Dumbbell, Search, Video, Stethoscope, Star, Clock, ChevronDown } from "lucide-react";
@@ -106,6 +107,7 @@ export function ExerciseBankPage({
   const [sportFilter, setSportFilter] = useState<Set<string>>(new Set());
   const [ownerFilter, setOwnerFilter] = useState<Set<string>>(new Set());
   const [correctivesOnly, setCorrectivesOnly] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<ExerciseWithOwnership | null>(null);
 
   // Clicking the active family again clears back to a fresh state; clicking
   // a different family discards whatever equipment was selected under the
@@ -244,6 +246,7 @@ export function ExerciseBankPage({
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [`${apiBase}/exercises`] });
       toast.success("Exercise deleted");
+      setDeleteTarget(null);
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not delete exercise"),
   });
@@ -559,9 +562,7 @@ export function ExerciseBankPage({
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        if (confirm(`Delete "${ex.name}"?`)) {
-                          deleteMutation.mutate(ex.id);
-                        }
+                        setDeleteTarget(ex);
                       }}
                     >
                       <Trash2 className="h-4 w-4 text-destructive" />
@@ -573,6 +574,16 @@ export function ExerciseBankPage({
           </Link>
         ))}
       </div>
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onOpenChange={(o) => !o && setDeleteTarget(null)}
+        title="Delete exercise?"
+        description={deleteTarget ? `Delete "${deleteTarget.name}"?` : ""}
+        confirmLabel="Delete"
+        isPending={deleteMutation.isPending}
+        onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+      />
     </AppShell>
   );
 }

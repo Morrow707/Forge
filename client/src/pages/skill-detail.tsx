@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { extractYouTubeId } from "@/components/exercise-video";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
@@ -72,6 +73,7 @@ export function SkillDetailPage({ apiBase, routeBase }: { apiBase: string; route
   const [, navigate] = useLocation();
   const [editing, setEditing] = useState(isNew);
   const [form, setForm] = useState<SkillForm>(emptyForm);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   const { data: skill, isLoading } = useQuery<SkillExerciseWithOwnership>({
     queryKey: [`${apiBase}/skill-exercises/${id}`],
@@ -236,9 +238,7 @@ export function SkillDetailPage({ apiBase, routeBase }: { apiBase: string; route
                   <Button
                     variant="ghost"
                     className="text-destructive hover:text-destructive"
-                    onClick={() => {
-                      if (confirm(`Delete "${skill.name}"?`)) deleteMutation.mutate();
-                    }}
+                    onClick={() => setDeleteConfirmOpen(true)}
                   >
                     <Trash2 className="h-4 w-4" />
                     Delete
@@ -397,6 +397,18 @@ export function SkillDetailPage({ apiBase, routeBase }: { apiBase: string; route
           </Card>
         )}
       </div>
+
+      {!isNew && skill && (
+        <ConfirmDialog
+          open={deleteConfirmOpen}
+          onOpenChange={setDeleteConfirmOpen}
+          title="Delete skill drill?"
+          description={`Delete "${skill.name}"?`}
+          confirmLabel="Delete"
+          isPending={deleteMutation.isPending}
+          onConfirm={() => deleteMutation.mutate()}
+        />
+      )}
     </AppShell>
   );
 }

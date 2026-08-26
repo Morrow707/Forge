@@ -16,6 +16,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { EnrollInClassDialog } from "@/components/enroll-in-class-dialog";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
@@ -83,6 +84,7 @@ export function ClassListPage({
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [enrollClassId, setEnrollClassId] = useState<number | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ClassSummary | null>(null);
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [sort, setSort] = useState<ClassSort>("unlocked");
@@ -137,6 +139,7 @@ export function ClassListPage({
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [`${apiBase}/classes`] });
       toast.success("Class deleted");
+      setDeleteTarget(null);
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not delete class"),
   });
@@ -308,15 +311,7 @@ export function ClassListPage({
                         size="icon"
                         variant="ghost"
                         aria-label={`Delete ${c.name}`}
-                        onClick={() => {
-                          const confirmText =
-                            c.enrolledAthleteCount > 0
-                              ? `"${c.name}" has ${c.enrolledAthleteCount} enrolled athlete${c.enrolledAthleteCount === 1 ? "" : "s"} -- the server will refuse this delete to protect their progress. Unpublish it instead if you don't want new signups. Try anyway?`
-                              : `Delete "${c.name}"? This cannot be undone.`;
-                          if (confirm(confirmText)) {
-                            deleteMutation.mutate(c.id);
-                          }
-                        }}
+                        onClick={() => setDeleteTarget(c)}
                       >
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
@@ -392,6 +387,22 @@ export function ClassListPage({
           apiBase={apiBase}
         />
       )}
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onOpenChange={(o) => !o && setDeleteTarget(null)}
+        title={deleteTarget && deleteTarget.enrolledAthleteCount > 0 ? "Try deleting anyway?" : "Delete class?"}
+        description={
+          deleteTarget
+            ? deleteTarget.enrolledAthleteCount > 0
+              ? `"${deleteTarget.name}" has ${deleteTarget.enrolledAthleteCount} enrolled athlete${deleteTarget.enrolledAthleteCount === 1 ? "" : "s"} -- the server will refuse this delete to protect their progress. Unpublish it instead if you don't want new signups. Try anyway?`
+              : `Delete "${deleteTarget.name}"? This cannot be undone.`
+            : ""
+        }
+        confirmLabel="Delete"
+        isPending={deleteMutation.isPending}
+        onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+      />
     </AppShell>
   );
 }

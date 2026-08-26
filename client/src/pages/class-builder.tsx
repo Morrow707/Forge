@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/select";
 import { SkillPickerDialog } from "@/components/skill-picker-dialog";
 import { EnrollInClassDialog } from "@/components/enroll-in-class-dialog";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
 import { apiRequest, ApiError, getJson, resolveApiUrl, getNativeToken } from "@/lib/queryClient";
 import { toast } from "sonner";
@@ -849,9 +850,23 @@ function ClassRosterProgress({ apiBase, classId }: { apiBase: string; classId: n
     onSuccess: (updatedRoster) => {
       qc.setQueryData(rosterQueryKey, updatedRoster);
       toast.success("Progress reset");
+      setResetClassTarget(null);
+      setResetLessonTarget(null);
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not reset progress"),
   });
+
+  const [resetClassTarget, setResetClassTarget] = useState<{
+    athleteId: number;
+    athleteName: string;
+  } | null>(null);
+  const [resetLessonTarget, setResetLessonTarget] = useState<{
+    athleteId: number;
+    athleteName: string;
+    lessonId: number;
+    lessonNumber: number;
+    lessonTitle: string;
+  } | null>(null);
 
   if (isLoading || roster.length === 0) return null;
 
@@ -870,118 +885,145 @@ function ClassRosterProgress({ apiBase, classId }: { apiBase: string; classId: n
   const medalClass = ["text-amber-400", "text-slate-300", "text-amber-700"];
 
   return (
-    <Card className="mb-6">
-      <CardContent className="space-y-3 p-5">
-        <div className="flex items-center gap-1.5">
-          <Users className="h-4 w-4 text-muted-foreground" />
-          <p className="text-sm font-semibold">Your roster's progress</p>
-          {roster.length > 1 && (
-            <span className="ml-auto flex items-center gap-1 text-[11px] font-normal text-muted-foreground">
-              <Medal className="h-3.5 w-3.5" />
-              Ranked by quiz points
-            </span>
-          )}
-        </div>
-        <div className="space-y-3">
-          {ranked.map(({ entry, score }, i) => (
-            <div key={entry.enrollmentId} className="rounded-md border border-border p-3">
-              {roster.length > 1 && (
-                <div className="mb-1.5 flex items-center gap-1 text-[11px] font-semibold text-muted-foreground">
-                  {i < 3 ? (
-                    <Medal className={cn("h-3.5 w-3.5", medalClass[i])} />
-                  ) : (
-                    <span className="w-3.5 text-center">#{i + 1}</span>
-                  )}
-                  {score} pt{score === 1 ? "" : "s"}
-                </div>
-              )}
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <p className="flex items-center gap-1.5 text-sm font-semibold">
-                  {entry.athleteName}
-                  {entry.completedAt && (
-                    <span title="Class completed">
-                      <Trophy className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
-                    </span>
-                  )}
-                </p>
-                <div className="flex items-center gap-2">
-                  <p className="text-xs text-muted-foreground">
-                    {entry.completedAt
-                      ? "Completed"
-                      : `${entry.lessonsStarted} of ${entry.lessonsTotal} lessons active`}
+    <>
+      <Card className="mb-6">
+        <CardContent className="space-y-3 p-5">
+          <div className="flex items-center gap-1.5">
+            <Users className="h-4 w-4 text-muted-foreground" />
+            <p className="text-sm font-semibold">Your roster's progress</p>
+            {roster.length > 1 && (
+              <span className="ml-auto flex items-center gap-1 text-[11px] font-normal text-muted-foreground">
+                <Medal className="h-3.5 w-3.5" />
+                Ranked by quiz points
+              </span>
+            )}
+          </div>
+          <div className="space-y-3">
+            {ranked.map(({ entry, score }, i) => (
+              <div key={entry.enrollmentId} className="rounded-md border border-border p-3">
+                {roster.length > 1 && (
+                  <div className="mb-1.5 flex items-center gap-1 text-[11px] font-semibold text-muted-foreground">
+                    {i < 3 ? (
+                      <Medal className={cn("h-3.5 w-3.5", medalClass[i])} />
+                    ) : (
+                      <span className="w-3.5 text-center">#{i + 1}</span>
+                    )}
+                    {score} pt{score === 1 ? "" : "s"}
+                  </div>
+                )}
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <p className="flex items-center gap-1.5 text-sm font-semibold">
+                    {entry.athleteName}
+                    {entry.completedAt && (
+                      <span title="Class completed">
+                        <Trophy className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                      </span>
+                    )}
                   </p>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 gap-1 px-1.5 text-[11px] text-muted-foreground hover:text-destructive"
-                    disabled={resetMutation.isPending}
-                    onClick={() => {
-                      if (
-                        confirm(
-                          `Reset ALL of ${entry.athleteName}'s progress in this class? They'll need to re-read and re-pass every lesson to be marked done again. Their calendar assignments and logged training stay untouched.`,
-                        )
-                      ) {
-                        resetMutation.mutate({ athleteId: entry.athleteId });
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs text-muted-foreground">
+                      {entry.completedAt
+                        ? "Completed"
+                        : `${entry.lessonsStarted} of ${entry.lessonsTotal} lessons active`}
+                    </p>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 gap-1 px-1.5 text-[11px] text-muted-foreground hover:text-destructive"
+                      disabled={resetMutation.isPending}
+                      onClick={() =>
+                        setResetClassTarget({ athleteId: entry.athleteId, athleteName: entry.athleteName })
                       }
-                    }}
-                  >
-                    <RotateCcw className="h-3 w-3" />
-                    Reset class
-                  </Button>
+                    >
+                      <RotateCcw className="h-3 w-3" />
+                      Reset class
+                    </Button>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {entry.lessons.map((l) => {
+                    const hasProgress = !!(l.contentCompletedAt || l.quizPassedAt || l.quizPerfectAt);
+                    return (
+                      <button
+                        key={l.lessonId}
+                        type="button"
+                        disabled={!hasProgress || resetMutation.isPending}
+                        title={`Lesson ${l.lessonNumber}: ${l.title} — ${
+                          l.quizPerfectAt
+                            ? "perfect quiz score"
+                            : l.quizPassedAt
+                              ? "quiz passed"
+                              : l.contentCompletedAt
+                                ? "content read, quiz not yet passed"
+                                : l.state
+                        }${hasProgress ? " (click to reset this lesson)" : ""}`}
+                        onClick={() =>
+                          setResetLessonTarget({
+                            athleteId: entry.athleteId,
+                            athleteName: entry.athleteName,
+                            lessonId: l.lessonId,
+                            lessonNumber: l.lessonNumber,
+                            lessonTitle: l.title,
+                          })
+                        }
+                        className={cn(
+                          "relative flex h-7 w-7 shrink-0 items-center justify-center rounded-md border text-[10px] font-semibold",
+                          hasProgress ? "cursor-pointer" : "cursor-default",
+                          l.state === "active"
+                            ? "border-primary/40 bg-primary/10 text-primary"
+                            : l.state === "ready"
+                              ? "border-border bg-surface-elevated text-foreground"
+                              : "border-border/60 bg-secondary text-muted-foreground",
+                        )}
+                      >
+                        {l.lessonNumber}
+                        {l.quizPerfectAt ? (
+                          <Star className="absolute -right-1.5 -top-1.5 h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                        ) : l.quizPassedAt ? (
+                          <Star className="absolute -right-1.5 -top-1.5 h-3.5 w-3.5 fill-amber-700 text-amber-700" />
+                        ) : null}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
-              <div className="flex flex-wrap gap-1.5">
-                {entry.lessons.map((l) => {
-                  const hasProgress = !!(l.contentCompletedAt || l.quizPassedAt || l.quizPerfectAt);
-                  return (
-                    <button
-                      key={l.lessonId}
-                      type="button"
-                      disabled={!hasProgress || resetMutation.isPending}
-                      title={`Lesson ${l.lessonNumber}: ${l.title} — ${
-                        l.quizPerfectAt
-                          ? "perfect quiz score"
-                          : l.quizPassedAt
-                            ? "quiz passed"
-                            : l.contentCompletedAt
-                              ? "content read, quiz not yet passed"
-                              : l.state
-                      }${hasProgress ? " (click to reset this lesson)" : ""}`}
-                      onClick={() => {
-                        if (
-                          confirm(
-                            `Reset ${entry.athleteName}'s progress on Lesson ${l.lessonNumber}: "${l.title}"? They'll need to re-read and re-pass it to be marked done again.`,
-                          )
-                        ) {
-                          resetMutation.mutate({ athleteId: entry.athleteId, lessonId: l.lessonId });
-                        }
-                      }}
-                      className={cn(
-                        "relative flex h-7 w-7 shrink-0 items-center justify-center rounded-md border text-[10px] font-semibold",
-                        hasProgress ? "cursor-pointer" : "cursor-default",
-                        l.state === "active"
-                          ? "border-primary/40 bg-primary/10 text-primary"
-                          : l.state === "ready"
-                            ? "border-border bg-surface-elevated text-foreground"
-                            : "border-border/60 bg-secondary text-muted-foreground",
-                      )}
-                    >
-                      {l.lessonNumber}
-                      {l.quizPerfectAt ? (
-                        <Star className="absolute -right-1.5 -top-1.5 h-3.5 w-3.5 fill-amber-400 text-amber-400" />
-                      ) : l.quizPassedAt ? (
-                        <Star className="absolute -right-1.5 -top-1.5 h-3.5 w-3.5 fill-amber-700 text-amber-700" />
-                      ) : null}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      <ConfirmDialog
+        open={resetClassTarget !== null}
+        onOpenChange={(o) => !o && setResetClassTarget(null)}
+        title="Reset class progress?"
+        description={
+          resetClassTarget
+            ? `Reset ALL of ${resetClassTarget.athleteName}'s progress in this class? They'll need to re-read and re-pass every lesson to be marked done again. Their calendar assignments and logged training stay untouched.`
+            : ""
+        }
+        confirmLabel="Reset"
+        isPending={resetMutation.isPending}
+        onConfirm={() => resetClassTarget && resetMutation.mutate({ athleteId: resetClassTarget.athleteId })}
+      />
+
+      <ConfirmDialog
+        open={resetLessonTarget !== null}
+        onOpenChange={(o) => !o && setResetLessonTarget(null)}
+        title="Reset lesson progress?"
+        description={
+          resetLessonTarget
+            ? `Reset ${resetLessonTarget.athleteName}'s progress on Lesson ${resetLessonTarget.lessonNumber}: "${resetLessonTarget.lessonTitle}"? They'll need to re-read and re-pass it to be marked done again.`
+            : ""
+        }
+        confirmLabel="Reset"
+        isPending={resetMutation.isPending}
+        onConfirm={() =>
+          resetLessonTarget &&
+          resetMutation.mutate({ athleteId: resetLessonTarget.athleteId, lessonId: resetLessonTarget.lessonId })
+        }
+      />
+    </>
   );
 }
 
