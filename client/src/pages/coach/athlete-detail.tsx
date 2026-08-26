@@ -280,10 +280,21 @@ export default function AthleteDetailPage() {
               <Card>
                 <CardContent className="p-5">
                   {profileStats.length === 0 && testingStats.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
-                      No profile details yet -- click Edit Profile above to add age, height,
-                      weight, and testing numbers.
-                    </p>
+                    <div className="flex flex-col items-center gap-3 py-4 text-center">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                        <Pencil className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="font-semibold">No profile details yet</p>
+                        <p className="text-sm text-muted-foreground">
+                          Add age, height, weight, and testing numbers to fill this out.
+                        </p>
+                      </div>
+                      <Button size="sm" onClick={() => setEditOpen(true)}>
+                        <Pencil className="h-3.5 w-3.5" />
+                        Edit Profile
+                      </Button>
+                    </div>
                   ) : (
                     <div className="space-y-4">
                       {profileStats.length > 0 && (

@@ -177,7 +177,12 @@ export default function AthleteClasses() {
               Browse Forge Classes
             </h2>
             {!catalogLoading && catalog.length === 0 && (
-              <p className="text-sm text-muted-foreground">No Forge Classes published yet.</p>
+              <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border py-10 text-center">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <GraduationCap className="h-5 w-5" />
+                </div>
+                <p className="text-sm text-muted-foreground">No Forge Classes published yet.</p>
+              </div>
             )}
             {catalog.length > 0 && (
               <div className="mb-4 space-y-2">
