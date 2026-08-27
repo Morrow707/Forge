@@ -37,6 +37,7 @@ type LeaderboardEntry = {
   weightUnit: string;
   currentStreak: number;
   totalCompleted: number;
+  rank: number;
 };
 
 type SpeedLeaderboardEntry = {
@@ -52,6 +53,7 @@ type SpeedLeaderboardEntry = {
   date: string;
   currentStreak: number;
   totalCompleted: number;
+  rank: number;
 };
 
 const RANK_STYLES = ["bg-amber-400 text-black", "bg-slate-300 text-black", "bg-amber-700 text-white"];
@@ -241,10 +243,10 @@ function StrengthLeaderboard({ myId }: { myId: number }) {
       {exerciseId && entries.length > 0 && (
         <Card>
           <CardContent className="divide-y divide-border p-0">
-            {entries.map((entry, i) => (
+            {entries.map((entry) => (
               <RosterRow
                 key={entry.id}
-                rank={i}
+                rank={entry.rank}
                 isYou={entry.id === myId}
                 name={entry.name}
                 sport={entry.sport}
@@ -341,10 +343,10 @@ function SpeedLeaderboard({ myId }: { myId: number }) {
       {skillExerciseId && entries.length > 0 && (
         <Card>
           <CardContent className="divide-y divide-border p-0">
-            {entries.map((entry, i) => (
+            {entries.map((entry) => (
               <RosterRow
                 key={entry.id}
-                rank={i}
+                rank={entry.rank}
                 isYou={entry.id === myId}
                 name={entry.name}
                 sport={entry.sport}

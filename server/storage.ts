@@ -287,6 +287,14 @@ const CLASS_QUIZ_STUCK_THRESHOLD = 3;
 // in 34s, one row costing ~12 correlated subqueries.
 const QUERY_ENGINE_MAX_ROWS = 10_000;
 
+// Cap on the strength/speed leaderboards -- see getLeaderboardForExercise's
+// own comment. A 25k-athlete roster returned every athlete who'd ever
+// logged the exercise (up to 5,001 rows on a real 5,001-enrollment class)
+// as a single unbounded list a client component renders with no
+// virtualization, for both the coach dashboard and every individual
+// athlete's own leaderboard tab.
+const LEADERBOARD_MAX_ROWS = 100;
+
 function jointLabelFor(jointKey: string): string {
   return GONIOMETER_JOINTS.find((j) => j.key === jointKey)?.label ?? jointKey;
 }
@@ -17102,7 +17110,16 @@ ${catalog}`;
     return all.sort((a, b) => b.unlockedAt.getTime() - a.unlockedAt.getTime());
   },
 
+  // Capped, coach-facing entry point -- see LEADERBOARD_MAX_ROWS' own
+  // comment for why. getFullLeaderboardForExercise below does the actual
+  // work and is also what the athlete-facing view (further down) uses to
+  // guarantee the viewing athlete's own row survives the cap.
   async getLeaderboardForExercise(coachId: number, exerciseId: number) {
+    const full = await this.getFullLeaderboardForExercise(coachId, exerciseId);
+    return full.slice(0, LEADERBOARD_MAX_ROWS);
+  },
+
+  async getFullLeaderboardForExercise(coachId: number, exerciseId: number) {
     const coachIds = await this.getEffectiveCoachIds(coachId);
     const peRows = await db
       .select({
@@ -17188,7 +17205,8 @@ ${catalog}`;
         currentStreak: streaks.get(id)?.currentStreak ?? 0,
         totalCompleted: streaks.get(id)?.totalCompleted ?? 0,
       }))
-      .sort((a, b) => b.estimatedOneRm - a.estimatedOneRm);
+      .sort((a, b) => b.estimatedOneRm - a.estimatedOneRm)
+      .map((entry, rank) => ({ ...entry, rank }));
   },
 
   // ---------- Speed & Agility leaderboard (Skills-side, fully separate from
@@ -17216,7 +17234,15 @@ ${catalog}`;
   // Ranks every athlete on this coach's roster by their best (lowest)
   // camera-timed sprint for one skill drill -- the Skills-side mirror of
   // getLeaderboardForExercise just above.
+  // Capped, coach-facing entry point -- same reasoning as
+  // getLeaderboardForExercise above. getFullSpeedLeaderboardForExercise
+  // does the actual work.
   async getSpeedLeaderboardForExercise(coachId: number, skillExerciseId: number) {
+    const full = await this.getFullSpeedLeaderboardForExercise(coachId, skillExerciseId);
+    return full.slice(0, LEADERBOARD_MAX_ROWS);
+  },
+
+  async getFullSpeedLeaderboardForExercise(coachId: number, skillExerciseId: number) {
     const coachIds = await this.getEffectiveCoachIds(coachId);
     const rows = await db
       .select({
@@ -17285,7 +17311,8 @@ ${catalog}`;
           totalCompleted: streaks.get(id)?.totalCompleted ?? 0,
         };
       })
-      .sort((a, b) => a.elapsedSeconds - b.elapsedSeconds);
+      .sort((a, b) => a.elapsedSeconds - b.elapsedSeconds)
+      .map((entry, rank) => ({ ...entry, rank }));
   },
 
   // ---------- Athlete-facing leaderboard (read-only view onto the coach
@@ -17304,10 +17331,22 @@ ${catalog}`;
     return this.getLeaderboardExercisesForCoach(coaches[0].id);
   },
 
+  // Top LEADERBOARD_MAX_ROWS, same cap as the coach view, but with one
+  // difference: the viewing athlete's own row is guaranteed present even
+  // if their real rank falls outside the cap (on Coach Riley's 25k-athlete
+  // roster, most athletes' true rank does) -- rank comes from
+  // getFullLeaderboardForExercise, computed once against the same full
+  // sorted list this always used, so "you're #4,832" stays a true number
+  // even though most of the list between the cap and that rank never
+  // leaves the server.
   async getLeaderboardForAthleteView(athleteId: number, exerciseId: number) {
     const coaches = await this.getCoachesForAthlete(athleteId);
     if (coaches.length === 0) return null;
-    return this.getLeaderboardForExercise(coaches[0].id, exerciseId);
+    const full = await this.getFullLeaderboardForExercise(coaches[0].id, exerciseId);
+    const top = full.slice(0, LEADERBOARD_MAX_ROWS);
+    if (top.some((e) => e.id === athleteId)) return top;
+    const own = full.find((e) => e.id === athleteId);
+    return own ? [...top, own] : top;
   },
 
   async getSpeedLeaderboardExercisesForAthlete(athleteId: number) {
@@ -17319,7 +17358,11 @@ ${catalog}`;
   async getSpeedLeaderboardForAthleteView(athleteId: number, skillExerciseId: number) {
     const coaches = await this.getCoachesForAthlete(athleteId);
     if (coaches.length === 0) return null;
-    return this.getSpeedLeaderboardForExercise(coaches[0].id, skillExerciseId);
+    const full = await this.getFullSpeedLeaderboardForExercise(coaches[0].id, skillExerciseId);
+    const top = full.slice(0, LEADERBOARD_MAX_ROWS);
+    if (top.some((e) => e.id === athleteId)) return top;
+    const own = full.find((e) => e.id === athleteId);
+    return own ? [...top, own] : top;
   },
 
   // ---------- Platform trends (admin-only, anonymized) ----------
