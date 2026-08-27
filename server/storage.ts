@@ -116,7 +116,13 @@ import {
   type InsertUser,
   MAX_PINNED_ATHLETES,
 } from "@shared/schema";
-import { derivePrivacyTier, videoRetentionDaysForTier, type PrivacyTier } from "@shared/privacy-tiers";
+import {
+  derivePrivacyTier,
+  videoRetentionDaysForTier,
+  TIER1_VIDEO_RETENTION_DAYS,
+  TIER2_VIDEO_RETENTION_DAYS,
+  type PrivacyTier,
+} from "@shared/privacy-tiers";
 import { createHash } from "node:crypto";
 import { classifyGoniometerReading, GONIOMETER_JOINTS } from "@shared/goniometer";
 import {
@@ -18015,58 +18021,48 @@ ${catalog}`;
   async getVideosEligibleForRetentionPurge(): Promise<
     { source: "set" | "skill"; id: number; tier: PrivacyTier }[]
   > {
-    const minors = await db
-      .select({ id: users.id, dateOfBirth: users.dateOfBirth })
-      .from(users)
-      .where(and(eq(users.role, "athlete"), sql`${users.dateOfBirth} IS NOT NULL`));
-    const eligibleByAthlete = new Map<number, PrivacyTier>();
-    for (const m of minors) {
-      if (!m.dateOfBirth) continue;
-      const tier = derivePrivacyTier(m.dateOfBirth);
-      const days = videoRetentionDaysForTier(tier);
-      if (days != null) eligibleByAthlete.set(m.id, tier);
-    }
-    if (eligibleByAthlete.size === 0) return [];
+    // Originally pulled every athlete with a dateOfBirth (~all of them) and
+    // every video-having set/skill row into Node to filter in a JS loop --
+    // fine at dev-seed scale, a ~1.4s pull of ~670k rows once the platform
+    // has real numbers behind it, run unattended once a day (and again 90s
+    // after every boot). Same fix as the ACWR/admin-video bugs found
+    // earlier in this same stress test: push the age-tier math and the
+    // per-source video filter into one SQL query, so this returns only the
+    // (normally zero, on any given day) rows actually eligible instead of
+    // materializing the whole platform to find them. Age-tier boundaries
+    // mirror derivePrivacyTier exactly: dateOfBirth > now - 13y is tier1,
+    // dateOfBirth > now - 18y (and not tier1) is tier2; date arithmetic in
+    // Postgres is calendar-aware, same as that function's month/day check.
+    const result = await db.execute<{ source: "set" | "skill"; id: number; tier: PrivacyTier }>(sql`
+      SELECT v.source, v.id,
+        CASE WHEN u.date_of_birth > (current_date - interval '13 years')
+          THEN 'tier1_under13' ELSE 'tier2_teen_13_17' END AS tier
+      FROM (
+        SELECT 'set' AS source, wse.id AS id, wl.athlete_id AS athlete_id,
+          coalesce(wl.completed_at, wl.date::timestamp) AS reference_time
+        FROM workout_set_entries wse
+        JOIN workout_log_entries wle ON wle.id = wse.log_entry_id
+        JOIN workout_logs wl ON wl.id = wle.workout_log_id
+        WHERE wse.form_check_video_url IS NOT NULL
 
-    const results: { source: "set" | "skill"; id: number; tier: PrivacyTier }[] = [];
-    const setRows = await db
-      .select({
-        id: workoutSetEntries.id,
-        athleteId: workoutLogs.athleteId,
-        date: workoutLogs.date,
-        completedAt: workoutLogs.completedAt,
-      })
-      .from(workoutSetEntries)
-      .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
-      .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
-      .where(sql`${workoutSetEntries.formCheckVideoUrl} IS NOT NULL`);
-    for (const row of setRows) {
-      const tier = eligibleByAthlete.get(row.athleteId);
-      if (!tier) continue;
-      const days = videoRetentionDaysForTier(tier)!;
-      // completedAt (set at actual submission time -- see submitWorkoutLog)
-      // is when the video was really uploaded; date is just the calendar
-      // day the workout was FOR, which a backfilled or edited log can put
-      // well before the video actually existed. Only falls back to date
-      // for rows saved before completedAt existed, or an in-progress
-      // autosave that hasn't completed yet.
-      const reference = row.completedAt ?? row.date;
-      const ageMs = Date.now() - new Date(reference).getTime();
-      if (ageMs > days * 24 * 60 * 60 * 1000) results.push({ source: "set", id: row.id, tier });
-    }
+        UNION ALL
 
-    const skillRows = await db
-      .select({ id: skillSessionLogs.id, athleteId: skillSessionLogs.athleteId, createdAt: skillSessionLogs.createdAt })
-      .from(skillSessionLogs)
-      .where(sql`${skillSessionLogs.videoUrl} IS NOT NULL`);
-    for (const row of skillRows) {
-      const tier = eligibleByAthlete.get(row.athleteId);
-      if (!tier) continue;
-      const days = videoRetentionDaysForTier(tier)!;
-      const ageMs = Date.now() - new Date(row.createdAt).getTime();
-      if (ageMs > days * 24 * 60 * 60 * 1000) results.push({ source: "skill", id: row.id, tier });
-    }
-    return results;
+        SELECT 'skill', ssl.id, ssl.athlete_id, ssl.created_at
+        FROM skill_session_logs ssl
+        WHERE ssl.video_url IS NOT NULL
+      ) v
+      JOIN users u ON u.id = v.athlete_id AND u.role = 'athlete'
+      WHERE u.date_of_birth IS NOT NULL
+        AND u.date_of_birth > (current_date - interval '18 years')
+        AND (
+          (u.date_of_birth > (current_date - interval '13 years')
+            AND v.reference_time < (now() - (${TIER1_VIDEO_RETENTION_DAYS} || ' days')::interval))
+          OR
+          (u.date_of_birth <= (current_date - interval '13 years')
+            AND v.reference_time < (now() - (${TIER2_VIDEO_RETENTION_DAYS} || ' days')::interval))
+        )
+    `);
+    return result.rows;
   },
 
   // Video storage cap -- applies to BOTH coached athletes and Free Agents
