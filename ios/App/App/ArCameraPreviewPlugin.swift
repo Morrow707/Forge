@@ -353,39 +353,24 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
             // for body tracking, if any, isn't available through this
             // configuration.
             configuration.planeDetection = [.horizontal]
-            // Explicit high-fps capture, not whatever Apple's default
-            // happens to be -- a fast movement (a bar's concentric drive, a
-            // sprint stride) motion-blurs measurably worse at a
-            // conservative default rate than at the fastest rate this
-            // device's body-tracking pipeline actually supports.
-            // supportedVideoFormats is declared on the ARConfiguration base
-            // class (unlike sceneReconstruction above, which genuinely
-            // isn't inherited -- see that comment), so every subclass,
-            // including ARBodyTrackingConfiguration, has a real list to
-            // pick from here. One thing this can't promise: ARKit's body-
-            // tracking joint UPDATES may still be throttled by the ML
-            // model's own inference rate regardless of capture format --
-            // this raises the ceiling capture can hit, it doesn't
-            // necessarily raise the joint data rate to match.
-            // Tie-broken by resolution, not left to whatever order
-            // supportedVideoFormats happens to return ties in -- max(by:)
-            // returns the first element it never finds "greater" than, so
-            // with only an fps comparison, two formats tied on fps but
-            // different resolutions resolved to an arbitrary one of them
-            // (array order, not anything intentional). Fps still wins
-            // outright when formats differ on it -- this only changes which
-            // format gets picked among ties, never trades fps for
-            // resolution.
-            if let bestFormat = ARBodyTrackingConfiguration.supportedVideoFormats.max(by: { a, b in
-                if a.framesPerSecond != b.framesPerSecond {
-                    return a.framesPerSecond < b.framesPerSecond
-                }
-                return a.imageResolution.width * a.imageResolution.height
-                    < b.imageResolution.width * b.imageResolution.height
-            }) {
-                configuration.videoFormat = bestFormat
-                self.logDiag("videoFormat: \(bestFormat.imageResolution.width)x\(bestFormat.imageResolution.height) @ \(bestFormat.framesPerSecond)fps")
-            }
+            // Previously hand-picked whichever supported format had the
+            // highest fps (tie-broken by resolution), on the theory that a
+            // fast movement (a bar's concentric drive, a sprint stride)
+            // would motion-blur less at a higher capture rate. On-device
+            // testing (builds 131/132) showed a different, worse problem
+            // instead: the picture was softly out of focus everywhere, all
+            // the time -- confirmed against the same phone's stock Camera
+            // app (sharp, same spot) and unresponsive to tap-to-focus in
+            // Forge, i.e. specific to this AR session's capture pipeline,
+            // not the lens/hardware. The fps override was the one thing
+            // this session was doing differently from a normal ARKit body-
+            // tracking session, which is consistent with it having landed
+            // on a tracking-throughput-optimized capture mode instead of
+            // Apple's own tuned default. Leaving videoFormat unset lets
+            // ARKit pick that default; the actual resolution/fps it lands
+            // on is logged below so a future regression has something to
+            // compare against.
+            self.logDiag("videoFormat (ARKit default): \(configuration.videoFormat.imageResolution.width)x\(configuration.videoFormat.imageResolution.height) @ \(configuration.videoFormat.framesPerSecond)fps")
             self.previewView?.session.delegate = self
             self.logDiag("calling session.run()")
             self.previewView?.session.run(configuration, options: [.resetTracking, .removeExistingAnchors])
