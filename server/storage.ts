@@ -13114,11 +13114,15 @@ ${entriesText}`;
   },
 
   async getUnreadNotificationCount(userId: number) {
-    const rows = await db
-      .select({ id: notifications.id })
+    // count(*) in SQL, not every unread row's id pulled into Node just to
+    // measure the array -- an account that never clears its notifications
+    // (an admin sitting on years of reflection-job output, say) shouldn't
+    // pay for the DB round trip proportionally to how many are unread.
+    const [{ count }] = await db
+      .select({ count: sql<number>`count(*)::int` })
       .from(notifications)
       .where(and(eq(notifications.userId, userId), eq(notifications.read, false)));
-    return rows.length;
+    return count;
   },
 
   async markAllNotificationsRead(userId: number) {
