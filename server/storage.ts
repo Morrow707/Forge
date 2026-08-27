@@ -4861,6 +4861,27 @@ Based on this athlete's actual rate of improvement, suggest a realistic target v
     return closed;
   },
 
+  // Roster-wide version of sweepStaleCaraSession -- one UPDATE instead of a
+  // per-athlete round trip, for callers (compliance dashboard, export) that
+  // need the whole roster swept before they read. Same idle_timeout
+  // semantics per row: each stale session closes at its own
+  // last_activity_at, never "now", so batching athletes together doesn't
+  // fabricate extra training time for any of them.
+  async sweepStaleCaraSessionsBulk(athleteIds: number[]): Promise<void> {
+    if (athleteIds.length === 0) return;
+    const staleCutoff = new Date(Date.now() - this.SWEEP_TIMEOUT_MINUTES * 60_000);
+    await db
+      .update(caraSessions)
+      .set({ endedAt: sql`${caraSessions.lastActivityAt}`, endReason: "idle_timeout" })
+      .where(
+        and(
+          inArray(caraSessions.athleteId, athleteIds),
+          isNull(caraSessions.endedAt),
+          lt(caraSessions.lastActivityAt, staleCutoff),
+        ),
+      );
+  },
+
   async startCaraTrainingSession(athleteId: number) {
     await this.sweepStaleCaraSession(athleteId);
     const existing = await this.getOpenCaraSession(athleteId);
@@ -5008,22 +5029,54 @@ Based on this athlete's actual rate of improvement, suggest a realistic target v
       .from(coachAthletes)
       .innerJoin(users, eq(coachAthletes.athleteId, users.id))
       .where(inArray(coachAthletes.coachId, coachIds));
-    const rows = await Promise.all(
-      roster.map(async (athlete) => {
-        const minutes = await this.getCaraWeeklyMinutesForAthlete(athlete.id, weekStart, weekEnd);
-        const openSession = await this.getOpenCaraSession(athlete.id);
-        return {
-          athleteId: athlete.id,
-          name: athlete.name,
-          minutes,
-          capMinutes: coach.cap!,
-          percentUsed: Math.round((minutes / coach.cap!) * 100),
-          atRisk: minutes >= coach.cap! * 0.8,
-          overCap: minutes > coach.cap!,
-          currentlyTraining: !!openSession,
-        };
-      }),
-    );
+    if (roster.length === 0) return { capMinutes: coach.cap, athletes: [] };
+    const athleteIds = roster.map((r) => r.id);
+
+    // Was a Promise.all of 3-4 queries per roster athlete (getCaraWeeklyMinutesForAthlete
+    // -> getCaraSessionsForAthlete -> sweepStaleCaraSession -> getOpenCaraSession, plus a
+    // second getOpenCaraSession), which fanned out to 75k-100k+ concurrent connection
+    // requests on a large roster and exhausted the pg pool. Same bulk-sweep-then-aggregate
+    // shape getCaraWeeklyBreakdownForCoach already uses safely below.
+    await this.sweepStaleCaraSessionsBulk(athleteIds);
+
+    const sessions = await db.query.caraSessions.findMany({
+      where: and(
+        inArray(caraSessions.athleteId, athleteIds),
+        gte(caraSessions.startedAt, weekStart),
+        lt(caraSessions.startedAt, weekEnd),
+      ),
+    });
+    const now = Date.now();
+    const minutesByAthlete = new Map<number, number>();
+    for (const s of sessions) {
+      const end = s.endedAt ?? new Date(now);
+      const minutes = Math.max(0, end.getTime() - s.startedAt.getTime()) / 60_000;
+      minutesByAthlete.set(s.athleteId, (minutesByAthlete.get(s.athleteId) ?? 0) + minutes);
+    }
+
+    // "Currently training" was never scoped to this challenge week (the
+    // getOpenCaraSession call this replaces takes no date range), so an
+    // open session from before weekStart still counts -- a separate,
+    // unscoped bulk query rather than derived from the week-filtered set above.
+    const openRows = await db
+      .select({ athleteId: caraSessions.athleteId })
+      .from(caraSessions)
+      .where(and(inArray(caraSessions.athleteId, athleteIds), isNull(caraSessions.endedAt)));
+    const currentlyTrainingIds = new Set(openRows.map((r) => r.athleteId));
+
+    const rows = roster.map((athlete) => {
+      const minutes = Math.round(minutesByAthlete.get(athlete.id) ?? 0);
+      return {
+        athleteId: athlete.id,
+        name: athlete.name,
+        minutes,
+        capMinutes: coach.cap!,
+        percentUsed: Math.round((minutes / coach.cap!) * 100),
+        atRisk: minutes >= coach.cap! * 0.8,
+        overCap: minutes > coach.cap!,
+        currentlyTraining: currentlyTrainingIds.has(athlete.id),
+      };
+    });
     return { capMinutes: coach.cap, athletes: rows };
   },
 
@@ -5043,7 +5096,7 @@ Based on this athlete's actual rate of improvement, suggest a realistic target v
     if (roster.length === 0) return [];
     const athleteIds = roster.map((r) => r.id);
     const nameById = new Map(roster.map((r) => [r.id, r.name]));
-    await Promise.all(athleteIds.map((id) => this.sweepStaleCaraSession(id)));
+    await this.sweepStaleCaraSessionsBulk(athleteIds);
     const rows = await db.query.caraSessions.findMany({
       where: and(
         inArray(caraSessions.athleteId, athleteIds),
