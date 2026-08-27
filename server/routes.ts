@@ -2727,10 +2727,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Paste a native AR tracker's on-device diagLog buffer, get a grounded AI
   // read on it -- see storage.diagnoseTrackerLog's own comment for why this
-  // exists. Stateless (no persisted history the way movement-knowledge chat
-  // has one), admin-only since it costs a real AI call and isn't athlete-
-  // facing.
-  app.post("/api/admin/diagnose-tracker-log", requireRole("admin"), async (req, res) => {
+  // exists. requireAuth, not requireRole("admin") -- whoever's actually
+  // reproducing the bug (coach or athlete, not just whoever happens to be
+  // signed in as admin) needs to be able to tap this in the moment; the
+  // /admin/ path segment is legacy from an earlier admin-only draft, kept
+  // as-is here to avoid an unrelated URL churn. Every run still gets
+  // persisted (see diagnoseTrackerLog) for an admin to review via the
+  // GET list route below, which stays admin-only -- that's the "send it
+  // in a report to the admin" half of this, not the trigger itself.
+  app.post("/api/admin/diagnose-tracker-log", requireAuth, async (req, res) => {
     const user = currentUser(req);
     const parsed = diagnoseTrackerLogSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message || "Invalid log" });
