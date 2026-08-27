@@ -398,6 +398,15 @@ export const users = pgTable(
     // before the drag-and-drop layout editor; getWidgetLayoutForCoach in
     // storage.ts coerces an old-shape row on read.
     hiddenWidgets: json("hidden_widgets").$type<WidgetLayoutEntry[]>(),
+    // Coach-only fast-access list -- the athletes this coach visits most,
+    // pinned from their own athlete-detail page so they show in a small
+    // "Pinned" section up in the nav instead of always going back through
+    // the full roster. Same "individual account, not org-wide" posture as
+    // hiddenWidgets just above (each staff member curates their own list).
+    // Capped at MAX_PINNED_ATHLETES below; null/empty means no pins yet.
+    // Meaningless for an athlete/admin account, same as the personal*
+    // fields above.
+    pinnedAthleteIds: json("pinned_athlete_ids").$type<number[]>(),
     // Athlete-only self-written line about who they are/what they're
     // training for -- optional, free text, distinct from the performance/
     // testing fields above (which are numbers a coach cares about; this is
@@ -523,6 +532,12 @@ export const users = pgTable(
     calendarTokenIdx: uniqueIndex("users_calendar_token_idx").on(table.calendarToken),
   }),
 );
+
+// Cap for users.pinnedAthleteIds above -- deliberately small, a coach's
+// fast-access shortlist, not a second roster. Both the toggle route
+// (server/routes.ts) and the pin button's client-side disabled state read
+// this same constant so the two can never disagree about the limit.
+export const MAX_PINNED_ATHLETES = 5;
 
 // Admin-created (see /api/admin/redeem-codes) -- grants trialDays of full
 // billing-unlocked access to whichever primary coach redeems it (see

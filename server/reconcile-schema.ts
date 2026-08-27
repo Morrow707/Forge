@@ -1909,6 +1909,10 @@ ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "push_notification_category_prefs" 
 -- Any coach's own short personal line (shared/schema.ts
 -- users.coachingPhilosophy) -- see that column's own comment.
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "coaching_philosophy" text;
+
+-- Coach-personal pinned-athletes fast-access list (shared/schema.ts
+-- users.pinnedAthleteIds) -- see that column's own comment.
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "pinned_athlete_ids" json;
 `;
 
 async function main() {

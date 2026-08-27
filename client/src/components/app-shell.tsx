@@ -41,10 +41,12 @@ import {
   Flag,
   MonitorSmartphone,
   KeyRound,
+  Pin,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ForgeMark } from "@/components/forge-mark";
+import { AthleteAvatar } from "@/components/athlete-avatar";
 import { EditMyProfileDialog } from "@/components/edit-my-profile-dialog";
 import { DeleteAccountDialog } from "@/components/delete-account-dialog";
 import { GuardianAccessDialog } from "@/components/guardian-access-dialog";
@@ -310,6 +312,25 @@ export function AppShell({
   function navLabel(item: NavItem) {
     return navLabelOverrides[item.href] || item.label;
   }
+
+  // Same /api/coach/roster query (and cache) AthleteSwitcher and the roster
+  // page already fetch from -- id+name is all a "Pinned" chip needs to
+  // show or link to, so this reuses that cache instead of standing up a
+  // dedicated endpoint just for names. The pin ids themselves ride along on
+  // the logged-in coach's own /api/auth/me response (users.pinnedAthleteIds),
+  // no separate fetch for those either.
+  const pinnedAthleteIds = user?.role === "coach" ? (user.pinnedAthleteIds ?? []) : [];
+  const { data: pinnableRoster } = useQuery<{ id: number; name: string }[]>({
+    queryKey: ["/api/coach/roster"],
+    queryFn: () => getJson("/api/coach/roster"),
+    enabled: pinnedAthleteIds.length > 0,
+  });
+  // Preserves pin order (most-recently-pinned last) rather than roster
+  // order -- a coach who pins their two most-visited athletes wants THOSE
+  // two first, not wherever they happen to fall alphabetically.
+  const pinnedAthletes = pinnedAthleteIds
+    .map((id) => pinnableRoster?.find((a) => a.id === id))
+    .filter((a): a is { id: number; name: string } => !!a);
 
   // Same query (and cache) the athlete dashboard's empty-state uses to
   // decide Free Agent status -- zero coaches linked. The "My Programs" and
@@ -775,6 +796,41 @@ export function AppShell({
           </div>
         </div>
 
+        {/* Fast access to a coach's own most-visited athletes -- see
+            athlete-detail.tsx's pin toggle. Its own thin row (not folded
+            into the primaryNav row above) since avatar+name chips read very
+            differently from the icon+label tab buttons, and only ever
+            appears once there's at least one pin. */}
+        {pinnedAthletes.length > 0 && (
+          <div className="hidden items-center gap-1 border-t border-white/10 px-4 py-1.5 md:flex md:px-8">
+            <span className="flex shrink-0 items-center gap-1 pr-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <Pin className="h-3 w-3" />
+              Pinned
+            </span>
+            <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
+              {pinnedAthletes.map((athlete) => {
+                const href = `/coach/roster/${athlete.id}`;
+                const active = location === href;
+                return (
+                  <Link
+                    key={athlete.id}
+                    href={href}
+                    className={cn(
+                      "flex shrink-0 items-center gap-1.5 rounded-md py-1 pl-1 pr-2 text-xs font-semibold transition-colors",
+                      active
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:bg-surface-elevated hover:text-foreground",
+                    )}
+                  >
+                    <AthleteAvatar name={athlete.name} size="sm" />
+                    <span className="max-w-[8rem] truncate">{athlete.name}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {mobileNavOpen && (
           <div className="border-t border-border px-4 py-3 md:hidden">
             {/* Name/role gets its own row, above the tabs -- crammed into the
@@ -786,6 +842,30 @@ export function AppShell({
                 {user?.staffTitle || (isFreeAgent ? "Free Agent" : user?.role)}
               </p>
             </div>
+            {pinnedAthletes.length > 0 && (
+              <div className="mb-3 flex flex-wrap gap-2 border-b border-border pb-3">
+                {pinnedAthletes.map((athlete) => {
+                  const href = `/coach/roster/${athlete.id}`;
+                  const active = location === href;
+                  return (
+                    <Link
+                      key={athlete.id}
+                      href={href}
+                      onClick={() => setMobileNavOpen(false)}
+                      className={cn(
+                        "flex items-center gap-1.5 rounded-full border py-1 pl-1 pr-2.5 text-xs font-semibold transition-colors",
+                        active
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground",
+                      )}
+                    >
+                      <AthleteAvatar name={athlete.name} size="sm" />
+                      {athlete.name}
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
             <div className="flex flex-wrap gap-2">
               {nav.map((item) => {
                 const Icon = item.icon;
