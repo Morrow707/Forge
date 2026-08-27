@@ -6157,45 +6157,67 @@ ${athleteContext}
     });
     const nameById = new Map(members.map((m) => [m.id, m.name]));
 
-    const logs = await db.query.workoutLogs.findMany({
-      where: and(
-        inArray(workoutLogs.athleteId, memberIds),
-        eq(workoutLogs.completed, true),
-        gte(workoutLogs.date, challenge.startDate),
-        lte(workoutLogs.date, challenge.endDate),
-      ),
-      with: { entries: { with: { sets: true } } },
-    });
-
-    const totalByAthlete = new Map<number, number>();
-    for (const id of memberIds) totalByAthlete.set(id, 0);
-
-    for (const log of logs) {
-      if (challenge.metric === "workouts_completed") {
-        totalByAthlete.set(log.athleteId, (totalByAthlete.get(log.athleteId) ?? 0) + 1);
-        continue;
-      }
-      for (const entry of log.entries) {
-        for (const set of entry.sets) {
-          const reps = parseInt(set.reps ?? "", 10);
-          if (Number.isNaN(reps)) continue;
-          if (challenge.metric === "total_reps") {
-            totalByAthlete.set(log.athleteId, (totalByAthlete.get(log.athleteId) ?? 0) + reps);
-          } else if (entry.weightMode === "numeric") {
-            const weight = parseFloat(set.weight ?? "");
-            if (Number.isNaN(weight)) continue;
-            const lbs = set.weightUnit === "kg" ? weight * 2.20462 : weight;
-            totalByAthlete.set(log.athleteId, (totalByAthlete.get(log.athleteId) ?? 0) + reps * lbs);
-          }
-        }
-      }
+    // Originally pulled every completed workout log (with every entry and
+    // every set, nested) for every team member in the date window into
+    // Node, then summed in a triple-nested JS loop. Fine for a handful of
+    // teammates; a real 10k-member team stress test found this taking 14+
+    // seconds for a single request -- same "materialize everything, reduce
+    // in JS" bug already fixed three other places this session (roster
+    // ACWR, admin video list, the retention job). Fixed the same way: one
+    // GROUP BY query per metric, matching each metric's exact original
+    // parsing semantics (leading-integer reps via regexp, kg->lbs only for
+    // weightMode='numeric' sets) so results are unchanged, just computed by
+    // Postgres instead of Node.
+    let contributionByAthlete = new Map<number, number>();
+    if (challenge.metric === "workouts_completed") {
+      const rows = await db.execute<{ athlete_id: number; total: string }>(sql`
+        SELECT athlete_id, count(*) AS total
+        FROM workout_logs
+        WHERE athlete_id IN ${memberIds}
+          AND completed = true
+          AND date >= ${challenge.startDate} AND date <= ${challenge.endDate}
+        GROUP BY athlete_id
+      `);
+      contributionByAthlete = new Map(rows.rows.map((r) => [r.athlete_id, Number(r.total)]));
+    } else if (challenge.metric === "total_reps") {
+      const rows = await db.execute<{ athlete_id: number; total: string }>(sql`
+        SELECT wl.athlete_id, sum((regexp_match(wse.reps, '^\\d+'))[1]::numeric) AS total
+        FROM workout_logs wl
+        JOIN workout_log_entries wle ON wle.workout_log_id = wl.id
+        JOIN workout_set_entries wse ON wse.log_entry_id = wle.id
+        WHERE wl.athlete_id IN ${memberIds}
+          AND wl.completed = true
+          AND wl.date >= ${challenge.startDate} AND wl.date <= ${challenge.endDate}
+          AND wse.reps ~ '^\\d+'
+        GROUP BY wl.athlete_id
+      `);
+      contributionByAthlete = new Map(rows.rows.map((r) => [r.athlete_id, Number(r.total)]));
+    } else {
+      const rows = await db.execute<{ athlete_id: number; total: string }>(sql`
+        SELECT wl.athlete_id,
+          sum(
+            (regexp_match(wse.reps, '^\\d+'))[1]::numeric *
+            wse.weight::numeric * (CASE WHEN wse.weight_unit_at_log = 'kg' THEN 2.20462 ELSE 1 END)
+          ) AS total
+        FROM workout_logs wl
+        JOIN workout_log_entries wle ON wle.workout_log_id = wl.id
+        JOIN workout_set_entries wse ON wse.log_entry_id = wle.id
+        WHERE wl.athlete_id IN ${memberIds}
+          AND wl.completed = true
+          AND wl.date >= ${challenge.startDate} AND wl.date <= ${challenge.endDate}
+          AND wle.weight_mode = 'numeric'
+          AND wse.reps ~ '^\\d+'
+          AND wse.weight ~ '^[0-9]+(\\.[0-9]+)?$'
+        GROUP BY wl.athlete_id
+      `);
+      contributionByAthlete = new Map(rows.rows.map((r) => [r.athlete_id, Number(r.total)]));
     }
 
     const perAthlete = memberIds
       .map((id) => ({
         athleteId: id,
         name: nameById.get(id) ?? "Unknown",
-        contribution: Math.round(totalByAthlete.get(id) ?? 0),
+        contribution: Math.round(contributionByAthlete.get(id) ?? 0),
       }))
       .sort((a, b) => b.contribution - a.contribution);
 
