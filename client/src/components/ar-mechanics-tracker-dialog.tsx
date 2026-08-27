@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
@@ -68,6 +68,7 @@ export function ArMechanicsTrackerDialog({
   skillProgramDayId: number;
   skillProgramExerciseId: number;
 }) {
+  const qc = useQueryClient();
   const { containerRef, frame, error, supported, supportError, cameraPermission, diagLog } = useArBodyTracking(open);
 
   const framesRef = useRef<MechanicsFrame[]>([]);
@@ -211,6 +212,7 @@ export function ArMechanicsTrackerDialog({
         videoFavorited: uploadedVideoUrl ? favoriteClip : false,
       });
       toast.success(`${actionLabel} saved`);
+      qc.invalidateQueries({ queryKey: ["/api/athlete/skill-day", skillAssignmentId, skillProgramDayId] });
       onOpenChange(false);
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Could not save this session");

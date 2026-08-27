@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
@@ -125,6 +125,7 @@ export function ArSprintTrackerDialog({
   skillProgramDayId: number;
   skillProgramExerciseId: number;
 }) {
+  const qc = useQueryClient();
   const containerRef = useRef<HTMLDivElement>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const reviewVideoRef = useRef<HTMLVideoElement>(null);
@@ -470,6 +471,13 @@ export function ArSprintTrackerDialog({
         videoFavorited: uploadedVideoUrl ? favoriteClip : false,
       });
       toast.success("Sprint saved");
+      // Prefix match (no date/trailing key segments) so this invalidates
+      // every cached occurrence of this day, not just whichever date the
+      // athlete happened to open it from -- the parent dialog's "X of Y
+      // sets recorded" count (see getSkillDayForAthlete's completedSets)
+      // would otherwise still show the pre-save count until some unrelated
+      // refetch happened to run.
+      qc.invalidateQueries({ queryKey: ["/api/athlete/skill-day", skillAssignmentId, skillProgramDayId] });
       onOpenChange(false);
     } catch (err: any) {
       toast.error(err.message || "Could not save sprint session");

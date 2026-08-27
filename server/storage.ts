@@ -14324,6 +14324,30 @@ ${entriesText}`;
         })
       : undefined;
 
+    // How many camera captures (createSkillSessionLog rows -- see that
+    // function's own comment) this athlete already has against each drill
+    // today, so the UI can show real "3 of 10 sets recorded" progress
+    // instead of a single record button with no memory of how many times
+    // it's been used. skillSessionLogs has no date column of its own (a
+    // capture just timestamps itself via createdAt, same as any other
+    // event log in this app) -- created_at::date scopes it to just this
+    // occurrence of a recurring day rather than every capture ever logged
+    // against this drill across every week it's been assigned.
+    const setCountByExerciseId = new Map<number, number>();
+    if (date) {
+      const counts = await db.execute<{ skill_program_exercise_id: number; cnt: string }>(sql`
+        SELECT skill_program_exercise_id, count(*) AS cnt
+        FROM skill_session_logs
+        WHERE skill_program_day_id = ${skillProgramDayId}
+          AND athlete_id = ${athleteId}
+          AND created_at::date = ${date}::date
+        GROUP BY skill_program_exercise_id
+      `);
+      for (const row of counts.rows) {
+        setCountByExerciseId.set(row.skill_program_exercise_id, Number(row.cnt));
+      }
+    }
+
     return {
       skillAssignmentId,
       skillProgramId: assignment.program.id,
@@ -14347,6 +14371,7 @@ ${entriesText}`;
         notes: ex.notes,
         videoUrl: ex.skillExercise.videoUrl,
         trackingLevel: ex.trackingLevel,
+        completedSets: date ? setCountByExerciseId.get(ex.id) ?? 0 : undefined,
       })),
     };
   },

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
@@ -105,6 +105,7 @@ export function SprintTrackerDialog({
   skillProgramDayId: number;
   skillProgramExerciseId: number;
 }) {
+  const qc = useQueryClient();
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const reviewVideoRef = useRef<HTMLVideoElement>(null);
@@ -576,6 +577,7 @@ export function SprintTrackerDialog({
         videoFavorited: uploadedVideoUrl ? favoriteClip : false,
       });
       toast.success("Sprint saved");
+      qc.invalidateQueries({ queryKey: ["/api/athlete/skill-day", skillAssignmentId, skillProgramDayId] });
       onOpenChange(false);
     } catch (err: any) {
       toast.error(err.message || "Could not save sprint session");

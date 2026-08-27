@@ -42,6 +42,12 @@ type SkillDayInfo = {
     notes: string | null;
     videoUrl?: string | null;
     trackingLevel?: "none" | "sprint" | "mechanics";
+    // How many camera captures/videos already exist for this drill today --
+    // only meaningful on the athlete's own real day (undefined for the
+    // coach-preview path, which has no athlete/date to count against). See
+    // getSkillDayForAthlete's own comment on why this is scoped per-day
+    // rather than a lifetime count.
+    completedSets?: number;
   }[];
 };
 
@@ -54,6 +60,17 @@ type SkillDayInfo = {
 // either way.
 function mechanicsModeFor(skillType: string): MechanicsMode {
   return skillType === "Throwing" || skillType === "Pitching" || skillType === "Shooting" ? "throw" : "swing";
+}
+
+// "(Set 3 of 10)" while there's still a set left on the plan, "(bonus set)"
+// once the athlete's gone past what the coach actually assigned -- keeps
+// the record button honest about count without ever blocking another
+// capture (a coach may well want extras on a max-effort test like a 40).
+// Empty string (not undefined) when completedSets isn't tracked at all
+// (the coach-preview path) so callers can just concatenate it in.
+function setProgressSuffix(ex: { sets: number; completedSets?: number }): string {
+  if (ex.completedSets === undefined) return "";
+  return ex.completedSets >= ex.sets ? " (bonus set)" : ` (Set ${ex.completedSets + 1} of ${ex.sets})`;
 }
 
 // Button/toast wording for the same skillType -- "Shooting" shares Throwing/
@@ -246,6 +263,12 @@ export function SkillDayViewDialog({
                         {ex.sets} sets &times; {ex.reps}
                         {ex.restSeconds ? ` · ${ex.restSeconds}s rest` : ""}
                       </p>
+                      {ex.completedSets !== undefined && ex.sets > 0 && (
+                        <p className="mt-0.5 text-xs font-semibold text-teal-400">
+                          {Math.min(ex.completedSets, ex.sets)} of {ex.sets} sets recorded
+                          {ex.completedSets > ex.sets ? ` (+${ex.completedSets - ex.sets} extra)` : ""}
+                        </p>
+                      )}
                       {ex.notes && <p className="mt-1 text-xs text-muted-foreground">{ex.notes}</p>}
                       {ex.videoUrl && (
                         <a
@@ -268,7 +291,7 @@ export function SkillDayViewDialog({
                           onClick={() => setSprintExercise(ex)}
                         >
                           <Timer className="h-3.5 w-3.5" />
-                          Record Sprint
+                          Record Sprint{setProgressSuffix(ex)}
                         </Button>
                       )}
                       {ex.trackingLevel === "mechanics" &&
@@ -282,6 +305,7 @@ export function SkillDayViewDialog({
                         >
                           <Activity className="h-3.5 w-3.5" />
                           Record {mechanicsActionLabelFor(ex.skillType)}
+                          {setProgressSuffix(ex)}
                         </Button>
                       )}
                       {(!ex.trackingLevel || ex.trackingLevel === "none") &&
