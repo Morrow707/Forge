@@ -2,6 +2,7 @@ import Foundation
 import ARKit
 import SceneKit
 import AVFoundation
+import ImageIO
 import simd
 import Capacitor
 
@@ -75,6 +76,14 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
     private var lastEmitTimestamp: TimeInterval = 0
     private let emitIntervalSeconds: TimeInterval = 1.0 / 30.0
     private var hadBody = false
+    // Three straight on-device rounds (contentScaleFactor/render-scale,
+    // video format, compositing order) were each individually confirmed
+    // correct yet the camera background stayed blurry -- guessing a fourth
+    // native-code change with no new evidence isn't the move. This instead
+    // logs ARKit's OWN reported camera focus/exposure metadata plus a
+    // measured sharpness number for the first frame of each session, once,
+    // so the next report comes with real numbers instead of a screenshot.
+    private var hasLoggedFrameDiagnostics = false
 
     // MARK: - Body-anchor plausibility gating
     //
@@ -333,6 +342,7 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
 
             self.hadBody = false
             self.lastEmitTimestamp = 0
+            self.hasLoggedFrameDiagnostics = false
             self.trackImplement = call.getBool("trackImplement") ?? false
             self.leftImplementTracker.reset()
             self.rightImplementTracker.reset()
@@ -662,12 +672,115 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
     // folded into "bodyTracking" so the JS-side BodyTrackingFrame contract
     // (tracked: true/false) doesn't have to grow a third shape -- see
     // native-ar-preview.ts's onSessionError.
+
+    // Everything app code controls about this camera feed (render scale,
+    // video format, layering) has now been checked and individually
+    // confirmed correct against the same on-device blur report -- see the
+    // comment on hasLoggedFrameDiagnostics above. What's left is what ARKit
+    // itself is actually doing with focus/exposure on this frame, which
+    // isn't visible from the app side at all unless it's explicitly read
+    // and logged. exifData carries the same focus/exposure fields a photo
+    // library image would (subject distance, focal length, aperture,
+    // exposure time, ISO); camera.intrinsics gives the focal-length-in-
+    // pixels/principal-point this frame was actually captured with, useful
+    // for spotting an unexpected crop/zoom; and frameSharpnessScore turns
+    // "looks blurry" into an actual number (variance of the luma Laplacian
+    // -- low and flat means genuinely low-frequency/blurred content, not
+    // just a subjective impression), so a future comparison doesn't have to
+    // rely on eyeballing screenshots against each other.
+    private func logFrameDiagnostics(_ frame: ARFrame) {
+        // Not optional (Apple declares this as a plain, possibly-empty
+        // dictionary) -- checking isEmpty rather than an if-let, which
+        // would always succeed here and silently hide the "ARKit didn't
+        // populate this at all" case behind a misleading success branch.
+        let exif = frame.exifData
+        if exif.isEmpty {
+            logDiag("EXIF: frame.exifData was empty")
+        } else {
+            let subjectDistance = exif[kCGImagePropertyExifSubjectDistance as String]
+            let focalLength = exif[kCGImagePropertyExifFocalLength as String]
+            let aperture = exif[kCGImagePropertyExifApertureValue as String]
+            let exposureTime = exif[kCGImagePropertyExifExposureTime as String]
+            let iso = exif[kCGImagePropertyExifISOSpeedRatings as String]
+            logDiag(
+                "EXIF subjectDistance=\(String(describing: subjectDistance)) "
+                    + "focalLength=\(String(describing: focalLength)) "
+                    + "aperture=\(String(describing: aperture)) "
+                    + "exposureTime=\(String(describing: exposureTime)) "
+                    + "iso=\(String(describing: iso))"
+            )
+        }
+
+        let intrinsics = frame.camera.intrinsics
+        logDiag(
+            "intrinsics fx=\(intrinsics.columns.0.x) fy=\(intrinsics.columns.1.y) "
+                + "cx=\(intrinsics.columns.2.x) cy=\(intrinsics.columns.2.y)"
+        )
+
+        if #available(iOS 16.0, *) {
+            logDiag(
+                "exposureDuration=\(frame.camera.exposureDuration) "
+                    + "exposureOffset=\(frame.camera.exposureOffset)"
+            )
+        }
+
+        let sharpness = frameSharpnessScore(frame.capturedImage)
+        logDiag("frameSharpness (variance of decimated luma Laplacian) = \(sharpness)")
+    }
+
+    // Cheap, single-shot approximation of the standard "variance of
+    // Laplacian" blur metric (OpenCV's cv::Laplacian + cv::meanStdDev, done
+    // by hand since this file has no OpenCV/Accelerate dependency) --
+    // walks a decimated grid over the luma plane rather than every pixel,
+    // since this only ever runs once per session (see
+    // hasLoggedFrameDiagnostics), not per frame. Meaningful for
+    // before/after comparison against itself (same scene, same distance,
+    // different build), not as an absolute pass/fail number -- content
+    // (a blank wall vs. a cluttered rack) changes the baseline regardless
+    // of focus.
+    private func frameSharpnessScore(_ pixelBuffer: CVPixelBuffer) -> Double {
+        CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
+        defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly) }
+
+        guard let base = CVPixelBufferGetBaseAddressOfPlane(pixelBuffer, 0) else { return -1 }
+        let width = CVPixelBufferGetWidthOfPlane(pixelBuffer, 0)
+        let height = CVPixelBufferGetHeightOfPlane(pixelBuffer, 0)
+        let bytesPerRow = CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 0)
+        let luma = base.assumingMemoryBound(to: UInt8.self)
+
+        let step = 4
+        var laplacians: [Double] = []
+        var y = step
+        while y < height - step {
+            var x = step
+            while x < width - step {
+                let center = Double(luma[y * bytesPerRow + x])
+                let up = Double(luma[(y - step) * bytesPerRow + x])
+                let down = Double(luma[(y + step) * bytesPerRow + x])
+                let left = Double(luma[y * bytesPerRow + (x - step)])
+                let right = Double(luma[y * bytesPerRow + (x + step)])
+                laplacians.append(4 * center - up - down - left - right)
+                x += step
+            }
+            y += step
+        }
+        guard !laplacians.isEmpty else { return -1 }
+        let mean = laplacians.reduce(0, +) / Double(laplacians.count)
+        let variance = laplacians.reduce(0) { $0 + ($1 - mean) * ($1 - mean) } / Double(laplacians.count)
+        return variance
+    }
+
     public func session(_ session: ARSession, didFailWithError error: Error) {
         notifyListeners("sessionError", data: ["message": error.localizedDescription])
     }
 
     public func session(_ session: ARSession, didUpdate frame: ARFrame) {
         appendVideoFrame(frame)
+
+        if !hasLoggedFrameDiagnostics {
+            hasLoggedFrameDiagnostics = true
+            logFrameDiagnostics(frame)
+        }
 
         let bodyAnchor = frame.anchors.compactMap { $0 as? ARBodyAnchor }.first
 
