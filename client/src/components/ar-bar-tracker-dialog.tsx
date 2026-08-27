@@ -795,7 +795,7 @@ export function ArBarTrackerDialog({
             {/* Diagnostic readout -- see SHOW_DIAGNOSTIC_OVERLAY's own
                 comment in ar-jump-tracker-dialog.tsx. */}
             {SHOW_DIAGNOSTIC_OVERLAY && (
-              <div className="absolute left-3 right-16 top-[max(0.75rem,env(safe-area-inset-top))] z-10 select-text space-y-0.5 rounded-md bg-black/60 px-2 py-1.5 font-mono text-[9px] leading-tight text-white/80 backdrop-blur-sm">
+              <div className="absolute left-3 right-16 top-[max(0.75rem,env(safe-area-inset-top))] z-10 max-h-[65vh] select-text space-y-0.5 overflow-y-auto rounded-md bg-black/60 px-2 py-1.5 font-mono text-[9px] leading-tight text-white/80 backdrop-blur-sm">
                 <div>
                   supported={String(supported)} perm={cameraPermission ?? "?"} tracked=
                   {String(frame?.tracked ?? false)}
