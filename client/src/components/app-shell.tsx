@@ -42,6 +42,7 @@ import {
   MonitorSmartphone,
   KeyRound,
   Pin,
+  Stethoscope,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -161,6 +162,7 @@ const adminNav: NavItem[] = [
   { href: "/admin/forge-ai", label: "Forge AI", icon: Sparkles, overflow: true },
   { href: "/admin/nutrition-knowledge", label: "Teach Nutrition AI", icon: Apple, overflow: true },
   { href: "/admin/movement-knowledge", label: "Teach Movement AI", icon: Camera, overflow: true },
+  { href: "/admin/tracker-diagnosis-reports", label: "AR Diagnosis Reports", icon: Stethoscope, overflow: true },
   { href: "/admin/platform-trends", label: "Platform Trends", icon: BarChart3, overflow: true },
   { href: "/admin/billing", label: "Billing", icon: CreditCard, overflow: true },
   { href: "/admin/users", label: "Users", icon: Users, overflow: true },

@@ -86,6 +86,7 @@ const AdminProgramBuilder = lazy(() => import("@/pages/admin/program-builder"));
 const AdminReviewQueue = lazy(() => import("@/pages/admin/review-queue"));
 const AdminAiKnowledge = lazy(() => import("@/pages/admin/ai-knowledge"));
 const AdminMovementKnowledge = lazy(() => import("@/pages/admin/movement-knowledge"));
+const AdminTrackerDiagnosisReports = lazy(() => import("@/pages/admin/tracker-diagnosis-reports"));
 const ForgeAi = lazy(() => import("@/pages/admin/forge-ai"));
 const AdminLegalAgreement = lazy(() => import("@/pages/admin/legal-agreement"));
 const AdminDocuments = lazy(() => import("@/pages/admin/documents"));
@@ -436,6 +437,9 @@ function Router() {
         </Route>
         <Route path="/admin/movement-knowledge">
           <ProtectedRoute role="admin" component={AdminMovementKnowledge} />
+        </Route>
+        <Route path="/admin/tracker-diagnosis-reports">
+          <ProtectedRoute role="admin" component={AdminTrackerDiagnosisReports} />
         </Route>
         <Route path="/admin/platform-trends">
           <ProtectedRoute role="admin" component={AdminPlatformTrends} />

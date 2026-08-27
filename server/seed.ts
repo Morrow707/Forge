@@ -4131,10 +4131,15 @@ async function main() {
       // Combine-style timed sprints -- unlike the rest of this Track & Field
       // block, these are cross-sport staples (the 40 is football's classic
       // combine number but shows up everywhere; the 60 is baseball/softball's
-      // and indoor track's own standard), so they're tagged broadly rather
-      // than Track & Field-only. "Starts" skillType makes both automatically
-      // Sprint-Timing-eligible (see SPRINT_TIMING_ELIGIBLE_SKILL_TYPES below)
-      // without needing a name-list entry the way a Footwork-typed drill would.
+      // and indoor track's own standard; the 20 is the common first-step-
+      // acceleration test, and its own "20yd" SPRINT_PRESETS entry already
+      // existed in sprint-tracking.ts before this drill did -- no tracking
+      // code to add, just the Skill Bank entry), so they're tagged broadly
+      // rather than Track & Field-only. "Starts" skillType makes all three
+      // automatically Sprint-Timing-eligible (see
+      // SPRINT_TIMING_ELIGIBLE_SKILL_TYPES below) without needing a
+      // name-list entry the way a Footwork-typed drill would.
+      { name: "20-Yard Dash", skillType: "Starts", sports: ["Football", "Track & Field", "Baseball", "Softball", "Basketball", "Soccer", "Lacrosse", "Field Hockey"], equipment: ["Stopwatch"], instructions: "Sprint 20 yards from a three-point or standing start at maximum effort -- the standard combine benchmark for first-step acceleration." },
       { name: "40-Yard Dash", skillType: "Starts", sports: ["Football", "Track & Field", "Baseball", "Softball", "Basketball", "Soccer", "Lacrosse", "Field Hockey"], equipment: ["Stopwatch"], instructions: "Sprint 40 yards from a three-point or standing start at maximum effort -- the standard combine benchmark for straight-line speed." },
       { name: "60-Yard Dash", skillType: "Starts", sports: ["Baseball", "Softball", "Track & Field", "Football"], equipment: ["Stopwatch"], instructions: "Sprint 60 yards from a standing start at maximum effort -- the standard baseball/softball combine benchmark for top-end speed." },
       // Jumps & Throws
@@ -4243,7 +4248,7 @@ async function main() {
       "Reaction Ball Footwork", "Overhand Throwing Mechanics", "Crossover Step Acceleration",
       "Reactive Start Drill", "Single-Leg Balance and Stability", "Hip Turn and Open-Gate Drill",
       "Multi-Directional Sprint Cone Drill", "Approach Run Rhythm Drill", "Quick Feet In-Place Drill",
-      "Change of Pace Running", "40-Yard Dash", "60-Yard Dash",
+      "Change of Pace Running", "20-Yard Dash", "40-Yard Dash", "60-Yard Dash",
     ]);
     let skillCrossSportBackfilled = 0;
     for (const existingSkill of await storage.getAllSkillExercises()) {
