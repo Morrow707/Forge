@@ -15,7 +15,18 @@ export type LensInfo = { id: "wide" | "ultraWide" | "telephoto" | string; label:
 // Y-flip belongs in vision-body-landmarks.ts (Phase 3), not here -- see
 // AvBodyTrackingPlugin.swift's own comment on why it's left raw at the source.
 export type PoseJoint = { name: string; x: number; y: number; confidence: number };
-export type PoseFrame = { frameIndex: number; timestamp: number; tracked: boolean; joints: PoseJoint[] };
+// frameWidth/frameHeight are the UPRIGHT (already orientation-corrected) pixel dimensions
+// Vision measured joints against -- see AvBodyTrackingPlugin.swift's own comment on why this
+// isn't just the raw buffer's native width/height, and vision-body-landmarks.ts for why the
+// bridge needs real pixel dimensions (not just normalized 0-1 values) at all.
+export type PoseFrame = {
+  frameIndex: number;
+  timestamp: number;
+  tracked: boolean;
+  joints: PoseJoint[];
+  frameWidth: number;
+  frameHeight: number;
+};
 
 interface AvBodyTrackingPlugin {
   isSupported(): Promise<{

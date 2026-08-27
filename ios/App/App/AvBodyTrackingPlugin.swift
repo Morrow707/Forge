@@ -664,6 +664,24 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             guard thisFrameIndex % sampleEveryNthFrame == 0 else { continue }
             guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { continue }
             let timestampSeconds = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sampleBuffer))
+            // Vision's normalized joint coordinates are relative to the UPRIGHT (oriented)
+            // image, not the raw pixel buffer's own native layout -- CVPixelBufferGetWidth/
+            // Height report the raw buffer (landscape sensor order for a 90-degree-rotated
+            // recording), so width/height get swapped here to match what Vision actually
+            // measured against. The JS bridge (vision-body-landmarks.ts) needs real pixel
+            // dimensions, not just normalized 0-1 values, to undo the aspect-ratio distortion
+            // pose-tracking.ts's own angle math is sensitive to on non-square (portrait) video
+            // -- see that file's comment on why angle computations need proportionally-correct
+            // coordinates, not independently-normalized-per-axis ones.
+            let rawWidth = CVPixelBufferGetWidth(pixelBuffer)
+            let rawHeight = CVPixelBufferGetHeight(pixelBuffer)
+            let swapDimensions: Bool
+            switch orientation {
+            case .left, .right, .leftMirrored, .rightMirrored: swapDimensions = true
+            default: swapDimensions = false
+            }
+            let frameWidth = swapDimensions ? rawHeight : rawWidth
+            let frameHeight = swapDimensions ? rawWidth : rawHeight
 
             var joints: [[String: Any]] = []
             var tracked = false
@@ -703,6 +721,8 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                     "timestamp": timestampSeconds,
                     "tracked": tracked,
                     "joints": joints,
+                    "frameWidth": frameWidth,
+                    "frameHeight": frameHeight,
                 ])
             }
         }
