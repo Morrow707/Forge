@@ -5870,6 +5870,16 @@ Identify 2-5 specific, concrete deficits grounded ONLY in the data above -- do n
 
     if (totalWorkouts === 0 && wellnessRows.length === 0) return null;
 
+    // Every one of these lines scales with roster size, and nothing bounded
+    // it -- on a real 25k-athlete roster, perAthleteLines alone was one line
+    // per athlete joined into a single prompt string, ~750k+ characters for
+    // a call capped at 500 OUTPUT tokens. Cap every list the same way a
+    // human summary would: enough concrete names to ground the AI's
+    // response, not a full roster dump.
+    const capNames = (names: string[], max = 30) =>
+      names.length <= max
+        ? names.join(", ")
+        : `${names.slice(0, max).join(", ")}, and ${names.length - max} more`;
     const noWorkoutsNames = roster
       .filter((a) => !workoutsByAthlete.has(a.id))
       .map((a) => a.name);
@@ -5881,18 +5891,14 @@ Identify 2-5 specific, concrete deficits grounded ONLY in the data above -- do n
         prs.map((pr) => `${athlete.name}: ${pr.exerciseName} ${pr.weight}${pr.unit} x ${pr.reps}`),
       )
       .slice(0, 10);
-    const perAthleteLines = roster.map(
-      (a) => `${a.name}: ${workoutsByAthlete.get(a.id) ?? 0} workouts logged`,
-    );
     const hurtNames = roster.filter((a) => a.healthStatus === "hurt").map((a) => a.name);
 
     const prompt = `Weekly roster data for a strength coach's team summary:
 - Roster size: ${roster.length} athletes
 - Total workouts logged this week across the roster: ${totalWorkouts}
-- Per-athlete workout counts: ${perAthleteLines.join("; ")}
-- Athletes with zero workouts logged this week: ${noWorkoutsNames.length > 0 ? noWorkoutsNames.join(", ") : "none"}
-- Athletes with 2+ flagged (poor) readiness days this week: ${flaggedNames.length > 0 ? flaggedNames.join(", ") : "none"}
-- Athletes currently marked hurt: ${hurtNames.length > 0 ? hurtNames.join(", ") : "none"}
+- Athletes with zero workouts logged this week: ${noWorkoutsNames.length > 0 ? capNames(noWorkoutsNames) : "none"}
+- Athletes with 2+ flagged (poor) readiness days this week: ${flaggedNames.length > 0 ? capNames(flaggedNames) : "none"}
+- Athletes currently marked hurt: ${hurtNames.length > 0 ? capNames(hurtNames) : "none"}
 - New PRs this week: ${prLines.length > 0 ? prLines.join("; ") : "none logged"}
 ${forgeAiContext ? `\n${forgeAiContext}\n` : ""}
 Write a short (3-5 sentence) plain-language weekly summary for the coach, highlighting real trends -- overall roster compliance, standout performances, and anyone who may need a check-in (missed sessions, flagged readiness, or currently hurt). Be specific and reference actual names and numbers from the data above. Talk directly to the coach as "you". No preamble or sign-off, just the summary itself.`;
