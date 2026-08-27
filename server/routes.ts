@@ -69,6 +69,7 @@ import {
   updateBrandingSchema,
   updateTeamBrandingSchema,
   updateNavPrefsSchema,
+  MAX_PINNED_ATHLETES,
   updateAccountNameSchema,
   updateAccountEmailSchema,
   updateAccountPasswordSchema,
@@ -3081,6 +3082,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const removed = await storage.removeAthleteFromCoach(user.id, athleteId);
     if (!removed) return res.status(404).json({ message: "Athlete not found" });
     res.status(204).end();
+  });
+
+  // Coach's own fast-access pin, toggled from the athlete-detail page --
+  // flips on/off in one call rather than needing separate pin/unpin routes.
+  // Pinned to THIS coach's own account (see storage.togglePinnedAthlete),
+  // not the whole staff, so it rides along on their own /api/auth/me
+  // response the same way hiddenSections/personalAccentColor already do.
+  app.patch("/api/coach/roster/:athleteId/pin", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const athleteId = Number(req.params.athleteId);
+    if (!Number.isInteger(athleteId)) return res.status(404).json({ message: "Athlete not found" });
+    const result = await storage.togglePinnedAthlete(user.id, athleteId);
+    if (!result.ok) {
+      if (result.reason === "not_on_roster") {
+        return res.status(404).json({ message: "Athlete not found" });
+      }
+      return res.status(400).json({
+        message: `You can only pin up to ${MAX_PINNED_ATHLETES} athletes -- unpin one first.`,
+      });
+    }
+    res.json({ pinned: result.pinned, pinnedAthleteIds: result.pinnedAthleteIds });
   });
 
   app.patch(

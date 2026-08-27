@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useParams, useLocation, useSearch } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/hooks/use-auth";
+import { cn } from "@/lib/utils";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -30,6 +32,7 @@ import { shareOrDownloadFile } from "@/lib/share-file";
 import type { ReadinessLevel } from "@shared/wellness";
 import type { AcwrRiskLevel } from "@shared/load";
 import { TESTING_METRICS } from "@shared/testing-metrics";
+import type { PublicUser } from "@shared/schema";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -40,6 +43,7 @@ import {
   CalendarDays,
   UserMinus,
   Users,
+  Pin,
 } from "lucide-react";
 
 type Athlete = {
@@ -106,6 +110,7 @@ export default function AthleteDetailPage() {
   const id = Number(athleteId);
   const [, navigate] = useLocation();
   const qc = useQueryClient();
+  const { user } = useAuth();
 
   // Lets the Nutrition list page (and anywhere else) deep-link straight to
   // a specific tab -- e.g. /coach/roster/123?tab=nutrition -- instead of
@@ -171,6 +176,29 @@ export default function AthleteDetailPage() {
       navigate("/coach/roster");
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not remove that athlete"),
+  });
+
+  // "Pinned" reads straight off the logged-in coach's own /api/auth/me
+  // cache (see shared/schema.ts users.pinnedAthleteIds) -- no separate
+  // fetch needed, same as hiddenSections/personalAccentColor elsewhere.
+  const isPinned = !!user?.pinnedAthleteIds?.includes(id);
+
+  const pinMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("PATCH", `/api/coach/roster/${id}/pin`);
+      return (await res.json()) as { pinned: boolean; pinnedAthleteIds: number[] };
+    },
+    onSuccess: (result) => {
+      qc.setQueryData<PublicUser | null | undefined>(["/api/auth/me"], (old) =>
+        old ? { ...old, pinnedAthleteIds: result.pinnedAthleteIds } : old,
+      );
+      toast.success(
+        result.pinned
+          ? `${athlete?.name ?? "Athlete"} pinned for quick access`
+          : `${athlete?.name ?? "Athlete"} unpinned`,
+      );
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't update pin"),
   });
 
   async function handleShareRecruitingProfile() {
@@ -243,6 +271,18 @@ export default function AthleteDetailPage() {
       title={
         <span className="flex min-w-0 items-center gap-2">
           <span className="min-w-0 flex-1 truncate">{athlete.name}</span>
+          <Button
+            type="button"
+            variant={isPinned ? "default" : "outline"}
+            size="icon"
+            className="h-8 w-8 shrink-0"
+            disabled={pinMutation.isPending}
+            onClick={() => pinMutation.mutate()}
+            aria-label={isPinned ? `Unpin ${athlete.name} from quick access` : `Pin ${athlete.name} for quick access`}
+            title={isPinned ? "Unpin from quick access" : "Pin for quick access"}
+          >
+            <Pin className={cn("h-3.5 w-3.5", isPinned && "fill-current")} />
+          </Button>
           <AthleteSwitcher currentAthleteId={athlete.id} />
         </span>
       }

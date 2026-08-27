@@ -114,6 +114,7 @@ import {
   userSessions,
   type UserSession,
   type InsertUser,
+  MAX_PINNED_ATHLETES,
 } from "@shared/schema";
 import { derivePrivacyTier, videoRetentionDaysForTier, type PrivacyTier } from "@shared/privacy-tiers";
 import { createHash } from "node:crypto";
@@ -2932,6 +2933,50 @@ export const storage = {
       .innerJoin(users, eq(coachAthletes.athleteId, users.id))
       .where(and(inArray(coachAthletes.coachId, coachIds), eq(coachAthletes.athleteId, athleteId)));
     return rows[0] ?? null;
+  },
+
+  // Coach's own fast-access pin list (users.pinnedAthleteIds) -- flips one
+  // athlete on/off. Stored on this exact coach's account, not the primary
+  // coach's -- each staff member curates their own shortlist, same posture
+  // as getWidgetLayoutForUser/setWidgetLayoutForUser below. Reuses
+  // getRosterAthleteForCoach for the ownership check (covers the whole
+  // staff's shared roster) so a coach can never pin someone outside it.
+  // Capped at MAX_PINNED_ATHLETES; a coach who's already at the cap has to
+  // unpin one before adding another rather than the oldest pin silently
+  // falling off.
+  async togglePinnedAthlete(
+    coachId: number,
+    athleteId: number,
+  ): Promise<
+    | { ok: true; pinned: boolean; pinnedAthleteIds: number[] }
+    | { ok: false; reason: "not_on_roster" | "limit_reached" }
+  > {
+    const onRoster = await this.getRosterAthleteForCoach(coachId, athleteId);
+    if (!onRoster) return { ok: false, reason: "not_on_roster" };
+
+    const row = await db.query.users.findFirst({
+      where: eq(users.id, coachId),
+      columns: { pinnedAthleteIds: true },
+    });
+    const current = row?.pinnedAthleteIds ?? [];
+    const alreadyPinned = current.includes(athleteId);
+    if (!alreadyPinned && current.length >= MAX_PINNED_ATHLETES) {
+      return { ok: false, reason: "limit_reached" };
+    }
+    const next = alreadyPinned
+      ? current.filter((id) => id !== athleteId)
+      : [...current, athleteId];
+
+    const [updated] = await db
+      .update(users)
+      .set({ pinnedAthleteIds: next })
+      .where(eq(users.id, coachId))
+      .returning({ pinnedAthleteIds: users.pinnedAthleteIds });
+    return {
+      ok: true,
+      pinned: !alreadyPinned,
+      pinnedAthleteIds: updated?.pinnedAthleteIds ?? next,
+    };
   },
 
   // Coach-only toggle -- 404s (via null) if the athlete isn't on this
