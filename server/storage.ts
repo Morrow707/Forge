@@ -11727,6 +11727,43 @@ Respond to the admin's latest message by calling ask_question or propose_movemen
     };
   },
 
+  // Stateless "paste a device diagLog buffer, get a grounded read on it"
+  // tool for the native AR tracker plugin (ArCameraPreviewPlugin.swift) --
+  // built after a real on-device blur investigation that took many rounds
+  // of manual back-and-forth (render scale, video format, compositing
+  // order, tracking-lock state, camera motion, each individually ruled
+  // out against real evidence before landing on ARKit's own camera
+  // pipeline having no public focus API at all). The point of this isn't
+  // to guess a fix -- it's to give whoever's looking at a fresh diagLog
+  // the same starting context that investigation built up, instead of
+  // starting from zero every time a similar report comes in.
+  async diagnoseTrackerLog(logText: string): Promise<string> {
+    if (!aiEnabled) {
+      return "AI isn't set up yet -- ask whoever manages this Forge instance to configure it.";
+    }
+    const system: SystemPrompt = `You are helping diagnose a native iOS ARKit camera issue in Forge, a training app. The relevant plugin is ArCameraPreviewPlugin.swift -- one shared ARSCNView-based ARKit body-tracking session used by all four AR tracker modes (bar path, vertical jump, sprint timing, swing mechanics). It's positioned behind a transparent hole punched in the app's WebView (see native-ar-preview.ts / index.css's ar-camera-active class), so the athlete sees ARKit's own camera passthrough directly, not anything the WebView draws.
+
+You'll be given the raw contents of that plugin's on-device diagLog buffer, pasted by whoever reproduced an issue. Lines you may see:
+- Lifecycle events: "start() called", "requesting camera permission...", "permission result: granted/denied", "rect: (...)" (the JS-measured container rect), "creating ARSCNView, inserting behind webView", "scnView.bounds=... scale=... screenScale=...", "videoFormat (ARKit default): WxH @ Nfps", "calling session.run()" / "session.run() returned, resolving", "sessionError" messages, "FAILED: ..." lines.
+- Per-frame diagnostics (only in builds with logFrameDiagnostics wired up), each line prefixed "[initial]" or "[post-recovery]" (before/after an automatic focus-recovery attempt that just re-runs the session once early on, since there's no public API to directly set ARKit's camera focus/lens position -- the only thing documented anywhere for that is the private, App-Store-unsafe setFocusModeLocked):
+  - "EXIF subjectDistance=... focalLength=... aperture=... exposureTime=... iso=..." -- read from ARFrame.exifData (iOS 16+ only; subjectDistance is very often nil/unpopulated, that's normal, not a bug).
+  - "intrinsics fx=... fy=... cx=... cy=..." -- ARFrame.camera.intrinsics (focal length in pixels / principal point). Wildly different fx/fy between samples, or a cx/cy far from half the frame's pixel dimensions, would be the anomaly to flag.
+  - "exposureDuration=... exposureOffset=..." (iOS 16+ only).
+  - "frameSharpness (variance of decimated luma Laplacian) = <number>" -- a rough, home-grown blur metric (higher = more high-frequency detail = sharper). It is NOT calibrated to any absolute "sharp" threshold and is heavily scene-content-dependent (a textured rack vs. a blank wall gives very different numbers even at identical focus) -- only meaningful as a same-session, same-scene before/after comparison, never as an absolute pass/fail number, and never compared across genuinely different scenes/sessions.
+
+Known, already-confirmed facts from real device investigation -- treat these as established, don't re-derive or contradict them without a specific reason from the log you're given:
+- contentScaleFactor/render-target scale being wrong was checked and ruled out (a real bug, since fixed, is no longer the cause of a fresh report).
+- ARKit's own default videoFormat for ARBodyTrackingConfiguration was confirmed identical to what a "pick the fastest fps" override selected -- video format choice is not a live lever here.
+- The native view being layered behind the WebView (not in front) is correct and intentional -- don't suggest re-ordering it.
+- On at least one real device/build, exposureTime was observed pinned to EXACTLY 1/(the session's fps) in every single sample, handheld and on a tripod alike -- i.e. non-adaptive, and confirmed independent of camera motion (a rock-still tripod test still showed a blurry image). If you see the same exact pinned-exposureTime pattern again, that's corroborating a known constraint, not a new finding.
+- There is no public ARKit API to read or set the camera's actual focus distance/lens position while an ARSession owns the capture device. isAutoFocusEnabled defaults to true already; setting it explicitly is very likely a no-op. NEVER suggest setFocusModeLocked(lensPosition:) or any other private API -- it cannot ship in an App Store build, full stop.
+
+Your job: read the pasted log and give a short (150-300 words), plain-English, evidence-grounded read of what it actually shows -- call out anything genuinely anomalous relative to the facts above (a degenerate/zero-sized rect or bounds, a permission denial, a sessionError, a FAILED line, an exposureTime that ISN'T pinned this time, wildly inconsistent intrinsics, a frameSharpness that's flat/unchanging across [initial] and [post-recovery] when it should differ, tracked staying false the whole session, etc.), and note what's just normal/expected. End with ONE concrete, cheap, testable next step -- a specific thing to check on-device, or a specific piece of missing diagnostic data worth adding next, not a firm code fix and never a private-API suggestion. If the log doesn't show anything unusual at all, say so plainly rather than manufacturing a finding.`;
+
+    const text = await askClaude(system, [{ role: "user", content: logText }], { maxTokens: 700 });
+    return text || "Couldn't get a diagnosis right now -- the AI request failed. Try again in a moment.";
+  },
+
   // Commits a previously-proposed profile: archives the current active row
   // for this movementType (if any -- full history stays for audit/revert)
   // and inserts the new one as the active version. Nothing above this call

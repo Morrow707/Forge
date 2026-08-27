@@ -113,6 +113,7 @@ import {
   createTeamGameDaySchema,
   sendMovementKnowledgeChatMessageSchema,
   applyMovementProfileProposalSchema,
+  diagnoseTrackerLogSchema,
   classStructureSchema,
   enrollInClassSchema,
   classCoachSettingsInputSchema,
@@ -2722,6 +2723,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       parsed.data,
     );
     res.status(201).json(result);
+  });
+
+  // Paste a native AR tracker's on-device diagLog buffer, get a grounded AI
+  // read on it -- see storage.diagnoseTrackerLog's own comment for why this
+  // exists. Stateless (no persisted history the way movement-knowledge chat
+  // has one), admin-only since it costs a real AI call and isn't athlete-
+  // facing.
+  app.post("/api/admin/diagnose-tracker-log", requireRole("admin"), async (req, res) => {
+    const parsed = diagnoseTrackerLogSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message || "Invalid log" });
+    const diagnosis = await storage.diagnoseTrackerLog(parsed.data.log);
+    res.json({ diagnosis });
   });
 
   // ---------------- Coach: Programs ----------------

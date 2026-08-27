@@ -4720,6 +4720,18 @@ export const sendMovementKnowledgeChatMessageSchema = z
 
 export type SendMovementKnowledgeChatMessageInput = z.infer<typeof sendMovementKnowledgeChatMessageSchema>;
 
+// Admin-only, stateless "paste a device diagnostic log, get an AI read on
+// it" tool -- see storage.diagnoseTrackerLog. No history table: unlike
+// movementKnowledgeMessages above, this isn't a conversation to revisit,
+// it's a one-shot analysis of whatever diagLog buffer got copied off a
+// device in the moment. 20000 chars is generous headroom over what even a
+// long AR tracker diagLog buffer produces (a few hundred short lines).
+export const diagnoseTrackerLogSchema = z.object({
+  log: z.string().trim().min(1).max(20000),
+});
+
+export type DiagnoseTrackerLogInput = z.infer<typeof diagnoseTrackerLogSchema>;
+
 export const applyMovementProfileProposalSchema = z.object({
   minKneeAngleDeg: z.number().optional().nullable(),
   valgusRatioMin: z.number().optional().nullable(),
