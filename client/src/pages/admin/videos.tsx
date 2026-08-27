@@ -34,20 +34,39 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
+const PAGE_SIZE = 50;
+
 /** Admin-only storage-management page for every user-uploaded video on the
  * platform (strength-set form checks, Skills clips, comment attachments) --
  * lists total disk usage, deletes one at a time, or bulk-deletes anything
  * older than N days. The one place on the platform this kind of deletion
  * exists at all; see set-video-review.tsx's own onRemove for the athlete-
- * facing equivalent, which now shares the same underlying disk cleanup. */
+ * facing equivalent, which now shares the same underlying disk cleanup.
+ *
+ * Paginated (Load More) rather than one giant list -- a stress test with
+ * 20,000 real videos found the old unpaginated version taking 1-5s to load
+ * since it stat'd every video on the platform on every visit. The running
+ * "X GB total" figure is its own decoupled, server-cached fetch (see
+ * /api/admin/videos/storage-summary) so it doesn't force that same full
+ * scan just to show the first page of the list. */
 export default function AdminVideos() {
   const queryClient = useQueryClient();
   const [olderThanDays, setOlderThanDays] = useState("90");
+  const [loadedPages, setLoadedPages] = useState(1);
 
-  const { data: videos = [], isLoading } = useQuery<AdminVideoRow[]>({
-    queryKey: ["/api/admin/videos"],
-    queryFn: () => getJson("/api/admin/videos"),
+  const { data: summary } = useQuery<{ totalBytes: number; totalCount: number }>({
+    queryKey: ["/api/admin/videos/storage-summary"],
+    queryFn: () => getJson("/api/admin/videos/storage-summary"),
+    staleTime: 60_000,
   });
+
+  const { data, isLoading } = useQuery<{ videos: AdminVideoRow[]; total: number }>({
+    queryKey: ["/api/admin/videos", loadedPages],
+    queryFn: () => getJson(`/api/admin/videos?limit=${loadedPages * PAGE_SIZE}&offset=0`),
+  });
+  const videos = data?.videos ?? [];
+  const total = data?.total ?? 0;
+  const hasMore = videos.length < total;
 
   const deleteMutation = useMutation({
     mutationFn: async (video: AdminVideoRow) => {
@@ -55,6 +74,7 @@ export default function AdminVideos() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/videos"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/videos/storage-summary"] });
       toast.success("Video deleted");
     },
     onError: () => toast.error("Couldn't delete that video"),
@@ -67,12 +87,11 @@ export default function AdminVideos() {
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/videos"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/videos/storage-summary"] });
       toast.success(`Deleted ${result.count} video${result.count === 1 ? "" : "s"}`);
     },
     onError: () => toast.error("Couldn't bulk-delete videos"),
   });
-
-  const totalBytes = videos.reduce((sum, v) => sum + v.sizeBytes, 0);
 
   function handleBulkDelete() {
     const days = Number(olderThanDays);
@@ -114,9 +133,11 @@ export default function AdminVideos() {
           </CardHeader>
           <CardContent className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <p className="text-2xl font-bold">{formatBytes(totalBytes)}</p>
+              <p className="text-2xl font-bold">
+                {summary ? formatBytes(summary.totalBytes) : "…"}
+              </p>
               <p className="text-sm text-muted-foreground">
-                across {videos.length} video{videos.length === 1 ? "" : "s"}
+                across {summary?.totalCount ?? "…"} video{summary?.totalCount === 1 ? "" : "s"}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -176,6 +197,18 @@ export default function AdminVideos() {
                     </Button>
                   </div>
                 ))}
+              </div>
+            )}
+            {hasMore && (
+              <div className="flex justify-center p-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setLoadedPages((p) => p + 1)}
+                  disabled={isLoading}
+                >
+                  Load more ({total - videos.length} remaining)
+                </Button>
               </div>
             )}
           </CardContent>

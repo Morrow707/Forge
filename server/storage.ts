@@ -1721,6 +1721,13 @@ export class ForbiddenReferenceError extends Error {
   status = 400;
 }
 
+// See getAdminVideoStorageSummary's own comment -- a process-local cache
+// (not Redis/DB-backed) is fine here: this figure is an approximate,
+// eventually-consistent "about how much space" indicator for one admin
+// page, not something any other part of the app reads or depends on.
+const ADMIN_VIDEO_SUMMARY_CACHE_MS = 5 * 60 * 1000;
+let adminVideoSummaryCache: { at: number; value: { totalBytes: number; totalCount: number } } | null = null;
+
 export const storage = {
   // ---------- Users ----------
   async getUser(id: number) {
@@ -15537,7 +15544,19 @@ ${catalog}`;
   // those are coach-curated reference/demo clips, not per-session
   // recordings, and aren't what fills up disk over time the way a new
   // upload per set/session does.
-  async getAdminVideos(): Promise<AdminVideoRow[]> {
+  // A stress test with 20,000 real video files found this whole route
+  // used to `fs.stat` EVERY video ever uploaded platform-wide, on every
+  // single page load -- 1.1s for one request, 2-5s once a couple of
+  // admins had the page open at once, and strictly worse the longer the
+  // platform runs since nothing here was ever bounded. The 4 SQL queries
+  // below were never the problem (confirmed via EXPLAIN ANALYZE); disk
+  // stats were. Now: `limit`/`offset` slice the (cheap, DB-only) combined
+  // row list BEFORE any disk touches it, so exactly `limit` stat calls
+  // happen per request no matter how large the platform's video history
+  // ever gets. getAdminVideoStorageSummary below still needs to touch
+  // every file at least once for the running "X GB total" figure, but
+  // that's now its own cached, decoupled computation -- see its comment.
+  async getAdminVideos(limit = 50, offset = 0): Promise<{ videos: AdminVideoRow[]; total: number }> {
     const setSelection = {
       id: workoutSetEntries.id,
       date: workoutLogs.date,
@@ -15632,11 +15651,45 @@ ${catalog}`;
       })),
     ];
 
-    const withSizes = await Promise.all(
-      rows.map(async (r) => ({ ...r, sizeBytes: (await statUploadedFile(r.videoUrl)) ?? 0 })),
+    const sorted = rows.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+    const page = sorted.slice(offset, offset + limit);
+    const videos = await Promise.all(
+      page.map(async (r) => ({ ...r, sizeBytes: (await statUploadedFile(r.videoUrl)) ?? 0 })),
     );
 
-    return withSizes.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+    return { videos, total: sorted.length };
+  },
+
+  // Platform-wide "X GB across Y videos" figure the storage page's header
+  // needs -- separated out from getAdminVideos above so paging through the
+  // list (or several admins having it open at once) never re-triggers a
+  // full-platform disk scan. Still has to stat every video at least once
+  // to answer "how much space are we actually using," so it's cached
+  // in-memory for ADMIN_VIDEO_SUMMARY_CACHE_MS: the first request after
+  // the cache goes stale pays the real scan cost once, everyone else
+  // (including concurrent requests in-flight during that scan) gets the
+  // cached figure instantly. A page-count list mutation (delete/bulk-
+  // delete) invalidates it immediately rather than waiting out the TTL,
+  // so the total never visibly lags behind an admin's own delete.
+  async getAdminVideoStorageSummary(): Promise<{ totalBytes: number; totalCount: number }> {
+    const now = Date.now();
+    if (adminVideoSummaryCache && now - adminVideoSummaryCache.at < ADMIN_VIDEO_SUMMARY_CACHE_MS) {
+      return adminVideoSummaryCache.value;
+    }
+    const { videos } = await this.getAdminVideos(Number.MAX_SAFE_INTEGER, 0);
+    const value = {
+      totalBytes: videos.reduce((sum, v) => sum + v.sizeBytes, 0),
+      totalCount: videos.length,
+    };
+    adminVideoSummaryCache = { at: now, value };
+    return value;
+  },
+
+  // Called after a delete/bulk-delete so the storage-summary figure
+  // doesn't visibly lag an admin's own action for up to
+  // ADMIN_VIDEO_SUMMARY_CACHE_MS -- see that cache's own comment.
+  invalidateAdminVideoSummaryCache() {
+    adminVideoSummaryCache = null;
   },
 
   // Clears one video's DB reference and deletes its file(s) from disk --
