@@ -106,11 +106,16 @@ export default function ForgeAiPage() {
     squatMaxLbs: number | null;
     deadliftMaxLbs: number | null;
   };
-  const { data: aggregateData, isLoading: aggregateLoading } = useQuery<AthleteRow[]>({
-    queryKey: ["/api/admin/aggregate-athlete-data"],
-    queryFn: () => getJson("/api/admin/aggregate-athlete-data"),
+  const AGGREGATE_PAGE_SIZE = 200;
+  const [aggregateLoadedPages, setAggregateLoadedPages] = useState(1);
+  const { data: aggregateResult, isLoading: aggregateLoading } = useQuery<{ rows: AthleteRow[]; total: number }>({
+    queryKey: ["/api/admin/aggregate-athlete-data", aggregateLoadedPages],
+    queryFn: () => getJson(`/api/admin/aggregate-athlete-data?limit=${aggregateLoadedPages * AGGREGATE_PAGE_SIZE}&offset=0`),
     enabled: showAggregate,
   });
+  const aggregateData = aggregateResult?.rows ?? [];
+  const aggregateTotal = aggregateResult?.total ?? 0;
+  const aggregateHasMore = aggregateData.length < aggregateTotal;
 
   type ScreenRow = {
     testKey: string;
@@ -457,7 +462,7 @@ export default function ForgeAiPage() {
             <CardContent className="overflow-x-auto">
               {aggregateLoading ? (
                 <div className="h-24 animate-pulse rounded-md bg-surface" />
-              ) : !aggregateData || aggregateData.length === 0 ? (
+              ) : aggregateData.length === 0 ? (
                 <p className="py-8 text-center text-sm text-muted-foreground">No athletes yet.</p>
               ) : (
                 <table className="w-full text-left text-sm">
@@ -506,6 +511,18 @@ export default function ForgeAiPage() {
                     ))}
                   </tbody>
                 </table>
+              )}
+              {aggregateHasMore && (
+                <div className="flex justify-center p-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setAggregateLoadedPages((p) => p + 1)}
+                    disabled={aggregateLoading}
+                  >
+                    Load more ({aggregateTotal - aggregateData.length} remaining)
+                  </Button>
+                </div>
               )}
             </CardContent>
           )}

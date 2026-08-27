@@ -11789,18 +11789,39 @@ Respond to the admin's latest message by calling ask_question or propose_movemen
   // query level, not just hidden client-side. Every call logs who looked
   // via aggregateDataAccessLog -- nothing here restricts access further,
   // so the audit trail is the only accountability mechanism.
-  async getAggregateAthleteData(adminId: number): Promise<AggregateAthleteRow[]> {
+  // Paginated -- the admin UI renders this as one row per athlete in a
+  // plain HTML table with no virtualization, so an unbounded fetch here
+  // meant "View data" on a real platform-scale instance (485k athletes)
+  // shipped a 160MB+ JSON response and then tried to mount 8M+ DOM nodes,
+  // which no browser tab survives. limit/offset default to a page real
+  // enough to be useful without threatening either the network payload or
+  // the DOM. total is the platform-wide athlete count, for the pager UI --
+  // NOT the count of an unfiltered query engine result, which stays exact
+  // and uncapped (see queryAthletesAdvanced below).
+  async getAggregateAthleteData(
+    adminId: number,
+    limit = 200,
+    offset = 0,
+  ): Promise<{ rows: AggregateAthleteRow[]; total: number }> {
     db.insert(aggregateDataAccessLog).values({ adminId }).catch(() => {});
-    return this.queryAggregateAthleteData();
+    const [rows, [{ count: total }]] = await Promise.all([
+      this.queryAggregateAthleteData({ limit, offset }),
+      db.select({ count: count() }).from(users).where(eq(users.role, "athlete")),
+    ]);
+    return { rows, total };
   },
 
   // The actual query behind getAggregateAthleteData, split out so the
   // reflection job below can read the same data WITHOUT writing an access-
   // log row -- that log means "a person looked," and a scheduled job isn't
   // one. Never call this directly from a route; routes go through
-  // getAggregateAthleteData so the audit trail stays honest.
-  async queryAggregateAthleteData(): Promise<AggregateAthleteRow[]> {
-    return db
+  // getAggregateAthleteData so the audit trail stays honest. No pagination
+  // arg means the full, unbounded set -- the reflection job genuinely needs
+  // every athlete to mine real population segments, and it's a background
+  // job, not something rendered to a browser, so the DOM-node ceiling that
+  // motivates getAggregateAthleteData's default page size doesn't apply.
+  async queryAggregateAthleteData(pagination?: { limit: number; offset: number }): Promise<AggregateAthleteRow[]> {
+    const base = db
       .select({
         age: users.age,
         gender: users.gender,
@@ -11822,6 +11843,8 @@ Respond to the admin's latest message by calling ask_question or propose_movemen
       })
       .from(users)
       .where(eq(users.role, "athlete"));
+    if (!pagination) return base;
+    return base.limit(pagination.limit).offset(pagination.offset);
   },
 
   // The Admin Query Engine's one entry point -- extends the redaction rule
