@@ -192,6 +192,7 @@ import { computeReadiness, BODY_PAIN_PARTS, type BodyPainPart } from "@shared/we
 import { isExerciseRiskyForPainParts } from "@shared/injury-matching";
 import {
   buildAcwrSeries,
+  computeAcwrRisk,
   buildWeeklyLoadSeries,
   type DailyLoad,
   type DailyTrainingLoad,
@@ -16129,52 +16130,66 @@ ${catalog}`;
   // approach) rather than one query per athlete. An athlete with no
   // logged training in the window is simply absent from the result, same
   // "absent means no data yet, not a real zero" convention as wellness.
+  // ACWR's roster-summary and 7-day-sparkline queries below both used to
+  // pull every raw numeric set in the window back to Node and sum
+  // reps*weight per (athlete, date) in a JS loop -- correct, but a stress
+  // test (300 athletes, 8 weeks of history) showed the *query* itself
+  // stayed under 50ms while the JS aggregation over tens of thousands of
+  // rows blocked Node's single event loop for 2+ seconds under concurrent
+  // load, stalling every other coach's requests too, not just this one's.
+  // rosterLoadExprSql does the same reps*weight arithmetic as a SQL
+  // expression instead, so Postgres's own aggregate engine does the
+  // summing and only one row per (athlete[, date]) crosses the wire.
+  // Mirrors the original JS parsing exactly: reps takes its leading digit
+  // run the way parseInt did ("8-10" -> 8; regexp_match returns NULL --
+  // and NULL propagates through the multiply and is ignored by sum() --
+  // for reps with no leading digit, same as the old isNaN(reps) skip);
+  // weight is required to look like a plain number (the old parseFloat/
+  // isNaN guard), enforced by the caller's own WHERE clause since casting
+  // a non-numeric string with ::numeric errors rather than parsing
+  // partially the way parseFloat did.
+  rosterLoadExprSql() {
+    return sql<number>`(regexp_match(${workoutSetEntries.reps}, '^\\d+'))[1]::numeric * ${workoutSetEntries.weight}::numeric`;
+  },
+
   async getRosterAcwrSummary(coachId: number) {
     const coachIds = await this.getEffectiveCoachIds(coachId);
-    const sinceDate = new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const today = new Date().toISOString().slice(0, 10);
+    // Matches buildAcwrSeries' own window math exactly: acute = the 7 days
+    // ending today, chronic = the 28 days ending today (both inclusive).
+    const acuteSince = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const chronicSince = new Date(Date.now() - 27 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const loadExpr = this.rosterLoadExprSql();
+
     const rows = await db
       .select({
         athleteId: coachAthletes.athleteId,
         athleteName: users.name,
-        date: workoutLogs.date,
-        weightMode: workoutLogEntries.weightMode,
-        reps: workoutSetEntries.reps,
-        weight: workoutSetEntries.weight,
+        acuteLoad: sql<number>`coalesce(sum(${loadExpr}) filter (where ${workoutLogs.date} >= ${acuteSince}), 0)::real`,
+        chronicTotal: sql<number>`coalesce(sum(${loadExpr}), 0)::real`,
       })
       .from(coachAthletes)
       .innerJoin(users, eq(users.id, coachAthletes.athleteId))
       .innerJoin(workoutLogs, eq(workoutLogs.athleteId, coachAthletes.athleteId))
       .innerJoin(workoutLogEntries, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
       .innerJoin(workoutSetEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
-      .where(and(inArray(coachAthletes.coachId, coachIds), gte(workoutLogs.date, sinceDate)));
+      .where(
+        and(
+          inArray(coachAthletes.coachId, coachIds),
+          gte(workoutLogs.date, chronicSince),
+          lte(workoutLogs.date, today),
+          eq(workoutLogEntries.weightMode, "numeric"),
+          sql`${workoutSetEntries.weight} ~ '^[0-9]+(\\.[0-9]+)?$'`,
+        ),
+      )
+      .groupBy(coachAthletes.athleteId, users.name);
 
-    const loadByAthleteAndDate = new Map<number, Map<string, number>>();
-    const nameByAthlete = new Map<number, string>();
-    for (const row of rows) {
-      nameByAthlete.set(row.athleteId, row.athleteName);
-      const reps = row.reps ? parseInt(row.reps, 10) : NaN;
-      if (Number.isNaN(reps) || row.weightMode !== "numeric" || !row.weight) continue;
-      const w = parseFloat(row.weight);
-      if (Number.isNaN(w)) continue;
-      const byDate = loadByAthleteAndDate.get(row.athleteId) ?? new Map<string, number>();
-      byDate.set(row.date, (byDate.get(row.date) ?? 0) + reps * w);
-      loadByAthleteAndDate.set(row.athleteId, byDate);
-    }
-
-    const summary: { athleteId: number; athleteName: string; ratio: number | null; level: string }[] = [];
-    for (const [athleteId, byDate] of loadByAthleteAndDate) {
-      const dailyLoads = Array.from(byDate.entries()).map(([date, load]) => ({ date, load }));
-      const series = buildAcwrSeries(dailyLoads, today, 1);
-      const latest = series[series.length - 1];
-      summary.push({
-        athleteId,
-        athleteName: nameByAthlete.get(athleteId)!,
-        ratio: latest.ratio,
-        level: latest.level,
-      });
-    }
-    return summary.sort((a, b) => a.athleteName.localeCompare(b.athleteName));
+    return rows
+      .map((r) => {
+        const { ratio, level } = computeAcwrRisk(r.acuteLoad, r.chronicTotal / 4);
+        return { athleteId: r.athleteId, athleteName: r.athleteName, ratio, level };
+      })
+      .sort((a, b) => a.athleteName.localeCompare(b.athleteName));
   },
 
   // Last 7 days of daily training load (sum of reps*weight across numeric-
@@ -16194,28 +16209,32 @@ ${catalog}`;
     const dates = Array.from({ length: days }, (_, i) =>
       formatISO(subDays(today, days - 1 - i), { representation: "date" }),
     );
+    // Summed per (athlete, date) in SQL -- see rosterLoadExprSql's own
+    // comment above for why (was a JS loop over every raw set row).
     const rows = await db
       .select({
         athleteId: coachAthletes.athleteId,
         date: workoutLogs.date,
-        weightMode: workoutLogEntries.weightMode,
-        reps: workoutSetEntries.reps,
-        weight: workoutSetEntries.weight,
+        load: sql<number>`coalesce(sum(${this.rosterLoadExprSql()}), 0)::real`,
       })
       .from(coachAthletes)
       .innerJoin(workoutLogs, eq(workoutLogs.athleteId, coachAthletes.athleteId))
       .innerJoin(workoutLogEntries, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
       .innerJoin(workoutSetEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
-      .where(and(inArray(coachAthletes.coachId, coachIds), gte(workoutLogs.date, dates[0])));
+      .where(
+        and(
+          inArray(coachAthletes.coachId, coachIds),
+          gte(workoutLogs.date, dates[0]),
+          eq(workoutLogEntries.weightMode, "numeric"),
+          sql`${workoutSetEntries.weight} ~ '^[0-9]+(\\.[0-9]+)?$'`,
+        ),
+      )
+      .groupBy(coachAthletes.athleteId, workoutLogs.date);
 
     const loadByAthleteAndDate = new Map<number, Map<string, number>>();
     for (const row of rows) {
-      const reps = row.reps ? parseInt(row.reps, 10) : NaN;
-      if (Number.isNaN(reps) || row.weightMode !== "numeric" || !row.weight) continue;
-      const w = parseFloat(row.weight);
-      if (Number.isNaN(w)) continue;
       const byDate = loadByAthleteAndDate.get(row.athleteId) ?? new Map<string, number>();
-      byDate.set(row.date, (byDate.get(row.date) ?? 0) + reps * w);
+      byDate.set(row.date, row.load);
       loadByAthleteAndDate.set(row.athleteId, byDate);
     }
 
