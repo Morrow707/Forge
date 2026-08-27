@@ -1919,6 +1919,25 @@ ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "pinned_athlete_ids" json;
 -- comments for the full writeup.
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "roster_groups" json;
 ALTER TABLE "coach_athletes" ADD COLUMN IF NOT EXISTS "group_id" text;
+
+-- Missing FK indexes found by a 500k-profile stress test: every one of
+-- these joins was doing a sequential scan of the whole child table on
+-- every request, invisible at dev-seed scale and a 200ms+ full scan once
+-- the table hit real production-shaped row counts. See each index's own
+-- comment in shared/schema.ts for which read path it backs.
+CREATE INDEX IF NOT EXISTS "workout_log_entries_workout_log_id_idx" ON "workout_log_entries" ("workout_log_id");
+CREATE INDEX IF NOT EXISTS "workout_set_entries_log_entry_id_idx" ON "workout_set_entries" ("log_entry_id");
+CREATE INDEX IF NOT EXISTS "skill_day_logs_athlete_date_idx" ON "skill_day_logs" ("athlete_id", "date");
+CREATE INDEX IF NOT EXISTS "teams_coach_idx" ON "teams" ("coach_id");
+CREATE INDEX IF NOT EXISTS "coach_athletes_athlete_idx" ON "coach_athletes" ("athlete_id");
+
+-- Partial indexes for the "every video on the platform" admin scan
+-- (getAdminVideos) -- only a small fraction of rows in each of these
+-- tables has a non-null video column, but without a partial index the
+-- WHERE ... IS NOT NULL filter was a full sequential scan every time.
+CREATE INDEX IF NOT EXISTS "workout_set_entries_video_idx" ON "workout_set_entries" ("form_check_video_url") WHERE "form_check_video_url" IS NOT NULL;
+CREATE INDEX IF NOT EXISTS "skill_session_logs_video_idx" ON "skill_session_logs" ("video_url") WHERE "video_url" IS NOT NULL;
+CREATE INDEX IF NOT EXISTS "workout_comments_video_idx" ON "workout_comments" ("video_url") WHERE "video_url" IS NOT NULL;
 `;
 
 async function main() {

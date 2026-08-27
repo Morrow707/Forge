@@ -14,7 +14,7 @@ import {
   real,
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { BODY_PAIN_PARTS } from "./wellness";
@@ -639,6 +639,11 @@ export const coachAthletes = pgTable(
       table.coachId,
       table.athleteId,
     ),
+    // pairIdx above leads with coachId, so it doesn't serve the reverse
+    // "which coach(es) is this athlete linked to" lookup (getEffectiveCoachIds
+    // and friends) -- that's run on essentially every athlete-authenticated
+    // request, so it needs its own index rather than a sequential scan.
+    athleteIdx: index("coach_athletes_athlete_idx").on(table.athleteId),
   }),
 );
 
@@ -753,6 +758,11 @@ export const teams = pgTable(
   },
   (table) => ({
     codeIdx: uniqueIndex("teams_code_idx").on(table.code),
+    // getTeamsForCoach and friends look these up by coachId on every
+    // roster/team-management page load -- unindexed, that's a sequential
+    // scan of the whole teams table once there are enough coaches on the
+    // platform for it to matter.
+    coachIdx: index("teams_coach_idx").on(table.coachId),
   }),
 );
 
@@ -1389,6 +1399,11 @@ export const skillSessionLogs = pgTable(
   (table) => ({
     athleteIdx: index("skill_session_logs_athlete_idx").on(table.athleteId),
     assignmentIdx: index("skill_session_logs_assignment_idx").on(table.skillAssignmentId),
+    // Same reasoning as workoutSetEntries.videoIdx -- backs the admin video
+    // list's "every skill session with a video" scan.
+    videoIdx: index("skill_session_logs_video_idx")
+      .on(table.videoUrl)
+      .where(sql`${table.videoUrl} is not null`),
   }),
 );
 
@@ -1420,6 +1435,10 @@ export const skillDayLogs = pgTable(
       table.skillProgramDayId,
       table.date,
     ),
+    // Mirrors workoutLogs.athleteDateIdx -- the skills side of the same
+    // "recent logs for this athlete" read, missing here even though the
+    // strength side has always had it.
+    athleteDateIdx: index("skill_day_logs_athlete_date_idx").on(table.athleteId, table.date),
   }),
 );
 
@@ -1711,7 +1730,9 @@ export const workoutLogs = pgTable(
 // One row per logged exercise (either a program exercise or a corrective --
 // exactly one of the two FKs is set). Actual per-set performance lives in
 // workoutSetEntries below, sized to however many sets were prescribed.
-export const workoutLogEntries = pgTable("workout_log_entries", {
+export const workoutLogEntries = pgTable(
+  "workout_log_entries",
+  {
   id: serial("id").primaryKey(),
   workoutLogId: integer("workout_log_id")
     .notNull()
@@ -1740,9 +1761,20 @@ export const workoutLogEntries = pgTable("workout_log_entries", {
   actualSets: integer("actual_sets"),
   actualReps: text("actual_reps"),
   actualWeight: text("actual_weight"),
-});
+  },
+  (table) => ({
+    // Every roster-wide read (ACWR, load trend, exercise history) joins
+    // workout_logs -> workout_log_entries -> workout_set_entries; without
+    // this, that last hop was a sequential scan of the whole table
+    // regardless of how few rows a single coach's roster touches --
+    // invisible in dev, a 200ms+ full scan once the table hit ~500k rows.
+    workoutLogIdx: index("workout_log_entries_workout_log_id_idx").on(table.workoutLogId),
+  }),
+);
 
-export const workoutSetEntries = pgTable("workout_set_entries", {
+export const workoutSetEntries = pgTable(
+  "workout_set_entries",
+  {
   id: serial("id").primaryKey(),
   logEntryId: integer("log_entry_id")
     .notNull()
@@ -1893,7 +1925,21 @@ export const workoutSetEntries = pgTable("workout_set_entries", {
   // believe instead of only ever seeing that context live, in the tracker
   // dialog, at the moment the set was captured.
   trustScores: json("trust_scores"),
-});
+  },
+  (table) => ({
+    // Same reasoning as workoutLogEntries.workoutLogIdx just above -- the
+    // last hop of the same roster-wide join chain.
+    logEntryIdx: index("workout_set_entries_log_entry_id_idx").on(table.logEntryId),
+    // Partial index backing the admin video list/storage-summary "every set
+    // with a video" scan (getAdminVideos) -- only ~5% of rows have a
+    // non-null formCheckVideoUrl, but without this the WHERE ... IS NOT
+    // NULL filter was a full sequential scan of the whole (multi-million-
+    // row) table every time.
+    videoIdx: index("workout_set_entries_video_idx")
+      .on(table.formCheckVideoUrl)
+      .where(sql`${table.formCheckVideoUrl} is not null`),
+  }),
+);
 
 // A two-way thread on a specific day of a specific assignment -- an athlete
 // flagging a rough set or attaching a form-check video, a coach replying.
@@ -1934,6 +1980,11 @@ export const workoutComments = pgTable(
       table.assignmentId,
       table.programDayId,
     ),
+    // Same reasoning as workoutSetEntries.videoIdx -- backs the admin video
+    // list's "every comment with a video attachment" scan.
+    videoIdx: index("workout_comments_video_idx")
+      .on(table.videoUrl)
+      .where(sql`${table.videoUrl} is not null`),
   }),
 );
 

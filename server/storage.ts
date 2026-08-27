@@ -1727,6 +1727,17 @@ export class ForbiddenReferenceError extends Error {
 // page, not something any other part of the app reads or depends on.
 const ADMIN_VIDEO_SUMMARY_CACHE_MS = 5 * 60 * 1000;
 let adminVideoSummaryCache: { at: number; value: { totalBytes: number; totalCount: number } } | null = null;
+// Single-flight guard for the cache-miss scan below -- without it, N
+// concurrent requests arriving while the cache is cold/stale each kick off
+// their own full-platform stat() sweep at once, which is exactly what a
+// 500k-profile stress test surfaced: ~192k videos x 20 concurrent admin
+// page loads saturated Node's libuv threadpool (default size 4) and
+// stalled the entire server, every unrelated endpoint included, for over
+// 13 seconds. adminVideoSummaryEpoch guards against a scan that started
+// before an invalidate() call overwriting the cache with data that raced
+// past the delete it was supposed to reflect.
+let adminVideoSummaryInFlight: Promise<{ totalBytes: number; totalCount: number }> | null = null;
+let adminVideoSummaryEpoch = 0;
 
 export const storage = {
   // ---------- Users ----------
@@ -15557,107 +15568,153 @@ ${catalog}`;
   // every file at least once for the running "X GB total" figure, but
   // that's now its own cached, decoupled computation -- see its comment.
   async getAdminVideos(limit = 50, offset = 0): Promise<{ videos: AdminVideoRow[]; total: number }> {
-    const setSelection = {
-      id: workoutSetEntries.id,
-      date: workoutLogs.date,
-      setNumber: workoutSetEntries.setNumber,
-      videoUrl: workoutSetEntries.formCheckVideoUrl,
-      athleteName: users.name,
-    };
-    const [setPeRows, setCorrectiveRows, skillRows, commentRows] = await Promise.all([
-      db
-        .select({ ...setSelection, exerciseName: exercises.name })
-        .from(workoutSetEntries)
-        .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
-        .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
-        .innerJoin(users, eq(workoutLogs.athleteId, users.id))
-        .innerJoin(programExercises, eq(workoutLogEntries.programExerciseId, programExercises.id))
-        .innerJoin(exercises, eq(programExercises.exerciseId, exercises.id))
-        .where(isNotNull(workoutSetEntries.formCheckVideoUrl)),
-      db
-        .select({ ...setSelection, exerciseName: exercises.name })
-        .from(workoutSetEntries)
-        .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
-        .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
-        .innerJoin(users, eq(workoutLogs.athleteId, users.id))
-        .innerJoin(assignmentCorrectives, eq(workoutLogEntries.correctiveId, assignmentCorrectives.id))
-        .innerJoin(exercises, eq(assignmentCorrectives.exerciseId, exercises.id))
-        .where(isNotNull(workoutSetEntries.formCheckVideoUrl)),
-      db
-        .select({
-          id: skillSessionLogs.id,
-          date: skillSessionLogs.createdAt,
-          videoUrl: skillSessionLogs.videoUrl,
-          coachAnnotationUrl: skillSessionLogs.coachAnnotationUrl,
-          athleteName: users.name,
-          exerciseName: skillExercises.name,
-        })
-        .from(skillSessionLogs)
-        .innerJoin(users, eq(skillSessionLogs.athleteId, users.id))
-        .innerJoin(skillProgramExercises, eq(skillSessionLogs.skillProgramExerciseId, skillProgramExercises.id))
-        .innerJoin(skillExercises, eq(skillProgramExercises.skillExerciseId, skillExercises.id))
-        .where(isNotNull(skillSessionLogs.videoUrl)),
-      db
-        .select({
-          id: workoutComments.id,
-          date: workoutComments.date,
-          createdAt: workoutComments.createdAt,
-          videoUrl: workoutComments.videoUrl,
-          imageUrl: workoutComments.imageUrl,
-          athleteName: users.name,
-        })
-        .from(workoutComments)
-        .innerJoin(assignments, eq(workoutComments.assignmentId, assignments.id))
-        .innerJoin(users, eq(assignments.athleteId, users.id))
-        .where(isNotNull(workoutComments.videoUrl)),
+    // A second stress-test pass (500k profiles, ~192k real videos) found
+    // the pagination fix above wasn't the whole story: `limit`/`offset`
+    // only ever sliced an in-Node array that these 4 queries still fetched
+    // in FULL on every single call, no matter how small a page was asked
+    // for -- 20 concurrent admin page loads meant 20 concurrent unbounded
+    // scans of the (now multi-million-row) workout_set_entries table,
+    // which starved the Postgres connection pool badly enough to stall
+    // every other endpoint on the platform, roster/nutrition/guardian
+    // included, for 20+ seconds. The EXPLAIN ANALYZE in the fix that
+    // introduced limit/offset was accurate for its own 20k-row test; it
+    // just didn't hold at 10x the scale. Fixed the same way as the ACWR
+    // bug: push the ORDER BY + LIMIT + OFFSET into SQL via a UNION ALL, so
+    // Postgres only ever computes the one page actually requested instead
+    // of materializing every video row in Node first.
+    // Phase 1: figure out which `limit` rows actually win, touching only
+    // id/date -- no joins out to users/exercises/skill_exercises, which is
+    // what made the single-pass version expensive (it computed the label +
+    // athlete name for every one of ~192k qualifying rows just to sort and
+    // throw away all but a handful). A single 'set' branch covers both
+    // program-exercise and corrective sets here since both just need
+    // (id, date), unlike phase 2 below where the exercise name actually
+    // requires knowing which of the two a given row is.
+    const rankResult = await db.execute<{ source: "set" | "skill" | "comment"; id: number }>(sql`
+      SELECT source, id FROM (
+        SELECT 'set' AS source, wse.id AS id, wl.date::timestamp AS date
+        FROM workout_set_entries wse
+        JOIN workout_log_entries wle ON wle.id = wse.log_entry_id
+        JOIN workout_logs wl ON wl.id = wle.workout_log_id
+        WHERE wse.form_check_video_url IS NOT NULL
+
+        UNION ALL
+
+        SELECT 'skill', ssl.id, ssl.created_at
+        FROM skill_session_logs ssl
+        WHERE ssl.video_url IS NOT NULL
+
+        UNION ALL
+
+        SELECT 'comment', wc.id, coalesce(wc.date::timestamp, wc.created_at)
+        FROM workout_comments wc
+        WHERE wc.video_url IS NOT NULL
+      ) all_videos
+      ORDER BY date DESC
+      LIMIT ${limit} OFFSET ${offset}
+    `);
+
+    const countResult = await db.execute<{ total: string }>(sql`
+      SELECT
+        (SELECT count(*) FROM workout_set_entries WHERE form_check_video_url IS NOT NULL) +
+        (SELECT count(*) FROM skill_session_logs WHERE video_url IS NOT NULL) +
+        (SELECT count(*) FROM workout_comments WHERE video_url IS NOT NULL) AS total
+    `);
+
+    const setIds = rankResult.rows.filter((r) => r.source === "set").map((r) => r.id);
+    const skillIds = rankResult.rows.filter((r) => r.source === "skill").map((r) => r.id);
+    const commentIds = rankResult.rows.filter((r) => r.source === "comment").map((r) => r.id);
+
+    // Phase 2: fetch full details (label, athlete name) only for the
+    // handful of ids that actually won phase 1's sort -- cheap regardless
+    // of how large the underlying tables get, since it's an id-list lookup
+    // instead of a platform-wide scan. LEFT JOINing both the program-
+    // exercise and corrective paths and coalescing avoids needing two
+    // separate 'set' branches here the way the old single-pass query did.
+    const [setDetails, skillDetails, commentDetails] = await Promise.all([
+      setIds.length === 0
+        ? []
+        : db.execute<{
+            id: number;
+            date: string;
+            video_url: string;
+            athlete_name: string;
+            label: string;
+          }>(sql`
+            SELECT wse.id AS id, to_char(wl.date, 'YYYY-MM-DD') AS date,
+              wse.form_check_video_url AS video_url, u.name AS athlete_name,
+              coalesce(ex_pe.name, ex_c.name) || ' — Set ' || wse.set_number AS label
+            FROM workout_set_entries wse
+            JOIN workout_log_entries wle ON wle.id = wse.log_entry_id
+            JOIN workout_logs wl ON wl.id = wle.workout_log_id
+            JOIN users u ON u.id = wl.athlete_id
+            LEFT JOIN program_exercises pe ON pe.id = wle.program_exercise_id
+            LEFT JOIN exercises ex_pe ON ex_pe.id = pe.exercise_id
+            LEFT JOIN assignment_correctives ac ON ac.id = wle.corrective_id
+            LEFT JOIN exercises ex_c ON ex_c.id = ac.exercise_id
+            WHERE wse.id IN ${setIds}
+          `).then((r) => r.rows),
+      skillIds.length === 0
+        ? []
+        : db.execute<{
+            id: number;
+            date: string;
+            video_url: string;
+            secondary_url: string | null;
+            athlete_name: string;
+            label: string;
+          }>(sql`
+            SELECT ssl.id AS id, to_char(ssl.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS date,
+              ssl.video_url AS video_url, ssl.coach_annotation_url AS secondary_url,
+              u.name AS athlete_name, se.name AS label
+            FROM skill_session_logs ssl
+            JOIN users u ON u.id = ssl.athlete_id
+            JOIN skill_program_exercises spe ON spe.id = ssl.skill_program_exercise_id
+            JOIN skill_exercises se ON se.id = spe.skill_exercise_id
+            WHERE ssl.id IN ${skillIds}
+          `).then((r) => r.rows),
+      commentIds.length === 0
+        ? []
+        : db.execute<{
+            id: number;
+            date: string;
+            video_url: string;
+            secondary_url: string | null;
+            athlete_name: string;
+          }>(sql`
+            SELECT wc.id AS id,
+              to_char(coalesce(wc.date::timestamp, wc.created_at), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS date,
+              wc.video_url AS video_url, wc.image_url AS secondary_url, u.name AS athlete_name
+            FROM workout_comments wc
+            JOIN assignments a ON a.id = wc.assignment_id
+            JOIN users u ON u.id = a.athlete_id
+            WHERE wc.id IN ${commentIds}
+          `).then((r) => r.rows),
     ]);
 
-    const rows: Omit<AdminVideoRow, "sizeBytes">[] = [
-      ...setPeRows.map((r) => ({
-        source: "set" as const,
-        id: r.id,
-        videoUrl: r.videoUrl!,
-        secondaryUrl: null,
-        athleteName: r.athleteName,
-        label: `${r.exerciseName} — Set ${r.setNumber}`,
-        date: r.date,
-      })),
-      ...setCorrectiveRows.map((r) => ({
-        source: "set" as const,
-        id: r.id,
-        videoUrl: r.videoUrl!,
-        secondaryUrl: null,
-        athleteName: r.athleteName,
-        label: `${r.exerciseName} — Set ${r.setNumber}`,
-        date: r.date,
-      })),
-      ...skillRows.map((r) => ({
-        source: "skill" as const,
-        id: r.id,
-        videoUrl: r.videoUrl!,
-        secondaryUrl: r.coachAnnotationUrl,
-        athleteName: r.athleteName,
-        label: r.exerciseName,
-        date: r.date.toISOString(),
-      })),
-      ...commentRows.map((r) => ({
-        source: "comment" as const,
-        id: r.id,
-        videoUrl: r.videoUrl!,
-        secondaryUrl: r.imageUrl,
-        athleteName: r.athleteName,
-        label: "Comment attachment",
-        date: r.date ?? r.createdAt.toISOString(),
-      })),
-    ];
+    const setById = new Map(setDetails.map((r) => [r.id, r]));
+    const skillById = new Map(skillDetails.map((r) => [r.id, r]));
+    const commentById = new Map(commentDetails.map((r) => [r.id, r]));
 
-    const sorted = rows.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
-    const page = sorted.slice(offset, offset + limit);
+    // Reassemble in phase 1's already-correct sorted order -- the detail
+    // queries above don't preserve it.
+    const page: Omit<AdminVideoRow, "sizeBytes">[] = rankResult.rows.map((r) => {
+      if (r.source === "set") {
+        const d = setById.get(r.id)!;
+        return { source: "set", id: r.id, videoUrl: d.video_url, secondaryUrl: null, athleteName: d.athlete_name, label: d.label, date: d.date };
+      }
+      if (r.source === "skill") {
+        const d = skillById.get(r.id)!;
+        return { source: "skill", id: r.id, videoUrl: d.video_url, secondaryUrl: d.secondary_url, athleteName: d.athlete_name, label: d.label, date: d.date };
+      }
+      const d = commentById.get(r.id)!;
+      return { source: "comment", id: r.id, videoUrl: d.video_url, secondaryUrl: d.secondary_url, athleteName: d.athlete_name, label: "Comment attachment", date: d.date };
+    });
     const videos = await Promise.all(
       page.map(async (r) => ({ ...r, sizeBytes: (await statUploadedFile(r.videoUrl)) ?? 0 })),
     );
 
-    return { videos, total: sorted.length };
+    return { videos, total: Number(countResult.rows[0]?.total ?? 0) };
   },
 
   // Platform-wide "X GB across Y videos" figure the storage page's header
@@ -15676,19 +15733,54 @@ ${catalog}`;
     if (adminVideoSummaryCache && now - adminVideoSummaryCache.at < ADMIN_VIDEO_SUMMARY_CACHE_MS) {
       return adminVideoSummaryCache.value;
     }
-    const { videos } = await this.getAdminVideos(Number.MAX_SAFE_INTEGER, 0);
-    const value = {
-      totalBytes: videos.reduce((sum, v) => sum + v.sizeBytes, 0),
-      totalCount: videos.length,
-    };
-    adminVideoSummaryCache = { at: now, value };
-    return value;
+    if (adminVideoSummaryInFlight) {
+      return adminVideoSummaryInFlight;
+    }
+    const startEpoch = adminVideoSummaryEpoch;
+    adminVideoSummaryInFlight = (async () => {
+      try {
+        // Deliberately NOT getAdminVideos(MAX_SAFE_INTEGER, 0): that route's
+        // pagination (see its own comment) fetches a cheap sort-key page
+        // and then joins full details back in for just that page via
+        // `WHERE id IN (...ids)` -- perfect for a page of 50, but asking it
+        // for every row at once turns that IN-list into one bind parameter
+        // per video. At real platform scale (~192k here) that blew straight
+        // through node-postgres's parameter list and crashed with "Maximum
+        // call stack size exceeded" the first time this ran after the
+        // pagination fix. The summary doesn't need labels/athlete names
+        // anyway -- just every video's URL, to stat() -- so it gets its own
+        // minimal, no-IN-list, no-join query instead.
+        const urlsResult = await db.execute<{ video_url: string }>(sql`
+          SELECT form_check_video_url AS video_url FROM workout_set_entries WHERE form_check_video_url IS NOT NULL
+          UNION ALL
+          SELECT video_url FROM skill_session_logs WHERE video_url IS NOT NULL
+          UNION ALL
+          SELECT video_url FROM workout_comments WHERE video_url IS NOT NULL
+        `);
+        const sizes = await Promise.all(urlsResult.rows.map((r) => statUploadedFile(r.video_url)));
+        const value = {
+          totalBytes: sizes.reduce((sum: number, s) => sum + (s ?? 0), 0),
+          totalCount: urlsResult.rows.length,
+        };
+        // Only cache the result if nothing invalidated us mid-scan --
+        // otherwise we'd overwrite a just-invalidated cache with a total
+        // computed before the delete that triggered the invalidation.
+        if (startEpoch === adminVideoSummaryEpoch) {
+          adminVideoSummaryCache = { at: Date.now(), value };
+        }
+        return value;
+      } finally {
+        adminVideoSummaryInFlight = null;
+      }
+    })();
+    return adminVideoSummaryInFlight;
   },
 
   // Called after a delete/bulk-delete so the storage-summary figure
   // doesn't visibly lag an admin's own action for up to
   // ADMIN_VIDEO_SUMMARY_CACHE_MS -- see that cache's own comment.
   invalidateAdminVideoSummaryCache() {
+    adminVideoSummaryEpoch++;
     adminVideoSummaryCache = null;
   },
 
