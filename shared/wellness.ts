@@ -1,5 +1,14 @@
 export type ReadinessLevel = "green" | "yellow" | "red";
 
+// Key under users.navLabelOverrides (see shared/schema.ts) a primary coach
+// can use to rename the athlete-facing wellness check-in term throughout
+// the app -- e.g. "Daily Readiness" instead of the default below. Not an
+// href like the rest of that map's keys, since this term isn't tied to a
+// single nav item; NavCustomizeDialog (write) and WellnessGate (read) both
+// key off this same constant so the two surfaces can't drift apart.
+export const DAILY_CHECKIN_TERM_KEY = "term:daily-checkin";
+export const DEFAULT_DAILY_CHECKIN_TERM = "Daily Check-In";
+
 export const SORENESS_SCALE = [
   { value: 1, label: "None" },
   { value: 2, label: "Mild" },

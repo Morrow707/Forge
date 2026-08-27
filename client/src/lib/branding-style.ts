@@ -9,6 +9,12 @@ export type EffectiveBranding = {
   brandMission?: string | null;
   brandContactEmail?: string | null;
   brandWelcomeMessage?: string | null;
+  // Only ever populated for an athlete's own /api/branding/me response --
+  // rides along so athlete-facing screens can read a primary-coach-set term
+  // (e.g. DAILY_CHECKIN_TERM_KEY in shared/wellness.ts) through this same
+  // GET. Read-only from here: nothing PATCHes navLabelOverrides through
+  // this route, only /api/coach/nav-prefs (primary-coach-gated) can.
+  navLabelOverrides?: Record<string, string>;
 };
 
 // Mirrors users.personalAccentColor/personalSecondaryColor/

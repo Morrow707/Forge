@@ -28,7 +28,10 @@ import {
   BODY_PAIN_PARTS,
   computeReadiness,
   READINESS_LABEL,
+  DAILY_CHECKIN_TERM_KEY,
+  DEFAULT_DAILY_CHECKIN_TERM,
 } from "@shared/wellness";
+import type { EffectiveBranding } from "@/lib/branding-style";
 import {
   isNativeHealthSupported,
   isHealthSyncEnabled,
@@ -69,6 +72,20 @@ export function WellnessGate() {
     queryKey: ["/api/athlete/wellness/today"],
     queryFn: () => getJson("/api/athlete/wellness/today"),
   });
+
+  // Same query (and cache -- AppShell already primes it) the rest of the
+  // app uses to re-skin itself for the athlete's coach. Here it's not the
+  // colors we want but navLabelOverrides[DAILY_CHECKIN_TERM_KEY]: a primary
+  // coach can rename this check-in from NavCustomizeDialog (see that
+  // component and shared/wellness.ts), and every piece of copy on this
+  // screen should follow along so it doesn't call itself one thing in the
+  // heading and another on the button.
+  const { data: branding } = useQuery<EffectiveBranding>({
+    queryKey: ["/api/branding/me"],
+    queryFn: () => getJson("/api/branding/me"),
+  });
+  const checkinTerm =
+    branding?.navLabelOverrides?.[DAILY_CHECKIN_TERM_KEY] || DEFAULT_DAILY_CHECKIN_TERM;
 
   const [editing, setEditing] = useState(false);
   const [sleepHours, setSleepHours] = useState("");
@@ -313,7 +330,7 @@ export function WellnessGate() {
       <div className="flex items-center justify-between gap-2">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-foreground">
-            Daily Check-In
+            {checkinTerm}
           </p>
           <p className="text-xs text-muted-foreground">
             Takes 20 seconds and helps your coach see how you're recovering.
@@ -447,7 +464,7 @@ export function WellnessGate() {
         disabled={!canSubmit || submitMutation.isPending}
         onClick={() => submitMutation.mutate()}
       >
-        {data ? "Update Check-In" : "Submit Check-In"}
+        {data ? `Update ${checkinTerm}` : `Submit ${checkinTerm}`}
       </Button>
     </div>
   );

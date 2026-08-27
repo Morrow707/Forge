@@ -12992,6 +12992,7 @@ ${entriesText}`;
       brandMission: null,
       brandContactEmail: null,
       brandWelcomeMessage: null,
+      navLabelOverrides: {},
       features: resolveCoachFeatures(null),
     };
     const coaches = await this.getCoachesForAthlete(userId);
@@ -12999,9 +13000,16 @@ ${entriesText}`;
       return emptyBranding;
     }
     const coachIds = await this.getEffectiveCoachIds(coaches[0].id);
-    const [orgBranding, features] = await Promise.all([
+    // navPrefs rides along here so athlete-facing screens (e.g.
+    // wellness-gate.tsx's DAILY_CHECKIN_TERM_KEY lookup) can read a
+    // primary-coach-set term through this same GET -- this route is
+    // read-only (no PATCH accepts navLabelOverrides through it), so an
+    // athlete can never write it; only /api/coach/nav-prefs, gated to the
+    // primary coach, can.
+    const [orgBranding, features, navPrefs] = await Promise.all([
       this.getCoachBranding(coachIds[0]),
       this.getCoachFeatures(coachIds[0]),
+      this.getNavPrefsForCoach(coachIds[0]),
     ]);
 
     const athleteTeams = await this.getTeamsForAthlete(userId);
@@ -13021,6 +13029,7 @@ ${entriesText}`;
       brandMission: orgBranding?.brandMission ?? null,
       brandContactEmail: orgBranding?.brandContactEmail ?? null,
       brandWelcomeMessage: orgBranding?.brandWelcomeMessage ?? null,
+      navLabelOverrides: navPrefs.navLabelOverrides,
       features,
     };
   },

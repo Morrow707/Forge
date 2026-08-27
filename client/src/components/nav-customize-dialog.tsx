@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { apiRequest, getJson, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
 import type { LucideIcon } from "lucide-react";
+import { DAILY_CHECKIN_TERM_KEY, DEFAULT_DAILY_CHECKIN_TERM } from "@shared/wellness";
 
 export type NavCustomizeItem = { href: string; label: string; icon: LucideIcon };
 
@@ -107,6 +108,21 @@ export function NavCustomizeDialog({
               </div>
             );
           })}
+          {/* Not a nav item -- no href/icon/checkbox to hide, just the one
+             athlete-facing term, keyed by DAILY_CHECKIN_TERM_KEY instead of
+             an href in the same navLabelOverrides map (see wellness-gate.tsx,
+             which reads this same key back out via /api/branding/me). */}
+          <div className="space-y-1.5 rounded-md border border-border p-2.5">
+            <p className="text-sm">{DEFAULT_DAILY_CHECKIN_TERM}</p>
+            <Input
+              value={labels[DAILY_CHECKIN_TERM_KEY] ?? ""}
+              onChange={(e) => setLabels({ ...labels, [DAILY_CHECKIN_TERM_KEY]: e.target.value })}
+              onBlur={commitLabel}
+              placeholder={`Rename "${DEFAULT_DAILY_CHECKIN_TERM}" (optional, e.g. "Daily Readiness")`}
+              className="h-7 text-xs"
+              maxLength={30}
+            />
+          </div>
         </div>
         <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
           Done
