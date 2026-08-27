@@ -3481,18 +3481,66 @@ export const storage = {
   // per-athlete "goal vs hit today" summary without a dialog-per-athlete
   // waterfall. Full history/editing still lives on the athlete's own
   // nutrition tab (NutritionPanel), this is just the at-a-glance list view.
+  // Was a Promise.all(roster.map(-> Promise.all([2 queries]))) fan-out --
+  // fine for a normal roster, but two bulk inArray queries + a JS reduce
+  // over the bounded (today-only) entry set scales the same way the other
+  // roster-wide summaries in this file do, instead of exhausting the pg
+  // pool on a large roster (see getCaraComplianceForCoach's own history of
+  // this exact failure mode).
   async getNutritionSummaryForRoster(coachId: number) {
     const roster = await this.getRosterForCoach(coachId);
+    if (roster.length === 0) return [];
+    const athleteIds = roster.map((a) => a.id);
     const today = formatISO(new Date(), { representation: "date" });
-    return Promise.all(
-      roster.map(async (athlete) => {
-        const [targets, { totals }] = await Promise.all([
-          this.getNutritionTargetsForAthlete(athlete.id),
-          this.getFoodLogForDate(athlete.id, today),
-        ]);
-        return { athleteId: athlete.id, targets: targets ?? null, totals };
-      }),
-    );
+
+    const [targetRows, entries] = await Promise.all([
+      db.select().from(nutritionTargets).where(inArray(nutritionTargets.athleteId, athleteIds)),
+      db
+        .select()
+        .from(foodLogEntries)
+        .where(and(inArray(foodLogEntries.athleteId, athleteIds), eq(foodLogEntries.date, today))),
+    ]);
+    const targetsByAthlete = new Map(targetRows.map((t) => [t.athleteId, t]));
+
+    const emptyTotals = {
+      caloriesKcal: 0,
+      proteinG: 0,
+      carbsG: 0,
+      fatG: 0,
+      fiberG: 0,
+      sodiumMg: 0,
+      calciumMg: 0,
+      ironMg: 0,
+      vitaminDMcg: 0,
+      potassiumMg: 0,
+      magnesiumMg: 0,
+      vitaminB12Mcg: 0,
+      zincMg: 0,
+    };
+    const totalsByAthlete = new Map<number, typeof emptyTotals>();
+    for (const e of entries) {
+      const acc = totalsByAthlete.get(e.athleteId) ?? { ...emptyTotals };
+      acc.caloriesKcal += e.caloriesKcal ?? 0;
+      acc.proteinG += e.proteinG ?? 0;
+      acc.carbsG += e.carbsG ?? 0;
+      acc.fatG += e.fatG ?? 0;
+      acc.fiberG += e.fiberG ?? 0;
+      acc.sodiumMg += e.sodiumMg ?? 0;
+      acc.calciumMg += e.calciumMg ?? 0;
+      acc.ironMg += e.ironMg ?? 0;
+      acc.vitaminDMcg += e.vitaminDMcg ?? 0;
+      acc.potassiumMg += e.potassiumMg ?? 0;
+      acc.magnesiumMg += e.magnesiumMg ?? 0;
+      acc.vitaminB12Mcg += e.vitaminB12Mcg ?? 0;
+      acc.zincMg += e.zincMg ?? 0;
+      totalsByAthlete.set(e.athleteId, acc);
+    }
+
+    return roster.map((athlete) => ({
+      athleteId: athlete.id,
+      targets: targetsByAthlete.get(athlete.id) ?? null,
+      totals: totalsByAthlete.get(athlete.id) ?? emptyTotals,
+    }));
   },
 
   // Weekly rollup for the trend view on both the athlete's own nutrition
