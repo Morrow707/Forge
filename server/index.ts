@@ -17,6 +17,7 @@ import "dotenv/config";
 import "express-async-errors";
 import express, { type Request, Response, NextFunction } from "express";
 import helmet from "helmet";
+import compression from "compression";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
 import { registerRoutes } from "./routes";
@@ -96,6 +97,14 @@ app.use(
     crossOriginResourcePolicy: false,
   }),
 );
+// No compression anywhere on this server until a 500k-profile stress test
+// found /api/coach/roster serializing a 12.6MB uncompressed JSON response
+// for one large-roster coach -- every response on the platform, this one
+// most of all, was going out uncompressed. Default threshold (1kb) and
+// filter (skips already-compressed types like video/image) are fine as-is;
+// gzip on repetitive structured JSON like a roster list routinely gets
+// 80-90%+ smaller.
+app.use(compression());
 // The web deployment is same-origin with itself, so it's never subject to
 // CORS at all -- this exists purely for the native iOS/Android app, whose
 // WKWebView/WebView serves the bundled UI from capacitor://localhost or
