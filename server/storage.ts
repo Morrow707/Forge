@@ -225,7 +225,6 @@ import {
   and,
   or,
   inArray,
-  notInArray,
   asc,
   desc,
   lt,
@@ -17280,44 +17279,50 @@ ${catalog}`;
   // to pay for.
   async getAdminPlatformStats() {
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    const [[coachRow], [athleteRow], newSignupRows, [freeAgentRow]] = await Promise.all([
+    const [[coachRow], [athleteRow], signupTrendResult, [freeAgentRow]] = await Promise.all([
       db.select({ count: count() }).from(users).where(eq(users.role, "coach")),
       db.select({ count: count() }).from(users).where(eq(users.role, "athlete")),
-      db.select({ createdAt: users.createdAt }).from(users).where(gte(users.createdAt, sevenDaysAgo)),
+      // Grouped in SQL rather than pulling one row per signup into Node --
+      // at real platform scale (500k+ signups can land in one 7-day window
+      // during a mass onboarding) that was every new user's raw created_at
+      // timestamp, just to bucket them by day in a JS loop.
+      db.execute<{ day: string; cnt: string }>(sql`
+        SELECT created_at::date AS day, count(*) AS cnt
+        FROM users
+        WHERE created_at >= ${sevenDaysAgo}
+        GROUP BY day
+      `),
       // Free Agent = an athlete with zero coachAthletes rows -- same
       // definition requireFreeAgent (routes.ts) and getCoachesForAthlete
       // use per-athlete, just as a platform-wide set difference instead of
-      // one query per athlete.
+      // one query per athlete. A LEFT JOIN + IS NULL anti-join, not
+      // notInArray/NOT IN: at real platform scale (485k users, 455k
+      // coach_athletes rows) Postgres wouldn't rewrite a NOT IN subquery
+      // into a hash anti-join here -- it planned a materialize-and-scan
+      // SubPlan instead, an effectively O(n*m) comparison that took over 2
+      // minutes of 100% CPU across 3 backends and still hadn't finished when
+      // cancelled. The LEFT JOIN form plans as a Parallel Hash Anti Join
+      // (~56k cost vs. ~1.33 BILLION) and actually runs in ~330ms.
       db
         .select({ count: count() })
         .from(users)
-        .where(
-          and(
-            eq(users.role, "athlete"),
-            notInArray(
-              users.id,
-              db.select({ athleteId: coachAthletes.athleteId }).from(coachAthletes),
-            ),
-          ),
-        ),
+        .leftJoin(coachAthletes, eq(coachAthletes.athleteId, users.id))
+        .where(and(eq(users.role, "athlete"), isNull(coachAthletes.athleteId))),
     ]);
     // Real per-day signup counts for the "New signups this week" sparkline --
-    // bucketed from the same users.createdAt rows the headcount above already
-    // fetched, not a new query or any persisted snapshot.
+    // bucketed from the grouped query above, not a new query or any
+    // persisted snapshot.
     const today = new Date();
     const last7Dates = Array.from({ length: 7 }, (_, i) =>
       formatISO(subDays(today, 6 - i), { representation: "date" }),
     );
-    const signupCountByDate = new Map<string, number>();
-    for (const row of newSignupRows) {
-      const d = formatISO(row.createdAt, { representation: "date" });
-      signupCountByDate.set(d, (signupCountByDate.get(d) ?? 0) + 1);
-    }
+    const signupCountByDate = new Map(signupTrendResult.rows.map((r) => [r.day, Number(r.cnt)]));
     const newSignupsTrend = last7Dates.map((d) => signupCountByDate.get(d) ?? 0);
+    const newSignupsThisWeek = Array.from(signupCountByDate.values()).reduce((a, b) => a + b, 0);
     return {
       totalCoaches: coachRow?.count ?? 0,
       totalAthletes: athleteRow?.count ?? 0,
-      newSignupsThisWeek: newSignupRows.length,
+      newSignupsThisWeek,
       newSignupsTrend,
       freeAgentCount: freeAgentRow?.count ?? 0,
     };
