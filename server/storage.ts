@@ -16710,6 +16710,15 @@ ${catalog}`;
     );
     if (toInsert.length === 0) return { newlyUnlocked: [], all: existing };
 
+    // onConflictDoNothing, not a bare insert: two concurrent calls for the
+    // same athlete (two open tabs/devices, or a client retry racing the
+    // original request -- a 500k-profile stress test's write-concurrency
+    // pass hit this on ~half of one athlete's 12 simultaneous submits) both
+    // read the same "existing" snapshot above and compute the same toInsert
+    // list, so the loser of the race hit the (athleteId, key) unique index
+    // as a hard constraint-violation error instead of the no-op this
+    // function's own comment already promised ("safe to call as often as
+    // we like"). Silently dropping the losing rows here makes that true.
     const inserted = await db
       .insert(athleteTrophies)
       .values(
@@ -16722,6 +16731,7 @@ ${catalog}`;
           threshold: def.threshold,
         })),
       )
+      .onConflictDoNothing({ target: [athleteTrophies.athleteId, athleteTrophies.key] })
       .returning();
     return { newlyUnlocked: inserted, all: [...existing, ...inserted] };
   },
