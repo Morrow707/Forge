@@ -410,11 +410,7 @@ export default function CoachRoster() {
 
   const bulkAddToTeamMutation = useMutation({
     mutationFn: async ({ teamId, athleteIds }: { teamId: number; athleteIds: number[] }) => {
-      await Promise.all(
-        athleteIds.map((athleteId) =>
-          apiRequest("POST", `/api/coach/teams/${teamId}/members`, { athleteId }),
-        ),
-      );
+      await apiRequest("POST", `/api/coach/teams/${teamId}/members/bulk`, { athleteIds });
     },
     onSuccess: (_, { athleteIds }) => {
       qc.invalidateQueries({ queryKey: ["/api/coach/teams"] });

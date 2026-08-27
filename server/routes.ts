@@ -4802,12 +4802,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // Agent) to their team, and every team view from then on (roster list,
     // challenges progress, microcycle plan) leaks that athlete's real name
     // and training data to a coach who was never actually assigned to them.
-    const roster = await storage.getRosterForCoach(user.id);
-    if (!roster.some((a) => a.id === parsed.data.athleteId)) {
+    const onRoster = await storage.getRosterAthleteForCoach(user.id, parsed.data.athleteId);
+    if (!onRoster) {
       return res.status(400).json({ message: "Athlete not on your roster" });
     }
     const member = await storage.addAthleteToTeam(teamId, parsed.data.athleteId);
     res.status(201).json(member);
+  });
+
+  // Bulk counterpart -- see storage.bulkAddAthletesToTeam's own comment for
+  // why the roster page's "select all, add to team" needs this instead of
+  // firing the single-athlete route above once per selection.
+  app.post("/api/coach/teams/:id/members/bulk", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const teamId = Number(req.params.id);
+    if (!(await assertOwnsTeam(user.id, teamId))) {
+      return res.status(404).json({ message: "Team not found" });
+    }
+    const schema = z.object({ athleteIds: z.array(z.number()).min(1).max(5000) });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const result = await storage.bulkAddAthletesToTeam(user.id, teamId, parsed.data.athleteIds);
+    res.status(201).json(result);
   });
 
   app.delete(

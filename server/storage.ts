@@ -6185,6 +6185,36 @@ ${athleteContext}
     return row;
   },
 
+  // Bulk counterpart to addAthleteToTeam -- backs the roster page's "select
+  // all, add to team" action. The single-athlete route above (and this one,
+  // if called once per id) re-fetches the coach's WHOLE roster just to
+  // check membership of one athleteId; fired once per selected athlete from
+  // a client-side Promise.all, that's an O(roster size) scan repeated once
+  // per selection -- quadratic in roster size, and on a coach with a
+  // several-thousand-athlete roster (see getRosterForCoach's own scale
+  // history) it turns "select all, add to team" into tens of seconds of
+  // pointless DB load for a click that should be instant. This checks
+  // roster membership for every requested id in one query and inserts every
+  // valid one in a single statement instead.
+  async bulkAddAthletesToTeam(coachId: number, teamId: number, athleteIds: number[]) {
+    if (athleteIds.length === 0) return { added: 0, skippedNotOnRoster: 0 };
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    const onRoster = await db
+      .select({ athleteId: coachAthletes.athleteId })
+      .from(coachAthletes)
+      .where(
+        and(inArray(coachAthletes.coachId, coachIds), inArray(coachAthletes.athleteId, athleteIds)),
+      );
+    const validIds = onRoster.map((r) => r.athleteId);
+    if (validIds.length === 0) return { added: 0, skippedNotOnRoster: athleteIds.length };
+    const inserted = await db
+      .insert(teamMembers)
+      .values(validIds.map((athleteId) => ({ teamId, athleteId })))
+      .onConflictDoNothing({ target: [teamMembers.teamId, teamMembers.athleteId] })
+      .returning();
+    return { added: inserted.length, skippedNotOnRoster: athleteIds.length - validIds.length };
+  },
+
   async removeAthleteFromTeam(teamId: number, athleteId: number) {
     await db
       .delete(teamMembers)
