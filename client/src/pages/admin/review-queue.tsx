@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { apiRequest, ApiError } from "@/lib/queryClient";
+import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import { Check, X, Pencil, CheckCircle2, TrendingUp, Flag, Youtube, Users } from "lucide-react";
@@ -72,14 +72,29 @@ function ExerciseSummaryLine({ exercise }: { exercise: ExerciseSummary }) {
   );
 }
 
+const PAGE_SIZE = 100;
+
 export default function AdminReviewQueue() {
   const qc = useQueryClient();
-  const { data: submissions = [] } = useQuery<PendingSubmission[]>({
-    queryKey: ["/api/admin/submissions"],
+  const [submissionsLoadedPages, setSubmissionsLoadedPages] = useState(1);
+  const { data: submissionsResult } = useQuery<{ rows: PendingSubmission[]; total: number }>({
+    queryKey: ["/api/admin/submissions", submissionsLoadedPages],
+    queryFn: () =>
+      getJson(`/api/admin/submissions?limit=${submissionsLoadedPages * PAGE_SIZE}&offset=0`),
   });
-  const { data: reports = [] } = useQuery<OpenReport[]>({
-    queryKey: ["/api/admin/reports"],
+  const submissions = submissionsResult?.rows ?? [];
+  const submissionsTotal = submissionsResult?.total ?? 0;
+  const submissionsHasMore = submissions.length < submissionsTotal;
+
+  const [reportsLoadedPages, setReportsLoadedPages] = useState(1);
+  const { data: reportsResult } = useQuery<{ rows: OpenReport[]; total: number }>({
+    queryKey: ["/api/admin/reports", reportsLoadedPages],
+    queryFn: () => getJson(`/api/admin/reports?limit=${reportsLoadedPages * PAGE_SIZE}&offset=0`),
   });
+  const reports = reportsResult?.rows ?? [];
+  const reportsTotal = reportsResult?.total ?? 0;
+  const reportsHasMore = reports.length < reportsTotal;
+
   const [nameEdits, setNameEdits] = useState<Record<number, string>>({});
 
   const resolveSubmission = useMutation({
@@ -113,7 +128,7 @@ export default function AdminReviewQueue() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <TrendingUp className="h-4 w-4 text-primary" />
-              Trending Across Coaches ({submissions.length})
+              Trending Across Coaches ({submissionsTotal})
             </CardTitle>
             <CardDescription>
               No one nominated these -- two or more coaches independently added an exercise
@@ -196,6 +211,17 @@ export default function AdminReviewQueue() {
                 </div>
               </div>
             ))}
+            {submissionsHasMore && (
+              <div className="flex justify-center pt-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSubmissionsLoadedPages((p) => p + 1)}
+                >
+                  Load more ({submissionsTotal - submissions.length} remaining)
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -203,7 +229,7 @@ export default function AdminReviewQueue() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Flag className="h-4 w-4 text-destructive" />
-              Reported Issues ({reports.length})
+              Reported Issues ({reportsTotal})
             </CardTitle>
             <CardDescription>
               Problems coaches have flagged on Forge exercises -- broken links, wrong info,
@@ -252,6 +278,13 @@ export default function AdminReviewQueue() {
                 </div>
               </div>
             ))}
+            {reportsHasMore && (
+              <div className="flex justify-center pt-2">
+                <Button variant="outline" size="sm" onClick={() => setReportsLoadedPages((p) => p + 1)}>
+                  Load more ({reportsTotal - reports.length} remaining)
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

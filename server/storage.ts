@@ -9422,28 +9422,45 @@ ${athleteContext}
     }
   },
 
-  async getPendingSubmissionsForAdmin() {
-    const rows = await db.query.exerciseSubmissions.findMany({
-      where: eq(exerciseSubmissions.status, "pending"),
-      orderBy: asc(exerciseSubmissions.createdAt),
-      with: { exercise: true },
-    });
-    return rows.map((r) => ({
-      id: r.id,
-      createdAt: r.createdAt,
-      coachCount: r.coachCount,
-      exercise: {
-        id: r.exercise.id,
-        name: r.exercise.name,
-        category: r.exercise.category,
-        muscleGroup: r.exercise.muscleGroup,
-        movementType: r.exercise.movementType,
-        laterality: r.exercise.laterality,
-        equipment: r.exercise.equipment,
-        instructions: r.exercise.instructions,
-        videoUrl: r.exercise.videoUrl,
-      },
-    }));
+  // Paginated -- the admin review-queue UI renders each row as a live
+  // controlled <Input> plus action buttons, not plain text, with no
+  // virtualization. A real backlog of a few thousand pending submissions
+  // (plausible on a platform with 5,000+ coaches if admin review lags even
+  // briefly) mounted that many live inputs at once -- worse for the browser
+  // than a plain list at the same row count.
+  async getPendingSubmissionsForAdmin(limit = 100, offset = 0) {
+    const [rows, [{ count: total }]] = await Promise.all([
+      db.query.exerciseSubmissions.findMany({
+        where: eq(exerciseSubmissions.status, "pending"),
+        orderBy: asc(exerciseSubmissions.createdAt),
+        with: { exercise: true },
+        limit,
+        offset,
+      }),
+      db
+        .select({ count: count() })
+        .from(exerciseSubmissions)
+        .where(eq(exerciseSubmissions.status, "pending")),
+    ]);
+    return {
+      total,
+      rows: rows.map((r) => ({
+        id: r.id,
+        createdAt: r.createdAt,
+        coachCount: r.coachCount,
+        exercise: {
+          id: r.exercise.id,
+          name: r.exercise.name,
+          category: r.exercise.category,
+          muscleGroup: r.exercise.muscleGroup,
+          movementType: r.exercise.movementType,
+          laterality: r.exercise.laterality,
+          equipment: r.exercise.equipment,
+          instructions: r.exercise.instructions,
+          videoUrl: r.exercise.videoUrl,
+        },
+      })),
+    };
   },
 
   async resolveSubmission(id: number, approve: boolean, adminId: number, name?: string) {
@@ -9483,30 +9500,39 @@ ${athleteContext}
     return row;
   },
 
-  async getOpenReportsForAdmin() {
-    const rows = await db.query.exerciseReports.findMany({
-      where: eq(exerciseReports.status, "open"),
-      orderBy: asc(exerciseReports.createdAt),
-      with: { exercise: true, reporter: true },
-    });
-    return rows.map((r) => ({
-      id: r.id,
-      issueType: r.issueType,
-      note: r.note,
-      createdAt: r.createdAt,
-      exercise: {
-        id: r.exercise.id,
-        name: r.exercise.name,
-        category: r.exercise.category,
-        muscleGroup: r.exercise.muscleGroup,
-        movementType: r.exercise.movementType,
-        laterality: r.exercise.laterality,
-        equipment: r.exercise.equipment,
-        instructions: r.exercise.instructions,
-        videoUrl: r.exercise.videoUrl,
-      },
-      reporter: { id: r.reporter.id, name: r.reporter.name },
-    }));
+  // Paginated -- same reasoning as getPendingSubmissionsForAdmin above.
+  async getOpenReportsForAdmin(limit = 100, offset = 0) {
+    const [rows, [{ count: total }]] = await Promise.all([
+      db.query.exerciseReports.findMany({
+        where: eq(exerciseReports.status, "open"),
+        orderBy: asc(exerciseReports.createdAt),
+        with: { exercise: true, reporter: true },
+        limit,
+        offset,
+      }),
+      db.select({ count: count() }).from(exerciseReports).where(eq(exerciseReports.status, "open")),
+    ]);
+    return {
+      total,
+      rows: rows.map((r) => ({
+        id: r.id,
+        issueType: r.issueType,
+        note: r.note,
+        createdAt: r.createdAt,
+        exercise: {
+          id: r.exercise.id,
+          name: r.exercise.name,
+          category: r.exercise.category,
+          muscleGroup: r.exercise.muscleGroup,
+          movementType: r.exercise.movementType,
+          laterality: r.exercise.laterality,
+          equipment: r.exercise.equipment,
+          instructions: r.exercise.instructions,
+          videoUrl: r.exercise.videoUrl,
+        },
+        reporter: { id: r.reporter.id, name: r.reporter.name },
+      })),
+    };
   },
 
   async resolveReport(id: number) {

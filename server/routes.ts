@@ -1846,7 +1846,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // an existing Forge exercise.
 
   app.get("/api/admin/submissions", requireRole("admin"), async (req, res) => {
-    const list = await storage.getPendingSubmissionsForAdmin();
+    const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? "100"), 10) || 100, 1), 500);
+    const offset = Math.max(parseInt(String(req.query.offset ?? "0"), 10) || 0, 0);
+    const list = await storage.getPendingSubmissionsForAdmin(limit, offset);
     res.json(list);
   });
 
@@ -1863,7 +1865,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.get("/api/admin/reports", requireRole("admin"), async (req, res) => {
-    const list = await storage.getOpenReportsForAdmin();
+    const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? "100"), 10) || 100, 1), 500);
+    const offset = Math.max(parseInt(String(req.query.offset ?? "0"), 10) || 0, 0);
+    const list = await storage.getOpenReportsForAdmin(limit, offset);
     res.json(list);
   });
 
