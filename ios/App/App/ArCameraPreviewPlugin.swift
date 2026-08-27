@@ -84,6 +84,15 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
     // measured sharpness number for the first frame of each session, once,
     // so the next report comes with real numbers instead of a screenshot.
     private var hasLoggedFrameDiagnostics = false
+    // There's no public API to directly query or set the camera's lens
+    // position under ARKit -- attemptFocusRecovery below explains why and
+    // what this does instead. framesSinceFocusRecovery counts frames after
+    // that attempt so the "did it help" comparison log fires a beat later,
+    // once the pipeline has had a moment to settle, not on the very next
+    // frame.
+    private var hasAttemptedFocusRecovery = false
+    private var framesSinceFocusRecovery = 0
+    private static let focusRecoveryLogDelayFrames = 15
 
     // MARK: - Body-anchor plausibility gating
     //
@@ -343,6 +352,8 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
             self.hadBody = false
             self.lastEmitTimestamp = 0
             self.hasLoggedFrameDiagnostics = false
+            self.hasAttemptedFocusRecovery = false
+            self.framesSinceFocusRecovery = 0
             self.trackImplement = call.getBool("trackImplement") ?? false
             self.leftImplementTracker.reset()
             self.rightImplementTracker.reset()
@@ -688,14 +699,14 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
     // -- low and flat means genuinely low-frequency/blurred content, not
     // just a subjective impression), so a future comparison doesn't have to
     // rely on eyeballing screenshots against each other.
-    private func logFrameDiagnostics(_ frame: ARFrame) {
+    private func logFrameDiagnostics(_ frame: ARFrame, label: String) {
         // Not optional (Apple declares this as a plain, possibly-empty
         // dictionary) -- checking isEmpty rather than an if-let, which
         // would always succeed here and silently hide the "ARKit didn't
         // populate this at all" case behind a misleading success branch.
         let exif = frame.exifData
         if exif.isEmpty {
-            logDiag("EXIF: frame.exifData was empty")
+            logDiag("[\(label)] EXIF: frame.exifData was empty")
         } else {
             let subjectDistance = exif[kCGImagePropertyExifSubjectDistance as String]
             let focalLength = exif[kCGImagePropertyExifFocalLength as String]
@@ -703,7 +714,7 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
             let exposureTime = exif[kCGImagePropertyExifExposureTime as String]
             let iso = exif[kCGImagePropertyExifISOSpeedRatings as String]
             logDiag(
-                "EXIF subjectDistance=\(String(describing: subjectDistance)) "
+                "[\(label)] EXIF subjectDistance=\(String(describing: subjectDistance)) "
                     + "focalLength=\(String(describing: focalLength)) "
                     + "aperture=\(String(describing: aperture)) "
                     + "exposureTime=\(String(describing: exposureTime)) "
@@ -713,19 +724,48 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
 
         let intrinsics = frame.camera.intrinsics
         logDiag(
-            "intrinsics fx=\(intrinsics.columns.0.x) fy=\(intrinsics.columns.1.y) "
+            "[\(label)] intrinsics fx=\(intrinsics.columns.0.x) fy=\(intrinsics.columns.1.y) "
                 + "cx=\(intrinsics.columns.2.x) cy=\(intrinsics.columns.2.y)"
         )
 
         if #available(iOS 16.0, *) {
             logDiag(
-                "exposureDuration=\(frame.camera.exposureDuration) "
+                "[\(label)] exposureDuration=\(frame.camera.exposureDuration) "
                     + "exposureOffset=\(frame.camera.exposureOffset)"
             )
         }
 
         let sharpness = frameSharpnessScore(frame.capturedImage)
-        logDiag("frameSharpness (variance of decimated luma Laplacian) = \(sharpness)")
+        logDiag("[\(label)] frameSharpness (variance of decimated luma Laplacian) = \(sharpness)")
+    }
+
+    // ARKit doesn't expose the camera's lens/focus state to app code at
+    // all when it owns the capture device (no AVCaptureDevice reference,
+    // no lensPosition, no isAdjustingFocus) -- the only lever documented
+    // anywhere for the known "fixed lens position" bug (Apple dev forum
+    // threads 78954/87909) is the private setFocusModeLocked(lensPosition:)
+    // API, which isn't usable in an App Store build. Re-running the
+    // session's own already-active configuration is the one legitimate,
+    // public thing left to try: it tears down and reinitializes ARKit's
+    // internal capture pipeline, which is the same effect toggling a
+    // camera off and back on has for a stuck-focus point-and-shoot --
+    // real-world reports of this exact ARKit bug describe that sometimes
+    // (not reliably) landing on a sharper initial focus the second time.
+    // Fires once, automatically, a few hundred milliseconds into every
+    // session, before an athlete has had time to start a rep -- and
+    // logFrameDiagnostics logs a "post-recovery" entry a beat afterward
+    // (see framesSinceFocusRecovery in didUpdate above) specifically so
+    // the diagnostic log itself shows whether this changed anything,
+    // rather than needing another round of guessing if it doesn't.
+    private func attemptFocusRecovery(session: ARSession) {
+        hasAttemptedFocusRecovery = true
+        framesSinceFocusRecovery = 0
+        guard let configuration = session.configuration else {
+            logDiag("focus recovery skipped: session.configuration was nil")
+            return
+        }
+        logDiag("attempting focus recovery: re-running session()")
+        session.run(configuration, options: [.resetTracking, .removeExistingAnchors])
     }
 
     // Cheap, single-shot approximation of the standard "variance of
@@ -779,7 +819,14 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
 
         if !hasLoggedFrameDiagnostics {
             hasLoggedFrameDiagnostics = true
-            logFrameDiagnostics(frame)
+            logFrameDiagnostics(frame, label: "initial")
+            attemptFocusRecovery(session: session)
+        } else if hasAttemptedFocusRecovery && framesSinceFocusRecovery >= 0 {
+            framesSinceFocusRecovery += 1
+            if framesSinceFocusRecovery == Self.focusRecoveryLogDelayFrames {
+                logFrameDiagnostics(frame, label: "post-recovery")
+                framesSinceFocusRecovery = -1 // done -- stop counting/logging again
+            }
         }
 
         let bodyAnchor = frame.anchors.compactMap { $0 as? ARBodyAnchor }.first
