@@ -4933,8 +4933,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/athlete/team-challenges", requireRole("athlete"), async (req, res) => {
     const user = currentUser(req);
     const challenges = await storage.getTeamChallengesForAthlete(user.id);
+    // Coach's dashboard genuinely needs the full roster breakdown; this
+    // athlete-facing "Squad Quests" card is a compact at-a-glance widget
+    // (see squad-quests.tsx) that renders perAthlete unbounded with no
+    // pagination -- top 10 (already sorted by contribution) instead of the
+    // whole team, which on a real 10k-member team was a 2MB response and
+    // 10,000+ rendered rows for every single athlete's dashboard load.
     const withProgress = await Promise.all(
-      challenges.map(async (c) => ({ ...c, progress: await storage.computeTeamChallengeProgress(c) })),
+      challenges.map(async (c) => {
+        const progress = await storage.computeTeamChallengeProgress(c);
+        return { ...c, progress: { ...progress, perAthlete: progress.perAthlete.slice(0, 10) } };
+      }),
     );
     res.json(withProgress);
   });
