@@ -436,6 +436,13 @@ export const users = pgTable(
     personalAccentColor: text("personal_accent_color"),
     personalSecondaryColor: text("personal_secondary_color"),
     personalBackgroundHue: integer("personal_background_hue"),
+    // Any coach's own short line -- a coaching philosophy or personal
+    // quote, shown under their own name/title in the team's public About
+    // page staff listing (team-about.tsx). Same "about me, not the org"
+    // category as personalAccentColor above: any staff coach can set
+    // their own, not gated to isPrimaryCoach the way brandMotto/
+    // brandMission (the org-wide equivalent, set once by the primary) are.
+    coachingPhilosophy: text("coaching_philosophy"),
     // Primary-coach-only (same gate as hiddenNavSections): renames a
     // coachNav item's label without touching its route or icon -- e.g.
     // "Team Board" -> "Locker Room". Keyed by the nav item's href, same
@@ -5172,6 +5179,15 @@ export const updatePersonalThemeSchema = z.object({
   backgroundHue: z.number().int().min(0).max(359).optional().nullable(),
 });
 
+// Any coach's own short line (coaching philosophy / personal quote) -- see
+// users.coachingPhilosophy's own comment. Not gated to the primary coach,
+// same as updatePersonalThemeSchema above. Capped well short of
+// brandMission's 500 -- this renders as one line under a name in the staff
+// listing, not a paragraph.
+export const updateCoachingPhilosophySchema = z.object({
+  coachingPhilosophy: z.string().trim().max(200).optional().nullable(),
+});
+
 // Admin-only -- see server/billing.ts and shared/billing-tiers.ts. Enum
 // values pulled from BILLING_TIER_ORDER/BILLING_ADD_ON_ORDER (not
 // hand-typed) so a new tier/add-on id can never validate here without
@@ -5784,6 +5800,7 @@ export type UpdateAccountNameInput = z.infer<typeof updateAccountNameSchema>;
 export type UpdateAccountEmailInput = z.infer<typeof updateAccountEmailSchema>;
 export type UpdateAccountPasswordInput = z.infer<typeof updateAccountPasswordSchema>;
 export type UpdatePersonalThemeInput = z.infer<typeof updatePersonalThemeSchema>;
+export type UpdateCoachingPhilosophyInput = z.infer<typeof updateCoachingPhilosophySchema>;
 export type UpdateCoachBillingInput = z.infer<typeof updateCoachBillingSchema>;
 export type CreateRedeemCodeInput = z.infer<typeof createRedeemCodeSchema>;
 export type RedeemCodeInput = z.infer<typeof redeemCodeInputSchema>;

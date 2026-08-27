@@ -2043,6 +2043,18 @@ export const storage = {
     return row ?? null;
   },
 
+  // Any coach's own short line -- see users.coachingPhilosophy's own
+  // comment. Not gated to the primary coach; a staff coach updates only
+  // their own row, same shape as updatePersonalTheme above.
+  async updateCoachingPhilosophy(userId: number, coachingPhilosophy: string | null) {
+    const [row] = await db
+      .update(users)
+      .set({ coachingPhilosophy })
+      .where(eq(users.id, userId))
+      .returning({ id: users.id, coachingPhilosophy: users.coachingPhilosophy });
+    return row ?? null;
+  },
+
   // Self-service account deletion (Apple 5.1.1(v) / Google Play's account-
   // deletion requirement) -- password re-entry since this is permanent and
   // irreversible, same bar as any other destructive action in this app.
@@ -3085,7 +3097,7 @@ export const storage = {
     const primaryId = coachIds[0];
     const rows = await db.query.coachStaff.findMany({
       where: eq(coachStaff.primaryCoachId, primaryId),
-      with: { staffCoach: { columns: { id: true, name: true, email: true } } },
+      with: { staffCoach: { columns: { id: true, name: true, email: true, coachingPhilosophy: true } } },
     });
     return {
       primaryCoachId: primaryId,
@@ -3097,10 +3109,10 @@ export const storage = {
     };
   },
 
-  // Name + display title only -- the public-facing About page's staff
-  // list, safe for an athlete to see (unlike getStaffForCoach above,
-  // which also carries each staff member's email for the coach-only
-  // Coaching Staff management dialog).
+  // Name + display title (+ each coach's own optional personal line) only
+  // -- the public-facing About page's staff list, safe for an athlete to
+  // see (unlike getStaffForCoach above, which also carries each staff
+  // member's email for the coach-only Coaching Staff management dialog).
   async getTeamRosterInfo(primaryCoachId: number) {
     const [primary, staff] = await Promise.all([
       this.getUser(primaryCoachId),
@@ -3108,7 +3120,12 @@ export const storage = {
     ]);
     return {
       primaryCoachName: primary?.name ?? null,
-      staff: staff.staff.map((s) => ({ name: s.name, staffTitle: s.staffTitle })),
+      primaryCoachPhilosophy: primary?.coachingPhilosophy ?? null,
+      staff: staff.staff.map((s) => ({
+        name: s.name,
+        staffTitle: s.staffTitle,
+        coachingPhilosophy: s.coachingPhilosophy,
+      })),
     };
   },
 

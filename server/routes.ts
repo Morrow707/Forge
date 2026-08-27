@@ -73,6 +73,7 @@ import {
   updateAccountEmailSchema,
   updateAccountPasswordSchema,
   updatePersonalThemeSchema,
+  updateCoachingPhilosophySchema,
   updateCoachBillingSchema,
   createRedeemCodeSchema,
   redeemCodeInputSchema,
@@ -7594,6 +7595,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
     const updated = await storage.updatePersonalTheme(user.id, parsed.data);
+    res.json(updated);
+  });
+
+  // Any coach's own short line (coaching philosophy / personal quote),
+  // not gated to the primary the way brandMotto/brandMission are -- see
+  // users.coachingPhilosophy's own comment in shared/schema.ts. Shown
+  // under this coach's own name on the team's public About page.
+  app.patch("/api/coach/philosophy", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = updateCoachingPhilosophySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const updated = await storage.updateCoachingPhilosophy(
+      user.id,
+      parsed.data.coachingPhilosophy ?? null,
+    );
     res.json(updated);
   });
 
