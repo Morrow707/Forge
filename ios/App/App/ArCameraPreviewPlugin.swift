@@ -308,6 +308,13 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
                 scnView.autoenablesDefaultLighting = true
                 container.insertSubview(scnView, belowSubview: webView)
                 self.previewView = scnView
+                // Debugging the still-blurry report after the
+                // contentScaleFactor fix above didn't resolve it on-device --
+                // confirms whether the view actually landed at a real,
+                // non-zero size with the intended scale, or whether the rect
+                // the JS side measured (see rectFromCall above) was
+                // degenerate at the moment this ran.
+                self.logDiag("scnView.bounds=\(scnView.bounds) scale=\(scnView.contentScaleFactor) screenScale=\(UIScreen.main.scale)")
 
                 let skeleton = SCNNode()
                 scnView.scene.rootNode.addChildNode(skeleton)

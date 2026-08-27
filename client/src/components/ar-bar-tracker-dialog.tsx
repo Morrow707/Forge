@@ -105,7 +105,12 @@ const LIVE_TILT_HISTORY_SIZE = 5;
 // diagLog readout for a real device debugging session -- the capture
 // itself (diagLog state, getDiagnosticLog() polling) always keeps
 // running regardless of this flag, so no data is lost by leaving it off.
-const SHOW_DIAGNOSTIC_OVERLAY = false;
+// Temporarily on to get real on-device data for the blurry-camera report --
+// this text renders in the WebView layer, on top of whatever's rendering
+// (or not rendering right) in the native camera layer beneath it, so it
+// stays legible regardless of what the blur turns out to be. Flip back to
+// false once that's diagnosed.
+const SHOW_DIAGNOSTIC_OVERLAY = true;
 
 function medianOf(values: number[]): number {
   const sorted = [...values].sort((a, b) => a - b);
