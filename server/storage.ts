@@ -207,6 +207,7 @@ import { EXERCISE_FAMILIES, EQUIPMENT_ORDER } from "@shared/exercise-family";
 import { MOVEMENT_TYPES } from "@shared/exercise-taxonomy";
 import type { CoachSection } from "@shared/coach-sections";
 import type { WidgetLayoutEntry } from "@shared/dashboard-widgets";
+import type { RosterGroup } from "@shared/roster-groups";
 import { askClaude, askClaudeStructured, askClaudeWithTools, askClaudeVision, askClaudeVisionStructured, aiEnabled, fastModel, type SystemPrompt } from "./ai";
 import { fetchUrlSafely, UnsafeUrlError } from "./safe-fetch";
 import { deleteUploadedFile, statUploadedFile } from "./uploaded-files";
@@ -2698,6 +2699,38 @@ export const storage = {
     return resolveCoachFeatures(merged);
   },
 
+  // ---------- Roster groups ----------
+  // See shared/roster-groups.ts for the full writeup. Same "lives on the
+  // primary coach's row, but any staff member can read/write it" shape as
+  // getCoachFeatures/updateCoachFeatures just above (not requirePrimaryCoach
+  // -gated in routes.ts either) -- a roster-organization tool like the
+  // teams table, not org-wide branding identity like hiddenNavSections/
+  // navLabelOverrides, which really are primary-coach-only. Returns the raw
+  // stored value (null for "never customized") rather than resolving the
+  // default here -- resolveRosterGroups is what fills that in, on both the
+  // client and wherever a server-side caller needs the resolved list (e.g.
+  // validating a groupId in routes.ts), so "never customized" stays
+  // distinguishable from "customized to an empty list" for as long as any
+  // caller cares to check.
+  async getRosterGroupsForCoach(coachId: number): Promise<RosterGroup[] | null> {
+    const primaryId = await this.getPrimaryCoachId(coachId);
+    const row = await db.query.users.findFirst({
+      where: eq(users.id, primaryId),
+      columns: { rosterGroups: true },
+    });
+    return row?.rosterGroups ?? null;
+  },
+
+  async setRosterGroupsForCoach(coachId: number, groups: RosterGroup[]): Promise<RosterGroup[] | null> {
+    const primaryId = await this.getPrimaryCoachId(coachId);
+    const [row] = await db
+      .update(users)
+      .set({ rosterGroups: groups })
+      .where(eq(users.id, primaryId))
+      .returning({ rosterGroups: users.rosterGroups });
+    return row?.rosterGroups ?? null;
+  },
+
   // Public, unauthenticated lookup for the branded signup link/QR (see
   // TeamInviteCard in coach/dashboard.tsx, and GET /api/public/branding/:code
   // in routes.ts) -- resolves the same way POST /api/auth/signup already
@@ -2902,6 +2935,7 @@ export const storage = {
         benchMaxLbs: users.benchMaxLbs,
         squatMaxLbs: users.squatMaxLbs,
         deadliftMaxLbs: users.deadliftMaxLbs,
+        groupId: coachAthletes.groupId,
       })
       .from(coachAthletes)
       .innerJoin(users, eq(coachAthletes.athleteId, users.id))
@@ -2940,6 +2974,7 @@ export const storage = {
         benchMaxLbs: users.benchMaxLbs,
         squatMaxLbs: users.squatMaxLbs,
         deadliftMaxLbs: users.deadliftMaxLbs,
+        groupId: coachAthletes.groupId,
       })
       .from(coachAthletes)
       .innerJoin(users, eq(coachAthletes.athleteId, users.id))
@@ -3021,6 +3056,25 @@ export const storage = {
       .where(eq(users.id, athleteId))
       .returning({ id: users.id, trackingOptOut: users.trackingOptOut });
     return updated;
+  },
+
+  // Coach-only, roster-scoped set of which of the coach's own rosterGroups
+  // this athlete is filed under -- a soft reference (see coachAthletes.
+  // groupId's own comment in shared/schema.ts), not a DB foreign key, so
+  // the route validates groupId against the coach's current resolved group
+  // list itself rather than relying on a DB constraint. null unassigns the
+  // athlete back to "Unassigned." Filters directly by coachIds + athleteId
+  // (like removeAthleteFromCoach) rather than a separate onRoster check
+  // first, since coachAthletes is exactly the row being written -- 0 rows
+  // updated (an athlete not on this staff's roster) already reads as null.
+  async setAthleteGroup(coachId: number, athleteId: number, groupId: string | null) {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    const [updated] = await db
+      .update(coachAthletes)
+      .set({ groupId })
+      .where(and(inArray(coachAthletes.coachId, coachIds), eq(coachAthletes.athleteId, athleteId)))
+      .returning({ athleteId: coachAthletes.athleteId, groupId: coachAthletes.groupId });
+    return updated ?? null;
   },
 
   async touchUserActivity(userId: number) {

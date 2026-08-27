@@ -1913,6 +1913,12 @@ ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "coaching_philosophy" text;
 -- Coach-personal pinned-athletes fast-access list (shared/schema.ts
 -- users.pinnedAthleteIds) -- see that column's own comment.
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "pinned_athlete_ids" json;
+
+-- Coach roster groups (shared/roster-groups.ts, shared/schema.ts
+-- users.rosterGroups/coachAthletes.groupId) -- see those columns' own
+-- comments for the full writeup.
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "roster_groups" json;
+ALTER TABLE "coach_athletes" ADD COLUMN IF NOT EXISTS "group_id" text;
 `;
 
 async function main() {
