@@ -131,11 +131,17 @@ export default function ForgeAiPage() {
     position: string | null;
   };
   const [showScreens, setShowScreens] = useState(false);
-  const { data: screenData, isLoading: screenLoading } = useQuery<ScreenRow[]>({
-    queryKey: ["/api/admin/movement-screens/aggregate"],
-    queryFn: () => getJson("/api/admin/movement-screens/aggregate"),
+  const SCREEN_PAGE_SIZE = 200;
+  const [screenLoadedPages, setScreenLoadedPages] = useState(1);
+  const { data: screenResult, isLoading: screenLoading } = useQuery<{ rows: ScreenRow[]; total: number }>({
+    queryKey: ["/api/admin/movement-screens/aggregate", screenLoadedPages],
+    queryFn: () =>
+      getJson(`/api/admin/movement-screens/aggregate?limit=${screenLoadedPages * SCREEN_PAGE_SIZE}&offset=0`),
     enabled: showScreens,
   });
+  const screenData = screenResult?.rows ?? [];
+  const screenTotal = screenResult?.total ?? 0;
+  const screenHasMore = screenData.length < screenTotal;
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -554,7 +560,7 @@ export default function ForgeAiPage() {
             <CardContent className="overflow-x-auto">
               {screenLoading ? (
                 <div className="h-24 animate-pulse rounded-md bg-surface" />
-              ) : !screenData || screenData.length === 0 ? (
+              ) : screenData.length === 0 ? (
                 <p className="py-8 text-center text-sm text-muted-foreground">No screens logged yet.</p>
               ) : (
                 <table className="w-full text-left text-sm">
@@ -585,6 +591,18 @@ export default function ForgeAiPage() {
                     ))}
                   </tbody>
                 </table>
+              )}
+              {screenHasMore && (
+                <div className="flex justify-center p-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setScreenLoadedPages((p) => p + 1)}
+                    disabled={screenLoading}
+                  >
+                    Load more ({screenTotal - screenData.length} remaining)
+                  </Button>
+                </div>
               )}
             </CardContent>
           )}

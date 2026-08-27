@@ -4196,12 +4196,20 @@ export const storage = {
     return { rows };
   },
 
-  // Platform-wide, redacted movement-screen data -- same treatment as
-  // getAggregateAthleteData: exact score values, joined only to
-  // non-identifying demographics (age/gender/sport/position), no name/team,
-  // logged via the same aggregateDataAccessLog audit trail.
-  async getAggregateMovementScreenData(adminId: number): Promise<
-    {
+  // Platform-wide, redacted movement-screen data -- same treatment (and
+  // same pagination reasoning) as getAggregateAthleteData: exact score
+  // values, joined only to non-identifying demographics (age/gender/sport/
+  // position), no name/team, logged via the same aggregateDataAccessLog
+  // audit trail. Unpaginated, this returned one row per movement-screen
+  // *result* (several per screen) rendered as a plain, unvirtualized table
+  // row on the same admin page as getAggregateAthleteData -- a real
+  // 5,000-screen stress test produced 20,000+ rows.
+  async getAggregateMovementScreenData(
+    adminId: number,
+    limit = 200,
+    offset = 0,
+  ): Promise<{
+    rows: {
       testKey: string;
       label: string;
       category: string;
@@ -4213,26 +4221,33 @@ export const storage = {
       gender: string | null;
       sport: string | null;
       position: string | null;
-    }[]
-  > {
+    }[];
+    total: number;
+  }> {
     db.insert(aggregateDataAccessLog).values({ adminId }).catch(() => {});
-    return db
-      .select({
-        testKey: movementScreenResults.testKey,
-        label: movementScreenResults.label,
-        category: movementScreenResults.category,
-        scoreType: movementScreenResults.scoreType,
-        side: movementScreenResults.side,
-        scoreValue: movementScreenResults.scoreValue,
-        flagged: movementScreenResults.flagged,
-        age: users.age,
-        gender: users.gender,
-        sport: users.sport,
-        position: users.position,
-      })
-      .from(movementScreenResults)
-      .innerJoin(movementScreens, eq(movementScreenResults.screenId, movementScreens.id))
-      .innerJoin(users, eq(movementScreens.athleteId, users.id));
+    const [rows, [{ count: total }]] = await Promise.all([
+      db
+        .select({
+          testKey: movementScreenResults.testKey,
+          label: movementScreenResults.label,
+          category: movementScreenResults.category,
+          scoreType: movementScreenResults.scoreType,
+          side: movementScreenResults.side,
+          scoreValue: movementScreenResults.scoreValue,
+          flagged: movementScreenResults.flagged,
+          age: users.age,
+          gender: users.gender,
+          sport: users.sport,
+          position: users.position,
+        })
+        .from(movementScreenResults)
+        .innerJoin(movementScreens, eq(movementScreenResults.screenId, movementScreens.id))
+        .innerJoin(users, eq(movementScreens.athleteId, users.id))
+        .limit(limit)
+        .offset(offset),
+      db.select({ count: count() }).from(movementScreenResults),
+    ]);
+    return { rows, total };
   },
 
   // Most recent screen's flagged results, unauthorized-free (internal,

@@ -3612,7 +3612,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // trail as /api/admin/aggregate-athlete-data.
   app.get("/api/admin/movement-screens/aggregate", requireRole("admin"), async (req, res) => {
     const user = currentUser(req);
-    const result = await storage.getAggregateMovementScreenData(user.id);
+    const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? "200"), 10) || 200, 1), 500);
+    const offset = Math.max(parseInt(String(req.query.offset ?? "0"), 10) || 0, 0);
+    const result = await storage.getAggregateMovementScreenData(user.id, limit, offset);
     res.json(result);
   });
 
