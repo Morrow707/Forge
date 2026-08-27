@@ -12240,12 +12240,60 @@ Respond to the admin's latest message by calling ask_question or propose_movemen
       const injuries = await db.select().from(injuryHistory).where(gte(injuryHistory.occurredOn, since));
       let total = 0;
       let elevated = 0;
-      for (const injury of injuries) {
-        const history = await this.getAcwrHistoryForAthlete(injury.athleteId, 90);
-        const point = history.find((p) => p.date === injury.occurredOn);
-        if (!point || point.ratio == null) continue;
-        total += 1;
-        if (point.level === "red") elevated += 1;
+      if (injuries.length > 0) {
+        // Was one getAcwrHistoryForAthlete call (its own DB query) per
+        // injury, sequential -- a real 2,000-injury stress test took nearly
+        // 20s of this background job doing round trips one at a time. Same
+        // fix as the roster-scale bugs elsewhere this session: one bulk
+        // per-(athlete, date) load query (mirrors getRosterAcwrSummary's own
+        // rosterLoadExprSql pattern, just platform-wide instead of one
+        // coach's roster), then buildAcwrSeries per distinct athlete instead
+        // of per injury.
+        const athleteIds = Array.from(new Set(injuries.map((i) => i.athleteId)));
+        const days = 90;
+        const sinceDate = new Date(Date.now() - (days + 28) * 24 * 60 * 60 * 1000)
+          .toISOString()
+          .slice(0, 10);
+        const loadExpr = this.rosterLoadExprSql();
+        const rows = await db
+          .select({
+            athleteId: workoutLogs.athleteId,
+            date: workoutLogs.date,
+            load: sql<number>`coalesce(sum(${loadExpr}), 0)::real`,
+          })
+          .from(workoutLogs)
+          .innerJoin(workoutLogEntries, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
+          .innerJoin(workoutSetEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
+          .where(
+            and(
+              inArray(workoutLogs.athleteId, athleteIds),
+              gte(workoutLogs.date, sinceDate),
+              eq(workoutLogEntries.weightMode, "numeric"),
+              sql`${workoutSetEntries.weight} ~ '^[0-9]+(\\.[0-9]+)?$'`,
+            ),
+          )
+          .groupBy(workoutLogs.athleteId, workoutLogs.date);
+
+        const dailyLoadsByAthlete = new Map<number, DailyLoad[]>();
+        for (const r of rows) {
+          const list = dailyLoadsByAthlete.get(r.athleteId);
+          const point = { date: r.date, load: r.load };
+          if (list) list.push(point);
+          else dailyLoadsByAthlete.set(r.athleteId, [point]);
+        }
+        const today = new Date().toISOString().slice(0, 10);
+        const acwrByAthlete = new Map<number, AcwrPoint[]>();
+        for (const athleteId of athleteIds) {
+          acwrByAthlete.set(athleteId, buildAcwrSeries(dailyLoadsByAthlete.get(athleteId) ?? [], today, days));
+        }
+
+        for (const injury of injuries) {
+          const history = acwrByAthlete.get(injury.athleteId) ?? [];
+          const point = history.find((p) => p.date === injury.occurredOn);
+          if (!point || point.ratio == null) continue;
+          total += 1;
+          if (point.level === "red") elevated += 1;
+        }
       }
       if (total >= 3 && elevated / total >= 0.5) {
         const [finding] = await db
