@@ -281,6 +281,12 @@ const CLASS_QUIZ_PASS_THRESHOLD = 0.8;
 // coachNotifiedStuckAt on classLessonProgress.
 const CLASS_QUIZ_STUCK_THRESHOLD = 3;
 
+// Hard cap on queryAthletesAdvanced (the Admin Query Engine) -- see its own
+// comment for why. A broad/empty filter with no cap matched the whole
+// platform (485k athletes at real seed scale) and returned a 335MB response
+// in 34s, one row costing ~12 correlated subqueries.
+const QUERY_ENGINE_MAX_ROWS = 10_000;
+
 function jointLabelFor(jointKey: string): string {
   return GONIOMETER_JOINTS.find((j) => j.key === jointKey)?.label ?? jointKey;
 }
@@ -11905,48 +11911,68 @@ Respond to the admin's latest message by calling ask_question or propose_movemen
     };
 
     // ---- Correlated scalar subqueries, reused in both SELECT and WHERE ----
+    // Correlate on the literal "users"."id" text, not an interpolated
+    // ${users.id} -- Drizzle renders that as a bare, unqualified "id", which
+    // is fine when a subquery's own FROM has only one table but throws a
+    // real "column reference \"id\" is ambiguous" error the moment that
+    // subquery joins two or more tables that each have their own id column
+    // (workout_set_entries/workout_log_entries/workout_logs all do). That
+    // made every one of these multi-join subqueries fail outright -- this
+    // whole route 500'd on every request, filtered or not, not just at scale.
     const latestWellness = (col: "soreness" | "stress" | "sleep_hours" | "hydration" | "mental_focus") =>
       sql<number | null>`(SELECT wc.${sql.raw(col)} FROM wellness_checkins wc
-        WHERE wc.athlete_id = ${users.id} ORDER BY wc.date DESC LIMIT 1)`;
+        WHERE wc.athlete_id = "users"."id" ORDER BY wc.date DESC LIMIT 1)`;
 
     const bestPeakVelocity = sql<number | null>`(SELECT MAX(wse.peak_velocity_mps)
       FROM workout_set_entries wse
       JOIN workout_log_entries wle ON wse.log_entry_id = wle.id
       JOIN workout_logs wl ON wle.workout_log_id = wl.id
-      WHERE wl.athlete_id = ${users.id} AND wl.date >= ${cutoff})`;
+      WHERE wl.athlete_id = "users"."id" AND wl.date >= ${cutoff})`;
     const avgMeanVelocity = sql<number | null>`(SELECT AVG(wse.mean_velocity_mps)
       FROM workout_set_entries wse
       JOIN workout_log_entries wle ON wse.log_entry_id = wle.id
       JOIN workout_logs wl ON wle.workout_log_id = wl.id
-      WHERE wl.athlete_id = ${users.id} AND wl.date >= ${cutoff})`;
+      WHERE wl.athlete_id = "users"."id" AND wl.date >= ${cutoff})`;
     const avgRom = sql<number | null>`(SELECT AVG(wse.rom_cm)
       FROM workout_set_entries wse
       JOIN workout_log_entries wle ON wse.log_entry_id = wle.id
       JOIN workout_logs wl ON wle.workout_log_id = wl.id
-      WHERE wl.athlete_id = ${users.id} AND wl.date >= ${cutoff})`;
+      WHERE wl.athlete_id = "users"."id" AND wl.date >= ${cutoff})`;
     const avgVelocityLoss = sql<number | null>`(SELECT AVG(wse.velocity_loss_percent)
       FROM workout_set_entries wse
       JOIN workout_log_entries wle ON wse.log_entry_id = wle.id
       JOIN workout_logs wl ON wle.workout_log_id = wl.id
-      WHERE wl.athlete_id = ${users.id} AND wl.date >= ${cutoff})`;
+      WHERE wl.athlete_id = "users"."id" AND wl.date >= ${cutoff})`;
     const minTrustScore = sql<number | null>`(SELECT MIN((elem->>'score')::numeric)
       FROM workout_set_entries wse
       JOIN workout_log_entries wle ON wse.log_entry_id = wle.id
       JOIN workout_logs wl ON wle.workout_log_id = wl.id
-      CROSS JOIN LATERAL jsonb_array_elements(COALESCE(wse.trust_scores, '[]'::jsonb)) elem
-      WHERE wl.athlete_id = ${users.id} AND wl.date >= ${cutoff})`;
+      CROSS JOIN LATERAL json_array_elements(COALESCE(wse.trust_scores, '[]'::json)) elem
+      WHERE wl.athlete_id = "users"."id" AND wl.date >= ${cutoff})`;
     const hasUnresolvedInjury = sql<boolean>`EXISTS (SELECT 1 FROM injury_history ih
-      WHERE ih.athlete_id = ${users.id} AND ih.resolved = false)`;
+      WHERE ih.athlete_id = "users"."id" AND ih.resolved = false)`;
     const hasFlaggedScreen = sql<boolean>`EXISTS (SELECT 1 FROM movement_screen_results msr
       JOIN movement_screens ms ON msr.screen_id = ms.id
-      WHERE ms.athlete_id = ${users.id} AND msr.flagged = true)`;
+      WHERE ms.athlete_id = "users"."id" AND msr.flagged = true)`;
     const caraMinutesUsed = sql<number>`(SELECT COALESCE(SUM(
         EXTRACT(EPOCH FROM (COALESCE(cs.ended_at, now()) - cs.started_at)) / 60
       ), 0)
       FROM cara_sessions cs
-      WHERE cs.athlete_id = ${users.id} AND cs.started_at >= ${caraCutoff.toISOString()})`;
-    const caraCapUsagePct = sql<number | null>`(CASE WHEN ${users.caraWeeklyCapMinutes} IS NULL THEN NULL
-      ELSE (${caraMinutesUsed} / NULLIF(${users.caraWeeklyCapMinutes}, 0)) * 100 END)`;
+      WHERE cs.athlete_id = "users"."id" AND cs.started_at >= ${caraCutoff.toISOString()})`;
+    // caraWeeklyCapMinutes only ever gets set on a COACH's own row (see
+    // setCaraCapMinutesForCoach) -- an athlete's own row never has it, so
+    // reading users.caraWeeklyCapMinutes here (the athlete row this whole
+    // query is over) was always NULL and this field/filter could never
+    // match a single athlete. The athlete's real effective cap is the
+    // strictest cap among their coaches, same lookup
+    // getCaraCapMinutesForAthlete does -- join through coach_athletes to
+    // each coach's own cap and take the minimum non-null one.
+    const effectiveCaraCap = sql<number | null>`(SELECT MIN(coach.cara_weekly_cap_minutes)
+      FROM coach_athletes ca2
+      JOIN users coach ON coach.id = ca2.coach_id
+      WHERE ca2.athlete_id = "users"."id" AND coach.cara_weekly_cap_minutes IS NOT NULL)`;
+    const caraCapUsagePct = sql<number | null>`(CASE WHEN ${effectiveCaraCap} IS NULL THEN NULL
+      ELSE (${caraMinutesUsed} / NULLIF(${effectiveCaraCap}, 0)) * 100 END)`;
 
     const conditions = [eq(users.role, "athlete")];
     if (filters.sport?.length) conditions.push(inArray(users.sport, filters.sport));
@@ -11987,8 +12013,8 @@ Respond to the admin's latest message by calling ask_question or propose_movemen
         SELECT 1 FROM workout_set_entries wse
         JOIN workout_log_entries wle ON wse.log_entry_id = wle.id
         JOIN workout_logs wl ON wle.workout_log_id = wl.id
-        CROSS JOIN LATERAL jsonb_array_elements(COALESCE(wse.form_faults, '[]'::jsonb)) elem
-        WHERE wl.athlete_id = ${users.id} AND wl.date >= ${cutoff} AND elem->>'code' IN (${codes})
+        CROSS JOIN LATERAL json_array_elements(COALESCE(wse.form_faults, '[]'::json)) elem
+        WHERE wl.athlete_id = "users"."id" AND wl.date >= ${cutoff} AND elem->>'code' IN (${codes})
       )`);
     }
     if (filters.skillFaultCodes?.length) {
@@ -11998,8 +12024,8 @@ Respond to the admin's latest message by calling ask_question or propose_movemen
       );
       conditions.push(sql`EXISTS (
         SELECT 1 FROM skill_session_logs ssl
-        CROSS JOIN LATERAL jsonb_array_elements(COALESCE(ssl.faults, '[]'::jsonb)) elem
-        WHERE ssl.athlete_id = ${users.id} AND ssl.created_at >= ${cutoff} AND elem->>'code' IN (${codes})
+        CROSS JOIN LATERAL json_array_elements(COALESCE(ssl.faults, '[]'::json)) elem
+        WHERE ssl.athlete_id = "users"."id" AND ssl.created_at >= ${cutoff} AND elem->>'code' IN (${codes})
       )`);
     }
 
@@ -12038,7 +12064,14 @@ Respond to the admin's latest message by calling ask_question or propose_movemen
         caraCapUsagePercent: caraCapUsagePct,
       })
       .from(users)
-      .where(and(...conditions));
+      .where(and(...conditions))
+      // Hard safety cap, not real pagination (no UI exists yet to page
+      // through more) -- a broad/empty filter matches the whole platform,
+      // and every row here costs ~12 correlated subqueries. An empty filter
+      // against the real 485k-athlete population took 34s and returned a
+      // 335MB response before this cap existed. Revisit with real
+      // limit/offset once this actually has a UI to drive it.
+      .limit(QUERY_ENGINE_MAX_ROWS);
   },
 
   // ---------- Admin saved views ----------
