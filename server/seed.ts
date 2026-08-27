@@ -4128,6 +4128,15 @@ async function main() {
       { name: "Reaction Time Starts", skillType: "Starts", sports: ["Track & Field"], equipment: ["Starting Blocks", "Stopwatch", "Partner"], instructions: "Practice exploding out of the blocks off an unpredictable audible start signal from a partner." },
       { name: "Standing Start Acceleration", skillType: "Starts", sports: ["Track & Field"], equipment: ["Stopwatch"], instructions: "Accelerate from a standing start with a strong forward lean and driving arms for the first 10-15 meters." },
       { name: "Falling Start Drill", skillType: "Starts", sports: ["Track & Field"], equipment: [], instructions: "Lean forward from a tall standing position until forced to catch yourself with a sprint step, building the feel of forward drive." },
+      // Combine-style timed sprints -- unlike the rest of this Track & Field
+      // block, these are cross-sport staples (the 40 is football's classic
+      // combine number but shows up everywhere; the 60 is baseball/softball's
+      // and indoor track's own standard), so they're tagged broadly rather
+      // than Track & Field-only. "Starts" skillType makes both automatically
+      // Sprint-Timing-eligible (see SPRINT_TIMING_ELIGIBLE_SKILL_TYPES below)
+      // without needing a name-list entry the way a Footwork-typed drill would.
+      { name: "40-Yard Dash", skillType: "Starts", sports: ["Football", "Track & Field", "Baseball", "Softball", "Basketball", "Soccer", "Lacrosse", "Field Hockey"], equipment: ["Stopwatch"], instructions: "Sprint 40 yards from a three-point or standing start at maximum effort -- the standard combine benchmark for straight-line speed." },
+      { name: "60-Yard Dash", skillType: "Starts", sports: ["Baseball", "Softball", "Track & Field", "Football"], equipment: ["Stopwatch"], instructions: "Sprint 60 yards from a standing start at maximum effort -- the standard baseball/softball combine benchmark for top-end speed." },
       // Jumps & Throws
       { name: "Long Jump Approach and Takeoff", skillType: "Jumps & Throws", sports: ["Track & Field"], equipment: [], instructions: "Build a consistent, accelerating approach run to a precise takeoff board hit without checking stride length late." },
       { name: "High Jump Approach Curve", skillType: "Jumps & Throws", sports: ["Track & Field"], equipment: [], instructions: "Run a curved approach that leans the body inward, converting horizontal speed into vertical lift at takeoff." },
@@ -4234,7 +4243,7 @@ async function main() {
       "Reaction Ball Footwork", "Overhand Throwing Mechanics", "Crossover Step Acceleration",
       "Reactive Start Drill", "Single-Leg Balance and Stability", "Hip Turn and Open-Gate Drill",
       "Multi-Directional Sprint Cone Drill", "Approach Run Rhythm Drill", "Quick Feet In-Place Drill",
-      "Change of Pace Running",
+      "Change of Pace Running", "40-Yard Dash", "60-Yard Dash",
     ]);
     let skillCrossSportBackfilled = 0;
     for (const existingSkill of await storage.getAllSkillExercises()) {
