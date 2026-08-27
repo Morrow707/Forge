@@ -700,26 +700,35 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
     // just a subjective impression), so a future comparison doesn't have to
     // rely on eyeballing screenshots against each other.
     private func logFrameDiagnostics(_ frame: ARFrame, label: String) {
-        // Not optional (Apple declares this as a plain, possibly-empty
-        // dictionary) -- checking isEmpty rather than an if-let, which
-        // would always succeed here and silently hide the "ARKit didn't
-        // populate this at all" case behind a misleading success branch.
-        let exif = frame.exifData
-        if exif.isEmpty {
-            logDiag("[\(label)] EXIF: frame.exifData was empty")
+        // frame.exifData is iOS 16.0+ only (confirmed by the actual build
+        // failure this guard fixes, not assumed from docs -- this project's
+        // deployment target is iOS 15, same lesson as the sceneReconstruction
+        // comment above about trusting the compiler here) -- exposureDuration/
+        // exposureOffset below share the same cutoff.
+        if #available(iOS 16.0, *) {
+            // Not optional (Apple declares this as a plain, possibly-empty
+            // dictionary) -- checking isEmpty rather than an if-let, which
+            // would always succeed here and silently hide the "ARKit didn't
+            // populate this at all" case behind a misleading success branch.
+            let exif = frame.exifData
+            if exif.isEmpty {
+                logDiag("[\(label)] EXIF: frame.exifData was empty")
+            } else {
+                let subjectDistance = exif[kCGImagePropertyExifSubjectDistance as String]
+                let focalLength = exif[kCGImagePropertyExifFocalLength as String]
+                let aperture = exif[kCGImagePropertyExifApertureValue as String]
+                let exposureTime = exif[kCGImagePropertyExifExposureTime as String]
+                let iso = exif[kCGImagePropertyExifISOSpeedRatings as String]
+                logDiag(
+                    "[\(label)] EXIF subjectDistance=\(String(describing: subjectDistance)) "
+                        + "focalLength=\(String(describing: focalLength)) "
+                        + "aperture=\(String(describing: aperture)) "
+                        + "exposureTime=\(String(describing: exposureTime)) "
+                        + "iso=\(String(describing: iso))"
+                )
+            }
         } else {
-            let subjectDistance = exif[kCGImagePropertyExifSubjectDistance as String]
-            let focalLength = exif[kCGImagePropertyExifFocalLength as String]
-            let aperture = exif[kCGImagePropertyExifApertureValue as String]
-            let exposureTime = exif[kCGImagePropertyExifExposureTime as String]
-            let iso = exif[kCGImagePropertyExifISOSpeedRatings as String]
-            logDiag(
-                "[\(label)] EXIF subjectDistance=\(String(describing: subjectDistance)) "
-                    + "focalLength=\(String(describing: focalLength)) "
-                    + "aperture=\(String(describing: aperture)) "
-                    + "exposureTime=\(String(describing: exposureTime)) "
-                    + "iso=\(String(describing: iso))"
-            )
+            logDiag("[\(label)] EXIF: unavailable (iOS < 16)")
         }
 
         let intrinsics = frame.camera.intrinsics
