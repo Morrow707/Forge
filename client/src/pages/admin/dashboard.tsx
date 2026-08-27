@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Sparkline } from "@/components/stat-tile";
 import { useAuth } from "@/hooks/use-auth";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, getJson } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { EntryPill, type CalendarEntry } from "@/components/calendar-view";
 import {
@@ -24,8 +24,8 @@ import {
 import { addDays, format, formatISO, isToday } from "date-fns";
 import type { ExerciseWithOwnership } from "@/lib/exercise-types";
 
-type PendingSubmission = { id: number };
-type OpenReport = { id: number };
+type PendingSubmissionsResponse = { total: number };
+type OpenReportsResponse = { total: number };
 type PlatformStats = {
   totalCoaches: number;
   totalAthletes: number;
@@ -50,11 +50,16 @@ export default function AdminDashboard() {
   const { data: exercises = [] } = useQuery<ExerciseWithOwnership[]>({
     queryKey: ["/api/admin/exercises"],
   });
-  const { data: submissions = [] } = useQuery<PendingSubmission[]>({
-    queryKey: ["/api/admin/submissions"],
+  // limit=1: this widget only needs the total count, not the rows
+  // themselves -- see getPendingSubmissionsForAdmin/getOpenReportsForAdmin's
+  // own {total, rows} shape in storage.ts.
+  const { data: submissions } = useQuery<PendingSubmissionsResponse>({
+    queryKey: ["/api/admin/submissions?limit=1"],
+    queryFn: () => getJson("/api/admin/submissions?limit=1"),
   });
-  const { data: reports = [] } = useQuery<OpenReport[]>({
-    queryKey: ["/api/admin/reports"],
+  const { data: reports } = useQuery<OpenReportsResponse>({
+    queryKey: ["/api/admin/reports?limit=1"],
+    queryFn: () => getJson("/api/admin/reports?limit=1"),
   });
   const { data: platformStats } = useQuery<PlatformStats>({
     queryKey: ["/api/admin/platform-stats"],
@@ -67,7 +72,7 @@ export default function AdminDashboard() {
     acc[ex.category] = (acc[ex.category] ?? 0) + 1;
     return acc;
   }, {});
-  const pendingCount = submissions.length + reports.length;
+  const pendingCount = (submissions?.total ?? 0) + (reports?.total ?? 0);
 
   // Admin's own training calendar -- same role-agnostic /api/admin/my/calendar
   // endpoint admin/my-calendar.tsx uses, just windowed to 3 days here.
