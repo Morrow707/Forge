@@ -28,6 +28,8 @@ import { InjuryIntakeImportDialog } from "@/components/injury-intake-import-dial
 import { TestingDataImportDialog } from "@/components/testing-data-import-dialog";
 import { PlayerIntakeImportDialog } from "@/components/player-intake-import-dialog";
 import { ProvisionalRosterPanel } from "@/components/provisional-roster-panel";
+import { ManageRosterGroupsDialog } from "@/components/manage-roster-groups-dialog";
+import { toggleInSet } from "@/components/filter-chip-group";
 import { Skeleton } from "@/components/skeleton";
 import { Sparkline } from "@/components/stat-tile";
 import {
@@ -38,6 +40,7 @@ import {
 } from "@/components/athlete-status-badges";
 import type { ReadinessLevel } from "@shared/wellness";
 import type { AcwrRiskLevel } from "@shared/load";
+import { resolveRosterGroups, type RosterGroup } from "@shared/roster-groups";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { usePullToRefresh } from "@/hooks/use-pull-to-refresh";
@@ -78,6 +81,7 @@ import {
   ChevronsUpDown,
   Loader2,
   BellRing,
+  Tags,
 } from "lucide-react";
 
 type PhotoImportKind = "testing-day" | "weigh-in" | "nutrition" | "injury" | "testing-data" | "player-intake";
@@ -118,6 +122,7 @@ type RosterEntry = {
   sport?: string | null;
   position?: string | null;
   healthStatus?: HealthStatus;
+  groupId?: string | null;
 };
 type TeamMember = { athlete: RosterEntry };
 type TeamEntry = {
@@ -145,6 +150,23 @@ const ROSTER_SORT_COLUMNS: { column: RosterSortColumn; label: string }[] = [
   { column: "health", label: "Health" },
   { column: "email", label: "Email" },
 ];
+
+// Sentinel used for both the group filter chips and the group-select's own
+// current value whenever an athlete's groupId is null, or no longer
+// matches any group in the coach's current (resolved) list -- e.g. that
+// group was since removed. Never sent to the server as a real groupId;
+// setGroupMutation translates it back to null.
+const UNASSIGNED_GROUP_KEY = "__unassigned__";
+
+// Which chip/select value an athlete currently reads as -- a stale groupId
+// (the group it pointed at got deleted) reads exactly like never having
+// been assigned one, per coachAthletes.groupId's own comment in
+// shared/schema.ts.
+function athleteGroupKey(athlete: RosterEntry, groups: RosterGroup[]): string {
+  return athlete.groupId && groups.some((g) => g.id === athlete.groupId)
+    ? athlete.groupId
+    : UNASSIGNED_GROUP_KEY;
+}
 
 // String key each column sorts by -- blanks (no sport/position on file)
 // always sort to the end regardless of direction, rather than clumping at
@@ -177,6 +199,14 @@ export default function CoachRoster() {
   const { data: teams = [], refetch: refetchTeams } = useQuery<TeamEntry[]>({
     queryKey: ["/api/coach/teams"],
   });
+  // Coach-named roster subdivisions (see shared/roster-groups.ts) -- raw
+  // stored value comes back null until a coach customizes it, so this page
+  // (like ManageRosterGroupsDialog) applies resolveRosterGroups itself
+  // rather than ever depending on the server having written the default.
+  const { data: rosterGroupsData } = useQuery<{ rosterGroups: RosterGroup[] | null }>({
+    queryKey: ["/api/coach/roster-groups"],
+  });
+  const groups = resolveRosterGroups(rosterGroupsData?.rosterGroups);
   const { data: programs = [], refetch: refetchPrograms } = useQuery<ProgramSummary[]>({
     queryKey: ["/api/coach/programs"],
   });
@@ -249,6 +279,11 @@ export default function CoachRoster() {
 
   const [rosterSearch, setRosterSearch] = useState("");
   const [healthFilter, setHealthFilter] = useState<"all" | HealthStatus>("all");
+  // Multi-select, same "none active means all" convention as
+  // FilterChipGroup -- keyed by group id, or UNASSIGNED_GROUP_KEY for the
+  // "no group" chip.
+  const [groupFilter, setGroupFilter] = useState<Set<string>>(new Set());
+  const [manageGroupsOpen, setManageGroupsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"roster" | "teams" | "compliance">("roster");
 
   // Bulk selection on the Roster grid -- Assign Program, Add to Team, and
@@ -295,6 +330,7 @@ export default function CoachRoster() {
 
   const filteredRoster = roster.filter((a) => {
     if (healthFilter !== "all" && (a.healthStatus ?? "healthy") !== healthFilter) return false;
+    if (groupFilter.size > 0 && !groupFilter.has(athleteGroupKey(a, groups))) return false;
     const q = rosterSearch.trim().toLowerCase();
     if (!q) return true;
     return (
@@ -412,6 +448,19 @@ export default function CoachRoster() {
       toast.success("Moved to new team");
     },
     onError: (err: ApiError) => toast.error(err.message || "Couldn't move that athlete"),
+  });
+
+  // One mutation shared by every row's group <Select>, rather than one
+  // useMutation per row -- same "define once in the parent, call from the
+  // map" shape as moveToTeamMutation/addToTeamMutation above.
+  const setGroupMutation = useMutation({
+    mutationFn: async ({ athleteId, groupId }: { athleteId: number; groupId: string | null }) => {
+      await apiRequest("PATCH", `/api/coach/roster/${athleteId}/group`, { groupId });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/coach/roster"] });
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't update group"),
   });
 
   function exportRosterCsv(rows: RosterEntry[]) {
@@ -610,6 +659,69 @@ export default function CoachRoster() {
                   aria-label="Search athletes"
                 />
               </div>
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setGroupFilter(new Set())}
+                    aria-pressed={groupFilter.size === 0}
+                    className={cn(
+                      "rounded-full border px-2 py-0.5 text-xs font-medium transition-colors",
+                      groupFilter.size === 0
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    All groups
+                  </button>
+                  {groups.map((g) => {
+                    const active = groupFilter.has(g.id);
+                    const count = roster.filter((a) => athleteGroupKey(a, groups) === g.id).length;
+                    return (
+                      <button
+                        key={g.id}
+                        type="button"
+                        onClick={() => toggleInSet(setGroupFilter, g.id)}
+                        aria-pressed={active}
+                        className={cn(
+                          "rounded-full border px-2 py-0.5 text-xs font-medium transition-colors",
+                          active
+                            ? "border-primary bg-primary/10 text-primary"
+                            : "border-border text-muted-foreground hover:text-foreground",
+                        )}
+                      >
+                        {g.label} ({count})
+                      </button>
+                    );
+                  })}
+                  {(() => {
+                    const unassignedCount = roster.filter(
+                      (a) => athleteGroupKey(a, groups) === UNASSIGNED_GROUP_KEY,
+                    ).length;
+                    if (unassignedCount === 0) return null;
+                    const active = groupFilter.has(UNASSIGNED_GROUP_KEY);
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => toggleInSet(setGroupFilter, UNASSIGNED_GROUP_KEY)}
+                        aria-pressed={active}
+                        className={cn(
+                          "rounded-full border px-2 py-0.5 text-xs font-medium transition-colors",
+                          active
+                            ? "border-primary bg-primary/10 text-primary"
+                            : "border-border text-muted-foreground hover:text-foreground",
+                        )}
+                      >
+                        Unassigned ({unassignedCount})
+                      </button>
+                    );
+                  })()}
+                </div>
+                <Button size="sm" variant="ghost" onClick={() => setManageGroupsOpen(true)}>
+                  <Tags className="h-3.5 w-3.5" />
+                  Manage groups
+                </Button>
+              </div>
               {selectMode && (
                 <div className="mb-4 flex flex-wrap items-center gap-2 rounded-md border border-primary/30 bg-primary/5 p-2.5">
                   <span className="text-xs font-semibold text-muted-foreground">
@@ -665,9 +777,11 @@ export default function CoachRoster() {
               )}
               {filteredRoster.length === 0 ? (
                 <p className="py-8 text-center text-sm text-muted-foreground">
-                  {healthFilter === "all"
+                  {rosterSearch
                     ? `No athletes match "${rosterSearch}".`
-                    : `No ${healthFilter} athletes match your search.`}
+                    : healthFilter !== "all"
+                      ? `No ${healthFilter} athletes match your filters.`
+                      : "No athletes match your filters."}
                 </p>
               ) : (
                 // Wrapped in its own overflow-x-auto container (per AppShell's
@@ -737,6 +851,13 @@ export default function CoachRoster() {
                           className="sticky z-10 border-b border-white/10 bg-card/85 px-3 py-2 shadow-[0_1px_0_0_rgba(255,255,255,0.06),0_8px_20px_-16px_rgba(0,0,0,0.6)] backdrop-blur-xl backdrop-saturate-150"
                           style={{ top: "var(--app-shell-sticky-height, 0px)" }}
                         >
+                          <span className="label-xs">Group</span>
+                        </th>
+                        <th
+                          scope="col"
+                          className="sticky z-10 border-b border-white/10 bg-card/85 px-3 py-2 shadow-[0_1px_0_0_rgba(255,255,255,0.06),0_8px_20px_-16px_rgba(0,0,0,0.6)] backdrop-blur-xl backdrop-saturate-150"
+                          style={{ top: "var(--app-shell-sticky-height, 0px)" }}
+                        >
                           <span className="label-xs">7-Day Load</span>
                         </th>
                         <th
@@ -796,6 +917,32 @@ export default function CoachRoster() {
                             </td>
                             <td className="max-w-[220px] truncate px-3 py-2 text-muted-foreground">
                               {a.email}
+                            </td>
+                            <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
+                              <Select
+                                value={athleteGroupKey(a, groups)}
+                                onValueChange={(next) =>
+                                  setGroupMutation.mutate({
+                                    athleteId: a.id,
+                                    groupId: next === UNASSIGNED_GROUP_KEY ? null : next,
+                                  })
+                                }
+                              >
+                                <SelectTrigger
+                                  className="h-7 w-32 text-xs"
+                                  aria-label={`Set ${a.name}'s group`}
+                                >
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value={UNASSIGNED_GROUP_KEY}>Unassigned</SelectItem>
+                                  {groups.map((g) => (
+                                    <SelectItem key={g.id} value={g.id}>
+                                      {g.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                             </td>
                             <td className="px-3 py-2">
                               {loadTrendByAthlete[a.id] ? (
@@ -1108,6 +1255,8 @@ export default function CoachRoster() {
         initialAthleteIds={assignAthleteIds}
       />
 
+      <ManageRosterGroupsDialog open={manageGroupsOpen} onOpenChange={setManageGroupsOpen} />
+
       {brandingTeamId !== null &&
         (() => {
           const liveTeam = teams.find((t) => t.id === brandingTeamId);
@@ -1207,8 +1356,8 @@ export default function CoachRoster() {
 
 /** Placeholder for one roster table row while `/api/coach/roster` is still
  * in flight -- shaped to the real row's columns (name/sport/position/
- * health/email/load-trend/actions) so the table doesn't jump around once
- * real rows swap in. Takes showCheckbox rather than reading selectMode
+ * health/email/group/load-trend/actions) so the table doesn't jump around
+ * once real rows swap in. Takes showCheckbox rather than reading selectMode
  * itself so it matches whichever mode the page is already in the instant
  * data arrives. */
 function RosterRowSkeleton({ showCheckbox }: { showCheckbox: boolean }) {
@@ -1233,6 +1382,9 @@ function RosterRowSkeleton({ showCheckbox }: { showCheckbox: boolean }) {
       </td>
       <td className="px-3 py-2">
         <Skeleton className="h-4 w-32" />
+      </td>
+      <td className="px-3 py-2">
+        <Skeleton className="h-7 w-32 rounded-md" />
       </td>
       <td className="px-3 py-2">
         <Skeleton className="h-5 w-14" />

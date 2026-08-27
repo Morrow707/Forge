@@ -1905,6 +1905,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS "users_staff_invite_code_idx" ON "users" ("sta
 -- Per-category push opt-out (shared/schema.ts users.pushNotificationCategoryPrefs
 -- and shared/notification-categories.ts) -- see that column's own comment.
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "push_notification_category_prefs" json;
+
+-- Coach roster groups (shared/roster-groups.ts, shared/schema.ts
+-- users.rosterGroups/coachAthletes.groupId) -- see those columns' own
+-- comments for the full writeup.
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "roster_groups" json;
+ALTER TABLE "coach_athletes" ADD COLUMN IF NOT EXISTS "group_id" text;
 `;
 
 async function main() {

@@ -31,6 +31,7 @@ import { verifyMediaUrl } from "./media-url-signing";
 import { shouldTouchLastSeen } from "./session-tracking";
 import { COACH_SECTIONS } from "@shared/coach-sections";
 import { widgetLayoutSchema } from "@shared/dashboard-widgets";
+import { resolveRosterGroups, updateRosterGroupsSchema, setAthleteGroupSchema } from "@shared/roster-groups";
 import { notifyUser } from "./notify";
 import { findGoniometerMovement } from "@shared/goniometer";
 import { NOTIFICATION_CATEGORIES } from "@shared/notification-categories";
@@ -3025,6 +3026,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(roster);
   });
 
+  // Coach-named roster subdivisions (position groups, training pods, grade
+  // levels...) -- see shared/roster-groups.ts for the full writeup,
+  // including why this is neither users.position nor the teams table.
+  // Returns the raw stored value (null for "never customized") rather than
+  // the resolved default -- the client applies resolveRosterGroups itself,
+  // same "server stores null, client fills in the default" split as
+  // getNavPrefsForCoach below does NOT do (that one defaults server-side)
+  // because unlike hiddenNavSections/navLabelOverrides, an unset
+  // rosterGroups has a real, non-empty default to show a coach before
+  // they've ever customized it. Not requirePrimaryCoach-gated -- any staff
+  // member can rename/add/remove groups, same as the teams table below,
+  // since this is a roster-organization tool, not org-wide branding
+  // identity (storage.ts resolves both read and write through the primary
+  // coach's row regardless of which staff member is asking, so the whole
+  // staff always sees one consistent group list).
+  app.get("/api/coach/roster-groups", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const rosterGroups = await storage.getRosterGroupsForCoach(user.id);
+    res.json({ rosterGroups });
+  });
+
+  app.patch("/api/coach/roster-groups", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = updateRosterGroupsSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const rosterGroups = await storage.setRosterGroupsForCoach(user.id, parsed.data.rosterGroups);
+    res.json({ rosterGroups });
+  });
+
   // Today-only "goal vs hit" summary for every roster athlete at once --
   // powers the Nutrition tab's list view. Full history/editing per athlete
   // still goes through /api/coach/roster/:athleteId/nutrition + /food-log.
@@ -3081,6 +3113,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const removed = await storage.removeAthleteFromCoach(user.id, athleteId);
     if (!removed) return res.status(404).json({ message: "Athlete not found" });
     res.status(204).end();
+  });
+
+  // Files one roster athlete under (or back out of) one of the coach's own
+  // roster groups above -- see setAthleteGroup's own comment in storage.ts.
+  // Validated here (not just left to the soft reference) so a fresh
+  // assignment can't silently point at a nonexistent group id; a group
+  // that's since been deleted out from under an *existing* assignment is a
+  // separate, deliberately-unenforced case -- see coachAthletes.groupId's
+  // comment in shared/schema.ts.
+  app.patch("/api/coach/roster/:athleteId/group", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const athleteId = Number(req.params.athleteId);
+    const parsed = setAthleteGroupSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    if (parsed.data.groupId !== null) {
+      const groups = resolveRosterGroups(await storage.getRosterGroupsForCoach(user.id));
+      if (!groups.some((g) => g.id === parsed.data.groupId)) {
+        return res.status(400).json({ message: "That group no longer exists" });
+      }
+    }
+    const updated = await storage.setAthleteGroup(user.id, athleteId, parsed.data.groupId);
+    if (!updated) return res.status(404).json({ message: "Athlete not found" });
+    res.json(updated);
   });
 
   app.patch(

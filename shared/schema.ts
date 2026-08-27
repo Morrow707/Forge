@@ -19,6 +19,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { BODY_PAIN_PARTS } from "./wellness";
 import type { WidgetLayoutEntry } from "./dashboard-widgets";
+import type { RosterGroup } from "./roster-groups";
 import {
   BILLING_TIER_ORDER,
   BILLING_ADD_ON_ORDER,
@@ -442,6 +443,22 @@ export const users = pgTable(
     // key shape as hiddenNavSections, so both live on the one settings
     // surface (NavCustomizeDialog) without needing two lookups.
     navLabelOverrides: json("nav_label_overrides").$type<Record<string, string>>(),
+    // Coach-defined roster subdivisions (position groups, training pods,
+    // grade levels -- whatever fits the program) that the Roster page can
+    // filter by and file each athlete under -- see shared/roster-groups.ts
+    // for the full writeup of what this is (and, just as importantly, what
+    // it deliberately is NOT: not users.position, a finer-grained per-
+    // athlete field, and not the teams table, a much heavier concept with
+    // its own join code and branding). Null/unset means "never customized"
+    // -- resolveRosterGroups fills in the neutral default 3-group split
+    // (Group A/B/C) on read rather than this ever being written eagerly,
+    // same "null means default, only write on actual customization"
+    // convention as personalAccentColor/hiddenNavSections above. Any staff
+    // member can read/edit it (not gated to the primary coach the way org
+    // branding/nav are) since it's a plain roster-organization tool, same
+    // as the teams table -- see storage.ts's getRosterGroupsForCoach for
+    // how it still resolves to one shared list for the whole staff.
+    rosterGroups: json("roster_groups").$type<RosterGroup[]>(),
     // Which pricing tier/add-ons this primary coach's org is on -- see
     // shared/billing-tiers.ts for what each id actually means. Null tier
     // means no tier has been assigned (an admin hasn't set one yet, or
@@ -584,6 +601,16 @@ export const coachAthletes = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     createdAt: timestamp("created_at").notNull().defaultNow(),
+    // Soft reference to one of the coach's own (resolved) users.
+    // rosterGroups[].id -- deliberately NOT a DB foreign key, the same
+    // convention as every other JSON-preference-driven reference in this
+    // app, since the thing it points into is a JSON array entry, not a
+    // row. Renaming a group's label never touches this column (ids are
+    // stable across a rename); if a group is later deleted, an athlete
+    // whose groupId no longer matches anything just reads as "Unassigned"
+    // in the UI -- nothing here hard-deletes or reassigns that athlete.
+    // Null means never assigned (or explicitly unassigned).
+    groupId: text("group_id"),
   },
   (table) => ({
     pairIdx: uniqueIndex("coach_athlete_pair_idx").on(
