@@ -417,7 +417,32 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
             // ARKit pick that default; the actual resolution/fps it lands
             // on is logged below so a future regression has something to
             // compare against.
-            self.logDiag("videoFormat (ARKit default): \(configuration.videoFormat.imageResolution.width)x\(configuration.videoFormat.imageResolution.height) @ \(configuration.videoFormat.framesPerSecond)fps")
+            // Field-of-view fix: the default wide lens (~78 degree FOV) is
+            // why filming a 20+ yard sprint needs standing absurdly far
+            // back to keep the whole distance in frame -- ARKit doesn't
+            // have a live zoom control, but VideoFormat.captureDeviceType
+            // (a real, public property) lets a format from a DIFFERENT
+            // physical lens be selected outright, and the ultra-wide lens
+            // has roughly double the field of view of the default. Whether
+            // ARBodyTrackingConfiguration's supportedVideoFormats actually
+            // INCLUDES an ultra-wide entry on this device/OS is genuinely
+            // uncertain -- this file has hit real "available on
+            // ARWorldTrackingConfiguration but not on
+            // ARBodyTrackingConfiguration" gaps before (see the
+            // sceneReconstruction comment above) -- so this only switches
+            // to it if one is actually present in the real list, and logs
+            // every device type actually offered either way so a device
+            // report settles it rather than another guess.
+            let allFormats = ARBodyTrackingConfiguration.supportedVideoFormats
+            let offeredDeviceTypes = Set(allFormats.map { $0.captureDeviceType.rawValue }).sorted()
+            self.logDiag("supportedVideoFormats device types offered: \(offeredDeviceTypes.joined(separator: ", "))")
+            if let ultraWideFormat = allFormats.first(where: { $0.captureDeviceType == .builtInUltraWideCamera }) {
+                configuration.videoFormat = ultraWideFormat
+                self.logDiag("selected ultra-wide videoFormat for a wider field of view")
+            } else {
+                self.logDiag("no ultra-wide videoFormat available on this device/OS -- keeping ARKit's own default lens")
+            }
+            self.logDiag("videoFormat in use: \(configuration.videoFormat.imageResolution.width)x\(configuration.videoFormat.imageResolution.height) @ \(configuration.videoFormat.framesPerSecond)fps, device=\(configuration.videoFormat.captureDeviceType.rawValue)")
             self.previewView?.session.delegate = self
             self.logDiag("calling session.run()")
             self.previewView?.session.run(configuration, options: [.resetTracking, .removeExistingAnchors])
