@@ -1938,6 +1938,15 @@ CREATE INDEX IF NOT EXISTS "coach_athletes_athlete_idx" ON "coach_athletes" ("at
 CREATE INDEX IF NOT EXISTS "workout_set_entries_video_idx" ON "workout_set_entries" ("form_check_video_url") WHERE "form_check_video_url" IS NOT NULL;
 CREATE INDEX IF NOT EXISTS "skill_session_logs_video_idx" ON "skill_session_logs" ("video_url") WHERE "video_url" IS NOT NULL;
 CREATE INDEX IF NOT EXISTS "workout_comments_video_idx" ON "workout_comments" ("video_url") WHERE "video_url" IS NOT NULL;
+
+-- getUsersForAdmin's account search does ilike(name/email, '%term%') --
+-- a leading-wildcard pattern that a plain btree index can never serve, so
+-- every search was a full sequential scan of the whole users table
+-- (~200ms solo at 500k rows, ~5s average under 30 concurrent admin
+-- searches). pg_trgm lets a GIN index serve '%term%' ILIKE directly.
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE INDEX IF NOT EXISTS "users_name_trgm_idx" ON "users" USING gin ("name" gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS "users_email_trgm_idx" ON "users" USING gin ("email" gin_trgm_ops);
 `;
 
 async function main() {

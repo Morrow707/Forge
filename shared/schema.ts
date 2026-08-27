@@ -547,6 +547,13 @@ export const users = pgTable(
     coachCodeIdx: uniqueIndex("users_coach_code_idx").on(table.coachCode),
     staffInviteCodeIdx: uniqueIndex("users_staff_invite_code_idx").on(table.staffInviteCode),
     calendarTokenIdx: uniqueIndex("users_calendar_token_idx").on(table.calendarToken),
+    // getUsersForAdmin's account search also relies on
+    // users_name_trgm_idx/users_email_trgm_idx (GIN, pg_trgm) for its
+    // ilike('%term%', ...) pattern -- not declared here since Drizzle's
+    // index builder doesn't cleanly express an operator class, and
+    // reconcile-schema.ts (not drizzle-kit push, see that file's own
+    // header comment) is this project's actual source of truth for
+    // deployed indexes. See reconcile-schema.ts for the real definition.
   }),
 );
 
