@@ -293,6 +293,18 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
             } else {
                 self.logDiag("creating ARSCNView, inserting behind webView")
                 let scnView = ARSCNView(frame: rect)
+                // Explicit, not left to inherit from the window -- a view
+                // constructed with an explicit CGRect frame (as opposed to
+                // Auto Layout against an already-attached superview) doesn't
+                // reliably pick up the screen's native Retina scale before
+                // its first render pass on every device, and SCNView bakes
+                // contentScaleFactor into the actual pixel dimensions of its
+                // Metal render target: silently defaulting to 1x here is the
+                // single most common cause of "photo looks soft/blurry" bug
+                // reports against a native SceneKit view layered under a
+                // WebView, completely independent of anything the camera
+                // itself is doing.
+                scnView.contentScaleFactor = UIScreen.main.scale
                 scnView.autoenablesDefaultLighting = true
                 container.insertSubview(scnView, belowSubview: webView)
                 self.previewView = scnView
@@ -348,10 +360,24 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
             // model's own inference rate regardless of capture format --
             // this raises the ceiling capture can hit, it doesn't
             // necessarily raise the joint data rate to match.
-            if let fastestFormat = ARBodyTrackingConfiguration.supportedVideoFormats.max(
-                by: { $0.framesPerSecond < $1.framesPerSecond }
-            ) {
-                configuration.videoFormat = fastestFormat
+            // Tie-broken by resolution, not left to whatever order
+            // supportedVideoFormats happens to return ties in -- max(by:)
+            // returns the first element it never finds "greater" than, so
+            // with only an fps comparison, two formats tied on fps but
+            // different resolutions resolved to an arbitrary one of them
+            // (array order, not anything intentional). Fps still wins
+            // outright when formats differ on it -- this only changes which
+            // format gets picked among ties, never trades fps for
+            // resolution.
+            if let bestFormat = ARBodyTrackingConfiguration.supportedVideoFormats.max(by: { a, b in
+                if a.framesPerSecond != b.framesPerSecond {
+                    return a.framesPerSecond < b.framesPerSecond
+                }
+                return a.imageResolution.width * a.imageResolution.height
+                    < b.imageResolution.width * b.imageResolution.height
+            }) {
+                configuration.videoFormat = bestFormat
+                self.logDiag("videoFormat: \(bestFormat.imageResolution.width)x\(bestFormat.imageResolution.height) @ \(bestFormat.framesPerSecond)fps")
             }
             self.previewView?.session.delegate = self
             self.logDiag("calling session.run()")
