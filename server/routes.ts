@@ -7847,25 +7847,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ---------- Guardian dashboard ----------
-  // Read-mostly by design -- a guardian can view the linked athlete's
+  // Read-mostly by design -- a guardian can view a linked athlete's
   // profile/activity and edit their own profile info (see updateProfileSchema,
   // the same whitelist a coach edits with), but has no route anywhere that
   // logs a workout, uploads a video, or posts a comment. That's enforced by
   // omission: these are the only routes role "guardian" can reach at all.
+  //
+  // A guardian account can be linked to more than one athlete (siblings), so
+  // every per-athlete route below is scoped by :athleteId and authorization-
+  // checked against this guardian's own links via getAthleteForGuardianScoped
+  // -- a mismatch reads as 404, same as a coach hitting a roster athlete that
+  // isn't theirs.
 
-  app.get("/api/guardian/athlete", requireRole("guardian"), async (req, res) => {
+  app.get("/api/guardian/athletes", requireRole("guardian"), async (req, res) => {
     const user = currentUser(req);
-    const athlete = await storage.getAthleteForGuardian(user.id);
-    if (!athlete) return res.status(404).json({ message: "No athlete linked to this account." });
-    res.json(athlete);
+    const athletes = await storage.getAthletesForGuardian(user.id);
+    res.json(athletes);
   });
 
   // Same calendar an athlete/coach sees -- workouts, completion status,
-  // whatever videos/exercises are attached -- just scoped to the one
-  // athlete this guardian is linked to instead of "self."
-  app.get("/api/guardian/athlete/calendar", requireRole("guardian"), async (req, res) => {
+  // whatever videos/exercises are attached -- just scoped to one of this
+  // guardian's linked athletes instead of "self."
+  app.get("/api/guardian/athletes/:athleteId/calendar", requireRole("guardian"), async (req, res) => {
     const user = currentUser(req);
-    const athlete = await storage.getAthleteForGuardian(user.id);
+    const athlete = await storage.getAthleteForGuardianScoped(user.id, Number(req.params.athleteId));
     if (!athlete) return res.status(404).json({ message: "No athlete linked to this account." });
     const schema = z.object({ start: z.string(), end: z.string() });
     const parsed = schema.safeParse(req.query);
@@ -7876,9 +7881,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(entries);
   });
 
-  app.patch("/api/guardian/athlete/profile", requireRole("guardian"), async (req, res) => {
+  app.patch("/api/guardian/athletes/:athleteId/profile", requireRole("guardian"), async (req, res) => {
     const user = currentUser(req);
-    const athlete = await storage.getAthleteForGuardian(user.id);
+    const athlete = await storage.getAthleteForGuardianScoped(user.id, Number(req.params.athleteId));
     if (!athlete) return res.status(404).json({ message: "No athlete linked to this account." });
     const parsed = updateProfileSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -7891,20 +7896,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // The one write a "read-mostly" guardian account makes beyond their own
   // profile edits above -- stopping future camera-tracking collection for
-  // their own linked athlete (see users.trackingOptOut's own comment in
-  // shared/schema.ts). A real authenticated guardian account acting on
+  // one of their own linked athletes (see users.trackingOptOut's own comment
+  // in shared/schema.ts). A real authenticated guardian account acting on
   // their own linked athlete, so no separate confirmation step the way the
   // coach-relayed version needs -- this *is* the parent's own action.
-  app.patch("/api/guardian/athlete/tracking-opt-out", requireRole("guardian"), async (req, res) => {
-    const user = currentUser(req);
-    const parsed = setTrackingOptOutSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ message: parsed.error.issues[0]?.message });
-    }
-    const updated = await storage.setTrackingOptOutForGuardian(user.id, parsed.data.trackingOptOut);
-    if (!updated) return res.status(404).json({ message: "No athlete linked to this account." });
-    res.json(updated);
-  });
+  app.patch(
+    "/api/guardian/athletes/:athleteId/tracking-opt-out",
+    requireRole("guardian"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const parsed = setTrackingOptOutSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      const updated = await storage.setTrackingOptOutForGuardian(
+        user.id,
+        Number(req.params.athleteId),
+        parsed.data.trackingOptOut,
+      );
+      if (!updated) return res.status(404).json({ message: "No athlete linked to this account." });
+      res.json(updated);
+    },
+  );
 
   // Shared by both sides of the link -- a guardian can always give up their
   // own access; an athlete can only remove it once storage.removeGuardianLink

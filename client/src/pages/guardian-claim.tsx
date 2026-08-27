@@ -13,13 +13,19 @@ import { ForgeMark } from "@/components/forge-mark";
 import { toast } from "sonner";
 import type { PublicUser } from "@shared/schema";
 
-type InvitePreview = { athleteName: string; email: string };
+type InvitePreview = { athleteName: string; email: string; accountExists: boolean };
 
 /** Where the emailed guardian-invite link lands -- see
  * server/guardian-invite-email.ts and storage.claimGuardianInvite. Public
  * and unauthenticated for the same reason claim.tsx is: there's no account
  * yet to authenticate as. Claiming logs the guardian straight in, same as
- * every other signup path in this app. */
+ * every other signup path in this app.
+ *
+ * accountExists means this email already has a guardian account (from an
+ * earlier sibling's invite) -- claiming a second child's invite links the
+ * new athlete onto that same account instead of creating a new one, so the
+ * password field below switches from "set a password" to "confirm your
+ * existing password" for that case. */
 export default function GuardianClaimPage() {
   const token = new URLSearchParams(window.location.search).get("token") ?? "";
   const { user, isLoading } = useAuth();
@@ -83,8 +89,9 @@ export default function GuardianClaimPage() {
           <ForgeMark className="mb-2 h-8 w-8" />
           <CardTitle>{preview ? `Guardian access for ${preview.athleteName}` : "Set Up Your Account"}</CardTitle>
           <CardDescription>
-            Set a password for {preview?.email ?? "your account"} to see {preview?.athleteName ?? "their"}{" "}
-            training activity.
+            {preview?.accountExists
+              ? `You already have a guardian account for ${preview.email}. Enter your password to also link ${preview.athleteName}.`
+              : `Set a password for ${preview?.email ?? "your account"} to see ${preview?.athleteName ?? "their"} training activity.`}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -97,7 +104,7 @@ export default function GuardianClaimPage() {
                 minLength={6}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                autoComplete="new-password"
+                autoComplete={preview?.accountExists ? "current-password" : "new-password"}
               />
             </div>
             <label className="flex items-start gap-2 text-xs text-muted-foreground">
@@ -105,7 +112,13 @@ export default function GuardianClaimPage() {
               I agree to the terms of service
             </label>
             <Button type="submit" className="w-full" disabled={!agreedToTerms || claimMutation.isPending}>
-              {claimMutation.isPending ? "Creating account..." : "Create Account"}
+              {claimMutation.isPending
+                ? preview?.accountExists
+                  ? "Linking…"
+                  : "Creating account..."
+                : preview?.accountExists
+                  ? "Link Account"
+                  : "Create Account"}
             </Button>
           </form>
         </CardContent>

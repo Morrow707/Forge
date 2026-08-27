@@ -684,12 +684,13 @@ export const coachAthleteRequests = pgTable(
   }),
 );
 
-// One guardian per athlete, ever -- both columns are unique (not just the
-// pair), so a guardian account is single-purpose (one linked athlete) and an
-// athlete can't accumulate more than one guardian. Deliberately no "revoked"
-// status column: while the athlete is under 18 this row simply isn't
-// deletable (see storage.removeGuardianLink), so its mere existence already
-// means "active." Row deletion IS the unlink -- there's nothing else to model.
+// One guardian per athlete, ever -- athleteId is unique, so an athlete can't
+// accumulate more than one guardian. guardianId is NOT unique: one guardian
+// account can be linked to multiple athletes (a parent with more than one
+// kid on Forge). Deliberately no "revoked" status column: while the athlete
+// is under 18 this row simply isn't deletable (see storage.removeGuardianLink),
+// so its mere existence already means "active." Row deletion IS the unlink --
+// there's nothing else to model.
 export const guardianLinks = pgTable(
   "guardian_links",
   {
@@ -704,7 +705,7 @@ export const guardianLinks = pgTable(
   },
   (table) => ({
     athleteIdx: uniqueIndex("guardian_links_athlete_idx").on(table.athleteId),
-    guardianIdx: uniqueIndex("guardian_links_guardian_idx").on(table.guardianId),
+    guardianIdx: index("guardian_links_guardian_idx").on(table.guardianId),
   }),
 );
 

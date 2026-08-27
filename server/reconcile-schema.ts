@@ -1858,14 +1858,28 @@ CREATE TABLE IF NOT EXISTS "user_sessions" (
 );
 CREATE INDEX IF NOT EXISTS "user_sessions_user_idx" ON "user_sessions" ("user_id");
 
--- One guardian per athlete, ever -- both FKs are unique, not just the pair
--- (shared/schema.ts guardianLinks' own comment explains why).
+-- One guardian per athlete, ever -- athlete_id is unique (shared/schema.ts
+-- guardianLinks' own comment explains why). guardian_id is NOT unique: one
+-- guardian account can be linked to multiple athletes.
 CREATE TABLE IF NOT EXISTS "guardian_links" (
   "id" serial PRIMARY KEY,
   "athlete_id" integer NOT NULL UNIQUE REFERENCES "users"("id") ON DELETE CASCADE,
-  "guardian_id" integer NOT NULL UNIQUE REFERENCES "users"("id") ON DELETE CASCADE,
+  "guardian_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
   "created_at" timestamp NOT NULL DEFAULT now()
 );
+-- Pre-existing databases created this as a UNIQUE index (one guardian, one
+-- athlete) before multi-child guardian support existed -- drop the
+-- uniqueness while keeping the index itself, idempotently.
+DO $$ BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_index i
+    JOIN pg_class c ON c.oid = i.indexrelid
+    WHERE c.relname = 'guardian_links_guardian_idx' AND i.indisunique
+  ) THEN
+    DROP INDEX "guardian_links_guardian_idx";
+  END IF;
+END $$;
+CREATE INDEX IF NOT EXISTS "guardian_links_guardian_idx" ON "guardian_links" ("guardian_id");
 
 CREATE TABLE IF NOT EXISTS "guardian_invites" (
   "id" serial PRIMARY KEY,

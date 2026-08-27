@@ -1758,6 +1758,34 @@ let adminVideoSummaryCache: { at: number; value: { totalBytes: number; totalCoun
 let adminVideoSummaryInFlight: Promise<{ totalBytes: number; totalCount: number }> | null = null;
 let adminVideoSummaryEpoch = 0;
 
+// The athlete fields a guardian's dashboard is allowed to see -- shared
+// between getAthletesForGuardian (all linked athletes) and
+// getAthleteForGuardianScoped (one, authorization-checked) so the two never
+// drift apart.
+const guardianAthleteColumns = {
+  id: users.id,
+  name: users.name,
+  email: users.email,
+  createdAt: users.createdAt,
+  age: users.age,
+  dateOfBirth: users.dateOfBirth,
+  gender: users.gender,
+  heightIn: users.heightIn,
+  bodyWeightLbs: users.bodyWeightLbs,
+  sport: users.sport,
+  position: users.position,
+  seasonPhase: users.seasonPhase,
+  trainingStylePreference: users.trainingStylePreference,
+  trackingOptOut: users.trackingOptOut,
+  fortyYardDash: users.fortyYardDash,
+  verticalJumpIn: users.verticalJumpIn,
+  broadJumpIn: users.broadJumpIn,
+  proAgilitySeconds: users.proAgilitySeconds,
+  benchMaxLbs: users.benchMaxLbs,
+  squatMaxLbs: users.squatMaxLbs,
+  deadliftMaxLbs: users.deadliftMaxLbs,
+} as const;
+
 export const storage = {
   // ---------- Users ----------
   async getUser(id: number) {
@@ -18229,7 +18257,7 @@ ${catalog}`;
 
   async getGuardianInvitePreview(
     rawToken: string,
-  ): Promise<{ athleteName: string; email: string } | null> {
+  ): Promise<{ athleteName: string; email: string; accountExists: boolean } | null> {
     const invite = await db.query.guardianInvites.findFirst({
       where: and(
         eq(guardianInvites.tokenHash, hashResetToken(rawToken)),
@@ -18239,7 +18267,12 @@ ${catalog}`;
     });
     if (!invite) return null;
     const athlete = await this.getUser(invite.athleteId);
-    return { athleteName: athlete?.name ?? "this athlete", email: invite.email };
+    const existingUser = await this.getUserByEmail(invite.email);
+    return {
+      athleteName: athlete?.name ?? "this athlete",
+      email: invite.email,
+      accountExists: existingUser?.role === "guardian",
+    };
   },
 
   // Creates the guardian's users row and the permanent guardianLinks row
@@ -18249,6 +18282,14 @@ ${catalog}`;
   // coexist (createGuardianInvite clears the old one first), but this is
   // the actual point where the permanent row gets created, so it's the
   // right place to fail closed if that ever changes.
+  //
+  // A second child's invite landing on an email that's already a guardian
+  // account links the new athlete onto that SAME account instead of erroring
+  // -- that's the whole point of guardianId no longer being unique. The
+  // token (mailed to that address) is the proof of inbox control that lets
+  // an unauthenticated claim happen at all, same as the first child's; the
+  // password field here just confirms it's actually that account's owner
+  // typing, not a forwarded link landing in the wrong hands.
   async claimGuardianInvite(
     rawToken: string,
     password: string,
@@ -18263,10 +18304,6 @@ ${catalog}`;
       ),
     });
     if (!invite) return { error: "This invite link is invalid or has expired." as const };
-    const existingUser = await this.getUserByEmail(invite.email);
-    if (existingUser) {
-      return { error: "An account with this email already exists -- log in instead." as const };
-    }
     const existingLink = await db.query.guardianLinks.findFirst({
       where: eq(guardianLinks.athleteId, invite.athleteId),
     });
@@ -18274,6 +18311,24 @@ ${catalog}`;
 
     const athlete = await this.getUser(invite.athleteId);
     if (!athlete) return { error: "This athlete's account no longer exists." as const };
+
+    const existingUser = await this.getUserByEmail(invite.email);
+    if (existingUser) {
+      if (existingUser.role !== "guardian") {
+        return { error: "An account with this email already exists -- log in instead." as const };
+      }
+      if (!(await comparePasswords(password, existingUser.passwordHash))) {
+        return { error: "Incorrect password for the existing guardian account." as const };
+      }
+      await db.transaction(async (tx) => {
+        await tx.insert(guardianLinks).values({ athleteId: invite.athleteId, guardianId: existingUser.id });
+        await tx
+          .update(guardianInvites)
+          .set({ claimedAt: new Date() })
+          .where(eq(guardianInvites.id, invite.id));
+      });
+      return { user: existingUser, athleteId: invite.athleteId };
+    }
 
     const passwordHash = await hashPassword(password);
     const guardian = await db.transaction(async (tx) => {
@@ -18308,42 +18363,40 @@ ${catalog}`;
     return { user: guardian, athleteId: invite.athleteId };
   },
 
-  async getAthleteForGuardian(guardianId: number) {
-    const [row] = await db
-      .select({
-        id: users.id,
-        name: users.name,
-        email: users.email,
-        createdAt: users.createdAt,
-        age: users.age,
-        dateOfBirth: users.dateOfBirth,
-        gender: users.gender,
-        heightIn: users.heightIn,
-        bodyWeightLbs: users.bodyWeightLbs,
-        sport: users.sport,
-        position: users.position,
-        seasonPhase: users.seasonPhase,
-        trainingStylePreference: users.trainingStylePreference,
-        trackingOptOut: users.trackingOptOut,
-        fortyYardDash: users.fortyYardDash,
-        verticalJumpIn: users.verticalJumpIn,
-        broadJumpIn: users.broadJumpIn,
-        proAgilitySeconds: users.proAgilitySeconds,
-        benchMaxLbs: users.benchMaxLbs,
-        squatMaxLbs: users.squatMaxLbs,
-        deadliftMaxLbs: users.deadliftMaxLbs,
-      })
+  // A guardian account can be linked to more than one athlete (siblings on
+  // Forge) -- returns every athlete this guardian has an active link to, in
+  // no particular guaranteed order beyond the link's own creation order.
+  async getAthletesForGuardian(guardianId: number) {
+    return db
+      .select(guardianAthleteColumns)
       .from(guardianLinks)
       .innerJoin(users, eq(guardianLinks.athleteId, users.id))
-      .where(eq(guardianLinks.guardianId, guardianId));
+      .where(eq(guardianLinks.guardianId, guardianId))
+      .orderBy(guardianLinks.createdAt);
+  },
+
+  // Authorization check for every per-athlete guardian route below -- confirms
+  // athleteId is actually one of this guardian's linked athletes before any
+  // read/write touches it, the same role a coach roster check plays for
+  // getRosterAthleteForCoach. Null means "not linked" (404, not 403 --
+  // mirrors how a coach roster miss is handled elsewhere in this file).
+  async getAthleteForGuardianScoped(guardianId: number, athleteId: number) {
+    const [row] = await db
+      .select(guardianAthleteColumns)
+      .from(guardianLinks)
+      .innerJoin(users, eq(guardianLinks.athleteId, users.id))
+      .where(and(eq(guardianLinks.guardianId, guardianId), eq(guardianLinks.athleteId, athleteId)));
     return row ?? null;
   },
 
   // A guardian's own self-service equivalent of the coach-facing
   // setTrackingOptOut above -- authorized via guardianLinks instead of a
-  // coach roster, otherwise the same shape.
-  async setTrackingOptOutForGuardian(guardianId: number, trackingOptOut: boolean) {
-    const link = await db.query.guardianLinks.findFirst({ where: eq(guardianLinks.guardianId, guardianId) });
+  // coach roster, otherwise the same shape. Scoped to one linked athlete
+  // now that a guardian can have several.
+  async setTrackingOptOutForGuardian(guardianId: number, athleteId: number, trackingOptOut: boolean) {
+    const link = await db.query.guardianLinks.findFirst({
+      where: and(eq(guardianLinks.guardianId, guardianId), eq(guardianLinks.athleteId, athleteId)),
+    });
     if (!link) return null;
     const [updated] = await db
       .update(users)
