@@ -10,6 +10,13 @@ import { Filesystem } from "@capacitor/filesystem";
 // framework processing against the recorded clip exists.
 export type LensInfo = { id: "wide" | "ultraWide" | "telephoto" | string; label: string; minZoom: number; maxZoom: number };
 
+// Raw Vision coordinates -- normalized 0-1, origin at BOTTOM-left (Vision's own convention,
+// different from the top-left-origin image space most of the rest of this app assumes). The
+// Y-flip belongs in vision-body-landmarks.ts (Phase 3), not here -- see
+// AvBodyTrackingPlugin.swift's own comment on why it's left raw at the source.
+export type PoseJoint = { name: string; x: number; y: number; confidence: number };
+export type PoseFrame = { frameIndex: number; timestamp: number; tracked: boolean; joints: PoseJoint[] };
+
 interface AvBodyTrackingPlugin {
   isSupported(): Promise<{
     supported: boolean;
@@ -26,11 +33,17 @@ interface AvBodyTrackingPlugin {
   startRecording(): Promise<void>;
   stopRecording(): Promise<{ path: string }>;
   deleteRecording(options: { path: string }): Promise<void>;
+  analyzeRecording(options: { path: string; sampleEveryNthFrame?: number }): Promise<{
+    frameCount: number;
+    trackedFrameCount: number;
+    elapsedSeconds: number;
+  }>;
   getDiagnosticLog(): Promise<{ log: string[] }>;
   addListener(
     eventName: "sessionError",
     listenerFunc: (error: { message: string }) => void,
   ): Promise<{ remove: () => void }>;
+  addListener(eventName: "poseFrame", listenerFunc: (frame: PoseFrame) => void): Promise<{ remove: () => void }>;
 }
 
 type PreviewRect = { x: number; y: number; width: number; height: number };
@@ -110,24 +123,51 @@ export async function startAvRecording(): Promise<void> {
   await AvBodyTracking.startRecording();
 }
 
-// Mirrors stopArRecording in native-ar-preview.ts -- reads the native file off disk as a
-// Blob, then explicitly deletes the native temp file once it's safely in memory here (see
-// AvBodyTrackingPlugin.swift's own comment on why the plugin doesn't delete it itself: the
-// moment the clip is safely read is a JS-side fact, not a native-side one).
-export async function stopAvRecording(): Promise<Blob> {
+// Mirrors stopArRecording in native-ar-preview.ts, but does NOT delete the native file --
+// Phase 2's analyzeAvRecording still needs to read it from disk after this returns. Callers
+// own calling deleteAvRecording(path) once they're done with BOTH the blob (e.g. queued for
+// upload) and analysis -- purgeStaleRecordings() on the next native start() call is the
+// backstop if a caller never gets there (see AvBodyTrackingPlugin.swift's own comment).
+export async function stopAvRecording(): Promise<{ blob: Blob; path: string }> {
   const { path } = await AvBodyTracking.stopRecording();
-  try {
-    const { data } = await Filesystem.readFile({ path });
-    const binary = atob(data as string);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    return new Blob([bytes], { type: "video/quicktime" });
-  } finally {
-    await AvBodyTracking.deleteRecording({ path }).catch(() => {
-      // Best-effort -- purgeStaleRecordings() on the next start() call is the backstop if
-      // this somehow doesn't land (see AvBodyTrackingPlugin.swift's own comment).
-    });
-  }
+  const { data } = await Filesystem.readFile({ path });
+  const binary = atob(data as string);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return { blob: new Blob([bytes], { type: "video/quicktime" }), path };
+}
+
+export async function deleteAvRecording(path: string): Promise<void> {
+  await AvBodyTracking.deleteRecording({ path }).catch(() => {
+    // Best-effort -- purgeStaleRecordings() is the backstop.
+  });
+}
+
+// Phase 2: runs Vision body-pose detection against the recorded clip already on disk (see
+// AvBodyTrackingPlugin.swift's analyzeRecording) -- entirely offline, not a live stream.
+// Subscribe with onAvPoseFrame BEFORE calling this to see per-frame results as they're
+// produced; the returned promise resolves once every frame has been processed.
+export async function analyzeAvRecording(
+  path: string,
+  sampleEveryNthFrame?: number,
+): Promise<{ frameCount: number; trackedFrameCount: number; elapsedSeconds: number }> {
+  return AvBodyTracking.analyzeRecording({ path, sampleEveryNthFrame });
+}
+
+export function onAvPoseFrame(callback: (frame: PoseFrame) => void): () => void {
+  let handle: { remove: () => void } | null = null;
+  let cancelled = false;
+  AvBodyTracking.addListener("poseFrame", callback).then((h) => {
+    if (cancelled) {
+      h.remove();
+      return;
+    }
+    handle = h;
+  });
+  return () => {
+    cancelled = true;
+    handle?.remove();
+  };
 }
 
 // Same polling pattern as pollDiagnosticLog in native-ar-preview.ts -- see its own comment on

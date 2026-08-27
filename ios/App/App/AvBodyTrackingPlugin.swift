@@ -1,6 +1,8 @@
 import Foundation
 import AVFoundation
 import CoreMedia
+import CoreVideo
+import Vision
 import UIKit
 import Capacitor
 
@@ -11,11 +13,14 @@ import Capacitor
 // ar-*-tracker-dialog.tsx files it powers are NOT touched by this work -- they stay exactly
 // as they are, kept only as an untouched fallback, dead code once this pipeline replaces them.
 //
-// This plugin is camera ONLY: no Vision, no body tracking, no object tracking yet. It exists
-// purely to prove, on real hardware, that the fundamental premise holds -- a plain
-// AVCaptureSession (the same foundation the stock Camera app uses) gives real zoom, real lens
-// switching, and real autofocus/exposure that ARKit's ARSession never exposed a public API
-// for. Vision-based body-pose detection against the recorded clip is Phase 2, not built here.
+// Phase 1 proved the camera side: a plain AVCaptureSession (the same foundation the stock
+// Camera app uses) gives real zoom, real lens switching, and real autofocus/exposure that
+// ARKit's ARSession never exposed a public API for. Phase 2 (analyzeRecording, below) adds
+// Vision body-pose detection run OFFLINE against a recording already on disk -- not a live
+// sample-buffer delegate -- see this file's own comment on record-first/analyze-later for why:
+// running VNDetectHumanBodyPoseRequest live against a 60fps 4K feed would thermally throttle
+// an older device the same way live ARKit inference risked. Still no object/implement tracking
+// -- that's Phase 5.
 //
 // Positioned behind the WebView the same way ArCameraPreviewPlugin's ARSCNView is (see its own
 // comment on webView.isOpaque / insertSubview(belowSubview:)) -- the JS side punches a
@@ -46,6 +51,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         CAPPluginMethod(name: "startRecording", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "stopRecording", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "deleteRecording", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "analyzeRecording", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getDiagnosticLog", returnType: CAPPluginReturnPromise)
     ]
 
@@ -73,6 +79,27 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
     // particular is a blocking call Apple's own docs warn can take noticeable time, and
     // nothing here needs it to be synchronous with the UI work in continueStart.
     private static let sessionQueue = DispatchQueue(label: "com.forge.avbodytracking.session")
+    // Separate from sessionQueue -- Phase 2's frame-by-frame Vision analysis can run at the
+    // same time a new preview session is starting for the next set, and shouldn't contend
+    // with (or block) camera setup.
+    private static let analysisQueue = DispatchQueue(label: "com.forge.avbodytracking.analysis")
+    private var analysisBackgroundTaskID: UIBackgroundTaskIdentifier = .invalid
+
+    // The public, documented Vision joint names this plugin reports -- unlike ARKit's own
+    // joint-name strings (which needed on-device discovery to nail down, per
+    // ArCameraPreviewPlugin.swift's own comment), these are Apple's own documented
+    // VNHumanBodyPoseObservation.JointName constants, mapped to plain camelCase strings for
+    // the JS bridge. ~19 joints, no hands/face detail -- matches the plan's own accounting.
+    private static let bodyPoseJoints: [(VNHumanBodyPoseObservation.JointName, String)] = [
+        (.nose, "nose"), (.leftEye, "leftEye"), (.rightEye, "rightEye"),
+        (.leftEar, "leftEar"), (.rightEar, "rightEar"), (.neck, "neck"),
+        (.leftShoulder, "leftShoulder"), (.rightShoulder, "rightShoulder"),
+        (.leftElbow, "leftElbow"), (.rightElbow, "rightElbow"),
+        (.leftWrist, "leftWrist"), (.rightWrist, "rightWrist"),
+        (.root, "root"), (.leftHip, "leftHip"), (.rightHip, "rightHip"),
+        (.leftKnee, "leftKnee"), (.rightKnee, "rightKnee"),
+        (.leftAnkle, "leftAnkle"), (.rightAnkle, "rightAnkle"),
+    ]
 
     @objc func isSupported(_ call: CAPPluginCall) {
         let status = AVCaptureDevice.authorizationStatus(for: .video)
@@ -551,6 +578,159 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         try? FileManager.default.removeItem(atPath: pathString)
         logDiag("deleted recording at \(pathString)")
         call.resolve()
+    }
+
+    // MARK: - Phase 2: Vision body-pose detection (offline, against the recorded clip)
+
+    // Reads the clip via AVAssetReader (not a live sample-buffer delegate -- see file
+    // comment), runs VNDetectHumanBodyPoseRequest per frame, and emits one "poseFrame" event
+    // per processed frame as it's produced -- a "simulated-realtime" stream the JS side
+    // consumes the exact same way it would a live one, even though this runs entirely after
+    // recording already stopped. sampleEveryNthFrame defaults to 1 (every frame) -- Phase 2's
+    // own job is finding out, on real hardware, whether that's fast enough during a rest
+    // period or needs downsampling; not assumed either way here.
+    @objc func analyzeRecording(_ call: CAPPluginCall) {
+        guard let pathString = call.getString("path") else {
+            call.reject("Missing path")
+            return
+        }
+        let sampleEveryNthFrame = max(1, call.getInt("sampleEveryNthFrame") ?? 1)
+        let url = URL(fileURLWithPath: pathString)
+        logDiag("analyzeRecording() called for \(url.lastPathComponent), sampleEveryNthFrame=\(sampleEveryNthFrame)")
+        Self.analysisQueue.async {
+            self.runPoseAnalysis(url: url, sampleEveryNthFrame: sampleEveryNthFrame, call: call)
+        }
+    }
+
+    // Runs on Self.analysisQueue, NOT the main thread -- AVAssetReader's copyNextSampleBuffer
+    // and Vision's synchronous perform() are both blocking calls, potentially for seconds
+    // across a whole clip, and nothing here touches UI directly (notifyListeners/call.resolve
+    // are dispatched to main explicitly where it matters).
+    private func runPoseAnalysis(url: URL, sampleEveryNthFrame: Int, call: CAPPluginCall) {
+        // Background-execution edge case, same as stopRecording's finalize step -- a coach
+        // backgrounding the app to check something mid-analysis shouldn't kill this partway
+        // through a clip.
+        let taskID = UIApplication.shared.beginBackgroundTask(withName: "AvBodyTrackingAnalyze") { [weak self] in
+            guard let self = self else { return }
+            UIApplication.shared.endBackgroundTask(self.analysisBackgroundTaskID)
+            self.analysisBackgroundTaskID = .invalid
+        }
+        analysisBackgroundTaskID = taskID
+        defer {
+            if analysisBackgroundTaskID != .invalid {
+                UIApplication.shared.endBackgroundTask(analysisBackgroundTaskID)
+                analysisBackgroundTaskID = .invalid
+            }
+        }
+
+        let asset = AVAsset(url: url)
+        guard let track = asset.tracks(withMediaType: .video).first else {
+            logDiag("analyzeRecording FAILED: no video track in \(url.lastPathComponent)")
+            DispatchQueue.main.async { call.reject("No video track in recording") }
+            return
+        }
+        // AVAssetReader hands back pixel buffers in their raw stored orientation -- it does
+        // NOT apply the track's own preferredTransform for you (unlike AVPlayer, which does).
+        // Deriving the correct CGImagePropertyOrientation from that transform directly is
+        // robust regardless of what orientation the camera connection was actually recording
+        // in, rather than assuming Phase 1's setup got it right.
+        let orientation = cgOrientation(for: track.preferredTransform)
+
+        guard let reader = try? AVAssetReader(asset: asset) else {
+            logDiag("analyzeRecording FAILED: could not create AVAssetReader")
+            DispatchQueue.main.async { call.reject("Could not read recording") }
+            return
+        }
+        let outputSettings: [String: Any] = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
+        let trackOutput = AVAssetReaderTrackOutput(track: track, outputSettings: outputSettings)
+        guard reader.canAdd(trackOutput) else {
+            logDiag("analyzeRecording FAILED: cannot add track output")
+            DispatchQueue.main.async { call.reject("Could not set up frame reader") }
+            return
+        }
+        reader.add(trackOutput)
+        reader.startReading()
+
+        let poseRequest = VNDetectHumanBodyPoseRequest()
+        var frameIndex = 0
+        var processedCount = 0
+        var trackedCount = 0
+        let startTime = Date()
+
+        while reader.status == .reading {
+            guard let sampleBuffer = trackOutput.copyNextSampleBuffer() else { break }
+            let thisFrameIndex = frameIndex
+            frameIndex += 1
+            guard thisFrameIndex % sampleEveryNthFrame == 0 else { continue }
+            guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { continue }
+            let timestampSeconds = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sampleBuffer))
+
+            var joints: [[String: Any]] = []
+            var tracked = false
+            let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: orientation, options: [:])
+            do {
+                try handler.perform([poseRequest])
+                if let observation = poseRequest.results?.first as? VNHumanBodyPoseObservation {
+                    tracked = true
+                    trackedCount += 1
+                    for (jointName, label) in Self.bodyPoseJoints {
+                        guard let point = try? observation.recognizedPoint(jointName), point.confidence > 0.1 else {
+                            continue
+                        }
+                        // Vision's own coordinate convention: normalized 0-1, origin at
+                        // BOTTOM-left -- different from the top-left-origin image space most
+                        // of the rest of this app assumes. Left as raw Vision coordinates
+                        // here; Phase 3's vision-body-landmarks.ts bridge is where that
+                        // Y-flip belongs (matching how ar-body-landmarks.ts's own comment
+                        // handles ARKit's own coordinate quirks at the bridge layer, not
+                        // here at the source).
+                        joints.append([
+                            "name": label,
+                            "x": Double(point.location.x),
+                            "y": Double(point.location.y),
+                            "confidence": Double(point.confidence),
+                        ])
+                    }
+                }
+            } catch {
+                logDiag("Vision request failed on frame \(thisFrameIndex): \(error.localizedDescription)")
+            }
+
+            processedCount += 1
+            DispatchQueue.main.async {
+                self.notifyListeners("poseFrame", data: [
+                    "frameIndex": thisFrameIndex,
+                    "timestamp": timestampSeconds,
+                    "tracked": tracked,
+                    "joints": joints,
+                ])
+            }
+        }
+
+        let elapsed = Date().timeIntervalSince(startTime)
+        if let error = reader.error {
+            logDiag("analyzeRecording finished with reader error: \(error.localizedDescription)")
+        }
+        logDiag(
+            "analyzeRecording finished: \(processedCount) frames processed, "
+                + "\(trackedCount) tracked, \(String(format: "%.2f", elapsed))s elapsed"
+        )
+        DispatchQueue.main.async {
+            call.resolve([
+                "frameCount": processedCount,
+                "trackedFrameCount": trackedCount,
+                "elapsedSeconds": elapsed,
+            ])
+        }
+    }
+
+    private func cgOrientation(for transform: CGAffineTransform) -> CGImagePropertyOrientation {
+        switch (transform.a, transform.b, transform.c, transform.d) {
+        case (0, 1, -1, 0): return .right
+        case (0, -1, 1, 0): return .left
+        case (-1, 0, 0, -1): return .down
+        default: return .up
+        }
     }
 
     // Defense-in-depth for the same storage-bloat edge case -- a temp file only survives to

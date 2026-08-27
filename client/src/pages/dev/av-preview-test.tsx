@@ -15,9 +15,13 @@ import {
   setAvFocusPoint,
   startAvRecording,
   stopAvRecording,
+  deleteAvRecording,
+  analyzeAvRecording,
+  onAvPoseFrame,
   pollAvDiagnosticLog,
   onAvSessionError,
   type LensInfo,
+  type PoseFrame,
 } from "@/lib/native-av-preview";
 
 // Admin-only verification page for Phase 1 of the AVFoundation + Vision pipeline (see
@@ -44,7 +48,22 @@ export default function AvPreviewTestPage() {
   const [clipRecording, setClipRecording] = useState(false);
   const [clipSaving, setClipSaving] = useState(false);
   const [clipUrl, setClipUrl] = useState<string | null>(null);
+  const [clipPath, setClipPath] = useState<string | null>(null);
   const [clipError, setClipError] = useState<string | null>(null);
+
+  // Phase 2: Vision body-pose detection against the just-recorded clip -- entirely offline,
+  // see AvBodyTrackingPlugin.swift's analyzeRecording. Frames arrive as events during
+  // analysis (bufferRef so the per-frame stream doesn't re-render this page each time),
+  // synced to state only for the summary readout once analysis finishes.
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [analysisResult, setAnalysisResult] = useState<{
+    frameCount: number;
+    trackedFrameCount: number;
+    elapsedSeconds: number;
+  } | null>(null);
+  const poseFramesRef = useRef<PoseFrame[]>([]);
+  const [latestPoseFrame, setLatestPoseFrame] = useState<PoseFrame | null>(null);
 
   useEffect(() => {
     if (!isAvPreviewPlatform()) {
@@ -110,6 +129,10 @@ export default function AvPreviewTestPage() {
       setRunning(false);
       setClipRecording(false);
       setClipSaving(false);
+      if (clipPath) {
+        void deleteAvRecording(clipPath);
+        setClipPath(null);
+      }
     }
   }
 
@@ -144,10 +167,16 @@ export default function AvPreviewTestPage() {
     if (clipRecording) {
       setClipSaving(true);
       try {
-        const blob = await stopAvRecording();
+        if (clipPath) await deleteAvRecording(clipPath); // discard whatever the previous take left on disk
+        const { blob, path } = await stopAvRecording();
         if (clipUrl) URL.revokeObjectURL(clipUrl);
         setClipUrl(URL.createObjectURL(blob));
+        setClipPath(path);
         setClipError(null);
+        setAnalysisResult(null);
+        setAnalysisError(null);
+        poseFramesRef.current = [];
+        setLatestPoseFrame(null);
       } catch (err) {
         setClipError(err instanceof Error ? err.message : "Recording failed");
       } finally {
@@ -162,6 +191,28 @@ export default function AvPreviewTestPage() {
       setClipRecording(true);
     } catch (err) {
       setClipError(err instanceof Error ? err.message : "Could not start recording");
+    }
+  }
+
+  async function analyzeClip() {
+    if (!clipPath || analyzing) return;
+    setAnalyzing(true);
+    setAnalysisError(null);
+    setAnalysisResult(null);
+    poseFramesRef.current = [];
+    setLatestPoseFrame(null);
+    const unsubscribe = onAvPoseFrame((frame) => {
+      poseFramesRef.current.push(frame);
+      setLatestPoseFrame(frame);
+    });
+    try {
+      const result = await analyzeAvRecording(clipPath);
+      setAnalysisResult(result);
+    } catch (err) {
+      setAnalysisError(err instanceof Error ? err.message : "Analysis failed");
+    } finally {
+      unsubscribe();
+      setAnalyzing(false);
     }
   }
 
@@ -266,6 +317,25 @@ export default function AvPreviewTestPage() {
             </p>
             <video src={clipUrl} controls playsInline className="w-full rounded-md" />
           </div>
+        )}
+
+        {clipPath && !clipRecording && (
+          <Button className="w-full" variant="outline" onClick={analyzeClip} disabled={analyzing}>
+            {analyzing ? "Analyzing…" : "Analyze with Vision (Phase 2)"}
+          </Button>
+        )}
+        {analysisError && <p className="text-sm text-destructive">{analysisError}</p>}
+        {analyzing && latestPoseFrame && (
+          <p className="font-mono text-xs text-muted-foreground">
+            frame {latestPoseFrame.frameIndex} · t={latestPoseFrame.timestamp.toFixed(2)}s ·{" "}
+            {latestPoseFrame.tracked ? `${latestPoseFrame.joints.length} joints` : "no body detected"}
+          </p>
+        )}
+        {analysisResult && (
+          <p className="font-mono text-xs text-teal-600 dark:text-teal-400">
+            {analysisResult.frameCount} frames processed · {analysisResult.trackedFrameCount} tracked ·{" "}
+            {analysisResult.elapsedSeconds.toFixed(2)}s elapsed
+          </p>
         )}
       </div>
     </div>
