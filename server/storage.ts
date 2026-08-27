@@ -5793,18 +5793,19 @@ Identify 2-5 specific, concrete deficits grounded ONLY in the data above -- do n
       }
     }
 
-    // One progress-summary lookup per roster athlete to pull this week's PRs
-    // -- fine as a per-athlete loop since this only ever runs once per coach
-    // per week (cached after), never on a hot request path.
-    const prsByAthlete = await Promise.all(
-      roster.map(async (a) => {
-        const summary = await this.getAthleteProgressSummary(a.id);
-        const thisWeek = summary.recentPRs.filter(
-          (pr) => pr.date >= weekStart && pr.date < weekEnd,
-        );
-        return { athlete: a, prs: thisWeek };
-      }),
-    );
+    // Was a per-roster-athlete Promise.all of getAthleteProgressSummary (3
+    // queries each: getAllPrsForAthlete, a near-duplicate lift-history query,
+    // and a completed-logs query) -- "runs once per coach per week" didn't
+    // save it from a 25k-athlete roster, which fanned that out to 75,000+
+    // concurrent connection requests and exhausted the pg pool the same way
+    // the CARA compliance dashboard did. Only recentPRs was ever used here,
+    // so one bulk query replaces the whole per-athlete summary fetch.
+    const recentPrsByAthleteId = await this.getRecentPrsForRosterBulk(athleteIds);
+    const prsByAthlete = roster.map((a) => {
+      const recentPRs = (recentPrsByAthleteId.get(a.id) ?? []).slice(0, 10);
+      const thisWeek = recentPRs.filter((pr) => pr.date >= weekStart && pr.date < weekEnd);
+      return { athlete: a, prs: thisWeek };
+    });
 
     if (totalWorkouts === 0 && wellnessRows.length === 0) return null;
 
@@ -15326,6 +15327,103 @@ ${catalog}`;
   // the dashboard card itself only ever shows the top 5.
   async getFullPrHistoryForAthlete(athleteId: number) {
     return this.getAllPrsForAthlete(athleteId);
+  },
+
+  // Bulk version of getAllPrsForAthlete for a whole roster at once, computed
+  // by Postgres instead of one query-and-JS-reduce per athlete. Matches its
+  // two-stage reduction exactly:
+  //  1. Per (athlete, exercise, unit, reps) "bucket", the row that first
+  //     reached that bucket's all-time-max weight -- getAllPrsForAthlete
+  //     only overwrites its bestByKey map on strictly weight > prevBest while
+  //     iterating ascending by date (then set_number), so the winner is the
+  //     max weight, earliest date it was reached, earliest set_number on a
+  //     same-day tie (bucket_bests below).
+  //  2. getAllPrsForAthlete then collapses further to ONE row per exercise
+  //     (see its own comment: several rep-range PRs on the same lift don't
+  //     flood the list) by keying latestPrByExercise on exerciseId alone and
+  //     letting later bucket-max events overwrite earlier ones in the same
+  //     ascending-date iteration -- so the surviving row per exercise is
+  //     whichever bucket most recently reached ITS max, latest set_number on
+  //     a tie (exercise_bests below).
+  //  3. The final sort (date desc) is a stable sort over a Map whose
+  //     iteration order is each exercise's FIRST-EVER insertion -- which
+  //     happens on the athlete's very first qualifying logged set for that
+  //     exercise, since prevBest starts at -Infinity so that first row always
+  //     wins its bucket. So two exercises whose most-recent PR lands on the
+  //     same date keep, as their tiebreak, whichever exercise the athlete
+  //     logged earliest overall (first_seen below) -- not exercise id, not PR
+  //     weight. Matters more than it looks: coaches routinely put a whole
+  //     team through the same program on the same days, so same-date PR ties
+  //     across exercises are the common case here, not an edge case.
+  // Returns each athlete's PRs uncapped and sorted most-recent-first, same
+  // shape getAllPrsForAthlete returns for one athlete.
+  async getRecentPrsForRosterBulk(athleteIds: number[]) {
+    const byAthlete = new Map<
+      number,
+      Array<{ exerciseId: number; exerciseName: string; weight: number; unit: string; reps: string; date: string }>
+    >();
+    if (athleteIds.length === 0) return byAthlete;
+    const result = await db.execute<{
+      athlete_id: number;
+      exercise_id: number;
+      exercise_name: string;
+      weight: string;
+      weight_unit: string | null;
+      reps: string;
+      date: string;
+    }>(sql`
+      WITH qualifying AS (
+        SELECT a.athlete_id, e.id AS exercise_id, e.name AS exercise_name,
+          wse.weight, wse.weight_unit_at_log AS weight_unit, wse.reps, wl.date, wse.set_number, wle.id AS entry_id
+        FROM workout_set_entries wse
+        INNER JOIN workout_log_entries wle ON wse.log_entry_id = wle.id
+        INNER JOIN workout_logs wl ON wle.workout_log_id = wl.id
+        INNER JOIN assignments a ON wl.assignment_id = a.id
+        INNER JOIN program_exercises pe ON wle.program_exercise_id = pe.id
+        INNER JOIN exercises e ON pe.exercise_id = e.id
+        WHERE a.athlete_id IN ${athleteIds}
+          AND wle.weight_mode = 'numeric'
+          AND wse.weight IS NOT NULL AND wse.weight <> ''
+          AND wse.reps IS NOT NULL AND wse.reps <> ''
+          AND wse.weight ~ '^[0-9]+(\\.[0-9]+)?$'
+      ),
+      bucket_bests AS (
+        SELECT DISTINCT ON (athlete_id, exercise_id, weight_unit, reps)
+          athlete_id, exercise_id, exercise_name, weight, weight_unit, reps, date, set_number, entry_id
+        FROM qualifying
+        ORDER BY athlete_id, exercise_id, weight_unit, reps, weight::numeric DESC, date ASC, set_number ASC, entry_id ASC
+      ),
+      exercise_bests AS (
+        SELECT DISTINCT ON (athlete_id, exercise_id)
+          athlete_id, exercise_id, exercise_name, weight, weight_unit, reps, date, set_number, entry_id
+        FROM bucket_bests
+        ORDER BY athlete_id, exercise_id, date DESC, set_number DESC, entry_id DESC
+      ),
+      first_seen AS (
+        SELECT DISTINCT ON (athlete_id, exercise_id)
+          athlete_id, exercise_id, date AS first_date, set_number AS first_set_number, entry_id AS first_entry_id
+        FROM qualifying
+        ORDER BY athlete_id, exercise_id, date ASC, set_number ASC, entry_id ASC
+      )
+      SELECT eb.athlete_id, eb.exercise_id, eb.exercise_name, eb.weight, eb.weight_unit, eb.reps, eb.date
+      FROM exercise_bests eb
+      JOIN first_seen fs ON fs.athlete_id = eb.athlete_id AND fs.exercise_id = eb.exercise_id
+      ORDER BY eb.athlete_id, eb.date DESC, fs.first_date ASC, fs.first_set_number ASC, fs.first_entry_id ASC
+    `);
+    for (const r of result.rows) {
+      const entry = {
+        exerciseId: r.exercise_id,
+        exerciseName: r.exercise_name,
+        weight: Number(r.weight),
+        unit: r.weight_unit ?? "lbs",
+        reps: r.reps,
+        date: r.date,
+      };
+      const list = byAthlete.get(r.athlete_id);
+      if (list) list.push(entry);
+      else byAthlete.set(r.athlete_id, [entry]);
+    }
+    return byAthlete;
   },
 
   // An athlete's own, deliberately limited view of their progress -- just
