@@ -2731,10 +2731,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // has one), admin-only since it costs a real AI call and isn't athlete-
   // facing.
   app.post("/api/admin/diagnose-tracker-log", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
     const parsed = diagnoseTrackerLogSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message || "Invalid log" });
-    const diagnosis = await storage.diagnoseTrackerLog(parsed.data.log);
+    const diagnosis = await storage.diagnoseTrackerLog(parsed.data.log, user.id);
     res.json({ diagnosis });
+  });
+
+  // Every diagnose-tracker-log run above is persisted -- this is how an
+  // admin (or a future Claude session) reads back past reports instead of
+  // needing the original screenshot/log re-pasted.
+  app.get("/api/admin/tracker-diagnosis-reports", requireRole("admin"), async (_req, res) => {
+    const reports = await storage.listTrackerDiagnosisReports();
+    res.json(reports);
   });
 
   // ---------------- Coach: Programs ----------------

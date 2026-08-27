@@ -1975,6 +1975,20 @@ CREATE INDEX IF NOT EXISTS "users_email_trgm_idx" ON "users" USING gin ("email" 
 DELETE FROM "class_enrollments" a USING "class_enrollments" b
 WHERE a.class_id = b.class_id AND a.athlete_id = b.athlete_id AND a.id > b.id;
 CREATE UNIQUE INDEX IF NOT EXISTS "class_enrollments_class_athlete_idx" ON "class_enrollments" ("class_id", "athlete_id");
+
+-- One row per AI diagnosis run against a native AR tracker's diagLog
+-- buffer (see storage.diagnoseTrackerLog) -- makes each on-device "Diagnose
+-- with AI" tap a persisted report an admin (or a future Claude session) can
+-- come back and read later, not just a one-off readout that's gone once the
+-- dialog closes.
+CREATE TABLE IF NOT EXISTS "tracker_diagnosis_reports" (
+  "id" serial PRIMARY KEY,
+  "requested_by_user_id" integer REFERENCES "users"("id") ON DELETE SET NULL,
+  "log_text" text NOT NULL,
+  "diagnosis" text NOT NULL,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "tracker_diagnosis_reports_created_idx" ON "tracker_diagnosis_reports" ("created_at");
 `;
 
 async function main() {

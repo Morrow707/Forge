@@ -296,6 +296,15 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
     private func continueStart(_ call: CAPPluginCall) {
         DispatchQueue.main.async {
             self.logDiag("continueStart() running")
+            // Device/OS fingerprint, once per session start -- the one
+            // thing that can make byte-identical Swift code behave
+            // differently between two test sessions weeks apart without
+            // this file having changed at all (see thermalState/
+            // lightEstimate in logFrameDiagnostics for the two live
+            // signals; this is the static "what am I even running on"
+            // context to read a report against).
+            let device = UIDevice.current
+            self.logDiag("device model=\(device.model) systemVersion=\(device.systemVersion)")
             guard let webView = self.bridge?.webView, let container = webView.superview else {
                 self.logDiag("FAILED: bridge webView/superview not available")
                 call.reject("Bridge WebView is not available")
@@ -333,6 +342,23 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
                 // the JS side measured (see rectFromCall above) was
                 // degenerate at the moment this ran.
                 self.logDiag("scnView.bounds=\(scnView.bounds) scale=\(scnView.contentScaleFactor) screenScale=\(UIScreen.main.scale)")
+                // nativeScale vs. scale: these normally match, but iOS's
+                // Settings > Display & Brightness > View "Zoomed" display
+                // mode makes scale report a value for content scaled for
+                // that zoomed layout while nativeScale stays the real
+                // physical-pixel scale -- a real, if uncommon, way for
+                // everything upstream (contentScaleFactor included) to be
+                // "correct" per its own inputs while the physical render
+                // target still isn't native resolution. isLowPowerModeEnabled
+                // is a second real lever iOS can pull that this app never
+                // touches -- it throttles background/system behavior in ways
+                // that could plausibly extend to camera pipeline processing.
+                // Both public, both cheap, both worth ruling in or out with
+                // a real reading instead of assuming either is fine.
+                self.logDiag(
+                    "nativeScale=\(UIScreen.main.nativeScale) "
+                        + "lowPowerMode=\(ProcessInfo.processInfo.isLowPowerModeEnabled)"
+                )
 
                 let skeleton = SCNNode()
                 scnView.scene.rootNode.addChildNode(skeleton)
@@ -746,6 +772,66 @@ public class ArCameraPreviewPlugin: CAPPlugin, CAPBridgedPlugin, ARSessionDelega
 
         let sharpness = frameSharpnessScore(frame.capturedImage)
         logDiag("[\(label)] frameSharpness (variance of decimated luma Laplacian) = \(sharpness)")
+
+        // ARKit's own read on tracking quality for this frame -- .limited
+        // with a reason (excessiveMotion/insufficientFeatures/relocalizing/
+        // initializing) is ARKit telling us itself the environment is
+        // fighting it, a genuinely different signal from anything computed
+        // above. camera.trackingState is on the ARFrame.camera itself
+        // (unlike exifData/exposureDuration), so no #available guard needed.
+        logDiag("[\(label)] trackingState=\(trackingStateDescription(frame.camera.trackingState))")
+
+        // Two candidates for "the exact same code looked sharp on a
+        // different day": a hotter phone (thermal throttling is a known,
+        // documented cause of iOS camera quality dropping) or a dimmer
+        // room (a fixed 1/60s exposure ceiling -- see the exposureTime
+        // comment on afec446/this investigation -- run out of light
+        // headroom sooner in a dim gym than a bright one, and aggressive
+        // noise-reduction smoothing in low light can look exactly like
+        // softness/blur, distinct from either focus or motion). Both are
+        // real, public, and cheap to read every frame.
+        logDiag("[\(label)] thermalState=\(thermalStateDescription(ProcessInfo.processInfo.thermalState))")
+        if let light = frame.lightEstimate {
+            logDiag(
+                "[\(label)] ambientIntensity=\(light.ambientIntensity)lm "
+                    + "ambientColorTemperature=\(light.ambientColorTemperature)K"
+            )
+        } else {
+            logDiag("[\(label)] lightEstimate unavailable")
+        }
+
+        // rawFeaturePoints lives on ARFrame itself, not a configuration-
+        // specific subclass -- it's the same underlying world-tracking
+        // point cloud ARBodyTrackingConfiguration runs for its plane
+        // detection (see the planeDetection comment above). A low count
+        // here is ARKit's own signal that the scene has little to track
+        // against -- low light and low-texture surfaces (a blank wall, a
+        // dim room) hurt this the same way they'd hurt any contrast-based
+        // autofocus, which is the mechanistic link worth checking if this
+        // stays low alongside a low frameSharpness.
+        logDiag("[\(label)] rawFeaturePointCount=\(frame.rawFeaturePoints?.points.count.description ?? "nil")")
+    }
+
+    private func trackingStateDescription(_ state: ARCamera.TrackingState) -> String {
+        switch state {
+        case .normal: return "normal"
+        case .notAvailable: return "notAvailable"
+        case .limited(.initializing): return "limited(initializing)"
+        case .limited(.excessiveMotion): return "limited(excessiveMotion)"
+        case .limited(.insufficientFeatures): return "limited(insufficientFeatures)"
+        case .limited(.relocalizing): return "limited(relocalizing)"
+        case .limited: return "limited(unknown)"
+        }
+    }
+
+    private func thermalStateDescription(_ state: ProcessInfo.ThermalState) -> String {
+        switch state {
+        case .nominal: return "nominal"
+        case .fair: return "fair"
+        case .serious: return "serious"
+        case .critical: return "critical"
+        @unknown default: return "unknown"
+        }
     }
 
     // ARKit doesn't expose the camera's lens/focus state to app code at
