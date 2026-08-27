@@ -3248,11 +3248,25 @@ export const storage = {
       where: eq(coachStaff.primaryCoachId, joiningCoachId),
     });
     if (ownStaff) return null;
+    // onConflictDoNothing, not a bare insert: two concurrent join requests
+    // for the same code (a double-click, or a client retry racing the
+    // original request) both read the same "existing" snapshot above as
+    // null, so the loser hit coach_staff_pair_idx as a hard constraint-
+    // violation error -- a raw 500 with the SQL text leaked into the
+    // response -- instead of the idempotent join this route promises.
+    // Silently no-op on the loser and fetch what the winner created.
     const [row] = await db
       .insert(coachStaff)
       .values({ primaryCoachId: resolvedPrimaryId, staffCoachId: joiningCoachId })
+      .onConflictDoNothing({ target: [coachStaff.primaryCoachId, coachStaff.staffCoachId] })
       .returning();
-    return row;
+    if (row) return row;
+    return db.query.coachStaff.findFirst({
+      where: and(
+        eq(coachStaff.primaryCoachId, resolvedPrimaryId),
+        eq(coachStaff.staffCoachId, joiningCoachId),
+      ),
+    });
   },
 
   // Every coach on this org's staff (excluding the primary) -- for the
