@@ -18,7 +18,8 @@ type Branding = {
 
 type TeamRoster = {
   primaryCoachName: string | null;
-  staff: { name: string; staffTitle: string | null }[];
+  primaryCoachPhilosophy?: string | null;
+  staff: { name: string; staffTitle: string | null; coachingPhilosophy?: string | null }[];
 };
 
 /** A team's public-facing identity page -- branding is a re-skin, this is
@@ -91,18 +92,27 @@ export default function TeamAboutPage() {
             </CardHeader>
             <CardContent className="space-y-2">
               {roster.primaryCoachName && (
-                <div className="flex items-center justify-between rounded-md bg-surface-elevated px-3 py-2 text-sm">
-                  <span className="font-medium">{roster.primaryCoachName}</span>
-                  <span className="text-xs text-muted-foreground">Head Coach</span>
+                <div className="rounded-md bg-surface-elevated px-3 py-2 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium">{roster.primaryCoachName}</span>
+                    <span className="text-xs text-muted-foreground">Head Coach</span>
+                  </div>
+                  {roster.primaryCoachPhilosophy && (
+                    <p className="mt-1 text-xs italic text-muted-foreground">
+                      "{roster.primaryCoachPhilosophy}"
+                    </p>
+                  )}
                 </div>
               )}
               {roster.staff.map((s) => (
-                <div
-                  key={s.name}
-                  className="flex items-center justify-between rounded-md bg-surface-elevated px-3 py-2 text-sm"
-                >
-                  <span className="font-medium">{s.name}</span>
-                  <span className="text-xs text-muted-foreground">{s.staffTitle || "Coach"}</span>
+                <div key={s.name} className="rounded-md bg-surface-elevated px-3 py-2 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium">{s.name}</span>
+                    <span className="text-xs text-muted-foreground">{s.staffTitle || "Coach"}</span>
+                  </div>
+                  {s.coachingPhilosophy && (
+                    <p className="mt-1 text-xs italic text-muted-foreground">"{s.coachingPhilosophy}"</p>
+                  )}
                 </div>
               ))}
             </CardContent>
