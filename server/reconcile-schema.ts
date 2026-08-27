@@ -1947,6 +1947,20 @@ CREATE INDEX IF NOT EXISTS "workout_comments_video_idx" ON "workout_comments" ("
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 CREATE INDEX IF NOT EXISTS "users_name_trgm_idx" ON "users" USING gin ("name" gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS "users_email_trgm_idx" ON "users" USING gin ("email" gin_trgm_ops);
+
+-- enrollAthleteInClass was a bare check-then-insert with no unique
+-- constraint behind it -- two concurrent enroll calls for the same
+-- athlete+class could each pass the "not yet enrolled" check and both
+-- insert, producing a real duplicate (found via a stress test; fixed in
+-- storage.ts with onConflictDoNothing against the new index below). A
+-- CREATE UNIQUE INDEX on top of any duplicates already sitting in a real
+-- database would just fail the whole reconciliation run, so any duplicate
+-- (keeping the earliest enrollment -- the one an athlete's real progress
+-- is attached to) is cleared first. classLessonProgress rows on the
+-- duplicate cascade-delete with it, so nothing orphaned is left behind.
+DELETE FROM "class_enrollments" a USING "class_enrollments" b
+WHERE a.class_id = b.class_id AND a.athlete_id = b.athlete_id AND a.id > b.id;
+CREATE UNIQUE INDEX IF NOT EXISTS "class_enrollments_class_athlete_idx" ON "class_enrollments" ("class_id", "athlete_id");
 `;
 
 async function main() {

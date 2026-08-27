@@ -7862,12 +7862,18 @@ ${athleteContext}
   },
 
   async enrollAthleteInClass(coachId: number, classId: number, athleteId: number, startDate: string) {
-    const existing = await this.getClassEnrollmentForAthlete(athleteId, classId);
-    if (existing) return { enrollment: existing, newlyUnlocked: [] };
+    // onConflictDoNothing against the (classId, athleteId) unique index,
+    // not a check-then-insert -- see that index's own comment for the race
+    // this used to allow.
     const [enrollment] = await db
       .insert(classEnrollments)
       .values({ classId, athleteId, coachId, startDate })
+      .onConflictDoNothing({ target: [classEnrollments.classId, classEnrollments.athleteId] })
       .returning();
+    if (!enrollment) {
+      const existing = await this.getClassEnrollmentForAthlete(athleteId, classId);
+      return { enrollment: existing!, newlyUnlocked: [] };
+    }
     const newlyUnlocked = await this.recomputeClassProgress(enrollment.id);
     return { enrollment, newlyUnlocked };
   },
@@ -8057,7 +8063,22 @@ ${athleteContext}
   // that transition was detected because a coach enrolled/unlocked/the
   // athlete purchased something, or purely because enough time/reps/
   // sessions had quietly accumulated since the last time anyone checked.
-  async recomputeClassProgress(enrollmentId: number): Promise<
+  async recomputeClassProgress(
+    enrollmentId: number,
+    // Optional pre-fetched, class/coach-level context -- see
+    // getClassRosterForCoach's own comment. Every other call site omits
+    // this and gets the exact same per-call fetches as before; the
+    // (athlete-specific) enrollment row itself is still always required in
+    // ctx when passed, since a roster listing already has each enrollment
+    // row on hand from its own initial query and shouldn't refetch it.
+    ctx?: {
+      enrollment: typeof classEnrollments.$inferSelect | undefined;
+      cls: typeof classes.$inferSelect;
+      lessons: (typeof classLessons.$inferSelect)[];
+      lessonsWithQuiz: Set<number>;
+      coachSettings: typeof classCoachSettings.$inferSelect | undefined;
+    },
+  ): Promise<
     Array<{ lessonId: number; lessonNumber: number; title: string; classId: number; className: string; athleteId: number }>
   > {
     const newlyUnlocked: Array<{
@@ -8068,20 +8089,24 @@ ${athleteContext}
       className: string;
       athleteId: number;
     }> = [];
-    const enrollment = await db.query.classEnrollments.findFirst({
-      where: eq(classEnrollments.id, enrollmentId),
-    });
+    const enrollment = ctx
+      ? ctx.enrollment
+      : await db.query.classEnrollments.findFirst({ where: eq(classEnrollments.id, enrollmentId) });
     if (!enrollment) return newlyUnlocked;
-    const cls = await db.query.classes.findFirst({ where: eq(classes.id, enrollment.classId) });
+    const cls = ctx?.cls ?? (await db.query.classes.findFirst({ where: eq(classes.id, enrollment.classId) }));
     if (!cls) return newlyUnlocked;
-    const lessons = await db.query.classLessons.findMany({
-      where: eq(classLessons.classId, enrollment.classId),
-      orderBy: asc(classLessons.lessonNumber),
-    });
-    const lessonsWithQuiz = await this.getClassLessonIdsWithQuiz(lessons.map((l) => l.id));
-    const coachSettings = await db.query.classCoachSettings.findFirst({
-      where: and(eq(classCoachSettings.classId, cls.id), eq(classCoachSettings.coachId, enrollment.coachId)),
-    });
+    const lessons =
+      ctx?.lessons ??
+      (await db.query.classLessons.findMany({
+        where: eq(classLessons.classId, enrollment.classId),
+        orderBy: asc(classLessons.lessonNumber),
+      }));
+    const lessonsWithQuiz = ctx?.lessonsWithQuiz ?? (await this.getClassLessonIdsWithQuiz(lessons.map((l) => l.id)));
+    const coachSettings = ctx
+      ? ctx.coachSettings
+      : await db.query.classCoachSettings.findFirst({
+          where: and(eq(classCoachSettings.classId, cls.id), eq(classCoachSettings.coachId, enrollment.coachId)),
+        });
 
     let previousProgress: typeof classLessonProgress.$inferSelect | null = null;
     for (const lesson of lessons) {
@@ -8152,15 +8177,31 @@ ${athleteContext}
   // quiz and hasn't been explicitly activated yet -- the athlete can read
   // its content and take its quiz, but "Add to Calendar" (activateClassLesson)
   // stays disabled until hasQuiz/contentCompletedAt/quizPassedAt all clear.
-  async getClassProgressForAthlete(athleteId: number, classId: number) {
-    const cls = await db.query.classes.findFirst({ where: eq(classes.id, classId) });
+  async getClassProgressForAthlete(
+    athleteId: number,
+    classId: number,
+    // Optional pre-fetched, class/coach-level (never athlete-specific)
+    // context -- see getClassRosterForCoach's own comment for why this
+    // exists. Every other call site omits it and gets the exact same
+    // per-call fetches as before.
+    ctx?: {
+      cls: typeof classes.$inferSelect;
+      lessons: (typeof classLessons.$inferSelect)[];
+      lessonsWithQuiz: Set<number>;
+      coachSettings: typeof classCoachSettings.$inferSelect | undefined;
+      enrollment: typeof classEnrollments.$inferSelect | undefined;
+    },
+  ) {
+    const cls = ctx?.cls ?? (await db.query.classes.findFirst({ where: eq(classes.id, classId) }));
     if (!cls) return null;
-    const lessons = await db.query.classLessons.findMany({
-      where: eq(classLessons.classId, classId),
-      orderBy: asc(classLessons.lessonNumber),
-    });
-    const lessonsWithQuiz = await this.getClassLessonIdsWithQuiz(lessons.map((l) => l.id));
-    const enrollment = await this.getClassEnrollmentForAthlete(athleteId, classId);
+    const lessons =
+      ctx?.lessons ??
+      (await db.query.classLessons.findMany({
+        where: eq(classLessons.classId, classId),
+        orderBy: asc(classLessons.lessonNumber),
+      }));
+    const lessonsWithQuiz = ctx?.lessonsWithQuiz ?? (await this.getClassLessonIdsWithQuiz(lessons.map((l) => l.id)));
+    const enrollment = ctx ? ctx.enrollment : await this.getClassEnrollmentForAthlete(athleteId, classId);
     const classSummary = {
       id: cls.id,
       name: cls.name,
@@ -8189,14 +8230,19 @@ ${athleteContext}
       };
     }
 
-    await this.recomputeClassProgress(enrollment.id);
+    await this.recomputeClassProgress(
+      enrollment.id,
+      ctx && { enrollment, cls, lessons, lessonsWithQuiz, coachSettings: ctx.coachSettings },
+    );
     const progressRows = await db.query.classLessonProgress.findMany({
       where: eq(classLessonProgress.enrollmentId, enrollment.id),
     });
     const progressByLesson = new Map(progressRows.map((p) => [p.classLessonId, p]));
-    const coachSettings = await db.query.classCoachSettings.findFirst({
-      where: and(eq(classCoachSettings.classId, cls.id), eq(classCoachSettings.coachId, enrollment.coachId)),
-    });
+    const coachSettings = ctx
+      ? ctx.coachSettings
+      : await db.query.classCoachSettings.findFirst({
+          where: and(eq(classCoachSettings.classId, cls.id), eq(classCoachSettings.coachId, enrollment.coachId)),
+        });
 
     const result: Array<{
       id: number;
@@ -8670,9 +8716,44 @@ ${athleteContext}
     // separate summary here -- one source of truth for "where is this
     // athlete in this class," whether they're looking at it themselves or
     // their coach is.
+    //
+    // The class row, its lesson list, and which of those lessons have a
+    // quiz never vary by athlete -- getClassProgressForAthlete/
+    // recomputeClassProgress were each refetching all three from scratch
+    // per enrollment, on top of an already-redundant refetch of the very
+    // enrollment row this loop already has in hand. A real 5,000-enrollment
+    // stress test found the naive per-athlete version taking 30+ seconds
+    // because of it. classCoachSettings is the one piece that CAN
+    // legitimately vary within a roster (a different staff coach may have
+    // set different pacing overrides for enrollments they made), so that's
+    // batched by coachId instead of collapsed to one value. The per-lesson
+    // unlock/auto-activation walk inside recomputeClassProgress still runs
+    // per athlete -- it can have real side effects (creating a skill
+    // assignment), so it isn't safe to batch away here.
+    const cls = await db.query.classes.findFirst({ where: eq(classes.id, classId) });
+    const classLessonDefs = cls
+      ? await db.query.classLessons.findMany({
+          where: eq(classLessons.classId, classId),
+          orderBy: asc(classLessons.lessonNumber),
+        })
+      : [];
+    const lessonsWithQuiz = await this.getClassLessonIdsWithQuiz(classLessonDefs.map((l) => l.id));
+    const coachSettingsRows = await db.query.classCoachSettings.findMany({
+      where: and(eq(classCoachSettings.classId, classId), inArray(classCoachSettings.coachId, coachIds)),
+    });
+    const coachSettingsByCoach = new Map(coachSettingsRows.map((s) => [s.coachId, s]));
+
     const results = [];
     for (const enrollment of rows) {
-      const progress = await this.getClassProgressForAthlete(enrollment.athleteId, classId);
+      const progress = cls
+        ? await this.getClassProgressForAthlete(enrollment.athleteId, classId, {
+            cls,
+            lessons: classLessonDefs,
+            lessonsWithQuiz,
+            coachSettings: coachSettingsByCoach.get(enrollment.coachId),
+            enrollment,
+          })
+        : null;
       const lessons = progress?.lessons ?? [];
       results.push({
         enrollmentId: enrollment.id,

@@ -3538,6 +3538,17 @@ export const classEnrollments = pgTable(
   (table) => ({
     athleteIdx: index("class_enrollments_athlete_idx").on(table.athleteId),
     classIdx: index("class_enrollments_class_idx").on(table.classId),
+    // enrollAthleteInClass used to be a bare check-then-insert (find
+    // existing, insert if none) with nothing backing it -- two concurrent
+    // enroll calls for the same athlete+class (a double-tap, or a retried
+    // request racing the original) could both pass the "not yet enrolled"
+    // check and each insert their own row. Found via a real duplicate this
+    // produced during stress testing; fixed there with onConflictDoNothing
+    // against this index.
+    classAthleteIdx: uniqueIndex("class_enrollments_class_athlete_idx").on(
+      table.classId,
+      table.athleteId,
+    ),
   }),
 );
 
