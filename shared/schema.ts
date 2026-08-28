@@ -185,6 +185,17 @@ export const trackingLevelEnum = pgEnum("tracking_level", [
   // against actual swings before it ships, not something to guess at.
   "golf_swing",
   "baseball_swing",
+  // Strength-side, unlike sprint/mechanics above -- a med ball throw is a
+  // programExercises movement (see VideoTrackingToggle's own
+  // MED_BALL_NAME_PATTERN), not a Skills drill. Unlike bar_path/full it
+  // DOES use AvImplementTracker.swift's object tracking (following the
+  // ball itself, single-instance since there's only one hand's worth of
+  // implement to follow -- see AvImplementTracker's own comment), fused
+  // with mechanics-tracking.ts's existing "throw" mode body-joint analysis
+  // (reused unmodified) for a release-height/arm-slot reading the ball
+  // trace alone can't give. No ARKit equivalent was ever built for this --
+  // see av-medball-tracker-dialog.tsx's own file comment.
+  "med_ball",
 ]);
 
 export const users = pgTable(
@@ -1910,6 +1921,18 @@ export const workoutSetEntries = pgTable(
   swingBackswingMs: integer("swing_backswing_ms"),
   swingDownswingMs: integer("swing_downswing_ms"),
   swingHeadSwayCm: real("swing_head_sway_cm"),
+  // "med_ball" tracking mode's numbers (see av-medball-tracker-dialog.tsx) --
+  // null unless trackingLevel was "med_ball" when this set was logged.
+  // Best-of-set single throw, same "best rep, not an average" convention
+  // jumpHeightCm/jumpDistanceCm already use -- no rep-segmentation exists
+  // for a throw yet, so this is the whole set's peak read rather than a
+  // per-rep breakdown. medBallPeakSpeedMps is AvImplementTracker's own
+  // tracked ball speed when a confident lock was held for enough of the
+  // capture, falling back to mechanics-tracking.ts's peakWristSpeedMps
+  // proxy (a real, established substitute -- see that field's own comment)
+  // when it wasn't.
+  medBallPeakSpeedMps: real("med_ball_peak_speed_mps"),
+  medBallReleaseHeightCm: real("med_ball_release_height_cm"),
   // Per-rep left/right knee-drive comparison for bilateral lower-body lifts
   // (see pose-tracking.ts's computeLegDriveAsymmetry) -- null unless the
   // exercise's movementType was "Squat" (or it was jump-tracked) and both
@@ -5487,7 +5510,7 @@ export const programExerciseInputSchema = z.object({
   notes: z.string().optional().nullable(),
   supersetGroup: z.string().optional().nullable(),
   restAfterGroupOnly: z.boolean().optional(),
-  trackingLevel: z.enum(["none", "bar_path", "full", "jump", "golf_swing", "baseball_swing"]).optional(),
+  trackingLevel: z.enum(["none", "bar_path", "full", "jump", "golf_swing", "baseball_swing", "med_ball"]).optional(),
   videoCheckEnabled: z.boolean().optional(),
 });
 

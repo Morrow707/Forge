@@ -32,7 +32,7 @@ import { toast } from "sonner";
 import { Plus, Trash2, MoonStar, Link2, Stethoscope, Copy, Clock, Repeat, LineChart } from "lucide-react";
 import type { Exercise } from "@shared/schema";
 
-type TrackingLevel = "none" | "bar_path" | "full" | "jump" | "golf_swing" | "baseball_swing";
+type TrackingLevel = "none" | "bar_path" | "full" | "jump" | "golf_swing" | "baseball_swing" | "med_ball";
 
 type LocalExercise = {
   key: string;

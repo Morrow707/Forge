@@ -1,7 +1,7 @@
 import { Video, VideoOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type TrackingLevel = "none" | "bar_path" | "full" | "jump" | "golf_swing" | "baseball_swing";
+export type TrackingLevel = "none" | "bar_path" | "full" | "jump" | "golf_swing" | "baseball_swing" | "med_ball";
 
 // Word-boundary, not substring -- "Baseball-Style Rotational Med Ball
 // Throw" shouldn't silently become a swing-tracked exercise just because
@@ -12,6 +12,16 @@ export type TrackingLevel = "none" | "bar_path" | "full" | "jump" | "golf_swing"
 // exercise itself being that sport's swing.
 const GOLF_NAME_PATTERN = /\bgolf\b/i;
 const BASEBALL_NAME_PATTERN = /\bbaseball\b/i;
+// Checked BEFORE BASEBALL_NAME_PATTERN below -- "Baseball-Style Rotational
+// Med Ball Throw" (the example the comment above already calls out) would
+// otherwise match baseball's own pattern first and become swing-tracked
+// instead of med-ball-tracked. No structured `equipment` field is
+// threaded into this component (unlike golf/baseball, "Medicine Ball" IS
+// already a real value in shared/exercise-family.ts's equipment taxonomy,
+// but plumbing it through every call site for one pattern wasn't worth
+// it) -- name matching is the same lightweight approach already
+// established for golf/baseball, not a new category of guess.
+const MED_BALL_NAME_PATTERN = /\bmed(?:icine)?[\s-]?ball\b/i;
 
 /** Coach-facing camera control for one program exercise. Used to be 5
  * separate controls (4 tracking-level buttons -- Off/Path/Full/Jump --
@@ -23,7 +33,9 @@ const BASEBALL_NAME_PATTERN = /\bbaseball\b/i;
  * decisions. Collapsed to the one choice that actually matters -- camera
  * on or off -- with "on" auto-picking the right measurement pipeline:
  * jump tracking (ankle/vertical displacement) for a plyometric exercise,
- * full bar tracking for everything else. A program exercise saved under
+ * med-ball object tracking for a med-ball-named throw, golf/baseball swing
+ * tracking for a name matching that sport, full bar tracking for
+ * everything else. A program exercise saved under
  * the old "bar_path"-only level before this change still works exactly as
  * before in the athlete's workout view -- it just now reads as "Video: On"
  * here rather than exposing that narrower option again.
@@ -51,11 +63,13 @@ export function VideoTrackingToggle({
   const onLevel: TrackingLevel =
     category === "plyometric"
       ? "jump"
-      : exerciseName && GOLF_NAME_PATTERN.test(exerciseName)
-        ? "golf_swing"
-        : exerciseName && BASEBALL_NAME_PATTERN.test(exerciseName)
-          ? "baseball_swing"
-          : "full";
+      : exerciseName && MED_BALL_NAME_PATTERN.test(exerciseName)
+        ? "med_ball"
+        : exerciseName && GOLF_NAME_PATTERN.test(exerciseName)
+          ? "golf_swing"
+          : exerciseName && BASEBALL_NAME_PATTERN.test(exerciseName)
+            ? "baseball_swing"
+            : "full";
 
   return (
     <button

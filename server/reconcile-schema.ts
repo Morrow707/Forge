@@ -68,6 +68,9 @@ ALTER TYPE "tracking_level" ADD VALUE IF NOT EXISTS 'mechanics';
 -- -- see the comment on trackingLevelEnum in shared/schema.ts.
 ALTER TYPE "tracking_level" ADD VALUE IF NOT EXISTS 'golf_swing';
 ALTER TYPE "tracking_level" ADD VALUE IF NOT EXISTS 'baseball_swing';
+-- Strength-side med ball object tracking -- see the comment on
+-- trackingLevelEnum in shared/schema.ts.
+ALTER TYPE "tracking_level" ADD VALUE IF NOT EXISTS 'med_ball';
 
 DO $$ BEGIN
   CREATE TYPE "health_status" AS ENUM ('healthy', 'hurt');
@@ -1780,6 +1783,11 @@ ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "swing_tempo_ratio" r
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "swing_backswing_ms" integer;
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "swing_downswing_ms" integer;
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "swing_head_sway_cm" real;
+
+-- Med ball object tracking (shared/schema.ts workoutSetEntries's
+-- medBallPeakSpeedMps/medBallReleaseHeightCm).
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "med_ball_peak_speed_mps" real;
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "med_ball_release_height_cm" real;
 
 -- Billing framework -- see shared/schema.ts's own comment above the
 -- subscriptions table for why this exists with nothing wired to real

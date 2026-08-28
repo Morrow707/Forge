@@ -25,6 +25,7 @@ import { AvJumpTrackerDialog } from "@/components/av-jump-tracker-dialog";
 import { AvBarTrackerDialog } from "@/components/av-bar-tracker-dialog";
 import { type SwingSetMetrics } from "@/components/ar-swing-tracker-dialog";
 import { AvSwingTrackerDialog } from "@/components/av-swing-tracker-dialog";
+import { AvMedballTrackerDialog, type MedballSetMetrics } from "@/components/av-medball-tracker-dialog";
 import { isArPreviewPlatform } from "@/lib/native-ar-preview";
 import { FormVideoRecorderDialog } from "@/components/form-video-recorder-dialog";
 import { SetVideoPreviewDialog, SetVideoCompareDialog } from "@/components/set-video-review";
@@ -188,7 +189,7 @@ type SetHistoryPoint = {
   rpe: number | null;
 };
 
-type TrackingLevel = "none" | "bar_path" | "full" | "jump" | "golf_swing" | "baseball_swing";
+type TrackingLevel = "none" | "bar_path" | "full" | "jump" | "golf_swing" | "baseball_swing" | "med_ball";
 
 type PrescribedExercise = {
   id: number;
@@ -320,6 +321,9 @@ type SetMetrics = {
   swingBackswingMs: number | null;
   swingDownswingMs: number | null;
   swingHeadSwayCm: number | null;
+  // "med_ball" tracking mode's numbers -- see av-medball-tracker-dialog.tsx.
+  medBallPeakSpeedMps: number | null;
+  medBallReleaseHeightCm: number | null;
   // Per-rep left/right knee-drive comparison for bilateral lower-body lifts
   // -- see pose-tracking.ts's computeLegDriveAsymmetry. Null unless the
   // exercise's movementType/laterality made a same-rep comparison valid.
@@ -473,6 +477,8 @@ function buildItem(
       swingBackswingMs: existingSet?.swingBackswingMs ?? null,
       swingDownswingMs: existingSet?.swingDownswingMs ?? null,
       swingHeadSwayCm: existingSet?.swingHeadSwayCm ?? null,
+      medBallPeakSpeedMps: existingSet?.medBallPeakSpeedMps ?? null,
+      medBallReleaseHeightCm: existingSet?.medBallReleaseHeightCm ?? null,
       legDriveAsymmetry: existingSet?.legDriveAsymmetry ?? null,
       armDriveAsymmetry: existingSet?.armDriveAsymmetry ?? null,
       trustScores: existingSet?.trustScores ?? null,
@@ -921,6 +927,8 @@ export function WorkoutPage({
           swingBackswingMs: s.swingBackswingMs,
           swingDownswingMs: s.swingDownswingMs,
           swingHeadSwayCm: s.swingHeadSwayCm,
+          medBallPeakSpeedMps: s.medBallPeakSpeedMps,
+          medBallReleaseHeightCm: s.medBallReleaseHeightCm,
           legDriveAsymmetry: s.legDriveAsymmetry,
           armDriveAsymmetry: s.armDriveAsymmetry,
           trustScores: s.trustScores,
@@ -1412,6 +1420,8 @@ export function WorkoutPage({
               swingBackswingMs: null,
               swingDownswingMs: null,
               swingHeadSwayCm: null,
+              medBallPeakSpeedMps: null,
+              medBallReleaseHeightCm: null,
               legDriveAsymmetry: null,
               armDriveAsymmetry: null,
               trustScores: null,
@@ -2627,6 +2637,21 @@ function ExerciseLogContent({
                     )}
                   </div>
                 )}
+                {(set.medBallPeakSpeedMps != null || set.medBallReleaseHeightCm != null) && (
+                  <div className="mt-1 flex flex-wrap items-center gap-1 pl-9 text-[9px] text-muted-foreground">
+                    <span className="font-semibold uppercase tracking-wide">Throw</span>
+                    {set.medBallPeakSpeedMps != null && (
+                      <span className="rounded bg-secondary px-1.5 py-0.5">
+                        Peak speed {set.medBallPeakSpeedMps} m/s
+                      </span>
+                    )}
+                    {set.medBallReleaseHeightCm != null && (
+                      <span className="rounded bg-secondary px-1.5 py-0.5">
+                        Release {set.medBallReleaseHeightCm}cm
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })}
@@ -2741,6 +2766,60 @@ function ExerciseLogContent({
               if (videoCheckMode === "ai") aiFormCheckMutation.mutate({ setNumber: trackingSet, videoUrl });
               else postFormVideoMutation.mutate({ setNumber: trackingSet, videoUrl });
             }
+          }
+
+          // Separate from handleTrackerCapture above, same reasoning as handleSwingCapture --
+          // MedballSetMetrics doesn't fit the RepMetrics/JumpSetMetrics union either.
+          function handleMedballCapture(metrics: MedballSetMetrics, videoUrl?: string) {
+            if (trackingSet == null) return;
+            const videoPatch = videoUrl ? { formCheckVideoUrl: videoUrl } : {};
+            onUpdateSet(
+              trackingSet,
+              {
+                medBallPeakSpeedMps: metrics.peakSpeedMps,
+                medBallReleaseHeightCm: metrics.releaseHeightCm,
+                ...videoPatch,
+              },
+              { immediate: true },
+            );
+            if (videoUrl) {
+              if (videoCheckMode === "ai") aiFormCheckMutation.mutate({ setNumber: trackingSet, videoUrl });
+              else postFormVideoMutation.mutate({ setNumber: trackingSet, videoUrl });
+            }
+          }
+
+          if (item.trackingLevel === "med_ball") {
+            // AVFoundation + Vision pipeline only -- no ARKit equivalent was ever built for
+            // med ball tracking (see av-medball-tracker-dialog.tsx's own file comment), so
+            // there's no isArPreviewPlatform() branch to an Ar* fallback dialog the way every
+            // other mode has. Android/web falls through to a plain video-only capture, same
+            // fallback golf/baseball swing already uses for the identical "no non-iOS pipeline
+            // exists yet" reason.
+            if (isArPreviewPlatform()) {
+              return (
+                <AvMedballTrackerDialog
+                  open={trackingSet !== null}
+                  onOpenChange={(open) => !open && setTrackingSet(null)}
+                  heightIn={user?.heightIn}
+                  recordVideo={mergedTracking}
+                  onCapture={handleMedballCapture}
+                  videoContext={videoContextFor(trackingSet)}
+                />
+              );
+            }
+            return (
+              <FormVideoRecorderDialog
+                open={trackingSet !== null}
+                onOpenChange={(open) => !open && setTrackingSet(null)}
+                videoContext={videoContextFor(trackingSet)}
+                onSaved={(url) => {
+                  if (trackingSet == null) return;
+                  onUpdateSet(trackingSet, { formCheckVideoUrl: url }, { immediate: true });
+                  setTrackingSet(null);
+                }}
+                onQueued={() => setTrackingSet(null)}
+              />
+            );
           }
 
           if (item.trackingLevel === "golf_swing" || item.trackingLevel === "baseball_swing") {

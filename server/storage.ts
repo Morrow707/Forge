@@ -802,7 +802,16 @@ type MergeableDay = {
     notes: string | null;
     supersetGroup: string | null;
     restAfterGroupOnly: boolean;
-    trackingLevel?: "none" | "bar_path" | "full" | "jump" | "sprint" | "mechanics" | "golf_swing" | "baseball_swing";
+    trackingLevel?:
+      | "none"
+      | "bar_path"
+      | "full"
+      | "jump"
+      | "sprint"
+      | "mechanics"
+      | "golf_swing"
+      | "baseball_swing"
+      | "med_ball";
     videoCheckEnabled: boolean;
   }[];
 };
@@ -827,7 +836,16 @@ type WeekPatch = {
       notes?: string;
       supersetGroup?: string;
       restAfterGroupOnly?: boolean;
-      trackingLevel?: "none" | "bar_path" | "full" | "jump" | "sprint" | "mechanics" | "golf_swing" | "baseball_swing";
+      trackingLevel?:
+      | "none"
+      | "bar_path"
+      | "full"
+      | "jump"
+      | "sprint"
+      | "mechanics"
+      | "golf_swing"
+      | "baseball_swing"
+      | "med_ball";
       videoCheckEnabled?: boolean;
     }[];
   }[];
@@ -1201,7 +1219,7 @@ const programExerciseItemSchema = z.object({
   notes: z.string().optional(),
   supersetGroup: z.string().optional(),
   restAfterGroupOnly: z.boolean().optional(),
-  trackingLevel: z.enum(["none", "bar_path", "full", "jump", "golf_swing", "baseball_swing"]).optional(),
+  trackingLevel: z.enum(["none", "bar_path", "full", "jump", "golf_swing", "baseball_swing", "med_ball"]).optional(),
   videoCheckEnabled: z.boolean().optional(),
 });
 

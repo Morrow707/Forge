@@ -68,7 +68,7 @@ import {
 
 type RosterEntry = { id: number; name: string; email: string };
 
-type TrackingLevel = "none" | "bar_path" | "full" | "jump" | "golf_swing" | "baseball_swing";
+type TrackingLevel = "none" | "bar_path" | "full" | "jump" | "golf_swing" | "baseball_swing" | "med_ball";
 
 type LocalExercise = {
   key: string;

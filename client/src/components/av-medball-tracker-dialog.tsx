@@ -1,0 +1,356 @@
+import { useEffect, useState } from "react";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { ApiError } from "@/lib/queryClient";
+import {
+  uploadOrQueueVideo,
+  hasWarnedAboutQueueing,
+  markWarnedAboutQueueing,
+  type VideoRecordContext,
+} from "@/lib/video-offline-store";
+import { toast } from "sonner";
+import { Circle, Square, X, XCircle, AlertTriangle } from "lucide-react";
+import { useAvBodyTracking } from "@/lib/use-av-body-tracking";
+import { visionJointsToWorldLandmarks, visionImplementToPoint, type ImplementPoint } from "@/lib/vision-body-landmarks";
+import type { PoseFrame as NativePoseFrame } from "@/lib/native-av-preview";
+import { calibrateFromFrames, scaleWorldLandmarks, percentile } from "@/lib/pose-tracking";
+import { analyzeMechanics, type MechanicsFrame } from "@/lib/mechanics-tracking";
+import { MIN_TRACKING_CONFIDENCE } from "@/lib/bar-tracking";
+import { videoFilenameForBlob } from "@/lib/video-recording";
+
+/** AVFoundation + Vision med ball throw tracking -- genuinely new, no ARKit equivalent was ever
+ * built for this mode (unlike every other tracker this AV pipeline replaced). It exists at all
+ * because AvImplementTracker.swift's motion-diff object tracking (built for bar_path/full --
+ * see av-bar-tracker-dialog.tsx) generalizes to any held object, not just a barbell: "a caller
+ * tracking a single implement (a thrown medicine ball, not a two-handed bar) uses the left
+ * instance alone" is that class's own file comment, describing exactly this mode.
+ *
+ * Two independent signals, fused by simple fallback rather than a weighted blend:
+ * 1. The ball's own tracked speed -- AvImplementTracker follows the ball itself (not just the
+ *    wrist), so consecutive confident frames give a real frame-to-frame speed, same 95th-
+ *    percentile-over-a-physical-ceiling robustness pattern already established in
+ *    bar-tracking.ts's robustPeakSpeed and mechanics-tracking.ts's own peakWristSpeedMps.
+ * 2. mechanics-tracking.ts's existing "throw" mode (reused completely unmodified) -- a
+ *    body-joint-only analysis (peak wrist speed as a release-velocity proxy, release height,
+ *    arm slot) built for Skills' baseball/softball throwing mechanics, but the underlying
+ *    physics (a throwing motion's kinetic chain) doesn't care whether the context is a skill
+ *    drill or a strength set. Its peakWristSpeedMps is the fallback whenever the ball itself
+ *    wasn't confidently tracked for enough of the capture (occlusion, a throw that leaves frame
+ *    too fast) -- degrading to the same proxy signal Skills already trusts, rather than
+ *    reporting nothing.
+ *
+ * Only two headline numbers are saved (medBallPeakSpeedMps, medBallReleaseHeightCm), best-of-set
+ * rather than a per-rep breakdown -- same "no rep segmentation exists yet" simplicity
+ * jumpHeightCm/jumpDistanceCm already accept for jump mode. Fault detection
+ * (detectMechanicsFaults) isn't wired in yet -- it needs a camera-angle selection step
+ * (face_on/down_the_line) this mode doesn't have, the same missing piece Sprint's own
+ * cameraAngle warning step exists to fill for its mode.
+ *
+ * Calibration is required (see AvJumpTrackerDialog's own comment on why Vision's
+ * worldLandmarks-slot pixel values need it, unlike ARKit/MediaPipe) -- no number is better than
+ * a wrong one. Camera/recording/analysis plumbing comes from useAvBodyTracking, shared with
+ * every other AV tracker dialog. */
+
+export type MedballSetMetrics = {
+  peakSpeedMps: number | null;
+  releaseHeightCm: number | null;
+};
+
+const EMPTY_MEDBALL_METRICS: MedballSetMetrics = { peakSpeedMps: null, releaseHeightCm: null };
+
+const SHOW_DIAGNOSTIC_OVERLAY = false;
+
+// Elite med ball release velocities run well below a thrown baseball's (med balls are heavy --
+// typically 2-10kg -- unlike a 0.14kg baseball), so this ceiling sits generously above even a
+// hard rotational throw or overhead slam: same "well above even an elite real effort" margin
+// mechanics-tracking.ts's own MAX_PLAUSIBLE_WRIST_SPEED_MPS uses, just for the ball's own
+// tracked speed (which can genuinely run a bit above wrist speed, unlike that constant) rather
+// than the wrist. Untuned against real footage (this sandbox has no camera to test against).
+const MAX_PLAUSIBLE_BALL_SPEED_MPS = 25;
+// Below this many confident implement samples, there isn't enough of a tracked trace to trust a
+// frame-to-frame speed reading from it at all -- falls back to the wrist-speed proxy instead of
+// reporting a number computed from two or three lucky frames.
+const MIN_BALL_SPEED_SAMPLES = 4;
+
+export function AvMedballTrackerDialog({
+  open,
+  onOpenChange,
+  heightIn,
+  recordVideo,
+  onCapture,
+  videoContext,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  heightIn?: number | null;
+  recordVideo?: boolean;
+  onCapture: (metrics: MedballSetMetrics, videoUrl?: string) => void;
+  videoContext?: VideoRecordContext;
+}) {
+  const [saving, setSaving] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+
+  const {
+    containerRef,
+    supported,
+    supportError,
+    error,
+    setError,
+    diagLog,
+    recording,
+    analyzing,
+    analyzedFrames,
+    startRecording,
+    stopRecordingAndAnalyze,
+    cancelAnalysis,
+  } = useAvBodyTracking(open);
+
+  useEffect(() => {
+    if (!open) return;
+    setSaving(false);
+    setUploadProgress(0);
+  }, [open]);
+
+  async function saveEmptyAndWarn(blob: Blob, message: string) {
+    if (recordVideo) {
+      setSaving(true);
+      setUploadProgress(0);
+      try {
+        const filename = videoFilenameForBlob(blob, "form-check");
+        const result = await uploadOrQueueVideo(blob, filename, videoContext ?? { label: "Med Ball" }, setUploadProgress);
+        toast.error(
+          result.status === "queued"
+            ? `${message} (No Wi-Fi -- video saved on your device, will upload for your coach once connected.)`
+            : `${message} (Video saved for your coach.)`,
+        );
+        if (result.status === "queued") {
+          if (!hasWarnedAboutQueueing()) {
+            markWarnedAboutQueueing();
+            toast.info(
+              "You can also upload a queued video manually anytime -- even over cellular -- from the Video Bank.",
+              { duration: 10000 },
+            );
+          }
+          onCapture(EMPTY_MEDBALL_METRICS);
+        } else {
+          onCapture(EMPTY_MEDBALL_METRICS, result.url);
+        }
+        onOpenChange(false);
+      } catch (err) {
+        const detail = err instanceof ApiError ? err.message : err instanceof Error ? err.message : String(err);
+        toast.error(`${message} And the video didn't save either: ${detail}`);
+      } finally {
+        setSaving(false);
+      }
+    } else {
+      toast.error(message);
+    }
+  }
+
+  async function stopTracking() {
+    const result = await stopRecordingAndAnalyze();
+    if (!result) return; // error/cancellation already reported by the hook
+    await finishWithRecording(result.blob, result.rawFrames);
+  }
+
+  // Frame-to-frame speed across an implement's own confident trace -- same robust-percentile
+  // shape as mechanics-tracking.ts's own wristSpeeds computation, just against a tracked ball
+  // position instead of a wrist landmark.
+  function peakImplementSpeed(points: { t: number; x: number; y: number; confidence: number }[]): number | null {
+    const confident = points.filter((p) => p.confidence >= MIN_TRACKING_CONFIDENCE);
+    if (confident.length < MIN_BALL_SPEED_SAMPLES) return null;
+    const speeds: number[] = [];
+    for (let i = 1; i < confident.length; i++) {
+      const a = confident[i - 1];
+      const b = confident[i];
+      const dtSeconds = (b.t - a.t) / 1000;
+      if (dtSeconds <= 0) continue;
+      speeds.push(Math.hypot(b.x - a.x, b.y - a.y) / dtSeconds);
+    }
+    if (speeds.length < MIN_BALL_SPEED_SAMPLES) return null;
+    const plausible = speeds.filter((v) => v <= MAX_PLAUSIBLE_BALL_SPEED_MPS);
+    const pool = plausible.length > 0 ? plausible : speeds;
+    return Math.round(percentile(pool, 0.95) * 100) / 100;
+  }
+
+  async function finishWithRecording(blob: Blob, rawFrames: NativePoseFrame[]) {
+    const calibrationInput = rawFrames.map((f) => ({ worldLandmarks: visionJointsToWorldLandmarks(f) }));
+    const scaleFactor = calibrateFromFrames(calibrationInput, heightIn);
+    if (scaleFactor == null) {
+      await saveEmptyAndWarn(
+        blob,
+        "Couldn't calibrate real-world scale for this take -- make sure your height is set in your profile and you're clearly visible standing at some point in frame.",
+      );
+      return;
+    }
+
+    const frames: MechanicsFrame[] = [];
+    const leftBallPoints: { t: number; x: number; y: number; confidence: number }[] = [];
+    const rightBallPoints: { t: number; x: number; y: number; confidence: number }[] = [];
+    for (const f of rawFrames) {
+      const t = f.timestamp * 1000;
+      const worldLm = scaleWorldLandmarks(visionJointsToWorldLandmarks(f), scaleFactor);
+      frames.push({ t, worldLandmarks: worldLm });
+
+      const scalePoint = (raw: ImplementPoint | null) =>
+        raw ? { t, x: raw.x * scaleFactor, y: raw.y * scaleFactor, confidence: raw.confidence } : null;
+      const left = scalePoint(visionImplementToPoint(f.leftImplement, f));
+      const right = scalePoint(visionImplementToPoint(f.rightImplement, f));
+      if (left) leftBallPoints.push(left);
+      if (right) rightBallPoints.push(right);
+    }
+
+    // Whichever hand the tracker actually followed the ball with, for however this athlete
+    // held/released it (one hand, or two until release) -- same "pick whichever side moved
+    // more" reasoning mechanics-tracking.ts's own throwingSide detection already uses for the
+    // wrist, applied here to the ball trace instead.
+    const leftConfidentCount = leftBallPoints.filter((p) => p.confidence >= MIN_TRACKING_CONFIDENCE).length;
+    const rightConfidentCount = rightBallPoints.filter((p) => p.confidence >= MIN_TRACKING_CONFIDENCE).length;
+    const ballPoints = rightConfidentCount > leftConfidentCount ? rightBallPoints : leftBallPoints;
+
+    const mechanicsResult = analyzeMechanics(frames, "throw");
+    const peakSpeedMps = peakImplementSpeed(ballPoints) ?? mechanicsResult.peakWristSpeedMps;
+    const releaseHeightCm = mechanicsResult.releaseHeightM != null ? Math.round(mechanicsResult.releaseHeightM * 100) : null;
+
+    if (peakSpeedMps == null) {
+      await saveEmptyAndWarn(blob, "Couldn't get a clean read -- make sure your whole throwing motion, ball included, stays in frame.");
+      return;
+    }
+
+    const metrics: MedballSetMetrics = { peakSpeedMps, releaseHeightCm };
+
+    if (!recordVideo) {
+      onCapture(metrics);
+      onOpenChange(false);
+      return;
+    }
+
+    setSaving(true);
+    setUploadProgress(0);
+    try {
+      const filename = videoFilenameForBlob(blob, "form-check");
+      const result = await uploadOrQueueVideo(blob, filename, videoContext ?? { label: "Med Ball" }, setUploadProgress);
+      if (result.status === "queued") {
+        if (!hasWarnedAboutQueueing()) {
+          markWarnedAboutQueueing();
+          toast.info(
+            "No Wi-Fi -- this video is saved on your device and will upload automatically once you're connected. You can also upload it manually anytime from the Video Bank, even over cellular.",
+            { duration: 10000 },
+          );
+        }
+        onCapture(metrics);
+      } else {
+        onCapture(metrics, result.url);
+      }
+      onOpenChange(false);
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Saved the set, but the clip failed to upload");
+      onCapture(metrics);
+      onOpenChange(false);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        overlayClassName="bg-transparent backdrop-blur-none"
+        className="inset-0 top-0 left-0 h-screen w-screen max-w-none max-h-none translate-x-0 translate-y-0 gap-0 rounded-none border-0 bg-transparent p-0 overflow-hidden [&>button]:hidden"
+      >
+        <div className="relative flex h-full w-full flex-col">
+          <div ref={containerRef} className="relative flex-1" style={{ background: "transparent" }}>
+            <button
+              type="button"
+              aria-label="Close"
+              onClick={() => onOpenChange(false)}
+              className="absolute right-3 top-[max(0.75rem,env(safe-area-inset-top))] z-10 flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-colors hover:bg-black/70"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            {SHOW_DIAGNOSTIC_OVERLAY && (
+              <div className="absolute left-3 right-16 top-[max(0.75rem,env(safe-area-inset-top))] z-10 select-text space-y-0.5 rounded-md bg-black/60 px-2 py-1.5 font-mono text-[9px] leading-tight text-white/80 backdrop-blur-sm">
+                <div>supported={String(supported)} analyzedFrames={analyzedFrames}</div>
+                {diagLog.map((line, i) => (
+                  <div key={i} className="text-white/60">
+                    {line}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {recording && (
+              <div className="absolute left-1/2 top-[max(0.75rem,env(safe-area-inset-top))] flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5 text-sm font-bold text-white backdrop-blur-sm">
+                <Circle className="h-2.5 w-2.5 animate-pulse fill-destructive text-destructive" />
+                Recording -- take your throw, then tap Stop
+              </div>
+            )}
+
+            {analyzing && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/60">
+                <div className="h-8 w-8 animate-spin rounded-full border-2 border-teal-400 border-t-transparent" />
+                <p className="text-sm text-white">Analyzing recording -- {analyzedFrames} frames processed…</p>
+                <Button variant="outline" size="sm" onClick={cancelAnalysis}>
+                  <XCircle className="h-4 w-4" />
+                  Cancel
+                </Button>
+              </div>
+            )}
+
+            {!recording && !analyzing && !heightIn && (
+              <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 rounded-md bg-amber-500/80 px-3 py-2 text-center text-sm font-semibold text-black">
+                Add your height in your profile to get calibrated numbers from this camera.
+              </div>
+            )}
+
+            {error && (
+              <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 flex items-center gap-2 rounded-md bg-destructive/90 px-3 py-2 text-sm text-white">
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                {error}
+              </div>
+            )}
+            {supported === false && (
+              <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 flex flex-col items-center gap-2 rounded-md bg-destructive/90 px-3 py-2 text-sm text-white">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 shrink-0" />
+                  Camera tracking isn't supported on this device.
+                </div>
+                {supportError && (
+                  <p className="select-text break-all text-center text-xs opacity-90">{supportError}</p>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="flex shrink-0 flex-wrap items-center justify-center gap-2 bg-black/70 px-3 py-4 backdrop-blur-sm">
+            {!recording && !analyzing && (
+              <Button
+                size="lg"
+                onClick={() => {
+                  setError(null);
+                  startRecording();
+                }}
+                disabled={!supported || saving || !heightIn}
+              >
+                <Circle className="h-4 w-4 fill-current" />
+                Start Set
+              </Button>
+            )}
+            {recording && (
+              <Button size="lg" variant="secondary" onClick={stopTracking}>
+                <Square className="h-4 w-4" />
+                Stop Set
+              </Button>
+            )}
+            {analyzing && (
+              <Button size="lg" variant="secondary" disabled>
+                {saving ? `Saving… ${Math.round(uploadProgress * 100)}%` : "Analyzing…"}
+              </Button>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}

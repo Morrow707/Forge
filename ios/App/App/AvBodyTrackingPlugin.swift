@@ -896,7 +896,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         guard oriented.extent.width > 0, oriented.extent.height > 0 else { return nil }
         let scaleX = CGFloat(workingWidth) / oriented.extent.width
         let scaleY = CGFloat(workingHeight) / oriented.extent.height
-        let scaled = oriented.transformed(by: CGAffineTransform(scaleX: scaleX, scaleY: scaleY))
+        let scaled = oriented.transformed(by: CGAffineTransform(scaleX: scaleX, y: scaleY))
 
         let bytesPerRow = workingWidth * 4
         var rgba = [UInt8](repeating: 0, count: bytesPerRow * workingHeight)
