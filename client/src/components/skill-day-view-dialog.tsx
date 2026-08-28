@@ -13,10 +13,10 @@ import { externalLinkClick } from "@/lib/open-external";
 import { extractVideoFrames } from "@/lib/video-frames";
 import { Target, MoonStar, Timer, Activity, CheckCircle2, Film, Video, Sparkles } from "lucide-react";
 import { SprintTrackerDialog } from "@/components/sprint-tracker-dialog";
-import { ArSprintTrackerDialog } from "@/components/ar-sprint-tracker-dialog";
+import { AvSprintTrackerDialog } from "@/components/av-sprint-tracker-dialog";
+import { AvMechanicsTrackerDialog } from "@/components/av-mechanics-tracker-dialog";
 import { isArPreviewPlatform } from "@/lib/native-ar-preview";
 import { MechanicsTrackerDialog } from "@/components/mechanics-tracker-dialog";
-import { ArMechanicsTrackerDialog } from "@/components/ar-mechanics-tracker-dialog";
 import { FormVideoRecorderDialog } from "@/components/form-video-recorder-dialog";
 import { WorkoutCommentThread } from "@/components/workout-comment-thread";
 import type { MechanicsMode } from "@/lib/mechanics-tracking";
@@ -366,8 +366,12 @@ export function SkillDayViewDialog({
         </DialogContent>
       </Dialog>
 
+      {/* AVFoundation + Vision pipeline (see AvBodyTrackingPlugin.swift's file comment) is
+          the only iOS path now -- ArSprintTrackerDialog and the ARKit plugin underneath stay
+          in the repo untouched as a dead-code fallback (per the plan's Context section) but
+          nothing routes to them anymore. */}
       {sprintExercise && source.kind === "athlete" && (isArPreviewPlatform() ? (
-        <ArSprintTrackerDialog
+        <AvSprintTrackerDialog
           open={!!sprintExercise}
           onOpenChange={(o) => !o && setSprintExercise(null)}
           drillName={sprintExercise.name}
@@ -386,13 +390,18 @@ export function SkillDayViewDialog({
         />
       ))}
 
+      {/* AVFoundation + Vision pipeline (see AvBodyTrackingPlugin.swift's file comment) is
+          the only iOS path now -- ArMechanicsTrackerDialog and the ARKit plugin underneath
+          stay in the repo untouched as a dead-code fallback (per the plan's Context section)
+          but nothing routes to them anymore. */}
       {mechanicsExercise && source.kind === "athlete" && (isArPreviewPlatform() ? (
-        <ArMechanicsTrackerDialog
+        <AvMechanicsTrackerDialog
           open={!!mechanicsExercise}
           onOpenChange={(o) => !o && setMechanicsExercise(null)}
           drillName={mechanicsExercise.name}
           mode={mechanicsModeFor(mechanicsExercise.skillType)}
           actionLabel={mechanicsActionLabelFor(mechanicsExercise.skillType)}
+          heightIn={user?.heightIn}
           skillAssignmentId={source.skillAssignmentId}
           skillProgramDayId={source.skillProgramDayId}
           skillProgramExerciseId={mechanicsExercise.id}

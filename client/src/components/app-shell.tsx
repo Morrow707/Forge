@@ -30,6 +30,7 @@ import {
   Info,
   CreditCard,
   Camera,
+  Aperture,
   GraduationCap,
   BookOpen,
   HardDrive,
@@ -747,6 +748,17 @@ export function AppShell({
                       ARKit preview test
                     </Link>
                   )}
+                  {Capacitor.getPlatform() === "ios" && user?.role === "admin" && (
+                    <Link
+                      href="/dev/av-preview-test"
+                      role="menuitem"
+                      onClick={() => setAccountMenuOpen(false)}
+                      className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-muted-foreground hover:bg-surface-elevated"
+                    >
+                      <Aperture className="h-4 w-4" />
+                      AV preview test (Phase 1)
+                    </Link>
+                  )}
                   <button
                     type="button"
                     role="menuitem"
@@ -1063,6 +1075,16 @@ export function AppShell({
                     <ShieldCheck className="h-4 w-4" />
                     Guardian access
                   </button>
+                )}
+                {Capacitor.getPlatform() === "ios" && user?.role === "admin" && (
+                  <Link
+                    href="/dev/av-preview-test"
+                    onClick={() => setMobileNavOpen(false)}
+                    className="flex w-full items-center gap-2 py-2 text-left text-sm font-semibold text-foreground"
+                  >
+                    <Aperture className="h-4 w-4" />
+                    AV preview test (Phase 1)
+                  </Link>
                 )}
                 {Capacitor.getPlatform() === "ios" && (
                   <Link

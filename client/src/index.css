@@ -170,10 +170,13 @@ body {
    portalled outside .app-shell-root (a sibling of it in the DOM, not a
    descendant), so hiding this never touches the dialog's own UI. */
 html.ar-camera-active,
-html.ar-camera-active body {
+html.ar-camera-active body,
+html.av-camera-active,
+html.av-camera-active body {
   background: transparent !important;
 }
-html.ar-camera-active .app-shell-root {
+html.ar-camera-active .app-shell-root,
+html.av-camera-active .app-shell-root {
   visibility: hidden !important;
 }
 

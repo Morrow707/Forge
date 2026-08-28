@@ -7151,6 +7151,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
             eccentricMeanVelocityMps: z.number().optional().nullable(),
             romCm: z.number().optional().nullable(),
             velocityLossPercent: z.number().optional().nullable(),
+            trustScores: z
+              .object({
+                repNumber: z.number(),
+                score: z.number(),
+                label: z.enum(["high", "medium", "low"]),
+                notes: z.array(z.string()),
+              })
+              .array()
+              .optional()
+              .nullable(),
           })
           .optional(),
       });

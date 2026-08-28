@@ -1,0 +1,226 @@
+import { useEffect, useRef, useState } from "react";
+import {
+  isAvBodyTrackingSupported,
+  startAvPreview,
+  stopAvPreview,
+  updateAvPreviewRect,
+  startAvRecording,
+  stopAvRecording,
+  deleteAvRecording,
+  analyzeAvRecording,
+  cancelAvAnalysis,
+  onAvPoseFrame,
+  onAvSessionError,
+  pollAvDiagnosticLog,
+  setAvCameraActive,
+  type PoseFrame as NativePoseFrame,
+} from "@/lib/native-av-preview";
+
+/** The AVFoundation + Vision camera/recording/analysis lifecycle shared by every tracker
+ * dialog on the new pipeline (Sprint/Jump/Mechanics/Swing today, more to come) -- mirrors
+ * use-ar-body-tracking.ts's own shape and reasoning almost exactly (capability check, the
+ * container-ready wait/retry dance, session-error/diagnostic-log plumbing, teardown), but
+ * extended to also own the record-first-analyze-later pipeline this architecture needs that
+ * ARKit's live tracking never did: starting/stopping a recording, running Vision against it,
+ * streaming per-frame progress back out, and a real Cancel path (native support wired through
+ * AvBodyTrackingPlugin.swift's own cancelAnalysis -- not a client-side-only "stop showing the
+ * spinner" that leaves the native loop running to completion regardless).
+ *
+ * `active` (not `open`) drives the camera preview -- unlike ARKit's one-session-per-dialog-
+ * open model, every AV dialog only wants the live preview during specific steps
+ * (calibrate/capture), not for as long as the dialog is merely mounted, so the caller passes
+ * whatever boolean expression captures that (e.g. `open && (step === "calibrate" || step ===
+ * "capture")`).
+ *
+ * Unlike use-ar-body-tracking.ts, there's no live `frame` here at all -- Vision only ever
+ * runs against a finished recording, never a live feed (see AvBodyTrackingPlugin.swift's own
+ * comment on why). What's tracker-specific -- checkpoint math, calibration, rep/angle math --
+ * stays in the calling dialog; this hook only owns getting the camera live, a recording
+ * captured, and raw analyzed frames flowing back out, same division of responsibility as its
+ * ARKit counterpart. */
+export function useAvBodyTracking(active: boolean) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [supported, setSupported] = useState<boolean | null>(null);
+  const [supportError, setSupportError] = useState<string | undefined>(undefined);
+  const [error, setError] = useState<string | null>(null);
+  const [diagLog, setDiagLog] = useState<string[]>([]);
+  const [recording, setRecording] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analyzedFrames, setAnalyzedFrames] = useState(0);
+
+  const recordingPathRef = useRef<string | null>(null);
+  // Distinguishes an analysis that failed for a real reason from one that stopped because
+  // cancelAnalysis() was called -- analyzeAvRecording's promise rejects either way (see its
+  // own comment), and only the former should surface as an `error` state.
+  const cancelledRef = useRef(false);
+
+  useEffect(() => {
+    setError(null);
+    setDiagLog([]);
+    isAvBodyTrackingSupported().then(({ supported: isSupported, error: supportErr }) => {
+      setSupported(isSupported);
+      setSupportError(supportErr);
+    });
+    // Runs once per mount, not keyed to `active` -- device support doesn't change mid-dialog,
+    // and checking it doesn't need the camera live.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!active) {
+      setAvCameraActive(false);
+      void stopAvPreview();
+      return;
+    }
+    let cancelled = false;
+    let rafId: number | null = null;
+    let started = false;
+    let waitFrames = 0;
+    const MAX_WAIT_FRAMES = 180;
+
+    function onResize() {
+      const r = containerRef.current?.getBoundingClientRect();
+      if (r) void updateAvPreviewRect(r);
+    }
+
+    function tryStart() {
+      if (cancelled) return;
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (!rect || (rect.width === 0 && rect.height === 0)) {
+        // This effect only ever runs once per `active` transition, so a one-shot ref check
+        // that loses the race with the dialog's own open-transition/portal mount would mean
+        // the camera silently never starts for the rest of that step -- wait and retry
+        // instead of giving up after one failed read (same reasoning as the ARKit hook).
+        waitFrames++;
+        if (waitFrames > MAX_WAIT_FRAMES) return;
+        rafId = requestAnimationFrame(tryStart);
+        return;
+      }
+      started = true;
+      setAvCameraActive(true);
+      startAvPreview(rect).catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Could not start camera");
+      });
+      window.addEventListener("resize", onResize);
+    }
+
+    tryStart();
+    return () => {
+      cancelled = true;
+      if (rafId != null) cancelAnimationFrame(rafId);
+      window.removeEventListener("resize", onResize);
+      if (started) {
+        setAvCameraActive(false);
+        void stopAvPreview();
+      }
+    };
+  }, [active]);
+
+  useEffect(() => onAvSessionError(setError), []);
+
+  useEffect(() => {
+    if (!active) return;
+    return pollAvDiagnosticLog(setDiagLog);
+  }, [active]);
+
+  // Defense-in-depth against a lingering native temp file -- see
+  // AvBodyTrackingPlugin.swift's own comment on the storage-bloat edge case this guards.
+  // stopRecordingAndAnalyze already deletes the file itself on every normal path; this only
+  // matters if the component unmounts mid-analysis (e.g. the dialog closes while a
+  // recording's still being processed).
+  useEffect(() => {
+    return () => {
+      if (recordingPathRef.current) void deleteAvRecording(recordingPathRef.current);
+    };
+  }, []);
+
+  function startRecording() {
+    setError(null);
+    setRecording(true);
+    startAvRecording().catch((err) => {
+      setError(err instanceof Error ? err.message : "Could not start recording");
+      setRecording(false);
+    });
+  }
+
+  // Discards the current recording without analyzing it -- for a dialog's own "Cancel" path
+  // during capture (not to be confused with cancelAnalysis below, which interrupts an
+  // already-started analysis).
+  async function cancelRecording() {
+    setRecording(false);
+    try {
+      const { path } = await stopAvRecording();
+      await deleteAvRecording(path);
+    } catch {
+      // Nothing to clean up if stopping itself failed.
+    }
+  }
+
+  // Stops recording, runs Vision against the finished clip, and returns every tracked frame
+  // -- null on any failure or cancellation (this hook's own `error` state is already set by
+  // the time this resolves, for a real failure; a cancellation sets no error, since the
+  // caller asked for it). Cleans up the native temp file itself once analysis finishes
+  // either way, so callers never have to think about it.
+  async function stopRecordingAndAnalyze(): Promise<{ blob: Blob; rawFrames: NativePoseFrame[] } | null> {
+    setRecording(false);
+    setAnalyzing(true);
+    setAnalyzedFrames(0);
+    cancelledRef.current = false;
+
+    let blob: Blob;
+    let path: string;
+    try {
+      ({ blob, path } = await stopAvRecording());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't save the recording");
+      setAnalyzing(false);
+      return null;
+    }
+    recordingPathRef.current = path;
+
+    const rawFrames: NativePoseFrame[] = [];
+    const unsubscribe = onAvPoseFrame((frame) => {
+      if (!frame.tracked) return;
+      rawFrames.push(frame);
+      setAnalyzedFrames((n) => n + 1);
+    });
+    try {
+      await analyzeAvRecording(path);
+    } catch (err) {
+      unsubscribe();
+      void deleteAvRecording(path);
+      recordingPathRef.current = null;
+      setAnalyzing(false);
+      if (!cancelledRef.current) {
+        setError(err instanceof Error ? err.message : "Analysis failed");
+      }
+      return null;
+    }
+    unsubscribe();
+    void deleteAvRecording(path);
+    recordingPathRef.current = null;
+    setAnalyzing(false);
+    return { blob, rawFrames };
+  }
+
+  function cancelAnalysis() {
+    cancelledRef.current = true;
+    void cancelAvAnalysis();
+  }
+
+  return {
+    containerRef,
+    supported,
+    supportError,
+    error,
+    setError,
+    diagLog,
+    recording,
+    analyzing,
+    analyzedFrames,
+    startRecording,
+    cancelRecording,
+    stopRecordingAndAnalyze,
+    cancelAnalysis,
+  };
+}
