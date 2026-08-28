@@ -295,6 +295,81 @@ export function wristConfidence(worldLandmarks: Landmark[], side: "left" | "righ
   return visible(lm) ? lm.visibility : 0;
 }
 
+// Same {score, label, notes} shape bar-tracking.ts's own per-rep RepTrustScore already uses, for
+// a best-of-set mode (med-ball, kb-swing, swing) that has exactly one confidence reading for the
+// whole set rather than one per rep.
+export type SetTrustScore = {
+  score: number;
+  label: "high" | "medium" | "low";
+  notes: string[];
+};
+
+export type BlendedSpeedResult = {
+  speedMps: number;
+  trust: SetTrustScore;
+};
+
+// Confidence-weighted blend of two INDEPENDENT speed estimates for the same motion, rather than
+// picking one and discarding the other -- generalizes bar_path/full's own frame-by-frame position
+// fusion (av-bar-tracker-dialog.tsx's fuseSide, which blends an implement reading against wrist
+// confidence every frame) to a single post-hoc blend for the best-of-set modes, where the two
+// signals come from two separate analyses (an object tracker's own trace vs. a body-joint-derived
+// proxy) instead of one continuous fused trace. Deliberately NOT position-level fusion the way
+// fuseSide is: a thrown med-ball leaves the hand at release, so assuming the object and the wrist
+// stay rigidly co-located (what position fusion assumes) breaks down at exactly the moment that
+// matters most. Either signal may be absent -- the present one is used alone at reduced
+// confidence rather than reporting nothing. Agreement thresholds are honest, untuned-against-
+// real-footage guesses (no camera in this sandbox to calibrate against), same caveat as every
+// other plausibility constant in this pipeline (see MAX_PLAUSIBLE_BALL_SPEED_MPS's own comment in
+// av-medball-tracker-dialog.tsx).
+export function blendSpeedEstimates(
+  objectSignal: { speedMps: number; confidence: number } | null,
+  proxySignal: { speedMps: number; confidence: number } | null,
+  objectMissingNote: string,
+  proxyMissingNote: string,
+): BlendedSpeedResult | null {
+  if (objectSignal == null && proxySignal == null) return null;
+  if (objectSignal == null) {
+    return { speedMps: proxySignal!.speedMps, trust: { score: 55, label: "medium", notes: [objectMissingNote] } };
+  }
+  if (proxySignal == null) {
+    return { speedMps: objectSignal.speedMps, trust: { score: 65, label: "medium", notes: [proxyMissingNote] } };
+  }
+  const totalWeight = objectSignal.confidence + proxySignal.confidence;
+  const blended =
+    totalWeight > 0
+      ? (objectSignal.speedMps * objectSignal.confidence + proxySignal.speedMps * proxySignal.confidence) /
+        totalWeight
+      : (objectSignal.speedMps + proxySignal.speedMps) / 2;
+  const speedMps = Math.round(blended * 100) / 100;
+  const bigger = Math.max(objectSignal.speedMps, proxySignal.speedMps);
+  const agreementRatio = bigger > 0 ? Math.min(objectSignal.speedMps, proxySignal.speedMps) / bigger : 1;
+  if (agreementRatio >= 0.75) {
+    return { speedMps, trust: { score: 90, label: "high", notes: [] } };
+  }
+  if (agreementRatio >= 0.5) {
+    return {
+      speedMps,
+      trust: {
+        score: 60,
+        label: "medium",
+        notes: ["Object-tracked speed and body-motion speed only partly agreed this set"],
+      },
+    };
+  }
+  return {
+    speedMps,
+    trust: {
+      score: 30,
+      label: "low",
+      notes: [
+        `Object-tracked speed (${objectSignal.speedMps.toFixed(1)} m/s) and body-motion speed ` +
+          `(${proxySignal.speedMps.toFixed(1)} m/s) disagreed significantly this set -- treat with caution`,
+      ],
+    },
+  };
+}
+
 // World landmarks' vertical axis isn't documented as matching (or opposing)
 // normalized image-space landmarks' "y grows downward" convention, and there
 // is no way to confirm it empirically without a live camera + real body in
@@ -1106,6 +1181,150 @@ function frameKneeAnglesBySide(worldLm: Landmark[]): { left: number | null; righ
   return {
     left: visible(lHip) && visible(lKnee) && visible(lAnkle) ? worldAngleAtVertex(lHip, lKnee, lAnkle) : null,
     right: visible(rHip) && visible(rKnee) && visible(rAnkle) ? worldAngleAtVertex(rHip, rKnee, rAnkle) : null,
+  };
+}
+
+// Hip angle (shoulder-hip-knee, the trunk-to-thigh angle), per side -- one joint up the leg chain
+// from frameKneeAnglesBySide above, same worldAngleAtVertex math. Not wired into any fault
+// threshold yet; exists so chainConsistencyPenalty below has a real hip reading to cross-check
+// the knee against, the same "hip-knee-ankle should move together" reasoning this session's own
+// kinetic-chain discussion settled on.
+function frameHipAnglesBySide(worldLm: Landmark[]): { left: number | null; right: number | null } {
+  const lShoulder = worldLm[POSE_LANDMARKS.LEFT_SHOULDER];
+  const rShoulder = worldLm[POSE_LANDMARKS.RIGHT_SHOULDER];
+  const lHip = worldLm[POSE_LANDMARKS.LEFT_HIP];
+  const rHip = worldLm[POSE_LANDMARKS.RIGHT_HIP];
+  const lKnee = worldLm[POSE_LANDMARKS.LEFT_KNEE];
+  const rKnee = worldLm[POSE_LANDMARKS.RIGHT_KNEE];
+  return {
+    left: visible(lShoulder) && visible(lHip) && visible(lKnee) ? worldAngleAtVertex(lShoulder, lHip, lKnee) : null,
+    right: visible(rShoulder) && visible(rHip) && visible(rKnee) ? worldAngleAtVertex(rShoulder, rHip, rKnee) : null,
+  };
+}
+
+// Ankle angle (knee-ankle-foot, dorsi/plantarflexion) per side -- the third leg-chain joint,
+// completing hip-knee-ankle.
+function frameAnkleAnglesBySide(worldLm: Landmark[]): { left: number | null; right: number | null } {
+  const lKnee = worldLm[POSE_LANDMARKS.LEFT_KNEE];
+  const rKnee = worldLm[POSE_LANDMARKS.RIGHT_KNEE];
+  const lAnkle = worldLm[POSE_LANDMARKS.LEFT_ANKLE];
+  const rAnkle = worldLm[POSE_LANDMARKS.RIGHT_ANKLE];
+  const lFoot = worldLm[POSE_LANDMARKS.LEFT_FOOT_INDEX];
+  const rFoot = worldLm[POSE_LANDMARKS.RIGHT_FOOT_INDEX];
+  return {
+    left: visible(lKnee) && visible(lAnkle) && visible(lFoot) ? worldAngleAtVertex(lKnee, lAnkle, lFoot) : null,
+    right: visible(rKnee) && visible(rAnkle) && visible(rFoot) ? worldAngleAtVertex(rKnee, rAnkle, rFoot) : null,
+  };
+}
+
+// Elbow angle (shoulder-elbow-wrist) per side -- the arm chain's equivalent of knee angle.
+function frameElbowAnglesBySide(worldLm: Landmark[]): { left: number | null; right: number | null } {
+  const lShoulder = worldLm[POSE_LANDMARKS.LEFT_SHOULDER];
+  const rShoulder = worldLm[POSE_LANDMARKS.RIGHT_SHOULDER];
+  const lElbow = worldLm[POSE_LANDMARKS.LEFT_ELBOW];
+  const rElbow = worldLm[POSE_LANDMARKS.RIGHT_ELBOW];
+  const lWrist = worldLm[POSE_LANDMARKS.LEFT_WRIST];
+  const rWrist = worldLm[POSE_LANDMARKS.RIGHT_WRIST];
+  return {
+    left: visible(lShoulder) && visible(lElbow) && visible(lWrist) ? worldAngleAtVertex(lShoulder, lElbow, lWrist) : null,
+    right: visible(rShoulder) && visible(rElbow) && visible(rWrist) ? worldAngleAtVertex(rShoulder, rElbow, rWrist) : null,
+  };
+}
+
+// Shoulder angle (elbow-shoulder-hip) per side -- the arm chain's proximal joint, completing
+// shoulder-elbow-wrist the same way hip completes hip-knee-ankle for the leg.
+function frameShoulderAnglesBySide(worldLm: Landmark[]): { left: number | null; right: number | null } {
+  const lElbow = worldLm[POSE_LANDMARKS.LEFT_ELBOW];
+  const rElbow = worldLm[POSE_LANDMARKS.RIGHT_ELBOW];
+  const lShoulder = worldLm[POSE_LANDMARKS.LEFT_SHOULDER];
+  const rShoulder = worldLm[POSE_LANDMARKS.RIGHT_SHOULDER];
+  const lHip = worldLm[POSE_LANDMARKS.LEFT_HIP];
+  const rHip = worldLm[POSE_LANDMARKS.RIGHT_HIP];
+  return {
+    left: visible(lElbow) && visible(lShoulder) && visible(lHip) ? worldAngleAtVertex(lElbow, lShoulder, lHip) : null,
+    right: visible(rElbow) && visible(rShoulder) && visible(rHip) ? worldAngleAtVertex(rElbow, rShoulder, rHip) : null,
+  };
+}
+
+// Wrist angle (elbow-wrist-index), completing the arm chain's third joint the same way ankle
+// (knee-ankle-foot) completes the leg chain -- LEFT/RIGHT_INDEX are real landmarks in this
+// skeleton (see POSE_LANDMARKS), just never used for an angle vertex until now.
+function frameWristAnglesBySide(worldLm: Landmark[]): { left: number | null; right: number | null } {
+  const lElbow = worldLm[POSE_LANDMARKS.LEFT_ELBOW];
+  const rElbow = worldLm[POSE_LANDMARKS.RIGHT_ELBOW];
+  const lWrist = worldLm[POSE_LANDMARKS.LEFT_WRIST];
+  const rWrist = worldLm[POSE_LANDMARKS.RIGHT_WRIST];
+  const lIndex = worldLm[POSE_LANDMARKS.LEFT_INDEX];
+  const rIndex = worldLm[POSE_LANDMARKS.RIGHT_INDEX];
+  return {
+    left: visible(lElbow) && visible(lWrist) && visible(lIndex) ? worldAngleAtVertex(lElbow, lWrist, lIndex) : null,
+    right: visible(rElbow) && visible(rWrist) && visible(rIndex) ? worldAngleAtVertex(rElbow, rWrist, rIndex) : null,
+  };
+}
+
+// How much a rep's kinetic chain should dock a trust score for looking internally inconsistent --
+// see this session's own "how does it all work in unison" discussion: a real per-point Vision
+// confidence can stay deceptively high on a landmark that's still tracking the wrong local
+// feature (a brief occlusion, a misdetection), so a joint moving noticeably less than its
+// immediate neighbors in the same chain during the same rep window is a stronger tell than any
+// single joint's own confidence score. This stays a coarse "did every joint in the chain show
+// SOME real motion" gate rather than a precise inter-joint correlation model -- an actual
+// biomechanical correlation threshold would need real reference footage this sandbox doesn't
+// have (same honest-uncertainty stance as every other untuned constant in this pipeline).
+const MIN_CHAIN_JOINT_RANGE_DEG = 8;
+// A chain joint's range needs to fall at least this far below its most-mobile neighbor before
+// it's flagged as suspiciously still, rather than ordinary rep-to-rep variation in how much any
+// one joint contributes.
+const CHAIN_RANGE_RATIO_FLOOR = 0.25;
+
+export function chainConsistencyPenalty(
+  frames: PoseFrame[],
+  startT: number,
+  endT: number,
+  chain: "leg" | "arm",
+): { penalty: number; note: string | null } {
+  const anglesBySide: { name: string; bySide: (worldLm: Landmark[]) => { left: number | null; right: number | null } }[] =
+    chain === "leg"
+      ? [
+          { name: "hip", bySide: frameHipAnglesBySide },
+          { name: "knee", bySide: frameKneeAnglesBySide },
+          { name: "ankle", bySide: frameAnkleAnglesBySide },
+        ]
+      : [
+          { name: "shoulder", bySide: frameShoulderAnglesBySide },
+          { name: "elbow", bySide: frameElbowAnglesBySide },
+          { name: "wrist", bySide: frameWristAnglesBySide },
+        ];
+
+  const windowFrames = frames.filter((f) => f.t >= startT && f.t <= endT);
+  if (windowFrames.length < 4) return { penalty: 0, note: null };
+
+  const ranges = anglesBySide
+    .map(({ name, bySide }) => {
+      const values: number[] = [];
+      for (const f of windowFrames) {
+        const { left, right } = bySide(f.worldLandmarks);
+        if (left != null) values.push(left);
+        if (right != null) values.push(right);
+      }
+      if (values.length < 4) return null;
+      return { name, range: Math.max(...values) - Math.min(...values) };
+    })
+    .filter((r): r is { name: string; range: number } => r != null);
+
+  if (ranges.length < 2) return { penalty: 0, note: null };
+
+  const maxRange = Math.max(...ranges.map((r) => r.range));
+  if (maxRange < MIN_CHAIN_JOINT_RANGE_DEG) return { penalty: 0, note: null };
+
+  const stillJoints = ranges.filter(
+    (r) => r.range < MIN_CHAIN_JOINT_RANGE_DEG && r.range / maxRange < CHAIN_RANGE_RATIO_FLOOR,
+  );
+  if (stillJoints.length === 0) return { penalty: 0, note: null };
+
+  return {
+    penalty: Math.min(20, stillJoints.length * 10),
+    note: `${stillJoints.map((j) => j.name).join("/")} showed little motion while other joints in the same chain moved a lot -- possible tracking glitch`,
   };
 }
 

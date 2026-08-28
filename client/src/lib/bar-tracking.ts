@@ -1303,6 +1303,15 @@ export function computeRepTrustScores(
   rejectionEvents: number[],
   patternMismatch: boolean,
   alignmentReason: "ok" | "angled" | "axial" | "unknown" | null,
+  // Per-rep kinetic-chain consistency penalty (see pose-tracking.ts's chainConsistencyPenalty) --
+  // a real signal this position-fusion-only score couldn't see on its own: a hip or ankle
+  // landmark quietly glitching while the knee kept tracking cleanly still reads as high
+  // confidenceSamples here (Vision's own per-point confidence can stay high on a misdetected
+  // point), so this folds in as an ADDITIONAL deduction rather than a competing score, the same
+  // "cross-check so nothing interferes with each other" reasoning as every other signal this
+  // function already blends. Optional and keyed by repNumber so callers that don't have a
+  // relevant chain (no Squat/Hinge/Lunge leg chain, no Push/Pull arm chain) can simply omit it.
+  chainPenalties?: Map<number, { penalty: number; note: string | null }>,
 ): RepTrustScore[] {
   return repBreakdown.map((rep) => {
     const windowSamples = confidenceSamples.filter((s) => s.t >= rep.startT && s.t <= rep.endT);
@@ -1343,6 +1352,12 @@ export function computeRepTrustScores(
     // evaluateAutoStartReadiness's own comment in bar-tracker-dialog.tsx --
     // so it earns no penalty here; it degrades bar-path drift specifically,
     // not the position/velocity confidence this score is built from.
+
+    const chainPenalty = chainPenalties?.get(rep.repNumber);
+    if (chainPenalty && chainPenalty.penalty > 0) {
+      score -= chainPenalty.penalty;
+      if (chainPenalty.note) notes.push(chainPenalty.note);
+    }
 
     score = Math.max(5, Math.min(100, Math.round(score)));
     const label: RepTrustScore["label"] = score >= 80 ? "high" : score >= 55 ? "medium" : "low";

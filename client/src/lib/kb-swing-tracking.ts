@@ -26,6 +26,7 @@ import {
   MIN_TRACKING_CONFIDENCE,
   type TrackedPoint,
 } from "./bar-tracking";
+import type { SetTrustScore } from "./pose-tracking";
 
 // Elite/hard kettlebell swing bell speeds run roughly 3-6 m/s at the bottom of the arc --
 // meaningfully faster than a controlled barbell lift's own MAX_PLAUSIBLE_LIFT_VELOCITY_MPS (3
@@ -102,6 +103,12 @@ export type KbSwingSetMetrics = {
   meanSpeedMps: number;
   peakHeightCm: number;
   repBreakdown: KbSwingRepBreakdown[];
+  // Cross-check against AvImplementTracker's own bell-tracked speed -- computed here as null
+  // since this function only ever sees the wrist-midpoint trace; the dialog (which also has the
+  // implement tracker's raw frames) fills this in via pose-tracking.ts's blendSpeedEstimates
+  // after calling this function, same "wrap the base computation, don't reach into it" pattern
+  // av-medball-tracker-dialog.tsx uses for mechanics-tracking.ts's unmodified analyzeMechanics.
+  trust: SetTrustScore | null;
 };
 
 // heightIn: same athlete-height nudge to the rep-amplitude floor every other tracked mode
@@ -176,5 +183,5 @@ export function summarizeKbSwingSet(rawPoints: TrackedPoint[], heightIn?: number
       : 0;
   const peakHeightCm = Math.max(...repBreakdown.map((r) => r.heightCm));
 
-  return { peakSpeedMps, meanSpeedMps, peakHeightCm, repBreakdown };
+  return { peakSpeedMps, meanSpeedMps, peakHeightCm, repBreakdown, trust: null };
 }

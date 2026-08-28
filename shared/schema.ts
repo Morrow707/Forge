@@ -1939,27 +1939,39 @@ export const workoutSetEntries = pgTable(
   swingBackswingMs: integer("swing_backswing_ms"),
   swingDownswingMs: integer("swing_downswing_ms"),
   swingHeadSwayCm: real("swing_head_sway_cm"),
+  // Cross-diagonal magnitude check on swingSeparationDeg (see rotation-tracking.ts's
+  // summarizeRotation/crossDiagonalSpread) -- {score, label, notes}, pose-tracking.ts's
+  // SetTrustScore shape. swingSeparationDeg had no confidence signal at all before this.
+  swingTrustScore: json("swing_trust_score"),
   // "med_ball" tracking mode's numbers (see av-medball-tracker-dialog.tsx) --
   // null unless trackingLevel was "med_ball" when this set was logged.
   // Best-of-set single throw, same "best rep, not an average" convention
   // jumpHeightCm/jumpDistanceCm already use -- no rep-segmentation exists
   // for a throw yet, so this is the whole set's peak read rather than a
-  // per-rep breakdown. medBallPeakSpeedMps is AvImplementTracker's own
-  // tracked ball speed when a confident lock was held for enough of the
-  // capture, falling back to mechanics-tracking.ts's peakWristSpeedMps
-  // proxy (a real, established substitute -- see that field's own comment)
-  // when it wasn't.
+  // per-rep breakdown. medBallPeakSpeedMps is a confidence-weighted blend of
+  // AvImplementTracker's own tracked ball speed and mechanics-tracking.ts's
+  // peakWristSpeedMps proxy (see pose-tracking.ts's blendSpeedEstimates) --
+  // whichever signal exists alone when the other one didn't track
+  // confidently enough, blended between the two when both did.
   medBallPeakSpeedMps: real("med_ball_peak_speed_mps"),
   medBallReleaseHeightCm: real("med_ball_release_height_cm"),
+  // Confidence in medBallPeakSpeedMps (see blendSpeedEstimates) -- {score, label, notes}.
+  medBallTrustScore: json("med_ball_trust_score"),
   // "kb_swing" tracking mode's numbers (see kb-swing-tracking.ts) -- null
   // unless trackingLevel was "kb_swing" when this set was logged.
   // Best-of-set peak, same "best rep, not an average" convention
   // jumpHeightCm/medBallPeakSpeedMps already use. kbSwingPeakSpeedMps is
   // full 3D speed magnitude, not the vertical-only formula every other
   // tracked mode's velocity numbers use -- see trackingLevelEnum's own
-  // comment on why a swing's arc needs different math.
+  // comment on why a swing's arc needs different math. Also a
+  // confidence-weighted blend (see medBallPeakSpeedMps's own comment) of the
+  // wrist-midpoint trace's own peak and AvImplementTracker's bell-tracked
+  // speed, rather than the wrist-only reading kb-swing-tracking.ts computes
+  // on its own.
   kbSwingPeakSpeedMps: real("kb_swing_peak_speed_mps"),
   kbSwingPeakHeightCm: real("kb_swing_peak_height_cm"),
+  // Confidence in kbSwingPeakSpeedMps (see blendSpeedEstimates) -- {score, label, notes}.
+  kbSwingTrustScore: json("kb_swing_trust_score"),
   // "horizontal_load" tracking mode's numbers (sled push/pull, loaded
   // carry -- see av-horizontal-load-tracker-dialog.tsx) -- null unless
   // trackingLevel was "horizontal_load" when this set was logged. Same
@@ -5831,6 +5843,15 @@ export const repTrustScoreSchema = z.object({
   notes: z.array(z.string()),
 });
 
+// Same shape as repTrustScoreSchema above minus repNumber -- see pose-tracking.ts's
+// SetTrustScore, for the best-of-set modes (med-ball, kb-swing, swing) that have exactly one
+// confidence reading per set rather than one per rep.
+export const setTrustScoreSchema = z.object({
+  score: z.number(),
+  label: z.enum(["high", "medium", "low"]),
+  notes: z.array(z.string()),
+});
+
 // One entry per detected jump within a "jump" tracking-mode set -- see
 // jump-tracking.ts's summarizeJumpSet for how these are derived from the
 // ankle-height trace. Distinct from repBreakdownEntrySchema above since a
@@ -5895,10 +5916,13 @@ export const setLogInputSchema = z.object({
   swingBackswingMs: z.number().optional().nullable(),
   swingDownswingMs: z.number().optional().nullable(),
   swingHeadSwayCm: z.number().optional().nullable(),
+  swingTrustScore: setTrustScoreSchema.optional().nullable(),
   medBallPeakSpeedMps: z.number().optional().nullable(),
   medBallReleaseHeightCm: z.number().optional().nullable(),
+  medBallTrustScore: setTrustScoreSchema.optional().nullable(),
   kbSwingPeakSpeedMps: z.number().optional().nullable(),
   kbSwingPeakHeightCm: z.number().optional().nullable(),
+  kbSwingTrustScore: setTrustScoreSchema.optional().nullable(),
   horizontalLoadElapsedSeconds: z.number().optional().nullable(),
   horizontalLoadDistanceYards: z.number().optional().nullable(),
   horizontalLoadAvgSpeedYardsPerSec: z.number().optional().nullable(),

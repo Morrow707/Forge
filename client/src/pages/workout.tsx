@@ -23,8 +23,7 @@ import { WorkoutCommentThread } from "@/components/workout-comment-thread";
 import { BarTrackerDialog } from "@/components/bar-tracker-dialog";
 import { AvJumpTrackerDialog } from "@/components/av-jump-tracker-dialog";
 import { AvBarTrackerDialog } from "@/components/av-bar-tracker-dialog";
-import { type SwingSetMetrics } from "@/components/ar-swing-tracker-dialog";
-import { AvSwingTrackerDialog } from "@/components/av-swing-tracker-dialog";
+import { AvSwingTrackerDialog, type AvSwingSetMetrics } from "@/components/av-swing-tracker-dialog";
 import { AvMedballTrackerDialog, type MedballSetMetrics } from "@/components/av-medball-tracker-dialog";
 import { AvKbSwingTrackerDialog } from "@/components/av-kb-swing-tracker-dialog";
 import type { KbSwingSetMetrics } from "@/lib/kb-swing-tracking";
@@ -290,6 +289,15 @@ type RepTrustScore = {
   notes: string[];
 };
 
+// Same shape as RepTrustScore above minus repNumber -- see pose-tracking.ts's SetTrustScore, for
+// the best-of-set modes (swing, med-ball, kb-swing) that have exactly one confidence reading per
+// set rather than one per rep.
+type SetTrustScore = {
+  score: number;
+  label: "high" | "medium" | "low";
+  notes: string[];
+};
+
 type SetMetrics = {
   peakVelocityMps: number | null;
   meanVelocityMps: number | null;
@@ -333,12 +341,19 @@ type SetMetrics = {
   swingBackswingMs: number | null;
   swingDownswingMs: number | null;
   swingHeadSwayCm: number | null;
+  // Cross-diagonal trust score for swingSeparationDeg -- see rotation-tracking.ts's
+  // summarizeRotation.
+  swingTrustScore: SetTrustScore | null;
   // "med_ball" tracking mode's numbers -- see av-medball-tracker-dialog.tsx.
   medBallPeakSpeedMps: number | null;
   medBallReleaseHeightCm: number | null;
+  // Ball-vs-wrist blend trust score -- see pose-tracking.ts's blendSpeedEstimates.
+  medBallTrustScore: SetTrustScore | null;
   // "kb_swing" tracking mode's numbers -- see kb-swing-tracking.ts.
   kbSwingPeakSpeedMps: number | null;
   kbSwingPeakHeightCm: number | null;
+  // Bell-vs-wrist blend trust score -- see pose-tracking.ts's blendSpeedEstimates.
+  kbSwingTrustScore: SetTrustScore | null;
   // "horizontal_load" tracking mode's numbers -- see av-horizontal-load-tracker-dialog.tsx.
   horizontalLoadElapsedSeconds: number | null;
   horizontalLoadDistanceYards: number | null;
@@ -496,10 +511,13 @@ function buildItem(
       swingBackswingMs: existingSet?.swingBackswingMs ?? null,
       swingDownswingMs: existingSet?.swingDownswingMs ?? null,
       swingHeadSwayCm: existingSet?.swingHeadSwayCm ?? null,
+      swingTrustScore: existingSet?.swingTrustScore ?? null,
       medBallPeakSpeedMps: existingSet?.medBallPeakSpeedMps ?? null,
       medBallReleaseHeightCm: existingSet?.medBallReleaseHeightCm ?? null,
+      medBallTrustScore: existingSet?.medBallTrustScore ?? null,
       kbSwingPeakSpeedMps: existingSet?.kbSwingPeakSpeedMps ?? null,
       kbSwingPeakHeightCm: existingSet?.kbSwingPeakHeightCm ?? null,
+      kbSwingTrustScore: existingSet?.kbSwingTrustScore ?? null,
       horizontalLoadElapsedSeconds: existingSet?.horizontalLoadElapsedSeconds ?? null,
       horizontalLoadDistanceYards: existingSet?.horizontalLoadDistanceYards ?? null,
       horizontalLoadAvgSpeedYardsPerSec: existingSet?.horizontalLoadAvgSpeedYardsPerSec ?? null,
@@ -951,10 +969,13 @@ export function WorkoutPage({
           swingBackswingMs: s.swingBackswingMs,
           swingDownswingMs: s.swingDownswingMs,
           swingHeadSwayCm: s.swingHeadSwayCm,
+          swingTrustScore: s.swingTrustScore,
           medBallPeakSpeedMps: s.medBallPeakSpeedMps,
           medBallReleaseHeightCm: s.medBallReleaseHeightCm,
+          medBallTrustScore: s.medBallTrustScore,
           kbSwingPeakSpeedMps: s.kbSwingPeakSpeedMps,
           kbSwingPeakHeightCm: s.kbSwingPeakHeightCm,
+          kbSwingTrustScore: s.kbSwingTrustScore,
           horizontalLoadElapsedSeconds: s.horizontalLoadElapsedSeconds,
           horizontalLoadDistanceYards: s.horizontalLoadDistanceYards,
           horizontalLoadAvgSpeedYardsPerSec: s.horizontalLoadAvgSpeedYardsPerSec,
@@ -1449,10 +1470,13 @@ export function WorkoutPage({
               swingBackswingMs: null,
               swingDownswingMs: null,
               swingHeadSwayCm: null,
+              swingTrustScore: null,
               medBallPeakSpeedMps: null,
               medBallReleaseHeightCm: null,
+              medBallTrustScore: null,
               kbSwingPeakSpeedMps: null,
               kbSwingPeakHeightCm: null,
+              kbSwingTrustScore: null,
               horizontalLoadElapsedSeconds: null,
               horizontalLoadDistanceYards: null,
               horizontalLoadAvgSpeedYardsPerSec: null,
@@ -2669,6 +2693,15 @@ function ExerciseLogContent({
                         Head sway {set.swingHeadSwayCm}cm
                       </span>
                     )}
+                    {set.swingTrustScore && set.swingTrustScore.label !== "high" && (
+                      <span
+                        className="flex items-center gap-1 rounded bg-amber-500/15 px-1.5 py-0.5 text-amber-500"
+                        title={set.swingTrustScore.notes.join("; ")}
+                      >
+                        <ShieldAlert className="h-3 w-3 shrink-0" />
+                        Cross-check uncertain
+                      </span>
+                    )}
                   </div>
                 )}
                 {(set.medBallPeakSpeedMps != null || set.medBallReleaseHeightCm != null) && (
@@ -2684,6 +2717,15 @@ function ExerciseLogContent({
                         Release {set.medBallReleaseHeightCm}cm
                       </span>
                     )}
+                    {set.medBallTrustScore && set.medBallTrustScore.label !== "high" && (
+                      <span
+                        className="flex items-center gap-1 rounded bg-amber-500/15 px-1.5 py-0.5 text-amber-500"
+                        title={set.medBallTrustScore.notes.join("; ")}
+                      >
+                        <ShieldAlert className="h-3 w-3 shrink-0" />
+                        Cross-check uncertain
+                      </span>
+                    )}
                   </div>
                 )}
                 {(set.kbSwingPeakSpeedMps != null || set.kbSwingPeakHeightCm != null) && (
@@ -2697,6 +2739,15 @@ function ExerciseLogContent({
                     {set.kbSwingPeakHeightCm != null && (
                       <span className="rounded bg-secondary px-1.5 py-0.5">
                         Height {set.kbSwingPeakHeightCm}cm
+                      </span>
+                    )}
+                    {set.kbSwingTrustScore && set.kbSwingTrustScore.label !== "high" && (
+                      <span
+                        className="flex items-center gap-1 rounded bg-amber-500/15 px-1.5 py-0.5 text-amber-500"
+                        title={set.kbSwingTrustScore.notes.join("; ")}
+                      >
+                        <ShieldAlert className="h-3 w-3 shrink-0" />
+                        Cross-check uncertain
                       </span>
                     )}
                   </div>
@@ -2814,7 +2865,7 @@ function ExerciseLogContent({
           // JumpSetMetrics union that function already narrows between,
           // and reusing that narrowing here would mean widening it across
           // every other call site that pattern-matches on it instead.
-          function handleSwingCapture(metrics: SwingSetMetrics, videoUrl?: string) {
+          function handleSwingCapture(metrics: AvSwingSetMetrics, videoUrl?: string) {
             if (trackingSet == null) return;
             const videoPatch = videoUrl ? { formCheckVideoUrl: videoUrl } : {};
             onUpdateSet(
@@ -2825,6 +2876,7 @@ function ExerciseLogContent({
                 swingBackswingMs: metrics.backswingMs,
                 swingDownswingMs: metrics.downswingMs,
                 swingHeadSwayCm: metrics.headSwayCm,
+                swingTrustScore: metrics.trust,
                 ...videoPatch,
               },
               { immediate: true },
@@ -2845,6 +2897,7 @@ function ExerciseLogContent({
               {
                 medBallPeakSpeedMps: metrics.peakSpeedMps,
                 medBallReleaseHeightCm: metrics.releaseHeightCm,
+                medBallTrustScore: metrics.trust,
                 ...videoPatch,
               },
               { immediate: true },
@@ -2865,6 +2918,7 @@ function ExerciseLogContent({
               {
                 kbSwingPeakSpeedMps: metrics.peakSpeedMps,
                 kbSwingPeakHeightCm: metrics.peakHeightCm,
+                kbSwingTrustScore: metrics.trust,
                 ...videoPatch,
               },
               { immediate: true },

@@ -13,7 +13,14 @@ import { Circle, Square, X, XCircle, AlertTriangle } from "lucide-react";
 import { useAvBodyTracking } from "@/lib/use-av-body-tracking";
 import { visionJointsToWorldLandmarks, visionImplementToPoint, type ImplementPoint } from "@/lib/vision-body-landmarks";
 import type { PoseFrame as NativePoseFrame } from "@/lib/native-av-preview";
-import { calibrateFromFrames, scaleWorldLandmarks, percentile } from "@/lib/pose-tracking";
+import {
+  calibrateFromFrames,
+  scaleWorldLandmarks,
+  percentile,
+  wristConfidence,
+  blendSpeedEstimates,
+  type SetTrustScore,
+} from "@/lib/pose-tracking";
 import { analyzeMechanics, type MechanicsFrame } from "@/lib/mechanics-tracking";
 import { MIN_TRACKING_CONFIDENCE } from "@/lib/bar-tracking";
 import { videoFilenameForBlob } from "@/lib/video-recording";
@@ -25,7 +32,8 @@ import { videoFilenameForBlob } from "@/lib/video-recording";
  * tracking a single implement (a thrown medicine ball, not a two-handed bar) uses the left
  * instance alone" is that class's own file comment, describing exactly this mode.
  *
- * Two independent signals, fused by simple fallback rather than a weighted blend:
+ * Two independent signals, confidence-weighted BLENDED rather than a plain either/or fallback
+ * (see pose-tracking.ts's blendSpeedEstimates for why, and how):
  * 1. The ball's own tracked speed -- AvImplementTracker follows the ball itself (not just the
  *    wrist), so consecutive confident frames give a real frame-to-frame speed, same 95th-
  *    percentile-over-a-physical-ceiling robustness pattern already established in
@@ -34,10 +42,13 @@ import { videoFilenameForBlob } from "@/lib/video-recording";
  *    body-joint-only analysis (peak wrist speed as a release-velocity proxy, release height,
  *    arm slot) built for Skills' baseball/softball throwing mechanics, but the underlying
  *    physics (a throwing motion's kinetic chain) doesn't care whether the context is a skill
- *    drill or a strength set. Its peakWristSpeedMps is the fallback whenever the ball itself
- *    wasn't confidently tracked for enough of the capture (occlusion, a throw that leaves frame
- *    too fast) -- degrading to the same proxy signal Skills already trusts, rather than
- *    reporting nothing.
+ *    drill or a strength set.
+ * When both signals exist, blendSpeedEstimates weighs them by their own confidence into one
+ * number and reports how well they agreed as medBallTrustScore -- two independent reads agreeing
+ * is stronger evidence than either one's own raw confidence, since a tracker can report high
+ * confidence while still locked onto the wrong feature. When only one signal exists (the ball
+ * wasn't confidently tracked for enough of the capture, or no wrist data), that one is used alone
+ * at reduced confidence rather than reporting nothing.
  *
  * Only two headline numbers are saved (medBallPeakSpeedMps, medBallReleaseHeightCm), best-of-set
  * rather than a per-rep breakdown -- same "no rep segmentation exists yet" simplicity
@@ -54,9 +65,10 @@ import { videoFilenameForBlob } from "@/lib/video-recording";
 export type MedballSetMetrics = {
   peakSpeedMps: number | null;
   releaseHeightCm: number | null;
+  trust: SetTrustScore | null;
 };
 
-const EMPTY_MEDBALL_METRICS: MedballSetMetrics = { peakSpeedMps: null, releaseHeightCm: null };
+const EMPTY_MEDBALL_METRICS: MedballSetMetrics = { peakSpeedMps: null, releaseHeightCm: null, trust: null };
 
 const SHOW_DIAGNOSTIC_OVERLAY = false;
 
@@ -155,8 +167,14 @@ export function AvMedballTrackerDialog({
 
   // Frame-to-frame speed across an implement's own confident trace -- same robust-percentile
   // shape as mechanics-tracking.ts's own wristSpeeds computation, just against a tracked ball
-  // position instead of a wrist landmark.
-  function peakImplementSpeed(points: { t: number; x: number; y: number; confidence: number }[]): number | null {
+  // position instead of a wrist landmark. Also returns the average confidence of the points that
+  // actually fed the speed reading, for blendSpeedEstimates to weigh this signal against the
+  // wrist-proxy signal by -- not a new measurement, just carrying through what
+  // AvImplementTracker already reported per point instead of discarding it once used for the
+  // filter above.
+  function peakImplementSpeed(
+    points: { t: number; x: number; y: number; confidence: number }[],
+  ): { speedMps: number; confidence: number } | null {
     const confident = points.filter((p) => p.confidence >= MIN_TRACKING_CONFIDENCE);
     if (confident.length < MIN_BALL_SPEED_SAMPLES) return null;
     const speeds: number[] = [];
@@ -170,7 +188,9 @@ export function AvMedballTrackerDialog({
     if (speeds.length < MIN_BALL_SPEED_SAMPLES) return null;
     const plausible = speeds.filter((v) => v <= MAX_PLAUSIBLE_BALL_SPEED_MPS);
     const pool = plausible.length > 0 ? plausible : speeds;
-    return Math.round(percentile(pool, 0.95) * 100) / 100;
+    const speedMps = Math.round(percentile(pool, 0.95) * 100) / 100;
+    const confidence = confident.reduce((a, p) => a + p.confidence, 0) / confident.length;
+    return { speedMps, confidence };
   }
 
   async function finishWithRecording(blob: Blob, rawFrames: NativePoseFrame[]) {
@@ -203,13 +223,34 @@ export function AvMedballTrackerDialog({
     // Whichever hand the tracker actually followed the ball with, for however this athlete
     // held/released it (one hand, or two until release) -- same "pick whichever side moved
     // more" reasoning mechanics-tracking.ts's own throwingSide detection already uses for the
-    // wrist, applied here to the ball trace instead.
+    // wrist, applied here to the ball trace instead, and reused below as the wrist-confidence
+    // side too (the ball and the throwing wrist are the same hand until release).
     const leftConfidentCount = leftBallPoints.filter((p) => p.confidence >= MIN_TRACKING_CONFIDENCE).length;
     const rightConfidentCount = rightBallPoints.filter((p) => p.confidence >= MIN_TRACKING_CONFIDENCE).length;
-    const ballPoints = rightConfidentCount > leftConfidentCount ? rightBallPoints : leftBallPoints;
+    const throwingSide: "left" | "right" = rightConfidentCount > leftConfidentCount ? "right" : "left";
+    const ballPoints = throwingSide === "right" ? rightBallPoints : leftBallPoints;
 
     const mechanicsResult = analyzeMechanics(frames, "throw");
-    const peakSpeedMps = peakImplementSpeed(ballPoints) ?? mechanicsResult.peakWristSpeedMps;
+    const ballSignal = peakImplementSpeed(ballPoints);
+    const wristConfidenceSamples = frames
+      .map((f) => wristConfidence(f.worldLandmarks, throwingSide))
+      .filter((c) => c > 0);
+    const avgWristConfidence =
+      wristConfidenceSamples.length > 0
+        ? wristConfidenceSamples.reduce((a, c) => a + c, 0) / wristConfidenceSamples.length
+        : 0;
+    const wristSignal =
+      mechanicsResult.peakWristSpeedMps != null
+        ? { speedMps: mechanicsResult.peakWristSpeedMps, confidence: avgWristConfidence }
+        : null;
+
+    const blended = blendSpeedEstimates(
+      ballSignal,
+      wristSignal,
+      "Ball wasn't confidently tracked for enough of this throw -- speed estimated from wrist motion alone",
+      "No wrist motion signal to cross-check against -- speed from ball tracking alone",
+    );
+    const peakSpeedMps = blended?.speedMps ?? null;
     const releaseHeightCm = mechanicsResult.releaseHeightM != null ? Math.round(mechanicsResult.releaseHeightM * 100) : null;
 
     if (peakSpeedMps == null) {
@@ -217,7 +258,7 @@ export function AvMedballTrackerDialog({
       return;
     }
 
-    const metrics: MedballSetMetrics = { peakSpeedMps, releaseHeightCm };
+    const metrics: MedballSetMetrics = { peakSpeedMps, releaseHeightCm, trust: blended!.trust };
 
     if (!recordVideo) {
       onCapture(metrics);

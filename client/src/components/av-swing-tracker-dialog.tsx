@@ -12,20 +12,26 @@ import { toast } from "sonner";
 import { Circle, Square, AlertTriangle, X, XCircle } from "lucide-react";
 import { useAvBodyTracking } from "@/lib/use-av-body-tracking";
 import { visionJointsToWorldLandmarks } from "@/lib/vision-body-landmarks";
-import { calibrateFromFrames, scaleWorldLandmarks, type PoseFrame } from "@/lib/pose-tracking";
+import { calibrateFromFrames, scaleWorldLandmarks, type PoseFrame, type SetTrustScore } from "@/lib/pose-tracking";
 import { summarizeRotation } from "@/lib/rotation-tracking";
 import { summarizeSwing } from "@/lib/swing-tracking";
 import type { Landmark } from "@mediapipe/tasks-vision";
 import { videoFilenameForBlob } from "@/lib/video-recording";
 import { type SwingSetMetrics } from "@/components/ar-swing-tracker-dialog";
 
-const EMPTY_SWING_METRICS: SwingSetMetrics = {
+// SwingSetMetrics itself is defined in ar-swing-tracker-dialog.tsx (untouched, dead-code
+// fallback only -- see this file's own header comment), so the trust score this dialog adds is
+// carried as an extension here rather than a change to that shared type.
+export type AvSwingSetMetrics = SwingSetMetrics & { trust: SetTrustScore | null };
+
+const EMPTY_SWING_METRICS: AvSwingSetMetrics = {
   peakSeparationDeg: null,
   tempoRatio: null,
   backswingMs: null,
   downswingMs: null,
   headSwayCm: null,
   rotationTrace: [],
+  trust: null,
 };
 
 /** AVFoundation + Vision twin of ar-swing-tracker-dialog.tsx (which stays completely
@@ -62,7 +68,7 @@ export function AvSwingTrackerDialog({
   sport: "golf" | "baseball";
   heightIn?: number | null;
   recordVideo?: boolean;
-  onCapture: (metrics: SwingSetMetrics, videoUrl?: string) => void;
+  onCapture: (metrics: AvSwingSetMetrics, videoUrl?: string) => void;
   videoContext?: VideoRecordContext;
 }) {
   const label = sport === "golf" ? "Golf Swing" : "Baseball Swing";
@@ -110,7 +116,7 @@ export function AvSwingTrackerDialog({
 
     const rotation = summarizeRotation(frames);
     const swing = summarizeSwing(frames);
-    const metrics: SwingSetMetrics | null =
+    const metrics: AvSwingSetMetrics | null =
       rotation || swing.phases
         ? {
             peakSeparationDeg: rotation?.peakSeparationDeg ?? null,
@@ -120,6 +126,7 @@ export function AvSwingTrackerDialog({
             // Only headSwayCm is scale-dependent -- see this file's own comment.
             headSwayCm: scaleFactor != null ? swing.headSwayCm : null,
             rotationTrace: rotation?.trace ?? [],
+            trust: rotation?.trust ?? null,
           }
         : null;
 

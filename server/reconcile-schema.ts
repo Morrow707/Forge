@@ -1788,16 +1788,22 @@ ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "swing_tempo_ratio" r
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "swing_backswing_ms" integer;
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "swing_downswing_ms" integer;
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "swing_head_sway_cm" real;
+-- Cross-diagonal trust score for swingSeparationDeg (rotation-tracking.ts's summarizeRotation).
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "swing_trust_score" json;
 
 -- Med ball object tracking (shared/schema.ts workoutSetEntries's
 -- medBallPeakSpeedMps/medBallReleaseHeightCm).
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "med_ball_peak_speed_mps" real;
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "med_ball_release_height_cm" real;
+-- Ball-vs-wrist blend trust score (pose-tracking.ts's blendSpeedEstimates).
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "med_ball_trust_score" json;
 
 -- Kettlebell swing tracking (shared/schema.ts workoutSetEntries's
 -- kbSwingPeakSpeedMps/kbSwingPeakHeightCm).
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "kb_swing_peak_speed_mps" real;
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "kb_swing_peak_height_cm" real;
+-- Bell-vs-wrist blend trust score (pose-tracking.ts's blendSpeedEstimates).
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "kb_swing_trust_score" json;
 
 -- Horizontal load tracking -- sled push/pull, loaded carry (shared/schema.ts
 -- workoutSetEntries's horizontalLoadElapsedSeconds/DistanceYards/AvgSpeedYardsPerSec).
@@ -2013,6 +2019,31 @@ CREATE TABLE IF NOT EXISTS "tracker_diagnosis_reports" (
   "created_at" timestamp NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS "tracker_diagnosis_reports_created_idx" ON "tracker_diagnosis_reports" ("created_at");
+
+-- Seeds Forge AI's knowledge base (ai_knowledge_entries) with the tracking confidence
+-- cross-check system built this session (pose-tracking.ts's blendSpeedEstimates and
+-- chainConsistencyPenalty, rotation-tracking.ts's crossDiagonalSpread), so it's available to
+-- every AI feature that reads active entries without waiting for an admin to teach it manually
+-- through the chat flow -- see aiKnowledgeEntries' own schema comment for why per-entry rows are
+-- the central knowledge base every AI feature reads from. taught_by is a real NOT NULL foreign
+-- key, so this attributes to whichever admin user actually exists (oldest, for determinism)
+-- rather than a fabricated id -- skipped entirely on a database with no admin yet, not inserted
+-- with a broken reference. Guarded by the source_excerpt marker so re-running this
+-- reconciliation (it runs on every deploy) never inserts a duplicate.
+INSERT INTO "ai_knowledge_entries" ("content", "category", "maturity", "source_type", "source_excerpt", "taught_by")
+SELECT
+  'Forge''s camera tracking cross-checks independent signals against each other to score confidence, rather than trusting any single reading alone. Med-ball throws and kettlebell-swing speed blend the tracked object''s own speed against a body-joint-derived proxy (wrist speed), weighted by each signal''s own confidence -- agreement raises the trust score, disagreement lowers it and the reading gets flagged. Golf/baseball swing separation (X-Factor) is cross-checked against a geometrically independent cross-diagonal distance measurement between the opposite shoulder and hip. Bar-path/full lifts additionally cross-check hip-knee-ankle (for a squat/hinge/lunge) or shoulder-elbow-wrist (for a press/pull) joint consistency within each rep -- a joint moving far less than its neighbors in the same kinetic chain during the same rep is a tracking-glitch signal even when that joint''s own raw confidence score looks fine, since a misdetected landmark can still report high confidence while tracking the wrong feature. When discussing a set''s trust score, or why a tracked reading might be uncertain, reference this cross-check system rather than treating a single confidence number as unexplainable.',
+  'tracking',
+  'established',
+  'pasted_text',
+  'Session note: tracking confidence cross-check system (blendSpeedEstimates, chainConsistencyPenalty, crossDiagonalSpread) -- see pose-tracking.ts, rotation-tracking.ts, bar-tracking.ts',
+  (SELECT id FROM "users" WHERE role = 'admin' ORDER BY id ASC LIMIT 1)
+WHERE
+  EXISTS (SELECT 1 FROM "users" WHERE role = 'admin')
+  AND NOT EXISTS (
+    SELECT 1 FROM "ai_knowledge_entries"
+    WHERE "source_excerpt" = 'Session note: tracking confidence cross-check system (blendSpeedEstimates, chainConsistencyPenalty, crossDiagonalSpread) -- see pose-tracking.ts, rotation-tracking.ts, bar-tracking.ts'
+  );
 `;
 
 async function main() {

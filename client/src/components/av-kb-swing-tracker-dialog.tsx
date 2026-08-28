@@ -11,11 +11,18 @@ import {
 import { toast } from "sonner";
 import { Circle, Square, X, XCircle, AlertTriangle } from "lucide-react";
 import { useAvBodyTracking } from "@/lib/use-av-body-tracking";
-import { visionJointsToWorldLandmarks } from "@/lib/vision-body-landmarks";
+import { visionJointsToWorldLandmarks, visionImplementToPoint, type ImplementPoint } from "@/lib/vision-body-landmarks";
 import type { PoseFrame as NativePoseFrame } from "@/lib/native-av-preview";
-import { calibrateFromFrames, scaleWorldLandmarks, POSE_LANDMARKS, visible } from "@/lib/pose-tracking";
-import { summarizeKbSwingSet, type KbSwingSetMetrics } from "@/lib/kb-swing-tracking";
-import type { TrackedPoint } from "@/lib/bar-tracking";
+import {
+  calibrateFromFrames,
+  scaleWorldLandmarks,
+  POSE_LANDMARKS,
+  visible,
+  percentile,
+  blendSpeedEstimates,
+} from "@/lib/pose-tracking";
+import { summarizeKbSwingSet, MAX_PLAUSIBLE_KB_SWING_SPEED_MPS, type KbSwingSetMetrics } from "@/lib/kb-swing-tracking";
+import { MIN_TRACKING_CONFIDENCE, type TrackedPoint } from "@/lib/bar-tracking";
 import { videoFilenameForBlob } from "@/lib/video-recording";
 
 /** AVFoundation + Vision kettlebell swing tracking -- the "arc" trajectory pattern's first
@@ -24,12 +31,20 @@ import { videoFilenameForBlob } from "@/lib/video-recording";
  * use). Genuinely new, no ARKit equivalent was ever built for this, same category as
  * av-medball-tracker-dialog.tsx.
  *
- * Tracks the wrist MIDPOINT directly rather than a separate implement -- a two-handed swing's
- * grip sits right on the bell, so the wrist position is already a faithful proxy for the bell's
- * own position (unlike a barbell held away from the body, which genuinely needs
- * AvImplementTracker). This keeps the dialog structurally identical to AvJumpTrackerDialog:
- * record, calibrate from the athlete's own height, build a trace from body joints alone, hand
- * it to kb-swing-tracking.ts's own summarizeKbSwingSet.
+ * Tracks the wrist MIDPOINT as the PRIMARY signal rather than a separate implement -- a
+ * two-handed swing's grip sits right on the bell, so the wrist position is already a faithful
+ * proxy for the bell's own position (unlike a barbell held away from the body, which genuinely
+ * needs AvImplementTracker for its primary trace). This keeps the dialog structurally close to
+ * AvJumpTrackerDialog: record, calibrate from the athlete's own height, build a trace from body
+ * joints, hand it to kb-swing-tracking.ts's own summarizeKbSwingSet.
+ *
+ * AvImplementTracker's own bell-tracked speed (f.leftImplement/rightImplement -- already
+ * computed every frame for any AV recording, the same data av-medball-tracker-dialog.tsx reads)
+ * is used as a SECOND, independent cross-check on the headline peak speed, via
+ * pose-tracking.ts's blendSpeedEstimates -- the bell never leaves the hand mid-swing (unlike a
+ * thrown med-ball), so this is exactly the "wrist and implement should agree" reasoning this
+ * session settled on, generalized from bar_path/full to a mode that doesn't otherwise use the
+ * implement tracker at all.
  *
  * Calibration is required, same reasoning as every other AV dialog needing real-world scale --
  * Vision's worldLandmarks-slot values are pixel-space until calibrateFromFrames scales them. */
@@ -39,7 +54,13 @@ const EMPTY_KB_SWING_METRICS: KbSwingSetMetrics = {
   meanSpeedMps: 0,
   peakHeightCm: 0,
   repBreakdown: [],
+  trust: null,
 };
+
+// Minimum confident bell-tracked samples before trusting a frame-to-frame speed off
+// AvImplementTracker's own trace -- same reasoning as av-medball-tracker-dialog.tsx's identical
+// constant: a couple of lucky frames isn't a real trace.
+const MIN_BELL_SPEED_SAMPLES = 4;
 
 const SHOW_DIAGNOSTIC_OVERLAY = false;
 
@@ -136,6 +157,12 @@ export function AvKbSwingTrackerDialog({
     }
 
     const trace: TrackedPoint[] = [];
+    // AvImplementTracker's own bell-tracked point (pixel-space, scaled the same way as the
+    // implement in av-medball-tracker-dialog.tsx) -- kept as a fully separate signal from the
+    // wrist-midpoint trace above, not blended frame-by-frame, so a bad bell-tracking frame can
+    // never corrupt the primary wrist trace the way it would if the two were averaged together
+    // up front.
+    const bellPoints: { t: number; x: number; y: number; confidence: number }[] = [];
     for (const f of rawFrames) {
       const worldLm = scaleWorldLandmarks(visionJointsToWorldLandmarks(f), scaleFactor);
       const leftWrist = worldLm[POSE_LANDMARKS.LEFT_WRIST];
@@ -145,19 +172,74 @@ export function AvKbSwingTrackerDialog({
       // to a single confident point" pattern bar-tracking.ts's own combined-point fallback uses.
       const leftOk = visible(leftWrist);
       const rightOk = visible(rightWrist);
-      if (!leftOk && !rightOk) continue;
-      const x = leftOk && rightOk ? (leftWrist.x + rightWrist.x) / 2 : leftOk ? leftWrist.x : rightWrist.x;
-      const y = leftOk && rightOk ? (leftWrist.y + rightWrist.y) / 2 : leftOk ? leftWrist.y : rightWrist.y;
-      const z = leftOk && rightOk ? (leftWrist.z + rightWrist.z) / 2 : leftOk ? leftWrist.z : rightWrist.z;
-      const confidence = leftOk && rightOk ? Math.min(leftWrist.visibility, rightWrist.visibility) : leftOk ? leftWrist.visibility : rightWrist.visibility;
-      trace.push({ t: f.timestamp * 1000, x, y, z, confidence });
+      if (leftOk || rightOk) {
+        const x = leftOk && rightOk ? (leftWrist.x + rightWrist.x) / 2 : leftOk ? leftWrist.x : rightWrist.x;
+        const y = leftOk && rightOk ? (leftWrist.y + rightWrist.y) / 2 : leftOk ? leftWrist.y : rightWrist.y;
+        const z = leftOk && rightOk ? (leftWrist.z + rightWrist.z) / 2 : leftOk ? leftWrist.z : rightWrist.z;
+        const confidence = leftOk && rightOk ? Math.min(leftWrist.visibility, rightWrist.visibility) : leftOk ? leftWrist.visibility : rightWrist.visibility;
+        trace.push({ t: f.timestamp * 1000, x, y, z, confidence });
+      }
+
+      const t = f.timestamp * 1000;
+      const scalePoint = (raw: ImplementPoint | null) =>
+        raw ? { t, x: raw.x * scaleFactor, y: raw.y * scaleFactor, confidence: raw.confidence } : null;
+      const leftBell = scalePoint(visionImplementToPoint(f.leftImplement, f));
+      const rightBell = scalePoint(visionImplementToPoint(f.rightImplement, f));
+      // Both hands grip the SAME bell (unlike a barbell's independent left/right ends), so
+      // whichever side tracked more confidently this frame is the better read of the one bell,
+      // not something to average together.
+      if (leftBell && rightBell) bellPoints.push(leftBell.confidence >= rightBell.confidence ? leftBell : rightBell);
+      else if (leftBell) bellPoints.push(leftBell);
+      else if (rightBell) bellPoints.push(rightBell);
     }
 
-    const metrics = summarizeKbSwingSet(trace, heightIn);
-    if (!metrics) {
+    const wristMetrics = summarizeKbSwingSet(trace, heightIn);
+    if (!wristMetrics) {
       await saveEmptyAndWarn(blob, "Couldn't get a clean read -- make sure both hands and the kettlebell stay in frame throughout the set.");
       return;
     }
+
+    // Cross-check the wrist-derived peak speed against the bell's own tracked speed -- see this
+    // file's header comment. Same robust-percentile-over-a-physical-ceiling shape as
+    // av-medball-tracker-dialog.tsx's peakImplementSpeed.
+    const confidentBellPoints = bellPoints.filter((p) => p.confidence >= MIN_TRACKING_CONFIDENCE);
+    let bellSignal: { speedMps: number; confidence: number } | null = null;
+    if (confidentBellPoints.length >= MIN_BELL_SPEED_SAMPLES) {
+      const speeds: number[] = [];
+      for (let i = 1; i < confidentBellPoints.length; i++) {
+        const a = confidentBellPoints[i - 1];
+        const b = confidentBellPoints[i];
+        const dtSeconds = (b.t - a.t) / 1000;
+        if (dtSeconds <= 0) continue;
+        speeds.push(Math.hypot(b.x - a.x, b.y - a.y) / dtSeconds);
+      }
+      if (speeds.length >= MIN_BELL_SPEED_SAMPLES) {
+        const plausible = speeds.filter((v) => v <= MAX_PLAUSIBLE_KB_SWING_SPEED_MPS);
+        const pool = plausible.length > 0 ? plausible : speeds;
+        const confidence = confidentBellPoints.reduce((a, p) => a + p.confidence, 0) / confidentBellPoints.length;
+        bellSignal = { speedMps: Math.round(percentile(pool, 0.95) * 100) / 100, confidence };
+      }
+    }
+    const wristConfidentSamples = trace.filter((p) => (p.confidence ?? 0) >= MIN_TRACKING_CONFIDENCE);
+    const wristSignal =
+      wristConfidentSamples.length > 0
+        ? {
+            speedMps: wristMetrics.peakSpeedMps,
+            confidence: wristConfidentSamples.reduce((a, p) => a + (p.confidence ?? 0), 0) / wristConfidentSamples.length,
+          }
+        : null;
+
+    const blended = blendSpeedEstimates(
+      bellSignal,
+      wristSignal,
+      "Bell wasn't confidently tracked for enough of this set -- speed from wrist motion alone",
+      "No wrist motion signal to cross-check against -- speed from bell tracking alone",
+    );
+    const metrics: KbSwingSetMetrics = {
+      ...wristMetrics,
+      peakSpeedMps: blended?.speedMps ?? wristMetrics.peakSpeedMps,
+      trust: blended?.trust ?? null,
+    };
 
     if (!recordVideo) {
       onCapture(metrics);

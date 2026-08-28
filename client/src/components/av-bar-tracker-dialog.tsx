@@ -22,6 +22,8 @@ import {
   assessCameraAlignment,
   guessMovementPattern,
   computeLegDriveAsymmetry,
+  chainConsistencyPenalty,
+  LOWER_BODY_MOVEMENT_TYPES,
   wristConfidence,
   calibrateFromFrames,
   scaleWorldLandmarks,
@@ -391,12 +393,35 @@ export function AvBarTrackerDialog({
     const guess = guessMovementPattern(frames, movementType);
     const expectedPattern = expectedPatternFromName(exerciseName);
     const patternMismatch = guess.pattern !== "unknown" && !!expectedPattern && guess.pattern !== expectedPattern;
+
+    // Kinetic-chain consistency, folded in as one more trust-score signal (see
+    // chainConsistencyPenalty's own comment) -- only for the movement types that actually have a
+    // relevant chain: leg (hip-knee-ankle) for a lower-body lift, arm (shoulder-elbow-wrist) for
+    // a press/pull. Neither applies to a Hinge/Carry/etc. arm-wise or a Push/Pull leg-wise, so
+    // this stays a Map rather than a flat penalty -- reps outside the relevant movement type
+    // simply get no entry, and computeRepTrustScores treats a missing entry as no penalty.
+    const chainType: "leg" | "arm" | null =
+      movementType != null && LOWER_BODY_MOVEMENT_TYPES.has(movementType)
+        ? "leg"
+        : movementType === "Push" || movementType === "Pull"
+          ? "arm"
+          : null;
+    const chainPenalties = chainType
+      ? new Map(
+          metrics.repBreakdown.map((r) => [
+            r.repNumber,
+            chainConsistencyPenalty(frames, r.startT, r.endT, chainType),
+          ]),
+        )
+      : undefined;
+
     metrics.trustScores = computeRepTrustScores(
       metrics.repBreakdown.map((r) => ({ repNumber: r.repNumber, startT: r.startT, endT: r.endT })),
       trace.map((p) => ({ t: p.t, confidence: p.confidence ?? 0.6 })),
       rejectionEvents,
       patternMismatch,
       alignmentReason,
+      chainPenalties,
     );
 
     if (!recordVideo) {
