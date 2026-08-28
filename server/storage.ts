@@ -15678,6 +15678,70 @@ ${catalog}`;
     });
   },
 
+  // Powers the admin-only /api/admin/tracking-report route -- system-wide (not scoped to one
+  // coach's roster, unlike getExerciseAnalyticsForCoach above), most-recent-first, and only
+  // program-exercise sets (not correctives -- a much smaller, secondary case less likely to
+  // carry rich CV data, left out to keep this query to one join chain rather than two). Exists
+  // so a person (or Claude, logged in as its own dedicated admin account) can read exactly what
+  // each tracking mode actually recorded for a real set, in plain language, without guessing
+  // from the schema comments alone.
+  async getRecentTrackedSetsForAdmin(limit: number) {
+    return db
+      .select({
+        date: workoutLogs.date,
+        athleteName: users.name,
+        exerciseName: exercises.name,
+        movementType: exercises.movementType,
+        trackingLevel: programExercises.trackingLevel,
+        setNumber: workoutSetEntries.setNumber,
+        reps: workoutSetEntries.reps,
+        weight: workoutSetEntries.weight,
+        weightUnit: workoutSetEntries.weightUnit,
+        peakVelocityMps: workoutSetEntries.peakVelocityMps,
+        meanVelocityMps: workoutSetEntries.meanVelocityMps,
+        eccentricMeanVelocityMps: workoutSetEntries.eccentricMeanVelocityMps,
+        concentricSeconds: workoutSetEntries.concentricSeconds,
+        eccentricSeconds: workoutSetEntries.eccentricSeconds,
+        barPathDeviationCm: workoutSetEntries.barPathDeviationCm,
+        romCm: workoutSetEntries.romCm,
+        velocityLossPercent: workoutSetEntries.velocityLossPercent,
+        peakPowerWatts: workoutSetEntries.peakPowerWatts,
+        meanPowerWatts: workoutSetEntries.meanPowerWatts,
+        formFaults: workoutSetEntries.formFaults,
+        armDriveAsymmetry: workoutSetEntries.armDriveAsymmetry,
+        legDriveAsymmetry: workoutSetEntries.legDriveAsymmetry,
+        trustScores: workoutSetEntries.trustScores,
+        jumpHeightCm: workoutSetEntries.jumpHeightCm,
+        jumpDistanceCm: workoutSetEntries.jumpDistanceCm,
+        groundContactSeconds: workoutSetEntries.groundContactSeconds,
+        reactiveStrengthIndex: workoutSetEntries.reactiveStrengthIndex,
+        swingSeparationDeg: workoutSetEntries.swingSeparationDeg,
+        swingTempoRatio: workoutSetEntries.swingTempoRatio,
+        swingBackswingMs: workoutSetEntries.swingBackswingMs,
+        swingDownswingMs: workoutSetEntries.swingDownswingMs,
+        swingHeadSwayCm: workoutSetEntries.swingHeadSwayCm,
+        swingTrustScore: workoutSetEntries.swingTrustScore,
+        medBallPeakSpeedMps: workoutSetEntries.medBallPeakSpeedMps,
+        medBallReleaseHeightCm: workoutSetEntries.medBallReleaseHeightCm,
+        medBallTrustScore: workoutSetEntries.medBallTrustScore,
+        kbSwingPeakSpeedMps: workoutSetEntries.kbSwingPeakSpeedMps,
+        kbSwingPeakHeightCm: workoutSetEntries.kbSwingPeakHeightCm,
+        kbSwingTrustScore: workoutSetEntries.kbSwingTrustScore,
+        horizontalLoadElapsedSeconds: workoutSetEntries.horizontalLoadElapsedSeconds,
+        horizontalLoadDistanceYards: workoutSetEntries.horizontalLoadDistanceYards,
+        horizontalLoadAvgSpeedYardsPerSec: workoutSetEntries.horizontalLoadAvgSpeedYardsPerSec,
+      })
+      .from(workoutSetEntries)
+      .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
+      .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
+      .innerJoin(users, eq(workoutLogs.athleteId, users.id))
+      .innerJoin(programExercises, eq(workoutLogEntries.programExerciseId, programExercises.id))
+      .innerJoin(exercises, eq(programExercises.exerciseId, exercises.id))
+      .where(and(isNotNull(programExercises.trackingLevel), sql`${programExercises.trackingLevel} != 'none'`))
+      .orderBy(desc(workoutSetEntries.id))
+      .limit(limit);
+  },
+
   // Load-velocity profile for one exercise -- the standard barbell proxy
   // for a force-velocity relationship (see shared/force-velocity.ts for
   // why load stands in for force here). Built on top of
