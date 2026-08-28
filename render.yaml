@@ -119,6 +119,13 @@ services:
       # no-ops (console.error only, same as today) until this is set.
       - key: SENTRY_DSN
         sync: false
+      # Client-side error reporting (client/src/main.tsx) -- create a
+      # React project at sentry.io (separate from the Node one above) and
+      # paste its DSN here. Must be VITE_-prefixed for Vite to expose it
+      # to browser code, and has to be set before the build step runs
+      # (baked into the bundle, not read at runtime like the server one).
+      - key: VITE_SENTRY_DSN
+        sync: false
 
 databases:
   - name: forge-db
