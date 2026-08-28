@@ -20,10 +20,20 @@ export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> 
 const NATIVE_PICKER_TYPES = new Set(["date", "time", "datetime-local", "month", "week"]);
 
 const Input = React.forwardRef<HTMLInputElement, InputProps>(
-  ({ className, type, ...props }, ref) => {
+  ({ className, type, inputMode, ...props }, ref) => {
     return (
       <input
         type={type}
+        // iOS's WKWebView (the native app's shell, not desktop/Android Safari) is
+        // unreliable about opening the numeric keypad for a bare type="number" --
+        // confirmed on-device via TestFlight, showing the full QWERTY keyboard
+        // instead. inputMode is a separate, standards-based hint WebKit does
+        // respect consistently; "decimal" (not "numeric") since some type="number"
+        // fields in this app take fractional values (e.g. sleep hours, body
+        // weight) and a decimal-only pad still works fine for integer-only ones
+        // -- the extra "." key is simply unused there. Only applied when the
+        // caller hasn't already set their own inputMode.
+        inputMode={inputMode ?? (type === "number" ? "decimal" : undefined)}
         className={cn(
           NATIVE_PICKER_TYPES.has(type ?? "") ? "block appearance-none" : "flex",
           "h-10 w-full rounded-md border border-input bg-surface px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
