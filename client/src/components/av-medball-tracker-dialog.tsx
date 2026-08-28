@@ -24,6 +24,7 @@ import {
 import { analyzeMechanics, type MechanicsFrame } from "@/lib/mechanics-tracking";
 import { MIN_TRACKING_CONFIDENCE } from "@/lib/bar-tracking";
 import { videoFilenameForBlob } from "@/lib/video-recording";
+import { AvDiagnosticOverlay } from "@/components/av-diagnostic-overlay";
 
 /** AVFoundation + Vision med ball throw tracking -- genuinely new, no ARKit equivalent was ever
  * built for this mode (unlike every other tracker this AV pipeline replaced). It exists at all
@@ -70,8 +71,6 @@ export type MedballSetMetrics = {
 
 const EMPTY_MEDBALL_METRICS: MedballSetMetrics = { peakSpeedMps: null, releaseHeightCm: null, trust: null };
 
-const SHOW_DIAGNOSTIC_OVERLAY = false;
-
 // Elite med ball release velocities run well below a thrown baseball's (med balls are heavy --
 // typically 2-10kg -- unlike a 0.14kg baseball), so this ceiling sits generously above even a
 // hard rotational throw or overhead slam: same "well above even an elite real effort" margin
@@ -106,6 +105,7 @@ export function AvMedballTrackerDialog({
     containerRef,
     supported,
     supportError,
+    cameraPermission,
     error,
     setError,
     diagLog,
@@ -310,16 +310,14 @@ export function AvMedballTrackerDialog({
               <X className="h-5 w-5" />
             </button>
 
-            {SHOW_DIAGNOSTIC_OVERLAY && (
-              <div className="absolute left-3 right-16 top-[max(0.75rem,env(safe-area-inset-top))] z-10 select-text space-y-0.5 rounded-md bg-black/60 px-2 py-1.5 font-mono text-[9px] leading-tight text-white/80 backdrop-blur-sm">
-                <div>supported={String(supported)} analyzedFrames={analyzedFrames}</div>
-                {diagLog.map((line, i) => (
-                  <div key={i} className="text-white/60">
-                    {line}
-                  </div>
-                ))}
-              </div>
-            )}
+            <AvDiagnosticOverlay
+              supported={supported}
+              supportError={supportError}
+              cameraPermission={cameraPermission}
+              analyzedFrames={analyzedFrames}
+              diagLog={diagLog}
+              heightIn={heightIn}
+            />
 
             {recording && (
               <div className="absolute left-1/2 top-[max(0.75rem,env(safe-area-inset-top))] flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5 text-sm font-bold text-white backdrop-blur-sm">

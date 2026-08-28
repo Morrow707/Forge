@@ -42,6 +42,10 @@ export function useAvBodyTracking(active: boolean) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [supported, setSupported] = useState<boolean | null>(null);
   const [supportError, setSupportError] = useState<string | undefined>(undefined);
+  // isAvBodyTrackingSupported already returns this -- it was being discarded here, so no
+  // dialog could ever tell "device unsupported" apart from "camera permission denied," the two
+  // most common reasons this whole pipeline goes dark for a real user.
+  const [cameraPermission, setCameraPermission] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const [diagLog, setDiagLog] = useState<string[]>([]);
   const [recording, setRecording] = useState(false);
@@ -57,9 +61,10 @@ export function useAvBodyTracking(active: boolean) {
   useEffect(() => {
     setError(null);
     setDiagLog([]);
-    isAvBodyTrackingSupported().then(({ supported: isSupported, error: supportErr }) => {
+    isAvBodyTrackingSupported().then(({ supported: isSupported, error: supportErr, cameraPermission: perm }) => {
       setSupported(isSupported);
       setSupportError(supportErr);
+      setCameraPermission(perm);
     });
     // Runs once per mount, not keyed to `active` -- device support doesn't change mid-dialog,
     // and checking it doesn't need the camera live.
@@ -212,6 +217,7 @@ export function useAvBodyTracking(active: boolean) {
     containerRef,
     supported,
     supportError,
+    cameraPermission,
     error,
     setError,
     diagLog,

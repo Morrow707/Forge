@@ -43,6 +43,7 @@ import {
 } from "@/lib/bar-tracking";
 import { expectedPatternFromName } from "@/components/bar-tracker-dialog";
 import { videoFilenameForBlob } from "@/lib/video-recording";
+import { AvDiagnosticOverlay } from "@/components/av-diagnostic-overlay";
 import type { Landmark } from "@mediapipe/tasks-vision";
 
 /** AVFoundation + Vision bar-path/full mode tracking -- the last tracker mode converted off
@@ -107,7 +108,6 @@ const EMPTY_REP_METRICS: RepMetrics = {
   velocityLossPercent: null,
 };
 
-const SHOW_DIAGNOSTIC_OVERLAY = false;
 
 function isPlausibleVelocity(
   prev: { x: number; y: number; t: number } | null,
@@ -159,6 +159,7 @@ export function AvBarTrackerDialog({
     containerRef,
     supported,
     supportError,
+    cameraPermission,
     error,
     setError,
     diagLog,
@@ -474,18 +475,15 @@ export function AvBarTrackerDialog({
               <X className="h-5 w-5" />
             </button>
 
-            {SHOW_DIAGNOSTIC_OVERLAY && (
-              <div className="absolute left-3 right-16 top-[max(0.75rem,env(safe-area-inset-top))] z-10 select-text space-y-0.5 rounded-md bg-black/60 px-2 py-1.5 font-mono text-[9px] leading-tight text-white/80 backdrop-blur-sm">
-                <div>
-                  supported={String(supported)} mode={mode} analyzedFrames={analyzedFrames}
-                </div>
-                {diagLog.map((line, i) => (
-                  <div key={i} className="text-white/60">
-                    {line}
-                  </div>
-                ))}
-              </div>
-            )}
+            <AvDiagnosticOverlay
+              supported={supported}
+              supportError={supportError}
+              cameraPermission={cameraPermission}
+              analyzedFrames={analyzedFrames}
+              diagLog={diagLog}
+              heightIn={heightIn}
+              extra={`mode=${mode}`}
+            />
 
             {recording && (
               <div className="absolute left-1/2 top-[max(0.75rem,env(safe-area-inset-top))] flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5 text-sm font-bold text-white backdrop-blur-sm">

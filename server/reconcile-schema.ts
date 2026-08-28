@@ -2044,6 +2044,24 @@ WHERE
     SELECT 1 FROM "ai_knowledge_entries"
     WHERE "source_excerpt" = 'Session note: tracking confidence cross-check system (blendSpeedEstimates, chainConsistencyPenalty, crossDiagonalSpread) -- see pose-tracking.ts, rotation-tracking.ts, bar-tracking.ts'
   );
+
+-- Backfill height_in/body_weight_lbs for any athlete missing them -- calibrateFromFrames hard-
+-- requires a real height (see its own comment in pose-tracking.ts), so a test athlete with none
+-- set can never get a single calibrated number out of any camera mode, the exact failure just
+-- hit in testing. Only fills genuine NULLs (COALESCE), never overwrites a value someone already
+-- set -- explicitly excludes any account matching "jordan" by name (case-insensitive), which
+-- already has a real, deliberately-set 6'3"/75in height from testing that must stay untouched.
+-- Values are a plausible-but-arbitrary spread (id-derived, so not every row gets the same
+-- number) across a normal adult range -- test data for "the camera can run," not measurements of
+-- a real person, and weight genuinely doesn't matter for any tracked metric today.
+UPDATE "users"
+SET
+  height_in = COALESCE(height_in, 62 + (id % 16)),
+  body_weight_lbs = COALESCE(body_weight_lbs, 140 + (id % 90))
+WHERE
+  role = 'athlete'
+  AND name NOT ILIKE '%jordan%'
+  AND (height_in IS NULL OR body_weight_lbs IS NULL);
 `;
 
 async function main() {

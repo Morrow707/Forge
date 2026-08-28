@@ -17,6 +17,7 @@ import {
 import { POSE_LANDMARKS } from "@/lib/pose-tracking";
 import { type PoseFrame as NativePoseFrame } from "@/lib/native-av-preview";
 import { useAvBodyTracking } from "@/lib/use-av-body-tracking";
+import { AvDiagnosticOverlay } from "@/components/av-diagnostic-overlay";
 import {
   detectSprintCrossings,
   deriveSprintReferencePoint,
@@ -146,10 +147,12 @@ export function AvHorizontalLoadTrackerDialog({
     containerRef,
     supported,
     supportError,
+    cameraPermission,
     error,
     setError,
     diagLog,
     recording,
+    analyzedFrames,
     startRecording,
     cancelRecording,
     stopRecordingAndAnalyze,
@@ -369,6 +372,15 @@ export function AvHorizontalLoadTrackerDialog({
                 <X className="h-5 w-5" />
               </button>
 
+              <AvDiagnosticOverlay
+                supported={supported}
+                supportError={supportError}
+                cameraPermission={cameraPermission}
+                analyzedFrames={analyzedFrames}
+                diagLog={diagLog}
+                extra={`step=${step}`}
+              />
+
               <canvas
                 ref={overlayCanvasRef}
                 onClick={handleOverlayClick}
@@ -444,9 +456,6 @@ export function AvHorizontalLoadTrackerDialog({
                     Stop Recording
                   </Button>
                 </div>
-              )}
-              {(step === "calibrate" || step === "capture") && diagLog.length > 0 && (
-                <p className="truncate text-center text-[10px] text-white/40">{diagLog[diagLog.length - 1]}</p>
               )}
             </div>
           </div>

@@ -18,6 +18,7 @@ import { summarizeSwing } from "@/lib/swing-tracking";
 import type { Landmark } from "@mediapipe/tasks-vision";
 import { videoFilenameForBlob } from "@/lib/video-recording";
 import { type SwingSetMetrics } from "@/components/ar-swing-tracker-dialog";
+import { AvDiagnosticOverlay } from "@/components/av-diagnostic-overlay";
 
 // SwingSetMetrics itself is defined in ar-swing-tracker-dialog.tsx (untouched, dead-code
 // fallback only -- see this file's own header comment), so the trust score this dialog adds is
@@ -79,6 +80,7 @@ export function AvSwingTrackerDialog({
     containerRef,
     supported,
     supportError,
+    cameraPermission,
     error,
     setError,
     diagLog,
@@ -235,15 +237,15 @@ export function AvSwingTrackerDialog({
               </div>
             )}
 
-            {!recording && !analyzing && diagLog.length > 0 && (
-              <div className="absolute left-2 top-2 z-10 select-text space-y-0.5 rounded-md bg-black/60 px-2 py-1 font-mono text-[9px] leading-tight text-white/80">
-                {diagLog.slice(-3).map((line, i) => (
-                  <div key={i} className="text-white/60">
-                    {line}
-                  </div>
-                ))}
-              </div>
-            )}
+            <AvDiagnosticOverlay
+              supported={supported}
+              supportError={supportError}
+              cameraPermission={cameraPermission}
+              analyzedFrames={analyzedFrames}
+              diagLog={diagLog}
+              heightIn={heightIn}
+              extra={`sport=${sport}`}
+            />
 
             {error && (
               <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 flex items-center gap-2 rounded-md bg-destructive/90 px-3 py-2 text-sm text-white">
