@@ -24,7 +24,6 @@ import {
 import { summarizeKbSwingSet, MAX_PLAUSIBLE_KB_SWING_SPEED_MPS, type KbSwingSetMetrics } from "@/lib/kb-swing-tracking";
 import { MIN_TRACKING_CONFIDENCE, type TrackedPoint } from "@/lib/bar-tracking";
 import { videoFilenameForBlob } from "@/lib/video-recording";
-import { AvDiagnosticOverlay } from "@/components/av-diagnostic-overlay";
 
 /** AVFoundation + Vision kettlebell swing tracking -- the "arc" trajectory pattern's first
  * built mode (see kb-swing-tracking.ts's own file comment for the full reasoning: a swing's
@@ -290,15 +289,6 @@ export function AvKbSwingTrackerDialog({
             >
               <X className="h-5 w-5" />
             </button>
-
-            <AvDiagnosticOverlay
-              supported={supported}
-              supportError={supportError}
-              cameraPermission={cameraPermission}
-              analyzedFrames={analyzedFrames}
-              diagLog={diagLog}
-              heightIn={heightIn}
-            />
 
             {recording && (
               <div className="absolute left-1/2 top-[max(0.75rem,env(safe-area-inset-top))] flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5 text-sm font-bold text-white backdrop-blur-sm">

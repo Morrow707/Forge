@@ -24,7 +24,6 @@ import {
 import { analyzeMechanics, type MechanicsFrame } from "@/lib/mechanics-tracking";
 import { MIN_TRACKING_CONFIDENCE } from "@/lib/bar-tracking";
 import { videoFilenameForBlob } from "@/lib/video-recording";
-import { AvDiagnosticOverlay } from "@/components/av-diagnostic-overlay";
 
 /** AVFoundation + Vision med ball throw tracking -- genuinely new, no ARKit equivalent was ever
  * built for this mode (unlike every other tracker this AV pipeline replaced). It exists at all
@@ -309,15 +308,6 @@ export function AvMedballTrackerDialog({
             >
               <X className="h-5 w-5" />
             </button>
-
-            <AvDiagnosticOverlay
-              supported={supported}
-              supportError={supportError}
-              cameraPermission={cameraPermission}
-              analyzedFrames={analyzedFrames}
-              diagLog={diagLog}
-              heightIn={heightIn}
-            />
 
             {recording && (
               <div className="absolute left-1/2 top-[max(0.75rem,env(safe-area-inset-top))] flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5 text-sm font-bold text-white backdrop-blur-sm">

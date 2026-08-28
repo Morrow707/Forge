@@ -43,7 +43,6 @@ import {
 } from "@/lib/bar-tracking";
 import { expectedPatternFromName } from "@/components/bar-tracker-dialog";
 import { videoFilenameForBlob } from "@/lib/video-recording";
-import { AvDiagnosticOverlay } from "@/components/av-diagnostic-overlay";
 import type { Landmark } from "@mediapipe/tasks-vision";
 
 /** AVFoundation + Vision bar-path/full mode tracking -- the last tracker mode converted off
@@ -474,16 +473,6 @@ export function AvBarTrackerDialog({
             >
               <X className="h-5 w-5" />
             </button>
-
-            <AvDiagnosticOverlay
-              supported={supported}
-              supportError={supportError}
-              cameraPermission={cameraPermission}
-              analyzedFrames={analyzedFrames}
-              diagLog={diagLog}
-              heightIn={heightIn}
-              extra={`mode=${mode}`}
-            />
 
             {recording && (
               <div className="absolute left-1/2 top-[max(0.75rem,env(safe-area-inset-top))] flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5 text-sm font-bold text-white backdrop-blur-sm">

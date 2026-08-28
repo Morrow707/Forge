@@ -12,7 +12,6 @@ import { toast } from "sonner";
 import { Circle, Square, X, XCircle, AlertTriangle } from "lucide-react";
 import { useAvBodyTracking } from "@/lib/use-av-body-tracking";
 import { visionJointsToWorldLandmarks } from "@/lib/vision-body-landmarks";
-import { AvDiagnosticOverlay } from "@/components/av-diagnostic-overlay";
 import {
   deriveJumpPoint,
   detectFormFaults,
@@ -274,15 +273,6 @@ export function AvJumpTrackerDialog({
             >
               <X className="h-5 w-5" />
             </button>
-
-            <AvDiagnosticOverlay
-              supported={supported}
-              supportError={supportError}
-              cameraPermission={cameraPermission}
-              analyzedFrames={analyzedFrames}
-              diagLog={diagLog}
-              heightIn={heightIn}
-            />
 
             {recording && (
               <div className="absolute left-1/2 top-[max(0.75rem,env(safe-area-inset-top))] flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5 text-sm font-bold text-white backdrop-blur-sm">

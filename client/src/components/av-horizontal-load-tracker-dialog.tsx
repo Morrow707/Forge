@@ -17,7 +17,6 @@ import {
 import { POSE_LANDMARKS } from "@/lib/pose-tracking";
 import { type PoseFrame as NativePoseFrame } from "@/lib/native-av-preview";
 import { useAvBodyTracking } from "@/lib/use-av-body-tracking";
-import { AvDiagnosticOverlay } from "@/components/av-diagnostic-overlay";
 import {
   detectSprintCrossings,
   deriveSprintReferencePoint,
@@ -371,15 +370,6 @@ export function AvHorizontalLoadTrackerDialog({
               >
                 <X className="h-5 w-5" />
               </button>
-
-              <AvDiagnosticOverlay
-                supported={supported}
-                supportError={supportError}
-                cameraPermission={cameraPermission}
-                analyzedFrames={analyzedFrames}
-                diagLog={diagLog}
-                extra={`step=${step}`}
-              />
 
               <canvas
                 ref={overlayCanvasRef}

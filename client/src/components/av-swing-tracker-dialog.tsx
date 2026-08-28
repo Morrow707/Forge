@@ -18,7 +18,6 @@ import { summarizeSwing } from "@/lib/swing-tracking";
 import type { Landmark } from "@mediapipe/tasks-vision";
 import { videoFilenameForBlob } from "@/lib/video-recording";
 import { type SwingSetMetrics } from "@/components/ar-swing-tracker-dialog";
-import { AvDiagnosticOverlay } from "@/components/av-diagnostic-overlay";
 
 // SwingSetMetrics itself is defined in ar-swing-tracker-dialog.tsx (untouched, dead-code
 // fallback only -- see this file's own header comment), so the trust score this dialog adds is
@@ -236,16 +235,6 @@ export function AvSwingTrackerDialog({
                 </Button>
               </div>
             )}
-
-            <AvDiagnosticOverlay
-              supported={supported}
-              supportError={supportError}
-              cameraPermission={cameraPermission}
-              analyzedFrames={analyzedFrames}
-              diagLog={diagLog}
-              heightIn={heightIn}
-              extra={`sport=${sport}`}
-            />
 
             {error && (
               <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 flex items-center gap-2 rounded-md bg-destructive/90 px-3 py-2 text-sm text-white">

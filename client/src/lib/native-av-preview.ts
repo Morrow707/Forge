@@ -161,7 +161,14 @@ export async function startAvRecording(): Promise<void> {
 // backstop if a caller never gets there (see AvBodyTrackingPlugin.swift's own comment).
 export async function stopAvRecording(): Promise<{ blob: Blob; path: string }> {
   const { path } = await AvBodyTracking.stopRecording();
-  const { data } = await Filesystem.readFile({ path });
+  // stopRecording() resolves the plugin's own raw filesystem path (no file:// scheme) --
+  // deleteAvRecording/analyzeAvRecording both pass that same raw path straight back to native
+  // calls that expect exactly that form (FileManager's removeItem(atPath:) and
+  // URL(fileURLWithPath:) respectively), so `path` below and the value this function returns
+  // both stay raw. Filesystem.readFile is the one consumer that needs an actual file:// URI --
+  // with no `directory` given, a bare path like "/private/var/.../foo.mov" isn't a valid URL on
+  // its own and readFile fails with "couldn't be opened."
+  const { data } = await Filesystem.readFile({ path: `file://${path}` });
   const binary = atob(data as string);
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
