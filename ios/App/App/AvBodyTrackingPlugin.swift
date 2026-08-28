@@ -257,6 +257,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             )
 
             self.applyHighestFrameRate(to: captureDevice)
+            self.applyContinuousFocusAndExposure(to: captureDevice)
 
             if self.previewLayerView != nil {
                 self.logDiag("WARNING: previewLayerView already existed at start() -- removing stale view")
@@ -418,6 +419,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                 self.currentInput = newInput
                 session.commitConfiguration()
                 self.applyHighestFrameRate(to: newDevice)
+                self.applyContinuousFocusAndExposure(to: newDevice)
                 self.logDiag("switched lens to \(self.lensId(for: newDevice.deviceType))")
                 call.resolve()
             } catch {
@@ -518,6 +520,37 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             logDiag("activeFormat set: \(dims.width)x\(dims.height) @ up to \(bestRange.maxFrameRate)fps")
         } catch {
             logDiag("WARNING: failed to set highest frame rate: \(error.localizedDescription)")
+        }
+    }
+
+    // Never set anywhere else in this file -- setFocusPoint's .autoFocus/.autoExpose are a
+    // one-shot tap-to-focus response, not the default running state, so without this call a
+    // fresh AVCaptureDevice is left at whatever focus/exposure mode it happened to power on
+    // with. That's usually continuous already, EXCEPT right after applyHighestFrameRate above
+    // changes activeFormat: some formats (especially high-fps ones near the top of a device's
+    // range) don't support continuous AF/AE at all, and switching activeFormat can silently drop
+    // the device out of continuous mode even on formats that do -- exactly the persistent,
+    // uniform out-of-focus blur reported in testing (present under the old ARKit pipeline too,
+    // which independently hit the same "pick the fastest format, never re-affirm continuous
+    // focus after" gap). Called AFTER applyHighestFrameRate, not before, since it's the format
+    // change that can invalidate this -- setting it first would just get silently reset.
+    private func applyContinuousFocusAndExposure(to device: AVCaptureDevice) {
+        do {
+            try device.lockForConfiguration()
+            if device.isFocusModeSupported(.continuousAutoFocus) {
+                device.focusMode = .continuousAutoFocus
+            } else if device.isFocusModeSupported(.autoFocus) {
+                // Some high-fps formats only support one-shot autofocus -- better to refocus
+                // once at the current distance than stay locked wherever the device woke up.
+                device.focusMode = .autoFocus
+            }
+            if device.isExposureModeSupported(.continuousAutoExposure) {
+                device.exposureMode = .continuousAutoExposure
+            }
+            device.unlockForConfiguration()
+            logDiag("focus/exposure mode set: focus=\(device.focusMode.rawValue) exposure=\(device.exposureMode.rawValue)")
+        } catch {
+            logDiag("WARNING: failed to set continuous focus/exposure: \(error.localizedDescription)")
         }
     }
 
