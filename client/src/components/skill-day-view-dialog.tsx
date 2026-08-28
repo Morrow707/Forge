@@ -13,12 +13,10 @@ import { externalLinkClick } from "@/lib/open-external";
 import { extractVideoFrames } from "@/lib/video-frames";
 import { Target, MoonStar, Timer, Activity, CheckCircle2, Film, Video, Sparkles } from "lucide-react";
 import { SprintTrackerDialog } from "@/components/sprint-tracker-dialog";
-import { ArSprintTrackerDialog } from "@/components/ar-sprint-tracker-dialog";
 import { AvSprintTrackerDialog } from "@/components/av-sprint-tracker-dialog";
 import { AvMechanicsTrackerDialog } from "@/components/av-mechanics-tracker-dialog";
 import { isArPreviewPlatform } from "@/lib/native-ar-preview";
 import { MechanicsTrackerDialog } from "@/components/mechanics-tracker-dialog";
-import { ArMechanicsTrackerDialog } from "@/components/ar-mechanics-tracker-dialog";
 import { FormVideoRecorderDialog } from "@/components/form-video-recorder-dialog";
 import { WorkoutCommentThread } from "@/components/workout-comment-thread";
 import type { MechanicsMode } from "@/lib/mechanics-tracking";
@@ -368,22 +366,12 @@ export function SkillDayViewDialog({
         </DialogContent>
       </Dialog>
 
-      {/* Temporary admin-only branch for the AVFoundation + Vision pipeline that's
-          replacing ARKit on iOS (see AvBodyTrackingPlugin.swift's file comment) --
-          validation-only scaffolding, not the end state: the ARKit path underneath stays
-          byte-for-byte untouched for every non-admin user until Phase 7's cutover go/no-go
-          criteria are met, at which point this condition drops entirely. */}
-      {sprintExercise && source.kind === "athlete" && (isArPreviewPlatform() && user?.role === "admin" ? (
+      {/* AVFoundation + Vision pipeline (see AvBodyTrackingPlugin.swift's file comment) is
+          the only iOS path now -- ArSprintTrackerDialog and the ARKit plugin underneath stay
+          in the repo untouched as a dead-code fallback (per the plan's Context section) but
+          nothing routes to them anymore. */}
+      {sprintExercise && source.kind === "athlete" && (isArPreviewPlatform() ? (
         <AvSprintTrackerDialog
-          open={!!sprintExercise}
-          onOpenChange={(o) => !o && setSprintExercise(null)}
-          drillName={sprintExercise.name}
-          skillAssignmentId={source.skillAssignmentId}
-          skillProgramDayId={source.skillProgramDayId}
-          skillProgramExerciseId={sprintExercise.id}
-        />
-      ) : isArPreviewPlatform() ? (
-        <ArSprintTrackerDialog
           open={!!sprintExercise}
           onOpenChange={(o) => !o && setSprintExercise(null)}
           drillName={sprintExercise.name}
@@ -402,12 +390,11 @@ export function SkillDayViewDialog({
         />
       ))}
 
-      {/* Temporary admin-only branch for the AVFoundation + Vision pipeline that's
-          replacing ARKit on iOS (see AvBodyTrackingPlugin.swift's file comment) --
-          validation-only scaffolding, not the end state: the ARKit path below stays
-          byte-for-byte untouched for every non-admin user until Phase 7's cutover go/no-go
-          criteria are met, at which point this condition drops entirely. */}
-      {mechanicsExercise && source.kind === "athlete" && (isArPreviewPlatform() && user?.role === "admin" ? (
+      {/* AVFoundation + Vision pipeline (see AvBodyTrackingPlugin.swift's file comment) is
+          the only iOS path now -- ArMechanicsTrackerDialog and the ARKit plugin underneath
+          stay in the repo untouched as a dead-code fallback (per the plan's Context section)
+          but nothing routes to them anymore. */}
+      {mechanicsExercise && source.kind === "athlete" && (isArPreviewPlatform() ? (
         <AvMechanicsTrackerDialog
           open={!!mechanicsExercise}
           onOpenChange={(o) => !o && setMechanicsExercise(null)}
@@ -415,17 +402,6 @@ export function SkillDayViewDialog({
           mode={mechanicsModeFor(mechanicsExercise.skillType)}
           actionLabel={mechanicsActionLabelFor(mechanicsExercise.skillType)}
           heightIn={user?.heightIn}
-          skillAssignmentId={source.skillAssignmentId}
-          skillProgramDayId={source.skillProgramDayId}
-          skillProgramExerciseId={mechanicsExercise.id}
-        />
-      ) : isArPreviewPlatform() ? (
-        <ArMechanicsTrackerDialog
-          open={!!mechanicsExercise}
-          onOpenChange={(o) => !o && setMechanicsExercise(null)}
-          drillName={mechanicsExercise.name}
-          mode={mechanicsModeFor(mechanicsExercise.skillType)}
-          actionLabel={mechanicsActionLabelFor(mechanicsExercise.skillType)}
           skillAssignmentId={source.skillAssignmentId}
           skillProgramDayId={source.skillProgramDayId}
           skillProgramExerciseId={mechanicsExercise.id}

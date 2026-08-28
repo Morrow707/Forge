@@ -21,10 +21,9 @@ import { RestTimerControl, type RestTimerHandle } from "@/components/rest-timer"
 import { useWakeLock } from "@/hooks/use-wake-lock";
 import { WorkoutCommentThread } from "@/components/workout-comment-thread";
 import { BarTrackerDialog } from "@/components/bar-tracker-dialog";
-import { ArJumpTrackerDialog } from "@/components/ar-jump-tracker-dialog";
 import { AvJumpTrackerDialog } from "@/components/av-jump-tracker-dialog";
 import { ArBarTrackerDialog } from "@/components/ar-bar-tracker-dialog";
-import { ArSwingTrackerDialog, type SwingSetMetrics } from "@/components/ar-swing-tracker-dialog";
+import { type SwingSetMetrics } from "@/components/ar-swing-tracker-dialog";
 import { AvSwingTrackerDialog } from "@/components/av-swing-tracker-dialog";
 import { isArPreviewPlatform } from "@/lib/native-ar-preview";
 import { FormVideoRecorderDialog } from "@/components/form-video-recorder-dialog";
@@ -2745,12 +2744,11 @@ function ExerciseLogContent({
           }
 
           if (item.trackingLevel === "golf_swing" || item.trackingLevel === "baseball_swing") {
-            // Temporary admin-only branch for the AVFoundation + Vision pipeline that's
-            // replacing ARKit on iOS (see AvBodyTrackingPlugin.swift's file comment) --
-            // validation-only scaffolding, not the end state: the ARKit path below stays
-            // byte-for-byte untouched for every non-admin user until Phase 7's cutover
-            // go/no-go criteria are met, at which point this condition drops entirely.
-            if (isArPreviewPlatform() && user?.role === "admin") {
+            // AVFoundation + Vision pipeline (see AvBodyTrackingPlugin.swift's file comment)
+            // is the only iOS path now -- ArSwingTrackerDialog and the ARKit plugin
+            // underneath stay in the repo untouched as a dead-code fallback (per the plan's
+            // Context section) but nothing routes to them anymore.
+            if (isArPreviewPlatform()) {
               return (
                 <AvSwingTrackerDialog
                   open={trackingSet !== null}
@@ -2763,25 +2761,13 @@ function ExerciseLogContent({
                 />
               );
             }
-            if (isArPreviewPlatform()) {
-              return (
-                <ArSwingTrackerDialog
-                  open={trackingSet !== null}
-                  onOpenChange={(open) => !open && setTrackingSet(null)}
-                  sport={item.trackingLevel === "golf_swing" ? "golf" : "baseball"}
-                  heightIn={user?.heightIn}
-                  recordVideo={mergedTracking}
-                  onCapture={handleSwingCapture}
-                  videoContext={videoContextFor(trackingSet)}
-                />
-              );
-            }
             // MediaPipe-based rotation/tempo tracking for swings isn't
             // built yet -- see ar-swing-tracker-dialog.tsx's own comment on
-            // why ARKit went first here too (same "no implement to follow"
-            // reasoning jump mode used). Falls back to a plain video-only
-            // capture rather than forcing this through BarTrackerDialog's
-            // bar/jump-shaped tracking, which doesn't fit a swing at all.
+            // why ARKit (now the AV pipeline) went first here too (same "no
+            // implement to follow" reasoning jump mode used). Falls back to
+            // a plain video-only capture rather than forcing this through
+            // BarTrackerDialog's bar/jump-shaped tracking, which doesn't
+            // fit a swing at all.
             return (
               <FormVideoRecorderDialog
                 open={trackingSet !== null}
@@ -2797,38 +2783,15 @@ function ExerciseLogContent({
             );
           }
 
-          // Temporary admin-only branch for the AVFoundation + Vision pipeline that's
-          // replacing ARKit on iOS (see AvBodyTrackingPlugin.swift's file comment) --
-          // validation-only scaffolding, not the end state: the ARKit path below stays
-          // byte-for-byte untouched for every non-admin user until Phase 7's cutover
-          // go/no-go criteria are met, at which point this condition drops entirely.
-          if (isArPreviewPlatform() && user?.role === "admin" && item.trackingLevel === "jump") {
-            return (
-              <AvJumpTrackerDialog
-                open={trackingSet !== null}
-                onOpenChange={(open) => !open && setTrackingSet(null)}
-                heightIn={user?.heightIn}
-                movementType={item.movementType}
-                equipment={item.equipment}
-                recordVideo={mergedTracking}
-                onCapture={handleTrackerCapture}
-                videoContext={videoContextFor(trackingSet)}
-                formFaultThresholds={activeMovementProfile}
-                jumpHeightOutlierPercent={activeMovementProfile?.jumpHeightOutlierPercent}
-              />
-            );
-          }
-
-          // Jump mode is the first tracker mode moved off MediaPipe onto
-          // native ARKit -- see ar-jump-tracker-dialog.tsx's own comment for
-          // why jump specifically (no implement to follow, unlike bar_path/
-          // full, which still need implement tracking ported to Swift
-          // first). Every other mode, and jump mode on anything that isn't
-          // native iOS, keeps using the existing MediaPipe-based dialog
-          // unchanged.
+          // AVFoundation + Vision pipeline (see AvBodyTrackingPlugin.swift's file comment) is
+          // the only iOS path for jump mode now -- ArJumpTrackerDialog and the ARKit plugin
+          // underneath stay in the repo untouched as a dead-code fallback (per the plan's
+          // Context section) but nothing routes to them anymore. Every other mode, and jump
+          // mode on anything that isn't native iOS, keeps using the existing MediaPipe-based
+          // dialog unchanged.
           if (isArPreviewPlatform() && item.trackingLevel === "jump") {
             return (
-              <ArJumpTrackerDialog
+              <AvJumpTrackerDialog
                 open={trackingSet !== null}
                 onOpenChange={(open) => !open && setTrackingSet(null)}
                 heightIn={user?.heightIn}
