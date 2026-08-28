@@ -27,9 +27,21 @@ const shouldEnforceSsl = !urlAlreadySpecifiesSsl && process.env.NODE_ENV === "pr
 // not attached to the deploy environment) hangs forever waiting to connect
 // instead of failing -- on a platform that boots the server before any
 // request comes in, that looks like the process never starting at all.
+//
+// max: forge-db is on Render's basic-1gb plan, which caps Postgres at 100
+// total connections (fewer than 8GB RAM instances all share that ceiling),
+// with a handful reserved for Render's own direct/internal connections --
+// see the launch audit's own finding on this. 20 is well above pg's default
+// of 10 (this app's own concurrent-load testing found real
+// connection-pool-exhaustion bugs at that default) while leaving generous
+// headroom under the plan's real ceiling for the Render dashboard's SQL
+// shell, one-off scripts, and future growth -- the goal is a burst
+// degrading as request queuing, not maxing out the plan the moment this
+// ships.
 export const pool = new Pool({
   connectionString: databaseUrl,
   connectionTimeoutMillis: 10_000,
+  max: 20,
   ssl: shouldEnforceSsl ? { rejectUnauthorized: false } : undefined,
 });
 // pg emits 'error' on an idle client that drops (e.g. the DB restarting) --
