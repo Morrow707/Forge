@@ -69,6 +69,29 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         call.resolve(["log": diagLogBuffer])
     }
 
+    // Fires every second while the session is running, logging what the physical camera is
+    // actually doing right now -- lens focus position (0=closest, 1=infinity), whether AF/AE/AWB
+    // are actively hunting or have settled, ISO, exposure duration, zoom. The one-shot
+    // start-of-session log lines (activeFormat, focus mode) only ever say what was REQUESTED;
+    // this is the only way to see whether the lens actually moved/settled somewhere reasonable
+    // afterward, or is stuck -- exactly the "is it really stuck at macro" question no static log
+    // line can answer. Started right after session.startRunning() resolves, invalidated in stop().
+    private var telemetryTimer: Timer?
+    private func startTelemetryTimer(for device: AVCaptureDevice) {
+        telemetryTimer?.invalidate()
+        telemetryTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            guard let self = self else { return }
+            let lensPos = String(format: "%.2f", device.lensPosition)
+            let iso = String(format: "%.0f", device.iso)
+            let expMs = String(format: "%.1f", CMTimeGetSeconds(device.exposureDuration) * 1000)
+            self.logDiag(
+                "cam: lens=\(lensPos) iso=\(iso) exp=\(expMs)ms zoom=\(String(format: "%.2f", device.videoZoomFactor)) "
+                    + "adjustingFocus=\(device.isAdjustingFocus) adjustingExposure=\(device.isAdjustingExposure) "
+                    + "adjustingWB=\(device.isAdjustingWhiteBalance)"
+            )
+        }
+    }
+
     private var session: AVCaptureSession?
     private var previewLayerView: UIView?
     private var previewLayer: AVCaptureVideoPreviewLayer?
@@ -286,6 +309,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                 session.startRunning()
                 DispatchQueue.main.async {
                     self.logDiag("session.startRunning() returned, resolving")
+                    self.startTelemetryTimer(for: captureDevice)
                     call.resolve()
                 }
             }
@@ -301,6 +325,8 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
 
     @objc func stop(_ call: CAPPluginCall) {
         DispatchQueue.main.async {
+            self.telemetryTimer?.invalidate()
+            self.telemetryTimer = nil
             if let movieOutput = self.movieOutput, movieOutput.isRecording {
                 movieOutput.stopRecording()
             }
@@ -420,6 +446,9 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                 session.commitConfiguration()
                 self.applyHighestFrameRate(to: newDevice)
                 self.applyContinuousFocusAndExposure(to: newDevice)
+                // The running timer closes over the old device -- restart it against newDevice
+                // or the telemetry log would keep reporting the lens we just switched away from.
+                self.startTelemetryTimer(for: newDevice)
                 self.logDiag("switched lens to \(self.lensId(for: newDevice.deviceType))")
                 call.resolve()
             } catch {
