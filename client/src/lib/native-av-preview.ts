@@ -49,6 +49,7 @@ interface AvBodyTrackingPlugin {
     trackedFrameCount: number;
     elapsedSeconds: number;
   }>;
+  cancelAnalysis(): Promise<void>;
   getDiagnosticLog(): Promise<{ log: string[] }>;
   addListener(
     eventName: "sessionError",
@@ -163,6 +164,17 @@ export async function analyzeAvRecording(
   sampleEveryNthFrame?: number,
 ): Promise<{ frameCount: number; trackedFrameCount: number; elapsedSeconds: number }> {
   return AvBodyTracking.analyzeRecording({ path, sampleEveryNthFrame });
+}
+
+// Real native cancellation of an in-progress analyzeAvRecording call -- see
+// AvBodyTrackingPlugin.swift's own cancelAnalysis comment on why this has to reach the
+// native side rather than just being a client-side "stop showing the spinner": without it,
+// Vision keeps processing every remaining frame on the native side regardless, burning
+// battery/CPU for a result nothing will use. The pending analyzeAvRecording() promise
+// rejects once the native loop actually stops, same as any other failure -- callers should
+// expect that rejection, not treat it as a bug.
+export async function cancelAvAnalysis(): Promise<void> {
+  await AvBodyTracking.cancelAnalysis();
 }
 
 export function onAvPoseFrame(callback: (frame: PoseFrame) => void): () => void {

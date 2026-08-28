@@ -52,6 +52,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         CAPPluginMethod(name: "stopRecording", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "deleteRecording", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "analyzeRecording", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "cancelAnalysis", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getDiagnosticLog", returnType: CAPPluginReturnPromise)
     ]
 
@@ -84,6 +85,12 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
     // with (or block) camera setup.
     private static let analysisQueue = DispatchQueue(label: "com.forge.avbodytracking.analysis")
     private var analysisBackgroundTaskID: UIBackgroundTaskIdentifier = .invalid
+    // Checked once per frame inside runPoseAnalysis's while loop -- real cancellation, not
+    // just the JS side hiding its own spinner while the native loop keeps running to
+    // completion regardless. Reset at the start of every new analyzeRecording call so a
+    // stale cancellation from a previous (already-finished) analysis can't immediately
+    // abort the next one.
+    private var analysisCancelled = false
 
     // The public, documented Vision joint names this plugin reports -- unlike ARKit's own
     // joint-name strings (which needed on-device discovery to nail down, per
@@ -597,9 +604,21 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         let sampleEveryNthFrame = max(1, call.getInt("sampleEveryNthFrame") ?? 1)
         let url = URL(fileURLWithPath: pathString)
         logDiag("analyzeRecording() called for \(url.lastPathComponent), sampleEveryNthFrame=\(sampleEveryNthFrame)")
+        analysisCancelled = false
         Self.analysisQueue.async {
             self.runPoseAnalysis(url: url, sampleEveryNthFrame: sampleEveryNthFrame, call: call)
         }
+    }
+
+    // A slow take on an older device is exactly the case Phase 1's own record-first design
+    // was meant to protect against thermally, but nothing protected the athlete/coach from
+    // just having to wait on a stuck-feeling analysis with no way out -- this gives them one.
+    // Only flips the flag; runPoseAnalysis's own loop is what actually stops, on its next
+    // iteration, wherever it happens to be.
+    @objc func cancelAnalysis(_ call: CAPPluginCall) {
+        analysisCancelled = true
+        logDiag("cancelAnalysis() called")
+        call.resolve()
     }
 
     // Runs on Self.analysisQueue, NOT the main thread -- AVAssetReader's copyNextSampleBuffer
@@ -658,6 +677,12 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         let startTime = Date()
 
         while reader.status == .reading {
+            if analysisCancelled {
+                reader.cancelReading()
+                logDiag("analyzeRecording cancelled after \(processedCount) frames")
+                DispatchQueue.main.async { call.reject("Analysis cancelled") }
+                return
+            }
             guard let sampleBuffer = trackOutput.copyNextSampleBuffer() else { break }
             let thisFrameIndex = frameIndex
             frameIndex += 1

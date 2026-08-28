@@ -540,6 +540,38 @@ export function computeReferenceObjectScale(measuredPixelSize: number, knownReal
   return knownRealSizeM / measuredPixelSize;
 }
 
+// Not enough samples to trust a correction -- same "don't apply a bad multiplier with false
+// confidence" bar the ARKit-era height correction (MIN/MAX_PLAUSIBLE_SCALE_CORRECTION above)
+// already established as a working precedent for this app, applied to the units-crossing
+// case instead of the near-1.0-nudge case.
+export const MIN_CALIBRATION_SAMPLES = 5;
+
+// Shared by every AV-pipeline tracker dialog that needs metric calibration (Jump, Mechanics,
+// Swing today) -- was duplicated near-identically across all three before this: walks every
+// tracked frame's raw (pixel-space) worldLandmarks, tracks vertical sign per-frame the same
+// way live ARKit tracking does (worldVerticalSign can return null on a single noisy frame;
+// falls back to the last known-good sign rather than defaulting to a guess), and returns the
+// median of every valid computePixelToMeterScale sample. Consolidated here so a fix to this
+// logic (or the sample-count bar) lands in one place, not three separately-drifting copies.
+export function calibrateFromFrames(
+  frames: { worldLandmarks: Landmark[] }[],
+  heightIn: number | null | undefined,
+): number | null {
+  if (!heightIn || heightIn <= 0) return null;
+  let lastSign: 1 | -1 = 1;
+  const samples: number[] = [];
+  for (const f of frames) {
+    const sign: 1 | -1 = worldVerticalSign(f.worldLandmarks) ?? lastSign;
+    lastSign = sign;
+    const candidate = computePixelToMeterScale(f.worldLandmarks, sign, heightIn);
+    if (candidate != null) samples.push(candidate);
+  }
+  if (samples.length < MIN_CALIBRATION_SAMPLES) return null;
+  const sorted = [...samples].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+}
+
 // Enough coverage from head to ankle that the wrist/ankle point the tracker
 // actually follows is reliably readable through a full rep -- deliberately
 // not every one of the 33 landmarks (a foot slightly out of frame shouldn't
