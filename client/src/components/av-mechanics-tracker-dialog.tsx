@@ -11,23 +11,10 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
-import {
-  isAvPreviewPlatform,
-  isAvBodyTrackingSupported,
-  startAvPreview,
-  stopAvPreview,
-  updateAvPreviewRect,
-  startAvRecording,
-  stopAvRecording,
-  deleteAvRecording,
-  analyzeAvRecording,
-  onAvPoseFrame,
-  onAvSessionError,
-  pollAvDiagnosticLog,
-  setAvCameraActive,
-} from "@/lib/native-av-preview";
+import { isAvPreviewPlatform } from "@/lib/native-av-preview";
+import { useAvBodyTracking } from "@/lib/use-av-body-tracking";
 import { visionJointsToWorldLandmarks } from "@/lib/vision-body-landmarks";
-import { computePixelToMeterScale, scaleWorldLandmarks, worldVerticalSign } from "@/lib/pose-tracking";
+import { calibrateFromFrames, scaleWorldLandmarks } from "@/lib/pose-tracking";
 import {
   analyzeMechanics,
   detectMechanicsFaults,
@@ -43,20 +30,13 @@ import {
   type SkillFaultThresholds,
 } from "@shared/skill-fault-thresholds";
 import { toast } from "sonner";
-import { AlertTriangle, Play, Square, RotateCcw, Check, Activity } from "lucide-react";
+import { AlertTriangle, Play, Square, RotateCcw, Check, Activity, XCircle } from "lucide-react";
 import { SuggestedCorrective } from "@/components/suggested-corrective";
 import { videoFilenameForBlob } from "@/lib/video-recording";
 
 type Step = "warning" | "capture" | "analyzing" | "review";
 
 const MIN_TRACKED_FRAMES = 6;
-const MIN_CALIBRATION_SAMPLES = 5;
-
-function medianOf(values: number[]): number {
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
-}
 
 /** AVFoundation + Vision twin of ar-mechanics-tracker-dialog.tsx (which stays completely
  * untouched, per the plan's staged-rollout scope) -- the third real tracker on the new
@@ -77,7 +57,12 @@ function medianOf(values: number[]): number {
  * scale-dependent, and those three specifically get nulled out (not silently reported as
  * meaningless pixel-derived numbers) whenever this take couldn't calibrate, rather than
  * discarding the whole capture the way av-jump-tracker-dialog.tsx has to (jump's entire value
- * is a scale-dependent height number; mechanics has a much richer scale-invariant core). */
+ * is a scale-dependent height number; mechanics has a much richer scale-invariant core).
+ *
+ * Camera/recording/analysis plumbing comes from useAvBodyTracking (shared with every other AV
+ * tracker dialog) -- what's left here is purely mechanics-specific: the camera-angle warning
+ * step, the too-short-capture gate, calibration application, analyzeMechanics, and the
+ * review/save flow. */
 export function AvMechanicsTrackerDialog({
   open,
   onOpenChange,
@@ -100,11 +85,7 @@ export function AvMechanicsTrackerDialog({
   skillProgramExerciseId: number;
 }) {
   const qc = useQueryClient();
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  const rawFramesRef = useRef<{ t: number; worldLandmarks: Landmark[] }[]>([]);
   const recordedBlobRef = useRef<Blob | null>(null);
-  const recordingPathRef = useRef<string | null>(null);
 
   const stepRef = useRef<Step>("warning");
   const [step, setStepState] = useState<Step>("warning");
@@ -113,12 +94,6 @@ export function AvMechanicsTrackerDialog({
     setStepState(next);
   }
   const [cameraAngle, setCameraAngle] = useState<MechanicsCameraAngle | null>(null);
-  const [recording, setRecording] = useState(false);
-  const [supported, setSupported] = useState<boolean | null>(null);
-  const [supportError, setSupportError] = useState<string | undefined>(undefined);
-  const [diagLog, setDiagLog] = useState<string[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [analyzedFrames, setAnalyzedFrames] = useState(0);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [result, setResult] = useState<MechanicsResult | null>(null);
   const [uncalibrated, setUncalibrated] = useState(false);
@@ -126,6 +101,21 @@ export function AvMechanicsTrackerDialog({
   const [saving, setSaving] = useState(false);
   const [saveClipForCoach, setSaveClipForCoach] = useState(false);
   const [favoriteClip, setFavoriteClip] = useState(false);
+
+  const {
+    containerRef,
+    supported,
+    supportError,
+    error,
+    setError,
+    diagLog,
+    recording,
+    analyzing,
+    analyzedFrames,
+    startRecording,
+    stopRecordingAndAnalyze,
+    cancelAnalysis,
+  } = useAvBodyTracking(open && step === "capture");
 
   const { data: thresholds } = useQuery<SkillFaultThresholds>({
     queryKey: ["/api/athlete/skill-fault-thresholds", skillAssignmentId],
@@ -137,7 +127,6 @@ export function AvMechanicsTrackerDialog({
     if (!open) return;
     changeStep("warning");
     setCameraAngle(null);
-    setRecording(false);
     if (videoUrl) URL.revokeObjectURL(videoUrl);
     setVideoUrl(null);
     setResult(null);
@@ -145,149 +134,34 @@ export function AvMechanicsTrackerDialog({
     setFaults([]);
     setSaveClipForCoach(false);
     setFavoriteClip(false);
-    setError(null);
-    setDiagLog([]);
-    setAnalyzedFrames(0);
-    rawFramesRef.current = [];
     recordedBlobRef.current = null;
-    isAvBodyTrackingSupported().then(({ supported: isSupported, error: supportErr }) => {
-      setSupported(isSupported);
-      setSupportError(supportErr);
-    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  useEffect(() => {
-    if (!open || step !== "capture") {
-      setAvCameraActive(false);
-      void stopAvPreview();
-      return;
-    }
-    let cancelled = false;
-    let rafId: number | null = null;
-    let started = false;
-    let waitFrames = 0;
-    const MAX_WAIT_FRAMES = 180;
-
-    function onResize() {
-      const r = containerRef.current?.getBoundingClientRect();
-      if (r) void updateAvPreviewRect(r);
-    }
-
-    function tryStart() {
-      if (cancelled) return;
-      const rect = containerRef.current?.getBoundingClientRect();
-      if (!rect || (rect.width === 0 && rect.height === 0)) {
-        waitFrames++;
-        if (waitFrames > MAX_WAIT_FRAMES) return;
-        rafId = requestAnimationFrame(tryStart);
-        return;
-      }
-      started = true;
-      setAvCameraActive(true);
-      startAvPreview(rect).catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Could not start camera");
-      });
-      window.addEventListener("resize", onResize);
-    }
-
-    tryStart();
-    return () => {
-      cancelled = true;
-      if (rafId != null) cancelAnimationFrame(rafId);
-      window.removeEventListener("resize", onResize);
-      if (started) {
-        setAvCameraActive(false);
-        void stopAvPreview();
-      }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, step]);
-
-  useEffect(() => {
-    if (!open) return;
-    return onAvSessionError(setError);
-  }, [open]);
-
-  useEffect(() => {
-    if (!open || step !== "capture") return;
-    return pollAvDiagnosticLog(setDiagLog);
-  }, [open, step]);
-
-  useEffect(() => {
-    return () => {
-      if (recordingPathRef.current) void deleteAvRecording(recordingPathRef.current);
-    };
-  }, []);
-
-  function startRecording() {
-    rawFramesRef.current = [];
-    setRecording(true);
-    setError(null);
-    startAvRecording().catch((err) => {
-      setError(err instanceof Error ? err.message : "Recording failed to start");
-      setRecording(false);
-    });
-  }
-
-  async function stopRecordingAndAnalyze() {
-    setRecording(false);
+  async function handleStop() {
     changeStep("analyzing");
-    setAnalyzedFrames(0);
-
-    let blob: Blob;
-    let path: string;
-    try {
-      ({ blob, path } = await stopAvRecording());
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't save the recording");
+    const result = await stopRecordingAndAnalyze();
+    if (!result) {
+      // Error/cancellation already reported by the hook -- back to capture so the coach can
+      // just try again rather than getting stuck on a dead-end step.
       changeStep("capture");
       return;
     }
-    recordedBlobRef.current = blob;
-    recordingPathRef.current = path;
-
-    const unsubscribe = onAvPoseFrame((frame) => {
-      if (!frame.tracked) return;
-      rawFramesRef.current.push({ t: frame.timestamp * 1000, worldLandmarks: visionJointsToWorldLandmarks(frame) });
-      setAnalyzedFrames((n) => n + 1);
-    });
-    try {
-      await analyzeAvRecording(path);
-    } catch (err) {
-      unsubscribe();
-      setError(err instanceof Error ? err.message : "Analysis failed");
-      changeStep("capture");
-      void deleteAvRecording(path);
-      recordingPathRef.current = null;
-      return;
-    }
-    unsubscribe();
-    void deleteAvRecording(path);
-    recordingPathRef.current = null;
-
-    finishCapture(blob);
+    finishCapture(
+      result.blob,
+      result.rawFrames.map((f) => ({ t: f.timestamp * 1000, worldLandmarks: visionJointsToWorldLandmarks(f) })),
+    );
   }
 
-  function finishCapture(blob: Blob) {
-    if (rawFramesRef.current.length < MIN_TRACKED_FRAMES) {
+  function finishCapture(blob: Blob, rawFrames: { t: number; worldLandmarks: Landmark[] }[]) {
+    if (rawFrames.length < MIN_TRACKED_FRAMES) {
       toast.error("That capture was too short to analyze -- try again with the full motion in frame.");
       changeStep("capture");
       return;
     }
 
-    let lastSign: 1 | -1 = 1;
-    const scaleSamples: number[] = [];
-    for (const f of rawFramesRef.current) {
-      const sign: 1 | -1 = worldVerticalSign(f.worldLandmarks) ?? lastSign;
-      lastSign = sign;
-      if (!heightIn) continue;
-      const candidate = computePixelToMeterScale(f.worldLandmarks, sign, heightIn);
-      if (candidate != null) scaleSamples.push(candidate);
-    }
-    const scaleFactor = scaleSamples.length >= MIN_CALIBRATION_SAMPLES ? medianOf(scaleSamples) : null;
-
-    const frames: MechanicsFrame[] = rawFramesRef.current.map((f) => ({
+    const scaleFactor = calibrateFromFrames(rawFrames, heightIn);
+    const frames: MechanicsFrame[] = rawFrames.map((f) => ({
       t: f.t,
       worldLandmarks: scaleFactor != null ? scaleWorldLandmarks(f.worldLandmarks, scaleFactor) : f.worldLandmarks,
     }));
@@ -319,7 +193,6 @@ export function AvMechanicsTrackerDialog({
     setSaveClipForCoach(false);
     setFavoriteClip(false);
     setError(null);
-    rawFramesRef.current = [];
     recordedBlobRef.current = null;
     changeStep("capture");
   }
@@ -456,6 +329,10 @@ export function AvMechanicsTrackerDialog({
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/60">
                   <div className="h-8 w-8 animate-spin rounded-full border-2 border-teal-400 border-t-transparent" />
                   <p className="text-sm text-white">Analyzing -- {analyzedFrames} frames processed…</p>
+                  <Button variant="outline" size="sm" onClick={cancelAnalysis}>
+                    <XCircle className="h-4 w-4" />
+                    Cancel
+                  </Button>
                 </div>
               )}
             </div>
@@ -474,7 +351,7 @@ export function AvMechanicsTrackerDialog({
                 </Button>
               )}
               {step === "capture" && recording && (
-                <Button variant="secondary" onClick={stopRecordingAndAnalyze}>
+                <Button variant="secondary" onClick={handleStop}>
                   <Square className="h-4 w-4" />
                   Stop
                 </Button>

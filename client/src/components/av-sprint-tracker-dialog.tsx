@@ -14,21 +14,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { apiRequest, getJson } from "@/lib/queryClient";
 import { POSE_LANDMARKS, type PoseFrame } from "@/lib/pose-tracking";
-import {
-  isAvBodyTrackingSupported,
-  startAvPreview,
-  stopAvPreview,
-  updateAvPreviewRect,
-  startAvRecording,
-  stopAvRecording,
-  deleteAvRecording,
-  analyzeAvRecording,
-  onAvPoseFrame,
-  onAvSessionError,
-  pollAvDiagnosticLog,
-  setAvCameraActive,
-  type PoseFrame as NativePoseFrame,
-} from "@/lib/native-av-preview";
+import { type PoseFrame as NativePoseFrame } from "@/lib/native-av-preview";
+import { useAvBodyTracking } from "@/lib/use-av-body-tracking";
 import { visionJointsToWorldLandmarks } from "@/lib/vision-body-landmarks";
 import {
   detectSprintCrossings,
@@ -50,7 +37,7 @@ import { RadioChipGroup } from "@/components/filter-chip-group";
 import { DEFAULT_SKILL_FAULT_THRESHOLDS, type SkillFaultThresholds } from "@shared/skill-fault-thresholds";
 import type { NormalizedLandmark } from "@mediapipe/tasks-vision";
 import { toast } from "sonner";
-import { AlertTriangle, Play, Square, RotateCcw, Check, Timer, Trophy, X, Flag } from "lucide-react";
+import { AlertTriangle, Play, Square, RotateCcw, Check, Timer, Trophy, X, Flag, XCircle } from "lucide-react";
 import { SuggestedCorrective } from "@/components/suggested-corrective";
 import { videoFilenameForBlob } from "@/lib/video-recording";
 import { burnTrackingOverlay, type OverlayRepMarker } from "@/lib/video-overlay";
@@ -138,7 +125,12 @@ function buildManualResult(startTime: number, finishTime: number, checkpoints: S
  * once against the complete set of frames. If that auto-detection comes back low-confidence or
  * empty (occlusion, a bad angle, Vision losing the hip mid-run), the "manual" step lets the
  * coach scrub the recorded clip and drop Start/Finish pins by hand instead -- a real combine
- * test can't walk away with no number just because tracking glitched once. */
+ * test can't walk away with no number just because tracking glitched once.
+ *
+ * Camera/recording/analysis plumbing comes from useAvBodyTracking (shared with every other AV
+ * tracker dialog) -- what's left here is purely sprint-specific: the checkpoint-tap
+ * calibration UI, the MAX_RECORDING_MS safety timeout, checkpoint-crossing detection, the
+ * manual scrub-and-pin fallback, and the review/save flow. */
 export function AvSprintTrackerDialog({
   open,
   onOpenChange,
@@ -155,7 +147,6 @@ export function AvSprintTrackerDialog({
   skillProgramExerciseId: number;
 }) {
   const qc = useQueryClient();
-  const containerRef = useRef<HTMLDivElement>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const reviewVideoRef = useRef<HTMLVideoElement>(null);
   const manualVideoRef = useRef<HTMLVideoElement>(null);
@@ -164,7 +155,6 @@ export function AvSprintTrackerDialog({
   const framesRef = useRef<PoseFrame[]>([]);
   const stepRef = useRef<Step>("warning");
   const recordedBlobRef = useRef<Blob | null>(null);
-  const recordingPathRef = useRef<string | null>(null);
   const recordingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const manualStartRef = useRef<number | null>(null);
 
@@ -174,11 +164,6 @@ export function AvSprintTrackerDialog({
     setStepState(next);
   }
   const [cameraAngle, setCameraAngle] = useState<SprintCameraAngle | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [supported, setSupported] = useState<boolean | null>(null);
-  const [supportError, setSupportError] = useState<string | undefined>(undefined);
-  const [diagLog, setDiagLog] = useState<string[]>([]);
-  const [recording, setRecording] = useState(false);
   const [checkpointCount, setCheckpointCount] = useState(0);
   const [presetId, setPresetId] = useState("40yd");
   const preset: SprintPreset = SPRINT_PRESETS.find((p) => p.id === presetId) ?? SPRINT_PRESETS[2];
@@ -191,8 +176,22 @@ export function AvSprintTrackerDialog({
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [saveClipForCoach, setSaveClipForCoach] = useState(false);
   const [favoriteClip, setFavoriteClip] = useState(false);
-  const [analyzedFrames, setAnalyzedFrames] = useState(0);
   const [manualStartTime, setManualStartTime] = useState<number | null>(null);
+
+  const {
+    containerRef,
+    supported,
+    supportError,
+    error,
+    setError,
+    diagLog,
+    recording,
+    analyzedFrames,
+    startRecording,
+    cancelRecording,
+    stopRecordingAndAnalyze,
+    cancelAnalysis,
+  } = useAvBodyTracking(open && (step === "calibrate" || step === "capture"));
 
   const { data: thresholds } = useQuery<SkillFaultThresholds>({
     queryKey: ["/api/athlete/skill-fault-thresholds", skillAssignmentId],
@@ -218,79 +217,10 @@ export function AvSprintTrackerDialog({
     setVideoUrl(null);
     setSaveClipForCoach(false);
     recordedBlobRef.current = null;
-    setDiagLog([]);
-    setAnalyzedFrames(0);
     manualStartRef.current = null;
     setManualStartTime(null);
-    isAvBodyTrackingSupported().then(({ supported: isSupported, error: supportErr }) => {
-      setSupported(isSupported);
-      setSupportError(supportErr);
-    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
-
-  // Camera only needs to be live for calibrate/capture -- unlike the ARKit
-  // version there's nothing for it to do during analyzing/manual/review
-  // (Vision runs offline against the recorded clip, not against a live
-  // feed), so it's released the moment capture ends instead of staying
-  // bound for the rest of the dialog's lifetime.
-  useEffect(() => {
-    if (!open || (step !== "calibrate" && step !== "capture")) {
-      setAvCameraActive(false);
-      void stopAvPreview();
-      return;
-    }
-    let cancelled = false;
-    let rafId: number | null = null;
-    let started = false;
-    let waitFrames = 0;
-    const MAX_WAIT_FRAMES = 180;
-
-    function onResize() {
-      const r = containerRef.current?.getBoundingClientRect();
-      if (r) void updateAvPreviewRect(r);
-      redrawCheckpointOverlay();
-    }
-
-    function tryStart() {
-      if (cancelled) return;
-      const rect = containerRef.current?.getBoundingClientRect();
-      if (!rect || (rect.width === 0 && rect.height === 0)) {
-        waitFrames++;
-        if (waitFrames > MAX_WAIT_FRAMES) return;
-        rafId = requestAnimationFrame(tryStart);
-        return;
-      }
-      started = true;
-      setAvCameraActive(true);
-      startAvPreview(rect).catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Could not start camera");
-      });
-      window.addEventListener("resize", onResize);
-    }
-
-    tryStart();
-    return () => {
-      cancelled = true;
-      if (rafId != null) cancelAnimationFrame(rafId);
-      window.removeEventListener("resize", onResize);
-      if (started) {
-        setAvCameraActive(false);
-        void stopAvPreview();
-      }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, step]);
-
-  useEffect(() => {
-    if (!open) return;
-    return onAvSessionError(setError);
-  }, [open]);
-
-  useEffect(() => {
-    if (!open || (step !== "calibrate" && step !== "capture")) return;
-    return pollAvDiagnosticLog(setDiagLog);
-  }, [open, step]);
 
   useEffect(() => {
     redrawCheckpointOverlay();
@@ -300,7 +230,6 @@ export function AvSprintTrackerDialog({
   useEffect(() => {
     return () => {
       if (recordingTimeoutRef.current) clearTimeout(recordingTimeoutRef.current);
-      if (recordingPathRef.current) void deleteAvRecording(recordingPathRef.current);
     };
   }, []);
 
@@ -352,14 +281,8 @@ export function AvSprintTrackerDialog({
   }
 
   function startCapture() {
-    setError(null);
     changeStep("capture");
-    setRecording(true);
-    startAvRecording().catch((err) => {
-      setError(err instanceof Error ? err.message : "Could not start recording");
-      changeStep("calibrate");
-      setRecording(false);
-    });
+    startRecording();
     recordingTimeoutRef.current = setTimeout(() => {
       if (stepRef.current === "capture") void stopCaptureAndAnalyze();
     }, MAX_RECORDING_MS);
@@ -367,56 +290,41 @@ export function AvSprintTrackerDialog({
 
   function cancelCapture() {
     if (recordingTimeoutRef.current) clearTimeout(recordingTimeoutRef.current);
-    setRecording(false);
-    stopAvRecording()
-      .then(({ path }) => deleteAvRecording(path))
-      .catch(() => {});
+    void cancelRecording();
     changeStep("calibrate");
   }
 
   async function stopCaptureAndAnalyze() {
     if (recordingTimeoutRef.current) clearTimeout(recordingTimeoutRef.current);
-    setRecording(false);
     changeStep("analyzing");
-    setAnalyzedFrames(0);
-    pointsRef.current = [];
-    framesRef.current = [];
-
-    let blob: Blob;
-    let path: string;
-    try {
-      ({ blob, path } = await stopAvRecording());
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Recording failed");
+    const result = await stopRecordingAndAnalyze();
+    if (!result) {
+      // Error/cancellation already reported by the hook -- back to calibrate so the coach can
+      // just try again rather than getting stuck on a dead-end step.
       changeStep("calibrate");
       return;
     }
+    finishCapture(result.blob, result.rawFrames);
+  }
+
+  function finishCapture(blob: Blob, rawFrames: NativePoseFrame[]) {
     recordedBlobRef.current = blob;
-    recordingPathRef.current = path;
     if (videoUrl) URL.revokeObjectURL(videoUrl);
     setVideoUrl(URL.createObjectURL(blob));
 
-    const unsubscribe = onAvPoseFrame((frame) => {
-      if (!frame.tracked) return;
+    pointsRef.current = [];
+    framesRef.current = [];
+    for (const frame of rawFrames) {
       const elapsedMs = frame.timestamp * 1000;
       const hipLandmarks = sparseHipLandmarksFromVisionFrame(frame);
       const ref = deriveSprintReferencePoint(hipLandmarks);
       if (ref) pointsRef.current.push({ t: elapsedMs, x: ref.x });
-      framesRef.current.push({ t: elapsedMs, landmarks: hipLandmarks, worldLandmarks: visionJointsToWorldLandmarks(frame) });
-      setAnalyzedFrames((n) => n + 1);
-    });
-
-    try {
-      await analyzeAvRecording(path);
-    } catch (err) {
-      unsubscribe();
-      setError(err instanceof Error ? err.message : "Analysis failed");
-      changeStep("calibrate");
-      return;
+      framesRef.current.push({
+        t: elapsedMs,
+        landmarks: hipLandmarks,
+        worldLandmarks: visionJointsToWorldLandmarks(frame),
+      });
     }
-    unsubscribe();
-    void deleteAvRecording(path);
-    recordingPathRef.current = null;
 
     const checkpoints = buildCheckpoints();
     const crossing = checkpoints ? detectSprintCrossings(pointsRef.current, { checkpoints }) : null;
@@ -462,15 +370,6 @@ export function AvSprintTrackerDialog({
 
   function retry() {
     if (recordingTimeoutRef.current) clearTimeout(recordingTimeoutRef.current);
-    if (stepRef.current === "capture") {
-      stopAvRecording()
-        .then(({ path }) => deleteAvRecording(path))
-        .catch(() => {});
-    }
-    if (recordingPathRef.current) {
-      void deleteAvRecording(recordingPathRef.current);
-      recordingPathRef.current = null;
-    }
     if (videoUrl) URL.revokeObjectURL(videoUrl);
     setVideoUrl(null);
     recordedBlobRef.current = null;
@@ -480,7 +379,7 @@ export function AvSprintTrackerDialog({
     setResult(null);
     setFaults([]);
     setSavedToProfile(false);
-    setRecording(false);
+    setError(null);
     manualStartRef.current = null;
     setManualStartTime(null);
     changeStep("calibrate");
@@ -637,7 +536,7 @@ export function AvSprintTrackerDialog({
                 className={cn("absolute inset-0 h-full w-full", step === "calibrate" && "cursor-crosshair")}
               />
 
-              {step === "capture" && (
+              {recording && (
                 <div className="absolute left-1/2 top-[max(0.75rem,env(safe-area-inset-top))] flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5 text-sm font-bold text-teal-400 backdrop-blur-sm">
                   Recording -- run the drill now, then tap Stop
                 </div>
@@ -749,6 +648,10 @@ export function AvSprintTrackerDialog({
             <p className="text-sm text-muted-foreground">
               Analyzing recording -- {analyzedFrames} frames processed so far…
             </p>
+            <Button variant="outline" size="sm" onClick={cancelAnalysis}>
+              <XCircle className="h-4 w-4" />
+              Cancel
+            </Button>
           </div>
         )}
 

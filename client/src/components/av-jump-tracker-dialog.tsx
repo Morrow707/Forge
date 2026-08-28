@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ApiError } from "@/lib/queryClient";
@@ -9,35 +9,20 @@ import {
   type VideoRecordContext,
 } from "@/lib/video-offline-store";
 import { toast } from "sonner";
-import { Circle, Square, AlertTriangle, X } from "lucide-react";
-import {
-  isAvBodyTrackingSupported,
-  startAvPreview,
-  stopAvPreview,
-  updateAvPreviewRect,
-  startAvRecording,
-  stopAvRecording,
-  deleteAvRecording,
-  analyzeAvRecording,
-  onAvPoseFrame,
-  onAvSessionError,
-  pollAvDiagnosticLog,
-  setAvCameraActive,
-} from "@/lib/native-av-preview";
+import { Circle, Square, X, XCircle, AlertTriangle } from "lucide-react";
+import { useAvBodyTracking } from "@/lib/use-av-body-tracking";
 import { visionJointsToWorldLandmarks } from "@/lib/vision-body-landmarks";
 import {
   deriveJumpPoint,
   detectFormFaults,
   computeLandingAsymmetry,
-  computePixelToMeterScale,
+  calibrateFromFrames,
   scaleWorldLandmarks,
-  worldVerticalSign,
   type PoseFrame,
   type FormFaultThresholds,
 } from "@/lib/pose-tracking";
 import { summarizeJumpSet, type JumpSetMetrics } from "@/lib/jump-tracking";
 import type { TrackedPoint } from "@/lib/bar-tracking";
-import type { Landmark } from "@mediapipe/tasks-vision";
 import { videoFilenameForBlob } from "@/lib/video-recording";
 
 /** AVFoundation + Vision jump tracking (vertical/broad/box) -- the second real tracker built
@@ -58,19 +43,11 @@ import { videoFilenameForBlob } from "@/lib/video-recording";
  * already has for its own different failure reason), rather than a number computed from
  * meaningless pixel units.
  *
- * Record-first, analyze-later like Sprint: the whole set gets recorded, then Vision runs
- * against the finished clip once Stop is tapped, and BOTH the trace AND the height-calibration
- * samples are built from that same complete set of frames in one pass afterward -- unlike the
- * ARKit version's continuous live sampling, calibration here can only happen post-hoc since
- * there's no live per-frame stream to sample from during capture. */
+ * Camera/recording/analysis plumbing comes from useAvBodyTracking (shared with every other AV
+ * tracker dialog) -- what's left here is purely jump-specific: the calibration application,
+ * summarizeJumpSet, and the save/upload flow. */
 
 const SHOW_DIAGNOSTIC_OVERLAY = false;
-
-function medianOf(values: number[]): number {
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
-}
 
 const EMPTY_JUMP_METRICS: JumpSetMetrics = {
   bestJumpHeightCm: 0,
@@ -81,8 +58,6 @@ const EMPTY_JUMP_METRICS: JumpSetMetrics = {
   pathTrace: [],
   formFaults: [],
 };
-
-const MIN_CALIBRATION_SAMPLES = 5;
 
 export function AvJumpTrackerDialog({
   open,
@@ -107,174 +82,38 @@ export function AvJumpTrackerDialog({
   formFaultThresholds?: Partial<Record<keyof FormFaultThresholds, number | null>> | null;
   jumpHeightOutlierPercent?: number | null;
 }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [recording, setRecording] = useState(false);
-  const [analyzing, setAnalyzing] = useState(false);
-  const [supported, setSupported] = useState<boolean | null>(null);
-  const [supportError, setSupportError] = useState<string | undefined>(undefined);
-  const [diagLog, setDiagLog] = useState<string[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [analyzedFrames, setAnalyzedFrames] = useState(0);
   const [saving, setSaving] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
 
-  // Raw, uncalibrated worldLandmarks straight off the bridge -- calibration
-  // needs the complete set before it can compute a scale factor, so these
-  // are only turned into a final trace/framesRef.current after
-  // analyzeAvRecording resolves, not as each poseFrame streams in.
-  const rawFramesRef = useRef<{ t: number; worldLandmarks: Landmark[] }[]>([]);
-  const traceRef = useRef<TrackedPoint[]>([]);
-  const framesRef = useRef<PoseFrame[]>([]);
-  const recordingPathRef = useRef<string | null>(null);
+  const {
+    containerRef,
+    supported,
+    supportError,
+    error,
+    setError,
+    diagLog,
+    recording,
+    analyzing,
+    analyzedFrames,
+    startRecording,
+    stopRecordingAndAnalyze,
+    cancelAnalysis,
+  } = useAvBodyTracking(open);
 
   useEffect(() => {
     if (!open) return;
-    setRecording(false);
-    setAnalyzing(false);
-    setError(null);
-    setDiagLog([]);
-    setAnalyzedFrames(0);
-    rawFramesRef.current = [];
-    traceRef.current = [];
-    framesRef.current = [];
-    isAvBodyTrackingSupported().then(({ supported: isSupported, error: supportErr }) => {
-      setSupported(isSupported);
-      setSupportError(supportErr);
-    });
+    setSaving(false);
+    setUploadProgress(0);
   }, [open]);
-
-  // Camera only needs to be live while framing/recording -- released the
-  // instant analysis starts, same reasoning as av-sprint-tracker-dialog.tsx.
-  useEffect(() => {
-    if (!open || analyzing) {
-      setAvCameraActive(false);
-      void stopAvPreview();
-      return;
-    }
-    let cancelled = false;
-    let rafId: number | null = null;
-    let started = false;
-    let waitFrames = 0;
-    const MAX_WAIT_FRAMES = 180;
-
-    function onResize() {
-      const r = containerRef.current?.getBoundingClientRect();
-      if (r) void updateAvPreviewRect(r);
-    }
-
-    function tryStart() {
-      if (cancelled) return;
-      const rect = containerRef.current?.getBoundingClientRect();
-      if (!rect || (rect.width === 0 && rect.height === 0)) {
-        waitFrames++;
-        if (waitFrames > MAX_WAIT_FRAMES) return;
-        rafId = requestAnimationFrame(tryStart);
-        return;
-      }
-      started = true;
-      setAvCameraActive(true);
-      startAvPreview(rect).catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Could not start camera");
-      });
-      window.addEventListener("resize", onResize);
-    }
-
-    tryStart();
-    return () => {
-      cancelled = true;
-      if (rafId != null) cancelAnimationFrame(rafId);
-      window.removeEventListener("resize", onResize);
-      if (started) {
-        setAvCameraActive(false);
-        void stopAvPreview();
-      }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, analyzing]);
-
-  useEffect(() => {
-    if (!open) return;
-    return onAvSessionError(setError);
-  }, [open]);
-
-  useEffect(() => {
-    if (!open || analyzing) return;
-    return pollAvDiagnosticLog(setDiagLog);
-  }, [open, analyzing]);
-
-  useEffect(() => {
-    return () => {
-      if (recordingPathRef.current) void deleteAvRecording(recordingPathRef.current);
-    };
-  }, []);
-
-  function startTracking() {
-    setError(null);
-    rawFramesRef.current = [];
-    traceRef.current = [];
-    framesRef.current = [];
-    setRecording(true);
-    startAvRecording().catch((err) => {
-      setError(err instanceof Error ? err.message : "Could not start recording");
-      setRecording(false);
-    });
-  }
 
   async function stopTracking() {
-    setRecording(false);
-    setAnalyzing(true);
-    setAnalyzedFrames(0);
-
-    let blob: Blob;
-    let path: string;
-    try {
-      ({ blob, path } = await stopAvRecording());
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Recording failed");
-      setAnalyzing(false);
-      return;
-    }
-    recordingPathRef.current = path;
-
-    const unsubscribe = onAvPoseFrame((frame) => {
-      if (!frame.tracked) return;
-      rawFramesRef.current.push({ t: frame.timestamp * 1000, worldLandmarks: visionJointsToWorldLandmarks(frame) });
-      setAnalyzedFrames((n) => n + 1);
-    });
-    try {
-      await analyzeAvRecording(path);
-    } catch (err) {
-      unsubscribe();
-      setError(err instanceof Error ? err.message : "Analysis failed");
-      setAnalyzing(false);
-      void deleteAvRecording(path);
-      recordingPathRef.current = null;
-      return;
-    }
-    unsubscribe();
-    void deleteAvRecording(path);
-    recordingPathRef.current = null;
-    setAnalyzing(false);
-
-    await finishWithRecording(blob);
+    const result = await stopRecordingAndAnalyze();
+    if (!result) return; // error/cancellation already reported by the hook
+    await finishWithRecording(result.blob, result.rawFrames.map((f) => ({ t: f.timestamp * 1000, worldLandmarks: visionJointsToWorldLandmarks(f) })));
   }
 
-  async function finishWithRecording(blob: Blob) {
-    // Calibration pass: one scale factor for the whole take, computed from
-    // every frame the athlete was roughly upright in (mid-jump/mid-squat
-    // frames naturally fail computePixelToMeterScale's own standing-span
-    // gate and don't contribute) -- see this file's own comment on why
-    // this can't happen live the way ARKit's continuous sampling does.
-    let lastSign: 1 | -1 = 1;
-    const scaleSamples: number[] = [];
-    for (const f of rawFramesRef.current) {
-      const sign: 1 | -1 = worldVerticalSign(f.worldLandmarks) ?? lastSign;
-      lastSign = sign;
-      if (!heightIn) continue;
-      const candidate = computePixelToMeterScale(f.worldLandmarks, sign, heightIn);
-      if (candidate != null) scaleSamples.push(candidate);
-    }
-    const scaleFactor = scaleSamples.length >= MIN_CALIBRATION_SAMPLES ? medianOf(scaleSamples) : null;
+  async function finishWithRecording(blob: Blob, rawFrames: { t: number; worldLandmarks: PoseFrame["worldLandmarks"] }[]) {
+    const scaleFactor = calibrateFromFrames(rawFrames, heightIn);
 
     if (scaleFactor == null) {
       // No number is better than a wrong one -- see this file's own comment
@@ -320,19 +159,19 @@ export function AvJumpTrackerDialog({
       return;
     }
 
-    framesRef.current = rawFramesRef.current.map((f) => ({
+    const frames: PoseFrame[] = rawFrames.map((f) => ({
       t: f.t,
       landmarks: [],
       worldLandmarks: scaleWorldLandmarks(f.worldLandmarks, scaleFactor),
     }));
-    traceRef.current = framesRef.current
+    const trace: TrackedPoint[] = frames
       .map((f) => {
         const point = deriveJumpPoint(f.worldLandmarks);
         return point ? { t: f.t, x: point.x, y: point.y, z: point.z } : null;
       })
       .filter((p): p is TrackedPoint => p != null);
 
-    const metrics = summarizeJumpSet(traceRef.current, heightIn, jumpHeightOutlierPercent ?? undefined);
+    const metrics = summarizeJumpSet(trace, heightIn, jumpHeightOutlierPercent ?? undefined);
     if (!metrics) {
       if (recordVideo) {
         setSaving(true);
@@ -371,7 +210,7 @@ export function AvJumpTrackerDialog({
     }
 
     metrics.formFaults = detectFormFaults(
-      framesRef.current,
+      frames,
       0,
       "jump",
       movementType,
@@ -382,7 +221,7 @@ export function AvJumpTrackerDialog({
       formFaultThresholds,
     );
     metrics.landingAsymmetry = computeLandingAsymmetry(
-      framesRef.current,
+      frames,
       metrics.repBreakdown.map((rep) => ({ landingT: rep.landingT })),
     );
 
@@ -458,6 +297,10 @@ export function AvJumpTrackerDialog({
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/60">
                 <div className="h-8 w-8 animate-spin rounded-full border-2 border-teal-400 border-t-transparent" />
                 <p className="text-sm text-white">Analyzing recording -- {analyzedFrames} frames processed…</p>
+                <Button variant="outline" size="sm" onClick={cancelAnalysis}>
+                  <XCircle className="h-4 w-4" />
+                  Cancel
+                </Button>
               </div>
             )}
 
@@ -488,7 +331,14 @@ export function AvJumpTrackerDialog({
 
           <div className="flex shrink-0 flex-wrap items-center justify-center gap-2 bg-black/70 px-3 py-4 backdrop-blur-sm">
             {!recording && !analyzing && (
-              <Button size="lg" onClick={startTracking} disabled={!supported || saving || !heightIn}>
+              <Button
+                size="lg"
+                onClick={() => {
+                  setError(null);
+                  startRecording();
+                }}
+                disabled={!supported || saving || !heightIn}
+              >
                 <Circle className="h-4 w-4 fill-current" />
                 Start Jump Set
               </Button>
