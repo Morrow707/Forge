@@ -478,6 +478,68 @@ export function scaleWorldLandmarks(worldLandmarks: Landmark[], factor: number):
   return worldLandmarks.map((lm) => ({ ...lm, x: lm.x * factor, y: lm.y * factor, z: lm.z * factor }));
 }
 
+// ---------- Vision pipeline calibration (units-crossing, not a nudge) ----------
+// computeHeightScaleCorrection above assumes worldLandmarks are ALREADY approximately
+// real-world meters (true for MediaPipe and ARKit alike) and just nudges that estimate
+// toward this specific athlete's proportions -- factor stays near 1.0, and anything outside
+// [0.85, 1.15] is rejected as noise rather than a genuine correction. Vision-sourced
+// worldLandmarks (see vision-body-landmarks.ts) are NOT in that position at all: Vision has
+// no depth information whatsoever, so its worldLandmarks-slot values are pixel-space (an
+// arbitrary unit with zero inherent relationship to meters) until calibrated for the first
+// time. Reusing computeHeightScaleCorrection as-is here would either be meaningless (its
+// hardcoded NOSE_TO_CROWN_M is a real-meters anthropometric constant, not a pixel-space one)
+// or would simply always return null (a pixel-space "height" of a few hundred/thousand units
+// vs. a real height in meters is nowhere near the plausibility band's near-1.0 window) --
+// this is a genuinely different calibration problem: bootstrapping meters-per-pixel-unit from
+// scratch, not nudging an existing metric estimate.
+
+// Same nose-to-ankle-span idea as computeImpliedStandingHeightM, but returns the RAW pixel-
+// space span with no anthropometric NOSE_TO_CROWN_M add-on -- that 0.12m constant is
+// real-meters-specific, and estimating its pixel-space equivalent would need a scale factor
+// this function's own job is to produce, a circular dependency not worth introducing for a
+// small, consistent underestimate of true standing height.
+function impliedStandingHeightPixels(worldLandmarks: Landmark[], verticalSign: 1 | -1): number | null {
+  const nose = worldLandmarks[POSE_LANDMARKS.NOSE];
+  const lAnkle = worldLandmarks[POSE_LANDMARKS.LEFT_ANKLE];
+  const rAnkle = worldLandmarks[POSE_LANDMARKS.RIGHT_ANKLE];
+  if (!visible(nose) || !visible(lAnkle) || !visible(rAnkle)) return null;
+  const ankleY = (lAnkle.y + rAnkle.y) / 2;
+  const span = verticalSign * (ankleY - nose.y);
+  return span > 0 ? span : null;
+}
+
+// First of Vision's two calibration mechanisms: the athlete's own known real height compared
+// against their implied height in the pipeline's pixel-space units, at the same "standing
+// fully visible" moment computeImpliedStandingHeightM's callers already sample from. Returns
+// meters-per-pixel-unit (feed straight into scaleWorldLandmarks, same application point every
+// other calibration mode already uses) -- not a near-1.0 nudge, so no plausibility band is
+// applied here the way computeHeightScaleCorrection's is; a wildly-off reading (a bad angle,
+// partial occlusion) shows up downstream as an implausible scaled metric instead, the same
+// "flag, don't silently reject" stance this app takes elsewhere (e.g. SprintResult's own
+// likelyGlitch) rather than a magic band tuned for a units problem this function doesn't have.
+export function computePixelToMeterScale(
+  worldLandmarks: Landmark[],
+  verticalSign: 1 | -1,
+  athleteHeightIn: number | null | undefined,
+): number | null {
+  if (!athleteHeightIn || athleteHeightIn <= 0) return null;
+  const impliedHeightPixels = impliedStandingHeightPixels(worldLandmarks, verticalSign);
+  if (impliedHeightPixels == null) return null;
+  const trueHeightM = athleteHeightIn * 0.0254;
+  return trueHeightM / impliedHeightPixels;
+}
+
+// Second calibration mechanism: a known-size reference object (a bumper plate, a regulation
+// ball) visible in frame, instead of the athlete's own height -- same units-crossing ratio,
+// given a measured pixel-space size (in this bridge's pixel-space units, whatever produced
+// it -- Vision object detection is a separate, later piece of work) and the object's real,
+// known size. Deliberately generic over what "size" means (a diameter, a side length) --
+// callers are responsible for measuring and supplying consistent units on both sides.
+export function computeReferenceObjectScale(measuredPixelSize: number, knownRealSizeM: number): number | null {
+  if (!(measuredPixelSize > 0) || !(knownRealSizeM > 0)) return null;
+  return knownRealSizeM / measuredPixelSize;
+}
+
 // Enough coverage from head to ankle that the wrist/ankle point the tracker
 // actually follows is reliably readable through a full rep -- deliberately
 // not every one of the 33 landmarks (a foot slightly out of frame shouldn't

@@ -22,6 +22,7 @@ import { useWakeLock } from "@/hooks/use-wake-lock";
 import { WorkoutCommentThread } from "@/components/workout-comment-thread";
 import { BarTrackerDialog } from "@/components/bar-tracker-dialog";
 import { ArJumpTrackerDialog } from "@/components/ar-jump-tracker-dialog";
+import { AvJumpTrackerDialog } from "@/components/av-jump-tracker-dialog";
 import { ArBarTrackerDialog } from "@/components/ar-bar-tracker-dialog";
 import { ArSwingTrackerDialog, type SwingSetMetrics } from "@/components/ar-swing-tracker-dialog";
 import { isArPreviewPlatform } from "@/lib/native-ar-preview";
@@ -2766,6 +2767,28 @@ function ExerciseLogContent({
                   setTrackingSet(null);
                 }}
                 onQueued={() => setTrackingSet(null)}
+              />
+            );
+          }
+
+          // Temporary admin-only branch for the AVFoundation + Vision pipeline that's
+          // replacing ARKit on iOS (see AvBodyTrackingPlugin.swift's file comment) --
+          // validation-only scaffolding, not the end state: the ARKit path below stays
+          // byte-for-byte untouched for every non-admin user until Phase 7's cutover
+          // go/no-go criteria are met, at which point this condition drops entirely.
+          if (isArPreviewPlatform() && user?.role === "admin" && item.trackingLevel === "jump") {
+            return (
+              <AvJumpTrackerDialog
+                open={trackingSet !== null}
+                onOpenChange={(open) => !open && setTrackingSet(null)}
+                heightIn={user?.heightIn}
+                movementType={item.movementType}
+                equipment={item.equipment}
+                recordVideo={mergedTracking}
+                onCapture={handleTrackerCapture}
+                videoContext={videoContextFor(trackingSet)}
+                formFaultThresholds={activeMovementProfile}
+                jumpHeightOutlierPercent={activeMovementProfile?.jumpHeightOutlierPercent}
               />
             );
           }
