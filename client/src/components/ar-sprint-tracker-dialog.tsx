@@ -513,7 +513,7 @@ export function ArSprintTrackerDialog({
         overlayClassName={showsCamera ? "bg-transparent backdrop-blur-none" : undefined}
         className={cn(
           showsCamera
-            ? "inset-0 top-0 left-0 h-screen w-screen max-w-none max-h-none translate-x-0 translate-y-0 gap-0 rounded-none border-0 bg-transparent p-0 overflow-hidden [&>button]:hidden"
+            ? "inset-0 top-0 left-0 h-screen w-screen max-w-none max-h-none translate-x-0 translate-y-0 gap-0 rounded-none border-0 bg-transparent backdrop-blur-none p-0 overflow-hidden [&>button]:hidden"
             : "max-w-lg",
         )}
       >
