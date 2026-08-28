@@ -672,6 +672,33 @@ export const CALIBRATION_REFERENCES: CalibrationReference[] = [
     nominalSizeM: 0.1778,
     toleranceM: 0.005,
   },
+  {
+    id: "large_med_ball_10_30lb",
+    label: "Med/slam ball, 10-30lb (large family)",
+    // Unlike med_ball_giant_20lb above (a direct tape measurement of one specific ball), this
+    // covers three unbranded slam balls (10lb, 15lb, 30lb) plus a Perform Better "PB Extreme"
+    // 20lb ball, estimated from tile-grid photos (25in puzzle-piece tiles, same floor as the
+    // baseball/golf-ball reference shots) rather than a tape reading directly against the ball
+    // -- a real but lower-precision method, so this carries a wider tolerance than the
+    // tape-measured entries elsewhere in this file. Confirmed directly: these balls are
+    // "roughly the same size" across that whole weight range -- weight comes from density, not
+    // a bigger ball, the same reasoning that makes a competition kettlebell's body diameter
+    // weight-invariant. Nominal sits near the middle of the individual tile-grid estimates
+    // (~8.5-11in across the four balls); tolerance is wide enough to cover that real spread
+    // honestly rather than claim a precision this method doesn't have.
+    nominalSizeM: 0.2413,
+    toleranceM: 0.0254,
+  },
+  {
+    id: "hard_med_ball_2lb",
+    label: "Hard med ball, 2lb",
+    // A distinctly different, much smaller class from the "large" family above -- a small,
+    // dense, low-weight training ball, not a scaled-down version of the same product.
+    // Tile-grid estimate only (no tape reading), same lower-confidence caveat as
+    // large_med_ball_10_30lb.
+    nominalSizeM: 0.1651,
+    toleranceM: 0.019,
+  },
 ];
 
 // Turns an uncertainty fraction into the same kind of plain-language note
