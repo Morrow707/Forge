@@ -57,6 +57,10 @@ export function useAvBodyTracking(active: boolean) {
   // cancelAnalysis() was called -- analyzeAvRecording's promise rejects either way (see its
   // own comment), and only the former should surface as an `error` state.
   const cancelledRef = useRef(false);
+  // See stopRecordingAndAnalyze's own comment -- true for the whole duration of one
+  // stop-and-analyze call, so a second call arriving while the first is still in flight is a
+  // safe no-op instead of racing the native plugin's own single-in-flight-recording state.
+  const stoppingRef = useRef(false);
 
   useEffect(() => {
     setError(null);
@@ -183,7 +187,25 @@ export function useAvBodyTracking(active: boolean) {
   // the time this resolves, for a real failure; a cancellation sets no error, since the
   // caller asked for it). Cleans up the native temp file itself once analysis finishes
   // either way, so callers never have to think about it.
+  //
+  // Guarded against a second concurrent call (stoppingRef) -- a real double-tap on the
+  // dialog's own Stop button, or a slow render leaving it tappable a moment longer than
+  // intended, was reaching AvBodyTrackingPlugin.swift's stopRecording() twice: the first
+  // call's native stopRecording() flips movieOutput.isRecording to false immediately (before
+  // the file's even finished writing), so a second call in flight at the same time hits that
+  // plugin's own "Not recording" guard and surfaces as a spurious error on what the athlete
+  // experienced as a single, ordinary tap.
   async function stopRecordingAndAnalyze(): Promise<{ blob: Blob; rawFrames: NativePoseFrame[] } | null> {
+    if (stoppingRef.current) return null;
+    stoppingRef.current = true;
+    try {
+      return await doStopRecordingAndAnalyze();
+    } finally {
+      stoppingRef.current = false;
+    }
+  }
+
+  async function doStopRecordingAndAnalyze(): Promise<{ blob: Blob; rawFrames: NativePoseFrame[] } | null> {
     setRecording(false);
     setAnalyzing(true);
     setAnalyzedFrames(0);

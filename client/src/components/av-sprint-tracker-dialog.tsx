@@ -538,7 +538,7 @@ export function AvSprintTrackerDialog({
 
               {recording && (
                 <div className="absolute left-1/2 top-[max(0.75rem,env(safe-area-inset-top))] flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5 text-sm font-bold text-teal-400 backdrop-blur-sm">
-                  Recording -- run the drill now, then tap Stop
+                  Recording
                 </div>
               )}
 

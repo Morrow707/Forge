@@ -338,7 +338,7 @@ export function AvMechanicsTrackerDialog({
             </div>
             <p className="text-sm text-muted-foreground">
               {recording
-                ? `Recording -- perform the full ${actionLabel.toLowerCase()}, then stop.`
+                ? "Recording"
                 : step === "analyzing"
                   ? "Hold on while the recording is analyzed…"
                   : `Get in frame, then start recording your ${actionLabel.toLowerCase()}.`}
