@@ -601,6 +601,23 @@ export const CALIBRATION_REFERENCES: CalibrationReference[] = [
     toleranceM: 0.006,
   },
   {
+    id: "tri_grip_plate_25_35lb",
+    label: "Tri-grip plate, 25-35lb (secondary set)",
+    // Doesn't need to know the exact weight loaded to be useful -- this is barbell PATH
+    // tracking, not weight identification, so a wide-but-real window across the family still
+    // narrows the plausible real-world scale far more than no reference at all (same reasoning
+    // as weighted_training_ball below). Two direct tape measurements from the same gym: 13in at
+    // 25lb, 14.5in at 35lb, with 14.75in confirmed as the hard boundary before it becomes a
+    // 45lb plate (see bumper_plate_perform_better's own comment on why this family scales with
+    // weight at all, unlike a true bumper). Nominal sits at the midpoint of that confirmed
+    // 13-14.75in span; deliberately does NOT extend to cover the 45lb plate, whose actual size
+    // was never measured, only bounded below. Labeled "secondary set" because this gym's tri-
+    // grip plates aren't used in unison with the primary Perform Better bumpers for tracked
+    // lifts -- only small metal change plates (5lb/2.5lb) are.
+    nominalSizeM: 0.3524,
+    toleranceM: 0.0222,
+  },
+  {
     id: "baseball_regulation",
     label: "Baseball (regulation)",
     // MLB/NCAA Official Baseball Rule 3.02 fixes circumference at 9-9.25in, which works out to
@@ -608,6 +625,31 @@ export const CALIBRATION_REFERENCES: CalibrationReference[] = [
     // is the legal spread itself (nominal at the range's midpoint) rather than an assumption.
     nominalSizeM: 0.0738,
     toleranceM: 0.001,
+  },
+  {
+    id: "softball_regulation",
+    label: "Softball (regulation, 12in)",
+    // ASA/USA Softball & NCAA rules fix a 12in (fast-pitch/slow-pitch standard) softball's
+    // circumference at 11.88-12.13in, which works out to ~96.1-98.1mm diameter -- same
+    // "tolerance is the legal range itself" approach as baseball_regulation above. An 11in
+    // softball also exists in some slow-pitch leagues (smaller, ~84-85mm) -- this entry is the
+    // more common 12in size; a coach who knows it's the 11in variant should measure directly.
+    nominalSizeM: 0.0971,
+    toleranceM: 0.001,
+  },
+  {
+    id: "weighted_training_ball",
+    label: "Weighted training ball (baseball-to-softball range)",
+    // For the weighted balls used in throwing drills (not a regulation game ball) -- these
+    // genuinely vary in size ball-to-ball, roughly baseball-sized up through softball-sized,
+    // with no single documented constant the way a regulation baseball or golf ball has. Rather
+    // than invent a fake-precise number for an object that legitimately has none, this spans
+    // the full baseball_regulation-to-softball_regulation range as one wide, honest confidence
+    // window: nominal at the range's own midpoint, tolerance at half its spread (~72.8mm to
+    // ~98.1mm across both entries' own sourced bounds -- see their own comments). A coach who
+    // knows the specific ball's actual diameter should still measure it directly instead.
+    nominalSizeM: 0.0855,
+    toleranceM: 0.0127,
   },
   {
     id: "golf_ball_regulation",
