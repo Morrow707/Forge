@@ -30,6 +30,8 @@ type ProvisionalPreview = {
   needsGuardianEmail: boolean;
   needsSport: boolean;
   needsPosition: boolean;
+  needsHeight: boolean;
+  needsWeight: boolean;
 };
 
 /** Where a player-inflow-sheet claim code lands (see PlayerIntakeImportDialog
@@ -49,6 +51,8 @@ export default function ClaimPage() {
   const [guardianEmail, setGuardianEmail] = useState("");
   const [sport, setSport] = useState("");
   const [position, setPosition] = useState("");
+  const [heightIn, setHeightIn] = useState("");
+  const [bodyWeightLbs, setBodyWeightLbs] = useState("");
   const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   const { data: preview, isLoading: previewLoading, isError: previewError } = useQuery<ProvisionalPreview>({
@@ -65,6 +69,8 @@ export default function ClaimPage() {
         guardianEmail: guardianEmail.trim() || undefined,
         sport: sport || undefined,
         position: position.trim() || undefined,
+        heightIn: heightIn ? Number(heightIn) : undefined,
+        bodyWeightLbs: bodyWeightLbs ? Number(bodyWeightLbs) : undefined,
         agreedToTerms: true,
       });
       return (await res.json()) as PublicUser & { nativeToken?: string };
@@ -172,6 +178,46 @@ export default function ClaimPage() {
                 />
               </div>
             )}
+            {(preview?.needsHeight || preview?.needsWeight) && (
+              <div className="grid grid-cols-2 gap-3">
+                {preview?.needsHeight && (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="claim-height">Height (inches)</Label>
+                    <Input
+                      id="claim-height"
+                      type="number"
+                      inputMode="numeric"
+                      required
+                      min={1}
+                      max={120}
+                      value={heightIn}
+                      onChange={(e) => setHeightIn(e.target.value)}
+                      placeholder="e.g. 72"
+                    />
+                  </div>
+                )}
+                {preview?.needsWeight && (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="claim-weight">Weight (lbs)</Label>
+                    <Input
+                      id="claim-weight"
+                      type="number"
+                      inputMode="decimal"
+                      required
+                      min={1}
+                      max={1500}
+                      value={bodyWeightLbs}
+                      onChange={(e) => setBodyWeightLbs(e.target.value)}
+                      placeholder="e.g. 165"
+                    />
+                  </div>
+                )}
+                <p className="col-span-2 text-xs text-muted-foreground">
+                  Required for camera tracking -- your height is how the app converts what it sees
+                  into real distances and speeds.
+                </p>
+              </div>
+            )}
             {(preview?.needsDateOfBirth || preview?.needsGuardianEmail) && (
               <div className="space-y-1.5">
                 <Label htmlFor="claim-guardian-email">Parent/guardian email</Label>
@@ -211,7 +257,9 @@ export default function ClaimPage() {
                 !agreedToTerms ||
                 claimMutation.isPending ||
                 (!!preview?.needsSport && !sport) ||
-                (!!preview?.needsPosition && !position.trim())
+                (!!preview?.needsPosition && !position.trim()) ||
+                (!!preview?.needsHeight && !heightIn.trim()) ||
+                (!!preview?.needsWeight && !bodyWeightLbs.trim())
               }
             >
               {claimMutation.isPending ? "Creating account..." : "Create Account"}

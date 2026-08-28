@@ -62,6 +62,12 @@ export default function SignupPage() {
   // lock someone out of their own free content.
   const [sport, setSport] = useState("");
   const [position, setPosition] = useState("");
+  // Required for athletes -- camera calibration hard-requires a real height (see
+  // pose-tracking.ts's calibrateFromFrames); an account with none on file silently produces no
+  // tracked numbers from any camera mode. Same "raw inches, not a feet/inches picker" convention
+  // profile-fields-form.tsx already uses for editing this later.
+  const [heightIn, setHeightIn] = useState("");
+  const [bodyWeightLbs, setBodyWeightLbs] = useState("");
 
   // Looks up whichever coach/team invite code is currently typed in so
   // the page can re-skin itself before an account even exists -- the
@@ -135,6 +141,8 @@ export default function SignupPage() {
       guardianEmail: isMinorAthlete ? guardianEmail.trim() || undefined : undefined,
       sport: role === "athlete" ? sport : undefined,
       position: role === "athlete" ? position.trim() : undefined,
+      heightIn: role === "athlete" && heightIn ? Number(heightIn) : undefined,
+      bodyWeightLbs: role === "athlete" && bodyWeightLbs ? Number(bodyWeightLbs) : undefined,
       agreedToTerms: true,
     });
   }
@@ -309,6 +317,42 @@ export default function SignupPage() {
                   />
                 </div>
               )}
+              {role === "athlete" && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="heightIn">Height (inches)</Label>
+                    <Input
+                      id="heightIn"
+                      type="number"
+                      inputMode="numeric"
+                      required
+                      min={1}
+                      max={120}
+                      value={heightIn}
+                      onChange={(e) => setHeightIn(e.target.value)}
+                      placeholder="e.g. 72"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="bodyWeightLbs">Weight (lbs)</Label>
+                    <Input
+                      id="bodyWeightLbs"
+                      type="number"
+                      inputMode="decimal"
+                      required
+                      min={1}
+                      max={1500}
+                      value={bodyWeightLbs}
+                      onChange={(e) => setBodyWeightLbs(e.target.value)}
+                      placeholder="e.g. 165"
+                    />
+                  </div>
+                  <p className="col-span-2 text-xs text-muted-foreground">
+                    Required for camera tracking -- your height is how the app converts what it
+                    sees into real distances and speeds.
+                  </p>
+                </div>
+              )}
               <div className="space-y-1.5">
                 <Label htmlFor="phone">Phone number (optional)</Label>
                 <Input
@@ -358,7 +402,8 @@ export default function SignupPage() {
                   signupMutation.isPending ||
                   !agreedToTerms ||
                   (isMinorAthlete && !guardianEmail.trim()) ||
-                  (role === "athlete" && (!sport || !position.trim()))
+                  (role === "athlete" && (!sport || !position.trim())) ||
+                  (role === "athlete" && (!heightIn.trim() || !bodyWeightLbs.trim()))
                 }
               >
                 {signupMutation.isPending ? "Creating account…" : "Create Account"}

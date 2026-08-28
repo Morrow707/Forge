@@ -18,6 +18,8 @@ type SignupPayload = {
   guardianEmail?: string;
   sport?: string;
   position?: string;
+  heightIn?: number;
+  bodyWeightLbs?: number;
   agreedToTerms: true;
 };
 

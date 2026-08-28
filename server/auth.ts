@@ -362,8 +362,20 @@ export function setupAuth(app: Express) {
       if (!parsed.success) {
         return res.status(400).json({ message: parsed.error.issues[0]?.message });
       }
-      const { email, password, name, role, coachCode, phone, dateOfBirth, guardianEmail, sport, position } =
-        parsed.data;
+      const {
+        email,
+        password,
+        name,
+        role,
+        coachCode,
+        phone,
+        dateOfBirth,
+        guardianEmail,
+        sport,
+        position,
+        heightIn,
+        bodyWeightLbs,
+      } = parsed.data;
       const existing = await storage.getUserByEmail(email);
       if (existing) {
         return res.status(409).json({ message: "Email already in use" });
@@ -374,6 +386,13 @@ export function setupAuth(app: Express) {
       // guardianEmail below, since the schema alone can't see role.
       if (role === "athlete" && (!sport || !position)) {
         return res.status(400).json({ message: "Sport and position are required." });
+      }
+
+      // Same "required by the route, not the schema" posture as sport/position above -- height
+      // is what camera calibration hard-requires (see pose-tracking.ts's calibrateFromFrames),
+      // and an account with none on file silently produces no tracked numbers from any mode.
+      if (role === "athlete" && (!heightIn || !bodyWeightLbs)) {
+        return res.status(400).json({ message: "Height and weight are required." });
       }
 
       // Tier 1 (under 13) athletes can't self-register at all -- see
@@ -435,6 +454,8 @@ export function setupAuth(app: Express) {
         dateOfBirth,
         sport: role === "athlete" ? sport : null,
         position: role === "athlete" ? position : null,
+        heightIn: role === "athlete" ? heightIn : null,
+        bodyWeightLbs: role === "athlete" ? bodyWeightLbs : null,
         // Snapshotted once, here, at creation -- see users.signupSport's
         // own comment for why this never gets touched again even if the
         // athlete's `sport` profile field changes later.
@@ -535,6 +556,8 @@ export function setupAuth(app: Express) {
       needsGuardianEmail,
       needsSport: !provisional.sport,
       needsPosition: !provisional.position,
+      needsHeight: !provisional.heightIn,
+      needsWeight: !provisional.bodyWeightLbs,
     });
   });
 

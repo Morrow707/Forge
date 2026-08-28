@@ -18371,6 +18371,15 @@ ${catalog}`;
     if (!sport || !position) {
       return { error: "Sport and position are required to finish creating this account." as const };
     }
+    // Same "whichever of the two actually has one" pattern as sport/position above -- camera
+    // calibration hard-requires a real height (see pose-tracking.ts's calibrateFromFrames), so a
+    // coach-provisioned account with neither the intake sheet nor the claim form supplying one
+    // would silently produce no tracked numbers from any mode.
+    const heightIn = provisional.heightIn ?? input.heightIn;
+    const bodyWeightLbs = provisional.bodyWeightLbs ?? input.bodyWeightLbs;
+    if (!heightIn || !bodyWeightLbs) {
+      return { error: "Height and weight are required to finish creating this account." as const };
+    }
     const passwordHash = await hashPassword(input.password);
     const user = await this.createUser({
       email: input.email,
@@ -18399,8 +18408,8 @@ ${catalog}`;
       trackingOptOut: tier === "tier1_under13",
       age: provisional.age ?? undefined,
       gender: provisional.gender ?? undefined,
-      heightIn: provisional.heightIn ?? undefined,
-      bodyWeightLbs: provisional.bodyWeightLbs ?? undefined,
+      heightIn,
+      bodyWeightLbs,
       sport,
       position,
       signupSport: sport,

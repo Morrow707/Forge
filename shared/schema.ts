@@ -3050,6 +3050,10 @@ export const claimProvisionalAthleteSchema = z.object({
   // AND users.signupSport (see that column's own comment) once claimed.
   sport: z.string().trim().min(1).max(60).optional(),
   position: z.string().trim().min(1).max(60).optional(),
+  // Same "only required if the coach's intake didn't already capture one" pattern as sport/
+  // position above -- see provisionalAthletes.heightIn/bodyWeightLbs.
+  heightIn: z.number().int().min(1).max(120).optional(),
+  bodyWeightLbs: z.number().min(1).max(1500).optional(),
   agreedToTerms: z.literal(true, {
     errorMap: () => ({ message: "You must agree to the terms to create an account" }),
   }),
@@ -5246,6 +5250,12 @@ export const signupSchema = z.object({
   // reading this field later.
   sport: z.string().trim().min(1).max(60).optional(),
   position: z.string().trim().min(1).max(60).optional(),
+  // Same "required by the route, not here" posture as sport/position above -- only an athlete
+  // signup needs these, and the route is what knows role. Camera calibration hard-requires a
+  // real height (see pose-tracking.ts's calibrateFromFrames) -- without one on file, every
+  // tracked mode silently produces nothing, which is exactly the gap this closes.
+  heightIn: z.number().int().min(1).max(120).optional(),
+  bodyWeightLbs: z.number().min(1).max(1500).optional(),
   agreedToTerms: z.literal(true, {
     errorMap: () => ({ message: "You must agree to the terms to create an account" }),
   }),
