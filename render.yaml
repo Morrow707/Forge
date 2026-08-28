@@ -117,4 +117,4 @@ services:
 
 databases:
   - name: forge-db
-    plan: free
+    plan: basic-1gb
