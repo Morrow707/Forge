@@ -54,6 +54,16 @@ export function AvDiagnosticOverlay({
   const platform = Capacitor.getPlatform();
   const isNative = Capacitor.isNativePlatform();
 
+  // startTelemetryTimer (AvBodyTrackingPlugin.swift) appends a fresh "cam: ..." line every
+  // second for as long as the session runs, on top of the one-time setup lines (activeFormat,
+  // focus mode, etc.) -- rendering every entry in diagLog verbatim meant this panel grew
+  // without bound the longer a dialog stayed open, eventually covering most of the camera
+  // preview in a wall of near-identical readings. The one-time lines are still worth keeping in
+  // full (that's the actual startup diagnosis); the live telemetry only needs its latest value.
+  const setupLines = diagLog.filter((line) => !line.startsWith("cam:"));
+  const camLines = diagLog.filter((line) => line.startsWith("cam:"));
+  const latestCamLine = camLines[camLines.length - 1];
+
   return (
     <div className="absolute left-3 right-16 top-[max(0.75rem,env(safe-area-inset-top))] z-10 select-text space-y-0.5 rounded-md bg-black/70 px-2 py-1.5 font-mono text-[9px] leading-tight text-white/80 backdrop-blur-sm">
       <div>
@@ -69,11 +79,12 @@ export function AvDiagnosticOverlay({
         </div>
       )}
       {supportError && <div className="text-destructive">supportError: {supportError}</div>}
-      {diagLog.map((line, i) => (
+      {setupLines.map((line, i) => (
         <div key={i} className="text-white/60">
           {line}
         </div>
       ))}
+      {latestCamLine && <div className="text-white/60">{latestCamLine}</div>}
     </div>
   );
 }

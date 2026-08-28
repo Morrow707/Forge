@@ -540,7 +540,6 @@ export function AvBarTrackerDialog({
               >
                 <Circle className="h-4 w-4 fill-current" />
                 Start Set
-                {targetReps ? ` (${targetReps} reps)` : ""}
               </Button>
             )}
             {recording && (
