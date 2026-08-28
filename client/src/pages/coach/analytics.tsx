@@ -152,6 +152,18 @@ type AnalyticsPoint = {
   }[] | null;
   formCheckVideoUrl: string | null;
   formCheckFlag: "best" | "worst" | null;
+  swingSeparationDeg: number | null;
+  swingTempoRatio: number | null;
+  swingBackswingMs: number | null;
+  swingDownswingMs: number | null;
+  swingHeadSwayCm: number | null;
+  medBallPeakSpeedMps: number | null;
+  medBallReleaseHeightCm: number | null;
+  kbSwingPeakSpeedMps: number | null;
+  kbSwingPeakHeightCm: number | null;
+  horizontalLoadElapsedSeconds: number | null;
+  horizontalLoadDistanceYards: number | null;
+  horizontalLoadAvgSpeedYardsPerSec: number | null;
 };
 
 const FAULT_NAMES: Record<string, string> = {
@@ -189,6 +201,11 @@ const CHART_OPTIONS = [
   { key: "path", label: "Bar Path Deviation" },
   { key: "jump", label: "Jump Height & Distance" },
   { key: "groundContact", label: "Ground Contact & RSI" },
+  { key: "swingMechanics", label: "Swing Separation & Head Sway" },
+  { key: "swingTempo", label: "Swing Tempo" },
+  { key: "medBall", label: "Med Ball Throw" },
+  { key: "kbSwing", label: "Kettlebell Swing" },
+  { key: "horizontalLoad", label: "Sled / Loaded Carry" },
   { key: "pathShape", label: "Bar Path Shape" },
   { key: "armSymmetry", label: "Arm Symmetry" },
   { key: "legAsymmetry", label: "Leg Drive Asymmetry" },
@@ -388,6 +405,65 @@ function average(values: (number | null | undefined)[]): number | null {
 
 type RepRow = NonNullable<AnalyticsPoint["repBreakdown"]>[number];
 
+/** A tracked set with no rep-by-rep velocity breakdown isn't necessarily
+ * untracked -- jump, swing, med-ball, kettlebell-swing, and sled/carry sets
+ * all report one best-of-set read per set rather than a per-rep trace (see
+ * each field's own comment in shared/schema.ts for why). Without this, the
+ * default By Date view would tell a coach a med-ball throw that tracked
+ * fine "wasn't camera-tracked" just because it has no repBreakdown rows. */
+function bestOfSetSummary(p: AnalyticsPoint, distanceUnit: DistanceUnit): { label: string; value: string }[] {
+  const items: { label: string; value: string }[] = [];
+  if (p.jumpHeightCm != null) {
+    items.push({ label: "Jump height", value: `${fmtNum(cmToDisplayUnit(p.jumpHeightCm, distanceUnit), 1)} ${distanceUnit}` });
+  }
+  if (p.jumpDistanceCm != null) {
+    items.push({ label: "Jump distance", value: `${fmtNum(cmToDisplayUnit(p.jumpDistanceCm, distanceUnit), 1)} ${distanceUnit}` });
+  }
+  if (p.groundContactSeconds != null) {
+    items.push({ label: "Ground contact", value: `${fmtNum(p.groundContactSeconds, 2)} s` });
+  }
+  if (p.reactiveStrengthIndex != null) {
+    items.push({ label: "RSI", value: fmtNum(p.reactiveStrengthIndex, 2) });
+  }
+  if (p.swingSeparationDeg != null) {
+    items.push({ label: "X-Factor (separation)", value: `${fmtNum(p.swingSeparationDeg, 0)}°` });
+  }
+  if (p.swingTempoRatio != null) {
+    items.push({ label: "Tempo ratio", value: `${fmtNum(p.swingTempoRatio, 1)}:1` });
+  }
+  if (p.swingBackswingMs != null || p.swingDownswingMs != null) {
+    items.push({
+      label: "Backswing / downswing",
+      value: `${p.swingBackswingMs ?? "-"} / ${p.swingDownswingMs ?? "-"} ms`,
+    });
+  }
+  if (p.swingHeadSwayCm != null) {
+    items.push({ label: "Head sway", value: `${fmtNum(cmToDisplayUnit(p.swingHeadSwayCm, distanceUnit), 1)} ${distanceUnit}` });
+  }
+  if (p.medBallPeakSpeedMps != null) {
+    items.push({ label: "Peak throw speed", value: `${fmtNum(p.medBallPeakSpeedMps, 2)} m/s` });
+  }
+  if (p.medBallReleaseHeightCm != null) {
+    items.push({ label: "Release height", value: `${fmtNum(cmToDisplayUnit(p.medBallReleaseHeightCm, distanceUnit), 1)} ${distanceUnit}` });
+  }
+  if (p.kbSwingPeakSpeedMps != null) {
+    items.push({ label: "Peak swing speed", value: `${fmtNum(p.kbSwingPeakSpeedMps, 2)} m/s` });
+  }
+  if (p.kbSwingPeakHeightCm != null) {
+    items.push({ label: "Peak swing height", value: `${fmtNum(cmToDisplayUnit(p.kbSwingPeakHeightCm, distanceUnit), 1)} ${distanceUnit}` });
+  }
+  if (p.horizontalLoadElapsedSeconds != null) {
+    items.push({ label: "Elapsed time", value: `${fmtNum(p.horizontalLoadElapsedSeconds, 2)} s` });
+  }
+  if (p.horizontalLoadDistanceYards != null) {
+    items.push({ label: "Distance", value: `${fmtNum(p.horizontalLoadDistanceYards, 1)} yd` });
+  }
+  if (p.horizontalLoadAvgSpeedYardsPerSec != null) {
+    items.push({ label: "Avg speed", value: `${fmtNum(p.horizontalLoadAvgSpeedYardsPerSec, 2)} yd/s` });
+  }
+  return items;
+}
+
 /** One set's per-rep breakdown, laid out like a VBT app's at-a-glance
  * summary (avg/peak velocity, ROM, avg/peak power, time-to-peak-velocity
  * per rep, plus an averaged row) rather than a line graph -- see
@@ -403,6 +479,7 @@ function SetRepTable({
 }) {
   const reps = p.repBreakdown;
   const romInUnit = (r: RepRow) => (r.romCm != null ? cmToDisplayUnit(r.romCm, distanceUnit) : null);
+  const summaryItems = bestOfSetSummary(p, distanceUnit);
 
   return (
     <Card>
@@ -444,7 +521,18 @@ function SetRepTable({
       </CardHeader>
       <CardContent className="overflow-x-auto">
         {!reps || reps.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Not camera-tracked -- no per-rep data.</p>
+          summaryItems.length > 0 ? (
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {summaryItems.map((item) => (
+                <div key={item.label} className="rounded-md border border-border p-2">
+                  <p className="text-[10px] uppercase text-muted-foreground">{item.label}</p>
+                  <p className="font-semibold">{item.value}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">Not camera-tracked -- no per-rep data.</p>
+          )
         ) : (
           <table className="w-full text-left text-sm">
             <thead>
@@ -684,6 +772,18 @@ export default function CoachAnalytics() {
       p.jumpDistanceCm != null
         ? Math.round(cmToDisplayUnit(p.jumpDistanceCm, distanceUnit) * 10) / 10
         : p.jumpDistanceCm,
+    swingHeadSwayCm:
+      p.swingHeadSwayCm != null
+        ? Math.round(cmToDisplayUnit(p.swingHeadSwayCm, distanceUnit) * 10) / 10
+        : p.swingHeadSwayCm,
+    medBallReleaseHeightCm:
+      p.medBallReleaseHeightCm != null
+        ? Math.round(cmToDisplayUnit(p.medBallReleaseHeightCm, distanceUnit) * 10) / 10
+        : p.medBallReleaseHeightCm,
+    kbSwingPeakHeightCm:
+      p.kbSwingPeakHeightCm != null
+        ? Math.round(cmToDisplayUnit(p.kbSwingPeakHeightCm, distanceUnit) * 10) / 10
+        : p.kbSwingPeakHeightCm,
   }));
 
   const hasNumericWeight = chartData.some((p) => p.weightMode === "numeric" && p.weight != null);
@@ -695,6 +795,21 @@ export default function CoachAnalytics() {
   const hasJumpHeight = chartData.some((p) => p.jumpHeightCm != null || p.jumpDistanceCm != null);
   const hasGroundContact = chartData.some(
     (p) => p.groundContactSeconds != null || p.reactiveStrengthIndex != null,
+  );
+  const hasSwingMechanics = chartData.some(
+    (p) => p.swingSeparationDeg != null || p.swingHeadSwayCm != null,
+  );
+  const hasSwingTempo = chartData.some(
+    (p) => p.swingBackswingMs != null || p.swingDownswingMs != null || p.swingTempoRatio != null,
+  );
+  const hasMedBall = chartData.some(
+    (p) => p.medBallPeakSpeedMps != null || p.medBallReleaseHeightCm != null,
+  );
+  const hasKbSwing = chartData.some(
+    (p) => p.kbSwingPeakSpeedMps != null || p.kbSwingPeakHeightCm != null,
+  );
+  const hasHorizontalLoad = chartData.some(
+    (p) => p.horizontalLoadAvgSpeedYardsPerSec != null || p.horizontalLoadElapsedSeconds != null,
   );
   // The actual x/y shape of the bar's path, not just the scalar deviation
   // number above -- capped to the 5 most recent tracked sets so overlaying
@@ -1450,6 +1565,242 @@ export default function CoachAnalytics() {
             </Card>
           )}
 
+          {hasSwingMechanics && !hiddenCharts.has("swingMechanics") && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Swing Separation &amp; Head Sway</CardTitle>
+                <CardDescription>
+                  Peak hip-shoulder separation ("X-Factor") and lateral head movement during the
+                  swing, per tracked set.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="h-56">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={chartData} margin={{ left: 4, right: 12 }}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                    <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                    <YAxis yAxisId="left" tick={{ fontSize: 11 }} width={40} unit="°" />
+                    <YAxis
+                      yAxisId="right"
+                      orientation="right"
+                      tick={{ fontSize: 11 }}
+                      width={40}
+                      unit={distanceUnit}
+                    />
+                    <Tooltip
+                      contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))" }}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <TrendSeries
+                      chartType={chartType}
+                      yAxisId="left"
+                      dataKey="swingSeparationDeg"
+                      name="Separation"
+                      color="hsl(var(--primary))"
+                    />
+                    <TrendSeries
+                      chartType={chartType}
+                      yAxisId="right"
+                      dataKey="swingHeadSwayCm"
+                      name="Head sway"
+                      color="#f59e0b"
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
+          {hasSwingTempo && !hiddenCharts.has("swingTempo") && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Swing Tempo</CardTitle>
+                <CardDescription>
+                  Backswing and downswing duration per tracked set -- the classic 3:1 tempo ratio
+                  is the usual coaching reference point.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="h-56">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={chartData} margin={{ left: 4, right: 12 }}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                    <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} width={40} unit="ms" />
+                    <Tooltip
+                      contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))" }}
+                      formatter={(value: unknown, name: unknown, item: any) => [
+                        `${value} ms${
+                          item?.payload?.swingTempoRatio != null
+                            ? ` (${item.payload.swingTempoRatio.toFixed(1)}:1)`
+                            : ""
+                        }`,
+                        String(name),
+                      ]}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <TrendSeries
+                      chartType={chartType}
+                      dataKey="swingBackswingMs"
+                      name="Backswing"
+                      color="hsl(var(--primary))"
+                    />
+                    <TrendSeries
+                      chartType={chartType}
+                      dataKey="swingDownswingMs"
+                      name="Downswing"
+                      color="#a855f7"
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
+          {hasMedBall && !hiddenCharts.has("medBall") && (
+            <Card>
+              <CardHeader className="flex flex-row items-start justify-between gap-2">
+                <div>
+                  <CardTitle>Med Ball Throw</CardTitle>
+                  <CardDescription>
+                    Peak ball speed and release height, per tracked throw.
+                  </CardDescription>
+                </div>
+                <DistanceUnitToggle />
+              </CardHeader>
+              <CardContent className="h-56">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={chartData} margin={{ left: 4, right: 12 }}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                    <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                    <YAxis yAxisId="left" tick={{ fontSize: 11 }} width={40} unit=" m/s" />
+                    <YAxis
+                      yAxisId="right"
+                      orientation="right"
+                      tick={{ fontSize: 11 }}
+                      width={40}
+                      unit={distanceUnit}
+                    />
+                    <Tooltip
+                      contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))" }}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <TrendSeries
+                      chartType={chartType}
+                      yAxisId="left"
+                      dataKey="medBallPeakSpeedMps"
+                      name="Peak speed"
+                      color="hsl(var(--primary))"
+                    />
+                    <TrendSeries
+                      chartType={chartType}
+                      yAxisId="right"
+                      dataKey="medBallReleaseHeightCm"
+                      name="Release height"
+                      color="#3b82f6"
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
+          {hasKbSwing && !hiddenCharts.has("kbSwing") && (
+            <Card>
+              <CardHeader className="flex flex-row items-start justify-between gap-2">
+                <div>
+                  <CardTitle>Kettlebell Swing</CardTitle>
+                  <CardDescription>
+                    Peak full-3D bell speed and peak swing height, per tracked set -- the arc
+                    pattern needs true speed magnitude, not just vertical velocity.
+                  </CardDescription>
+                </div>
+                <DistanceUnitToggle />
+              </CardHeader>
+              <CardContent className="h-56">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={chartData} margin={{ left: 4, right: 12 }}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                    <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                    <YAxis yAxisId="left" tick={{ fontSize: 11 }} width={40} unit=" m/s" />
+                    <YAxis
+                      yAxisId="right"
+                      orientation="right"
+                      tick={{ fontSize: 11 }}
+                      width={40}
+                      unit={distanceUnit}
+                    />
+                    <Tooltip
+                      contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))" }}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <TrendSeries
+                      chartType={chartType}
+                      yAxisId="left"
+                      dataKey="kbSwingPeakSpeedMps"
+                      name="Peak speed"
+                      color="hsl(var(--primary))"
+                    />
+                    <TrendSeries
+                      chartType={chartType}
+                      yAxisId="right"
+                      dataKey="kbSwingPeakHeightCm"
+                      name="Peak height"
+                      color="#3b82f6"
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
+          {hasHorizontalLoad && !hiddenCharts.has("horizontalLoad") && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Sled / Loaded Carry</CardTitle>
+                <CardDescription>
+                  Average speed and elapsed time crossing a known checkpoint distance, per tracked
+                  set.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="h-56">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={chartData} margin={{ left: 4, right: 12 }}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                    <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                    <YAxis yAxisId="left" tick={{ fontSize: 11 }} width={48} unit=" yd/s" />
+                    <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} width={40} unit="s" />
+                    <Tooltip
+                      contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))" }}
+                      formatter={(value: unknown, name: unknown, item: any) => [
+                        `${value}${
+                          item?.payload?.horizontalLoadDistanceYards != null
+                            ? ` (${item.payload.horizontalLoadDistanceYards} yd)`
+                            : ""
+                        }`,
+                        String(name),
+                      ]}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <TrendSeries
+                      chartType={chartType}
+                      yAxisId="left"
+                      dataKey="horizontalLoadAvgSpeedYardsPerSec"
+                      name="Avg speed"
+                      color="hsl(var(--primary))"
+                    />
+                    <TrendSeries
+                      chartType={chartType}
+                      yAxisId="right"
+                      dataKey="horizontalLoadElapsedSeconds"
+                      name="Elapsed time"
+                      color="#f59e0b"
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
           {pathTraceSets.length > 0 && !hiddenCharts.has("pathShape") && (
             <Card>
               <CardHeader>
@@ -1799,6 +2150,10 @@ export default function CoachAnalytics() {
                     <th className="py-1.5 pr-3">Power (W)</th>
                     <th className="py-1.5 pr-3">Path (cm)</th>
                     <th className="py-1.5 pr-3">Jump ({distanceUnit})</th>
+                    <th className="py-1.5 pr-3">Swing Sep (°)</th>
+                    <th className="py-1.5 pr-3">Med Ball (m/s)</th>
+                    <th className="py-1.5 pr-3">KB Swing (m/s)</th>
+                    <th className="py-1.5 pr-3">Sled (yd/s)</th>
                     <th className="py-1.5 pr-3">Flags</th>
                     <th className="py-1.5 pr-3">Video</th>
                     <th className="py-1.5">PR</th>
@@ -1825,6 +2180,10 @@ export default function CoachAnalytics() {
                       <td className="py-1.5 pr-3">{p.peakPowerWatts ?? "-"}</td>
                       <td className="py-1.5 pr-3">{p.barPathDeviationCm ?? "-"}</td>
                       <td className="py-1.5 pr-3">{p.jumpHeightCm ?? "-"}</td>
+                      <td className="py-1.5 pr-3">{p.swingSeparationDeg ?? "-"}</td>
+                      <td className="py-1.5 pr-3">{p.medBallPeakSpeedMps ?? "-"}</td>
+                      <td className="py-1.5 pr-3">{p.kbSwingPeakSpeedMps ?? "-"}</td>
+                      <td className="py-1.5 pr-3">{p.horizontalLoadAvgSpeedYardsPerSec ?? "-"}</td>
                       <td className="py-1.5 pr-3">
                         {p.formFaults && p.formFaults.length > 0 ? (
                           <button

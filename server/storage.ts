@@ -15551,6 +15551,18 @@ ${catalog}`;
         legDriveAsymmetry: workoutSetEntries.legDriveAsymmetry,
         armDriveAsymmetry: workoutSetEntries.armDriveAsymmetry,
         trustScores: workoutSetEntries.trustScores,
+        swingSeparationDeg: workoutSetEntries.swingSeparationDeg,
+        swingTempoRatio: workoutSetEntries.swingTempoRatio,
+        swingBackswingMs: workoutSetEntries.swingBackswingMs,
+        swingDownswingMs: workoutSetEntries.swingDownswingMs,
+        swingHeadSwayCm: workoutSetEntries.swingHeadSwayCm,
+        medBallPeakSpeedMps: workoutSetEntries.medBallPeakSpeedMps,
+        medBallReleaseHeightCm: workoutSetEntries.medBallReleaseHeightCm,
+        kbSwingPeakSpeedMps: workoutSetEntries.kbSwingPeakSpeedMps,
+        kbSwingPeakHeightCm: workoutSetEntries.kbSwingPeakHeightCm,
+        horizontalLoadElapsedSeconds: workoutSetEntries.horizontalLoadElapsedSeconds,
+        horizontalLoadDistanceYards: workoutSetEntries.horizontalLoadDistanceYards,
+        horizontalLoadAvgSpeedYardsPerSec: workoutSetEntries.horizontalLoadAvgSpeedYardsPerSec,
       })
       .from(workoutSetEntries)
       .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
@@ -15601,6 +15613,18 @@ ${catalog}`;
         legDriveAsymmetry: workoutSetEntries.legDriveAsymmetry,
         armDriveAsymmetry: workoutSetEntries.armDriveAsymmetry,
         trustScores: workoutSetEntries.trustScores,
+        swingSeparationDeg: workoutSetEntries.swingSeparationDeg,
+        swingTempoRatio: workoutSetEntries.swingTempoRatio,
+        swingBackswingMs: workoutSetEntries.swingBackswingMs,
+        swingDownswingMs: workoutSetEntries.swingDownswingMs,
+        swingHeadSwayCm: workoutSetEntries.swingHeadSwayCm,
+        medBallPeakSpeedMps: workoutSetEntries.medBallPeakSpeedMps,
+        medBallReleaseHeightCm: workoutSetEntries.medBallReleaseHeightCm,
+        kbSwingPeakSpeedMps: workoutSetEntries.kbSwingPeakSpeedMps,
+        kbSwingPeakHeightCm: workoutSetEntries.kbSwingPeakHeightCm,
+        horizontalLoadElapsedSeconds: workoutSetEntries.horizontalLoadElapsedSeconds,
+        horizontalLoadDistanceYards: workoutSetEntries.horizontalLoadDistanceYards,
+        horizontalLoadAvgSpeedYardsPerSec: workoutSetEntries.horizontalLoadAvgSpeedYardsPerSec,
       })
       .from(workoutSetEntries)
       .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
