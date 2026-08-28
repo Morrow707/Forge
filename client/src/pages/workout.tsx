@@ -26,6 +26,9 @@ import { AvBarTrackerDialog } from "@/components/av-bar-tracker-dialog";
 import { type SwingSetMetrics } from "@/components/ar-swing-tracker-dialog";
 import { AvSwingTrackerDialog } from "@/components/av-swing-tracker-dialog";
 import { AvMedballTrackerDialog, type MedballSetMetrics } from "@/components/av-medball-tracker-dialog";
+import { AvKbSwingTrackerDialog } from "@/components/av-kb-swing-tracker-dialog";
+import type { KbSwingSetMetrics } from "@/lib/kb-swing-tracking";
+import { AvHorizontalLoadTrackerDialog, type HorizontalLoadSetMetrics } from "@/components/av-horizontal-load-tracker-dialog";
 import { isArPreviewPlatform } from "@/lib/native-ar-preview";
 import { FormVideoRecorderDialog } from "@/components/form-video-recorder-dialog";
 import { SetVideoPreviewDialog, SetVideoCompareDialog } from "@/components/set-video-review";
@@ -189,7 +192,16 @@ type SetHistoryPoint = {
   rpe: number | null;
 };
 
-type TrackingLevel = "none" | "bar_path" | "full" | "jump" | "golf_swing" | "baseball_swing" | "med_ball";
+type TrackingLevel =
+  | "none"
+  | "bar_path"
+  | "full"
+  | "jump"
+  | "golf_swing"
+  | "baseball_swing"
+  | "med_ball"
+  | "kb_swing"
+  | "horizontal_load";
 
 type PrescribedExercise = {
   id: number;
@@ -324,6 +336,13 @@ type SetMetrics = {
   // "med_ball" tracking mode's numbers -- see av-medball-tracker-dialog.tsx.
   medBallPeakSpeedMps: number | null;
   medBallReleaseHeightCm: number | null;
+  // "kb_swing" tracking mode's numbers -- see kb-swing-tracking.ts.
+  kbSwingPeakSpeedMps: number | null;
+  kbSwingPeakHeightCm: number | null;
+  // "horizontal_load" tracking mode's numbers -- see av-horizontal-load-tracker-dialog.tsx.
+  horizontalLoadElapsedSeconds: number | null;
+  horizontalLoadDistanceYards: number | null;
+  horizontalLoadAvgSpeedYardsPerSec: number | null;
   // Per-rep left/right knee-drive comparison for bilateral lower-body lifts
   // -- see pose-tracking.ts's computeLegDriveAsymmetry. Null unless the
   // exercise's movementType/laterality made a same-rep comparison valid.
@@ -479,6 +498,11 @@ function buildItem(
       swingHeadSwayCm: existingSet?.swingHeadSwayCm ?? null,
       medBallPeakSpeedMps: existingSet?.medBallPeakSpeedMps ?? null,
       medBallReleaseHeightCm: existingSet?.medBallReleaseHeightCm ?? null,
+      kbSwingPeakSpeedMps: existingSet?.kbSwingPeakSpeedMps ?? null,
+      kbSwingPeakHeightCm: existingSet?.kbSwingPeakHeightCm ?? null,
+      horizontalLoadElapsedSeconds: existingSet?.horizontalLoadElapsedSeconds ?? null,
+      horizontalLoadDistanceYards: existingSet?.horizontalLoadDistanceYards ?? null,
+      horizontalLoadAvgSpeedYardsPerSec: existingSet?.horizontalLoadAvgSpeedYardsPerSec ?? null,
       legDriveAsymmetry: existingSet?.legDriveAsymmetry ?? null,
       armDriveAsymmetry: existingSet?.armDriveAsymmetry ?? null,
       trustScores: existingSet?.trustScores ?? null,
@@ -929,6 +953,11 @@ export function WorkoutPage({
           swingHeadSwayCm: s.swingHeadSwayCm,
           medBallPeakSpeedMps: s.medBallPeakSpeedMps,
           medBallReleaseHeightCm: s.medBallReleaseHeightCm,
+          kbSwingPeakSpeedMps: s.kbSwingPeakSpeedMps,
+          kbSwingPeakHeightCm: s.kbSwingPeakHeightCm,
+          horizontalLoadElapsedSeconds: s.horizontalLoadElapsedSeconds,
+          horizontalLoadDistanceYards: s.horizontalLoadDistanceYards,
+          horizontalLoadAvgSpeedYardsPerSec: s.horizontalLoadAvgSpeedYardsPerSec,
           legDriveAsymmetry: s.legDriveAsymmetry,
           armDriveAsymmetry: s.armDriveAsymmetry,
           trustScores: s.trustScores,
@@ -1422,6 +1451,11 @@ export function WorkoutPage({
               swingHeadSwayCm: null,
               medBallPeakSpeedMps: null,
               medBallReleaseHeightCm: null,
+              kbSwingPeakSpeedMps: null,
+              kbSwingPeakHeightCm: null,
+              horizontalLoadElapsedSeconds: null,
+              horizontalLoadDistanceYards: null,
+              horizontalLoadAvgSpeedYardsPerSec: null,
               legDriveAsymmetry: null,
               armDriveAsymmetry: null,
               trustScores: null,
@@ -2652,6 +2686,39 @@ function ExerciseLogContent({
                     )}
                   </div>
                 )}
+                {(set.kbSwingPeakSpeedMps != null || set.kbSwingPeakHeightCm != null) && (
+                  <div className="mt-1 flex flex-wrap items-center gap-1 pl-9 text-[9px] text-muted-foreground">
+                    <span className="font-semibold uppercase tracking-wide">Swing</span>
+                    {set.kbSwingPeakSpeedMps != null && (
+                      <span className="rounded bg-secondary px-1.5 py-0.5">
+                        Peak speed {set.kbSwingPeakSpeedMps} m/s
+                      </span>
+                    )}
+                    {set.kbSwingPeakHeightCm != null && (
+                      <span className="rounded bg-secondary px-1.5 py-0.5">
+                        Height {set.kbSwingPeakHeightCm}cm
+                      </span>
+                    )}
+                  </div>
+                )}
+                {set.horizontalLoadElapsedSeconds != null && (
+                  <div className="mt-1 flex flex-wrap items-center gap-1 pl-9 text-[9px] text-muted-foreground">
+                    <span className="font-semibold uppercase tracking-wide">Load</span>
+                    <span className="rounded bg-secondary px-1.5 py-0.5">
+                      {set.horizontalLoadElapsedSeconds}s
+                    </span>
+                    {set.horizontalLoadDistanceYards != null && (
+                      <span className="rounded bg-secondary px-1.5 py-0.5">
+                        {set.horizontalLoadDistanceYards}yd
+                      </span>
+                    )}
+                    {set.horizontalLoadAvgSpeedYardsPerSec != null && (
+                      <span className="rounded bg-secondary px-1.5 py-0.5">
+                        {set.horizontalLoadAvgSpeedYardsPerSec} yd/s
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })}
@@ -2786,6 +2853,89 @@ function ExerciseLogContent({
               if (videoCheckMode === "ai") aiFormCheckMutation.mutate({ setNumber: trackingSet, videoUrl });
               else postFormVideoMutation.mutate({ setNumber: trackingSet, videoUrl });
             }
+          }
+
+          // Separate from handleTrackerCapture above, same reasoning as handleSwingCapture --
+          // KbSwingSetMetrics doesn't fit the RepMetrics/JumpSetMetrics union either.
+          function handleKbSwingCapture(metrics: KbSwingSetMetrics, videoUrl?: string) {
+            if (trackingSet == null) return;
+            const videoPatch = videoUrl ? { formCheckVideoUrl: videoUrl } : {};
+            onUpdateSet(
+              trackingSet,
+              {
+                kbSwingPeakSpeedMps: metrics.peakSpeedMps,
+                kbSwingPeakHeightCm: metrics.peakHeightCm,
+                ...videoPatch,
+              },
+              { immediate: true },
+            );
+            if (videoUrl) {
+              if (videoCheckMode === "ai") aiFormCheckMutation.mutate({ setNumber: trackingSet, videoUrl });
+              else postFormVideoMutation.mutate({ setNumber: trackingSet, videoUrl });
+            }
+          }
+
+          function handleHorizontalLoadCapture(metrics: HorizontalLoadSetMetrics, videoUrl?: string) {
+            if (trackingSet == null) return;
+            const videoPatch = videoUrl ? { formCheckVideoUrl: videoUrl } : {};
+            onUpdateSet(
+              trackingSet,
+              {
+                horizontalLoadElapsedSeconds: metrics.elapsedSeconds,
+                horizontalLoadDistanceYards: metrics.distanceYards,
+                horizontalLoadAvgSpeedYardsPerSec: metrics.avgSpeedYardsPerSec,
+                ...videoPatch,
+              },
+              { immediate: true },
+            );
+            if (videoUrl) {
+              if (videoCheckMode === "ai") aiFormCheckMutation.mutate({ setNumber: trackingSet, videoUrl });
+              else postFormVideoMutation.mutate({ setNumber: trackingSet, videoUrl });
+            }
+          }
+
+          if (item.trackingLevel === "kb_swing" || item.trackingLevel === "horizontal_load") {
+            // AVFoundation + Vision pipeline only -- no ARKit equivalent was ever built for
+            // either of these (genuinely new "arc" and "horizontal-linear" trajectory patterns
+            // -- see trackingLevelEnum's own comment in shared/schema.ts). Android/web falls
+            // through to a plain video-only capture, same fallback pattern med_ball/golf/
+            // baseball swing already use for "no non-iOS pipeline exists yet."
+            if (isArPreviewPlatform()) {
+              if (item.trackingLevel === "kb_swing") {
+                return (
+                  <AvKbSwingTrackerDialog
+                    open={trackingSet !== null}
+                    onOpenChange={(open) => !open && setTrackingSet(null)}
+                    heightIn={user?.heightIn}
+                    recordVideo={mergedTracking}
+                    onCapture={handleKbSwingCapture}
+                    videoContext={videoContextFor(trackingSet)}
+                  />
+                );
+              }
+              return (
+                <AvHorizontalLoadTrackerDialog
+                  open={trackingSet !== null}
+                  onOpenChange={(open) => !open && setTrackingSet(null)}
+                  recordVideo={mergedTracking}
+                  onCapture={handleHorizontalLoadCapture}
+                  videoContext={videoContextFor(trackingSet)}
+                />
+              );
+            }
+            return (
+              <FormVideoRecorderDialog
+                open={trackingSet !== null}
+                onOpenChange={(open) => !open && setTrackingSet(null)}
+                videoContext={videoContextFor(trackingSet)}
+                onSaved={(url) => {
+                  if (trackingSet == null) return;
+                  onUpdateSet(trackingSet, { formCheckVideoUrl: url }, { immediate: true });
+                  setTrackingSet(null);
+                }}
+                onQueued={() => setTrackingSet(null)}
+              />
+            );
           }
 
           if (item.trackingLevel === "med_ball") {

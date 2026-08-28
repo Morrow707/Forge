@@ -71,6 +71,11 @@ ALTER TYPE "tracking_level" ADD VALUE IF NOT EXISTS 'baseball_swing';
 -- Strength-side med ball object tracking -- see the comment on
 -- trackingLevelEnum in shared/schema.ts.
 ALTER TYPE "tracking_level" ADD VALUE IF NOT EXISTS 'med_ball';
+-- Kettlebell swing (arc-pattern) and horizontal load (sled push/loaded
+-- carry) tracking -- see the comment on trackingLevelEnum in
+-- shared/schema.ts.
+ALTER TYPE "tracking_level" ADD VALUE IF NOT EXISTS 'kb_swing';
+ALTER TYPE "tracking_level" ADD VALUE IF NOT EXISTS 'horizontal_load';
 
 DO $$ BEGIN
   CREATE TYPE "health_status" AS ENUM ('healthy', 'hurt');
@@ -1788,6 +1793,17 @@ ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "swing_head_sway_cm" 
 -- medBallPeakSpeedMps/medBallReleaseHeightCm).
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "med_ball_peak_speed_mps" real;
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "med_ball_release_height_cm" real;
+
+-- Kettlebell swing tracking (shared/schema.ts workoutSetEntries's
+-- kbSwingPeakSpeedMps/kbSwingPeakHeightCm).
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "kb_swing_peak_speed_mps" real;
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "kb_swing_peak_height_cm" real;
+
+-- Horizontal load tracking -- sled push/pull, loaded carry (shared/schema.ts
+-- workoutSetEntries's horizontalLoadElapsedSeconds/DistanceYards/AvgSpeedYardsPerSec).
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "horizontal_load_elapsed_seconds" real;
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "horizontal_load_distance_yards" real;
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "horizontal_load_avg_speed_yards_per_sec" real;
 
 -- Billing framework -- see shared/schema.ts's own comment above the
 -- subscriptions table for why this exists with nothing wired to real

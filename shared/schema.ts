@@ -196,6 +196,24 @@ export const trackingLevelEnum = pgEnum("tracking_level", [
   // trace alone can't give. No ARKit equivalent was ever built for this --
   // see av-medball-tracker-dialog.tsx's own file comment.
   "med_ball",
+  // "kb_swing" and "horizontal_load" are the first two of a genuinely
+  // different kinematic family from bar_path/full/jump/med_ball above --
+  // those all assume the tracked point's intended path is a straight
+  // vertical line (see bar-tracking.ts's barPathDeviationCm/peakVelocityMps,
+  // both built around that assumption), which is exactly wrong for a
+  // kettlebell swing's forward-back arc or a sled push/loaded carry's
+  // straight-line horizontal travel. "kb_swing" tracks the wrist midpoint
+  // (a two-handed swing's grip sits directly on the bell, unlike a barbell
+  // held away from the body, so no separate implement tracker is needed)
+  // and reports peak/mean speed as full 3D magnitude, not the vertical-only
+  // formula everything else uses -- see kb-swing-tracking.ts. "horizontal_load"
+  // reuses sprint-tracking.ts's own checkpoint-crossing model unmodified
+  // (a sled push/loaded carry is "cover a known distance," the exact
+  // problem that file already solves) rather than bar-tracking.ts's
+  // continuous-position model, which was never built for open-ended
+  // horizontal travel.
+  "kb_swing",
+  "horizontal_load",
 ]);
 
 export const users = pgTable(
@@ -1933,6 +1951,24 @@ export const workoutSetEntries = pgTable(
   // when it wasn't.
   medBallPeakSpeedMps: real("med_ball_peak_speed_mps"),
   medBallReleaseHeightCm: real("med_ball_release_height_cm"),
+  // "kb_swing" tracking mode's numbers (see kb-swing-tracking.ts) -- null
+  // unless trackingLevel was "kb_swing" when this set was logged.
+  // Best-of-set peak, same "best rep, not an average" convention
+  // jumpHeightCm/medBallPeakSpeedMps already use. kbSwingPeakSpeedMps is
+  // full 3D speed magnitude, not the vertical-only formula every other
+  // tracked mode's velocity numbers use -- see trackingLevelEnum's own
+  // comment on why a swing's arc needs different math.
+  kbSwingPeakSpeedMps: real("kb_swing_peak_speed_mps"),
+  kbSwingPeakHeightCm: real("kb_swing_peak_height_cm"),
+  // "horizontal_load" tracking mode's numbers (sled push/pull, loaded
+  // carry -- see av-horizontal-load-tracker-dialog.tsx) -- null unless
+  // trackingLevel was "horizontal_load" when this set was logged. Same
+  // shape as skillSessionLogs' own sprint fields (elapsed/distance/speed)
+  // since this reuses sprint-tracking.ts's checkpoint-crossing model
+  // directly rather than a continuous-position trace.
+  horizontalLoadElapsedSeconds: real("horizontal_load_elapsed_seconds"),
+  horizontalLoadDistanceYards: real("horizontal_load_distance_yards"),
+  horizontalLoadAvgSpeedYardsPerSec: real("horizontal_load_avg_speed_yards_per_sec"),
   // Per-rep left/right knee-drive comparison for bilateral lower-body lifts
   // (see pose-tracking.ts's computeLegDriveAsymmetry) -- null unless the
   // exercise's movementType was "Squat" (or it was jump-tracked) and both
@@ -5510,7 +5546,9 @@ export const programExerciseInputSchema = z.object({
   notes: z.string().optional().nullable(),
   supersetGroup: z.string().optional().nullable(),
   restAfterGroupOnly: z.boolean().optional(),
-  trackingLevel: z.enum(["none", "bar_path", "full", "jump", "golf_swing", "baseball_swing", "med_ball"]).optional(),
+  trackingLevel: z
+    .enum(["none", "bar_path", "full", "jump", "golf_swing", "baseball_swing", "med_ball", "kb_swing", "horizontal_load"])
+    .optional(),
   videoCheckEnabled: z.boolean().optional(),
 });
 
@@ -5859,6 +5897,11 @@ export const setLogInputSchema = z.object({
   swingHeadSwayCm: z.number().optional().nullable(),
   medBallPeakSpeedMps: z.number().optional().nullable(),
   medBallReleaseHeightCm: z.number().optional().nullable(),
+  kbSwingPeakSpeedMps: z.number().optional().nullable(),
+  kbSwingPeakHeightCm: z.number().optional().nullable(),
+  horizontalLoadElapsedSeconds: z.number().optional().nullable(),
+  horizontalLoadDistanceYards: z.number().optional().nullable(),
+  horizontalLoadAvgSpeedYardsPerSec: z.number().optional().nullable(),
 });
 
 export const logEntryInputSchema = z

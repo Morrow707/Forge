@@ -811,7 +811,9 @@ type MergeableDay = {
       | "mechanics"
       | "golf_swing"
       | "baseball_swing"
-      | "med_ball";
+      | "med_ball"
+      | "kb_swing"
+      | "horizontal_load";
     videoCheckEnabled: boolean;
   }[];
 };
@@ -845,7 +847,9 @@ type WeekPatch = {
       | "mechanics"
       | "golf_swing"
       | "baseball_swing"
-      | "med_ball";
+      | "med_ball"
+      | "kb_swing"
+      | "horizontal_load";
       videoCheckEnabled?: boolean;
     }[];
   }[];
@@ -1219,7 +1223,9 @@ const programExerciseItemSchema = z.object({
   notes: z.string().optional(),
   supersetGroup: z.string().optional(),
   restAfterGroupOnly: z.boolean().optional(),
-  trackingLevel: z.enum(["none", "bar_path", "full", "jump", "golf_swing", "baseball_swing", "med_ball"]).optional(),
+  trackingLevel: z
+    .enum(["none", "bar_path", "full", "jump", "golf_swing", "baseball_swing", "med_ball", "kb_swing", "horizontal_load"])
+    .optional(),
   videoCheckEnabled: z.boolean().optional(),
 });
 
@@ -15193,6 +15199,11 @@ ${catalog}`;
                 swingHeadSwayCm: s.swingHeadSwayCm ?? null,
                 medBallPeakSpeedMps: s.medBallPeakSpeedMps ?? null,
                 medBallReleaseHeightCm: s.medBallReleaseHeightCm ?? null,
+                kbSwingPeakSpeedMps: s.kbSwingPeakSpeedMps ?? null,
+                kbSwingPeakHeightCm: s.kbSwingPeakHeightCm ?? null,
+                horizontalLoadElapsedSeconds: s.horizontalLoadElapsedSeconds ?? null,
+                horizontalLoadDistanceYards: s.horizontalLoadDistanceYards ?? null,
+                horizontalLoadAvgSpeedYardsPerSec: s.horizontalLoadAvgSpeedYardsPerSec ?? null,
               };
             }),
           );

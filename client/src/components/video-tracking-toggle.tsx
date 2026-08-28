@@ -1,7 +1,16 @@
 import { Video, VideoOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type TrackingLevel = "none" | "bar_path" | "full" | "jump" | "golf_swing" | "baseball_swing" | "med_ball";
+export type TrackingLevel =
+  | "none"
+  | "bar_path"
+  | "full"
+  | "jump"
+  | "golf_swing"
+  | "baseball_swing"
+  | "med_ball"
+  | "kb_swing"
+  | "horizontal_load";
 
 // Word-boundary, not substring -- "Baseball-Style Rotational Med Ball
 // Throw" shouldn't silently become a swing-tracked exercise just because
@@ -22,6 +31,16 @@ const BASEBALL_NAME_PATTERN = /\bbaseball\b/i;
 // it) -- name matching is the same lightweight approach already
 // established for golf/baseball, not a new category of guess.
 const MED_BALL_NAME_PATTERN = /\bmed(?:icine)?[\s-]?ball\b/i;
+// "Kettlebell Snatch"/"KB Clean" deliberately do NOT match -- those are vertical-linear,
+// ballistic movements (same category as a barbell clean/snatch), not the arc pattern a swing
+// needs. Only the word "swing" alongside kettlebell/KB should route here -- see
+// kb-swing-tracking.ts's own file comment for why the swing specifically needs different math
+// even though it's the same implement as a snatch/clean.
+const KB_SWING_NAME_PATTERN = /\b(?:kettlebell|kb)\s+swing\b/i;
+// Sled push/pull/drag and a farmer's/loaded carry are both "cover a known distance in a
+// straight line" -- the horizontal-linear pattern -- as opposed to an up-down rep like every
+// other tracked mode. See av-horizontal-load-tracker-dialog.tsx's own file comment.
+const HORIZONTAL_LOAD_NAME_PATTERN = /\b(?:sled (?:push|pull|drag)|farmer'?s?\s+(?:carry|walk)|loaded carry)\b/i;
 
 /** Coach-facing camera control for one program exercise. Used to be 5
  * separate controls (4 tracking-level buttons -- Off/Path/Full/Jump --
@@ -33,9 +52,11 @@ const MED_BALL_NAME_PATTERN = /\bmed(?:icine)?[\s-]?ball\b/i;
  * decisions. Collapsed to the one choice that actually matters -- camera
  * on or off -- with "on" auto-picking the right measurement pipeline:
  * jump tracking (ankle/vertical displacement) for a plyometric exercise,
- * med-ball object tracking for a med-ball-named throw, golf/baseball swing
- * tracking for a name matching that sport, full bar tracking for
- * everything else. A program exercise saved under
+ * kettlebell-swing arc tracking or horizontal-load checkpoint tracking for
+ * a name matching those patterns, med-ball object tracking for a
+ * med-ball-named throw, golf/baseball swing tracking for a name matching
+ * that sport, full bar tracking for everything else. A program exercise
+ * saved under
  * the old "bar_path"-only level before this change still works exactly as
  * before in the athlete's workout view -- it just now reads as "Video: On"
  * here rather than exposing that narrower option again.
@@ -63,13 +84,17 @@ export function VideoTrackingToggle({
   const onLevel: TrackingLevel =
     category === "plyometric"
       ? "jump"
-      : exerciseName && MED_BALL_NAME_PATTERN.test(exerciseName)
-        ? "med_ball"
-        : exerciseName && GOLF_NAME_PATTERN.test(exerciseName)
-          ? "golf_swing"
-          : exerciseName && BASEBALL_NAME_PATTERN.test(exerciseName)
-            ? "baseball_swing"
-            : "full";
+      : exerciseName && KB_SWING_NAME_PATTERN.test(exerciseName)
+        ? "kb_swing"
+        : exerciseName && HORIZONTAL_LOAD_NAME_PATTERN.test(exerciseName)
+          ? "horizontal_load"
+          : exerciseName && MED_BALL_NAME_PATTERN.test(exerciseName)
+            ? "med_ball"
+            : exerciseName && GOLF_NAME_PATTERN.test(exerciseName)
+              ? "golf_swing"
+              : exerciseName && BASEBALL_NAME_PATTERN.test(exerciseName)
+                ? "baseball_swing"
+                : "full";
 
   return (
     <button
