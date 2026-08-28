@@ -673,6 +673,21 @@ export const CALIBRATION_REFERENCES: CalibrationReference[] = [
     toleranceM: 0.005,
   },
   {
+    id: "med_ball_giant_15lb",
+    label: "Medicine ball, 15lb (Giant Lifting)",
+    // No direct measurement of this one -- linearly interpolated between the two real anchors
+    // that DO exist: the large unbranded slam-ball family's ~9.5in tile-grid read at 10lb
+    // (large_med_ball_10_30lb below) and Giant Lifting's own direct 7in tape measurement at 20lb
+    // (med_ball_giant_20lb above). Those two anchors are different product lines (a soft
+    // training slam ball vs. Giant's denser line), so this is a genuine extrapolation across
+    // brands, not a same-product interpolation -- by explicit instruction rather than a
+    // measurement. nominalSizeM sits at the exact midpoint; toleranceM is set to reach exactly
+    // the two source anchors (7in-9.5in) rather than some smaller invented band, so the stated
+    // confidence never claims more than "somewhere between the two real numbers we have."
+    nominalSizeM: 0.2095,
+    toleranceM: 0.0318,
+  },
+  {
     id: "large_med_ball_10_30lb",
     label: "Med/slam ball, 10-30lb (large family)",
     // Unlike med_ball_giant_20lb above (a direct tape measurement of one specific ball), this
