@@ -5857,6 +5857,8 @@ export const setLogInputSchema = z.object({
   swingBackswingMs: z.number().optional().nullable(),
   swingDownswingMs: z.number().optional().nullable(),
   swingHeadSwayCm: z.number().optional().nullable(),
+  medBallPeakSpeedMps: z.number().optional().nullable(),
+  medBallReleaseHeightCm: z.number().optional().nullable(),
 });
 
 export const logEntryInputSchema = z

@@ -15191,6 +15191,8 @@ ${catalog}`;
                 swingBackswingMs: s.swingBackswingMs ?? null,
                 swingDownswingMs: s.swingDownswingMs ?? null,
                 swingHeadSwayCm: s.swingHeadSwayCm ?? null,
+                medBallPeakSpeedMps: s.medBallPeakSpeedMps ?? null,
+                medBallReleaseHeightCm: s.medBallReleaseHeightCm ?? null,
               };
             }),
           );
