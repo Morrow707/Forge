@@ -567,11 +567,11 @@ export type CalibrationReference = {
   toleranceM: number;
 };
 
-// Deliberately small and deliberately generic-only -- no per-brand entries (Rogue vs. Eleiko
-// vs. Perform Better) without real, sourced spec numbers to back them, which this app doesn't
-// have. Inventing brand-specific "exact" diameters would repeat the exact mistake this whole
-// mechanism exists to avoid, just one level more specific. A coach who knows their exact plate
-// should measure it and calibrate with toleranceM: 0 instead of picking a brand from a list.
+// Deliberately small, and every entry below is either a rules-regulated sport object or backed
+// by a real, sourced spec number plus an independent confirming measurement -- no invented
+// brand-specific "exact" diameters, which would repeat the exact mistake this whole mechanism
+// exists to avoid, just one level more specific. A coach who knows their exact plate/ball
+// should still prefer measuring it and calibrating with toleranceM: 0 over picking one of these.
 export const CALIBRATION_REFERENCES: CalibrationReference[] = [
   {
     id: "bumper_plate_generic",
@@ -584,6 +584,51 @@ export const CALIBRATION_REFERENCES: CalibrationReference[] = [
     // brand is actually on the bar.
     nominalSizeM: 0.45,
     toleranceM: 0.008,
+  },
+  {
+    id: "bumper_plate_perform_better",
+    label: "Bumper plate (Perform Better)",
+    // Unlike the generic entry above, this one has two independent, agreeing sources: Perform
+    // Better's own First Place bumper line spec (17.7in / 450mm, constant across weights) and a
+    // direct tape measurement of an actual 10lb plate from this app's own field-testing ("a
+    // little more than 17.5in"). NOT every plate that says "bumper" on it holds this constant,
+    // though -- a rubber-coated tri-grip/grip-style plate from the same gym measured 13in at
+    // 25lb and 14.5in at 35lb, genuinely scaling with weight like a solid plate would. Only use
+    // this entry when a true full-diameter bumper (not a grip-style plate) is confirmed on the
+    // bar -- see computeReferenceObjectScale's own comment on why guessing which type is loaded
+    // would be worse than not calibrating at all.
+    nominalSizeM: 0.45,
+    toleranceM: 0.006,
+  },
+  {
+    id: "baseball_regulation",
+    label: "Baseball (regulation)",
+    // MLB/NCAA Official Baseball Rule 3.02 fixes circumference at 9-9.25in, which works out to
+    // ~72.8-74.8mm diameter -- a rules-regulated range, not a brand guess, so the tolerance here
+    // is the legal spread itself (nominal at the range's midpoint) rather than an assumption.
+    nominalSizeM: 0.0738,
+    toleranceM: 0.001,
+  },
+  {
+    id: "golf_ball_regulation",
+    label: "Golf ball (regulation)",
+    // USGA/R&A Rules of Golf, Equipment Rules set a hard MINIMUM diameter of 42.67mm -- no
+    // stated maximum, but real manufactured balls cluster tightly at or just above it (going
+    // bigger only costs performance), so this is one of the tightest-tolerance objects
+    // available for calibration.
+    nominalSizeM: 0.0427,
+    toleranceM: 0.0001,
+  },
+  {
+    id: "med_ball_giant_20lb",
+    label: "Medicine ball, 20lb (Giant Lifting)",
+    // Unlike a bumper plate or a sport-regulated ball, a medicine ball's diameter genuinely
+    // grows with its weight AND varies by brand/line -- there's no single "medicine ball"
+    // constant, so this entry only applies to THIS specific weight and brand, from a direct
+    // tape measurement (~7in) of an actual ball, not a spec sheet. A different weight or brand
+    // needs its own separately-measured entry, not an interpolation from this one.
+    nominalSizeM: 0.1778,
+    toleranceM: 0.005,
   },
 ];
 
