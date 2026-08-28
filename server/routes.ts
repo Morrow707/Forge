@@ -9,6 +9,7 @@ import { hashPassword, comparePasswords } from "./auth-utils";
 import { getEntitlements, type Entitlements, getFreeAgentEntitlements } from "./billing";
 import { uploadsLimiter } from "./rate-limiters";
 import { storage } from "./storage";
+import { formatTrackingReport } from "./tracking-report";
 import { buildIcsFeed } from "./ics";
 import { getVapidPublicKey, pushEnabled } from "./push";
 import { apnsEnabled } from "./apns";
@@ -1870,6 +1871,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const offset = Math.max(parseInt(String(req.query.offset ?? "0"), 10) || 0, 0);
     const list = await storage.getOpenReportsForAdmin(limit, offset);
     res.json(list);
+  });
+
+  // Plain-language "what did the camera actually record, and how" report -- see
+  // tracking-report.ts's own comment. text/plain on purpose: this exists to be read directly
+  // (by a person, or by an agent with its own admin login), not consumed by a UI.
+  app.get("/api/admin/tracking-report", requireRole("admin"), async (req, res) => {
+    const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? "20"), 10) || 20, 1), 200);
+    const rows = await storage.getRecentTrackedSetsForAdmin(limit);
+    res.type("text/plain").send(formatTrackingReport(rows));
   });
 
   app.post("/api/admin/reports/:id/resolve", requireRole("admin"), async (req, res) => {

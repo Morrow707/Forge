@@ -2004,6 +2004,10 @@ export const workoutSetEntries = pgTable(
   // believe instead of only ever seeing that context live, in the tracker
   // dialog, at the moment the set was captured.
   trustScores: json("trust_scores"),
+  // Session-level camera/AI context for this set's recording -- see
+  // captureDeviceInfoSchema's own comment. Null for sets logged before this existed, and for
+  // any set that isn't camera-tracked (nothing to capture).
+  captureDeviceInfo: json("capture_device_info"),
   },
   (table) => ({
     // Same reasoning as workoutLogEntries.workoutLogIdx just above -- the
@@ -5862,6 +5866,28 @@ export const setTrustScoreSchema = z.object({
   notes: z.array(z.string()),
 });
 
+// What the camera/AI pipeline was actually doing during this specific recording -- device,
+// lens, the resolution/frame-rate format the native side negotiated, and whether continuous
+// AF/AE had settled by the time telemetry was sampled (see AvBodyTrackingPlugin.swift's
+// startTelemetryTimer). Parsed client-side from the native diagnostic log at the moment a
+// recording finishes (see native-av-preview.ts's extractCaptureDeviceInfo) -- this is
+// session-level context, not a tracked data point, which is why it's one JSON blob rather than
+// its own columns the way every other tracking-mode's numbers get.
+export const captureDeviceInfoSchema = z.object({
+  deviceModel: z.string().optional().nullable(),
+  systemVersion: z.string().optional().nullable(),
+  lens: z.string().optional().nullable(),
+  activeFormat: z.string().optional().nullable(),
+  focusMode: z.string().optional().nullable(),
+  exposureMode: z.string().optional().nullable(),
+  aiPipeline: z.string().optional().nullable(),
+  focusSettled: z.boolean().optional().nullable(),
+  exposureSettled: z.boolean().optional().nullable(),
+  telemetrySamples: z.number().optional().nullable(),
+  adjustingFocusSampleCount: z.number().optional().nullable(),
+  adjustingExposureSampleCount: z.number().optional().nullable(),
+});
+
 // One entry per detected jump within a "jump" tracking-mode set -- see
 // jump-tracking.ts's summarizeJumpSet for how these are derived from the
 // ankle-height trace. Distinct from repBreakdownEntrySchema above since a
@@ -5936,6 +5962,7 @@ export const setLogInputSchema = z.object({
   horizontalLoadElapsedSeconds: z.number().optional().nullable(),
   horizontalLoadDistanceYards: z.number().optional().nullable(),
   horizontalLoadAvgSpeedYardsPerSec: z.number().optional().nullable(),
+  captureDeviceInfo: captureDeviceInfoSchema.optional().nullable(),
 });
 
 export const logEntryInputSchema = z

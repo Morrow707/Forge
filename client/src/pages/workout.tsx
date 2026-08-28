@@ -298,6 +298,23 @@ type SetTrustScore = {
   notes: string[];
 };
 
+// Same shape as native-av-preview.ts's CaptureDeviceInfo -- see use-av-body-tracking.ts's
+// extractCaptureDeviceInfo for how it's built.
+type CaptureDeviceInfo = {
+  deviceModel: string | null;
+  systemVersion: string | null;
+  lens: string | null;
+  activeFormat: string | null;
+  focusMode: string | null;
+  exposureMode: string | null;
+  aiPipeline: string;
+  focusSettled: boolean | null;
+  exposureSettled: boolean | null;
+  telemetrySamples: number;
+  adjustingFocusSampleCount: number;
+  adjustingExposureSampleCount: number;
+};
+
 type SetMetrics = {
   peakVelocityMps: number | null;
   meanVelocityMps: number | null;
@@ -369,6 +386,9 @@ type SetMetrics = {
   // Per-rep tracking-confidence score -- see bar-tracking.ts's
   // computeRepTrustScores.
   trustScores: RepTrustScore[] | null;
+  // Session-level camera/AI context for this recording (device, lens, format, AF/AE
+  // stability) -- see use-av-body-tracking.ts's extractCaptureDeviceInfo.
+  captureDeviceInfo: CaptureDeviceInfo | null;
 };
 
 type LogEntry = {
@@ -524,6 +544,7 @@ function buildItem(
       legDriveAsymmetry: existingSet?.legDriveAsymmetry ?? null,
       armDriveAsymmetry: existingSet?.armDriveAsymmetry ?? null,
       trustScores: existingSet?.trustScores ?? null,
+      captureDeviceInfo: existingSet?.captureDeviceInfo ?? null,
     };
   });
   const materials = materialsFrom(prescribed.exercise);
@@ -982,6 +1003,7 @@ export function WorkoutPage({
           legDriveAsymmetry: s.legDriveAsymmetry,
           armDriveAsymmetry: s.armDriveAsymmetry,
           trustScores: s.trustScores,
+          captureDeviceInfo: s.captureDeviceInfo,
         })),
       })),
     };
@@ -1483,6 +1505,7 @@ export function WorkoutPage({
               legDriveAsymmetry: null,
               armDriveAsymmetry: null,
               trustScores: null,
+              captureDeviceInfo: null,
             },
           ],
         };
@@ -2818,6 +2841,7 @@ function ExerciseLogContent({
                   jumpBreakdown: repBreakdown,
                   barPathTrace: metrics.pathTrace,
                   formFaults: metrics.formFaults,
+                  captureDeviceInfo: metrics.captureDeviceInfo ?? null,
                   ...videoPatch,
                 },
                 // A tracked capture is expensive to redo -- save it the
@@ -2846,6 +2870,7 @@ function ExerciseLogContent({
                   legDriveAsymmetry: metrics.legDriveAsymmetry ?? null,
                   armDriveAsymmetry: metrics.armDriveAsymmetry ?? null,
                   trustScores: metrics.trustScores ?? null,
+                  captureDeviceInfo: metrics.captureDeviceInfo ?? null,
                   ...videoPatch,
                 },
                 { immediate: true },
@@ -2877,6 +2902,7 @@ function ExerciseLogContent({
                 swingDownswingMs: metrics.downswingMs,
                 swingHeadSwayCm: metrics.headSwayCm,
                 swingTrustScore: metrics.trust,
+                captureDeviceInfo: metrics.captureDeviceInfo,
                 ...videoPatch,
               },
               { immediate: true },
@@ -2898,6 +2924,7 @@ function ExerciseLogContent({
                 medBallPeakSpeedMps: metrics.peakSpeedMps,
                 medBallReleaseHeightCm: metrics.releaseHeightCm,
                 medBallTrustScore: metrics.trust,
+                captureDeviceInfo: metrics.captureDeviceInfo,
                 ...videoPatch,
               },
               { immediate: true },
@@ -2919,6 +2946,7 @@ function ExerciseLogContent({
                 kbSwingPeakSpeedMps: metrics.peakSpeedMps,
                 kbSwingPeakHeightCm: metrics.peakHeightCm,
                 kbSwingTrustScore: metrics.trust,
+                captureDeviceInfo: metrics.captureDeviceInfo,
                 ...videoPatch,
               },
               { immediate: true },
@@ -2938,6 +2966,7 @@ function ExerciseLogContent({
                 horizontalLoadElapsedSeconds: metrics.elapsedSeconds,
                 horizontalLoadDistanceYards: metrics.distanceYards,
                 horizontalLoadAvgSpeedYardsPerSec: metrics.avgSpeedYardsPerSec,
+                captureDeviceInfo: metrics.captureDeviceInfo ?? null,
                 ...videoPatch,
               },
               { immediate: true },

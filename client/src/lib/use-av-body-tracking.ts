@@ -13,7 +13,9 @@ import {
   onAvSessionError,
   pollAvDiagnosticLog,
   setAvCameraActive,
+  extractCaptureDeviceInfo,
   type PoseFrame as NativePoseFrame,
+  type CaptureDeviceInfo,
 } from "@/lib/native-av-preview";
 
 /** The AVFoundation + Vision camera/recording/analysis lifecycle shared by every tracker
@@ -195,7 +197,9 @@ export function useAvBodyTracking(active: boolean) {
   // the file's even finished writing), so a second call in flight at the same time hits that
   // plugin's own "Not recording" guard and surfaces as a spurious error on what the athlete
   // experienced as a single, ordinary tap.
-  async function stopRecordingAndAnalyze(): Promise<{ blob: Blob; rawFrames: NativePoseFrame[] } | null> {
+  async function stopRecordingAndAnalyze(): Promise<
+    { blob: Blob; rawFrames: NativePoseFrame[]; captureDeviceInfo: CaptureDeviceInfo } | null
+  > {
     if (stoppingRef.current) return null;
     stoppingRef.current = true;
     try {
@@ -205,11 +209,17 @@ export function useAvBodyTracking(active: boolean) {
     }
   }
 
-  async function doStopRecordingAndAnalyze(): Promise<{ blob: Blob; rawFrames: NativePoseFrame[] } | null> {
+  async function doStopRecordingAndAnalyze(): Promise<
+    { blob: Blob; rawFrames: NativePoseFrame[]; captureDeviceInfo: CaptureDeviceInfo } | null
+  > {
     setRecording(false);
     setAnalyzing(true);
     setAnalyzedFrames(0);
     cancelledRef.current = false;
+    // Snapshot now, not at the very end -- diagLog is this render's closed-over value and
+    // won't pick up anything the native side logs after this point anyway (the session's still
+    // running, but the recording that snapshot describes has already stopped).
+    const captureDeviceInfo = extractCaptureDeviceInfo(diagLog);
 
     let blob: Blob;
     let path: string;
@@ -244,7 +254,7 @@ export function useAvBodyTracking(active: boolean) {
     void deleteAvRecording(path);
     recordingPathRef.current = null;
     setAnalyzing(false);
-    return { blob, rawFrames };
+    return { blob, rawFrames, captureDeviceInfo };
   }
 
   function cancelAnalysis() {

@@ -2,6 +2,10 @@
 // no DOM/camera access here, so this is easy to reason about and test in
 // isolation from the getUserMedia/canvas plumbing in bar-tracker-dialog.tsx.
 
+// Type-only -- erased at compile time, so this doesn't actually pull native-av-preview.ts's
+// real Capacitor bridge code (or its runtime dependency on a native platform) into this module.
+import type { CaptureDeviceInfo } from "./native-av-preview";
+
 // x/y/z are real-world meters from MediaPipe's worldLandmarks (hip-centered
 // origin), not pixels -- no pixelsPerMeter calibration needed to interpret
 // them. y follows pose-tracking.ts's worldVerticalSign convention (smaller y
@@ -162,6 +166,10 @@ export type RepMetrics = {
   // loss figure; mean is far more stable rep to rep. Null for single-rep
   // sets (nothing to compare).
   velocityLossPercent: number | null;
+  // Session-level camera/AI context (device, lens, format, AF/AE stability) for this
+  // recording -- populated by the caller from use-av-body-tracking.ts's
+  // stopRecordingAndAnalyze, same "caller fills it in" pattern as trustScores above.
+  captureDeviceInfo?: CaptureDeviceInfo | null;
 };
 
 // Decimates a raw world-space (meters) trace to at most ~200 points and

@@ -22,6 +22,7 @@ import {
   type FormFaultThresholds,
 } from "@/lib/pose-tracking";
 import { summarizeJumpSet, type JumpSetMetrics } from "@/lib/jump-tracking";
+import type { CaptureDeviceInfo } from "@/lib/native-av-preview";
 import type { TrackedPoint } from "@/lib/bar-tracking";
 import { videoFilenameForBlob } from "@/lib/video-recording";
 
@@ -108,10 +109,18 @@ export function AvJumpTrackerDialog({
   async function stopTracking() {
     const result = await stopRecordingAndAnalyze();
     if (!result) return; // error/cancellation already reported by the hook
-    await finishWithRecording(result.blob, result.rawFrames.map((f) => ({ t: f.timestamp * 1000, worldLandmarks: visionJointsToWorldLandmarks(f) })));
+    await finishWithRecording(
+      result.blob,
+      result.rawFrames.map((f) => ({ t: f.timestamp * 1000, worldLandmarks: visionJointsToWorldLandmarks(f) })),
+      result.captureDeviceInfo,
+    );
   }
 
-  async function finishWithRecording(blob: Blob, rawFrames: { t: number; worldLandmarks: PoseFrame["worldLandmarks"] }[]) {
+  async function finishWithRecording(
+    blob: Blob,
+    rawFrames: { t: number; worldLandmarks: PoseFrame["worldLandmarks"] }[],
+    captureDeviceInfo: CaptureDeviceInfo,
+  ) {
     const scaleFactor = calibrateFromFrames(rawFrames, heightIn);
 
     if (scaleFactor == null) {
@@ -223,6 +232,7 @@ export function AvJumpTrackerDialog({
       frames,
       metrics.repBreakdown.map((rep) => ({ landingT: rep.landingT })),
     );
+    metrics.captureDeviceInfo = captureDeviceInfo;
 
     if (!recordVideo) {
       onCapture(metrics);

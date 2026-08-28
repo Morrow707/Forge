@@ -12,6 +12,26 @@ type TrackedSetRow = Awaited<
 
 type SetTrustScore = { score: number; label: "high" | "medium" | "low"; notes: string[] };
 type RepTrustScore = SetTrustScore & { repNumber: number };
+type CaptureDeviceInfo = {
+  deviceModel?: string | null;
+  systemVersion?: string | null;
+  lens?: string | null;
+  activeFormat?: string | null;
+  focusMode?: string | null;
+  exposureMode?: string | null;
+  aiPipeline?: string | null;
+  focusSettled?: boolean | null;
+  exposureSettled?: boolean | null;
+  telemetrySamples?: number | null;
+  adjustingFocusSampleCount?: number | null;
+  adjustingExposureSampleCount?: number | null;
+};
+
+// Modes that run a second, independent object tracker (the barbell, the ball, the bell)
+// alongside body-pose tracking, rather than deriving everything from joints alone -- matches
+// exactly the modes that also carry a trust score built from cross-checking those two signals
+// against each other (see the mode-specific *TrustScore columns/comments in shared/schema.ts).
+const OBJECT_TRACKER_MODES = new Set(["bar_path", "full", "med_ball", "kb_swing"]);
 
 const METHODOLOGY: Record<string, string> = {
   bar_path:
@@ -114,6 +134,52 @@ function formatDataPoints(r: TrackedSetRow): string[] {
   return lines;
 }
 
+function formatCaptureDeviceInfo(r: TrackedSetRow): string[] {
+  const info = r.captureDeviceInfo as CaptureDeviceInfo | null | undefined;
+  const lines: string[] = [];
+  const usesObjectTracker = OBJECT_TRACKER_MODES.has(r.trackingLevel);
+  lines.push(
+    `  Object tracker: ${
+      usesObjectTracker
+        ? "yes -- an independent motion-diff tracker followed the implement itself, alongside body-pose tracking"
+        : "no -- this mode reads body joints only, nothing else being tracked"
+    }`,
+  );
+  if (!info) {
+    lines.push("  Device/session info: not captured for this set (recorded before this was tracked, or capture failed)");
+    return lines;
+  }
+  lines.push(
+    `  Device: ${info.deviceModel ?? "unknown"}${info.systemVersion ? `, iOS ${info.systemVersion}` : ""}${
+      info.lens ? `, ${info.lens} lens` : ""
+    }`,
+  );
+  if (info.activeFormat) lines.push(`  Camera format negotiated: ${info.activeFormat}`);
+  if (info.aiPipeline) lines.push(`  AI/ML pipeline: ${info.aiPipeline}`);
+  if (info.focusMode || info.exposureMode) {
+    lines.push(
+      `  Focus mode: ${info.focusMode ?? "unknown"}, exposure mode: ${info.exposureMode ?? "unknown"} (requested at session start)`,
+    );
+  }
+  if (info.telemetrySamples != null && info.telemetrySamples > 0) {
+    const focusNote =
+      info.adjustingFocusSampleCount === 0
+        ? "never seen still hunting"
+        : `still adjusting on ${info.adjustingFocusSampleCount}/${info.telemetrySamples} samples`;
+    const exposureNote =
+      info.adjustingExposureSampleCount === 0
+        ? "never seen still hunting"
+        : `still adjusting on ${info.adjustingExposureSampleCount}/${info.telemetrySamples} samples`;
+    lines.push(
+      `  Focus stability: ${focusNote}, settled by the last sample: ${info.focusSettled ?? "unknown"}`,
+    );
+    lines.push(
+      `  Exposure stability: ${exposureNote}, settled by the last sample: ${info.exposureSettled ?? "unknown"}`,
+    );
+  }
+  return lines;
+}
+
 function formatTrust(r: TrackedSetRow): string[] {
   const lines: string[] = [];
   if (Array.isArray(r.trustScores) && r.trustScores.length) {
@@ -148,12 +214,14 @@ export function formatTrackingReport(rows: TrackedSetRow[]): string {
 
     const dataLines = formatDataPoints(r);
     const trustLines = formatTrust(r);
+    const captureLines = formatCaptureDeviceInfo(r);
 
     blocks.push(
       [
         header,
         `  Tracking mode: ${mode}${r.movementType ? ` (movement type: ${r.movementType})` : ""}`,
         methodology ? `  How this mode works: ${methodology}` : null,
+        ...captureLines,
         ...dataLines,
         ...trustLines,
         dataLines.length === 0 ? "  (no data points recorded for this set)" : null,

@@ -18,11 +18,12 @@ import { summarizeSwing } from "@/lib/swing-tracking";
 import type { Landmark } from "@mediapipe/tasks-vision";
 import { videoFilenameForBlob } from "@/lib/video-recording";
 import { type SwingSetMetrics } from "@/components/ar-swing-tracker-dialog";
+import type { CaptureDeviceInfo } from "@/lib/native-av-preview";
 
 // SwingSetMetrics itself is defined in ar-swing-tracker-dialog.tsx (untouched, dead-code
 // fallback only -- see this file's own header comment), so the trust score this dialog adds is
 // carried as an extension here rather than a change to that shared type.
-export type AvSwingSetMetrics = SwingSetMetrics & { trust: SetTrustScore | null };
+export type AvSwingSetMetrics = SwingSetMetrics & { trust: SetTrustScore | null; captureDeviceInfo: CaptureDeviceInfo | null };
 
 const EMPTY_SWING_METRICS: AvSwingSetMetrics = {
   peakSeparationDeg: null,
@@ -32,6 +33,7 @@ const EMPTY_SWING_METRICS: AvSwingSetMetrics = {
   headSwayCm: null,
   rotationTrace: [],
   trust: null,
+  captureDeviceInfo: null,
 };
 
 /** AVFoundation + Vision twin of ar-swing-tracker-dialog.tsx (which stays completely
@@ -103,10 +105,15 @@ export function AvSwingTrackerDialog({
     await finishTracking(
       result.blob,
       result.rawFrames.map((f) => ({ t: f.timestamp * 1000, worldLandmarks: visionJointsToWorldLandmarks(f) })),
+      result.captureDeviceInfo,
     );
   }
 
-  async function finishTracking(blob: Blob, rawFrames: { t: number; worldLandmarks: Landmark[] }[]) {
+  async function finishTracking(
+    blob: Blob,
+    rawFrames: { t: number; worldLandmarks: Landmark[] }[],
+    captureDeviceInfo: CaptureDeviceInfo,
+  ) {
     const scaleFactor = calibrateFromFrames(rawFrames, heightIn);
 
     const frames: PoseFrame[] = rawFrames.map((f) => ({
@@ -128,6 +135,7 @@ export function AvSwingTrackerDialog({
             headSwayCm: scaleFactor != null ? swing.headSwayCm : null,
             rotationTrace: rotation?.trace ?? [],
             trust: rotation?.trust ?? null,
+            captureDeviceInfo,
           }
         : null;
 

@@ -240,6 +240,74 @@ export function pollAvDiagnosticLog(callback: (log: string[]) => void): () => vo
   };
 }
 
+// Parses the fixed-format lines AvBodyTrackingPlugin.swift's logDiag() emits at session
+// start ("device model=...", "using lens: ...", "activeFormat set: ...", "focus/exposure mode
+// set: focus=N exposure=N") plus the per-second "cam: lens=... adjustingFocus=..." telemetry
+// (see startTelemetryTimer) into structured session context -- what device/lens/format this
+// specific recording actually used, and whether AF/AE were still hunting or had settled. Called
+// once when a recording finishes (see use-av-body-tracking.ts's stopRecordingAndAnalyze) so
+// this survives past the live session into whatever gets submitted with the set -- previously
+// this only ever existed as scrollback in the (now-removed) diagnostic overlay.
+export type CaptureDeviceInfo = {
+  deviceModel: string | null;
+  systemVersion: string | null;
+  lens: string | null;
+  activeFormat: string | null;
+  focusMode: string | null;
+  exposureMode: string | null;
+  aiPipeline: string;
+  focusSettled: boolean | null;
+  exposureSettled: boolean | null;
+  telemetrySamples: number;
+  adjustingFocusSampleCount: number;
+  adjustingExposureSampleCount: number;
+};
+
+const FOCUS_EXPOSURE_MODE_LABELS: Record<string, string> = {
+  "0": "locked",
+  "1": "one-shot (auto)",
+  "2": "continuous",
+};
+
+export function extractCaptureDeviceInfo(diagLog: string[]): CaptureDeviceInfo {
+  const deviceLine = diagLog.find((l) => l.startsWith("device model="));
+  const deviceModel = deviceLine?.match(/device model=(\S+)/)?.[1] ?? null;
+  const systemVersion = deviceLine?.match(/systemVersion=(\S+)/)?.[1] ?? null;
+
+  const lensLine = diagLog.find((l) => l.startsWith("using lens:"));
+  const lens = lensLine?.match(/using lens:\s*(\S+)/)?.[1] ?? null;
+
+  const formatLine = diagLog.find((l) => l.startsWith("activeFormat set:"));
+  const activeFormat = formatLine ? formatLine.replace("activeFormat set:", "").trim() : null;
+
+  const modeLine = diagLog.find((l) => l.startsWith("focus/exposure mode set:"));
+  const modeNums = modeLine?.match(/focus=(\d+) exposure=(\d+)/);
+  const focusMode = modeNums ? (FOCUS_EXPOSURE_MODE_LABELS[modeNums[1]] ?? modeNums[1]) : null;
+  const exposureMode = modeNums ? (FOCUS_EXPOSURE_MODE_LABELS[modeNums[2]] ?? modeNums[2]) : null;
+
+  const camLines = diagLog.filter((l) => l.startsWith("cam:"));
+  const adjustingFocusSampleCount = camLines.filter((l) => l.includes("adjustingFocus=true")).length;
+  const adjustingExposureSampleCount = camLines.filter((l) => l.includes("adjustingExposure=true")).length;
+  const lastCamLine = camLines[camLines.length - 1];
+  const focusSettled = lastCamLine ? !lastCamLine.includes("adjustingFocus=true") : null;
+  const exposureSettled = lastCamLine ? !lastCamLine.includes("adjustingExposure=true") : null;
+
+  return {
+    deviceModel,
+    systemVersion,
+    lens,
+    activeFormat,
+    focusMode,
+    exposureMode,
+    aiPipeline: "Apple Vision framework (on-device VNDetectHumanBodyPoseRequest) -- no cloud AI involved",
+    focusSettled,
+    exposureSettled,
+    telemetrySamples: camLines.length,
+    adjustingFocusSampleCount,
+    adjustingExposureSampleCount,
+  };
+}
+
 export function onAvSessionError(callback: (message: string) => void): () => void {
   let handle: { remove: () => void } | null = null;
   let cancelled = false;

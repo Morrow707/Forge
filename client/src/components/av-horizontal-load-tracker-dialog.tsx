@@ -15,7 +15,7 @@ import {
   type VideoRecordContext,
 } from "@/lib/video-offline-store";
 import { POSE_LANDMARKS } from "@/lib/pose-tracking";
-import { type PoseFrame as NativePoseFrame } from "@/lib/native-av-preview";
+import { type PoseFrame as NativePoseFrame, type CaptureDeviceInfo } from "@/lib/native-av-preview";
 import { useAvBodyTracking } from "@/lib/use-av-body-tracking";
 import {
   detectSprintCrossings,
@@ -51,6 +51,7 @@ export type HorizontalLoadSetMetrics = {
   distanceYards: number;
   avgSpeedYardsPerSec: number;
   likelyGlitch: boolean;
+  captureDeviceInfo?: CaptureDeviceInfo | null;
 };
 
 const CHECKPOINT_COLOR = "#facc15";
@@ -127,6 +128,11 @@ export function AvHorizontalLoadTrackerDialog({
   const pointsRef = useRef<SprintPoint[]>([]);
   const stepRef = useRef<Step>("calibrate");
   const recordedBlobRef = useRef<Blob | null>(null);
+  // Set once per capture (stopCaptureAndAnalyze), read by finishWithResult -- the manual
+  // start/finish fallback re-scrubs the SAME already-recorded clip rather than capturing again,
+  // so it has no fresh captureDeviceInfo of its own to attach; both paths funnel through
+  // finishWithResult, so stashing it here once covers both.
+  const captureDeviceInfoRef = useRef<CaptureDeviceInfo | null>(null);
   const recordingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const manualStartRef = useRef<number | null>(null);
 
@@ -243,6 +249,7 @@ export function AvHorizontalLoadTrackerDialog({
       changeStep("calibrate");
       return;
     }
+    captureDeviceInfoRef.current = captured.captureDeviceInfo;
     finishCapture(captured.blob, captured.rawFrames);
   }
 
@@ -272,7 +279,7 @@ export function AvHorizontalLoadTrackerDialog({
 
   function finishWithResult(metrics: HorizontalLoadSetMetrics) {
     changeStep("review");
-    setResult(metrics);
+    setResult({ ...metrics, captureDeviceInfo: captureDeviceInfoRef.current });
   }
 
   function markManualStart() {

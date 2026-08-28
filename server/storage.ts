@@ -15207,6 +15207,7 @@ ${catalog}`;
                 horizontalLoadElapsedSeconds: s.horizontalLoadElapsedSeconds ?? null,
                 horizontalLoadDistanceYards: s.horizontalLoadDistanceYards ?? null,
                 horizontalLoadAvgSpeedYardsPerSec: s.horizontalLoadAvgSpeedYardsPerSec ?? null,
+                captureDeviceInfo: s.captureDeviceInfo ?? null,
               };
             }),
           );
@@ -15730,6 +15731,7 @@ ${catalog}`;
         horizontalLoadElapsedSeconds: workoutSetEntries.horizontalLoadElapsedSeconds,
         horizontalLoadDistanceYards: workoutSetEntries.horizontalLoadDistanceYards,
         horizontalLoadAvgSpeedYardsPerSec: workoutSetEntries.horizontalLoadAvgSpeedYardsPerSec,
+        captureDeviceInfo: workoutSetEntries.captureDeviceInfo,
       })
       .from(workoutSetEntries)
       .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))

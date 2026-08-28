@@ -12,7 +12,7 @@ import { toast } from "sonner";
 import { Circle, Square, X, XCircle, AlertTriangle } from "lucide-react";
 import { useAvBodyTracking } from "@/lib/use-av-body-tracking";
 import { visionJointsToWorldLandmarks, visionImplementToPoint, type ImplementPoint } from "@/lib/vision-body-landmarks";
-import type { PoseFrame as NativePoseFrame } from "@/lib/native-av-preview";
+import type { PoseFrame as NativePoseFrame, CaptureDeviceInfo } from "@/lib/native-av-preview";
 import {
   calibrateFromFrames,
   scaleWorldLandmarks,
@@ -66,9 +66,15 @@ export type MedballSetMetrics = {
   peakSpeedMps: number | null;
   releaseHeightCm: number | null;
   trust: SetTrustScore | null;
+  captureDeviceInfo: CaptureDeviceInfo | null;
 };
 
-const EMPTY_MEDBALL_METRICS: MedballSetMetrics = { peakSpeedMps: null, releaseHeightCm: null, trust: null };
+const EMPTY_MEDBALL_METRICS: MedballSetMetrics = {
+  peakSpeedMps: null,
+  releaseHeightCm: null,
+  trust: null,
+  captureDeviceInfo: null,
+};
 
 // Elite med ball release velocities run well below a thrown baseball's (med balls are heavy --
 // typically 2-10kg -- unlike a 0.14kg baseball), so this ceiling sits generously above even a
@@ -161,7 +167,7 @@ export function AvMedballTrackerDialog({
   async function stopTracking() {
     const result = await stopRecordingAndAnalyze();
     if (!result) return; // error/cancellation already reported by the hook
-    await finishWithRecording(result.blob, result.rawFrames);
+    await finishWithRecording(result.blob, result.rawFrames, result.captureDeviceInfo);
   }
 
   // Frame-to-frame speed across an implement's own confident trace -- same robust-percentile
@@ -192,7 +198,7 @@ export function AvMedballTrackerDialog({
     return { speedMps, confidence };
   }
 
-  async function finishWithRecording(blob: Blob, rawFrames: NativePoseFrame[]) {
+  async function finishWithRecording(blob: Blob, rawFrames: NativePoseFrame[], captureDeviceInfo: CaptureDeviceInfo) {
     const calibrationInput = rawFrames.map((f) => ({ worldLandmarks: visionJointsToWorldLandmarks(f) }));
     const scaleFactor = calibrateFromFrames(calibrationInput, heightIn);
     if (scaleFactor == null) {
@@ -257,7 +263,7 @@ export function AvMedballTrackerDialog({
       return;
     }
 
-    const metrics: MedballSetMetrics = { peakSpeedMps, releaseHeightCm, trust: blended!.trust };
+    const metrics: MedballSetMetrics = { peakSpeedMps, releaseHeightCm, trust: blended!.trust, captureDeviceInfo };
 
     if (!recordVideo) {
       onCapture(metrics);

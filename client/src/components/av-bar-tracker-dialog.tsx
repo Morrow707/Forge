@@ -12,7 +12,7 @@ import { toast } from "sonner";
 import { Circle, Square, X, XCircle, AlertTriangle } from "lucide-react";
 import { useAvBodyTracking } from "@/lib/use-av-body-tracking";
 import { visionJointsToWorldLandmarks, visionImplementToPoint, type ImplementPoint } from "@/lib/vision-body-landmarks";
-import type { PoseFrame as NativePoseFrame } from "@/lib/native-av-preview";
+import type { PoseFrame as NativePoseFrame, CaptureDeviceInfo } from "@/lib/native-av-preview";
 import {
   POSE_LANDMARKS,
   detectFormFaults,
@@ -222,10 +222,10 @@ export function AvBarTrackerDialog({
   async function stopTracking() {
     const result = await stopRecordingAndAnalyze();
     if (!result) return; // error/cancellation already reported by the hook
-    await finishWithRecording(result.blob, result.rawFrames);
+    await finishWithRecording(result.blob, result.rawFrames, result.captureDeviceInfo);
   }
 
-  async function finishWithRecording(blob: Blob, rawFrames: NativePoseFrame[]) {
+  async function finishWithRecording(blob: Blob, rawFrames: NativePoseFrame[], captureDeviceInfo: CaptureDeviceInfo) {
     const calibrationInput = rawFrames.map((f) => ({ worldLandmarks: visionJointsToWorldLandmarks(f) }));
     const scaleFactor = calibrateFromFrames(calibrationInput, heightIn);
     if (scaleFactor == null) {
@@ -423,6 +423,7 @@ export function AvBarTrackerDialog({
       alignmentReason,
       chainPenalties,
     );
+    metrics.captureDeviceInfo = captureDeviceInfo;
 
     if (!recordVideo) {
       onCapture(metrics);
