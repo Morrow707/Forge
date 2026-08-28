@@ -114,6 +114,11 @@ services:
       # this unset.
       - key: USDA_FDC_API_KEY
         sync: false
+      # Server-side error reporting (server/index.ts) -- create a Node/
+      # Express project at sentry.io and paste its DSN here. Silently
+      # no-ops (console.error only, same as today) until this is set.
+      - key: SENTRY_DSN
+        sync: false
 
 databases:
   - name: forge-db

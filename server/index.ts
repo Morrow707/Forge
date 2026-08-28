@@ -1,4 +1,18 @@
 import "dotenv/config";
+import * as Sentry from "@sentry/node";
+
+// Error reporting -- same "silently no-op until configured" pattern every
+// other optional integration in this file follows (AI, email, push). Has
+// to run this early (before express-async-errors and every other import
+// below) so Sentry's own auto-instrumentation can hook modules like http
+// and pg before anything else touches them. Deliberately no
+// tracesSampleRate/profiling here -- error monitoring only, matching what
+// was actually asked for; performance tracing is a separate Sentry
+// product this app isn't opting into.
+if (process.env.SENTRY_DSN) {
+  Sentry.init({ dsn: process.env.SENTRY_DSN });
+}
+
 // Express 4's router never awaits (or attaches a .catch to) an async route
 // handler's returned promise -- a rejection inside one (a dropped DB
 // connection, any unguarded throw) becomes an unhandled promise rejection
@@ -208,6 +222,18 @@ app.use((req, res, next) => {
 
 (async () => {
   const server = await registerRoutes(app);
+
+  // Reports the error to Sentry, then calls next(err) itself -- doesn't
+  // swallow anything, so the existing handler below still runs unchanged
+  // and still sends the same response shape it always has. No-ops if
+  // SENTRY_DSN was never set (Sentry's capture calls are safe to invoke
+  // without an initialized client). This also doesn't touch
+  // rest-timer-push.ts's deliberate choice not to install a global
+  // unhandledRejection handler -- Sentry's SDK reports a fatal crash on
+  // its way out; Node still crashes the process exactly as it does today.
+  if (process.env.SENTRY_DSN) {
+    Sentry.setupExpressErrorHandler(app);
+  }
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
