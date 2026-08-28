@@ -535,9 +535,67 @@ export function computePixelToMeterScale(
 // it -- Vision object detection is a separate, later piece of work) and the object's real,
 // known size. Deliberately generic over what "size" means (a diameter, a side length) --
 // callers are responsible for measuring and supplying consistent units on both sides.
-export function computeReferenceObjectScale(measuredPixelSize: number, knownRealSizeM: number): number | null {
-  if (!(measuredPixelSize > 0) || !(knownRealSizeM > 0)) return null;
-  return knownRealSizeM / measuredPixelSize;
+//
+// toleranceM is real, not decoration: a "known" plate size is only ever an assumption unless
+// a coach has actually measured the specific plate on the bar. Bumper plates from different
+// manufacturers (Rogue, Eleiko, Perform Better, off-brand) all target roughly the same
+// training-standard diameter but don't cast identically -- treating that as one exact
+// constant would silently understate error on every calibration that uses it. Passing 0 means
+// the caller supplied a real measurement (a coach's own tape-measure reading), not an
+// assumption -- the only case where uncertaintyFraction should come back 0.
+export function computeReferenceObjectScale(
+  measuredPixelSize: number,
+  knownRealSizeM: number,
+  toleranceM = 0,
+): { scale: number; uncertaintyFraction: number } | null {
+  if (!(measuredPixelSize > 0) || !(knownRealSizeM > 0) || toleranceM < 0) return null;
+  return {
+    scale: knownRealSizeM / measuredPixelSize,
+    uncertaintyFraction: toleranceM / knownRealSizeM,
+  };
+}
+
+// A named reference size with its own honest uncertainty, not a bare exact-looking number --
+// see computeReferenceObjectScale's own comment on why a single constant would be dishonest
+// here. "generic" entries are a best-effort assumption for when the coach hasn't confirmed
+// exactly which plate/ball is on the bar; a coach-measured value should always be preferred
+// (build a reference with toleranceM: 0 from that instead of looking one up here).
+export type CalibrationReference = {
+  id: string;
+  label: string;
+  nominalSizeM: number;
+  toleranceM: number;
+};
+
+// Deliberately small and deliberately generic-only -- no per-brand entries (Rogue vs. Eleiko
+// vs. Perform Better) without real, sourced spec numbers to back them, which this app doesn't
+// have. Inventing brand-specific "exact" diameters would repeat the exact mistake this whole
+// mechanism exists to avoid, just one level more specific. A coach who knows their exact plate
+// should measure it and calibrate with toleranceM: 0 instead of picking a brand from a list.
+export const CALIBRATION_REFERENCES: CalibrationReference[] = [
+  {
+    id: "bumper_plate_generic",
+    label: "Bumper plate (brand unknown)",
+    // 450mm / 17.7in is the near-universal training standard most bumper plate
+    // manufacturers target regardless of weight (unlike solid metal plates, whose diameter
+    // genuinely scales with load) -- IWF competition plates hold this to ~1mm, but training/
+    // commercial plates commonly run a few mm off it from mold and rubber-thickness variance
+    // across brands. ±1.8% covers that realistic spread without pretending to know which
+    // brand is actually on the bar.
+    nominalSizeM: 0.45,
+    toleranceM: 0.008,
+  },
+];
+
+// Turns an uncertainty fraction into the same kind of plain-language note
+// bar-tracking.ts's RepTrustScore.notes already surfaces for every other source of tracking
+// uncertainty (position-fusion confidence, tracker disagreement, camera alignment) -- this is
+// that pattern's calibration-side equivalent, not a new one-off. Returns null for a
+// coach-confirmed exact measurement (uncertaintyFraction 0), since there's nothing to caveat.
+export function calibrationConfidenceNote(uncertaintyFraction: number): string | null {
+  if (uncertaintyFraction <= 0) return null;
+  const pct = Math.round(uncertaintyFraction * 1000) / 10;
+  return `Calibrated from a generic size assumption (±${pct}%) -- confirm the exact plate/ball size for tighter accuracy.`;
 }
 
 // Not enough samples to trust a correction -- same "don't apply a bad multiplier with false
