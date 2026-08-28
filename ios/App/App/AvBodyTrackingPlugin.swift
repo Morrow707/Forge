@@ -490,6 +490,18 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         }
     }
 
+    // Formats above this are the slow-motion-oriented end of a device's range (240fps and
+    // similar) -- continuous autofocus is well documented to struggle to converge, or stop
+    // converging altogether, at those frame rates on iPhone hardware, and some of those formats
+    // use a reduced-quality/binned sensor readout that looks soft even genuinely in focus. This
+    // is exactly what testing hit: applyContinuousFocusAndExposure below correctly reported
+    // focus/exposure both set to continuous mode, yet the picture stayed persistently blurred --
+    // the mode was on, but not actually working at the 240fps format this function had greedily
+    // picked. 120fps is still a large motion-blur improvement over a device's un-tuned default
+    // (~30fps) while staying well inside the range every iPhone rear camera keeps full,
+    // functional continuous AF/AE at.
+    private let maxUsableFrameRate: Double = 120
+
     // Explicit, not left to the session preset's default -- the exact lesson
     // ArCameraPreviewPlugin.swift's own comment already documents (a fast movement blurs
     // measurably worse at a conservative default capture rate). Restricted to formats at
@@ -502,12 +514,22 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             return dims.width >= 1920 && dims.height >= 1080
         }
         let candidates = eligibleFormats.isEmpty ? device.formats : eligibleFormats
-        guard let bestFormat = candidates.max(by: { lhs, rhs in
-            let lhsMaxFps = lhs.videoSupportedFrameRateRanges.map { $0.maxFrameRate }.max() ?? 0
-            let rhsMaxFps = rhs.videoSupportedFrameRateRanges.map { $0.maxFrameRate }.max() ?? 0
-            return lhsMaxFps < rhsMaxFps
-        }) else { return }
-        guard let bestRange = bestFormat.videoSupportedFrameRateRanges.max(by: { $0.maxFrameRate < $1.maxFrameRate }) else {
+        // "Best" now means highest fps NOT EXCEEDING maxUsableFrameRate, not simply highest fps
+        // outright -- see that constant's own comment. usableMaxFps clamps each format's own
+        // highest range to the ceiling so the comparison and the range lookup below agree on
+        // what "best" means for a format that offers rates both above and below it.
+        func usableMaxFps(_ format: AVCaptureDevice.Format) -> Double {
+            format.videoSupportedFrameRateRanges
+                .map { $0.maxFrameRate }
+                .filter { $0 <= maxUsableFrameRate }
+                .max() ?? 0
+        }
+        guard let bestFormat = candidates.max(by: { usableMaxFps($0) < usableMaxFps($1) }) else { return }
+        guard
+            let bestRange = bestFormat.videoSupportedFrameRateRanges
+                .filter({ $0.maxFrameRate <= maxUsableFrameRate })
+                .max(by: { $0.maxFrameRate < $1.maxFrameRate })
+        else {
             return
         }
         do {

@@ -103,9 +103,26 @@ export function useAvBodyTracking(active: boolean) {
       }
       started = true;
       setAvCameraActive(true);
-      startAvPreview(rect).catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Could not start camera");
-      });
+      startAvPreview(rect)
+        .then(() => {
+          // start() is what actually requests camera access natively (see
+          // AvBodyTrackingPlugin.swift's continueStart) -- the mount-time isAvBodyTrackingSupported
+          // check above necessarily ran before that, so cameraPermission was always going to read
+          // "notDetermined" up to this point regardless of what the athlete actually granted.
+          // Re-checking now is what makes the diagnostic overlay's permission line reflect reality
+          // instead of a stale first-render snapshot.
+          if (!cancelled) {
+            isAvBodyTrackingSupported().then(({ supported: isSupported, error: supportErr, cameraPermission: perm }) => {
+              if (cancelled) return;
+              setSupported(isSupported);
+              setSupportError(supportErr);
+              setCameraPermission(perm);
+            });
+          }
+        })
+        .catch((err) => {
+          if (!cancelled) setError(err instanceof Error ? err.message : "Could not start camera");
+        });
       window.addEventListener("resize", onResize);
     }
 
