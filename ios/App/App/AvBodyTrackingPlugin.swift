@@ -531,29 +531,57 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
     // functional continuous AF/AE at.
     private let maxUsableFrameRate: Double = 120
 
+    // The other half of the tradeoff maxUsableFrameRate's comment describes. On-device telemetry
+    // (lens=0.78, adjustingFocus=false on every sample -- AF genuinely settled, not hunting or
+    // stuck at macro) proved focus/exposure were never the cause of the persistent on-screen
+    // blur -- the real cause sits upstream of AF entirely. Every iPhone format that clears
+    // 120fps is capped at 1920x1080, and AVCaptureVideoPreviewLayer's resizeAspectFill then has
+    // to upscale that buffer roughly 25-30% to cover a modern iPhone's actual portrait pixel
+    // count -- a soft, uniform blur baked into every frame regardless of focus, exactly what was
+    // reported. Requiring only 60fps (still double the ~30fps hardware default -- a real
+    // motion-blur win) instead of maximizing fps outright is what unlocks a device's much
+    // higher-resolution formats below.
+    private let minAcceptableFrameRate: Double = 60
+
     // Explicit, not left to the session preset's default -- the exact lesson
     // ArCameraPreviewPlugin.swift's own comment already documents (a fast movement blurs
     // measurably worse at a conservative default capture rate). Restricted to formats at
-    // least matching the 1080p session preset -- an unfiltered max-fps search can land on a
-    // tiny low-res slow-motion format (some devices offer very high fps at a fraction of
-    // full resolution), which would quietly undo the resolution pose detection actually needs.
+    // least matching the 1080p session preset -- an unfiltered search can land on a tiny
+    // low-res slow-motion format (some devices offer very high fps at a fraction of full
+    // resolution), which would quietly undo the resolution pose detection actually needs.
     private func applyHighestFrameRate(to device: AVCaptureDevice) {
         let eligibleFormats = device.formats.filter { format in
             let dims = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
-            return dims.width >= 1920 && dims.height >= 1080
+            guard dims.width >= 1920 && dims.height >= 1080 else { return false }
+            // Needs a range whose own top speed lands inside [60, 120] -- not just >= 60. A
+            // format whose only qualifying range tops out above maxUsableFrameRate (e.g. a
+            // single 1-240fps range) would otherwise pass this check but then get excluded
+            // entirely by the <= maxUsableFrameRate filter below, leaving activeFormat unset.
+            return format.videoSupportedFrameRateRanges.contains {
+                $0.maxFrameRate >= minAcceptableFrameRate && $0.maxFrameRate <= maxUsableFrameRate
+            }
         }
         let candidates = eligibleFormats.isEmpty ? device.formats : eligibleFormats
-        // "Best" now means highest fps NOT EXCEEDING maxUsableFrameRate, not simply highest fps
-        // outright -- see that constant's own comment. usableMaxFps clamps each format's own
-        // highest range to the ceiling so the comparison and the range lookup below agree on
-        // what "best" means for a format that offers rates both above and below it.
+        // "Best" now means highest RESOLUTION among formats that clear minAcceptableFrameRate --
+        // see this function's and minAcceptableFrameRate's own comments for why resolution, not
+        // fps, is the dimension actually worth maximizing here. usableMaxFps clamps each format's
+        // own highest range to the ceiling, used only as a tiebreaker between two formats that
+        // happen to offer the same pixel count.
         func usableMaxFps(_ format: AVCaptureDevice.Format) -> Double {
             format.videoSupportedFrameRateRanges
                 .map { $0.maxFrameRate }
                 .filter { $0 <= maxUsableFrameRate }
                 .max() ?? 0
         }
-        guard let bestFormat = candidates.max(by: { usableMaxFps($0) < usableMaxFps($1) }) else { return }
+        func pixelCount(_ format: AVCaptureDevice.Format) -> Int64 {
+            let dims = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
+            return Int64(dims.width) * Int64(dims.height)
+        }
+        guard let bestFormat = candidates.max(by: { a, b in
+            let pxA = pixelCount(a), pxB = pixelCount(b)
+            if pxA != pxB { return pxA < pxB }
+            return usableMaxFps(a) < usableMaxFps(b)
+        }) else { return }
         guard
             let bestRange = bestFormat.videoSupportedFrameRateRanges
                 .filter({ $0.maxFrameRate <= maxUsableFrameRate })
