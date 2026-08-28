@@ -25,6 +25,7 @@ import { ArJumpTrackerDialog } from "@/components/ar-jump-tracker-dialog";
 import { AvJumpTrackerDialog } from "@/components/av-jump-tracker-dialog";
 import { ArBarTrackerDialog } from "@/components/ar-bar-tracker-dialog";
 import { ArSwingTrackerDialog, type SwingSetMetrics } from "@/components/ar-swing-tracker-dialog";
+import { AvSwingTrackerDialog } from "@/components/av-swing-tracker-dialog";
 import { isArPreviewPlatform } from "@/lib/native-ar-preview";
 import { FormVideoRecorderDialog } from "@/components/form-video-recorder-dialog";
 import { SetVideoPreviewDialog, SetVideoCompareDialog } from "@/components/set-video-review";
@@ -2737,6 +2738,24 @@ function ExerciseLogContent({
           }
 
           if (item.trackingLevel === "golf_swing" || item.trackingLevel === "baseball_swing") {
+            // Temporary admin-only branch for the AVFoundation + Vision pipeline that's
+            // replacing ARKit on iOS (see AvBodyTrackingPlugin.swift's file comment) --
+            // validation-only scaffolding, not the end state: the ARKit path below stays
+            // byte-for-byte untouched for every non-admin user until Phase 7's cutover
+            // go/no-go criteria are met, at which point this condition drops entirely.
+            if (isArPreviewPlatform() && user?.role === "admin") {
+              return (
+                <AvSwingTrackerDialog
+                  open={trackingSet !== null}
+                  onOpenChange={(open) => !open && setTrackingSet(null)}
+                  sport={item.trackingLevel === "golf_swing" ? "golf" : "baseball"}
+                  heightIn={user?.heightIn}
+                  recordVideo={mergedTracking}
+                  onCapture={handleSwingCapture}
+                  videoContext={videoContextFor(trackingSet)}
+                />
+              );
+            }
             if (isArPreviewPlatform()) {
               return (
                 <ArSwingTrackerDialog
