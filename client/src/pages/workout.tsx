@@ -2078,6 +2078,13 @@ function ExerciseLogContent({
               eccentricMeanVelocityMps: trackedSet.eccentricMeanVelocityMps,
               romCm: trackedSet.romCm,
               velocityLossPercent: trackedSet.velocityLossPercent,
+              // Per-rep tracking confidence (see RepTrustScore's own comment:
+              // position-fusion confidence, tracker-disagreement rejections,
+              // and camera-alignment status folded into one label + notes)
+              // -- lets the AI weigh its own "ground truth" framing against
+              // how much to actually trust this specific set's numbers,
+              // rather than treating every tracked reading as equally solid.
+              trustScores: trackedSet.trustScores,
             }
           : undefined,
       });

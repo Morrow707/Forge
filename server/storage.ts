@@ -12815,6 +12815,7 @@ ${entriesText}`;
       eccentricMeanVelocityMps?: number | null;
       romCm?: number | null;
       velocityLossPercent?: number | null;
+      trustScores?: { repNumber: number; score: number; label: "high" | "medium" | "low"; notes: string[] }[] | null;
     },
   ) {
     const program = await this.getProgramFull(programId);
@@ -12853,9 +12854,24 @@ ${entriesText}`;
     // is quantitative fact about the same set the images were pulled from,
     // so the system prompt tells the model to defer to it over what the
     // frames merely suggest.
+    // Which reps (if any) the tracker itself flagged as less than fully
+    // confident -- see RepTrustScore's own comment in bar-tracking.ts:
+    // position-fusion confidence, tracker-disagreement rejections, and
+    // camera-alignment status folded into one label + notes per rep. This
+    // is what lets the "treat this as ground truth" framing below soften
+    // itself on a genuinely shaky read instead of asserting equal
+    // confidence in every number regardless of how the tracker itself
+    // rated it -- the "in unison, not against" principle this session's
+    // AV-pipeline plan settled on, applied to bar-tracking's existing data.
+    const lowTrustReps = (trackedMetrics?.trustScores ?? [])
+      .filter((t) => t.label !== "high")
+      .map((t) => `rep ${t.repNumber} (${t.label}${t.notes.length > 0 ? `: ${t.notes.join("; ")}` : ""})`);
+
     const metricsText = trackedMetrics
       ? [
-          "Quantitative data from on-device motion tracking for this same set (treat this as ground truth, more reliable than what you can judge from the images alone):",
+          lowTrustReps.length > 0
+            ? "Quantitative data from on-device motion tracking for this same set (mostly reliable, but see the tracking-confidence note below -- don't treat every number here as unconditional ground truth):"
+            : "Quantitative data from on-device motion tracking for this same set (treat this as ground truth, more reliable than what you can judge from the images alone):",
           trackedMetrics.peakVelocityMps != null
             ? `- Peak bar speed: ${trackedMetrics.peakVelocityMps} m/s`
             : null,
@@ -12888,6 +12904,11 @@ ${entriesText}`;
             ? `- Detected form flags: ${trackedMetrics.formFaults.map((f) => f.label).join("; ")}`
             : trackedMetrics.formFaults
               ? "- No form flags detected by motion tracking."
+              : null,
+          lowTrustReps.length > 0
+            ? `- Tracking confidence: lower than usual on ${lowTrustReps.join(", ")} -- weigh the numbers for those specific reps with more caution, and lean more on what the images actually show for them.`
+            : trackedMetrics.trustScores && trackedMetrics.trustScores.length > 0
+              ? "- Tracking confidence: high across every tracked rep."
               : null,
         ]
           .filter(Boolean)
