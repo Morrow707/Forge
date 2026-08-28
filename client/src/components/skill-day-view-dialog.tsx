@@ -15,6 +15,7 @@ import { Target, MoonStar, Timer, Activity, CheckCircle2, Film, Video, Sparkles 
 import { SprintTrackerDialog } from "@/components/sprint-tracker-dialog";
 import { ArSprintTrackerDialog } from "@/components/ar-sprint-tracker-dialog";
 import { AvSprintTrackerDialog } from "@/components/av-sprint-tracker-dialog";
+import { AvMechanicsTrackerDialog } from "@/components/av-mechanics-tracker-dialog";
 import { isArPreviewPlatform } from "@/lib/native-ar-preview";
 import { MechanicsTrackerDialog } from "@/components/mechanics-tracker-dialog";
 import { ArMechanicsTrackerDialog } from "@/components/ar-mechanics-tracker-dialog";
@@ -401,7 +402,24 @@ export function SkillDayViewDialog({
         />
       ))}
 
-      {mechanicsExercise && source.kind === "athlete" && (isArPreviewPlatform() ? (
+      {/* Temporary admin-only branch for the AVFoundation + Vision pipeline that's
+          replacing ARKit on iOS (see AvBodyTrackingPlugin.swift's file comment) --
+          validation-only scaffolding, not the end state: the ARKit path below stays
+          byte-for-byte untouched for every non-admin user until Phase 7's cutover go/no-go
+          criteria are met, at which point this condition drops entirely. */}
+      {mechanicsExercise && source.kind === "athlete" && (isArPreviewPlatform() && user?.role === "admin" ? (
+        <AvMechanicsTrackerDialog
+          open={!!mechanicsExercise}
+          onOpenChange={(o) => !o && setMechanicsExercise(null)}
+          drillName={mechanicsExercise.name}
+          mode={mechanicsModeFor(mechanicsExercise.skillType)}
+          actionLabel={mechanicsActionLabelFor(mechanicsExercise.skillType)}
+          heightIn={user?.heightIn}
+          skillAssignmentId={source.skillAssignmentId}
+          skillProgramDayId={source.skillProgramDayId}
+          skillProgramExerciseId={mechanicsExercise.id}
+        />
+      ) : isArPreviewPlatform() ? (
         <ArMechanicsTrackerDialog
           open={!!mechanicsExercise}
           onOpenChange={(o) => !o && setMechanicsExercise(null)}
