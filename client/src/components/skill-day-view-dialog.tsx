@@ -14,6 +14,7 @@ import { extractVideoFrames } from "@/lib/video-frames";
 import { Target, MoonStar, Timer, Activity, CheckCircle2, Film, Video, Sparkles } from "lucide-react";
 import { SprintTrackerDialog } from "@/components/sprint-tracker-dialog";
 import { ArSprintTrackerDialog } from "@/components/ar-sprint-tracker-dialog";
+import { AvSprintTrackerDialog } from "@/components/av-sprint-tracker-dialog";
 import { isArPreviewPlatform } from "@/lib/native-ar-preview";
 import { MechanicsTrackerDialog } from "@/components/mechanics-tracker-dialog";
 import { ArMechanicsTrackerDialog } from "@/components/ar-mechanics-tracker-dialog";
@@ -366,7 +367,21 @@ export function SkillDayViewDialog({
         </DialogContent>
       </Dialog>
 
-      {sprintExercise && source.kind === "athlete" && (isArPreviewPlatform() ? (
+      {/* Temporary admin-only branch for the AVFoundation + Vision pipeline that's
+          replacing ARKit on iOS (see AvBodyTrackingPlugin.swift's file comment) --
+          validation-only scaffolding, not the end state: the ARKit path underneath stays
+          byte-for-byte untouched for every non-admin user until Phase 7's cutover go/no-go
+          criteria are met, at which point this condition drops entirely. */}
+      {sprintExercise && source.kind === "athlete" && (isArPreviewPlatform() && user?.role === "admin" ? (
+        <AvSprintTrackerDialog
+          open={!!sprintExercise}
+          onOpenChange={(o) => !o && setSprintExercise(null)}
+          drillName={sprintExercise.name}
+          skillAssignmentId={source.skillAssignmentId}
+          skillProgramDayId={source.skillProgramDayId}
+          skillProgramExerciseId={sprintExercise.id}
+        />
+      ) : isArPreviewPlatform() ? (
         <ArSprintTrackerDialog
           open={!!sprintExercise}
           onOpenChange={(o) => !o && setSprintExercise(null)}
