@@ -103,3 +103,36 @@ export function visionJointsToWorldLandmarks(frame: NativePoseFrame): Landmark[]
   }
   return landmarks;
 }
+
+// Phase 5: same pixel-scale + Y-flip transform as visionJointsToWorldLandmarks above, applied
+// to AvImplementTracker.swift's own leftImplement/rightImplement output instead of a body
+// joint -- see native-av-preview.ts's PoseImplement comment for why that's reported in the
+// identical raw Vision convention a joint is. Landing it in this same pixel-space,
+// consistent-sign-convention unit as worldLandmarks' own wrist entry (not yet real-world
+// meters -- see this file's header comment on why that's still fine for difference-based math)
+// is what lets av-bar-tracker-dialog.tsx fuse the two directly, the same way
+// bar-tracker-dialog.tsx fuses ImplementTracker's meters against deriveBarPoint's own meters,
+// and ar-bar-tracker-dialog.tsx fuses ArImplementTracker's ARKit world meters. Returns null on
+// a frame with no lock (the field is omitted, not a zeroed point -- never treat a missing
+// implement as "at the origin").
+export type ImplementPoint = {
+  x: number;
+  y: number;
+  z: number;
+  confidence: number;
+  color?: { r: number; g: number; b: number };
+};
+
+export function visionImplementToPoint(
+  implement: { x: number; y: number; confidence: number; color?: { r: number; g: number; b: number } } | undefined,
+  frame: NativePoseFrame,
+): ImplementPoint | null {
+  if (!implement) return null;
+  return {
+    x: implement.x * frame.frameWidth,
+    y: -(implement.y * frame.frameHeight),
+    z: 0,
+    confidence: implement.confidence,
+    color: implement.color,
+  };
+}

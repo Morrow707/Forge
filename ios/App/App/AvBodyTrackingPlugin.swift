@@ -2,6 +2,7 @@ import Foundation
 import AVFoundation
 import CoreMedia
 import CoreVideo
+import CoreImage
 import Vision
 import UIKit
 import Capacitor
@@ -91,6 +92,18 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
     // stale cancellation from a previous (already-finished) analysis can't immediately
     // abort the next one.
     private var analysisCancelled = false
+
+    // Phase 5: object/implement tracking (bar path, thrown ball) -- see AvImplementTracker's
+    // own comment for why this runs entirely in pixel space with no live meters conversion,
+    // unlike ArImplementTracker.swift's ARKit port. One CIContext shared across the whole
+    // analysis run (Apple's own guidance: expensive to create, cheap to reuse) rather than one
+    // per frame. Left/right are independent instances, same one-tracker-per-hand pattern
+    // ArCameraPreviewPlugin.swift's own leftImplementTracker/rightImplementTracker already
+    // establish -- a caller tracking a single implement (a thrown medicine ball, not a
+    // two-handed bar) just uses the left instance alone and ignores the right.
+    private let implementCIContext = CIContext(options: [.useSoftwareRenderer: false])
+    private var leftImplementTracker = AvImplementTracker()
+    private var rightImplementTracker = AvImplementTracker()
 
     // The public, documented Vision joint names this plugin reports -- unlike ARKit's own
     // joint-name strings (which needed on-device discovery to nail down, per
@@ -605,6 +618,8 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         let url = URL(fileURLWithPath: pathString)
         logDiag("analyzeRecording() called for \(url.lastPathComponent), sampleEveryNthFrame=\(sampleEveryNthFrame)")
         analysisCancelled = false
+        leftImplementTracker.reset()
+        rightImplementTracker.reset()
         Self.analysisQueue.async {
             self.runPoseAnalysis(url: url, sampleEveryNthFrame: sampleEveryNthFrame, call: call)
         }
@@ -710,6 +725,8 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
 
             var joints: [[String: Any]] = []
             var tracked = false
+            var leftWristJoint: (x: Double, y: Double)?
+            var rightWristJoint: (x: Double, y: Double)?
             let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: orientation, options: [:])
             do {
                 try handler.perform([poseRequest])
@@ -733,22 +750,65 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                             "y": Double(point.location.y),
                             "confidence": Double(point.confidence),
                         ])
+                        if label == "leftWrist" {
+                            leftWristJoint = (x: Double(point.location.x), y: Double(point.location.y))
+                        } else if label == "rightWrist" {
+                            rightWristJoint = (x: Double(point.location.x), y: Double(point.location.y))
+                        }
                     }
                 }
             } catch {
                 logDiag("Vision request failed on frame \(thisFrameIndex): \(error.localizedDescription)")
             }
 
+            // Phase 5: object/implement tracking -- only worth the extra downscale+render
+            // work on a frame that actually has a wrist to anchor the search on, same
+            // "skip when there's nothing to track from" precedent bar-tracker-dialog.tsx
+            // and ar-bar-tracker-dialog.tsx both already establish for their own callers.
+            var leftImplement: [String: Any]?
+            var rightImplement: [String: Any]?
+            if leftWristJoint != nil || rightWristJoint != nil,
+               let working = extractWorkingFrame(
+                   pixelBuffer: pixelBuffer, orientation: orientation, frameWidth: frameWidth, frameHeight: frameHeight
+               ) {
+                if let wrist = leftWristJoint {
+                    let wristWorkingX = wrist.x * Double(working.width)
+                    let wristWorkingY = (1.0 - wrist.y) * Double(working.height)
+                    if let result = leftImplementTracker.track(
+                        rgba: working.rgba, luma: working.luma, width: working.width, height: working.height,
+                        wristX: wristWorkingX, wristY: wristWorkingY
+                    ) {
+                        leftImplement = implementResultDict(result)
+                    }
+                }
+                if let wrist = rightWristJoint {
+                    let wristWorkingX = wrist.x * Double(working.width)
+                    let wristWorkingY = (1.0 - wrist.y) * Double(working.height)
+                    if let result = rightImplementTracker.track(
+                        rgba: working.rgba, luma: working.luma, width: working.width, height: working.height,
+                        wristX: wristWorkingX, wristY: wristWorkingY
+                    ) {
+                        rightImplement = implementResultDict(result)
+                    }
+                }
+            }
+
             processedCount += 1
+            var eventData: [String: Any] = [
+                "frameIndex": thisFrameIndex,
+                "timestamp": timestampSeconds,
+                "tracked": tracked,
+                "joints": joints,
+                "frameWidth": frameWidth,
+                "frameHeight": frameHeight,
+            ]
+            // Omit-when-nil, matching ArCameraPreviewPlugin's own
+            // implementResultDict pattern -- the JS bridge treats a missing key the
+            // same as "no lock this frame," not a zeroed/default point.
+            if let leftImplement = leftImplement { eventData["leftImplement"] = leftImplement }
+            if let rightImplement = rightImplement { eventData["rightImplement"] = rightImplement }
             DispatchQueue.main.async {
-                self.notifyListeners("poseFrame", data: [
-                    "frameIndex": thisFrameIndex,
-                    "timestamp": timestampSeconds,
-                    "tracked": tracked,
-                    "joints": joints,
-                    "frameWidth": frameWidth,
-                    "frameHeight": frameHeight,
-                ])
+                self.notifyListeners("poseFrame", data: eventData)
             }
         }
 
@@ -790,5 +850,355 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         for file in files where file.lastPathComponent.hasPrefix("av-") {
             try? FileManager.default.removeItem(at: file)
         }
+    }
+
+    // Downscaled working-resolution buffers for AvImplementTracker's motion-diff scan --
+    // same WORKING_MAX_DIM=160 budget as implement-tracking.ts's own (see that file's
+    // comment: large enough to localize a held implement's centroid, small enough that a
+    // full-frame diff is cheap every tick regardless of the camera's native resolution).
+    // .oriented(orientation) reorients the raw BGRA buffer into the exact same upright
+    // coordinate space Vision's own joint normalization already measured against (the
+    // frameWidth x frameHeight already computed by the caller), so the returned buffer's
+    // pixel grid lines up with Vision's joints with nothing further to correct for.
+    private static let implementWorkingMaxDim = 160
+
+    private struct WorkingFrame {
+        // Row-major, top-left origin, width*height*4 (rgba) / width*height (luma) --
+        // UNVERIFIED on real hardware, flagged honestly rather than assumed (this
+        // environment has no device to render against): CIContext.render(_:toBitmap:...)
+        // is documented top-left-origin/row-major output, matching this codebase's own
+        // established pattern for anything that can't be confirmed without a physical
+        // device (see e.g. ArImplementTracker.swift's own orientation caveat).
+        var rgba: [UInt8]
+        var luma: [UInt8]
+        var width: Int
+        var height: Int
+    }
+
+    private func extractWorkingFrame(
+        pixelBuffer: CVPixelBuffer,
+        orientation: CGImagePropertyOrientation,
+        frameWidth: Int,
+        frameHeight: Int
+    ) -> WorkingFrame? {
+        guard frameWidth > 0, frameHeight > 0 else { return nil }
+        let maxDim = Double(Self.implementWorkingMaxDim)
+        var workingWidth = Self.implementWorkingMaxDim
+        var workingHeight = Int((maxDim * Double(frameHeight) / Double(frameWidth)).rounded())
+        if workingHeight > Self.implementWorkingMaxDim {
+            workingHeight = Self.implementWorkingMaxDim
+            workingWidth = Int((maxDim * Double(frameWidth) / Double(frameHeight)).rounded())
+        }
+        workingWidth = max(1, workingWidth)
+        workingHeight = max(1, workingHeight)
+
+        let oriented = CIImage(cvPixelBuffer: pixelBuffer).oriented(orientation)
+        guard oriented.extent.width > 0, oriented.extent.height > 0 else { return nil }
+        let scaleX = CGFloat(workingWidth) / oriented.extent.width
+        let scaleY = CGFloat(workingHeight) / oriented.extent.height
+        let scaled = oriented.transformed(by: CGAffineTransform(scaleX: scaleX, scaleY: scaleY))
+
+        let bytesPerRow = workingWidth * 4
+        var rgba = [UInt8](repeating: 0, count: bytesPerRow * workingHeight)
+        let bounds = CGRect(x: 0, y: 0, width: workingWidth, height: workingHeight)
+        let rendered: Bool = rgba.withUnsafeMutableBytes { ptr -> Bool in
+            guard let base = ptr.baseAddress else { return false }
+            implementCIContext.render(
+                scaled,
+                toBitmap: base,
+                rowBytes: bytesPerRow,
+                bounds: bounds,
+                format: .RGBA8,
+                colorSpace: CGColorSpaceCreateDeviceRGB()
+            )
+            return true
+        }
+        guard rendered else { return nil }
+
+        var luma = [UInt8](repeating: 0, count: workingWidth * workingHeight)
+        for pixelIndex in 0..<(workingWidth * workingHeight) {
+            let byteIndex = pixelIndex * 4
+            let r = Double(rgba[byteIndex])
+            let g = Double(rgba[byteIndex + 1])
+            let b = Double(rgba[byteIndex + 2])
+            luma[pixelIndex] = UInt8(min(255.0, max(0.0, 0.299 * r + 0.587 * g + 0.114 * b)))
+        }
+        return WorkingFrame(rgba: rgba, luma: luma, width: workingWidth, height: workingHeight)
+    }
+
+    // Same shape/omit-when-nil convention as ArCameraPreviewPlugin's own implementResultDict --
+    // color is carried through even though no current AV dialog reads it yet (same as that
+    // ARKit counterpart, which computes and emits it for implement-appearance-memory.ts's
+    // corroboration feature despite ar-bar-tracker-dialog.tsx not calling into it either) so a
+    // future caller doesn't need a native change just to start using it.
+    private func implementResultDict(_ result: AvImplementTracker.TrackResult) -> [String: Any] {
+        var dict: [String: Any] = [
+            "x": result.x,
+            "y": result.y,
+            "confidence": result.confidence,
+        ]
+        if let color = result.color {
+            dict["color"] = ["r": color.r, "g": color.g, "b": color.b]
+        }
+        return dict
+    }
+}
+
+// Swift port of client/src/lib/implement-tracking.ts's ImplementTracker for the
+// AVFoundation + Vision pipeline -- see that file's own header comment for the
+// algorithm itself (motion-diff, not object recognition: whatever moves in sync with
+// the athlete's own wrist, frame to frame, is what they're holding). One instance
+// tracks one hand, same as both existing ports (implement-tracking.ts's own
+// ImplementTracker and ArImplementTracker.swift) -- a caller tracking a single
+// implement (a thrown medicine ball, not a two-handed bar) uses the left instance
+// alone and ignores the right.
+//
+// Unlike both of those, this reports its result directly in Vision's own normalized,
+// bottom-left-origin joint convention (0-1, relative to the oriented frame's own
+// width/height) rather than meters or an ARKit world position. There's no real depth
+// in this pipeline (see AvBodyTrackingPlugin's own file comment on why), and unlike
+// implement-tracking.ts this plugin's caller (the JS bridge) already defers ALL
+// pixel-to-meters conversion, for every joint, to pose-tracking.ts's own calibration
+// functions, after the fact -- reporting the implement in that identical raw
+// convention means it flows through that same existing path with zero new conversion
+// code on the JS side, rather than reproducing either existing tracker's own meters
+// math. That also makes the state machine itself simpler than both ports it's
+// descended from: with no unit conversion to perform, the tracker's own held "lock"
+// position IS the reported position, with no separate delta-accumulation
+// (implement-tracking.ts) or per-frame unprojection (ArImplementTracker.swift) needed
+// to get there.
+private final class AvImplementTracker {
+    // Untuned starting values, same as both ports this descends from -- there's no
+    // camera to tune any of them against in this environment (see
+    // implement-tracking.ts's own comment on MOTION_DIFF_THRESHOLD).
+    private let motionDiffThreshold = 18
+    private let searchRadiusFraction = 0.22
+    private let minHotPixels = 6
+    private let minWristSpeedPx = 1.0
+    private let lockRampFrames = 3.0
+    private let maxLockDriftFraction = 0.45
+
+    struct ColorSignature {
+        var r: Double
+        var g: Double
+        var b: Double
+    }
+
+    struct TrackResult {
+        // Vision's own normalized [0,1], bottom-left-origin convention -- see this
+        // class's own comment for why, and vision-body-landmarks.ts for the bridge
+        // that turns this (like every joint) into real pixels and, eventually, meters.
+        var x: Double
+        var y: Double
+        // 0-1, ramping up over lockRampFrames of continuous, unbroken lock -- same
+        // meaning as both ports this is descended from.
+        var confidence: Double
+        var color: ColorSignature?
+    }
+
+    private var prevLuma: [UInt8]?
+    private var prevWidth = 0
+    private var prevHeight = 0
+    private var prevWristX: Double = 0
+    private var prevWristY: Double = 0
+
+    private var lockPixelX: Double?
+    private var lockPixelY: Double?
+    private var lockStreak: Double = 0
+    private var lastColor: ColorSignature?
+
+    func reset() {
+        prevLuma = nil
+        prevWidth = 0
+        prevHeight = 0
+        dropLock()
+    }
+
+    private func dropLock() {
+        lockPixelX = nil
+        lockPixelY = nil
+        lockStreak = 0
+        lastColor = nil
+    }
+
+    // Same escape hatch as both ports this descends from -- a caller-side fusion
+    // (av-bar-tracker-dialog.tsx) that decides this frame's reported point disagreed
+    // with the wrist by more than any real implement plausibly could calls this to
+    // force a clean reacquisition next frame instead of continuing to dead-reckon from
+    // a position just flagged as wrong.
+    func rejectLock() {
+        dropLock()
+    }
+
+    // rgba/luma: the current frame's downscaled working-resolution buffers (see
+    // AvBodyTrackingPlugin.extractWorkingFrame), row-major, top-left origin,
+    // width*height (luma) / width*height*4 (rgba). wristX/wristY: the tracked wrist
+    // joint (or wrist midpoint for a two-handed grip), already converted into this
+    // SAME working-resolution top-left-origin pixel space -- centers the search
+    // window, and, on a fresh acquisition, seeds the lock directly (this class has no
+    // separate "world" position to seed, unlike both ports it's descended from, so
+    // seeding just means starting the search there). Only ever called on a frame where
+    // the wrist joint was itself confidently detected, matching bar-tracker-dialog.tsx
+    // and ar-bar-tracker-dialog.tsx's own existing precedent of never calling track()
+    // on a frame with no wrist reading.
+    func track(
+        rgba: [UInt8],
+        luma: [UInt8],
+        width: Int,
+        height: Int,
+        wristX: Double,
+        wristY: Double
+    ) -> TrackResult? {
+        let previousWristX = prevWristX
+        let previousWristY = prevWristY
+        prevWristX = wristX
+        prevWristY = wristY
+
+        guard let prev = prevLuma, prevWidth == width, prevHeight == height else {
+            prevLuma = luma
+            prevWidth = width
+            prevHeight = height
+            dropLock()
+            return nil
+        }
+        prevLuma = luma
+        prevWidth = width
+        prevHeight = height
+
+        let wristSpeed = hypot(wristX - previousWristX, wristY - previousWristY)
+        if wristSpeed < minWristSpeedPx {
+            // A stationary implement (top of a squat, a paused bench press) hasn't
+            // moved -- nothing new to search for, but no reason to believe an
+            // already-held lock is suddenly wrong. Same "hold, don't drop" reasoning
+            // as both ports this descends from.
+            if let lx = lockPixelX, let ly = lockPixelY {
+                return TrackResult(
+                    x: lx / Double(width),
+                    y: 1.0 - (ly / Double(height)),
+                    confidence: min(1.0, lockStreak / lockRampFrames),
+                    color: lastColor
+                )
+            }
+            return nil
+        }
+
+        let maxDrift = maxLockDriftFraction * Double(min(width, height))
+        let hasPlausibleLock: Bool
+        if let lx = lockPixelX, let ly = lockPixelY {
+            hasPlausibleLock = hypot(lx - wristX, ly - wristY) < maxDrift
+        } else {
+            hasPlausibleLock = false
+        }
+        let searchX = hasPlausibleLock ? lockPixelX! : wristX
+        let searchY = hasPlausibleLock ? lockPixelY! : wristY
+
+        guard let centroid = AvImplementTracker.findMotionCentroid(
+            curr: luma,
+            prev: prev,
+            width: width,
+            height: height,
+            centerX: searchX,
+            centerY: searchY,
+            searchRadiusFraction: searchRadiusFraction,
+            motionDiffThreshold: motionDiffThreshold,
+            minHotPixels: minHotPixels
+        ) else {
+            dropLock()
+            return nil
+        }
+
+        lockPixelX = centroid.x
+        lockPixelY = centroid.y
+        lockStreak = hasPlausibleLock ? lockStreak + 1 : 1
+        lastColor = AvImplementTracker.sampleColor(rgba: rgba, width: width, height: height, x: centroid.x, y: centroid.y)
+
+        return TrackResult(
+            x: centroid.x / Double(width),
+            y: 1.0 - (centroid.y / Double(height)),
+            confidence: min(1.0, lockStreak / lockRampFrames),
+            color: lastColor
+        )
+    }
+
+    // Direct port of implement-tracking.ts's own findMotionCentroid -- see that file's
+    // comment for the reasoning behind each constant. Scans every pixel in the search
+    // window, not strided (unlike ArImplementTracker.swift's full-sensor-resolution
+    // version) -- this already runs against the same ~160px-max working resolution the
+    // JS version does, so a full scan is just as cheap here.
+    private static func findMotionCentroid(
+        curr: [UInt8],
+        prev: [UInt8],
+        width: Int,
+        height: Int,
+        centerX: Double,
+        centerY: Double,
+        searchRadiusFraction: Double,
+        motionDiffThreshold: Int,
+        minHotPixels: Int
+    ) -> (x: Double, y: Double)? {
+        let radius = max(6.0, (searchRadiusFraction * Double(min(width, height))).rounded())
+        let left = max(0, Int((centerX - radius).rounded()))
+        let right = min(width, Int((centerX + radius).rounded()))
+        let top = max(0, Int((centerY - radius).rounded()))
+        let bottom = min(height, Int((centerY + radius).rounded()))
+        guard left < right, top < bottom else { return nil }
+
+        var sumX = 0.0
+        var sumY = 0.0
+        var hotCount = 0
+        var y = top
+        while y < bottom {
+            let rowOffset = y * width
+            var x = left
+            while x < right {
+                let idx = rowOffset + x
+                let diff = abs(Int(curr[idx]) - Int(prev[idx]))
+                if diff >= motionDiffThreshold {
+                    sumX += Double(x)
+                    sumY += Double(y)
+                    hotCount += 1
+                }
+                x += 1
+            }
+            y += 1
+        }
+        guard hotCount >= minHotPixels else { return nil }
+        return (x: sumX / Double(hotCount), y: sumY / Double(hotCount))
+    }
+
+    // Average RGB in a small neighborhood around the found centroid, for
+    // implement-appearance-memory.ts's existing corroboration feature -- same
+    // reasoning as implement-tracking.ts's own sampleAverageColor (a few-pixel average
+    // is stable without smearing across the implement's actual edge; a single pixel is
+    // too noisy).
+    private static func sampleColor(rgba: [UInt8], width: Int, height: Int, x: Double, y: Double) -> ColorSignature? {
+        let radius = 2
+        let cx = Int(x.rounded())
+        let cy = Int(y.rounded())
+        let left = max(0, cx - radius)
+        let right = min(width, cx + radius + 1)
+        let top = max(0, cy - radius)
+        let bottom = min(height, cy + radius + 1)
+        guard left < right, top < bottom else { return nil }
+
+        var r = 0.0
+        var g = 0.0
+        var b = 0.0
+        var count = 0
+        var sy = top
+        while sy < bottom {
+            var sx = left
+            while sx < right {
+                let idx = (sy * width + sx) * 4
+                r += Double(rgba[idx])
+                g += Double(rgba[idx + 1])
+                b += Double(rgba[idx + 2])
+                count += 1
+                sx += 1
+            }
+            sy += 1
+        }
+        guard count > 0 else { return nil }
+        return ColorSignature(r: r / Double(count), g: g / Double(count), b: b / Double(count))
     }
 }

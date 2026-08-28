@@ -22,7 +22,7 @@ import { useWakeLock } from "@/hooks/use-wake-lock";
 import { WorkoutCommentThread } from "@/components/workout-comment-thread";
 import { BarTrackerDialog } from "@/components/bar-tracker-dialog";
 import { AvJumpTrackerDialog } from "@/components/av-jump-tracker-dialog";
-import { ArBarTrackerDialog } from "@/components/ar-bar-tracker-dialog";
+import { AvBarTrackerDialog } from "@/components/av-bar-tracker-dialog";
 import { type SwingSetMetrics } from "@/components/ar-swing-tracker-dialog";
 import { AvSwingTrackerDialog } from "@/components/av-swing-tracker-dialog";
 import { isArPreviewPlatform } from "@/lib/native-ar-preview";
@@ -2806,12 +2806,14 @@ function ExerciseLogContent({
             );
           }
 
-          // bar_path/full: needs a held implement tracked, unlike jump --
-          // see ArBarTrackerDialog's own file comment for what's ported vs
-          // deliberately still MediaPipe-only in this first pass.
+          // AVFoundation + Vision pipeline (see AvBodyTrackingPlugin.swift's file comment) is
+          // the only iOS path for bar_path/full now -- ArBarTrackerDialog and the ARKit plugin
+          // underneath stay in the repo untouched as a dead-code fallback (per the plan's
+          // Context section) but nothing routes to them anymore. See AvBarTrackerDialog's own
+          // file comment for what's ported vs deliberately still MediaPipe-only.
           if (isArPreviewPlatform() && (item.trackingLevel === "bar_path" || item.trackingLevel === "full")) {
             return (
-              <ArBarTrackerDialog
+              <AvBarTrackerDialog
                 open={trackingSet !== null}
                 onOpenChange={(open) => !open && setTrackingSet(null)}
                 mode={item.trackingLevel}

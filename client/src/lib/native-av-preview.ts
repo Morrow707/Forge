@@ -15,6 +15,23 @@ export type LensInfo = { id: "wide" | "ultraWide" | "telephoto" | string; label:
 // Y-flip belongs in vision-body-landmarks.ts (Phase 3), not here -- see
 // AvBodyTrackingPlugin.swift's own comment on why it's left raw at the source.
 export type PoseJoint = { name: string; x: number; y: number; confidence: number };
+// Phase 5: object/implement tracking (bar path, thrown ball) -- AvImplementTracker.swift's own
+// output, in the exact same raw Vision convention as PoseJoint above (normalized 0-1,
+// bottom-left origin, relative to frameWidth/frameHeight). Omitted (not a zeroed/default
+// point) on a frame with no lock -- see AvBodyTrackingPlugin.swift's own comment on its
+// omit-when-nil emission, matching ArCameraPreviewPlugin's existing implementResultDict
+// pattern. A caller tracking a single implement (a thrown medicine ball, not a two-handed bar)
+// uses leftImplement alone and ignores rightImplement.
+export type PoseImplement = {
+  x: number;
+  y: number;
+  confidence: number;
+  // Real RGB sample at the found position, for implement-appearance-memory.ts's existing
+  // corroboration feature -- carried through even though no current AV dialog reads it yet,
+  // same as ArImplementTracker's own color field (computed and emitted despite
+  // ar-bar-tracker-dialog.tsx not calling into that feature either).
+  color?: { r: number; g: number; b: number };
+};
 // frameWidth/frameHeight are the UPRIGHT (already orientation-corrected) pixel dimensions
 // Vision measured joints against -- see AvBodyTrackingPlugin.swift's own comment on why this
 // isn't just the raw buffer's native width/height, and vision-body-landmarks.ts for why the
@@ -26,6 +43,8 @@ export type PoseFrame = {
   joints: PoseJoint[];
   frameWidth: number;
   frameHeight: number;
+  leftImplement?: PoseImplement;
+  rightImplement?: PoseImplement;
 };
 
 interface AvBodyTrackingPlugin {
