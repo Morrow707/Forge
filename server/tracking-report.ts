@@ -137,7 +137,10 @@ function formatDataPoints(r: TrackedSetRow): string[] {
 function formatCaptureDeviceInfo(r: TrackedSetRow): string[] {
   const info = r.captureDeviceInfo as CaptureDeviceInfo | null | undefined;
   const lines: string[] = [];
-  const usesObjectTracker = OBJECT_TRACKER_MODES.has(r.trackingLevel);
+  // Guaranteed non-null by getRecentTrackedSetsForAdmin's own WHERE clause
+  // (isNotNull(programExercises.trackingLevel)) -- the left join it's read
+  // through can't express that at the type level.
+  const usesObjectTracker = OBJECT_TRACKER_MODES.has(r.trackingLevel!);
   lines.push(
     `  Object tracker: ${
       usesObjectTracker
@@ -208,7 +211,8 @@ export function formatTrackingReport(rows: TrackedSetRow[]): string {
     const header = `${r.date}  ${r.athleteName} -- ${r.exerciseName} (set ${r.setNumber}${
       r.reps ? `, ${r.reps} reps` : ""
     }${r.weight ? `, ${r.weight}${r.weightUnit ? ` ${r.weightUnit}` : ""}` : ""})`;
-    const mode = r.trackingLevel;
+    // Guaranteed non-null -- see formatCaptureDeviceInfo's own comment.
+    const mode = r.trackingLevel!;
     const methodology = !seenModes.has(mode) ? METHODOLOGY[mode] : null;
     if (methodology) seenModes.add(mode);
 

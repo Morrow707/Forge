@@ -15062,11 +15062,30 @@ ${catalog}`;
       const touchedExerciseIds = new Set<number>();
 
       for (const entry of input.entries) {
+        // Resolved once here, up front, and stored directly on the entry --
+        // see workoutLogEntries.exerciseId's own schema comment for why this
+        // can't just be re-derived later via programExerciseId's live join.
+        const resolvedExerciseId =
+          entry.programExerciseId != null
+            ? (
+                await tx.query.programExercises.findFirst({
+                  where: eq(programExercises.id, entry.programExerciseId),
+                })
+              )?.exerciseId
+            : entry.correctiveId != null
+              ? (
+                  await tx.query.assignmentCorrectives.findFirst({
+                    where: eq(assignmentCorrectives.id, entry.correctiveId),
+                  })
+                )?.exerciseId
+              : undefined;
+
         const [entryRow] = await tx
           .insert(workoutLogEntries)
           .values({
             workoutLogId: log!.id,
             programExerciseId: entry.programExerciseId ?? null,
+            exerciseId: resolvedExerciseId ?? null,
             correctiveId: entry.correctiveId ?? null,
             weightMode: entry.weightMode,
             rpe: entry.rpe ?? null,
@@ -15075,23 +15094,7 @@ ${catalog}`;
           .returning();
 
         const hasAnyVideo = entry.sets.some((s) => s.formCheckVideoUrl);
-        if (hasAnyVideo) {
-          const exerciseId =
-            entry.programExerciseId != null
-              ? (
-                  await tx.query.programExercises.findFirst({
-                    where: eq(programExercises.id, entry.programExerciseId),
-                  })
-                )?.exerciseId
-              : entry.correctiveId != null
-                ? (
-                    await tx.query.assignmentCorrectives.findFirst({
-                      where: eq(assignmentCorrectives.id, entry.correctiveId),
-                    })
-                  )?.exerciseId
-                : undefined;
-          if (exerciseId != null) touchedExerciseIds.add(exerciseId);
-        }
+        if (hasAnyVideo && resolvedExerciseId != null) touchedExerciseIds.add(resolvedExerciseId);
 
         if (entry.sets.length > 0) {
           const exerciseKey = entry.programExerciseId != null ? `pe:${entry.programExerciseId}` : `c:${entry.correctiveId}`;
@@ -15737,8 +15740,14 @@ ${catalog}`;
       .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
       .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
       .innerJoin(users, eq(workoutLogs.athleteId, users.id))
-      .innerJoin(programExercises, eq(workoutLogEntries.programExerciseId, programExercises.id))
-      .innerJoin(exercises, eq(programExercises.exerciseId, exercises.id))
+      // Exercise identity comes from the submission-time snapshot
+      // (workoutLogEntries.exerciseId), not a live join through
+      // programExercises -- see that column's own schema comment. Tracking
+      // mode still has to come from programExercises (it was never
+      // snapshotted), left-joined since a later program-day edit can leave
+      // programExerciseId null without touching the set's actual data.
+      .innerJoin(exercises, eq(workoutLogEntries.exerciseId, exercises.id))
+      .leftJoin(programExercises, eq(workoutLogEntries.programExerciseId, programExercises.id))
       .where(and(isNotNull(programExercises.trackingLevel), sql`${programExercises.trackingLevel} != 'none'`))
       .orderBy(desc(workoutSetEntries.id))
       .limit(limit);

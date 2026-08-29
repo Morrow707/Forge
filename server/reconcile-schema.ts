@@ -617,7 +617,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS "workout_log_day_instance_idx" ON "workout_log
 CREATE TABLE IF NOT EXISTS "workout_log_entries" (
   "id" serial PRIMARY KEY,
   "workout_log_id" integer NOT NULL REFERENCES "workout_logs"("id") ON DELETE CASCADE,
-  "program_exercise_id" integer REFERENCES "program_exercises"("id") ON DELETE CASCADE,
+  "program_exercise_id" integer REFERENCES "program_exercises"("id") ON DELETE SET NULL,
+  "exercise_id" integer REFERENCES "exercises"("id") ON DELETE SET NULL,
   "corrective_id" integer REFERENCES "assignment_correctives"("id") ON DELETE CASCADE,
   "weight_mode" weight_mode NOT NULL DEFAULT 'numeric',
   "rpe" integer,
@@ -640,6 +641,31 @@ DO $$ BEGIN
     ALTER TABLE "workout_log_entries" ADD CONSTRAINT "workout_log_entries_corrective_id_assignment_correctives_id_fk"
       FOREIGN KEY ("corrective_id") REFERENCES "assignment_correctives"("id") ON DELETE CASCADE;
   END IF;
+END $$;
+
+-- Bug fix, 2026-08-29: program_exercise_id was ON DELETE CASCADE, and
+-- updateProgramDay deletes+reinserts a program day's ENTIRE programExercises
+-- row set on every edit, even ones that don't touch a given exercise. That
+-- silently cascade-deleted every athlete's already-logged sets for the day
+-- -- real weight, tracked velocities, video refs, everything -- the instant
+-- a coach edited anything about that day. Switching to SET NULL stops the
+-- destructive delete going forward; it cannot undo cascade-deletes that
+-- already happened before this migration ran. exercise_id is a permanent,
+-- submission-time snapshot of which exercise a set was actually logged
+-- against (see submitWorkoutLog), so historical reads no longer depend on
+-- programExercises still existing, or still pointing at the same exercise
+-- it did at log time. Backfilled below from the live join for every
+-- existing row whose program_exercise_id link is still intact; rows
+-- already orphaned by a past cascade-delete have no recoverable identity.
+ALTER TABLE "workout_log_entries" ADD COLUMN IF NOT EXISTS "exercise_id" integer REFERENCES "exercises"("id") ON DELETE SET NULL;
+UPDATE "workout_log_entries" wle
+  SET "exercise_id" = pe."exercise_id"
+  FROM "program_exercises" pe
+  WHERE wle."program_exercise_id" = pe."id" AND wle."exercise_id" IS NULL;
+DO $$ BEGIN
+  ALTER TABLE "workout_log_entries" DROP CONSTRAINT IF EXISTS "workout_log_entries_program_exercise_id_program_exercises_id_fk";
+  ALTER TABLE "workout_log_entries" ADD CONSTRAINT "workout_log_entries_program_exercise_id_program_exercises_id_fk"
+    FOREIGN KEY ("program_exercise_id") REFERENCES "program_exercises"("id") ON DELETE SET NULL;
 END $$;
 
 CREATE TABLE IF NOT EXISTS "workout_set_entries" (

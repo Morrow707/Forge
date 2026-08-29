@@ -1774,10 +1774,29 @@ export const workoutLogEntries = pgTable(
   workoutLogId: integer("workout_log_id")
     .notNull()
     .references(() => workoutLogs.id, { onDelete: "cascade" }),
+  // "set null", not "cascade" -- updateProgramDay replaces a program day's
+  // entire programExercises row set (delete-all, reinsert fresh) on every
+  // single edit, even ones that don't touch this exercise. With cascade,
+  // that silently deleted every athlete's already-logged sets for the day
+  // -- real weight, tracked velocities, video, everything -- the instant a
+  // coach edited anything about it. Losing the link to a no-longer-current
+  // program-exercise config is fine (nothing about it still exists to link
+  // to); losing the athlete's actual recorded performance is not. See
+  // exerciseId below for how a set's exercise identity survives that.
   programExerciseId: integer("program_exercise_id").references(
     () => programExercises.id,
-    { onDelete: "cascade" },
+    { onDelete: "set null" },
   ),
+  // Snapshot of which exercise this entry was actually logged against,
+  // resolved once at submission time (see submitWorkoutLog) and never
+  // re-derived afterward. programExerciseId's live join through
+  // programExercises can't be used for this: a later program-day edit can
+  // leave that FK null (see its own comment) or pointing at a row that's
+  // since been reassigned to a completely different exercise, which would
+  // silently relabel -- not just orphan -- a historical set's data. This
+  // column is what every historical read (admin tracking report, PR
+  // detection, etc.) should resolve exercise identity through instead.
+  exerciseId: integer("exercise_id").references(() => exercises.id, { onDelete: "set null" }),
   correctiveId: integer("corrective_id").references(
     () => assignmentCorrectives.id,
     { onDelete: "cascade" },
