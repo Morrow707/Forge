@@ -85,15 +85,12 @@ const AdminSkillDetail = lazy(() => import("@/pages/admin/skill-detail"));
 const AdminPrograms = lazy(() => import("@/pages/admin/programs"));
 const AdminProgramBuilder = lazy(() => import("@/pages/admin/program-builder"));
 const AdminReviewQueue = lazy(() => import("@/pages/admin/review-queue"));
-const AdminAiKnowledge = lazy(() => import("@/pages/admin/ai-knowledge"));
-const AdminMovementKnowledge = lazy(() => import("@/pages/admin/movement-knowledge"));
+const AdminTeachAi = lazy(() => import("@/pages/admin/teach-ai"));
 const AdminTrackerDiagnosisReports = lazy(() => import("@/pages/admin/tracker-diagnosis-reports"));
 const AdminTrackingReport = lazy(() => import("@/pages/admin/tracking-report"));
-const ForgeAi = lazy(() => import("@/pages/admin/forge-ai"));
 const AdminLegalAgreement = lazy(() => import("@/pages/admin/legal-agreement"));
 const AdminDocuments = lazy(() => import("@/pages/admin/documents"));
 const AdminProblemReports = lazy(() => import("@/pages/admin/problem-reports"));
-const AdminNutritionKnowledge = lazy(() => import("@/pages/admin/nutrition-knowledge"));
 const AdminMyCalendar = lazy(() => import("@/pages/admin/my-calendar"));
 const AdminMyWorkout = lazy(() => import("@/pages/admin/my-workout"));
 const AdminPlatformTrends = lazy(() => import("@/pages/admin/platform-trends"));
@@ -422,11 +419,8 @@ function Router() {
         <Route path="/admin/review">
           <ProtectedRoute role="admin" component={AdminReviewQueue} />
         </Route>
-        <Route path="/admin/ai-knowledge">
-          <ProtectedRoute role="admin" component={AdminAiKnowledge} />
-        </Route>
-        <Route path="/admin/forge-ai">
-          <ProtectedRoute role="admin" component={ForgeAi} />
+        <Route path="/admin/teach-ai">
+          <ProtectedRoute role="admin" component={AdminTeachAi} />
         </Route>
         <Route path="/admin/legal-agreement">
           <ProtectedRoute role="admin" component={AdminLegalAgreement} />
@@ -436,12 +430,6 @@ function Router() {
         </Route>
         <Route path="/admin/problem-reports">
           <ProtectedRoute role="admin" component={AdminProblemReports} />
-        </Route>
-        <Route path="/admin/nutrition-knowledge">
-          <ProtectedRoute role="admin" component={AdminNutritionKnowledge} />
-        </Route>
-        <Route path="/admin/movement-knowledge">
-          <ProtectedRoute role="admin" component={AdminMovementKnowledge} />
         </Route>
         <Route path="/admin/tracker-diagnosis-reports">
           <ProtectedRoute role="admin" component={AdminTrackerDiagnosisReports} />

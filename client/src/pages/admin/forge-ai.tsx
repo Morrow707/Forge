@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AppShell } from "@/components/app-shell";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -51,7 +50,7 @@ function scopeLabel(e: EntryTags): string {
  * "Teach AI"/"Teach Nutrition AI" pages used. Nothing here reaches the live
  * knowledge base every AI feature reads from until the admin reviews a
  * proposal card and explicitly applies it. */
-export default function ForgeAiPage() {
+export function ForgeAiContent() {
   const qc = useQueryClient();
   const [content, setContent] = useState("");
   const [attachedImage, setAttachedImage] = useState<CapturedPhoto | null>(null);
@@ -191,7 +190,7 @@ export default function ForgeAiPage() {
   });
 
   return (
-    <AppShell title="Forge AI">
+    <>
       <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
         <Card className="flex min-h-[28rem] flex-col">
           <CardHeader className="shrink-0">
@@ -608,6 +607,6 @@ export default function ForgeAiPage() {
           )}
         </Card>
       </div>
-    </AppShell>
+    </>
   );
 }

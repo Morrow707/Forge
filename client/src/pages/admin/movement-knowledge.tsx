@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AppShell } from "@/components/app-shell";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -69,7 +68,7 @@ function formatValue(value: number | null, unit: string): string {
  * apply" pattern, but the AI proposes structured fields instead of a
  * freeform document. Nothing here affects a live tracked set until the
  * admin explicitly applies a proposal -- see storage.applyMovementProfileProposal. */
-export default function AdminMovementKnowledge() {
+export function MovementKnowledgeContent() {
   const qc = useQueryClient();
   const [movementType, setMovementType] = useState<string>(MOVEMENT_TYPES[0]);
   const [content, setContent] = useState("");
@@ -133,7 +132,7 @@ export default function AdminMovementKnowledge() {
     proposal && proposal.cameraFramingNotes !== (activeProfile?.cameraFramingNotes ?? null);
 
   return (
-    <AppShell title="Teach Movement AI">
+    <>
       <div className="mb-4">
         <RadioChipGroup
           label="Movement"
@@ -332,6 +331,6 @@ export default function AdminMovementKnowledge() {
           </CardContent>
         </Card>
       </div>
-    </AppShell>
+    </>
   );
 }
