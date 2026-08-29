@@ -2104,6 +2104,15 @@ ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "capture_device_info"
 INSERT INTO "users" ("email", "password_hash", "name", "role")
 SELECT 'claude-report-bot@forge.app', '767e659819d1605188e06850579076e9b5fc8d65bfd3e829e99114e90552e88e6da597a2a8925c45469bd0ea8ece2f7ad2dcc79091ab3dba4fbfd81178fede02.2367fa9be6ca03230b2a4003814d3bf6', 'Forge Tracking Report Bot', 'admin'
 WHERE NOT EXISTS (SELECT 1 FROM "users" WHERE "email" = 'claude-report-bot@forge.app');
+
+-- Admin-editable price overrides for the Billing page's pricing catalog -- see
+-- pricing-catalog.ts and storage.getPricingCatalog/setPricingOverride. Empty on a fresh
+-- database; every price simply falls back to its coded default until an admin actually edits one.
+CREATE TABLE IF NOT EXISTS "pricing_overrides" (
+  "key" text PRIMARY KEY,
+  "price_cents" integer NOT NULL,
+  "updated_at" timestamp NOT NULL DEFAULT now()
+);
 `;
 
 async function main() {

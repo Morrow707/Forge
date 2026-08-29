@@ -66,6 +66,7 @@ import {
   skillProgramChatMessages,
   classes,
   classLessons,
+  pricingOverrides,
   classEnrollments,
   classLessonProgress,
   classLessonQuizQuestions,
@@ -220,6 +221,7 @@ import { fetchUrlSafely, UnsafeUrlError } from "./safe-fetch";
 import { deleteUploadedFile, statUploadedFile } from "./uploaded-files";
 import { isGatedUploadPath } from "./media-url-signing";
 import { tierForAppleProductId, type VerifiedAppleTransaction } from "./apple-iap";
+import { PRICING_CATALOG, type PricingCatalogItem } from "./pricing-catalog";
 import {
   eq,
   and,
@@ -2231,6 +2233,80 @@ export const storage = {
 
   async listRedeemCodes() {
     return db.query.redeemCodes.findMany({ orderBy: desc(redeemCodes.createdAt) });
+  },
+
+  // ---------- Pricing catalog (admin Billing page) ----------
+  // Every priced thing on the platform in one place -- see
+  // pricing-catalog.ts's own comment for why the numbers themselves stay
+  // coded defaults and this table only ever holds the deltas an admin has
+  // actually changed.
+  async getPricingCatalog(): Promise<
+    (PricingCatalogItem & { currentCents: number; overridden: boolean })[]
+  > {
+    const overrides = await db.query.pricingOverrides.findMany();
+    const byKey = new Map(overrides.map((o) => [o.key, o.priceCents]));
+    return PRICING_CATALOG.map((item) => {
+      const override = byKey.get(item.key);
+      return {
+        ...item,
+        currentCents: override ?? item.defaultCents,
+        overridden: override != null,
+      };
+    });
+  },
+
+  async setPricingOverride(key: string, priceCents: number | null): Promise<void> {
+    if (priceCents == null) {
+      await db.delete(pricingOverrides).where(eq(pricingOverrides.key, key));
+      return;
+    }
+    await db
+      .insert(pricingOverrides)
+      .values({ key, priceCents })
+      .onConflictDoUpdate({ target: pricingOverrides.key, set: { priceCents, updatedAt: new Date() } });
+  },
+
+  // Every Forge-official class's lessons with their per-lesson price --
+  // priceCents only ever applies when the parent class isForgeOfficial (see
+  // classLessons' own schema comment), so a coach's private class lessons
+  // are excluded entirely rather than shown as "always free" noise.
+  async getForgeClassLessonPrices(): Promise<
+    { classId: number; className: string; lessonId: number; lessonNumber: number; lessonTitle: string; priceCents: number | null }[]
+  > {
+    const rows = await db
+      .select({
+        classId: classes.id,
+        className: classes.name,
+        lessonId: classLessons.id,
+        lessonNumber: classLessons.lessonNumber,
+        lessonTitle: classLessons.title,
+        priceCents: classLessons.priceCents,
+      })
+      .from(classLessons)
+      .innerJoin(classes, eq(classLessons.classId, classes.id))
+      .where(eq(classes.isForgeOfficial, true))
+      .orderBy(classes.name, classLessons.lessonNumber);
+    return rows;
+  },
+
+  // Guarded to a Forge-official class's lesson only -- see this file's
+  // other comment on why priceCents is meaningless (never read) on a
+  // coach's own private class.
+  async setForgeClassLessonPrice(lessonId: number, priceCents: number | null): Promise<boolean> {
+    const [updated] = await db
+      .update(classLessons)
+      .set({ priceCents })
+      .where(
+        and(
+          eq(classLessons.id, lessonId),
+          inArray(
+            classLessons.classId,
+            db.select({ id: classes.id }).from(classes).where(eq(classes.isForgeOfficial, true)),
+          ),
+        ),
+      )
+      .returning();
+    return Boolean(updated);
   },
 
   // Extends (never overwrites) trialExpiresAt -- a coach who redeems a

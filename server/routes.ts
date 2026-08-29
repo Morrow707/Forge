@@ -10,6 +10,7 @@ import { getEntitlements, type Entitlements, getFreeAgentEntitlements } from "./
 import { uploadsLimiter } from "./rate-limiters";
 import { storage } from "./storage";
 import { formatTrackingReport, buildTrackingReportEntries } from "./tracking-report";
+import { PRICING_CATALOG_KEYS } from "./pricing-catalog";
 import { buildIcsFeed } from "./ics";
 import { getVapidPublicKey, pushEnabled } from "./push";
 import { apnsEnabled } from "./apns";
@@ -79,6 +80,7 @@ import {
   updateCoachingPhilosophySchema,
   updateCoachBillingSchema,
   createRedeemCodeSchema,
+  setPricingOverrideSchema,
   redeemCodeInputSchema,
   updateFreeAgentBillingSchema,
   createFamilyGroupSchema,
@@ -2139,6 +2141,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     const code = await storage.createRedeemCode(parsed.data);
     res.status(201).json(code);
+  });
+
+  // Every priced thing on the platform, admin-editable -- see pricing-catalog.ts.
+  app.get("/api/admin/pricing", requireRole("admin"), async (_req, res) => {
+    const catalog = await storage.getPricingCatalog();
+    res.json(catalog);
+  });
+
+  app.patch("/api/admin/pricing/:key", requireRole("admin"), async (req, res) => {
+    const key = String(req.params.key);
+    if (!PRICING_CATALOG_KEYS.has(key)) {
+      return res.status(404).json({ message: "Unknown pricing key" });
+    }
+    const parsed = setPricingOverrideSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    await storage.setPricingOverride(key, parsed.data.priceCents);
+    res.status(204).end();
+  });
+
+  app.get("/api/admin/pricing/class-lessons", requireRole("admin"), async (_req, res) => {
+    const lessons = await storage.getForgeClassLessonPrices();
+    res.json(lessons);
+  });
+
+  app.patch("/api/admin/pricing/class-lessons/:id", requireRole("admin"), async (req, res) => {
+    const parsed = setPricingOverrideSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const updated = await storage.setForgeClassLessonPrice(Number(req.params.id), parsed.data.priceCents);
+    if (!updated) return res.status(404).json({ message: "Lesson not found (or not a Forge-official class)" });
+    res.status(204).end();
   });
 
   // Coach-facing redemption -- primary only, same as the rest of billing

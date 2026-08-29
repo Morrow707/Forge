@@ -4,52 +4,10 @@ import { AppShell } from "@/components/app-shell";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 import { apiRequest, getJson, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { Search, Ticket, Users, Video } from "lucide-react";
-import {
-  BILLING_TIERS,
-  BILLING_TIER_ORDER,
-  BILLING_ADD_ONS,
-  BILLING_ADD_ON_ORDER,
-  formatCents,
-  type BillingTierId,
-  type AddOnId,
-} from "@shared/billing-tiers";
-import {
-  FREE_AGENT_TIERS,
-  FREE_AGENT_TIER_ORDER,
-  FREE_AGENT_ADD_ONS,
-  FREE_AGENT_ADD_ON_ORDER,
-  BUILT_FREE_AGENT_ADD_ONS,
-  type FreeAgentTierId,
-  type FreeAgentAddOnId,
-} from "@shared/free-agent-tiers";
-import { VIDEO_STORAGE_ADD_ON, VIDEO_RETENTION } from "@shared/video-retention";
-import { SKILL_SPORT_UNLOCK_MONTHLY_PRICE_CENTS } from "@shared/free-agent-tiers";
-import { SPORTS } from "@shared/exercise-taxonomy";
-import { FilterChipGroup, toggleInSet } from "@/components/filter-chip-group";
-
-type CoachLookup = {
-  id: number;
-  name: string;
-  email: string;
-  isPrimary: boolean;
-  rosterCount: number;
-  billingTier: string | null;
-  billingAddOns: string[];
-  isBetaAccount: boolean;
-  institutionalAgreement: { required: boolean; accepted: boolean; acceptedAt: string | null };
-};
+import { Ticket, DollarSign, RotateCcw, GraduationCap } from "lucide-react";
 
 type RedeemCode = {
   id: number;
@@ -60,59 +18,130 @@ type RedeemCode = {
   createdAt: string;
 };
 
-type AthleteLookup = {
-  id: number;
-  name: string;
-  email: string;
-  freeAgentTier: string | null;
-  freeAgentAddOns: string[];
-  isBetaAccount: boolean;
-  familyGroupId: number | null;
-  hasVideoStorageAddOn: boolean;
-  unlockedSkillSports: string[];
+type PricingItem = {
+  key: string;
+  category: string;
+  label: string;
+  description: string;
+  defaultCents: number;
+  currentCents: number;
+  overridden: boolean;
 };
 
-/** No self-serve checkout exists yet -- this is the only place a real
- * coach account gets a billingTier/billingAddOns/isBetaAccount set (see
- * shared/billing-tiers.ts, server/billing.ts). Look up an org by its
- * primary coach's email, then assign. */
+type ClassLessonPrice = {
+  classId: number;
+  className: string;
+  lessonId: number;
+  lessonNumber: number;
+  lessonTitle: string;
+  priceCents: number | null;
+};
+
+function centsToInput(cents: number | null): string {
+  return cents == null ? "" : (cents / 100).toFixed(2);
+}
+
+function dollarsToCents(value: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const n = Math.round(Number(trimmed) * 100);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
+/** One editable price row shared by the pricing catalog and the Forge Class
+ * lesson list below -- local draft state seeded from the server value,
+ * Save only enabled once it actually differs, Reset clears back to the
+ * coded default (catalog rows only; a class lesson has no "default" to
+ * revert to). */
+function PriceRow({
+  label,
+  description,
+  currentCents,
+  overridden,
+  onSave,
+  onReset,
+  saving,
+  allowBlank,
+}: {
+  label: string;
+  description?: string;
+  currentCents: number | null;
+  overridden?: boolean;
+  onSave: (cents: number | null) => void;
+  onReset?: () => void;
+  saving: boolean;
+  /** Class lessons: blank means free, so an empty draft is a valid, savable
+   * value. Catalog rows never allow a blank save -- clearing back to the
+   * coded default goes through the explicit Reset button instead. */
+  allowBlank?: boolean;
+}) {
+  const [draft, setDraft] = useState(centsToInput(currentCents));
+  const draftCents = dollarsToCents(draft);
+  const draftIsBlank = draft.trim() === "";
+  const dirty = draftIsBlank
+    ? allowBlank && currentCents != null
+    : draftCents != null && draftCents !== currentCents;
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/50 py-2.5 last:border-b-0">
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium">
+          {label} {overridden && <Badge variant="outline" className="ml-1 text-[9px]">edited</Badge>}
+        </p>
+        {description && <p className="text-xs text-muted-foreground">{description}</p>}
+      </div>
+      <div className="flex shrink-0 items-center gap-1.5">
+        <span className="text-sm text-muted-foreground">$</span>
+        <Input
+          type="number"
+          min={0}
+          step="0.01"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          placeholder={allowBlank ? "free" : undefined}
+          className="w-24"
+        />
+        <Button size="sm" variant="secondary" disabled={!dirty || saving} onClick={() => onSave(draftIsBlank ? null : draftCents)}>
+          Save
+        </Button>
+        {onReset && overridden && (
+          <Button size="icon" variant="ghost" onClick={onReset} disabled={saving} aria-label="Reset to default">
+            <RotateCcw className="h-3.5 w-3.5" />
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Billing-only admin page: create/manage redeem codes, and edit every
+ * priced thing on the platform in one place. Per-account tier assignment
+ * (org billing tier, Free Agent tier, family groups) used to live here too
+ * -- pulled out since nothing on this page needs a coach/athlete lookup to
+ * just see and edit prices, and the lookup tools weren't finding accounts
+ * as expected. The server routes those used (/api/admin/coaches/:id/billing
+ * etc.) are untouched, just no longer surfaced from this page. */
 export default function AdminBilling() {
   const qc = useQueryClient();
-  const [emailInput, setEmailInput] = useState("");
-  const [coach, setCoach] = useState<CoachLookup | null>(null);
-  const [tier, setTier] = useState<string>("none");
-  const [addOns, setAddOns] = useState<Set<AddOnId>>(new Set());
-  const [isBeta, setIsBeta] = useState(true);
 
   const [newCode, setNewCode] = useState("");
   const [newTrialDays, setNewTrialDays] = useState("14");
   const [newMaxRedemptions, setNewMaxRedemptions] = useState("");
-
-  const [athleteEmailInput, setAthleteEmailInput] = useState("");
-  const [athlete, setAthlete] = useState<AthleteLookup | null>(null);
-  const [freeAgentTier, setFreeAgentTier] = useState<string>("none");
-  const [freeAgentAddOns, setFreeAgentAddOns] = useState<Set<FreeAgentAddOnId>>(new Set());
-  const [athleteIsBeta, setAthleteIsBeta] = useState(true);
-  const [videoStorageAddOn, setVideoStorageAddOn] = useState(false);
-  const [unlockedSkillSports, setUnlockedSkillSports] = useState<Set<string>>(new Set());
-
-  const [familyEmails, setFamilyEmails] = useState(["", "", ""]);
 
   const { data: codes = [] } = useQuery<RedeemCode[]>({
     queryKey: ["/api/admin/redeem-codes"],
     queryFn: () => getJson("/api/admin/redeem-codes"),
   });
 
-  // Only a subset of shared/exercise-taxonomy.ts's ~30 sports have any real
-  // Skill Bank drill content -- filters the unlock picker below so this
-  // page can't be used to sell/assign an unlock for a sport with nothing
-  // behind it (the server enforces this too, see PATCH .../billing's own
-  // check; this is just so the admin never sees the dead option at all).
-  const { data: skillSportsWithContent } = useQuery<{ sports: string[] }>({
-    queryKey: ["/api/admin/skill-sports-with-content"],
-    queryFn: () => getJson("/api/admin/skill-sports-with-content"),
+  const { data: pricing = [], isLoading: pricingLoading } = useQuery<PricingItem[]>({
+    queryKey: ["/api/admin/pricing"],
+    queryFn: () => getJson("/api/admin/pricing"),
   });
-  const sportsWithSkillContent = SPORTS.filter((s) => skillSportsWithContent?.sports.includes(s));
+
+  const { data: classLessons = [] } = useQuery<ClassLessonPrice[]>({
+    queryKey: ["/api/admin/pricing/class-lessons"],
+    queryFn: () => getJson("/api/admin/pricing/class-lessons"),
+  });
 
   const createCodeMutation = useMutation({
     mutationFn: async () => {
@@ -132,212 +161,38 @@ export default function AdminBilling() {
     onError: (err: ApiError) => toast.error(err.message || "Couldn't create code"),
   });
 
-  const lookupMutation = useMutation({
-    mutationFn: async (email: string) => getJson(`/api/admin/coaches/lookup?email=${encodeURIComponent(email)}`) as Promise<CoachLookup>,
-    onSuccess: (data) => {
-      setCoach(data);
-      setTier(data.billingTier ?? "none");
-      setAddOns(new Set(data.billingAddOns as AddOnId[]));
-      setIsBeta(data.isBetaAccount);
-    },
-    onError: (err: ApiError) => {
-      setCoach(null);
-      toast.error(err.message || "No coach found with that email");
-    },
-  });
-
-  const saveMutation = useMutation({
-    mutationFn: async () => {
-      if (!coach) return;
-      await apiRequest("PATCH", `/api/admin/coaches/${coach.id}/billing`, {
-        billingTier: tier === "none" ? null : tier,
-        billingAddOns: Array.from(addOns),
-        isBetaAccount: isBeta,
-      });
+  const savePriceMutation = useMutation({
+    mutationFn: async ({ key, priceCents }: { key: string; priceCents: number | null }) => {
+      await apiRequest("PATCH", `/api/admin/pricing/${key}`, { priceCents });
     },
     onSuccess: () => {
-      toast.success("Billing updated");
-      qc.invalidateQueries({ queryKey: ["/api/admin/coaches/lookup"] });
+      toast.success("Price updated");
+      qc.invalidateQueries({ queryKey: ["/api/admin/pricing"] });
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't save"),
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't save price"),
   });
 
-  function toggleAddOn(id: AddOnId) {
-    const next = new Set(addOns);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    setAddOns(next);
+  const saveLessonPriceMutation = useMutation({
+    mutationFn: async ({ lessonId, priceCents }: { lessonId: number; priceCents: number | null }) => {
+      await apiRequest("PATCH", `/api/admin/pricing/class-lessons/${lessonId}`, { priceCents });
+    },
+    onSuccess: () => {
+      toast.success("Price updated");
+      qc.invalidateQueries({ queryKey: ["/api/admin/pricing/class-lessons"] });
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't save price"),
+  });
+
+  const categories = Array.from(new Set(pricing.map((p) => p.category)));
+  const lessonsByClass = new Map<string, ClassLessonPrice[]>();
+  for (const l of classLessons) {
+    if (!lessonsByClass.has(l.className)) lessonsByClass.set(l.className, []);
+    lessonsByClass.get(l.className)!.push(l);
   }
-
-  const lookupAthleteMutation = useMutation({
-    mutationFn: async (email: string) =>
-      getJson(`/api/admin/athletes/lookup?email=${encodeURIComponent(email)}`) as Promise<AthleteLookup>,
-    onSuccess: (data) => {
-      setAthlete(data);
-      setFreeAgentTier(data.freeAgentTier ?? "none");
-      setFreeAgentAddOns(new Set(data.freeAgentAddOns as FreeAgentAddOnId[]));
-      setAthleteIsBeta(data.isBetaAccount);
-      setVideoStorageAddOn(data.hasVideoStorageAddOn);
-      setUnlockedSkillSports(new Set(data.unlockedSkillSports));
-    },
-    onError: (err: ApiError) => {
-      setAthlete(null);
-      toast.error(err.message || "No athlete found with that email");
-    },
-  });
-
-  const saveAthleteMutation = useMutation({
-    mutationFn: async () => {
-      if (!athlete) return;
-      await apiRequest("PATCH", `/api/admin/athletes/${athlete.id}/billing`, {
-        freeAgentTier: freeAgentTier === "none" ? null : freeAgentTier,
-        freeAgentAddOns: Array.from(freeAgentAddOns),
-        isBetaAccount: athleteIsBeta,
-        hasVideoStorageAddOn: videoStorageAddOn,
-        unlockedSkillSports: Array.from(unlockedSkillSports),
-      });
-    },
-    onSuccess: () => {
-      toast.success("Billing updated");
-      qc.invalidateQueries({ queryKey: ["/api/admin/athletes/lookup"] });
-    },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't save"),
-  });
-
-  function toggleFreeAgentAddOn(id: FreeAgentAddOnId) {
-    const next = new Set(freeAgentAddOns);
-    if (next.has(id)) {
-      next.delete(id);
-    } else {
-      if (!BUILT_FREE_AGENT_ADD_ONS.has(id)) return;
-      next.add(id);
-    }
-    setFreeAgentAddOns(next);
-  }
-
-  const createFamilyGroupMutation = useMutation({
-    mutationFn: async () => {
-      const emails = familyEmails.map((e) => e.trim()).filter(Boolean);
-      await apiRequest("POST", "/api/admin/family-groups", { athleteEmails: emails });
-    },
-    onSuccess: () => {
-      toast.success("Family group created");
-      setFamilyEmails(["", "", ""]);
-    },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't create family group"),
-  });
 
   return (
     <AppShell title="Billing">
-      <div className="mx-auto max-w-xl space-y-4">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Find a coach</CardTitle>
-            <CardDescription>
-              Look up an org by its primary coach's email to assign a tier or add-ons.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex gap-2">
-            <Input
-              type="email"
-              value={emailInput}
-              onChange={(e) => setEmailInput(e.target.value)}
-              placeholder="coach@example.com"
-              onKeyDown={(e) => e.key === "Enter" && emailInput.trim() && lookupMutation.mutate(emailInput.trim())}
-            />
-            <Button
-              type="button"
-              onClick={() => lookupMutation.mutate(emailInput.trim())}
-              disabled={!emailInput.trim() || lookupMutation.isPending}
-            >
-              <Search className="h-4 w-4" />
-              Look up
-            </Button>
-          </CardContent>
-        </Card>
-
-        {coach && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">{coach.name}</CardTitle>
-              <CardDescription>
-                {coach.email} · {coach.rosterCount} athlete{coach.rosterCount === 1 ? "" : "s"} on
-                roster
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {!coach.isPrimary ? (
-                <p className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
-                  This account is staff under another coach's org -- billing is assigned to the
-                  primary coach, not a staff member. Look up the primary instead.
-                </p>
-              ) : (
-                <>
-                  {coach.institutionalAgreement.required && (
-                    <p className="text-xs text-muted-foreground">
-                      Institutional Service Agreement:{" "}
-                      {coach.institutionalAgreement.accepted ? (
-                        <span className="text-success">
-                          accepted{" "}
-                          {coach.institutionalAgreement.acceptedAt &&
-                            new Date(coach.institutionalAgreement.acceptedAt).toLocaleDateString()}
-                        </span>
-                      ) : (
-                        <span className="text-amber-500">not yet accepted</span>
-                      )}
-                    </p>
-                  )}
-                  <div className="space-y-1.5">
-                    <Label>Tier</Label>
-                    <Select value={tier} onValueChange={setTier}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">No tier assigned</SelectItem>
-                        {BILLING_TIER_ORDER.map((id) => (
-                          <SelectItem key={id} value={id}>
-                            {BILLING_TIERS[id].label} -- {formatCents(BILLING_TIERS[id].monthlyPriceCents)}/mo
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label>Add-ons</Label>
-                    <div className="space-y-2">
-                      {BILLING_ADD_ON_ORDER.map((id) => (
-                        <label key={id} className="flex items-center gap-2 text-sm hover:cursor-pointer">
-                          <Checkbox checked={addOns.has(id)} onCheckedChange={() => toggleAddOn(id)} />
-                          {BILLING_ADD_ONS[id].label} -- {formatCents(BILLING_ADD_ONS[id].monthlyPriceCents)}/mo
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-
-                  <label className="flex items-center gap-2 rounded-md border border-border p-3 text-sm hover:cursor-pointer">
-                    <Checkbox checked={isBeta} onCheckedChange={(v) => setIsBeta(v === true)} />
-                    <span>
-                      <span className="font-medium">Beta account</span> -- fully unlocked
-                      regardless of tier/add-ons, exempt from billing enforcement entirely.
-                    </span>
-                  </label>
-
-                  <Button
-                    type="button"
-                    className="w-full"
-                    onClick={() => saveMutation.mutate()}
-                    disabled={saveMutation.isPending}
-                  >
-                    Save
-                  </Button>
-                </>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
+      <div className="mx-auto max-w-3xl space-y-4">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
@@ -401,186 +256,82 @@ export default function AdminBilling() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Find an athlete</CardTitle>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <DollarSign className="h-4 w-4" />
+              Pricing
+            </CardTitle>
             <CardDescription>
-              Look up any athlete by email -- Free Agent AI-coach tier assignment (a separate
-              track from coach/org billing above) and the video storage add-on below both work
-              here, and the latter applies to a coached athlete too.
+              Every priced thing on the platform -- the org/coach plan formula, personalization
+              add-ons, Free Agent tiers and sport add-ons, video storage, and Skill Bank unlocks.
+              Edit any price here; nothing is charged automatically yet (no live checkout), this
+              is the source every price shown elsewhere reads from.
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex gap-2">
-            <Input
-              type="email"
-              value={athleteEmailInput}
-              onChange={(e) => setAthleteEmailInput(e.target.value)}
-              placeholder="athlete@example.com"
-              onKeyDown={(e) =>
-                e.key === "Enter" && athleteEmailInput.trim() && lookupAthleteMutation.mutate(athleteEmailInput.trim())
-              }
-            />
-            <Button
-              type="button"
-              onClick={() => lookupAthleteMutation.mutate(athleteEmailInput.trim())}
-              disabled={!athleteEmailInput.trim() || lookupAthleteMutation.isPending}
-            >
-              <Search className="h-4 w-4" />
-              Look up
-            </Button>
+          <CardContent className="space-y-5">
+            {pricingLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
+            {categories.map((cat) => (
+              <div key={cat}>
+                <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {cat}
+                </p>
+                <div>
+                  {pricing
+                    .filter((p) => p.category === cat)
+                    .map((p) => (
+                      <PriceRow
+                        key={p.key}
+                        label={p.label}
+                        description={p.description}
+                        currentCents={p.currentCents}
+                        overridden={p.overridden}
+                        saving={savePriceMutation.isPending}
+                        onSave={(cents) => savePriceMutation.mutate({ key: p.key, priceCents: cents })}
+                        onReset={() => savePriceMutation.mutate({ key: p.key, priceCents: null })}
+                      />
+                    ))}
+                </div>
+              </div>
+            ))}
           </CardContent>
         </Card>
 
-        {athlete && (
+        {lessonsByClass.size > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">{athlete.name}</CardTitle>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <GraduationCap className="h-4 w-4" />
+                Forge Class lesson prices
+              </CardTitle>
               <CardDescription>
-                {athlete.email}
-                {athlete.familyGroupId != null && ` · in family group #${athlete.familyGroupId}`}
+                Per-lesson pricing only ever applies to a Forge-official class sold to a Free
+                Agent -- a coach's own class is never priced to their own roster. Blank = free.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-1.5">
-                <Label>Tier</Label>
-                <Select value={freeAgentTier} onValueChange={setFreeAgentTier}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">No tier assigned</SelectItem>
-                    {FREE_AGENT_TIER_ORDER.map((id) => (
-                      <SelectItem key={id} value={id}>
-                        {FREE_AGENT_TIERS[id].label} -- {formatCents(FREE_AGENT_TIERS[id].monthlyPriceCents)}/mo
-                      </SelectItem>
+            <CardContent className="space-y-5">
+              {[...lessonsByClass.entries()].map(([className, lessons]) => (
+                <div key={className}>
+                  <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    {className}
+                  </p>
+                  <div>
+                    {lessons.map((l) => (
+                      <PriceRow
+                        key={l.lessonId}
+                        label={`Lesson ${l.lessonNumber}: ${l.lessonTitle}`}
+                        currentCents={l.priceCents}
+                        allowBlank
+                        saving={saveLessonPriceMutation.isPending}
+                        onSave={(cents) =>
+                          saveLessonPriceMutation.mutate({ lessonId: l.lessonId, priceCents: cents })
+                        }
+                      />
                     ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label>Sport add-ons</Label>
-                <p className="text-xs text-muted-foreground">
-                  Pricing only -- none of these sport-specialist coaches are built yet, so none
-                  can be assigned. Each one unlocks here the moment that coach actually ships.
-                </p>
-                <div className="space-y-2">
-                  {FREE_AGENT_ADD_ON_ORDER.map((id) => {
-                    const built = BUILT_FREE_AGENT_ADD_ONS.has(id);
-                    const checked = freeAgentAddOns.has(id);
-                    // Disabled only for turning ON an unbuilt add-on -- if
-                    // one somehow got checked before this guard existed,
-                    // unchecking it (cleanup) still needs to work.
-                    const disabled = !built && !checked;
-                    return (
-                      <label
-                        key={id}
-                        className="flex items-center gap-2 text-sm hover:cursor-pointer aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
-                        aria-disabled={disabled}
-                      >
-                        <Checkbox
-                          checked={checked}
-                          disabled={disabled}
-                          onCheckedChange={() => toggleFreeAgentAddOn(id)}
-                        />
-                        {FREE_AGENT_ADD_ONS[id].label} -- {formatCents(FREE_AGENT_ADD_ONS[id].monthlyPriceCents)}/mo
-                        {!built && <span className="text-muted-foreground">(not built yet)</span>}
-                      </label>
-                    );
-                  })}
+                  </div>
                 </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label>Unlocked skill sports</Label>
-                <p className="text-xs text-muted-foreground">
-                  Every Free Agent gets their own signup sport's Skill Bank free -- toggle on any
-                  other sport here to unlock it manually (${(SKILL_SPORT_UNLOCK_MONTHLY_PRICE_CENTS / 100).toFixed(2)}/mo each, no live checkout yet).
-                  Only sports with real drill content are listed -- there's nothing to unlock for
-                  the rest of the taxonomy yet.
-                </p>
-                <FilterChipGroup
-                  label="Sports"
-                  options={sportsWithSkillContent}
-                  selected={unlockedSkillSports}
-                  onToggle={(v) => toggleInSet(setUnlockedSkillSports, v)}
-                />
-              </div>
-
-              <label className="flex items-center gap-2 rounded-md border border-border p-3 text-sm hover:cursor-pointer">
-                <Checkbox
-                  checked={videoStorageAddOn}
-                  onCheckedChange={(v) => setVideoStorageAddOn(v === true)}
-                />
-                <span className="flex items-center gap-1.5">
-                  <Video className="h-3.5 w-3.5 shrink-0" />
-                  <span>
-                    <span className="font-medium">
-                      Extra video storage -- {formatCents(VIDEO_STORAGE_ADD_ON.monthlyPriceCents)}/mo
-                    </span>{" "}
-                    -- {VIDEO_STORAGE_ADD_ON.favoritedCap} favorited / {VIDEO_STORAGE_ADD_ON.totalCap}{" "}
-                    total per exercise AND per skill drill (baseline is {VIDEO_RETENTION.favoritedCap}/
-                    {VIDEO_RETENTION.totalCap}). Works for a coached athlete too, not just Free
-                    Agents.
-                  </span>
-                </span>
-              </label>
-
-              <label className="flex items-center gap-2 rounded-md border border-border p-3 text-sm hover:cursor-pointer">
-                <Checkbox checked={athleteIsBeta} onCheckedChange={(v) => setAthleteIsBeta(v === true)} />
-                <span>
-                  <span className="font-medium">Beta account</span> -- fully unlocked regardless of
-                  tier, exempt from billing enforcement entirely.
-                </span>
-              </label>
-
-              <Button
-                type="button"
-                className="w-full"
-                onClick={() => saveAthleteMutation.mutate()}
-                disabled={saveAthleteMutation.isPending}
-              >
-                Save
-              </Button>
+              ))}
             </CardContent>
           </Card>
         )}
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Users className="h-4 w-4" />
-              Family groups
-            </CardTitle>
-            <CardDescription>
-              Link up to {FREE_AGENT_TIERS.family.athleteProfileCap} athletes under one Family plan
-              -- each gets set to the Family tier automatically.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              {familyEmails.map((email, i) => (
-                <Input
-                  key={i}
-                  type="email"
-                  value={email}
-                  onChange={(e) => {
-                    const next = [...familyEmails];
-                    next[i] = e.target.value;
-                    setFamilyEmails(next);
-                  }}
-                  placeholder={`Athlete ${i + 1} email${i === 0 ? "" : " (optional)"}`}
-                />
-              ))}
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => createFamilyGroupMutation.mutate()}
-              disabled={!familyEmails[0]?.trim() || createFamilyGroupMutation.isPending}
-            >
-              Create family group
-            </Button>
-          </CardContent>
-        </Card>
       </div>
     </AppShell>
   );

@@ -637,6 +637,25 @@ export const redeemCodeRedemptions = pgTable(
   }),
 );
 
+// One row per admin-edited price -- the defaults live as plain constants in
+// shared/billing-tiers.ts, shared/free-agent-tiers.ts, and
+// shared/video-retention.ts (see server/pricing-catalog.ts's own comment for
+// why); this table only ever holds the keys an admin has actually
+// overridden from this page, so a brand-new deploy with no admin edits yet
+// has an empty table and every price simply falls back to its coded
+// default. Key is the catalog entry's own id (e.g. "org_base_fee",
+// "addon_custom_colors") -- see PRICING_CATALOG.
+export const pricingOverrides = pgTable("pricing_overrides", {
+  key: text("key").primaryKey(),
+  priceCents: integer("price_cents").notNull(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const setPricingOverrideSchema = z.object({
+  // null clears the override, reverting to the coded default.
+  priceCents: z.number().int().min(0).nullable(),
+});
+
 // A Family Free Agent plan (shared/free-agent-tiers.ts: "family", up to
 // FREE_AGENT_TIERS.family.athleteProfileCap members) is billed once but
 // covers multiple athlete accounts -- this is just the shared group they're

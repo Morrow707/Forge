@@ -31,8 +31,8 @@
 // ceiling, not their exact headcount) since a stepped ladder sells better
 // than "exactly $3.50 x your roster" -- but the underlying rate never
 // changes band to band, which is the actual fix.
-const ORG_BASE_CENTS = 1000; // $10.00 flat account fee
-const ORG_PER_ATHLETE_CENTS = 350; // $3.50/athlete, flat, every band, no discount
+export const ORG_BASE_CENTS = 1000; // $10.00 flat account fee
+export const ORG_PER_ATHLETE_CENTS = 350; // $3.50/athlete, flat, every band, no discount
 
 export type BillingTierId = string;
 export type AddOnId = "custom_colors" | "team_identity" | "workflow" | "full_bundle";
