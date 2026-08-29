@@ -164,6 +164,7 @@ const adminNav: NavItem[] = [
   { href: "/admin/nutrition-knowledge", label: "Teach Nutrition AI", icon: Apple, overflow: true },
   { href: "/admin/movement-knowledge", label: "Teach Movement AI", icon: Camera, overflow: true },
   { href: "/admin/tracker-diagnosis-reports", label: "AR Diagnosis Reports", icon: Stethoscope, overflow: true },
+  { href: "/admin/tracking-report", label: "Tracking Report", icon: FileText, overflow: true },
   { href: "/admin/platform-trends", label: "Platform Trends", icon: BarChart3, overflow: true },
   { href: "/admin/billing", label: "Billing", icon: CreditCard, overflow: true },
   { href: "/admin/users", label: "Users", icon: Users, overflow: true },
