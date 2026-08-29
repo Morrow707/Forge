@@ -3,9 +3,15 @@ import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { GraduationCap, Users, Trophy, ChevronDown, ChevronUp } from "lucide-react";
+import { GraduationCap, Users, Trophy, ChevronDown, ChevronUp, Lock } from "lucide-react";
 
-type LessonFunnelRow = { lessonNumber: number; title: string; started: number; passed: number };
+type LessonFunnelRow = {
+  lessonNumber: number;
+  title: string;
+  suppressed: boolean;
+  started: number | null;
+  passed: number | null;
+};
 type ClassAnalyticsRow = {
   id: number;
   name: string;
@@ -13,8 +19,9 @@ type ClassAnalyticsRow = {
   isDraft: boolean;
   lessonCount: number;
   enrolledCount: number;
-  completedCount: number;
-  completionRate: number;
+  suppressed: boolean;
+  completedCount: number | null;
+  completionRate: number | null;
   lessons: LessonFunnelRow[];
 };
 type ClassAnalytics = {
@@ -61,8 +68,16 @@ function ClassFunnelRow({ row }: { row: ClassAnalyticsRow }) {
             {row.enrolledCount}
           </span>
           <span className="flex items-center gap-1 text-muted-foreground">
-            <Trophy className="h-3.5 w-3.5" />
-            {row.enrolledCount > 0 ? pct(row.completionRate) : "–"}
+            {row.suppressed ? (
+              <Lock className="h-3.5 w-3.5" />
+            ) : (
+              <Trophy className="h-3.5 w-3.5" />
+            )}
+            {row.suppressed
+              ? "n/a"
+              : row.completionRate != null && row.enrolledCount > 0
+                ? pct(row.completionRate)
+                : "–"}
           </span>
           {open ? (
             <ChevronUp className="h-4 w-4 text-muted-foreground" />
@@ -73,13 +88,18 @@ function ClassFunnelRow({ row }: { row: ClassAnalyticsRow }) {
       </button>
       {open && (
         <div className="border-t border-border p-3">
-          {row.enrolledCount === 0 ? (
+          {row.suppressed ? (
+            <p className="flex items-center justify-center gap-1.5 py-2 text-center text-xs text-muted-foreground">
+              <Lock className="h-3.5 w-3.5" />
+              Fewer than 5 athletes enrolled -- withheld so no individual's progress is isolable.
+            </p>
+          ) : row.enrolledCount === 0 ? (
             <p className="py-2 text-center text-xs text-muted-foreground">No enrollments yet.</p>
           ) : (
             <div className="space-y-1.5">
               {row.lessons.map((l) => {
-                const startedPct = row.enrolledCount > 0 ? l.started / row.enrolledCount : 0;
-                const passedPct = row.enrolledCount > 0 ? l.passed / row.enrolledCount : 0;
+                const startedPct = !l.suppressed && row.enrolledCount > 0 ? (l.started ?? 0) / row.enrolledCount : 0;
+                const passedPct = !l.suppressed && row.enrolledCount > 0 ? (l.passed ?? 0) / row.enrolledCount : 0;
                 return (
                   <div key={l.lessonNumber} className="flex items-center gap-2 text-xs">
                     <span className="w-28 shrink-0 truncate text-muted-foreground">
@@ -96,14 +116,15 @@ function ClassFunnelRow({ row }: { row: ClassAnalyticsRow }) {
                       />
                     </div>
                     <span className="w-24 shrink-0 text-right text-muted-foreground">
-                      {l.started} read / {l.passed} passed
+                      {l.suppressed ? "< 5 -- withheld" : `${l.started} read / ${l.passed} passed`}
                     </span>
                   </div>
                 );
               })}
               <p className="pt-1 text-[11px] text-muted-foreground">
                 Lighter bar = read the content, solid bar = passed the quiz -- out of{" "}
-                {row.enrolledCount} enrolled.
+                {row.enrolledCount} enrolled. Any lesson fewer than 5 athletes have reached is
+                withheld the same way.
               </p>
             </div>
           )}
@@ -126,53 +147,62 @@ export default function AdminClassesAnalytics() {
         {data && (
           <>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <Card>
-                <CardContent className="flex items-center gap-4 p-5">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-md bg-primary/15 text-primary">
-                    <GraduationCap className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <p className="font-display text-3xl font-bold">{data.totalClasses}</p>
-                    <p className="text-sm text-muted-foreground">Classes on the platform</p>
-                  </div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="flex items-center gap-4 p-5">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-md bg-primary/15 text-primary">
-                    <Users className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <p className="font-display text-3xl font-bold">{data.totalEnrollments}</p>
-                    <p className="text-sm text-muted-foreground">Total enrollments</p>
-                  </div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="flex items-center gap-4 p-5">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-md bg-primary/15 text-primary">
-                    <Trophy className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <p className="font-display text-3xl font-bold">
-                      {data.totalEnrollments > 0
-                        ? pct(data.totalCompletions / data.totalEnrollments)
-                        : "–"}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      Overall completion rate ({data.totalCompletions} finished)
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
+              <a href="#per-class-breakdown">
+                <Card className="cursor-pointer transition-colors hover:border-primary/50">
+                  <CardContent className="flex items-center gap-4 p-5">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-md bg-primary/15 text-primary">
+                      <GraduationCap className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className="font-display text-3xl font-bold">{data.totalClasses}</p>
+                      <p className="text-sm text-muted-foreground">Classes on the platform</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </a>
+              <a href="#per-class-breakdown">
+                <Card className="cursor-pointer transition-colors hover:border-primary/50">
+                  <CardContent className="flex items-center gap-4 p-5">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-md bg-primary/15 text-primary">
+                      <Users className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className="font-display text-3xl font-bold">{data.totalEnrollments}</p>
+                      <p className="text-sm text-muted-foreground">Total enrollments</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </a>
+              <a href="#per-class-breakdown">
+                <Card className="cursor-pointer transition-colors hover:border-primary/50">
+                  <CardContent className="flex items-center gap-4 p-5">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-md bg-primary/15 text-primary">
+                      <Trophy className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className="font-display text-3xl font-bold">
+                        {data.totalEnrollments > 0
+                          ? pct(data.totalCompletions / data.totalEnrollments)
+                          : "–"}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        Overall completion rate ({data.totalCompletions} finished)
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </a>
             </div>
 
-            <Card>
+            <Card id="per-class-breakdown">
               <CardHeader>
                 <CardTitle>Per-Class Enrollment &amp; Drop-off</CardTitle>
                 <CardDescription>
-                  Every class on Forge, Forge-official and coach-authored alike. Expand a class to
-                  see where athletes stall lesson by lesson.
+                  Every class on Forge, Forge-official and coach-authored alike -- no names, no
+                  athlete-level detail, ever. Expand a class to see where athletes stall lesson by
+                  lesson. A class (or a single lesson within one) with fewer than 5 athletes
+                  enrolled/reached shows its enrollment count but withholds completion numbers
+                  entirely, so no individual's outcome is ever isolable.
                 </CardDescription>
               </CardHeader>
               <CardContent>

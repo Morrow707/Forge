@@ -9427,21 +9427,41 @@ ${athleteContext}
       const enrollments = enrollmentsByClass.get(cls.id) ?? [];
       const enrolledCount = enrollments.length;
       const completedCount = enrollments.filter((e) => e.completedAt).length;
+      // Same anonymity floor as buildPlatformTrends (PLATFORM_TRENDS_MIN_COHORT)
+      // -- a class's completion rate is one number derived from every
+      // enrollee's individual pass/fail, so with too few enrolled it just
+      // *is* one specific person's outcome. Below the floor the class still
+      // shows up (enrolledCount alone, "N people signed up," isn't
+      // identifying on its own) but completedCount/completionRate/the
+      // per-lesson funnel are withheld rather than shown small.
+      const classSuppressed = enrolledCount < PLATFORM_TRENDS_MIN_COHORT;
       // Per-lesson funnel: of everyone enrolled in this class, how many
       // reached (read the content of) vs. cleared (passed the quiz on)
       // each lesson number -- the drop-off curve a coach/admin actually
-      // wants to see, not just a single class-wide completion rate.
-      const lessons = cls.lessons.map((lesson) => {
-        let started = 0;
-        let passed = 0;
-        for (const e of enrollments) {
-          const progressRows = progressByEnrollment.get(e.id) ?? [];
-          const p = progressRows.find((row) => row.classLessonId === lesson.id);
-          if (p?.contentCompletedAt) started++;
-          if (p?.quizPassedAt) passed++;
-        }
-        return { lessonNumber: lesson.lessonNumber, title: lesson.title, started, passed };
-      });
+      // wants to see, not just a single class-wide completion rate. Each
+      // lesson is floor-checked independently of the class as a whole --
+      // a well-enrolled class can still have a specific lesson only one or
+      // two people have reached.
+      const lessons = classSuppressed
+        ? []
+        : cls.lessons.map((lesson) => {
+            let started = 0;
+            let passed = 0;
+            for (const e of enrollments) {
+              const progressRows = progressByEnrollment.get(e.id) ?? [];
+              const p = progressRows.find((row) => row.classLessonId === lesson.id);
+              if (p?.contentCompletedAt) started++;
+              if (p?.quizPassedAt) passed++;
+            }
+            const lessonSuppressed = started < PLATFORM_TRENDS_MIN_COHORT && passed < PLATFORM_TRENDS_MIN_COHORT;
+            return {
+              lessonNumber: lesson.lessonNumber,
+              title: lesson.title,
+              suppressed: lessonSuppressed,
+              started: lessonSuppressed ? null : started,
+              passed: lessonSuppressed ? null : passed,
+            };
+          });
       return {
         id: cls.id,
         name: cls.name,
@@ -9449,8 +9469,9 @@ ${athleteContext}
         isDraft: cls.isDraft,
         lessonCount: cls.lessons.length,
         enrolledCount,
-        completedCount,
-        completionRate: enrolledCount > 0 ? completedCount / enrolledCount : 0,
+        suppressed: classSuppressed,
+        completedCount: classSuppressed ? null : completedCount,
+        completionRate: classSuppressed ? null : enrolledCount > 0 ? completedCount / enrolledCount : 0,
         lessons,
       };
     });
