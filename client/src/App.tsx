@@ -86,12 +86,11 @@ const AdminPrograms = lazy(() => import("@/pages/admin/programs"));
 const AdminProgramBuilder = lazy(() => import("@/pages/admin/program-builder"));
 const AdminSkillPrograms = lazy(() => import("@/pages/admin/skill-programs"));
 const AdminSkillProgramBuilder = lazy(() => import("@/pages/admin/skill-program-builder"));
-const AdminReviewQueue = lazy(() => import("@/pages/admin/review-queue"));
+const AdminReports = lazy(() => import("@/pages/admin/reports"));
 const AdminTeachAi = lazy(() => import("@/pages/admin/teach-ai"));
 const AdminTrackingReport = lazy(() => import("@/pages/admin/tracking-report"));
 const AdminLegalAgreement = lazy(() => import("@/pages/admin/legal-agreement"));
 const AdminDocuments = lazy(() => import("@/pages/admin/documents"));
-const AdminProblemReports = lazy(() => import("@/pages/admin/problem-reports"));
 const AdminMyCalendar = lazy(() => import("@/pages/admin/my-calendar"));
 const AdminMyWorkout = lazy(() => import("@/pages/admin/my-workout"));
 const AdminPlatformTrends = lazy(() => import("@/pages/admin/platform-trends"));
@@ -424,7 +423,7 @@ function Router() {
           <ProtectedRoute role="admin" component={AdminAcademyTrackBuilder} />
         </Route>
         <Route path="/admin/review">
-          <ProtectedRoute role="admin" component={AdminReviewQueue} />
+          <ProtectedRoute role="admin" component={AdminReports} />
         </Route>
         <Route path="/admin/teach-ai">
           <ProtectedRoute role="admin" component={AdminTeachAi} />
@@ -434,9 +433,6 @@ function Router() {
         </Route>
         <Route path="/admin/documents">
           <ProtectedRoute role="admin" component={AdminDocuments} />
-        </Route>
-        <Route path="/admin/problem-reports">
-          <ProtectedRoute role="admin" component={AdminProblemReports} />
         </Route>
         <Route path="/admin/tracking-report">
           <ProtectedRoute role="admin" component={AdminTrackingReport} />

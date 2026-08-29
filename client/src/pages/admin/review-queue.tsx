@@ -2,7 +2,6 @@ import { useState } from "react";
 import { externalLinkClick } from "@/lib/open-external";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -74,7 +73,14 @@ function ExerciseSummaryLine({ exercise }: { exercise: ExerciseSummary }) {
 
 const PAGE_SIZE = 100;
 
-export default function AdminReviewQueue() {
+/** Exercise-catalog moderation: coach-submitted exercises trending across
+ * multiple rosters (approve into the shared Forge library, or dismiss),
+ * plus coach-flagged data problems on existing Forge exercises. Rendered as
+ * a tab inside admin/reports.tsx alongside ProblemReportsContent -- a
+ * different kind of report entirely (always tied to one exercise, with a
+ * real approve/resolve workflow), just combined onto the same page so
+ * "somewhere to review flagged things" isn't split across two nav entries. */
+export function ReviewQueueContent() {
   const qc = useQueryClient();
   const [submissionsLoadedPages, setSubmissionsLoadedPages] = useState(1);
   const { data: submissionsResult } = useQuery<{ rows: PendingSubmission[]; total: number }>({
@@ -122,7 +128,7 @@ export default function AdminReviewQueue() {
   });
 
   return (
-    <AppShell title="Review Queue">
+    <>
       <div className="space-y-6">
         <Card>
           <CardHeader>
@@ -288,6 +294,6 @@ export default function AdminReviewQueue() {
           </CardContent>
         </Card>
       </div>
-    </AppShell>
+    </>
   );
 }

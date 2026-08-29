@@ -158,7 +158,7 @@ const adminNav: NavItem[] = [
   // getting the "More" dropdown this exact problem already has a fix for.
   { href: "/admin/classes-analytics", label: "Class Analytics", icon: TrendingUp, overflow: true },
   { href: "/admin/coaches-corner", label: "Coaches Corner", icon: BookOpen, overflow: true },
-  { href: "/admin/review", label: "Review Queue", icon: ClipboardCheck, overflow: true },
+  { href: "/admin/review", label: "Reports", icon: Flag, overflow: true },
   { href: "/admin/teach-ai", label: "Teach AI", icon: Sparkles, overflow: true },
   { href: "/admin/tracking-report", label: "AR Diagnosis", icon: FileText, overflow: true },
   { href: "/admin/platform-trends", label: "Platform Trends", icon: BarChart3, overflow: true },
@@ -167,7 +167,6 @@ const adminNav: NavItem[] = [
   { href: "/admin/videos", label: "Video Storage", icon: HardDrive, overflow: true },
   { href: "/admin/legal-agreement", label: "Legal Agreement", icon: FileText, overflow: true },
   { href: "/admin/documents", label: "Documents", icon: ShieldCheck, overflow: true },
-  { href: "/admin/problem-reports", label: "Problem Reports", icon: Flag, overflow: true },
 ];
 
 export function AppShell({

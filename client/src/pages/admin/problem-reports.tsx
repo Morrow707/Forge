@@ -1,5 +1,4 @@
 import { useQuery } from "@tanstack/react-query";
-import { AppShell } from "@/components/app-shell";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { resolveApiUrl } from "@/lib/queryClient";
 import { Flag } from "lucide-react";
@@ -18,14 +17,17 @@ type ProblemReport = {
  * ReportProblemDialog) -- no status/priority workflow, just the raw list,
  * newest first. Screenshot URLs are already signed by the time they reach
  * here (server/media-url-signing.ts sweeps every JSON response), so
- * resolveApiUrl is the only client-side handling they need. */
-export default function AdminProblemReports() {
+ * resolveApiUrl is the only client-side handling they need. Rendered as a
+ * tab inside admin/reports.tsx alongside ReviewQueueContent -- a general,
+ * not-tied-to-any-record bug inbox, unlike that one's per-exercise
+ * moderation workflow; combined onto the same page purely to save a nav
+ * slot, not because the two functions overlap. */
+export function ProblemReportsContent() {
   const { data, isLoading } = useQuery<ProblemReport[]>({
     queryKey: ["/api/admin/problem-reports"],
   });
 
   return (
-    <AppShell title="Problem Reports">
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -65,6 +67,5 @@ export default function AdminProblemReports() {
           )}
         </CardContent>
       </Card>
-    </AppShell>
   );
 }
