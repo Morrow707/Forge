@@ -9,7 +9,7 @@ import { hashPassword, comparePasswords } from "./auth-utils";
 import { getEntitlements, type Entitlements, getFreeAgentEntitlements } from "./billing";
 import { uploadsLimiter } from "./rate-limiters";
 import { storage } from "./storage";
-import { formatTrackingReport } from "./tracking-report";
+import { formatTrackingReport, buildTrackingReportEntries } from "./tracking-report";
 import { buildIcsFeed } from "./ics";
 import { getVapidPublicKey, pushEnabled } from "./push";
 import { apnsEnabled } from "./apns";
@@ -114,7 +114,6 @@ import {
   createTeamGameDaySchema,
   sendMovementKnowledgeChatMessageSchema,
   applyMovementProfileProposalSchema,
-  diagnoseTrackerLogSchema,
   classStructureSchema,
   enrollInClassSchema,
   classCoachSettingsInputSchema,
@@ -1963,6 +1962,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.type("text/plain").send(formatTrackingReport(rows));
   });
 
+  // JSON counterpart of the route above, for the Tracking Data admin page to render as real
+  // cards instead of a single plain-text blob -- same underlying rows and formatting logic.
+  app.get("/api/admin/tracking-report/entries", requireRole("admin"), async (req, res) => {
+    const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? "20"), 10) || 20, 1), 200);
+    const rows = await storage.getRecentTrackedSetsForAdmin(limit);
+    res.json(buildTrackingReportEntries(rows));
+  });
+
   app.post("/api/admin/reports/:id/resolve", requireRole("admin"), async (req, res) => {
     const id = Number(req.params.id);
     const updated = await storage.resolveReport(id);
@@ -2835,32 +2842,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       parsed.data,
     );
     res.status(201).json(result);
-  });
-
-  // Paste a native AR tracker's on-device diagLog buffer, get a grounded AI
-  // read on it -- see storage.diagnoseTrackerLog's own comment for why this
-  // exists. requireAuth, not requireRole("admin") -- whoever's actually
-  // reproducing the bug (coach or athlete, not just whoever happens to be
-  // signed in as admin) needs to be able to tap this in the moment; the
-  // /admin/ path segment is legacy from an earlier admin-only draft, kept
-  // as-is here to avoid an unrelated URL churn. Every run still gets
-  // persisted (see diagnoseTrackerLog) for an admin to review via the
-  // GET list route below, which stays admin-only -- that's the "send it
-  // in a report to the admin" half of this, not the trigger itself.
-  app.post("/api/admin/diagnose-tracker-log", requireAuth, async (req, res) => {
-    const user = currentUser(req);
-    const parsed = diagnoseTrackerLogSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message || "Invalid log" });
-    const diagnosis = await storage.diagnoseTrackerLog(parsed.data.log, user.id);
-    res.json({ diagnosis });
-  });
-
-  // Every diagnose-tracker-log run above is persisted -- this is how an
-  // admin (or a future Claude session) reads back past reports instead of
-  // needing the original screenshot/log re-pasted.
-  app.get("/api/admin/tracker-diagnosis-reports", requireRole("admin"), async (_req, res) => {
-    const reports = await storage.listTrackerDiagnosisReports();
-    res.json(reports);
   });
 
   // ---------------- Coach: Programs ----------------

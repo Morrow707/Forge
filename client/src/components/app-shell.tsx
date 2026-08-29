@@ -43,7 +43,6 @@ import {
   MonitorSmartphone,
   KeyRound,
   Pin,
-  Stethoscope,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -161,8 +160,7 @@ const adminNav: NavItem[] = [
   { href: "/admin/coaches-corner", label: "Coaches Corner", icon: BookOpen, overflow: true },
   { href: "/admin/review", label: "Review Queue", icon: ClipboardCheck, overflow: true },
   { href: "/admin/teach-ai", label: "Teach AI", icon: Sparkles, overflow: true },
-  { href: "/admin/tracker-diagnosis-reports", label: "AR Diagnosis Reports", icon: Stethoscope, overflow: true },
-  { href: "/admin/tracking-report", label: "Tracking Data", icon: FileText, overflow: true },
+  { href: "/admin/tracking-report", label: "AR Diagnosis", icon: FileText, overflow: true },
   { href: "/admin/platform-trends", label: "Platform Trends", icon: BarChart3, overflow: true },
   { href: "/admin/billing", label: "Billing", icon: CreditCard, overflow: true },
   { href: "/admin/users", label: "Users", icon: Users, overflow: true },

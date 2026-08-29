@@ -98,7 +98,6 @@ import {
   familyGroups,
   movementKnowledgeMessages,
   movementProfiles,
-  trackerDiagnosisReports,
   weaknessDeficitSchema,
   PERIODIZATION_PHASE_LABEL,
   NUTRITION_GOAL_LABEL,
@@ -176,7 +175,6 @@ import type {
   UpdateFreeAgentBillingInput,
   MovementKnowledgeMessage,
   MovementProfile,
-  TrackerDiagnosisReport,
   SendMovementKnowledgeChatMessageInput,
   ApplyMovementProfileProposalInput,
   UpdateFoodLogEntryInput,
@@ -12099,68 +12097,6 @@ Respond to the admin's latest message by calling ask_question or propose_movemen
         summary: parsed.data.summary.trim(),
       },
     };
-  },
-
-  // Stateless "paste a device diagLog buffer, get a grounded read on it"
-  // tool for the native AR tracker plugin (ArCameraPreviewPlugin.swift) --
-  // built after a real on-device blur investigation that took many rounds
-  // of manual back-and-forth (render scale, video format, compositing
-  // order, tracking-lock state, camera motion, each individually ruled
-  // out against real evidence before landing on ARKit's own camera
-  // pipeline having no public focus API at all). The point of this isn't
-  // to guess a fix -- it's to give whoever's looking at a fresh diagLog
-  // the same starting context that investigation built up, instead of
-  // starting from zero every time a similar report comes in.
-  async diagnoseTrackerLog(logText: string, requestedByUserId: number | null): Promise<string> {
-    if (!aiEnabled) {
-      return "AI isn't set up yet -- ask whoever manages this Forge instance to configure it.";
-    }
-    const system: SystemPrompt = `You are helping diagnose a native iOS ARKit camera issue in Forge, a training app. The relevant plugin is ArCameraPreviewPlugin.swift -- one shared ARSCNView-based ARKit body-tracking session used by all four AR tracker modes (bar path, vertical jump, sprint timing, swing mechanics). It's positioned behind a transparent hole punched in the app's WebView (see native-ar-preview.ts / index.css's ar-camera-active class), so the athlete sees ARKit's own camera passthrough directly, not anything the WebView draws.
-
-You'll be given the raw contents of that plugin's on-device diagLog buffer, pasted by whoever reproduced an issue. Lines you may see:
-- Lifecycle events: "start() called", "requesting camera permission...", "permission result: granted/denied", "rect: (...)" (the JS-measured container rect), "creating ARSCNView, inserting behind webView", "scnView.bounds=... scale=... screenScale=...", "nativeScale=... lowPowerMode=...", "videoFormat (ARKit default): WxH @ Nfps", "device model=... systemVersion=...", "calling session.run()" / "session.run() returned, resolving", "sessionError" messages, "FAILED: ..." lines.
-  - "nativeScale=..." vs. the "scale=..."/"screenScale=..." on the same line just above it -- these normally match. A mismatch means iOS's Settings > Display & Brightness > View "Zoomed" mode is active, which can leave contentScaleFactor "correct" per its own inputs while the physical render target still isn't native resolution -- a real, if uncommon, cause worth flagging if you see it.
-  - "lowPowerMode=true" -- iOS throttles background/system behavior under Low Power Mode in ways that could plausibly extend to camera pipeline processing; worth naming as a contributing factor if true, not dismissing.
-  - "device model=... systemVersion=..." -- logged once per session start. Useful for correlating a report against a specific device/iOS version, e.g. if the same person reports "it worked before, now it doesn't" with no app code change in between (a real iOS update between those two tests is a legitimate explanation app code can't rule out).
-- Per-frame diagnostics (only in builds with logFrameDiagnostics wired up), each line prefixed "[initial]" or "[post-recovery]" (before/after an automatic focus-recovery attempt that just re-runs the session once early on, since there's no public API to directly set ARKit's camera focus/lens position -- the only thing documented anywhere for that is the private, App-Store-unsafe setFocusModeLocked):
-  - "EXIF subjectDistance=... focalLength=... aperture=... exposureTime=... iso=..." -- read from ARFrame.exifData (iOS 16+ only; subjectDistance is very often nil/unpopulated, that's normal, not a bug).
-  - "intrinsics fx=... fy=... cx=... cy=..." -- ARFrame.camera.intrinsics (focal length in pixels / principal point). Wildly different fx/fy between samples, or a cx/cy far from half the frame's pixel dimensions, would be the anomaly to flag.
-  - "exposureDuration=... exposureOffset=..." (iOS 16+ only).
-  - "frameSharpness (variance of decimated luma Laplacian) = <number>" -- a rough, home-grown blur metric (higher = more high-frequency detail = sharper). It is NOT calibrated to any absolute "sharp" threshold and is heavily scene-content-dependent (a textured rack vs. a blank wall gives very different numbers even at identical focus) -- only meaningful as a same-session, same-scene before/after comparison, never as an absolute pass/fail number, and never compared across genuinely different scenes/sessions.
-  - "trackingState=normal / notAvailable / limited(initializing|excessiveMotion|insufficientFeatures|relocalizing)" -- ARKit's own read on how well it's tracking this frame. "limited(insufficientFeatures)" alongside a low rawFeaturePointCount and/or a low ambientIntensity is a real, coherent, mechanistic story: a dim or low-texture scene can hurt contrast-based focus/tracking the same way it hurts feature detection, not three unrelated coincidences.
-  - "thermalState=nominal/fair/serious/critical" -- iOS is a documented, real source of camera-quality degradation under thermal pressure. "fair" or worse is worth naming as a plausible contributor.
-  - "ambientIntensity=...lm ambientColorTemperature=...K" -- from ARFrame.lightEstimate. Low ambientIntensity in a dim room can force ISP noise-reduction smoothing that looks exactly like softness/blur -- a genuinely different mechanism from either defocus or motion blur, worth naming explicitly if intensity looks low (roughly, low four-figures lux or less for an indoor gym is on the dim side; this is a rough heuristic, not a hard threshold -- reason about it relative to the rest of the log, don't just compare to a number in isolation).
-  - "rawFeaturePointCount=..." -- ARFrame.rawFeaturePoints (world-tracking point cloud, always present regardless of configuration). Low alongside limited(insufficientFeatures) and/or low ambientIntensity corroborates a genuinely low-light/low-texture scene, not a rendering bug.
-
-Known, already-confirmed facts from real device investigation -- treat these as established, don't re-derive or contradict them without a specific reason from the log you're given:
-- contentScaleFactor/render-target scale being wrong was checked and ruled out (a real bug, since fixed, is no longer the cause of a fresh report).
-- ARKit's own default videoFormat for ARBodyTrackingConfiguration was confirmed identical to what a "pick the fastest fps" override selected -- video format choice is not a live lever here.
-- The native view being layered behind the WebView (not in front) is correct and intentional -- don't suggest re-ordering it.
-- exposureTime DOES adapt to scene brightness (corrected from an earlier, wrong assumption in this same investigation: several early samples all happened to show it pinned at exactly 1/fps, which looked like a hard non-adaptive cap, until a later well-lit session showed a genuinely shorter 1/120s exposure at ISO 80 -- still blurry regardless. Read exposureTime/iso together as a real brightness signal, not as a suspected constant.
-- Camera motion was directly ruled out: a rock-still tripod test still showed a blurry image, same as handheld.
-- Low light was directly ruled out too: a session with short exposure, low ISO, and rising frameSharpness after recovery (well-lit, well-exposed by any normal reading) was still reported blurry by the person testing it.
-- With render scale, video format, compositing order, camera motion, and low light all individually tested and ruled out, the most likely remaining explanation is ARKit's own camera focus behavior for body tracking having no public API to read or influence at all -- not a code bug in this app, a platform constraint for this specific use case (filming a full body from several feet back). Say this plainly when the evidence in front of you supports it, rather than reaching for a sixth guess.
-- There is no public ARKit API to read or set the camera's actual focus distance/lens position while an ARSession owns the capture device. isAutoFocusEnabled defaults to true already; setting it explicitly is very likely a no-op. NEVER suggest setFocusModeLocked(lensPosition:) or any other private API -- it cannot ship in an App Store build, full stop.
-- A person reporting "this worked before, it doesn't now" with zero relevant app code changes in between (check git history before assuming a code regression) means the cause is environmental, not a code bug -- device model/systemVersion, thermalState, and ambientIntensity are exactly the fields that can explain that without any code having changed.
-
-Your job: read the pasted log and give a short (150-300 words), plain-English, evidence-grounded read of what it actually shows -- call out anything genuinely anomalous relative to the facts above (a degenerate/zero-sized rect or bounds, a permission denial, a sessionError, a FAILED line, an exposureTime that ISN'T pinned this time, wildly inconsistent intrinsics, a frameSharpness that's flat/unchanging across [initial] and [post-recovery] when it should differ, tracked staying false the whole session, a nativeScale/scale mismatch, lowPowerMode=true, elevated thermalState, low ambientIntensity/rawFeaturePointCount, etc.), and note what's just normal/expected. End with ONE concrete, cheap, testable next step -- a specific thing to check on-device, or a specific piece of missing diagnostic data worth adding next, not a firm code fix and never a private-API suggestion. If the log doesn't show anything unusual at all, say so plainly rather than manufacturing a finding.`;
-
-    const text = await askClaude(system, [{ role: "user", content: logText }], { maxTokens: 700 });
-    const diagnosis = text || "Couldn't get a diagnosis right now -- the AI request failed. Try again in a moment.";
-    // Persisted regardless of AI success/failure -- a failed-diagnosis
-    // report is still useful evidence (the log itself, and that a
-    // failure happened at this timestamp) for whoever reviews this later.
-    await db.insert(trackerDiagnosisReports).values({ requestedByUserId, logText, diagnosis });
-    return diagnosis;
-  },
-
-  // Most-recent-first, for an admin (or a future Claude session) catching
-  // up on what's already been diagnosed before touching code again.
-  async listTrackerDiagnosisReports(limit = 50): Promise<TrackerDiagnosisReport[]> {
-    return db.query.trackerDiagnosisReports.findMany({
-      orderBy: desc(trackerDiagnosisReports.createdAt),
-      limit,
-    });
   },
 
   // Commits a previously-proposed profile: archives the current active row

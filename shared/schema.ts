@@ -4818,36 +4818,6 @@ export const sendMovementKnowledgeChatMessageSchema = z
 
 export type SendMovementKnowledgeChatMessageInput = z.infer<typeof sendMovementKnowledgeChatMessageSchema>;
 
-// Admin-only "paste a device diagnostic log, get an AI read on it" tool --
-// see storage.diagnoseTrackerLog. Not a back-and-forth conversation the way
-// movementKnowledgeMessages above is (no reply/thread), but every run does
-// get persisted below as a standing report -- an admin (or a future Claude
-// session) triaging the same recurring bug shouldn't have to re-run the
-// same log through the AI to see what it already said. 20000 chars is
-// generous headroom over what even a long AR tracker diagLog buffer
-// produces (a few hundred short lines).
-export const diagnoseTrackerLogSchema = z.object({
-  log: z.string().trim().min(1).max(20000),
-});
-
-export type DiagnoseTrackerLogInput = z.infer<typeof diagnoseTrackerLogSchema>;
-
-export const trackerDiagnosisReports = pgTable(
-  "tracker_diagnosis_reports",
-  {
-    id: serial("id").primaryKey(),
-    requestedByUserId: integer("requested_by_user_id").references(() => users.id, { onDelete: "set null" }),
-    logText: text("log_text").notNull(),
-    diagnosis: text("diagnosis").notNull(),
-    createdAt: timestamp("created_at").notNull().defaultNow(),
-  },
-  (table) => ({
-    createdIdx: index("tracker_diagnosis_reports_created_idx").on(table.createdAt),
-  }),
-);
-
-export type TrackerDiagnosisReport = typeof trackerDiagnosisReports.$inferSelect;
-
 export const applyMovementProfileProposalSchema = z.object({
   minKneeAngleDeg: z.number().optional().nullable(),
   valgusRatioMin: z.number().optional().nullable(),

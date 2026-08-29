@@ -88,7 +88,6 @@ const AdminSkillPrograms = lazy(() => import("@/pages/admin/skill-programs"));
 const AdminSkillProgramBuilder = lazy(() => import("@/pages/admin/skill-program-builder"));
 const AdminReviewQueue = lazy(() => import("@/pages/admin/review-queue"));
 const AdminTeachAi = lazy(() => import("@/pages/admin/teach-ai"));
-const AdminTrackerDiagnosisReports = lazy(() => import("@/pages/admin/tracker-diagnosis-reports"));
 const AdminTrackingReport = lazy(() => import("@/pages/admin/tracking-report"));
 const AdminLegalAgreement = lazy(() => import("@/pages/admin/legal-agreement"));
 const AdminDocuments = lazy(() => import("@/pages/admin/documents"));
@@ -438,9 +437,6 @@ function Router() {
         </Route>
         <Route path="/admin/problem-reports">
           <ProtectedRoute role="admin" component={AdminProblemReports} />
-        </Route>
-        <Route path="/admin/tracker-diagnosis-reports">
-          <ProtectedRoute role="admin" component={AdminTrackerDiagnosisReports} />
         </Route>
         <Route path="/admin/tracking-report">
           <ProtectedRoute role="admin" component={AdminTrackingReport} />

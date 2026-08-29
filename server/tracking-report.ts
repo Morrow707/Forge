@@ -75,23 +75,28 @@ const METHODOLOGY: Record<string, string> = {
     "med_ball/kb_swing's own implement-cross-checked speeds are built on top of.",
 };
 
-function fmtTrust(t: SetTrustScore | null | undefined, label: string): string | null {
+// Structured label/value pair shared by both the plain-text report (joined into "  Label: value"
+// lines) and the JSON entries route the admin UI renders as cards -- one formatting pass feeds
+// both, so they can never drift out of sync with each other.
+export type ReportField = { label: string; value: string };
+
+function fmtTrust(t: SetTrustScore | null | undefined, label: string): ReportField | null {
   if (!t) return null;
   const notes = t.notes?.length ? ` -- ${t.notes.join("; ")}` : "";
-  return `  ${label}: ${t.label} (${t.score}/100)${notes}`;
+  return { label, value: `${t.label} (${t.score}/100)${notes}` };
 }
 
 function num(n: number | null | undefined, unit: string): string | null {
   return n == null ? null : `${Math.round(n * 100) / 100}${unit}`;
 }
 
-// Every non-null field for one set, one line per data point -- rather than a fixed template per
+// Every non-null field for one set, one entry per data point -- rather than a fixed template per
 // mode, so a set that has data from more than one column set (shouldn't normally happen, but
 // costs nothing to handle) still shows everything it actually has.
-function formatDataPoints(r: TrackedSetRow): string[] {
-  const lines: string[] = [];
+function formatDataPoints(r: TrackedSetRow): ReportField[] {
+  const lines: ReportField[] = [];
   const push = (label: string, value: string | null) => {
-    if (value != null) lines.push(`  ${label}: ${value}`);
+    if (value != null) lines.push({ label, value });
   };
 
   push("Peak concentric velocity", num(r.peakVelocityMps, " m/s"));
@@ -134,35 +139,39 @@ function formatDataPoints(r: TrackedSetRow): string[] {
   return lines;
 }
 
-function formatCaptureDeviceInfo(r: TrackedSetRow): string[] {
+function formatCaptureDeviceInfo(r: TrackedSetRow): ReportField[] {
   const info = r.captureDeviceInfo as CaptureDeviceInfo | null | undefined;
-  const lines: string[] = [];
+  const lines: ReportField[] = [];
   // Guaranteed non-null by getRecentTrackedSetsForAdmin's own WHERE clause
   // (isNotNull(programExercises.trackingLevel)) -- the left join it's read
   // through can't express that at the type level.
   const usesObjectTracker = OBJECT_TRACKER_MODES.has(r.trackingLevel!);
-  lines.push(
-    `  Object tracker: ${
-      usesObjectTracker
-        ? "yes -- an independent motion-diff tracker followed the implement itself, alongside body-pose tracking"
-        : "no -- this mode reads body joints only, nothing else being tracked"
-    }`,
-  );
+  lines.push({
+    label: "Object tracker",
+    value: usesObjectTracker
+      ? "yes -- an independent motion-diff tracker followed the implement itself, alongside body-pose tracking"
+      : "no -- this mode reads body joints only, nothing else being tracked",
+  });
   if (!info) {
-    lines.push("  Device/session info: not captured for this set (recorded before this was tracked, or capture failed)");
+    lines.push({
+      label: "Device/session info",
+      value: "not captured for this set (recorded before this was tracked, or capture failed)",
+    });
     return lines;
   }
-  lines.push(
-    `  Device: ${info.deviceModel ?? "unknown"}${info.systemVersion ? `, iOS ${info.systemVersion}` : ""}${
+  lines.push({
+    label: "Device",
+    value: `${info.deviceModel ?? "unknown"}${info.systemVersion ? `, iOS ${info.systemVersion}` : ""}${
       info.lens ? `, ${info.lens} lens` : ""
     }`,
-  );
-  if (info.activeFormat) lines.push(`  Camera format negotiated: ${info.activeFormat}`);
-  if (info.aiPipeline) lines.push(`  AI/ML pipeline: ${info.aiPipeline}`);
+  });
+  if (info.activeFormat) lines.push({ label: "Camera format negotiated", value: info.activeFormat });
+  if (info.aiPipeline) lines.push({ label: "AI/ML pipeline", value: info.aiPipeline });
   if (info.focusMode || info.exposureMode) {
-    lines.push(
-      `  Focus mode: ${info.focusMode ?? "unknown"}, exposure mode: ${info.exposureMode ?? "unknown"} (requested at session start)`,
-    );
+    lines.push({
+      label: "Focus/exposure mode",
+      value: `${info.focusMode ?? "unknown"} / ${info.exposureMode ?? "unknown"} (requested at session start)`,
+    });
   }
   if (info.telemetrySamples != null && info.telemetrySamples > 0) {
     const focusNote =
@@ -173,18 +182,20 @@ function formatCaptureDeviceInfo(r: TrackedSetRow): string[] {
       info.adjustingExposureSampleCount === 0
         ? "never seen still hunting"
         : `still adjusting on ${info.adjustingExposureSampleCount}/${info.telemetrySamples} samples`;
-    lines.push(
-      `  Focus stability: ${focusNote}, settled by the last sample: ${info.focusSettled ?? "unknown"}`,
-    );
-    lines.push(
-      `  Exposure stability: ${exposureNote}, settled by the last sample: ${info.exposureSettled ?? "unknown"}`,
-    );
+    lines.push({
+      label: "Focus stability",
+      value: `${focusNote}, settled by the last sample: ${info.focusSettled ?? "unknown"}`,
+    });
+    lines.push({
+      label: "Exposure stability",
+      value: `${exposureNote}, settled by the last sample: ${info.exposureSettled ?? "unknown"}`,
+    });
   }
   return lines;
 }
 
-function formatTrust(r: TrackedSetRow): string[] {
-  const lines: string[] = [];
+function formatTrust(r: TrackedSetRow): ReportField[] {
+  const lines: ReportField[] = [];
   if (Array.isArray(r.trustScores) && r.trustScores.length) {
     for (const t of r.trustScores as RepTrustScore[]) {
       const line = fmtTrust(t, `Rep ${t.repNumber} trust`);
@@ -200,6 +211,53 @@ function formatTrust(r: TrackedSetRow): string[] {
   return lines;
 }
 
+export type TrackingReportEntry = {
+  date: string;
+  athleteName: string;
+  exerciseName: string;
+  setNumber: number;
+  reps: string | null;
+  weight: string | null;
+  weightUnit: string | null;
+  trackingMode: string;
+  movementType: string | null;
+  methodology: string | null;
+  dataPoints: ReportField[];
+  trust: ReportField[];
+  device: ReportField[];
+};
+
+// Shared assembly step both formatTrackingReport (plain text) and the JSON entries route build
+// on -- one pass over the rows, so the two views of this same data can't drift apart.
+function buildEntries(rows: TrackedSetRow[]): TrackingReportEntry[] {
+  return rows.map((r) => {
+    // Guaranteed non-null -- see formatCaptureDeviceInfo's own comment.
+    const mode = r.trackingLevel!;
+    return {
+      date: r.date,
+      athleteName: r.athleteName,
+      exerciseName: r.exerciseName,
+      setNumber: r.setNumber,
+      reps: r.reps,
+      weight: r.weight,
+      weightUnit: r.weightUnit,
+      trackingMode: mode,
+      movementType: r.movementType,
+      methodology: METHODOLOGY[mode] ?? null,
+      dataPoints: formatDataPoints(r),
+      trust: formatTrust(r),
+      device: formatCaptureDeviceInfo(r),
+    };
+  });
+}
+
+// JSON counterpart to formatTrackingReport, for the admin UI to render as real cards instead of
+// a single plain-text blob -- see this file's top comment on why the plain-text route stays as
+// it is (a person or an agent reads that one directly; nothing else consumes it as a UI).
+export function buildTrackingReportEntries(rows: TrackedSetRow[]): TrackingReportEntry[] {
+  return buildEntries(rows);
+}
+
 export function formatTrackingReport(rows: TrackedSetRow[]): string {
   if (rows.length === 0) {
     return "No tracked sets yet. Nothing has been recorded with a camera tracking mode enabled.";
@@ -207,28 +265,22 @@ export function formatTrackingReport(rows: TrackedSetRow[]): string {
   const seenModes = new Set<string>();
   const blocks: string[] = [];
 
-  for (const r of rows) {
-    const header = `${r.date}  ${r.athleteName} -- ${r.exerciseName} (set ${r.setNumber}${
-      r.reps ? `, ${r.reps} reps` : ""
-    }${r.weight ? `, ${r.weight}${r.weightUnit ? ` ${r.weightUnit}` : ""}` : ""})`;
-    // Guaranteed non-null -- see formatCaptureDeviceInfo's own comment.
-    const mode = r.trackingLevel!;
-    const methodology = !seenModes.has(mode) ? METHODOLOGY[mode] : null;
-    if (methodology) seenModes.add(mode);
-
-    const dataLines = formatDataPoints(r);
-    const trustLines = formatTrust(r);
-    const captureLines = formatCaptureDeviceInfo(r);
+  for (const e of buildEntries(rows)) {
+    const header = `${e.date}  ${e.athleteName} -- ${e.exerciseName} (set ${e.setNumber}${
+      e.reps ? `, ${e.reps} reps` : ""
+    }${e.weight ? `, ${e.weight}${e.weightUnit ? ` ${e.weightUnit}` : ""}` : ""})`;
+    const showMethodology = e.methodology && !seenModes.has(e.trackingMode);
+    if (showMethodology) seenModes.add(e.trackingMode);
 
     blocks.push(
       [
         header,
-        `  Tracking mode: ${mode}${r.movementType ? ` (movement type: ${r.movementType})` : ""}`,
-        methodology ? `  How this mode works: ${methodology}` : null,
-        ...captureLines,
-        ...dataLines,
-        ...trustLines,
-        dataLines.length === 0 ? "  (no data points recorded for this set)" : null,
+        `  Tracking mode: ${e.trackingMode}${e.movementType ? ` (movement type: ${e.movementType})` : ""}`,
+        showMethodology ? `  How this mode works: ${e.methodology}` : null,
+        ...e.device.map((f) => `  ${f.label}: ${f.value}`),
+        ...e.dataPoints.map((f) => `  ${f.label}: ${f.value}`),
+        ...e.trust.map((f) => `  ${f.label}: ${f.value}`),
+        e.dataPoints.length === 0 ? "  (no data points recorded for this set)" : null,
       ]
         .filter((l): l is string => l != null)
         .join("\n"),

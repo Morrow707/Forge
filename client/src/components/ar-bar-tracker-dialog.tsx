@@ -9,8 +9,7 @@ import {
   type VideoRecordContext,
 } from "@/lib/video-offline-store";
 import { toast } from "sonner";
-import { Circle, Square, AlertTriangle, X, Sparkles } from "lucide-react";
-import { diagnoseTrackerLog } from "@/lib/ai-diagnose";
+import { Circle, Square, AlertTriangle, X } from "lucide-react";
 import {
   isArBodyTrackingSupported,
   startArPreview,
@@ -209,8 +208,6 @@ export function ArBarTrackerDialog({
   const [supportError, setSupportError] = useState<string | undefined>(undefined);
   const [cameraPermission, setCameraPermission] = useState<string | undefined>(undefined);
   const [diagLog, setDiagLog] = useState<string[]>([]);
-  const [aiDiagnosis, setAiDiagnosis] = useState<string | null>(null);
-  const [diagnosing, setDiagnosing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [frame, setFrame] = useState<BodyTrackingFrame | null>(null);
   const [recordedReps, setRecordedReps] = useState(0);
@@ -805,29 +802,6 @@ export function ArBarTrackerDialog({
                     {line}
                   </div>
                 ))}
-                <button
-                  type="button"
-                  disabled={diagnosing || diagLog.length === 0}
-                  onClick={() => {
-                    setDiagnosing(true);
-                    setAiDiagnosis(null);
-                    diagnoseTrackerLog(diagLog)
-                      .then(setAiDiagnosis)
-                      .catch((err: unknown) =>
-                        setAiDiagnosis(err instanceof ApiError ? err.message : "Couldn't reach the AI -- try again."),
-                      )
-                      .finally(() => setDiagnosing(false));
-                  }}
-                  className="mt-1 flex items-center gap-1 rounded bg-white/10 px-1.5 py-1 font-sans text-[10px] font-semibold text-white/90 disabled:opacity-50"
-                >
-                  <Sparkles className="h-3 w-3" />
-                  {diagnosing ? "Diagnosing..." : "Diagnose with AI"}
-                </button>
-                {aiDiagnosis && (
-                  <div className="mt-1 whitespace-pre-wrap border-t border-white/10 pt-1 font-sans text-[10px] leading-snug text-white/90">
-                    {aiDiagnosis}
-                  </div>
-                )}
               </div>
             )}
 
