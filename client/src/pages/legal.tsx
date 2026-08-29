@@ -4,11 +4,11 @@ import { ForgeMark } from "@/components/forge-mark";
 
 /**
  * Public, unauthenticated page for the same document signup's clickwrap
- * checkbox references (see admin/legal-agreement.tsx and GET
- * /api/legal-agreement, which is intentionally unauthenticated for exactly
- * this reason). App Store Connect requires a working public privacy-policy
- * URL for the listing, and Forge had no page reachable without logging in
- * to point it at -- this is that page.
+ * checkbox references (see admin/documents.tsx's SignupAgreementEditor and
+ * GET /api/legal-agreement, which is intentionally unauthenticated for
+ * exactly this reason). App Store Connect requires a working public
+ * privacy-policy URL for the listing, and Forge had no page reachable
+ * without logging in to point it at -- this is that page.
  */
 export default function LegalPage() {
   const { data, isLoading } = useQuery<{ content: string }>({

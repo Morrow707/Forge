@@ -4,6 +4,7 @@ import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { DownloadButton } from "@/components/download-button";
@@ -65,12 +66,34 @@ const CONSENT_LABEL: Record<string, string> = {
   institutional_agreement: "Institutional Agreement",
 };
 
-/** Everything built tonight for legal review lives here, in one place --
- * the privacy-tier/consent-logging snapshot and the per-record access audit
- * log. Deliberately plain: this page exists to be read by an admin or a
- * lawyer checking the system before it's relied on, not to look finished.
- * See each section's own "not yet built"/scope note for what's real vs.
- * still missing. */
+function LiveBadge() {
+  return (
+    <Badge variant="success" className="text-[10px]">
+      LIVE -- shown at signup
+    </Badge>
+  );
+}
+function DraftBadge() {
+  return (
+    <Badge variant="secondary" className="text-[10px]">
+      DRAFT -- not enforced
+    </Badge>
+  );
+}
+
+/** Every legal document on the platform, and everything built for legal
+ * review, in one place -- previously split across two confusingly similar
+ * pages ("Legal Agreement" and "Documents") that both turned out to just be
+ * "a page where an admin edits legal document text," which made it unclear
+ * which document was which. Only the Signup Agreement is actually live
+ * (shown and required at signup, frozen per-user at acceptance time via
+ * agreedToTermsText -- see legal-agreement's own comment, folded in below);
+ * the other five are drafts with no live enforcement path yet. Every
+ * document card is labeled LIVE or DRAFT so that distinction is never
+ * ambiguous again. The compliance snapshot and audit log below aren't
+ * documents at all -- they're system data for the same "review before
+ * relying on it" purpose, kept on this page rather than given their own
+ * nav slot. */
 export default function AdminDocuments() {
   const { data: compliance, isLoading: complianceLoading } = useQuery<ComplianceReportData>({
     queryKey: ["/api/admin/compliance-report"],
@@ -80,14 +103,15 @@ export default function AdminDocuments() {
   });
 
   return (
-    <AppShell title="Documents">
+    <AppShell title="Legal & Compliance">
       <div className="space-y-4">
         <Card>
           <CardHeader>
-            <CardTitle>Documents</CardTitle>
+            <CardTitle>Legal & Compliance</CardTitle>
             <CardDescription>
-              Privacy/compliance data and the record-access audit log -- built for review before
-              they're relied on, not finished legal or security documents yet.
+              Every legal document on the platform (labeled LIVE or DRAFT below), plus the
+              privacy/compliance data snapshot and record-access audit log -- built for review
+              before any of it is relied on, not finished legal or security documents yet.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -97,6 +121,23 @@ export default function AdminDocuments() {
               windows, and what the audit log does and doesn't cover are all real, current system
               behavior -- not a claim that the underlying approach is legally sound.
             </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              Signup Agreement
+              <LiveBadge />
+            </CardTitle>
+            <CardDescription>
+              Shown to every coach/athlete on the signup page -- they must check a box agreeing
+              to this exact text before an account is created. Editing it only affects signups
+              from now on; nobody who already agreed sees their own record change.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <SignupAgreementEditor />
           </CardContent>
         </Card>
 
@@ -216,7 +257,10 @@ export default function AdminDocuments() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Terms of Service (Draft)</CardTitle>
+            <CardTitle className="flex items-center gap-2 text-base">
+              Terms of Service
+              <DraftBadge />
+            </CardTitle>
             <CardDescription>
               Not wired into signup and not enforced against current accounts -- current beta
               testers are friends, no need to force a re-consent flow on them. Edit, print, or
@@ -230,7 +274,10 @@ export default function AdminDocuments() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Privacy Policy (Draft)</CardTitle>
+            <CardTitle className="flex items-center gap-2 text-base">
+              Privacy Policy
+              <DraftBadge />
+            </CardTitle>
             <CardDescription>Same treatment as the Terms of Service above.</CardDescription>
           </CardHeader>
           <CardContent>
@@ -240,7 +287,10 @@ export default function AdminDocuments() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Biometric Waiver (Draft)</CardTitle>
+            <CardTitle className="flex items-center gap-2 text-base">
+              Biometric Waiver
+              <DraftBadge />
+            </CardTitle>
             <CardDescription>
               A standalone release for the camera-tracked movement data Forge collects (see
               Section 4 of the Privacy Policy) -- separate from it on purpose, since laws like
@@ -257,7 +307,10 @@ export default function AdminDocuments() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Notice to Parent or Guardian (Draft)</CardTitle>
+            <CardTitle className="flex items-center gap-2 text-base">
+              Notice to Parent or Guardian
+              <DraftBadge />
+            </CardTitle>
             <CardDescription>
               Addressed to a parent, not the athlete -- what a Tier 2 (13-17, self-registering) or
               Tier 1 (under-13, coach-provisioned) athlete's parent/guardian would actually
@@ -274,7 +327,10 @@ export default function AdminDocuments() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Institutional Agreement (Draft)</CardTitle>
+            <CardTitle className="flex items-center gap-2 text-base">
+              Institutional Agreement
+              <DraftBadge />
+            </CardTitle>
             <CardDescription>
               A different kind of document from the four above -- addressed to a paying
               institutional customer (a school, club, or program on an org billing plan) rather
@@ -290,6 +346,70 @@ export default function AdminDocuments() {
         </Card>
       </div>
     </AppShell>
+  );
+}
+
+// The one document with a real live enforcement path -- separate storage
+// (/api/legal-agreement, /api/admin/legal-agreement) and a separate,
+// frozen-per-user acceptance record (users.agreedToTermsText, snapshotted
+// at signup -- see server/auth.ts), unlike the five drafts below which are
+// just storage with no signup wiring at all. Kept as its own component
+// (not folded into the LegalDocType union) rather than force it into a
+// shape built for documents that don't have this live/frozen behavior.
+function SignupAgreementEditor() {
+  const qc = useQueryClient();
+  const { data, isLoading } = useQuery<{ content: string }>({
+    queryKey: ["/api/legal-agreement"],
+  });
+  const [content, setContent] = useState("");
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    if (data && !hydrated) {
+      setContent(data.content);
+      setHydrated(true);
+    }
+  }, [data, hydrated]);
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("PUT", "/api/admin/legal-agreement", { content });
+      return res.json() as Promise<{ content: string }>;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/legal-agreement"] });
+      toast.success("Agreement updated -- new signups will see this text");
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Could not save"),
+  });
+
+  return (
+    <div className="space-y-3">
+      <Textarea
+        value={content}
+        onChange={(e) => setContent(e.target.value)}
+        disabled={isLoading}
+        rows={12}
+        className="font-mono text-xs"
+        placeholder="Loading…"
+      />
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          size="sm"
+          onClick={() => saveMutation.mutate()}
+          disabled={saveMutation.isPending || !content.trim() || isLoading}
+        >
+          <Save className="h-4 w-4" />
+          {saveMutation.isPending ? "Saving…" : "Save"}
+        </Button>
+        <DownloadButton
+          url="/api/admin/legal-agreement.pdf"
+          filename="forge-signup-agreement.pdf"
+          shareTitle="Forge Signup Agreement"
+          label="Print / Download PDF"
+        />
+      </div>
+    </div>
   );
 }
 

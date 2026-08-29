@@ -165,8 +165,7 @@ const adminNav: NavItem[] = [
   { href: "/admin/billing", label: "Billing", icon: CreditCard, overflow: true },
   { href: "/admin/users", label: "Users", icon: Users, overflow: true },
   { href: "/admin/videos", label: "Video Storage", icon: HardDrive, overflow: true },
-  { href: "/admin/legal-agreement", label: "Legal Agreement", icon: FileText, overflow: true },
-  { href: "/admin/documents", label: "Documents", icon: ShieldCheck, overflow: true },
+  { href: "/admin/documents", label: "Legal & Compliance", icon: ShieldCheck, overflow: true },
 ];
 
 export function AppShell({
