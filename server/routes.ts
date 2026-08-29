@@ -1873,6 +1873,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.status(201).json(track);
   });
 
+  // Photo/document counterpart to /api/admin/programs/photo-draft -- upload a
+  // photographed or screenshotted coach-education document and get back a
+  // draft track (title, description, lessons) to review before it's saved.
+  app.post("/api/admin/academy/tracks/photo-draft", requireRole("admin"), async (req, res) => {
+    const parsed = z.object({ images: photoImagesSchema }).safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const draft = await storage.generateAcademyTrackDraftFromPhoto(parsed.data.images);
+    if (!draft) return res.status(422).json({ message: "Couldn't read that photo -- try a clearer shot." });
+    res.json(draft);
+  });
+
   app.put("/api/admin/academy/tracks/:id", requireRole("admin"), async (req, res) => {
     const id = Number(req.params.id);
     const existing = await storage.getAcademyTrackFull(id);

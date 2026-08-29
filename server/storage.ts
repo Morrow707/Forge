@@ -1204,6 +1204,24 @@ const programPhotoDraftSchema = z.object({
   weeks: z.array(programPhotoWeekSchema).default([]),
 });
 
+// Photo/document counterpart to programPhotoDraftSchema, for Coaches Corner
+// tracks -- see generateAcademyTrackDraftFromPhoto's own comment for why
+// this organizes into lessons rather than transcribing verbatim the way the
+// program schema does.
+const academyTrackPhotoLessonSchema = z.object({
+  lessonNumber: z.number().int().min(1).optional().nullable(),
+  title: z.string().trim().min(1).max(200),
+  content: z.string().trim().min(1),
+  estMinutes: z.number().int().min(1).max(120).optional().nullable(),
+});
+const academyTrackPhotoDraftSchema = z.object({
+  note: z.string().trim().max(500).optional().nullable(),
+  title: z.string().trim().min(1).max(200),
+  description: z.string().trim().min(1).max(2000),
+  keyPrinciplesForAi: z.string().trim().min(1).max(4000),
+  lessons: z.array(academyTrackPhotoLessonSchema).default([]),
+});
+
 const generateModifiedWorkoutSchema = z.object({
   substitutions: z.array(
     z.object({
@@ -19601,6 +19619,90 @@ ${catalog}`;
       }
       structure.weeks.push(week);
     }
+
+    return { structure, note: draft.note?.trim() || null };
+  },
+
+  // Photo/document counterpart to generateProgramDraftFromPhoto, for
+  // Coaches Corner tracks. Unlike the program transcription (which must
+  // reproduce sets/reps/weight verbatim since those are exact numbers a
+  // coach depends on), source material here -- a document, slide deck, or
+  // screenshot of coaching notes -- is prose that rarely arrives pre-split
+  // into lesson-sized chunks, so Claude is asked to organize it into
+  // lessons and distill a keyPrinciplesForAi summary (the same field the
+  // builder asks an admin to write by hand) rather than transcribe
+  // mechanically. Same return shape (structure + note) as the program
+  // path: the client feeds this straight into the same
+  // create-then-land-in-the-builder-to-review flow.
+  async generateAcademyTrackDraftFromPhoto(
+    images: { mediaType: "image/jpeg" | "image/png"; data: string }[],
+  ): Promise<{ structure: AcademyTrackStructureInput; note: string | null } | null> {
+    if (!aiEnabled) return null;
+    const system =
+      "You are turning a photographed or screenshotted coach-education document (an outline, slide deck, article, or notes) into a structured learning track for strength & conditioning coaches. Organize the material into a logical sequence of lessons, each with a clear title and the actual content from the source (you may lightly rephrase for readability, but do not invent facts, statistics, or claims that aren't in the source). Also write a concise keyPrinciplesForAi -- a short distillation of the core takeaways an AI assistant could use as context, not the full lesson text. If the photo doesn't clearly show educational/instructional content, return an empty lessons array.";
+    const tool = {
+      name: "report_academy_track_transcription",
+      description: "Reports a coach-education track (title, description, lessons) built from the photo(s).",
+      input_schema: {
+        type: "object",
+        properties: {
+          note: {
+            type: "string",
+            description: "Optional. Only if something in the photo was illegible/ambiguous and you had to guess.",
+          },
+          title: { type: "string", description: "Track title, e.g. 'Sports Nutrition Literacy for Coaches'." },
+          description: { type: "string", description: "1-2 sentence summary shown on the track's catalog card." },
+          keyPrinciplesForAi: {
+            type: "string",
+            description: "Concise distillation of the core takeaways, for use as AI context -- not the full lesson text.",
+          },
+          lessons: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                lessonNumber: { type: "integer" },
+                title: { type: "string" },
+                content: { type: "string" },
+                estMinutes: { type: "integer", description: "Estimated reading time in minutes." },
+              },
+              required: ["title", "content"],
+            },
+          },
+        },
+        required: ["title", "description", "keyPrinciplesForAi", "lessons"],
+      },
+    };
+    const rawDraft = await askClaudeVisionStructured<{
+      note?: string;
+      title: string;
+      description: string;
+      keyPrinciplesForAi: string;
+      lessons: unknown[];
+    }>(
+      system,
+      "Build a coach-education track from the document/screenshot(s) shown.",
+      images,
+      tool,
+      { maxTokens: 4096 },
+    );
+    const parsedDraft = academyTrackPhotoDraftSchema.safeParse(rawDraft);
+    if (!parsedDraft.success) return null;
+    const draft = parsedDraft.data;
+
+    const structure: AcademyTrackStructureInput = {
+      title: draft.title,
+      description: draft.description,
+      keyPrinciplesForAi: draft.keyPrinciplesForAi,
+      orderIndex: 0,
+      lessons: draft.lessons.map((l, i) => ({
+        lessonNumber: l.lessonNumber ?? i + 1,
+        title: l.title,
+        content: l.content,
+        estMinutes: l.estMinutes ?? null,
+      })),
+      quizQuestions: [],
+    };
 
     return { structure, note: draft.note?.trim() || null };
   },
