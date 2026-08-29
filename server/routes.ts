@@ -1099,6 +1099,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.status(204).end();
   });
 
+  // ---------------- Admin: Skill Programs ----------------
+  // Same shape as /api/admin/programs above -- an admin's own account is
+  // the "coach" that owns Forge-official content, so this reuses the exact
+  // storage functions the coach skill-program routes above call, just
+  // gated on requireRole("admin") instead. getVisibleSkillProgramsForCoach/
+  // getVisibleSkillProgramDetail already compute isForgeOfficial/ownerLabel
+  // generically via withOwnership, so nothing here needs to hardcode them.
+  app.get("/api/admin/skill-programs", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const list = await storage.getVisibleSkillProgramsForCoach(user.id);
+    res.json(list);
+  });
+
+  app.get("/api/admin/skill-programs/:id", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const program = await storage.getVisibleSkillProgramDetail(id, user.id);
+    if (!program) return res.status(404).json({ message: "Skill program not found" });
+    res.json(program);
+  });
+
+  app.post("/api/admin/skill-programs", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = skillProgramStructureSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const program = await storage.createSkillProgramWithStructure(user.id, parsed.data);
+    res.status(201).json(program);
+  });
+
+  app.put("/api/admin/skill-programs/:id", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const owned = await assertCoachOwnsSkillProgram(user.id, id);
+    if (!owned) return res.status(404).json({ message: "Skill program not found" });
+    const parsed = skillProgramStructureSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    await storage.updateSkillProgramStructure(id, parsed.data, user.id);
+    const updated = await storage.getSkillProgramFull(id);
+    res.json(updated);
+  });
+
+  app.delete("/api/admin/skill-programs/:id", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const owned = await assertCoachOwnsSkillProgram(user.id, id);
+    if (!owned) return res.status(404).json({ message: "Skill program not found" });
+    await storage.deleteSkillProgram(id);
+    res.status(204).end();
+  });
+
   app.get("/api/coach/skill-assignments", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     const list = await storage.getSkillAssignmentsForCoach(user.id);

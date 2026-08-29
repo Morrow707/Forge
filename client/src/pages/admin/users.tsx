@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearch } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
 import { Card, CardContent } from "@/components/ui/card";
@@ -76,9 +77,15 @@ const ROLE_BADGE_CLASS: Record<UserRow["role"], string> = {
  * paginated; narrow the search if you hit the cap. */
 export default function AdminUsers() {
   const qc = useQueryClient();
+  // Dashboard stat tiles (Coaches/Athletes) deep-link here with ?role=coach
+  // or ?role=athlete so the tile actually lands on the filtered view it
+  // named, not just this page in general.
+  const initialRole = new URLSearchParams(useSearch()).get("role");
   const [searchInput, setSearchInput] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
-  const [roleFilter, setRoleFilter] = useState<RoleFilter>("all");
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>(
+    ROLE_FILTERS.includes(initialRole as RoleFilter) ? (initialRole as RoleFilter) : "all",
+  );
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [roleChangeTarget, setRoleChangeTarget] = useState<{ id: number; name: string; role: string } | null>(
     null,

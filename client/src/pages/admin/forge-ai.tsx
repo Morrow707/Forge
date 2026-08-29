@@ -9,7 +9,7 @@ import type { CapturedPhoto } from "@/lib/photo-capture";
 import { apiRequest, getJson } from "@/lib/queryClient";
 import { format, parseISO } from "date-fns";
 import { toast } from "sonner";
-import { Send, Sparkles, Loader2, BookOpen, Eye, X, Database, AlertTriangle, Info } from "lucide-react";
+import { Send, Sparkles, Loader2, BookOpen, Eye, X, AlertTriangle, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type ForgeAiMessage = { id: number; role: "admin" | "assistant"; content: string; createdAt: string };
@@ -57,10 +57,8 @@ export function ForgeAiContent() {
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [retiringId, setRetiringId] = useState<number | null>(null);
   const [retireReason, setRetireReason] = useState("");
-  const [showAggregate, setShowAggregate] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  type Gap = { context: string; position: string | null; gender: string | null; age: number | null; count: number; lastSeen: string };
   type Finding = {
     id: number;
     tier: "safety" | "informational";
@@ -74,7 +72,6 @@ export function ForgeAiContent() {
     messages: ForgeAiMessage[];
     entries: ForgeAiEntry[];
     usageCounts: Record<number, number>;
-    gaps: Gap[];
     findings: Finding[];
   }>({
     queryKey: ["/api/admin/forge-ai"],
@@ -83,64 +80,7 @@ export function ForgeAiContent() {
   const messages = data?.messages ?? [];
   const entries = data?.entries ?? [];
   const usageCounts = data?.usageCounts ?? {};
-  const gaps = data?.gaps ?? [];
   const findings = data?.findings ?? [];
-
-  type AthleteRow = {
-    age: number | null;
-    gender: string | null;
-    heightIn: number | null;
-    bodyWeightLbs: number | null;
-    sport: string | null;
-    position: string | null;
-    seasonPhase: string | null;
-    trainingStylePreference: string | null;
-    nutritionGoal: string | null;
-    healthStatus: string;
-    fortyYardDash: number | null;
-    verticalJumpIn: number | null;
-    broadJumpIn: number | null;
-    proAgilitySeconds: number | null;
-    benchMaxLbs: number | null;
-    squatMaxLbs: number | null;
-    deadliftMaxLbs: number | null;
-  };
-  const AGGREGATE_PAGE_SIZE = 200;
-  const [aggregateLoadedPages, setAggregateLoadedPages] = useState(1);
-  const { data: aggregateResult, isLoading: aggregateLoading } = useQuery<{ rows: AthleteRow[]; total: number }>({
-    queryKey: ["/api/admin/aggregate-athlete-data", aggregateLoadedPages],
-    queryFn: () => getJson(`/api/admin/aggregate-athlete-data?limit=${aggregateLoadedPages * AGGREGATE_PAGE_SIZE}&offset=0`),
-    enabled: showAggregate,
-  });
-  const aggregateData = aggregateResult?.rows ?? [];
-  const aggregateTotal = aggregateResult?.total ?? 0;
-  const aggregateHasMore = aggregateData.length < aggregateTotal;
-
-  type ScreenRow = {
-    testKey: string;
-    label: string;
-    category: string;
-    scoreType: string;
-    side: string | null;
-    scoreValue: number;
-    flagged: boolean;
-    age: number | null;
-    gender: string | null;
-    sport: string | null;
-    position: string | null;
-  };
-  const [showScreens, setShowScreens] = useState(false);
-  const SCREEN_PAGE_SIZE = 200;
-  const [screenLoadedPages, setScreenLoadedPages] = useState(1);
-  const { data: screenResult, isLoading: screenLoading } = useQuery<{ rows: ScreenRow[]; total: number }>({
-    queryKey: ["/api/admin/movement-screens/aggregate", screenLoadedPages],
-    queryFn: () =>
-      getJson(`/api/admin/movement-screens/aggregate?limit=${screenLoadedPages * SCREEN_PAGE_SIZE}&offset=0`),
-    enabled: showScreens,
-  });
-  const screenData = screenResult?.rows ?? [];
-  const screenTotal = screenResult?.total ?? 0;
-  const screenHasMore = screenData.length < screenTotal;
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -418,195 +358,6 @@ export function ForgeAiContent() {
         </div>
       )}
 
-      {gaps.length > 0 && (
-        <div className="px-4 pb-4 lg:px-8">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Recurring gaps</CardTitle>
-              <CardDescription>
-                Cases that came up more than once in the last two weeks with nothing taught for them.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-1.5">
-              {gaps.map((g, i) => (
-                <div key={i} className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm">
-                  <span>
-                    <span className="font-semibold">{g.context.replace(/_/g, " ")}</span> ·{" "}
-                    {[g.position, g.gender, g.age != null ? `age ${g.age}` : null].filter(Boolean).join(", ") || "no profile detail"}
-                  </span>
-                  <Badge variant="outline">{g.count}x</Badge>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      <div className="px-4 pb-4 lg:px-8">
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Database className="h-4 w-4 text-primary" />
-                  Aggregate athlete data
-                </CardTitle>
-                <CardDescription>
-                  Every athlete on the platform, across every coach's roster -- exact values, no names or team info.
-                  Each view is logged.
-                </CardDescription>
-              </div>
-              {!showAggregate && (
-                <Button type="button" variant="outline" size="sm" onClick={() => setShowAggregate(true)}>
-                  View data
-                </Button>
-              )}
-            </div>
-          </CardHeader>
-          {showAggregate && (
-            <CardContent className="overflow-x-auto">
-              {aggregateLoading ? (
-                <div className="h-24 animate-pulse rounded-md bg-surface" />
-              ) : aggregateData.length === 0 ? (
-                <p className="py-8 text-center text-sm text-muted-foreground">No athletes yet.</p>
-              ) : (
-                <table className="w-full text-left text-sm">
-                  <thead>
-                    <tr className="border-b border-border text-[10px] uppercase text-muted-foreground">
-                      <th className="py-1.5 pr-3">Age</th>
-                      <th className="py-1.5 pr-3">Gender</th>
-                      <th className="py-1.5 pr-3">Height</th>
-                      <th className="py-1.5 pr-3">Weight</th>
-                      <th className="py-1.5 pr-3">Sport</th>
-                      <th className="py-1.5 pr-3">Position</th>
-                      <th className="py-1.5 pr-3">Season</th>
-                      <th className="py-1.5 pr-3">Style</th>
-                      <th className="py-1.5 pr-3">Nutrition goal</th>
-                      <th className="py-1.5 pr-3">Health</th>
-                      <th className="py-1.5 pr-3">40-Yd</th>
-                      <th className="py-1.5 pr-3">Vertical</th>
-                      <th className="py-1.5 pr-3">Broad</th>
-                      <th className="py-1.5 pr-3">Agility</th>
-                      <th className="py-1.5 pr-3">Bench</th>
-                      <th className="py-1.5 pr-3">Squat</th>
-                      <th className="py-1.5 pr-3">Deadlift</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {aggregateData.map((a, i) => (
-                      <tr key={i} className="border-b border-border/50">
-                        <td className="py-1.5 pr-3">{a.age ?? "--"}</td>
-                        <td className="py-1.5 pr-3">{a.gender ?? "--"}</td>
-                        <td className="py-1.5 pr-3">{a.heightIn ?? "--"}</td>
-                        <td className="py-1.5 pr-3">{a.bodyWeightLbs ?? "--"}</td>
-                        <td className="py-1.5 pr-3">{a.sport ?? "--"}</td>
-                        <td className="py-1.5 pr-3">{a.position ?? "--"}</td>
-                        <td className="py-1.5 pr-3">{a.seasonPhase ?? "--"}</td>
-                        <td className="py-1.5 pr-3">{a.trainingStylePreference ?? "--"}</td>
-                        <td className="py-1.5 pr-3">{a.nutritionGoal ?? "--"}</td>
-                        <td className="py-1.5 pr-3">{a.healthStatus}</td>
-                        <td className="py-1.5 pr-3">{a.fortyYardDash ?? "--"}</td>
-                        <td className="py-1.5 pr-3">{a.verticalJumpIn ?? "--"}</td>
-                        <td className="py-1.5 pr-3">{a.broadJumpIn ?? "--"}</td>
-                        <td className="py-1.5 pr-3">{a.proAgilitySeconds ?? "--"}</td>
-                        <td className="py-1.5 pr-3">{a.benchMaxLbs ?? "--"}</td>
-                        <td className="py-1.5 pr-3">{a.squatMaxLbs ?? "--"}</td>
-                        <td className="py-1.5 pr-3">{a.deadliftMaxLbs ?? "--"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-              {aggregateHasMore && (
-                <div className="flex justify-center p-3">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setAggregateLoadedPages((p) => p + 1)}
-                    disabled={aggregateLoading}
-                  >
-                    Load more ({aggregateTotal - aggregateData.length} remaining)
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          )}
-        </Card>
-      </div>
-
-      <div className="px-4 pb-4 lg:px-8">
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Database className="h-4 w-4 text-primary" />
-                  Movement screen results
-                </CardTitle>
-                <CardDescription>
-                  Every screened result across every coach's roster -- exact values, redacted to age/gender/sport/
-                  position. Each view is logged.
-                </CardDescription>
-              </div>
-              {!showScreens && (
-                <Button type="button" variant="outline" size="sm" onClick={() => setShowScreens(true)}>
-                  View data
-                </Button>
-              )}
-            </div>
-          </CardHeader>
-          {showScreens && (
-            <CardContent className="overflow-x-auto">
-              {screenLoading ? (
-                <div className="h-24 animate-pulse rounded-md bg-surface" />
-              ) : screenData.length === 0 ? (
-                <p className="py-8 text-center text-sm text-muted-foreground">No screens logged yet.</p>
-              ) : (
-                <table className="w-full text-left text-sm">
-                  <thead>
-                    <tr className="border-b border-border text-[10px] uppercase text-muted-foreground">
-                      <th className="py-1.5 pr-3">Test</th>
-                      <th className="py-1.5 pr-3">Side</th>
-                      <th className="py-1.5 pr-3">Score</th>
-                      <th className="py-1.5 pr-3">Flagged</th>
-                      <th className="py-1.5 pr-3">Age</th>
-                      <th className="py-1.5 pr-3">Gender</th>
-                      <th className="py-1.5 pr-3">Sport</th>
-                      <th className="py-1.5 pr-3">Position</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {screenData.map((r, i) => (
-                      <tr key={i} className="border-b border-border/50">
-                        <td className="py-1.5 pr-3">{r.label}</td>
-                        <td className="py-1.5 pr-3">{r.side ?? "--"}</td>
-                        <td className="py-1.5 pr-3">{r.scoreValue}</td>
-                        <td className="py-1.5 pr-3">{r.flagged ? "yes" : "no"}</td>
-                        <td className="py-1.5 pr-3">{r.age ?? "--"}</td>
-                        <td className="py-1.5 pr-3">{r.gender ?? "--"}</td>
-                        <td className="py-1.5 pr-3">{r.sport ?? "--"}</td>
-                        <td className="py-1.5 pr-3">{r.position ?? "--"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-              {screenHasMore && (
-                <div className="flex justify-center p-3">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setScreenLoadedPages((p) => p + 1)}
-                    disabled={screenLoading}
-                  >
-                    Load more ({screenTotal - screenData.length} remaining)
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          )}
-        </Card>
-      </div>
     </>
   );
 }

@@ -167,40 +167,45 @@ export default function AdminDashboard() {
         </Card>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <StatTile icon={Users} label="Coaches" value={platformStats?.totalCoaches ?? 0} />
-          <StatTile icon={UserCheck} label="Athletes" value={platformStats?.totalAthletes ?? 0} />
+          <StatTile icon={Users} label="Coaches" value={platformStats?.totalCoaches ?? 0} href="/admin/users?role=coach" />
+          <StatTile icon={UserCheck} label="Athletes" value={platformStats?.totalAthletes ?? 0} href="/admin/users?role=athlete" />
           <StatTile
             icon={UserPlus}
             label="New signups this week"
             value={platformStats?.newSignupsThisWeek ?? 0}
             trend={platformStats?.newSignupsTrend}
+            href="/admin/users"
           />
-          <StatTile icon={Compass} label="Free Agents" value={platformStats?.freeAgentCount ?? 0} />
+          <StatTile icon={Compass} label="Free Agents" value={platformStats?.freeAgentCount ?? 0} href="/admin/users" />
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <Card>
-            <CardContent className="flex items-center gap-4 p-5">
-              <div className="flex h-11 w-11 items-center justify-center rounded-md bg-primary/15 text-primary">
-                <Dumbbell className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="font-display text-3xl font-bold">{exercises.length}</p>
-                <p className="text-sm text-muted-foreground">Forge exercises</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="flex items-center gap-4 p-5">
-              <div className="flex h-11 w-11 items-center justify-center rounded-md bg-success/15 text-success">
-                <ArrowRight className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="font-display text-3xl font-bold">{Object.keys(categoryCounts).length}</p>
-                <p className="text-sm text-muted-foreground">Categories covered</p>
-              </div>
-            </CardContent>
-          </Card>
+          <Link href="/admin/exercises">
+            <Card className="cursor-pointer transition-colors hover:border-primary/50">
+              <CardContent className="flex items-center gap-4 p-5">
+                <div className="flex h-11 w-11 items-center justify-center rounded-md bg-primary/15 text-primary">
+                  <Dumbbell className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="font-display text-3xl font-bold">{exercises.length}</p>
+                  <p className="text-sm text-muted-foreground">Forge exercises</p>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
+          <Link href="/admin/exercises">
+            <Card className="cursor-pointer transition-colors hover:border-primary/50">
+              <CardContent className="flex items-center gap-4 p-5">
+                <div className="flex h-11 w-11 items-center justify-center rounded-md bg-success/15 text-success">
+                  <ArrowRight className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="font-display text-3xl font-bold">{Object.keys(categoryCounts).length}</p>
+                  <p className="text-sm text-muted-foreground">Categories covered</p>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
           <Link href="/admin/review">
             <Card className="cursor-pointer transition-colors hover:border-primary/50">
               <CardContent className="flex items-center gap-4 p-5">
@@ -270,14 +275,16 @@ function StatTile({
   label,
   value,
   trend,
+  href,
 }: {
   icon: typeof Users;
   label: string;
   value: number;
   trend?: number[];
+  href?: string;
 }) {
-  return (
-    <Card>
+  const card = (
+    <Card className={cn(href && "cursor-pointer transition-colors hover:border-primary/50")}>
       <CardContent className="flex items-center gap-3 p-3 md:p-4">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary/15 text-primary">
           <Icon className="h-5 w-5" />
@@ -292,6 +299,7 @@ function StatTile({
       </CardContent>
     </Card>
   );
+  return href ? <Link href={href}>{card}</Link> : card;
 }
 
 function StatusRow({ label, ok }: { label: string; ok: boolean | undefined }) {

@@ -151,6 +151,7 @@ const adminNav: NavItem[] = [
   { href: "/admin/my", label: "My Calendar", icon: CalendarDays },
   { href: "/admin/exercises", label: "Forge Library", icon: Dumbbell },
   { href: "/admin/skills", label: "Forge Skill Bank", icon: Target, overflow: true },
+  { href: "/admin/skill-programs", label: "Forge Skill Programs", icon: Target, overflow: true },
   { href: "/admin/programs", label: "Forge Programs", icon: CalendarRange },
   { href: "/admin/classes", label: "Forge Classes", icon: GraduationCap },
   // Same overflow treatment as coachNav above -- at 14+ items, admin's full
