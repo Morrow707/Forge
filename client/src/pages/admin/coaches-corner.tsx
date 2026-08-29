@@ -7,10 +7,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { AcademyQuiz } from "@/components/academy-quiz";
-import { AcademyTrackPhotoImportDialog } from "@/components/academy-track-photo-import-dialog";
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { ArrowLeft, CheckCircle2, Circle, ImagePlus, Pencil, Plus } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Circle, Pencil, Plus } from "lucide-react";
 
 type Lesson = {
   id: number;
@@ -44,7 +43,6 @@ export default function AdminCoachesCorner() {
   const qc = useQueryClient();
   const [selectedTrackId, setSelectedTrackId] = useState<number | null>(null);
   const [selectedLessonId, setSelectedLessonId] = useState<number | null>(null);
-  const [photoImportOpen, setPhotoImportOpen] = useState(false);
 
   const { data: tracks = [], isLoading } = useQuery<Track[]>({
     queryKey: ["/api/admin/academy/tracks"],
@@ -161,19 +159,12 @@ export default function AdminCoachesCorner() {
     <AppShell
       title="Coaches Corner"
       actions={
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => setPhotoImportOpen(true)}>
-            <ImagePlus className="h-4 w-4" />
-            Import from Photo
-          </Button>
-          <Button onClick={() => navigate("/admin/academy-tracks/new")}>
-            <Plus className="h-4 w-4" />
-            New Track
-          </Button>
-        </div>
+        <Button onClick={() => navigate("/admin/academy-tracks/new")}>
+          <Plus className="h-4 w-4" />
+          New Lesson
+        </Button>
       }
     >
-      <AcademyTrackPhotoImportDialog open={photoImportOpen} onOpenChange={setPhotoImportOpen} />
       <p className="mb-6 max-w-2xl text-sm text-muted-foreground">
         Coach-education content -- what a regular coach sees as a locked, paywalled catalog (see the
         Coaches Corner nav item next to the account menu). Click a track to read it, or the pencil to

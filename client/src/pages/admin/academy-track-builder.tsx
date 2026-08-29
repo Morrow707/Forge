@@ -5,11 +5,16 @@ import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
+import {
+  AcademyTrackPhotoImportPanel,
+  type PhotoDraftStructure,
+} from "@/components/academy-track-photo-import-panel";
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { ArrowLeft, Plus, Trash2, ChevronUp, ChevronDown, Save } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, ChevronUp, ChevronDown, Save, Eye } from "lucide-react";
 
 type LessonForm = {
   id?: number;
@@ -43,6 +48,41 @@ function emptyQuestion(orderIndex: number): QuestionForm {
 }
 function emptyLesson(lessonNumber: number): LessonForm {
   return { lessonNumber, title: "", content: "", estMinutes: null };
+}
+
+/** One row in the live preview -- collapsed it's just the read-view list
+ * item a coach sees; expanded it shows the same paragraph-split rendering
+ * coaches-corner.tsx uses for the actual lesson reader, so a formatting
+ * mistake (missing blank line between paragraphs, etc.) is visible before
+ * saving instead of only after a coach opens it. */
+function LessonPreviewRow({ lesson, index }: { lesson: LessonForm; index: number }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div className="rounded-md border border-border">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm"
+      >
+        <span className="min-w-0 flex-1 truncate font-semibold">
+          {index + 1}. {lesson.title.trim() || "Untitled lesson"}
+        </span>
+        <span className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
+          {lesson.estMinutes != null && `${lesson.estMinutes} min`}
+          {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+        </span>
+      </button>
+      {expanded && (
+        <div className="space-y-2 border-t border-border px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+          {lesson.content.trim() ? (
+            lesson.content.split("\n\n").map((para, i) => <p key={i}>{para}</p>)
+          ) : (
+            <p className="italic">No content yet.</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 /** Full authoring surface for one Coaches Corner track -- title/description/
@@ -115,7 +155,7 @@ export default function AdminAcademyTrackBuilder() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/admin/academy/tracks"] });
-      toast.success("Track deleted");
+      toast.success("Lesson deleted");
       navigate("/admin/coaches-corner");
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not delete"),
@@ -149,9 +189,29 @@ export default function AdminAcademyTrackBuilder() {
     });
   }
 
+  // Only fills title/description/principles if the admin hasn't already
+  // typed something -- but always appends the transcribed lessons, so a
+  // second photo (another chapter of the same source) adds to what's
+  // already there instead of wiping it.
+  function handlePhotoDraft(structure: PhotoDraftStructure, note: string | null) {
+    setTitle((prev) => prev || structure.title);
+    setDescription((prev) => prev || structure.description);
+    setKeyPrinciplesForAi((prev) => prev || structure.keyPrinciplesForAi);
+    setLessons((prev) => [
+      ...prev,
+      ...structure.lessons.map((l, i) => ({
+        lessonNumber: prev.length + i + 1,
+        title: l.title,
+        content: l.content,
+        estMinutes: l.estMinutes,
+      })),
+    ]);
+    if (note) toast.info(note, { duration: 10000 });
+  }
+
   return (
     <AppShell
-      title={isNew ? "New Track" : "Edit Track"}
+      title={isNew ? "New Coaches Corner Lesson" : "Edit Coaches Corner Lesson"}
       actions={
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={() => navigate("/admin/coaches-corner")}>
@@ -179,7 +239,8 @@ export default function AdminAcademyTrackBuilder() {
         </div>
       }
     >
-      <div className="max-w-3xl space-y-6">
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+      <div className="flex-1 space-y-6 lg:max-w-3xl">
         <Card>
           <CardContent className="space-y-4 p-5">
             <div className="flex gap-3">
@@ -454,6 +515,48 @@ export default function AdminAcademyTrackBuilder() {
             {questions.length === 0 && <p className="text-sm text-muted-foreground">No quiz questions yet.</p>}
           </div>
         </div>
+      </div>
+
+      <div className="w-full space-y-6 lg:sticky lg:top-4 lg:w-80 lg:shrink-0 lg:self-start">
+        <AcademyTrackPhotoImportPanel onDraft={handlePhotoDraft} />
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Eye className="h-4 w-4" />
+              Preview
+            </CardTitle>
+            <CardDescription>What a coach sees -- updates as you edit.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div>
+              <p className="font-display text-sm font-bold uppercase tracking-wide">
+                {title.trim() || "Untitled Lesson"}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {description.trim() || "No description yet."}
+              </p>
+            </div>
+            <div className="flex gap-1.5">
+              <Badge variant="secondary" className="text-[10px]">
+                {lessons.length} lesson{lessons.length === 1 ? "" : "s"}
+              </Badge>
+              <Badge variant="outline" className="text-[10px]">
+                {questions.length} quiz Qs
+              </Badge>
+            </div>
+            <div className="space-y-1.5">
+              {lessons.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No lessons yet.</p>
+              ) : (
+                lessons.map((lesson, i) => (
+                  <LessonPreviewRow key={lesson.id ?? `new-${i}`} lesson={lesson} index={i} />
+                ))
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
       </div>
     </AppShell>
   );
