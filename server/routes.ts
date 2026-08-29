@@ -1713,6 +1713,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(draft);
   });
 
+  // Admin counterpart to /api/coach/programs/photo-draft -- the client's
+  // ProgramPhotoImportDialog already renders on this side (admin/programs.tsx
+  // passes showAiAssist), it just had nowhere to POST to.
+  app.post("/api/admin/programs/photo-draft", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = z.object({ images: photoImagesSchema }).safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const draft = await storage.generateProgramDraftFromPhoto(user.id, parsed.data.images);
+    if (!draft) return res.status(422).json({ message: "Couldn't read that photo -- try a clearer shot." });
+    res.json(draft);
+  });
+
   app.put("/api/admin/programs/:id", requireRole("admin"), async (req, res) => {
     const user = currentUser(req);
     const id = Number(req.params.id);
