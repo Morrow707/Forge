@@ -60,7 +60,10 @@ export default function AdminVideos() {
     staleTime: 60_000,
   });
 
-  const { data, isLoading } = useQuery<{ videos: AdminVideoRow[]; total: number }>({
+  const { data, isLoading, isError, error, refetch, isFetching } = useQuery<{
+    videos: AdminVideoRow[];
+    total: number;
+  }>({
     queryKey: ["/api/admin/videos", loadedPages],
     queryFn: () => getJson(`/api/admin/videos?limit=${loadedPages * PAGE_SIZE}&offset=0`),
   });
@@ -166,7 +169,17 @@ export default function AdminVideos() {
         <Card>
           <CardContent className="p-0">
             {isLoading && <p className="p-6 text-center text-sm text-muted-foreground">Loading…</p>}
-            {!isLoading && videos.length === 0 && (
+            {isError && (
+              <div className="flex flex-col items-center gap-2 py-10 text-center">
+                <p className="text-sm text-destructive">
+                  Couldn't load this page: {error instanceof Error ? error.message : "unknown error"}
+                </p>
+                <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
+                  Retry
+                </Button>
+              </div>
+            )}
+            {!isLoading && !isError && videos.length === 0 && (
               <div className="flex flex-col items-center gap-2 py-16 text-center">
                 <Video className="h-8 w-8 text-muted-foreground" />
                 <p className="text-muted-foreground">No videos on disk right now.</p>

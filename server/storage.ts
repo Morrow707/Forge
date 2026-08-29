@@ -2108,7 +2108,8 @@ let adminVideoSummaryCache: { at: number; value: { totalBytes: number; totalCoun
 // 13 seconds. adminVideoSummaryEpoch guards against a scan that started
 // before an invalidate() call overwriting the cache with data that raced
 // past the delete it was supposed to reflect.
-let adminVideoSummaryInFlight: Promise<{ totalBytes: number; totalCount: number }> | null = null;
+let adminVideoSummaryInFlight: { epoch: number; promise: Promise<{ totalBytes: number; totalCount: number }> } | null =
+  null;
 let adminVideoSummaryEpoch = 0;
 
 // The athlete fields a guardian's dashboard is allowed to see -- shared
@@ -16848,19 +16849,33 @@ ${catalog}`;
     const commentById = new Map(commentDetails.map((r) => [r.id, r]));
 
     // Reassemble in phase 1's already-correct sorted order -- the detail
-    // queries above don't preserve it.
-    const page: Omit<AdminVideoRow, "sizeBytes">[] = rankResult.rows.map((r) => {
+    // queries above don't preserve it. Phase 1's WHERE clause is looser
+    // than phase 2's INNER JOINs (which require a live
+    // workout_log_entries -> workout_logs -> users chain, or the
+    // equivalent for skill/comment) -- an orphaned or since-deleted parent
+    // record would win phase 1's sort but come back missing here. flatMap
+    // + skip rather than a non-null assertion: one bad row used to crash
+    // this entire request (a bigger `limit` -- i.e. clicking "Load more"
+    // -- was more likely to include one, which made it look like Load
+    // More just silently did nothing) instead of just being left out of
+    // the page.
+    const page: Omit<AdminVideoRow, "sizeBytes">[] = rankResult.rows.flatMap(
+      (r): Omit<AdminVideoRow, "sizeBytes">[] => {
       if (r.source === "set") {
-        const d = setById.get(r.id)!;
-        return { source: "set", id: r.id, videoUrl: d.video_url, secondaryUrl: null, athleteName: d.athlete_name, label: d.label, date: d.date };
+        const d = setById.get(r.id);
+        if (!d) return [];
+        return [{ source: "set" as const, id: r.id, videoUrl: d.video_url, secondaryUrl: null, athleteName: d.athlete_name, label: d.label, date: d.date }];
       }
       if (r.source === "skill") {
-        const d = skillById.get(r.id)!;
-        return { source: "skill", id: r.id, videoUrl: d.video_url, secondaryUrl: d.secondary_url, athleteName: d.athlete_name, label: d.label, date: d.date };
+        const d = skillById.get(r.id);
+        if (!d) return [];
+        return [{ source: "skill" as const, id: r.id, videoUrl: d.video_url, secondaryUrl: d.secondary_url, athleteName: d.athlete_name, label: d.label, date: d.date }];
       }
-      const d = commentById.get(r.id)!;
-      return { source: "comment", id: r.id, videoUrl: d.video_url, secondaryUrl: d.secondary_url, athleteName: d.athlete_name, label: "Comment attachment", date: d.date };
-    });
+      const d = commentById.get(r.id);
+      if (!d) return [];
+      return [{ source: "comment" as const, id: r.id, videoUrl: d.video_url, secondaryUrl: d.secondary_url, athleteName: d.athlete_name, label: "Comment attachment", date: d.date }];
+      },
+    );
     const videos = await Promise.all(
       page.map(async (r) => ({ ...r, sizeBytes: (await statUploadedFile(r.videoUrl)) ?? 0 })),
     );
@@ -16884,11 +16899,25 @@ ${catalog}`;
     if (adminVideoSummaryCache && now - adminVideoSummaryCache.at < ADMIN_VIDEO_SUMMARY_CACHE_MS) {
       return adminVideoSummaryCache.value;
     }
+    const epochAtCall = adminVideoSummaryEpoch;
     if (adminVideoSummaryInFlight) {
-      return adminVideoSummaryInFlight;
+      // A scan already running, from before this call, is safe to reuse
+      // as-is only if it started at the same epoch we're asking at -- i.e.
+      // no invalidate() (a delete) landed in between. The epoch guard
+      // below already stops a stale scan like that from being cached, but
+      // that alone still let a delete's own invalidate-then-refetch be
+      // handed back a number computed before the delete, since the
+      // in-flight promise itself was returned unconditionally. Await it
+      // (still only one concurrent full-platform scan, same as before)
+      // then recurse for a value actually computed after this call.
+      if (adminVideoSummaryInFlight.epoch !== epochAtCall) {
+        await adminVideoSummaryInFlight.promise;
+        return this.getAdminVideoStorageSummary();
+      }
+      return adminVideoSummaryInFlight.promise;
     }
-    const startEpoch = adminVideoSummaryEpoch;
-    adminVideoSummaryInFlight = (async () => {
+    const startEpoch = epochAtCall;
+    const promise = (async () => {
       try {
         // Deliberately NOT getAdminVideos(MAX_SAFE_INTEGER, 0): that route's
         // pagination (see its own comment) fetches a cheap sort-key page
@@ -16924,7 +16953,8 @@ ${catalog}`;
         adminVideoSummaryInFlight = null;
       }
     })();
-    return adminVideoSummaryInFlight;
+    adminVideoSummaryInFlight = { epoch: startEpoch, promise };
+    return promise;
   },
 
   // Called after a delete/bulk-delete so the storage-summary figure
