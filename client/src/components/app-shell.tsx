@@ -394,7 +394,14 @@ export function AppShell({
           a gap -- only the content below needs pushing down, not the bar. */}
       <div
         ref={stickyBarRef}
-        className="sticky top-0 z-30 shrink-0 border-b border-white/10 bg-surface/70 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)] backdrop-blur-xl backdrop-saturate-150"
+        // will-change-transform forces this onto its own compositing layer --
+        // without it, a sticky element carrying backdrop-blur can lose that
+        // layer and flicker/disappear mid-scroll on Chromium once the page
+        // below it gets long enough to scroll fast (Video Storage's 1,000+
+        // row list is exactly that case; nowhere else on the platform has a
+        // list anywhere near long enough to trigger it, which is why this
+        // read as page-specific rather than an AppShell-wide bug).
+        className="sticky top-0 z-30 shrink-0 border-b border-white/10 bg-surface/70 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)] backdrop-blur-xl backdrop-saturate-150 will-change-transform"
         style={{
           paddingTop: "env(safe-area-inset-top)",
           // A coach's second brand color gets exactly this one bounded,
