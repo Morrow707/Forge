@@ -1665,6 +1665,315 @@ async function buildPlatformTrends() {
   };
 }
 
+// ---------- Cohort query (admin-only, natural-language, anonymized) ----------
+// Generalizes buildPlatformTrends' fixed by-sport breakdown into an
+// arbitrary cohort: any combination of age/gender/sport/position, any
+// metric(s), optionally cross-tabbed by one more dimension. Two metric
+// families:
+//  - "profile": self-reported/coach-entered testing numbers that live
+//    directly on users (height, weight, 40-yd, vertical, bench/squat/
+//    deadlift max).
+//  - "tracked": camera-tracked set data (workoutSetEntries), which
+//    buildPlatformTrends' own velocityBySport/powerBySport pool across
+//    EVERY bar_path/full exercise together -- bench and squat land in the
+//    same bucket there. Real research asks are exercise-specific ("back
+//    squat bar speed" is not "bench press bar speed"), so here a
+//    tracked metric is filtered to exerciseNames when the caller names
+//    any -- via workoutLogEntries.exerciseId, the submission-time
+//    snapshot (see that column's own schema comment for why the live
+//    join through programExercises can't be trusted for this), joined
+//    to exercises.name, never the live program-config path.
+type CohortMetricMeta = {
+  key: string;
+  label: string;
+  unit: string;
+  source: "profile" | "tracked";
+  column: string; // property name on the row shape selected below
+};
+const COHORT_METRICS: CohortMetricMeta[] = [
+  { key: "heightIn", label: "Height", unit: "in", source: "profile", column: "heightIn" },
+  { key: "bodyWeightLbs", label: "Weight", unit: "lb", source: "profile", column: "bodyWeightLbs" },
+  { key: "fortyYardDash", label: "40-yard dash", unit: "s", source: "profile", column: "fortyYardDash" },
+  { key: "verticalJumpIn", label: "Vertical jump", unit: "in", source: "profile", column: "verticalJumpIn" },
+  { key: "broadJumpIn", label: "Broad jump", unit: "in", source: "profile", column: "broadJumpIn" },
+  { key: "proAgilitySeconds", label: "Pro agility", unit: "s", source: "profile", column: "proAgilitySeconds" },
+  { key: "benchMaxLbs", label: "Bench max", unit: "lb", source: "profile", column: "benchMaxLbs" },
+  { key: "squatMaxLbs", label: "Squat max", unit: "lb", source: "profile", column: "squatMaxLbs" },
+  { key: "deadliftMaxLbs", label: "Deadlift max", unit: "lb", source: "profile", column: "deadliftMaxLbs" },
+  { key: "peakVelocityMps", label: "Peak bar velocity", unit: "m/s", source: "tracked", column: "peakVelocityMps" },
+  { key: "meanVelocityMps", label: "Mean bar velocity", unit: "m/s", source: "tracked", column: "meanVelocityMps" },
+  { key: "romCm", label: "Range of motion", unit: "cm", source: "tracked", column: "romCm" },
+  { key: "peakPowerWatts", label: "Peak power", unit: "W", source: "tracked", column: "peakPowerWatts" },
+  { key: "jumpHeightCm", label: "Jump height", unit: "cm", source: "tracked", column: "jumpHeightCm" },
+  { key: "kbSwingPeakSpeedMps", label: "Kettlebell swing peak speed", unit: "m/s", source: "tracked", column: "kbSwingPeakSpeedMps" },
+  { key: "medBallPeakSpeedMps", label: "Med ball peak throw speed", unit: "m/s", source: "tracked", column: "medBallPeakSpeedMps" },
+  { key: "horizontalLoadAvgSpeedYardsPerSec", label: "Sled push/pull avg speed", unit: "yd/s", source: "tracked", column: "horizontalLoadAvgSpeedYardsPerSec" },
+];
+const COHORT_METRIC_BY_KEY = new Map(COHORT_METRICS.map((m) => [m.key, m]));
+
+export type CohortQueryFilters = {
+  ageMin?: number | null;
+  ageMax?: number | null;
+  genders?: string[];
+  sports?: string[];
+  positions?: string[];
+  exerciseNames?: string[];
+  metrics: string[];
+  groupBy?: "sport" | "position" | "ageBracket" | "gender" | null;
+};
+
+function summarizeCohort(values: number[]) {
+  const n = values.length;
+  if (n < PLATFORM_TRENDS_MIN_COHORT) return { n, suppressed: true as const };
+  const sorted = [...values].sort((a, b) => a - b);
+  const round = (v: number) => Math.round(v * 100) / 100;
+  const pct = (p: number) => sorted[Math.min(sorted.length - 1, Math.floor(p * sorted.length))];
+  return {
+    n,
+    suppressed: false as const,
+    mean: round(sorted.reduce((s, v) => s + v, 0) / n),
+    p25: round(pct(0.25)),
+    p75: round(pct(0.75)),
+    min: round(sorted[0]),
+    max: round(sorted[n - 1]),
+  };
+}
+
+function cohortGroupLabel(
+  dim: "sport" | "position" | "ageBracket" | "gender",
+  a: { age: number | null; gender: string | null; sport: string | null; position: string | null },
+): string {
+  if (dim === "ageBracket") return ageBracket(a.age);
+  if (dim === "gender") return a.gender ? GENDER_LABEL[a.gender] : "Not set";
+  if (dim === "position") return a.position?.trim() || "Not set";
+  return normalizeSport(a.sport)?.label ?? "Not set";
+}
+
+// The real aggregation engine -- everything above buildPlatformTrends'
+// fixed by-sport view generalized to an arbitrary filter+metric
+// combination. Never returns a name, email, ID, or any other per-athlete
+// field; every output is a count or a group summary statistic, and any
+// group under PLATFORM_TRENDS_MIN_COHORT is suppressed (count shown,
+// values withheld) rather than shown small -- same floor, same reasoning,
+// as buildPlatformTrends' own comment.
+async function queryTrackedCohort(filters: CohortQueryFilters) {
+  const athletes = await db
+    .select({
+      id: users.id,
+      age: users.age,
+      gender: users.gender,
+      sport: users.sport,
+      position: users.position,
+      heightIn: users.heightIn,
+      bodyWeightLbs: users.bodyWeightLbs,
+      fortyYardDash: users.fortyYardDash,
+      verticalJumpIn: users.verticalJumpIn,
+      broadJumpIn: users.broadJumpIn,
+      proAgilitySeconds: users.proAgilitySeconds,
+      benchMaxLbs: users.benchMaxLbs,
+      squatMaxLbs: users.squatMaxLbs,
+      deadliftMaxLbs: users.deadliftMaxLbs,
+    })
+    .from(users)
+    .where(eq(users.role, "athlete"));
+
+  const genderSet = filters.genders?.length ? new Set(filters.genders) : null;
+  const sportSet = filters.sports?.length ? new Set(filters.sports.map((s) => s.toLowerCase())) : null;
+  const positionSet = filters.positions?.length ? new Set(filters.positions.map((p) => p.toLowerCase())) : null;
+  const cohort = athletes.filter((a) => {
+    if (filters.ageMin != null && (a.age == null || a.age < filters.ageMin)) return false;
+    if (filters.ageMax != null && (a.age == null || a.age > filters.ageMax)) return false;
+    if (genderSet && (!a.gender || !genderSet.has(a.gender))) return false;
+    if (sportSet && !sportSet.has((a.sport ?? "").toLowerCase())) return false;
+    if (positionSet && !positionSet.has((a.position ?? "").toLowerCase())) return false;
+    return true;
+  });
+  const cohortIds = new Set(cohort.map((a) => a.id));
+  const athleteById = new Map(cohort.map((a) => [a.id, a]));
+
+  const requestedMetrics = filters.metrics
+    .map((k) => COHORT_METRIC_BY_KEY.get(k))
+    .filter((m): m is CohortMetricMeta => m != null);
+  const needsTracked = requestedMetrics.some((m) => m.source === "tracked");
+
+  let setRows: {
+    athleteId: number;
+    exerciseName: string;
+    peakVelocityMps: number | null;
+    meanVelocityMps: number | null;
+    romCm: number | null;
+    peakPowerWatts: number | null;
+    jumpHeightCm: number | null;
+    kbSwingPeakSpeedMps: number | null;
+    medBallPeakSpeedMps: number | null;
+    horizontalLoadAvgSpeedYardsPerSec: number | null;
+  }[] = [];
+  if (needsTracked && cohortIds.size > 0) {
+    const rows = await db
+      .select({
+        athleteId: workoutLogs.athleteId,
+        exerciseName: exercises.name,
+        peakVelocityMps: workoutSetEntries.peakVelocityMps,
+        meanVelocityMps: workoutSetEntries.meanVelocityMps,
+        romCm: workoutSetEntries.romCm,
+        peakPowerWatts: workoutSetEntries.peakPowerWatts,
+        jumpHeightCm: workoutSetEntries.jumpHeightCm,
+        kbSwingPeakSpeedMps: workoutSetEntries.kbSwingPeakSpeedMps,
+        medBallPeakSpeedMps: workoutSetEntries.medBallPeakSpeedMps,
+        horizontalLoadAvgSpeedYardsPerSec: workoutSetEntries.horizontalLoadAvgSpeedYardsPerSec,
+      })
+      .from(workoutSetEntries)
+      .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
+      .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
+      .innerJoin(exercises, eq(workoutLogEntries.exerciseId, exercises.id));
+    const exerciseSet = filters.exerciseNames?.length
+      ? new Set(filters.exerciseNames.map((e) => e.toLowerCase()))
+      : null;
+    setRows = rows.filter(
+      (r) =>
+        cohortIds.has(r.athleteId) && (!exerciseSet || exerciseSet.has(r.exerciseName.toLowerCase())),
+    );
+  }
+
+  const results = requestedMetrics.map((meta) => {
+    const values =
+      meta.source === "profile"
+        ? cohort
+            .map((a) => (a as unknown as Record<string, unknown>)[meta.column])
+            .filter((v): v is number => typeof v === "number")
+        : setRows
+            .map((r) => (r as unknown as Record<string, unknown>)[meta.column])
+            .filter((v): v is number => typeof v === "number");
+    return { key: meta.key, label: meta.label, unit: meta.unit, source: meta.source, ...summarizeCohort(values) };
+  });
+
+  let crosstab: { label: string; n: number; suppressed: boolean; mean?: number; p25?: number; p75?: number; min?: number; max?: number }[] | null =
+    null;
+  if (filters.groupBy && requestedMetrics.length > 0) {
+    const primary = requestedMetrics[0];
+    const groups = new Map<string, number[]>();
+    const addValue = (athleteId: number, value: unknown) => {
+      if (typeof value !== "number") return;
+      const a = athleteById.get(athleteId);
+      if (!a) return;
+      const label = cohortGroupLabel(filters.groupBy!, a);
+      groups.set(label, [...(groups.get(label) ?? []), value]);
+    };
+    if (primary.source === "profile") {
+      for (const a of cohort) addValue(a.id, (a as unknown as Record<string, unknown>)[primary.column]);
+    } else {
+      for (const r of setRows) addValue(r.athleteId, (r as unknown as Record<string, unknown>)[primary.column]);
+    }
+    crosstab = Array.from(groups.entries())
+      .map(([label, values]) => ({ label, ...summarizeCohort(values) }))
+      .sort((a, b) => b.n - a.n);
+  }
+
+  return {
+    cohortSize: cohort.length,
+    minCohortSize: PLATFORM_TRENDS_MIN_COHORT,
+    results,
+    crosstab,
+  };
+}
+
+// Distinct exercise names that have ever been tracking-enabled on a
+// program -- grounds the AI parser's exerciseNames extraction in real
+// library entries instead of letting it guess a plausible-sounding name
+// that doesn't exist. Kept small on purpose (only tracked exercises, not
+// the whole ~1000-entry library) to stay cheap in the system prompt.
+async function getTrackableExerciseNames(): Promise<string[]> {
+  const rows = await db
+    .selectDistinct({ name: exercises.name })
+    .from(programExercises)
+    .innerJoin(exercises, eq(programExercises.exerciseId, exercises.id))
+    .where(and(isNotNull(programExercises.trackingLevel), sql`${programExercises.trackingLevel} != 'none'`));
+  return rows.map((r) => r.name).sort();
+}
+
+const cohortQueryTool = {
+  name: "cohort_query",
+  description:
+    "Extract a structured cohort filter + metric request from an admin's free-text research question about Forge's athlete data.",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      ageMin: { type: "number", description: "Minimum age, inclusive. Omit if no lower age bound was stated." },
+      ageMax: { type: "number", description: "Maximum age, inclusive. Omit if no upper age bound was stated." },
+      genders: {
+        type: "array",
+        items: { type: "string", enum: ["male", "female", "non_binary", "prefer_not_to_say"] },
+        description: "Only include a gender the admin actually named (e.g. 'female' -> [\"female\"]). Omit entirely if no gender was mentioned -- never default to including everyone explicitly.",
+      },
+      sports: {
+        type: "array",
+        items: { type: "string" },
+        description: "Sport name(s) exactly as an athlete would self-report them (e.g. 'Track & Field', 'Football'). Omit if no sport was named.",
+      },
+      positions: {
+        type: "array",
+        items: { type: "string" },
+        description: "Position/event name(s) as self-reported (e.g. 'LB', 'Sprints', 'Point Guard' -- match the admin's own wording/abbreviation style). Omit if none named.",
+      },
+      exerciseNames: {
+        type: "array",
+        items: { type: "string" },
+        description: "Specific tracked exercise(s) by exact name from the provided list, when the admin named a specific lift (e.g. 'back squat' -> [\"Back Squat\"], never both Bench Press and Back Squat unless both were actually asked for). Omit if the admin asked about a metric generally with no specific lift.",
+      },
+      metrics: {
+        type: "array",
+        items: { type: "string" },
+        description: "One or more metric keys from the provided metric list that the admin is asking to see. Always include at least one.",
+      },
+      groupBy: {
+        type: "string",
+        enum: ["sport", "position", "ageBracket", "gender"],
+        description: "Only set if the admin asked for a breakdown/comparison across a dimension (e.g. 'by sport', 'compare positions'). Omit for a single overall number.",
+      },
+    },
+    required: ["metrics"],
+  },
+};
+
+export async function parseCohortQueryText(text: string) {
+  const exerciseNames = await getTrackableExerciseNames();
+  const metricList = COHORT_METRICS.map((m) => `${m.key}: ${m.label} (${m.unit || "unitless"}, ${m.source})`).join("\n");
+  const system = `You turn a Forge admin's plain-English research question into a structured cohort query against athlete data. Forge is a strength-and-conditioning platform; admins ask things like "15-17 year old female track athletes, bar velocity on back squats" or "linebackers, bench max".
+
+Valid metric keys (pick from these exactly, "tracked" ones need a specific exercise named when the admin named one):
+${metricList}
+
+Exercises that actually have camera-tracking data on file (use these exact names for exerciseNames, never invent one):
+${exerciseNames.join(", ") || "(none tracked yet)"}
+
+Only extract what the admin actually said -- do not infer an age range, gender, sport, or position that wasn't stated. If the admin names one specific lift (e.g. "back squat"), extract ONLY that lift's exerciseNames -- never add a second exercise (like Bench Press) they didn't mention, even if the metric (bar velocity) is shared across lifts.`;
+
+  const parsed = await askClaudeStructured<{
+    ageMin?: number;
+    ageMax?: number;
+    genders?: string[];
+    sports?: string[];
+    positions?: string[];
+    exerciseNames?: string[];
+    metrics?: string[];
+    groupBy?: "sport" | "position" | "ageBracket" | "gender";
+  }>(system, text, cohortQueryTool, { maxTokens: 512 });
+
+  if (!parsed) return null;
+  const validMetrics = (parsed.metrics ?? []).filter((k) => COHORT_METRIC_BY_KEY.has(k));
+  const filters: CohortQueryFilters = {
+    ageMin: parsed.ageMin ?? null,
+    ageMax: parsed.ageMax ?? null,
+    genders: parsed.genders?.filter((g) => ["male", "female", "non_binary", "prefer_not_to_say"].includes(g)),
+    sports: parsed.sports,
+    positions: parsed.positions,
+    exerciseNames: parsed.exerciseNames,
+    metrics: validMetrics.length > 0 ? validMetrics : ["peakVelocityMps"],
+    groupBy: parsed.groupBy ?? null,
+  };
+  return filters;
+}
+
 type DbTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 // Trims favorited-video count down to favoritedCap (oldest favorite first)
@@ -17785,6 +18094,19 @@ ${catalog}`;
 
   async getPlatformTrends() {
     return buildPlatformTrends();
+  },
+
+  // Natural-language front end for queryTrackedCohort -- parses the admin's
+  // free text into filters via Claude (see parseCohortQueryText's own
+  // comment on why exercise names are grounded in the real tracked-library
+  // list rather than left to the model to guess), then runs the same
+  // anonymized aggregation buildPlatformTrends uses, generalized to
+  // whatever cohort/metric combination the text actually asked for.
+  async runCohortQuery(text: string) {
+    const filters = await parseCohortQueryText(text);
+    if (!filters) return null;
+    const query = await queryTrackedCohort(filters);
+    return { filters, ...query };
   },
 
   // Cheap headcounts for the admin dashboard's stat tiles -- deliberately

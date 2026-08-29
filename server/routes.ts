@@ -1968,6 +1968,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(trends);
   });
 
+  // Natural-language cohort query -- "15-17 year old female track athletes,
+  // bar velocity on back squats" in, an anonymized aggregate (or a clear
+  // "AI isn't configured" / "couldn't parse that" response) out. Same
+  // k-anonymity floor as platform-trends above; see
+  // storage.runCohortQuery's own comment for how exercise-specific
+  // filtering avoids pooling different lifts' bar-speed data together.
+  app.post("/api/admin/cohort-query", requireRole("admin"), async (req, res) => {
+    if (!aiEnabled) {
+      return res.status(503).json({ message: "AI parsing isn't configured on this server." });
+    }
+    const parsed = z.object({ text: z.string().trim().min(1).max(500) }).safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "A non-empty search text is required." });
+    }
+    const result = await storage.runCohortQuery(parsed.data.text);
+    if (!result) {
+      return res.status(422).json({ message: "Couldn't understand that as a data query -- try naming an age range, sport, position, or metric directly." });
+    }
+    res.json(result);
+  });
+
   // ---------------- Admin: billing/pricing assignment ----------------
   // No self-serve checkout exists yet (see shared/billing-tiers.ts,
   // server/billing.ts) -- an admin manually assigning a tier here is the
