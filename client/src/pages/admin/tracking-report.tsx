@@ -26,13 +26,13 @@ export default function AdminTrackingReport() {
   });
 
   return (
-    <AppShell title="Tracking Report">
+    <AppShell title="Tracking Data">
       <div className="mx-auto max-w-4xl space-y-4 p-4">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <FileText className="h-5 w-5" />
-              Tracking Report
+              Tracking Data
             </CardTitle>
             <CardDescription>
               Every camera-tracked set's data points, methodology, confidence, and the

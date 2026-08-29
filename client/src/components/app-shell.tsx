@@ -162,7 +162,7 @@ const adminNav: NavItem[] = [
   { href: "/admin/review", label: "Review Queue", icon: ClipboardCheck, overflow: true },
   { href: "/admin/teach-ai", label: "Teach AI", icon: Sparkles, overflow: true },
   { href: "/admin/tracker-diagnosis-reports", label: "AR Diagnosis Reports", icon: Stethoscope, overflow: true },
-  { href: "/admin/tracking-report", label: "Tracking Report", icon: FileText, overflow: true },
+  { href: "/admin/tracking-report", label: "Tracking Data", icon: FileText, overflow: true },
   { href: "/admin/platform-trends", label: "Platform Trends", icon: BarChart3, overflow: true },
   { href: "/admin/billing", label: "Billing", icon: CreditCard, overflow: true },
   { href: "/admin/users", label: "Users", icon: Users, overflow: true },
