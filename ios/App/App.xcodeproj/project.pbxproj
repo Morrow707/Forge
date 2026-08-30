@@ -24,6 +24,7 @@
 		4D3875D14B7ECDFF4FC02731 /* ForgeBridgeViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0C916CC5DB6FD72D7964BB0 /* ForgeBridgeViewController.swift */; };
 		4A7AFEECA4CC21CADA48F9FE /* PasswordPickerPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9833D72362FC8476DFEDACF6 /* PasswordPickerPlugin.swift */; };
 		AB0DCE10AB0DCE10AB0DCE10 /* AvBodyTrackingPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB0DCE10AB0DCE10AB0DCE11 /* AvBodyTrackingPlugin.swift */; };
+		AB1E1A99AB1E1A99AB1E1A90 /* AppleIapPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB1E1A99AB1E1A99AB1E1A91 /* AppleIapPlugin.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -47,6 +48,7 @@
 		F0C916CC5DB6FD72D7964BB0 /* ForgeBridgeViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForgeBridgeViewController.swift; sourceTree = "<group>"; };
 		9833D72362FC8476DFEDACF6 /* PasswordPickerPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasswordPickerPlugin.swift; sourceTree = "<group>"; };
 		AB0DCE10AB0DCE10AB0DCE11 /* AvBodyTrackingPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvBodyTrackingPlugin.swift; sourceTree = "<group>"; };
+		AB1E1A99AB1E1A99AB1E1A91 /* AppleIapPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleIapPlugin.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -89,6 +91,7 @@
 				958DCC762DB07C7200EA8C64 /* ArCameraPreviewPlugin.swift */,
 				618BCA781814AFB2E340B77C /* ArImplementTracker.swift */,
 				AB0DCE10AB0DCE10AB0DCE11 /* AvBodyTrackingPlugin.swift */,
+				AB1E1A99AB1E1A99AB1E1A91 /* AppleIapPlugin.swift */,
 				958DCC812DB07C7200EA8C71 /* ArMeasurePlugin.swift */,
 				958DCC832DB07C7200EA8C73 /* ArMeasureViewController.swift */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
@@ -194,6 +197,7 @@
 				4D3875D14B7ECDFF4FC02731 /* ForgeBridgeViewController.swift in Sources */,
 				4A7AFEECA4CC21CADA48F9FE /* PasswordPickerPlugin.swift in Sources */,
 				AB0DCE10AB0DCE10AB0DCE10 /* AvBodyTrackingPlugin.swift in Sources */,
+				AB1E1A99AB1E1A99AB1E1A90 /* AppleIapPlugin.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

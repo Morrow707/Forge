@@ -28,5 +28,6 @@ class ForgeBridgeViewController: CAPBridgeViewController {
         bridge?.registerPluginInstance(ArMeasurePlugin())
         bridge?.registerPluginInstance(PasswordPickerPlugin())
         bridge?.registerPluginInstance(AvBodyTrackingPlugin())
+        bridge?.registerPluginInstance(AppleIapPlugin())
     }
 }

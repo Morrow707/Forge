@@ -7,6 +7,7 @@ import { Capacitor } from "@capacitor/core";
 import { queryClient, persistOptions } from "@/lib/queryClient";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { BiometricLockGate } from "@/components/biometric-lock-gate";
+import { watchAppleIapTransactionUpdates } from "@/lib/apple-iap";
 import { DebugConsole } from "@/components/debug-console";
 
 // Auth pages are small and needed on the very first, unauthenticated
@@ -67,6 +68,7 @@ const AthleteWorkout = lazy(() => import("@/pages/athlete/workout"));
 const AthleteChat = lazy(() => import("@/pages/athlete/chat"));
 const AthleteSportCoach = lazy(() => import("@/pages/athlete/sport-coach"));
 const AthleteSportCoaches = lazy(() => import("@/pages/athlete/sport-coaches"));
+const AthleteUpgrade = lazy(() => import("@/pages/athlete/upgrade"));
 const AthleteNutrition = lazy(() => import("@/pages/athlete/nutrition"));
 const AthleteLeaderboard = lazy(() => import("@/pages/athlete/leaderboard"));
 const AthletePrograms = lazy(() => import("@/pages/athlete/programs"));
@@ -210,6 +212,15 @@ function Router() {
     document.querySelectorAll("[inert]").forEach((el) => el.removeAttribute("inert"));
   }, [location]);
 
+  // Once per app launch, not per navigation -- catches a StoreKit
+  // transaction that completes outside any purchase()/restorePurchases()
+  // call in this session (Ask to Buy approval, a subscription bought on
+  // another device). No-op on every platform but iOS; see
+  // watchAppleIapTransactionUpdates' own comment.
+  useEffect(() => {
+    if (Capacitor.isNativePlatform()) watchAppleIapTransactionUpdates();
+  }, []);
+
   return (
     <Suspense fallback={<FullScreenSpinner />}>
       {/* Keyed on location so React remounts this wrapper -- not the routes
@@ -341,6 +352,9 @@ function Router() {
         </Route>
         <Route path="/athlete/coaches">
           <ProtectedRoute role="athlete" component={AthleteSportCoaches} />
+        </Route>
+        <Route path="/athlete/upgrade">
+          <ProtectedRoute role="athlete" component={AthleteUpgrade} />
         </Route>
         <Route path="/athlete/coach/:addOnId">
           <ProtectedRoute role="athlete" component={AthleteSportCoach} />

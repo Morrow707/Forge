@@ -55,6 +55,29 @@ export const FREE_AGENT_TIERS: Record<FreeAgentTierId, FreeAgentTierDef> = {
 // admin assignment dropdown in a sensible order without re-sorting.
 export const FREE_AGENT_TIER_ORDER: FreeAgentTierId[] = ["ai_coach", "ai_coach_video", "family"];
 
+// The app's real bundle id (see ios/App/App.xcodeproj) -- StoreKit 2 Product
+// ids are conventionally namespaced under it. Shared here (not just in
+// server/apple-iap.ts) so the client's purchase UI and the server's
+// verification both derive the same product id from the same tier id
+// instead of two hand-typed strings drifting apart, which is exactly what
+// happened to the "base"/"pro" placeholder ids this replaced.
+export const APPLE_BUNDLE_ID = "com.foreperformancesystems.forge";
+
+/** The App Store Connect subscription Product id for a Free Agent tier.
+ * These three ids must be created as real, priced auto-renewable
+ * subscription Products in ONE subscription group in App Store Connect
+ * before Apple IAP can go live (see server/apple-iap.ts) -- ai_coach,
+ * ai_coach_video, and family are mutually exclusive (an athlete is only
+ * ever on one at a time), which is exactly what belonging to the same
+ * StoreKit subscription group enforces. Whatever price is configured for
+ * each Product in App Store Connect IS the real price shown to the
+ * customer (via StoreKit's own Product.displayPrice) -- this file's
+ * monthlyPriceCents is what that configuration should match, not a value
+ * the app needs to independently re-charge or display on iOS. */
+export function appleProductIdForFreeAgentTier(tier: FreeAgentTierId): string {
+  return `${APPLE_BUNDLE_ID}.freeagent.${tier}`;
+}
+
 export type FreeAgentAddOnId = "golf_swing" | "hitting" | "pitching";
 
 export interface FreeAgentAddOnDef {

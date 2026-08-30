@@ -28,7 +28,7 @@ import { buildComplianceReportPdf } from "./compliance-report";
 import { buildLegalDocumentPdf } from "./legal-document-export";
 import { GUARDIAN_NOTICE_LIVE, derivePrivacyTier } from "@shared/privacy-tiers";
 import { BILLING_LIVE } from "./billing";
-import { verifyAppleTransaction } from "./apple-iap";
+import { verifyAppleTransaction, APPLE_IAP_LIVE } from "./apple-iap";
 import { verifyMediaUrl } from "./media-url-signing";
 import { shouldTouchLastSeen } from "./session-tracking";
 import { COACH_SECTIONS } from "@shared/coach-sections";
@@ -8053,6 +8053,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // it doesn't bother registering" pattern.
   app.get("/api/push/apns-enabled", requireAuth, async (req, res) => {
     res.json({ enabled: apnsEnabled });
+  });
+
+  // Same "tell the client up front" shape as apns-enabled above -- the
+  // athlete-facing purchase UI checks this before rendering any Subscribe
+  // button at all, not just before letting a tap through. APPLE_IAP_LIVE
+  // off (the default -- see server/apple-iap.ts) means nobody, anywhere,
+  // ever sees a purchase entry point, regardless of PAYWALLS_DISABLED.
+  app.get("/api/billing/apple-iap-enabled", requireAuth, async (req, res) => {
+    res.json({ enabled: APPLE_IAP_LIVE });
   });
 
   app.post("/api/push/subscribe-apns", requireAuth, async (req, res) => {

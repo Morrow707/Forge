@@ -221,7 +221,12 @@ import { askClaude, askClaudeStructured, askClaudeWithTools, askClaudeVision, as
 import { fetchUrlSafely, UnsafeUrlError } from "./safe-fetch";
 import { deleteUploadedFile, statUploadedFile } from "./uploaded-files";
 import { isGatedUploadPath } from "./media-url-signing";
-import { tierForAppleProductId, type VerifiedAppleTransaction } from "./apple-iap";
+import {
+  tierForAppleProductId,
+  entitlementTierForFreeAgentTier,
+  type VerifiedAppleTransaction,
+  type VerifiedAppleNotification,
+} from "./apple-iap";
 import { PRICING_CATALOG, type PricingCatalogItem } from "./pricing-catalog";
 import {
   eq,
@@ -3009,11 +3014,11 @@ export const storage = {
     userId: number,
     verified: VerifiedAppleTransaction,
   ): Promise<{ ok: true } | { ok: false; error: string }> {
-    const tier = tierForAppleProductId(verified.productId);
-    if (!tier) return { ok: false, error: "Unrecognized product." };
+    const freeAgentTier = tierForAppleProductId(verified.productId);
+    if (!freeAgentTier) return { ok: false, error: "Unrecognized product." };
     const updated = await this.updateSubscriptionByUserId(userId, {
       accountType: "free_agent",
-      tier,
+      tier: entitlementTierForFreeAgentTier(freeAgentTier),
       status: "active",
       appleOriginalTransactionId: verified.originalTransactionId,
       currentPeriodEnd: verified.expiresAt,
@@ -3022,6 +3027,65 @@ export const storage = {
     await this.logBillingEvent(userId, "apple_iap.verified", {
       originalTransactionId: verified.originalTransactionId,
       productId: verified.productId,
+      freeAgentTier,
+    });
+    return { ok: true };
+  },
+
+  // Mirrors updateSubscriptionByStripeId -- Apple Server Notifications V2
+  // (see server/apple-iap.ts) identify a subscription by
+  // originalTransactionId, never by userId, so renewal/revocation events
+  // need the same lookup-by-external-id shape the Stripe webhook already
+  // has for stripeSubscriptionId.
+  async updateSubscriptionByAppleOriginalTransactionId(
+    originalTransactionId: string,
+    patch: Partial<typeof subscriptions.$inferInsert>,
+  ) {
+    const [row] = await db
+      .update(subscriptions)
+      .set({ ...patch, updatedAt: new Date() })
+      .where(eq(subscriptions.appleOriginalTransactionId, originalTransactionId))
+      .returning();
+    return row ?? null;
+  },
+
+  // The DB-writing half of an Apple Server Notification (see
+  // server/apple-iap.ts's verifyAppleNotification, which does the
+  // cryptographic half) -- same split as applyAppleIapVerification/
+  // verifyAppleTransaction above, and the same reasoning as
+  // handleStripeWebhookEvent in billing.ts for why this lives with the
+  // other subscription-table writes rather than in apple-iap.ts itself
+  // (apple-iap.ts is imported BY this file; importing storage back into it
+  // would be circular).
+  async applyAppleServerNotification(
+    notification: VerifiedAppleNotification,
+  ): Promise<{ ok: true } | { ok: false; error: string }> {
+    if (notification.kind === "ignored" || !notification.transaction) return { ok: true };
+    const { originalTransactionId, productId, expiresAt } = notification.transaction;
+    if (notification.kind === "revoked") {
+      const updated = await this.updateSubscriptionByAppleOriginalTransactionId(originalTransactionId, {
+        status: "canceled",
+      });
+      if (!updated) return { ok: false, error: "No subscription found for this transaction." };
+      await this.logBillingEvent(updated.userId, `apple_iap.${notification.notificationType.toLowerCase()}`, {
+        originalTransactionId,
+        productId,
+      });
+      return { ok: true };
+    }
+    // "renewed" -- extend the access window Apple already confirmed, same
+    // shape applyAppleIapVerification uses for the initial purchase.
+    const freeAgentTier = tierForAppleProductId(productId);
+    if (!freeAgentTier) return { ok: false, error: "Unrecognized product." };
+    const updated = await this.updateSubscriptionByAppleOriginalTransactionId(originalTransactionId, {
+      tier: entitlementTierForFreeAgentTier(freeAgentTier),
+      status: "active",
+      currentPeriodEnd: expiresAt,
+    });
+    if (!updated) return { ok: false, error: "No subscription found for this transaction." };
+    await this.logBillingEvent(updated.userId, `apple_iap.${notification.notificationType.toLowerCase()}`, {
+      originalTransactionId,
+      productId,
     });
     return { ok: true };
   },

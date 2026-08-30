@@ -40,6 +40,8 @@ import { startReflectionJob } from "./reflection-job";
 import { startDataRetentionJob } from "./data-retention-job";
 import { startVideoRetentionJob } from "./video-retention-job";
 import { verifyStripeWebhook, handleStripeWebhookEvent } from "./billing";
+import { verifyAppleNotification } from "./apple-iap";
+import { storage } from "./storage";
 import { signMediaUrlsDeep } from "./media-url-signing";
 import { verifyRequestOrigin } from "./csrf-protection";
 import { NATIVE_APP_ORIGINS } from "./native-app-origins";
@@ -166,6 +168,34 @@ app.post(
     const event = verifyStripeWebhook(req.body, req.headers["stripe-signature"] as string | undefined);
     if (!event) return res.status(400).send("Invalid signature");
     await handleStripeWebhookEvent(event);
+    res.json({ received: true });
+  },
+);
+
+// Apple Server Notifications V2 -- the App Store's own equivalent of the
+// Stripe webhook above, same raw-body-before-express.json() requirement
+// (verifyAppleNotification needs the exact signedPayload string, a JWS).
+// Framework only in the exact same sense: nothing is registered as this
+// app's Server Notifications URL in App Store Connect yet, and
+// verifyAppleNotification fails closed (returns null) whenever
+// server/apple-root-certs/AppleRootCA-G3.cer is missing, which it is in
+// every environment today -- see that file's own README.
+app.post(
+  "/api/webhooks/apple",
+  webhookLimiter,
+  express.raw({ type: "application/json" }),
+  async (req, res) => {
+    const signedPayload = (req.body as Buffer).toString("utf8");
+    let parsed: { signedPayload?: string };
+    try {
+      parsed = JSON.parse(signedPayload);
+    } catch {
+      return res.status(400).send("Invalid payload");
+    }
+    if (!parsed.signedPayload) return res.status(400).send("Invalid payload");
+    const notification = await verifyAppleNotification(parsed.signedPayload);
+    if (!notification) return res.status(400).send("Invalid signature");
+    await storage.applyAppleServerNotification(notification);
     res.json({ received: true });
   },
 );

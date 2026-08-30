@@ -1,35 +1,58 @@
-// StoreKit 2 (iOS App Store subscription) verification -- scaffolding
-// only, same "framework, not live" status as billing.ts. Unlike Stripe,
-// there's no npm SDK to lean on here: Apple signs each transaction as a
-// JWS (JSON Web Signature) using a certificate chain rooted at Apple's own
-// CA, and verifying one for real means walking that x5c certificate chain
-// against Apple's root, not just checking a signature against a shared
-// secret. That's real, testable work against a live App Store Connect
-// subscription group and sandbox purchases -- neither exists yet, so
-// rather than ship a JWS-parsing function nobody can exercise end to end,
-// this documents exactly what a real implementation needs to do and where
-// it plugs in, so building it later is "fill in verifyAppleTransaction,"
-// not "figure out the architecture from scratch."
+// StoreKit 2 (iOS App Store subscription) verification, real implementation
+// on top of Apple's own @apple/app-store-server-library -- handles the JWS
+// (JSON Web Signature) decode + certificate-chain verification against
+// Apple's root CA that server/apple-iap.ts's earlier scaffolding comment
+// documented as the actual hard part. Two things this still can't do for
+// you:
+//   1. The App Store Connect subscription group + three real Products
+//      (matching appleProductIdForFreeAgentTier's ids) have to exist before
+//      any real transaction can ever reach this code -- see that function's
+//      own comment in shared/free-agent-tiers.ts.
+//   2. Apple's root certificate itself has to be present on disk at
+//      server/apple-root-certs/AppleRootCA-G3.cer -- see that directory's
+//      README for the one-line fetch. It's a public, non-secret file (the
+//      same root every browser and OS already trusts), just not something
+//      this server can fetch for itself in every environment, so it's a
+//      committed asset rather than a runtime download.
 //
-// What a real launch needs, in order:
-//   1. An App Store Connect subscription group with Products matching
-//      PRICING.free_agent's ios_cents tiers (billing.ts).
-//   2. The `jose` package (or Apple's own app-store-server-library) to
-//      decode the JWS header, extract the x5c certificate chain, verify it
-//      chains to Apple's published root CA, then verify the payload
-//      signature against the leaf certificate's public key.
-//   3. The decoded payload's `originalTransactionId` is the stable id to
-//      store as subscriptions.appleOriginalTransactionId (see
-//      shared/schema.ts) -- Apple can reissue transactionId on renewal,
-//      originalTransactionId never changes for the life of the
-//      subscription.
-//   4. Apple's Server Notifications V2 (a webhook, same shape idea as
-//      Stripe's) for renewal/cancellation/refund events -- this app has no
-//      route registered for it yet; it would live in index.ts next to the
-//      Stripe webhook, registered the same way (before express.json(),
-//      since it also needs the raw body for signature verification).
+// Still governed by the same two-flag "ready, not live" posture as the rest
+// of billing: APPLE_IAP_LIVE gates whether the client shows any purchase UI
+// at all (see GET /api/config/billing in routes.ts), and PAYWALLS_DISABLED
+// keeps every feature free regardless of subscription state during beta.
+// Neither flag changes anything in this file -- verification either works
+// or fails closed, independent of whether anything is actually paywalled.
+
+import fs from "fs";
+import path from "path";
+import {
+  SignedDataVerifier,
+  Environment,
+  NotificationTypeV2,
+  Subtype,
+  type ResponseBodyV2DecodedPayload,
+} from "@apple/app-store-server-library";
+import {
+  APPLE_BUNDLE_ID,
+  FREE_AGENT_TIER_ORDER,
+  FREE_AGENT_TIERS,
+  appleProductIdForFreeAgentTier,
+  type FreeAgentTierId,
+} from "@shared/free-agent-tiers";
 
 export const APPLE_IAP_LIVE = process.env.APPLE_IAP_LIVE === "true";
+
+// TestFlight and every real device using a Sandbox tester Apple ID transact
+// through Apple's Sandbox environment REGARDLESS of whether this server
+// itself is running in production (NODE_ENV) -- that's exactly the
+// distinction SignedDataVerifier's environment param exists to check, so it
+// can't be derived from NODE_ENV without rejecting every real transaction
+// during the entire beta/TestFlight phase. Defaults to sandbox, matching
+// "still in beta" -- flip to "production" only once this is a real App
+// Store release being bought by real customers, not testers.
+const APPLE_IAP_ENVIRONMENT: Environment =
+  process.env.APPLE_IAP_ENVIRONMENT === "production" ? Environment.PRODUCTION : Environment.SANDBOX;
+
+const APPLE_ROOT_CERT_PATH = path.join(process.cwd(), "server/apple-root-certs/AppleRootCA-G3.cer");
 
 export type VerifiedAppleTransaction = {
   originalTransactionId: string;
@@ -37,29 +60,145 @@ export type VerifiedAppleTransaction = {
   expiresAt: Date;
 };
 
-/** Not implemented -- see this file's own comment for exactly what real
- * verification requires. Always returns null so the one real caller
- * (POST /api/athlete/apple-iap/verify in routes.ts) fails closed rather
- * than silently trusting an unverified receipt -- the route itself is
- * fully wired (StoreKit purchases happen entirely client-side, so there's
- * no separate "start checkout" step to build the way Stripe Checkout
- * needs; verifying the resulting transaction is the whole server-side job),
- * it just can't do anything useful until this function has a real body. */
-export async function verifyAppleTransaction(_signedTransactionInfo: string): Promise<VerifiedAppleTransaction | null> {
-  return null;
+let cachedVerifier: SignedDataVerifier | null = null;
+let verifierInitAttempted = false;
+
+// Lazy + memoized rather than constructed at module load -- a missing root
+// cert file shouldn't crash the whole server on boot (this is still
+// "framework, not required" until APPLE_IAP_LIVE and real App Store Connect
+// products exist), just make every verification attempt fail closed with a
+// clear, one-time log instead of a silent null forever.
+function getVerifier(): SignedDataVerifier | null {
+  if (cachedVerifier) return cachedVerifier;
+  if (verifierInitAttempted) return null;
+  verifierInitAttempted = true;
+  let rootCert: Buffer;
+  try {
+    rootCert = fs.readFileSync(APPLE_ROOT_CERT_PATH);
+  } catch {
+    console.error(
+      `Apple IAP: missing ${APPLE_ROOT_CERT_PATH} -- see server/apple-root-certs/README.md. ` +
+        "Every Apple transaction/notification will fail verification until this is added.",
+    );
+    return null;
+  }
+  cachedVerifier = new SignedDataVerifier([rootCert], true, APPLE_IAP_ENVIRONMENT, APPLE_BUNDLE_ID);
+  return cachedVerifier;
 }
 
-// Maps a StoreKit 2 productId to this app's own tier concept. Placeholder
-// naming convention -- "<bundle id>.freeagent.<tier>", matching
-// PRICING.free_agent in billing.ts -- update once real Products exist in
-// App Store Connect (this file's step 1) and their actual identifiers are
-// known. Returns null for anything unrecognized so applyAppleIapVerification
-// fails closed instead of guessing a tier for a product it's never heard of.
-const PRODUCT_ID_TIER: Record<string, "base" | "pro"> = {
-  "com.foreperformancesystems.forge.freeagent.base": "base",
-  "com.foreperformancesystems.forge.freeagent.pro": "pro",
+/** The one real caller (POST /api/athlete/apple-iap/verify in routes.ts)
+ * fails closed on null -- a bad/forged/unparseable signedTransactionInfo,
+ * a missing root cert, or a transaction for a product this app doesn't
+ * recognize all resolve the same way: no entitlement is ever granted for
+ * something that wasn't cryptographically verified end to end. */
+export async function verifyAppleTransaction(signedTransactionInfo: string): Promise<VerifiedAppleTransaction | null> {
+  const verifier = getVerifier();
+  if (!verifier) return null;
+  try {
+    const decoded = await verifier.verifyAndDecodeTransaction(signedTransactionInfo);
+    if (!decoded.originalTransactionId || !decoded.productId || decoded.expiresDate == null) return null;
+    if (!tierForAppleProductId(decoded.productId)) return null;
+    return {
+      originalTransactionId: decoded.originalTransactionId,
+      productId: decoded.productId,
+      expiresAt: new Date(decoded.expiresDate),
+    };
+  } catch (err) {
+    console.error("Apple IAP: transaction verification failed", err);
+    return null;
+  }
+}
+
+// Built from appleProductIdForFreeAgentTier rather than a second hand-typed
+// table -- the earlier version of this file had its own literal product-id
+// strings that quietly drifted out of sync with the real pricing model
+// (shared/free-agent-tiers.ts moved to ai_coach/ai_coach_video/family while
+// this file kept mapping stale "base"/"pro"-named ids that didn't
+// correspond to anything actually priced). One source, both directions.
+const PRODUCT_ID_TO_TIER: Record<string, FreeAgentTierId> = Object.fromEntries(
+  FREE_AGENT_TIER_ORDER.map((tier) => [appleProductIdForFreeAgentTier(tier), tier]),
+);
+
+export function tierForAppleProductId(productId: string): FreeAgentTierId | null {
+  return PRODUCT_ID_TO_TIER[productId] ?? null;
+}
+
+// subscriptions.tier (see shared/schema.ts) stores a coarse "base"|"pro"
+// ENTITLEMENT level, not the customer-facing SKU -- the same column and
+// vocabulary a coach's Stripe subscription also uses for an unrelated
+// purpose (Coaches Corner access). Multiple Free Agent SKUs can carry the
+// same entitlement: ai_coach_video and family both include video form-check
+// (see FREE_AGENT_TIERS), so both grant "pro" here, matching
+// hasAthletePaidForAiAccess's existing sub.tier === "pro" check in
+// routes.ts rather than introducing a second vocabulary for the same
+// column.
+export function entitlementTierForFreeAgentTier(tier: FreeAgentTierId): "base" | "pro" {
+  return FREE_AGENT_TIERS[tier].hasVideoFormCheck ? "pro" : "base";
+}
+
+// ---------- Apple Server Notifications V2 ----------
+// Server-to-server renewal/cancellation/refund events -- without this, a
+// subscription's currentPeriodEnd/status only ever update at the moment the
+// athlete happens to reopen the app and re-verify, same gap Stripe's own
+// webhook closes for the coach side. Registered in server/index.ts before
+// express.json() the same way the Stripe webhook is, since JWS
+// verification needs the raw signedPayload string, not a parsed body.
+// Which notification types actually change subscription state this app
+// cares about -- SUBSCRIBED/DID_RENEW extend access, EXPIRED/REVOKE/REFUND
+// end it, DID_FAIL_TO_RENEW/GRACE_PERIOD_EXPIRED are Apple's own retry
+// signals (no action needed here; currentPeriodEnd already reflects the
+// real access window either way). Everything else (price changes, consent,
+// metadata) doesn't touch entitlement and is deliberately ignored.
+const RENEWAL_TYPES = new Set<string>([NotificationTypeV2.SUBSCRIBED, NotificationTypeV2.DID_RENEW]);
+const REVOCATION_TYPES = new Set<string>([
+  NotificationTypeV2.EXPIRED,
+  NotificationTypeV2.REVOKE,
+  NotificationTypeV2.REFUND,
+]);
+
+export type VerifiedAppleNotification = {
+  kind: "renewed" | "revoked" | "ignored";
+  notificationType: string;
+  transaction: VerifiedAppleTransaction | null;
 };
 
-export function tierForAppleProductId(productId: string): "base" | "pro" | null {
-  return PRODUCT_ID_TIER[productId] ?? null;
+/** Verifies the notification's outer signedPayload, then -- for the two
+ * kinds this app actually acts on -- the embedded signedTransactionInfo
+ * too. The outer envelope proves Apple sent this notification; the inner
+ * transaction proves which real subscription it's about (originalTransactionId
+ * is how storage.updateSubscriptionByAppleOriginalTransactionId finds the
+ * row), so a renewed/revoked classification with no verified transaction
+ * inside it is treated as unverified, not silently applied. Returns null on
+ * any verification failure -- same fail-closed contract as
+ * verifyAppleTransaction. */
+export async function verifyAppleNotification(signedPayload: string): Promise<VerifiedAppleNotification | null> {
+  const verifier = getVerifier();
+  if (!verifier) return null;
+  try {
+    const payload: ResponseBodyV2DecodedPayload = await verifier.verifyAndDecodeNotification(signedPayload);
+    const notificationType = payload.notificationType ?? "";
+    const kind: VerifiedAppleNotification["kind"] = RENEWAL_TYPES.has(notificationType)
+      ? "renewed"
+      : REVOCATION_TYPES.has(notificationType)
+        ? "revoked"
+        : "ignored";
+    if (kind === "ignored") return { kind, notificationType, transaction: null };
+
+    const signedTransactionInfo = payload.data?.signedTransactionInfo;
+    if (!signedTransactionInfo) return null;
+    const decodedTx = await verifier.verifyAndDecodeTransaction(signedTransactionInfo);
+    if (!decodedTx.originalTransactionId || !decodedTx.productId || decodedTx.expiresDate == null) return null;
+    return {
+      kind,
+      notificationType,
+      transaction: {
+        originalTransactionId: decodedTx.originalTransactionId,
+        productId: decodedTx.productId,
+        expiresAt: new Date(decodedTx.expiresDate),
+      },
+    };
+  } catch (err) {
+    console.error("Apple IAP: notification verification failed", err);
+    return null;
+  }
 }
