@@ -144,6 +144,12 @@ const athleteNav: NavItem[] = [
   // tab rather than folded in. Overflow since most Free Agents won't own any
   // of these yet -- same "nicety, not daily-use" call as Leaderboard below.
   { href: "/athlete/coaches", label: "Sport Coaches", icon: Sparkles, overflow: true },
+  // Self-gates on both platform (isAppleIapSupported) and APPLE_IAP_LIVE --
+  // safe to always show since a coached athlete never reaches this tab at
+  // all (filtered out below, same as AI Chat/Sport Coaches), and a Free
+  // Agent who taps it on web/Android or before billing is live just sees an
+  // explanatory card instead of a purchase button.
+  { href: "/athlete/upgrade", label: "Upgrade", icon: CreditCard, overflow: true },
   // Overflow, not primary -- same "engagement nicety, not daily-use" call
   // as the coach nav's own Leaderboard entry, which already lives there.
   { href: "/athlete/leaderboard", label: "Leaderboard", icon: Trophy, overflow: true },
@@ -362,7 +368,8 @@ export function AppShell({
               (item) =>
                 item.href !== "/athlete/programs" &&
                 item.href !== "/athlete/chat" &&
-                item.href !== "/athlete/coaches",
+                item.href !== "/athlete/coaches" &&
+                item.href !== "/athlete/upgrade",
             )
   ).filter((item) => !disabledNavHrefs.has(item.href));
   const primaryNav = nav.filter((item) => !item.overflow);
