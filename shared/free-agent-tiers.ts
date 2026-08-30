@@ -64,12 +64,12 @@ export interface FreeAgentAddOnDef {
   description: string;
 }
 
-// IMPORTANT: none of these sport-specialist coaches exist yet -- this only
-// locks in the pricing structure so the numbers are real, committed code
-// instead of a figure that only ever existed in a chat transcript (same
-// reasoning as billing-tiers.ts before Stripe existed). Nothing in the app
-// gates any route on freeAgentAddOns yet; wire a specific route's paywall
-// to one of these ids once that sport's coach actually ships.
+// All three sport-specialist coaches are live -- see requireFreeAgentAddOn
+// in routes.ts (which gates /api/athlete/coach/:addOnId/chat on
+// users.freeAgentAddOns) and storage.sendSportCoachChatMessage. This still
+// locks in the pricing structure as real, committed code (same reasoning as
+// billing-tiers.ts before Stripe existed), it just no longer describes
+// unbuilt features.
 export const FREE_AGENT_ADD_ONS: Record<FreeAgentAddOnId, FreeAgentAddOnDef> = {
   golf_swing: {
     id: "golf_swing",
@@ -94,14 +94,16 @@ export const FREE_AGENT_ADD_ONS: Record<FreeAgentAddOnId, FreeAgentAddOnDef> = {
 // Which of the three above have an actual feature behind them -- same
 // "framework only, don't sell what doesn't exist" gate the Skill Bank
 // sport-unlock already enforces (see getSportsWithSkillContent in
-// storage.ts). Every add-on here is still empty, so this starts empty; add
-// an id the moment that specific sport-specialist coach actually ships,
-// which is the one-line change that flips its checkbox from disabled to
-// assignable in the admin billing UI and lifts the 400 the billing route
-// throws for it today. Empty (not just "framework only") is a stronger
-// claim than the Skill Bank case, where some sports already had real drill
-// content and only the empty ones were blocked.
-export const BUILT_FREE_AGENT_ADD_ONS: Set<FreeAgentAddOnId> = new Set([]);
+// storage.ts). All three ship as of this add -- this is what actually
+// flips each checkbox from disabled to assignable in the admin billing UI
+// and lifts the 400 the billing route used to throw for them. Kept as an
+// explicit Set (not just "always all three") so a future fourth add-on can
+// land here framework-first, same as these three originally did.
+export const BUILT_FREE_AGENT_ADD_ONS: Set<FreeAgentAddOnId> = new Set([
+  "golf_swing",
+  "hitting",
+  "pitching",
+]);
 
 export const FREE_AGENT_ADD_ON_ORDER: FreeAgentAddOnId[] = ["golf_swing", "hitting", "pitching"];
 

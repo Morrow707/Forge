@@ -37,7 +37,12 @@ import { resolveRosterGroups, updateRosterGroupsSchema, setAthleteGroupSchema } 
 import { notifyUser } from "./notify";
 import { findGoniometerMovement } from "@shared/goniometer";
 import { NOTIFICATION_CATEGORIES } from "@shared/notification-categories";
-import { FREE_AGENT_ADD_ONS, BUILT_FREE_AGENT_ADD_ONS } from "@shared/free-agent-tiers";
+import {
+  FREE_AGENT_ADD_ONS,
+  BUILT_FREE_AGENT_ADD_ONS,
+  FREE_AGENT_ADD_ON_ORDER,
+  type FreeAgentAddOnId,
+} from "@shared/free-agent-tiers";
 import {
   insertExerciseSchema,
   insertSkillExerciseSchema,
@@ -571,6 +576,37 @@ function requirePaidAiAccess(entitlement: AiEntitlement) {
     }
     next();
   };
+}
+
+// Gates one specific sport-specialist coach (Golf Swing/Hitting/Pitching)
+// behind its own add-on purchase -- a wholly separate dimension from
+// requirePaidAiAccess above (a Free Agent can own strengthAi/skillsAi and
+// still have zero sport-specialist coaches, or vice versa). Only meaningful
+// stacked after requireFreeAgent, same as requirePaidAiAccess. Reads
+// :addOnId from the route param (rather than being called per-sport like
+// requirePaidAiAccess's per-entitlement factory) since all three coaches
+// share one route shape -- validates it against FREE_AGENT_ADD_ON_ORDER
+// first so an unknown id 404s instead of silently falling through the
+// ownership check as "not owned."
+async function requireFreeAgentAddOn(req: any, res: any, next: any) {
+  const addOnId = req.params.addOnId as string;
+  if (!FREE_AGENT_ADD_ON_ORDER.includes(addOnId as FreeAgentAddOnId)) {
+    return res.status(404).json({ message: "No such sport coach" });
+  }
+  const sessionUser = currentUser(req);
+  if (testingUnlockAllPaywalls) return next();
+  if (COMPED_FREE_AGENT_ENTITLEMENTS[sessionUser.email]) return next();
+  const user = await storage.getUser(sessionUser.id);
+  if (user?.isBetaAccount) return next();
+  const owned = (user?.freeAgentAddOns ?? []).includes(addOnId);
+  if (!owned) {
+    return res.status(402).json({
+      message: `${FREE_AGENT_ADD_ONS[addOnId as FreeAgentAddOnId].label} is a paid upgrade for Free Agents.`,
+      freeAgentPaywall: true,
+      addOnId,
+    });
+  }
+  next();
 }
 
 // Same demo/testing exception as COMPED_FREE_AGENT_ENTITLEMENTS above, for
@@ -6534,6 +6570,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const parsed = sendChatMessageSchema.safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ message: "Invalid message" });
       const result = await storage.sendAthleteChatMessage(user.id, parsed.data.content);
+      res.status(201).json(result);
+    },
+  );
+
+  // Golf Swing/Hitting/Pitching sport-specialist coaches -- one route shape
+  // for all three (see requireFreeAgentAddOn's own comment), gated on top of
+  // requireFreeAgent the same way requirePaidAiAccess is above, but keyed to
+  // a specific $7.99 add-on purchase instead of the strengthAi/skillsAi
+  // subscription tiers. Same "readable by nobody but the athlete" shape as
+  // /api/athlete/chat, except there genuinely is no coach to loop in here --
+  // see sendSportCoachChatMessage's system prompt for how that's handled.
+  app.get(
+    "/api/athlete/coach/:addOnId/chat",
+    requireRole("athlete"),
+    requireFreeAgent,
+    requireFreeAgentAddOn,
+    async (req, res) => {
+      const user = currentUser(req);
+      const addOnId = req.params.addOnId as FreeAgentAddOnId;
+      const messages = await storage.getSportCoachChatMessages(user.id, addOnId);
+      res.json(messages);
+    },
+  );
+
+  app.post(
+    "/api/athlete/coach/:addOnId/chat",
+    requireRole("athlete"),
+    requireFreeAgent,
+    requireFreeAgentAddOn,
+    async (req, res) => {
+      const user = currentUser(req);
+      const addOnId = req.params.addOnId as FreeAgentAddOnId;
+      const parsed = sendChatMessageSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ message: "Invalid message" });
+      const result = await storage.sendSportCoachChatMessage(user.id, addOnId, parsed.data.content);
       res.status(201).json(result);
     },
   );

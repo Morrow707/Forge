@@ -26,10 +26,14 @@ export function AiChatPanel({
   fetchUrl,
   postUrl,
   athleteName,
+  title = "AI Training Chat",
+  description = "Ask about your training, recovery, or progress. If you join a coach later, they'll be able to see this conversation.",
 }: {
   fetchUrl: string;
   postUrl?: string;
   athleteName?: string;
+  title?: string;
+  description?: string;
 }) {
   const qc = useQueryClient();
   const [content, setContent] = useState("");
@@ -81,7 +85,7 @@ export function AiChatPanel({
         <CardHeader className="shrink-0">
           <CardTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" />
-            AI Training Chat
+            {title}
           </CardTitle>
         </CardHeader>
         <CardContent className="flex flex-1 flex-col items-center justify-center gap-3 py-10 text-center">
@@ -97,13 +101,13 @@ export function AiChatPanel({
       <CardHeader className="shrink-0">
         <CardTitle className="flex items-center gap-2">
           <Sparkles className="h-5 w-5 text-primary" />
-          AI Training Chat
+          {title}
         </CardTitle>
         <CardDescription className="flex items-start gap-1.5">
           <Eye className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <span>
             {postUrl
-              ? "Ask about your training, recovery, or progress. If you join a coach later, they'll be able to see this conversation."
+              ? description
               : `${athleteName ?? "This athlete"}'s conversation with the AI training chat -- always visible to you as their coach.`}
           </span>
         </CardDescription>

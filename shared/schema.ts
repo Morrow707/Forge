@@ -3375,6 +3375,37 @@ export const athleteChatMessages = pgTable(
 
 export type AthleteChatMessage = typeof athleteChatMessages.$inferSelect;
 
+// One row per message in a Free Agent's sport-specialist coach chat (Golf
+// Swing / Hitting / Pitching, see shared/free-agent-tiers.ts's
+// FreeAgentAddOnId) -- same flat, permanent, coach-readable shape as
+// athleteChatMessages above, just with an addOn discriminant so all three
+// coaches share one table instead of three near-identical ones. addOn is a
+// FreeAgentAddOnId string, not a DB enum: free-agent-tiers.ts is already the
+// single source of truth for that set, and a DB enum here would just be a
+// second place to keep in sync with it every time an add-on is added.
+export const sportCoachMessages = pgTable(
+  "sport_coach_messages",
+  {
+    id: serial("id").primaryKey(),
+    athleteId: integer("athlete_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    addOn: text("add_on").notNull(),
+    role: chatRoleEnum("role").notNull(),
+    content: text("content").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    athleteAddOnIdx: index("sport_coach_messages_athlete_addon_idx").on(
+      table.athleteId,
+      table.addOn,
+      table.createdAt,
+    ),
+  }),
+);
+
+export type SportCoachMessage = typeof sportCoachMessages.$inferSelect;
+
 export const sendChatMessageSchema = z.object({
   content: z.string().trim().min(1).max(2000),
 });

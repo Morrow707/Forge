@@ -139,6 +139,11 @@ const athleteNav: NavItem[] = [
   { href: "/athlete/nutrition", label: "Nutrition", icon: Apple },
   { href: "/athlete/team-board", label: "Team Board", icon: MessagesSquare },
   { href: "/athlete/chat", label: "AI Chat", icon: Sparkles },
+  // Golf Swing/Hitting/Pitching -- separate paid add-ons from the general AI
+  // Chat above (see requireFreeAgentAddOn in routes.ts), so this is its own
+  // tab rather than folded in. Overflow since most Free Agents won't own any
+  // of these yet -- same "nicety, not daily-use" call as Leaderboard below.
+  { href: "/athlete/coaches", label: "Sport Coaches", icon: Sparkles, overflow: true },
   // Overflow, not primary -- same "engagement nicety, not daily-use" call
   // as the coach nav's own Leaderboard entry, which already lives there.
   { href: "/athlete/leaderboard", label: "Leaderboard", icon: Trophy, overflow: true },
@@ -353,7 +358,12 @@ export function AppShell({
           // chat) has nobody on the other end -- same "would just 403/be
           // empty" reasoning as the coached-athlete filter below.
           ? athleteNav.filter((item) => item.href !== "/athlete/team-board")
-          : athleteNav.filter((item) => item.href !== "/athlete/programs" && item.href !== "/athlete/chat")
+          : athleteNav.filter(
+              (item) =>
+                item.href !== "/athlete/programs" &&
+                item.href !== "/athlete/chat" &&
+                item.href !== "/athlete/coaches",
+            )
   ).filter((item) => !disabledNavHrefs.has(item.href));
   const primaryNav = nav.filter((item) => !item.overflow);
   const overflowNav = nav.filter((item) => item.overflow);
