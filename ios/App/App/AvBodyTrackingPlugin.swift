@@ -242,6 +242,13 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             // ArCameraPreviewPlugin's ARSCNView (heavier, more stateful), an AVCaptureSession
             // is cheap to recreate, and stop() below always fully tears the previous one down.
             let session = AVCaptureSession()
+            // This session only ever gets a video input (see addInput below) -- no
+            // microphone, movieOutput records picture only. Left at its default of true,
+            // AVFoundation still claims the shared AVAudioSession the moment the session
+            // starts running (category .playAndRecord), which interrupts/stops whatever
+            // audio the athlete had playing (e.g. their own music) even though this
+            // session never touches audio. false tells it to leave the audio session alone.
+            session.automaticallyConfiguresApplicationAudioSession = false
             session.beginConfiguration()
             if session.canSetSessionPreset(.hd1920x1080) {
                 session.sessionPreset = .hd1920x1080
