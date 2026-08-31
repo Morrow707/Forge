@@ -233,14 +233,20 @@ export function AvSwingTrackerDialog({
               </div>
             )}
 
-            {analyzing && (
+            {(analyzing || saving) && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/60">
                 <div className="h-8 w-8 animate-spin rounded-full border-2 border-teal-400 border-t-transparent" />
-                <p className="text-sm text-white">Analyzing swing -- {analyzedFrames} frames processed…</p>
-                <Button variant="outline" size="sm" onClick={cancelAnalysis}>
-                  <XCircle className="h-4 w-4" />
-                  Cancel
-                </Button>
+                <p className="text-sm text-white">
+                  {saving
+                    ? `Saving your video… ${Math.round(uploadProgress * 100)}%`
+                    : `Analyzing swing -- ${analyzedFrames} frames processed…`}
+                </p>
+                {!saving && (
+                  <Button variant="outline" size="sm" onClick={cancelAnalysis}>
+                    <XCircle className="h-4 w-4" />
+                    Cancel
+                  </Button>
+                )}
               </div>
             )}
 
@@ -264,14 +270,14 @@ export function AvSwingTrackerDialog({
           </div>
 
           <div className="flex shrink-0 flex-wrap items-center justify-center gap-2 bg-black/70 px-3 py-4 backdrop-blur-sm">
-            {!recording && !analyzing && (
+            {!recording && !analyzing && !saving && (
               <Button
                 size="lg"
                 onClick={() => {
                   setError(null);
                   startRecording();
                 }}
-                disabled={!supported || saving}
+                disabled={!supported}
               >
                 <Circle className="h-4 w-4 fill-current" />
                 Start {label}
@@ -283,7 +289,7 @@ export function AvSwingTrackerDialog({
                 Stop
               </Button>
             )}
-            {analyzing && (
+            {(analyzing || saving) && (
               <Button size="lg" variant="secondary" disabled>
                 {saving ? `Saving… ${Math.round(uploadProgress * 100)}%` : "Analyzing…"}
               </Button>

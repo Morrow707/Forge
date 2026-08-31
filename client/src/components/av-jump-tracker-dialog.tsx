@@ -291,18 +291,24 @@ export function AvJumpTrackerDialog({
               </div>
             )}
 
-            {analyzing && (
+            {(analyzing || saving) && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/60">
                 <div className="h-8 w-8 animate-spin rounded-full border-2 border-teal-400 border-t-transparent" />
-                <p className="text-sm text-white">Analyzing recording -- {analyzedFrames} frames processed…</p>
-                <Button variant="outline" size="sm" onClick={cancelAnalysis}>
-                  <XCircle className="h-4 w-4" />
-                  Cancel
-                </Button>
+                <p className="text-sm text-white">
+                  {saving
+                    ? `Saving your video… ${Math.round(uploadProgress * 100)}%`
+                    : `Analyzing recording -- ${analyzedFrames} frames processed…`}
+                </p>
+                {!saving && (
+                  <Button variant="outline" size="sm" onClick={cancelAnalysis}>
+                    <XCircle className="h-4 w-4" />
+                    Cancel
+                  </Button>
+                )}
               </div>
             )}
 
-            {!recording && !analyzing && !heightIn && (
+            {!recording && !analyzing && !saving && !heightIn && (
               <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 rounded-md bg-amber-500/80 px-3 py-2 text-center text-sm font-semibold text-black">
                 Add your height in your profile to get calibrated jump numbers from this camera.
               </div>
@@ -328,14 +334,14 @@ export function AvJumpTrackerDialog({
           </div>
 
           <div className="flex shrink-0 flex-wrap items-center justify-center gap-2 bg-black/70 px-3 py-4 backdrop-blur-sm">
-            {!recording && !analyzing && (
+            {!recording && !analyzing && !saving && (
               <Button
                 size="lg"
                 onClick={() => {
                   setError(null);
                   startRecording();
                 }}
-                disabled={!supported || saving || !heightIn}
+                disabled={!supported || !heightIn}
               >
                 <Circle className="h-4 w-4 fill-current" />
                 Start Jump Set
@@ -347,7 +353,7 @@ export function AvJumpTrackerDialog({
                 Stop Set
               </Button>
             )}
-            {analyzing && (
+            {(analyzing || saving) && (
               <Button size="lg" variant="secondary" disabled>
                 {saving ? `Saving… ${Math.round(uploadProgress * 100)}%` : "Analyzing…"}
               </Button>
