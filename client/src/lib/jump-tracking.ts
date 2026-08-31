@@ -15,7 +15,7 @@ import type { TrackingDiagnostics } from "./tracking-diagnostics";
 // the true landing moment regardless of how long the athlete stands still
 // afterward.
 import {
-  movingAverage,
+  kalmanSmooth,
   buildPathTrace,
   heightScaledAmplitudeCm,
   framesForDuration,
@@ -26,16 +26,10 @@ import {
 import type { FormFault, LandingAsymmetryEntry } from "./pose-tracking";
 
 const GRAVITY_MPS2 = 9.81;
-// A flat frame count here would describe half as much real-world smoothing
-// once a device grants the 60fps bar-tracker-dialog.tsx now requests
-// instead of the ~30fps this was tuned around -- see bar-tracking.ts's own
-// comment on TARGET_SMOOTHING_MS/framesForDuration, which this reuses so a
-// jump's ankle trace gets the same fps-independent smoothing strength a
-// lift's bar-path trace does.
-const TARGET_SMOOTHING_MS = 165;
-// Same reasoning, for how many consecutive near-still SAMPLES count as
-// "landed" -- see its own comment further down where it's turned into an
-// actual frame count via framesForDuration.
+// How many consecutive near-still SAMPLES count as "landed" -- see its own comment further
+// down where it's turned into an actual frame count via framesForDuration. (The primary
+// position smoothing pass below is kalmanSmooth, not a frame-count window, so it needs no
+// equivalent constant here -- see that call's own comment.)
 const TARGET_SETTLE_MS = 100;
 
 // No standing vertical jump, broad jump, or box jump for any real athlete
@@ -150,15 +144,20 @@ export function summarizeJumpSet(
   if (rawPoints.length < 6) return null;
   const minFlightAmplitudeCm = heightScaledAmplitudeCm(BASE_MIN_FLIGHT_AMPLITUDE_CM, heightIn);
 
-  // Confidence-weighted the same way bar-tracking.ts's own sideSmoothed is
-  // (see fuseSideVelocity) -- movingAverage already accepts this, this call
-  // just never passed it, so a stretch of low-lock frames (the implement/
-  // ankle tracker briefly losing the athlete mid-air, e.g. a broad jump
-  // sending an ankle out of frame for an instant) got the same weight as a
-  // fully-trusted frame going into the takeoff/landing state machine below.
-  const ySmoothed = movingAverage(
+  // kalmanSmooth, not movingAverage -- see its own comment in bar-tracking.ts on exactly why:
+  // a plain moving average's window counts FRAMES, blind to how much wall-clock time actually
+  // separates them, so a window straddling an occlusion-gap-bridged stretch (see
+  // interpolateOcclusionGap in the caller) mixes real pre-jump baseline samples in with the
+  // jump's own peak and dilutes it -- confirmed against a real failed box-jump clip's frame
+  // pattern (heavy dropout through the whole airborne phase) that a real ~28cm excursion got
+  // smoothed down to ~22cm, short of the amplitude floor that would register it as a jump at
+  // all. kalmanSmooth uses each frame's actual timestamp instead of a frame count, so it
+  // doesn't have this problem. Confidence-weighted the same way bar-tracking.ts's own
+  // sideSmoothed is -- a stretch of low-lock frames (the ankle tracker briefly losing the
+  // athlete mid-air) gets less say over the smoothed position than a fully-trusted frame.
+  const ySmoothed = kalmanSmooth(
     rawPoints.map((p) => p.y),
-    framesForDuration(rawPoints, TARGET_SMOOTHING_MS),
+    rawPoints.map((p) => p.t),
     rawPoints.map((p) => p.confidence ?? 1),
   );
   const minAmplitudeM = minFlightAmplitudeCm / 100;

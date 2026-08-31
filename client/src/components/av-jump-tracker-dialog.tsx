@@ -197,6 +197,19 @@ export function AvJumpTrackerDialog({
     // can leave summarizeJumpSet's takeoff/landing state machine too few real samples to ever
     // register a genuine excursion as a jump at all -- exactly the "feet never left the ground"
     // false negative on a real, completed jump.
+    //
+    // Real box-jump footage (AR Diagnosis on a failed set) showed the default 200ms cap
+    // (bar_path's own tuning -- see interpolateOcclusionGap's default) wasn't nearly enough:
+    // only 106/221 frames had a body at all, and the misses run in long stretches through the
+    // whole airborne phase, not scattered singles. A box jump's actual flight time is commonly
+    // 300-600ms, so this widens the cap to 600ms -- enough to bridge most real flight phases
+    // even when Vision loses the athlete for almost all of it. The tradeoff: a rep bridged this
+    // way is a straight-line guess between the last grounded point and the first landed one, so
+    // its reported jumpHeightCm/peakHeightCm reads as a rough floor on a heavily-occluded rep
+    // (a true parabolic arc rises well above the straight-line midpoint), not a precise number
+    // -- registering the jump at all beats reporting none, but this isn't a substitute for
+    // actually improving detection through the jump itself.
+    const JUMP_OCCLUSION_MAX_GAP_MS = 600;
     const trace: TrackedPoint[] = [];
     for (const f of frames) {
       const point = deriveJumpPoint(f.worldLandmarks);
@@ -209,7 +222,8 @@ export function AvJumpTrackerDialog({
       const trackedPoint: TrackedPoint = { t: f.t, x: point.x, y: point.y, z: point.z, confidence };
       const prevPoint = trace[trace.length - 1];
       if (prevPoint) {
-        for (const gapPoint of interpolateOcclusionGap(prevPoint, trackedPoint)) trace.push(gapPoint);
+        for (const gapPoint of interpolateOcclusionGap(prevPoint, trackedPoint, JUMP_OCCLUSION_MAX_GAP_MS))
+          trace.push(gapPoint);
       }
       trace.push(trackedPoint);
     }
