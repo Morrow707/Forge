@@ -17138,13 +17138,13 @@ ${catalog}`;
             athlete_name: string;
             label: string;
           }>(sql`
-            SELECT wse.id AS id, to_char(wl.date, 'YYYY-MM-DD') AS date,
-              wse.form_check_video_url AS video_url, u.name AS athlete_name,
-              coalesce(ex_pe.name, ex_c.name) || ' — Set ' || wse.set_number AS label
+            SELECT wse.id AS id, coalesce(to_char(wl.date, 'YYYY-MM-DD'), '(unknown)') AS date,
+              wse.form_check_video_url AS video_url, coalesce(u.name, '(deleted workout)') AS athlete_name,
+              coalesce(ex_pe.name, ex_c.name, 'Unknown exercise') || ' — Set ' || wse.set_number AS label
             FROM workout_set_entries wse
-            JOIN workout_log_entries wle ON wle.id = wse.log_entry_id
-            JOIN workout_logs wl ON wl.id = wle.workout_log_id
-            JOIN users u ON u.id = wl.athlete_id
+            LEFT JOIN workout_log_entries wle ON wle.id = wse.log_entry_id
+            LEFT JOIN workout_logs wl ON wl.id = wle.workout_log_id
+            LEFT JOIN users u ON u.id = wl.athlete_id
             LEFT JOIN program_exercises pe ON pe.id = wle.program_exercise_id
             LEFT JOIN exercises ex_pe ON ex_pe.id = pe.exercise_id
             LEFT JOIN assignment_correctives ac ON ac.id = wle.corrective_id
@@ -17163,11 +17163,11 @@ ${catalog}`;
           }>(sql`
             SELECT ssl.id AS id, to_char(ssl.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS date,
               ssl.video_url AS video_url, ssl.coach_annotation_url AS secondary_url,
-              u.name AS athlete_name, se.name AS label
+              coalesce(u.name, '(deleted athlete)') AS athlete_name, coalesce(se.name, 'Unknown drill') AS label
             FROM skill_session_logs ssl
-            JOIN users u ON u.id = ssl.athlete_id
-            JOIN skill_program_exercises spe ON spe.id = ssl.skill_program_exercise_id
-            JOIN skill_exercises se ON se.id = spe.skill_exercise_id
+            LEFT JOIN users u ON u.id = ssl.athlete_id
+            LEFT JOIN skill_program_exercises spe ON spe.id = ssl.skill_program_exercise_id
+            LEFT JOIN skill_exercises se ON se.id = spe.skill_exercise_id
             WHERE ssl.id IN ${skillIds}
           `).then((r) => r.rows),
       commentIds.length === 0
@@ -17181,10 +17181,11 @@ ${catalog}`;
           }>(sql`
             SELECT wc.id AS id,
               to_char(coalesce(wc.date::timestamp, wc.created_at), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS date,
-              wc.video_url AS video_url, wc.image_url AS secondary_url, u.name AS athlete_name
+              wc.video_url AS video_url, wc.image_url AS secondary_url,
+              coalesce(u.name, '(deleted assignment)') AS athlete_name
             FROM workout_comments wc
-            JOIN assignments a ON a.id = wc.assignment_id
-            JOIN users u ON u.id = a.athlete_id
+            LEFT JOIN assignments a ON a.id = wc.assignment_id
+            LEFT JOIN users u ON u.id = a.athlete_id
             WHERE wc.id IN ${commentIds}
           `).then((r) => r.rows),
     ]);

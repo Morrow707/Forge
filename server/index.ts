@@ -292,8 +292,17 @@ app.use((req, res, next) => {
     // count is 0 -- a request landing between server.listen() and this
     // finishing could otherwise cache a pre-cleanup total for up to
     // ADMIN_VIDEO_SUMMARY_CACHE_MS with nothing left to ever refresh it.
+    //
+    // The cutoff checks each row's real created_at, not the free-text
+    // "date" field the admin video list displays -- a large-scale stress
+    // test can backdate that display field while the row's actual
+    // created_at reflects when the test really ran. An earlier cutoff here
+    // predated that run, so every stress-test row's real created_at looked
+    // "too new" and nothing matched despite the displayed dates looking
+    // weeks old. This cutoff must stay at or after the stress test's real
+    // run time for the cleanup to ever match its rows.
     storage
-      .oneTimeCleanupPreexistingVideosForAccount("athlete@forge.app", new Date("2026-08-31T02:52:49.000Z"))
+      .oneTimeCleanupPreexistingVideosForAccount("athlete@forge.app", new Date("2026-08-31T03:30:37.000Z"))
       .then((result) => {
         storage.invalidateAdminVideoSummaryCache();
         // Always logged, not just on a nonzero count -- this ran silent-on-
