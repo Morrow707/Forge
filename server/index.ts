@@ -293,24 +293,29 @@ app.use((req, res, next) => {
     // finishing could otherwise cache a pre-cleanup total for up to
     // ADMIN_VIDEO_SUMMARY_CACHE_MS with nothing left to ever refresh it.
     //
-    // The cutoff checks each row's real created_at, not the free-text
-    // "date" field the admin video list displays -- a large-scale stress
-    // test can backdate that display field while the row's actual
-    // created_at reflects when the test really ran. An earlier cutoff here
-    // predated that run, so every stress-test row's real created_at looked
-    // "too new" and nothing matched despite the displayed dates looking
-    // weeks old. This cutoff must stay at or after the stress test's real
-    // run time for the cleanup to ever match its rows.
+    // Confirmed on production (2026-08-31 03:43 UTC log) that this finds
+    // the right account and runs cleanly, but matches 0 rows -- Jordan's
+    // account genuinely has no old videos. The 1078-video/8.85GB backlog
+    // is NOT on this account; scoping every fix attempt to it was the
+    // wrong assumption from the start. Left running (harmless, matches
+    // nothing) while diagnoseVideoBacklog below establishes where the
+    // backlog actually lives.
     storage
       .oneTimeCleanupPreexistingVideosForAccount("athlete@forge.app", new Date("2026-08-31T03:30:37.000Z"))
       .then((result) => {
         storage.invalidateAdminVideoSummaryCache();
-        // Always logged, not just on a nonzero count -- this ran silent-on-
-        // no-op before, which made "did it even run, and did it find the
-        // right account" impossible to answer from the Render logs alone
-        // after the numbers didn't move.
         log(`One-time video cleanup: ${JSON.stringify(result)}`);
       })
       .catch((err) => console.error("One-time video cleanup failed:", err));
+    // Read-only diagnostic -- see diagnoseVideoBacklog's own comment.
+    // Answers, with real production data instead of another guess: which
+    // athlete accounts actually hold the 1078 videos, how old they really
+    // are, and whether production has rows a join can't reach that the
+    // local dev DB's CASCADE constraints couldn't reproduce. Delete this
+    // call (and diagnoseVideoBacklog) once it's answered that.
+    storage
+      .diagnoseVideoBacklog()
+      .then((result) => log(`Video backlog diagnostic: ${JSON.stringify(result)}`))
+      .catch((err) => console.error("Video backlog diagnostic failed:", err));
   });
 })();

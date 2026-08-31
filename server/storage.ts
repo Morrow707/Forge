@@ -17229,6 +17229,85 @@ ${catalog}`;
     return { videos, total: Number(countResult.rows[0]?.total ?? 0) };
   },
 
+  // One-time, read-only diagnostic for the video-storage total that won't
+  // move: rather than guess again at a scope/cutoff for a *deleting*
+  // function, this just reports the truth -- which real athlete accounts
+  // the 1078-video backlog actually sits on, how old it really is, and
+  // whether production has rows a join can't reach (comparing each
+  // source's raw WHERE-only count against its athlete-joined GROUP BY sum
+  // catches real orphaning even though the local dev DB's CASCADE
+  // constraints made that impossible to reproduce there -- production's
+  // constraint history may not match). Never deletes anything. Meant to be
+  // called once from server/index.ts's boot sequence and then deleted once
+  // it's answered the question.
+  async diagnoseVideoBacklog(): Promise<{
+    rawCounts: { set: number; skill: number; comment: number };
+    byAthlete: {
+      set: { athleteId: number; athleteName: string; athleteEmail: string; count: number; oldest: string | null; newest: string | null }[];
+      skill: { athleteId: number; athleteName: string; athleteEmail: string; count: number; oldest: string | null; newest: string | null }[];
+      comment: { athleteId: number; athleteName: string; athleteEmail: string; count: number; oldest: string | null; newest: string | null }[];
+    };
+  }> {
+    const [rawSet, rawSkill, rawComment, bySet, bySkill, byComment] = await Promise.all([
+      db.execute<{ count: string }>(sql`SELECT count(*) FROM workout_set_entries WHERE form_check_video_url IS NOT NULL`),
+      db.execute<{ count: string }>(sql`SELECT count(*) FROM skill_session_logs WHERE video_url IS NOT NULL`),
+      db.execute<{ count: string }>(sql`SELECT count(*) FROM workout_comments WHERE video_url IS NOT NULL`),
+      db.execute<{ athlete_id: number; athlete_name: string; athlete_email: string; count: string; oldest: string | null; newest: string | null }>(sql`
+        SELECT u.id AS athlete_id, u.name AS athlete_name, u.email AS athlete_email,
+          count(*) AS count, min(wl.date)::text AS oldest, max(wl.date)::text AS newest
+        FROM workout_set_entries wse
+        JOIN workout_log_entries wle ON wle.id = wse.log_entry_id
+        JOIN workout_logs wl ON wl.id = wle.workout_log_id
+        JOIN users u ON u.id = wl.athlete_id
+        WHERE wse.form_check_video_url IS NOT NULL
+        GROUP BY u.id, u.name, u.email
+        ORDER BY count(*) DESC
+      `),
+      db.execute<{ athlete_id: number; athlete_name: string; athlete_email: string; count: string; oldest: string | null; newest: string | null }>(sql`
+        SELECT u.id AS athlete_id, u.name AS athlete_name, u.email AS athlete_email,
+          count(*) AS count, min(ssl.created_at)::text AS oldest, max(ssl.created_at)::text AS newest
+        FROM skill_session_logs ssl
+        JOIN users u ON u.id = ssl.athlete_id
+        WHERE ssl.video_url IS NOT NULL
+        GROUP BY u.id, u.name, u.email
+        ORDER BY count(*) DESC
+      `),
+      db.execute<{ athlete_id: number; athlete_name: string; athlete_email: string; count: string; oldest: string | null; newest: string | null }>(sql`
+        SELECT u.id AS athlete_id, u.name AS athlete_name, u.email AS athlete_email,
+          count(*) AS count, min(wc.created_at)::text AS oldest, max(wc.created_at)::text AS newest
+        FROM workout_comments wc
+        JOIN assignments a ON a.id = wc.assignment_id
+        JOIN users u ON u.id = a.athlete_id
+        WHERE wc.video_url IS NOT NULL
+        GROUP BY u.id, u.name, u.email
+        ORDER BY count(*) DESC
+      `),
+    ]);
+
+    const mapRows = (rows: { athlete_id: number; athlete_name: string; athlete_email: string; count: string; oldest: string | null; newest: string | null }[]) =>
+      rows.map((r) => ({
+        athleteId: r.athlete_id,
+        athleteName: r.athlete_name,
+        athleteEmail: r.athlete_email,
+        count: Number(r.count),
+        oldest: r.oldest,
+        newest: r.newest,
+      }));
+
+    return {
+      rawCounts: {
+        set: Number(rawSet.rows[0]?.count ?? 0),
+        skill: Number(rawSkill.rows[0]?.count ?? 0),
+        comment: Number(rawComment.rows[0]?.count ?? 0),
+      },
+      byAthlete: {
+        set: mapRows(bySet.rows),
+        skill: mapRows(bySkill.rows),
+        comment: mapRows(byComment.rows),
+      },
+    };
+  },
+
   // Platform-wide "X GB across Y videos" figure the storage page's header
   // needs -- separated out from getAdminVideos above so paging through the
   // list (or several admins having it open at once) never re-triggers a
