@@ -287,10 +287,15 @@ app.use((req, res, next) => {
     // One-time backlog cleanup for the dev-testing account's accumulated
     // video volume -- see oneTimeCleanupPreexistingVideosForAccount's own
     // comment for why this is safe to leave as permanent boot-time code
-    // (self-limiting by a fixed cutoff, not "now" on every boot).
+    // (self-limiting by a fixed cutoff, not "now" on every boot). Always
+    // invalidates the admin storage-summary cache afterward, even when
+    // count is 0 -- a request landing between server.listen() and this
+    // finishing could otherwise cache a pre-cleanup total for up to
+    // ADMIN_VIDEO_SUMMARY_CACHE_MS with nothing left to ever refresh it.
     storage
       .oneTimeCleanupPreexistingVideosForAccount("athlete@forge.app", new Date("2026-08-31T02:52:49.000Z"))
       .then((result) => {
+        storage.invalidateAdminVideoSummaryCache();
         if (!result.skipped && result.count > 0) {
           log(`One-time video cleanup: removed ${result.count} pre-existing video(s) for athlete@forge.app.`);
         }

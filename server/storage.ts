@@ -17494,64 +17494,6 @@ ${catalog}`;
       .limit(limit);
   },
 
-  // Same per-source cleanup as deleteAdminVideo above, applied in bulk to
-  // everything older than a cutoff -- the "clean up anything old" sibling
-  // to deleting one at a time. Ages workoutComments off createdAt rather
-  // than its own nullable, inconsistently-formatted free-text `date` field,
-  // since createdAt is always present and reliably comparable. Returns how
-  // many rows were cleared.
-  async bulkDeleteAdminVideosOlderThan(cutoff: Date): Promise<number> {
-    const cutoffDateStr = cutoff.toISOString().slice(0, 10);
-
-    const [setRows, skillRows, commentRows] = await Promise.all([
-      db
-        .select({ id: workoutSetEntries.id, videoUrl: workoutSetEntries.formCheckVideoUrl })
-        .from(workoutSetEntries)
-        .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
-        .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
-        .where(and(isNotNull(workoutSetEntries.formCheckVideoUrl), lt(workoutLogs.date, cutoffDateStr))),
-      db
-        .select({
-          id: skillSessionLogs.id,
-          videoUrl: skillSessionLogs.videoUrl,
-          coachAnnotationUrl: skillSessionLogs.coachAnnotationUrl,
-        })
-        .from(skillSessionLogs)
-        .where(and(isNotNull(skillSessionLogs.videoUrl), lt(skillSessionLogs.createdAt, cutoff))),
-      db
-        .select({ id: workoutComments.id, videoUrl: workoutComments.videoUrl, imageUrl: workoutComments.imageUrl })
-        .from(workoutComments)
-        .where(and(isNotNull(workoutComments.videoUrl), lt(workoutComments.createdAt, cutoff))),
-    ]);
-
-    await Promise.all([
-      ...setRows.map((r) => deleteUploadedFile(r.videoUrl)),
-      ...skillRows.flatMap((r) => [deleteUploadedFile(r.videoUrl), deleteUploadedFile(r.coachAnnotationUrl)]),
-      ...commentRows.flatMap((r) => [deleteUploadedFile(r.videoUrl), deleteUploadedFile(r.imageUrl)]),
-    ]);
-
-    if (setRows.length) {
-      await db
-        .update(workoutSetEntries)
-        .set({ formCheckVideoUrl: null, formCheckFlag: null })
-        .where(inArray(workoutSetEntries.id, setRows.map((r) => r.id)));
-    }
-    if (skillRows.length) {
-      await db
-        .update(skillSessionLogs)
-        .set({ videoUrl: null, coachAnnotationUrl: null })
-        .where(inArray(skillSessionLogs.id, skillRows.map((r) => r.id)));
-    }
-    if (commentRows.length) {
-      await db
-        .update(workoutComments)
-        .set({ videoUrl: null, imageUrl: null })
-        .where(inArray(workoutComments.id, commentRows.map((r) => r.id)));
-    }
-
-    return setRows.length + skillRows.length + commentRows.length;
-  },
-
   // Ownership check mirrors the read above -- a coach can only annotate a
   // clip belonging to one of their own (or their staff's) athletes. Reuses
   // VideoAnnotationDialog/its PNG-decode route as-is; this just persists the
@@ -20086,8 +20028,14 @@ ${catalog}`;
   // ever match. Immediate, no grace window -- unlike the automatic sweeps
   // above, this targets known-already-stale data by explicit request, not
   // a live account someone might still want to react to a warning about.
-  // Scoped to set/skill videos only, matching every other automatic
-  // cleanup path's exclusion of comment attachments.
+  //
+  // Unlike the two automatic sweeps above, this DOES include comment-
+  // attachment videos/images (workoutComments) -- the original exclusion
+  // reasoning (a comment thread is a real conversation record) applies to
+  // the message text, not to the attached file, and this account's
+  // attachments turned out to be the majority of its actual disk usage.
+  // Only ever clears videoUrl/imageUrl, never the comment row or its body
+  // text.
   async oneTimeCleanupPreexistingVideosForAccount(
     email: string,
     cutoff: Date,
@@ -20095,7 +20043,7 @@ ${catalog}`;
     const [account] = await db.select({ id: users.id }).from(users).where(eq(users.email, email));
     if (!account) return { count: 0, skipped: true };
 
-    const [setRows, skillRows] = await Promise.all([
+    const [setRows, skillRows, commentRows] = await Promise.all([
       db
         .select({ id: workoutSetEntries.id, videoUrl: workoutSetEntries.formCheckVideoUrl })
         .from(workoutSetEntries)
@@ -20122,11 +20070,23 @@ ${catalog}`;
             lt(skillSessionLogs.createdAt, cutoff),
           ),
         ),
+      db
+        .select({ id: workoutComments.id, videoUrl: workoutComments.videoUrl, imageUrl: workoutComments.imageUrl })
+        .from(workoutComments)
+        .innerJoin(assignments, eq(workoutComments.assignmentId, assignments.id))
+        .where(
+          and(
+            eq(assignments.athleteId, account.id),
+            isNotNull(workoutComments.videoUrl),
+            lt(workoutComments.createdAt, cutoff),
+          ),
+        ),
     ]);
 
     await Promise.all([
       ...setRows.map((r) => deleteUploadedFile(r.videoUrl)),
       ...skillRows.flatMap((r) => [deleteUploadedFile(r.videoUrl), deleteUploadedFile(r.coachAnnotationUrl)]),
+      ...commentRows.flatMap((r) => [deleteUploadedFile(r.videoUrl), deleteUploadedFile(r.imageUrl)]),
     ]);
 
     if (setRows.length) {
@@ -20153,8 +20113,14 @@ ${catalog}`;
         })
         .where(inArray(skillSessionLogs.id, skillRows.map((r) => r.id)));
     }
+    if (commentRows.length) {
+      await db
+        .update(workoutComments)
+        .set({ videoUrl: null, imageUrl: null })
+        .where(inArray(workoutComments.id, commentRows.map((r) => r.id)));
+    }
 
-    return { count: setRows.length + skillRows.length, skipped: false };
+    return { count: setRows.length + skillRows.length + commentRows.length, skipped: false };
   },
 
   // Starts a video's 7-day deletion grace window -- split out from

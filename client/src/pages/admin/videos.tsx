@@ -1,20 +1,19 @@
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
 import { AppShell } from "@/components/app-shell";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { apiRequest, getJson } from "@/lib/queryClient";
-import { toast } from "sonner";
-import { Trash2, HardDrive, Video } from "lucide-react";
+import { getJson } from "@/lib/queryClient";
+import { HardDrive, Video } from "lucide-react";
 
 type AdminVideoRow = {
   source: "set" | "skill" | "comment";
   id: number;
   videoUrl: string;
   secondaryUrl: string | null;
+  athleteId: number;
   athleteName: string;
   label: string;
   date: string;
@@ -36,12 +35,14 @@ function formatBytes(bytes: number): string {
 
 const PAGE_SIZE = 50;
 
-/** Admin-only storage-management page for every user-uploaded video on the
- * platform (strength-set form checks, Skills clips, comment attachments) --
- * lists total disk usage, deletes one at a time, or bulk-deletes anything
- * older than N days. The one place on the platform this kind of deletion
- * exists at all; see set-video-review.tsx's own onRemove for the athlete-
- * facing equivalent, which now shares the same underlying disk cleanup.
+/** Admin-only, READ-ONLY storage-visibility page for every user-uploaded
+ * video on the platform (strength-set form checks, Skills clips, comment
+ * attachments) -- lists total disk usage and every video, but deliberately
+ * has no delete action of any kind. Videos only ever leave disk through
+ * storage.sweepVideoRetentionCap, storage.sweepStaleAccountVideos, or a
+ * one-time backlog cleanup -- none of which an admin triggers by hand, on
+ * purpose: an admin reviewing this list has no way of knowing which video
+ * an athlete or their coach still cares about.
  *
  * Paginated (Load More) rather than one giant list -- a stress test with
  * 20,000 real videos found the old unpaginated version taking 1-5s to load
@@ -50,8 +51,6 @@ const PAGE_SIZE = 50;
  * /api/admin/videos/storage-summary) so it doesn't force that same full
  * scan just to show the first page of the list. */
 export default function AdminVideos() {
-  const queryClient = useQueryClient();
-  const [olderThanDays, setOlderThanDays] = useState("90");
   const [loadedPages, setLoadedPages] = useState(1);
 
   const { data: summary } = useQuery<{ totalBytes: number; totalCount: number }>({
@@ -71,55 +70,6 @@ export default function AdminVideos() {
   const total = data?.total ?? 0;
   const hasMore = videos.length < total;
 
-  const deleteMutation = useMutation({
-    mutationFn: async (video: AdminVideoRow) => {
-      await apiRequest("DELETE", `/api/admin/videos/${video.source}/${video.id}`, {});
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/videos"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/videos/storage-summary"] });
-      toast.success("Video deleted");
-    },
-    onError: () => toast.error("Couldn't delete that video"),
-  });
-
-  const bulkDeleteMutation = useMutation({
-    mutationFn: async (days: number) => {
-      const res = await apiRequest("POST", "/api/admin/videos/bulk-delete", { olderThanDays: days });
-      return (await res.json()) as { count: number };
-    },
-    onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/videos"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/videos/storage-summary"] });
-      toast.success(`Deleted ${result.count} video${result.count === 1 ? "" : "s"}`);
-    },
-    onError: () => toast.error("Couldn't bulk-delete videos"),
-  });
-
-  function handleBulkDelete() {
-    const days = Number(olderThanDays);
-    if (!Number.isFinite(days) || days < 1) {
-      toast.error("Enter a valid number of days");
-      return;
-    }
-    const cutoffLabel = format(new Date(Date.now() - days * 86400000), "MMM d, yyyy");
-    if (
-      window.confirm(
-        `Permanently delete every video recorded before ${cutoffLabel} (older than ${days} days)? This can't be undone.`,
-      )
-    ) {
-      bulkDeleteMutation.mutate(days);
-    }
-  }
-
-  function handleDelete(video: AdminVideoRow) {
-    if (
-      window.confirm(`Permanently delete this video (${video.athleteName} — ${video.label})? This can't be undone.`)
-    ) {
-      deleteMutation.mutate(video);
-    }
-  }
-
   return (
     <AppShell title="Video Storage">
       <div className="space-y-4">
@@ -131,38 +81,15 @@ export default function AdminVideos() {
             </CardTitle>
             <CardDescription>
               Every athlete-recorded video currently on disk, across strength sets, Skills sessions, and comment
-              attachments. Deleting here removes the file permanently — it's not recoverable.
+              attachments. Read-only -- videos are only ever removed automatically (a per-exercise retention cap, or
+              an account going 12+ months inactive), never by an admin picking one out.
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <p className="text-2xl font-bold">
-                {summary ? formatBytes(summary.totalBytes) : "…"}
-              </p>
-              <p className="text-sm text-muted-foreground">
-                across {summary?.totalCount ?? "…"} video{summary?.totalCount === 1 ? "" : "s"}
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-sm text-muted-foreground">Delete videos older than</span>
-              <Input
-                type="number"
-                min={1}
-                value={olderThanDays}
-                onChange={(e) => setOlderThanDays(e.target.value)}
-                className="h-9 w-20"
-              />
-              <span className="text-sm text-muted-foreground">days</span>
-              <Button
-                variant="outline"
-                className="text-destructive"
-                onClick={handleBulkDelete}
-                disabled={bulkDeleteMutation.isPending}
-              >
-                <Trash2 className="h-4 w-4" />
-                Bulk Delete
-              </Button>
-            </div>
+          <CardContent>
+            <p className="text-2xl font-bold">{summary ? formatBytes(summary.totalBytes) : "…"}</p>
+            <p className="text-sm text-muted-foreground">
+              across {summary?.totalCount ?? "…"} video{summary?.totalCount === 1 ? "" : "s"}
+            </p>
           </CardContent>
         </Card>
 
@@ -198,16 +125,6 @@ export default function AdminVideos() {
                         {v.label} · {format(parseISO(v.date), "MMM d, yyyy")} · {formatBytes(v.sizeBytes)}
                       </p>
                     </div>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="text-destructive hover:text-destructive"
-                      onClick={() => handleDelete(v)}
-                      disabled={deleteMutation.isPending}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                      Delete
-                    </Button>
                   </div>
                 ))}
               </div>

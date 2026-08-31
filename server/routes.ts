@@ -2367,51 +2367,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(await storage.getAdminVideoStorageSummary());
   });
 
-  app.delete("/api/admin/videos/:source/:id", requireRole("admin"), async (req, res) => {
-    const user = currentUser(req);
-    const source = req.params.source;
-    if (source !== "set" && source !== "skill" && source !== "comment") {
-      return res.status(400).json({ message: "Invalid video source" });
-    }
-    const id = Number(req.params.id);
-    if (!Number.isFinite(id)) return res.status(400).json({ message: "Invalid video id" });
-    const result = await storage.deleteAdminVideo(source, id);
-    if (!result.deleted) return res.status(404).json({ message: "Video not found" });
-    storage.invalidateAdminVideoSummaryCache();
-    const justification = typeof req.body?.justification === "string" ? req.body.justification.trim() : undefined;
-    await storage.logRecordAccess({
-      userId: user.id,
-      targetAthleteId: result.athleteId,
-      actionType: "deleted",
-      resourceType: `video:${source}`,
-      resourceId: String(id),
-      justification: justification || undefined,
-      ipAddress: req.ip,
-      userAgent: req.get("user-agent") ?? undefined,
-    });
-    res.json({ success: true });
-  });
-
-  app.post("/api/admin/videos/bulk-delete", requireRole("admin"), async (req, res) => {
-    const user = currentUser(req);
-    const days = Number(req.body?.olderThanDays);
-    if (!Number.isFinite(days) || days < 1) {
-      return res.status(400).json({ message: "olderThanDays must be a positive number" });
-    }
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - days);
-    const count = await storage.bulkDeleteAdminVideosOlderThan(cutoff);
-    storage.invalidateAdminVideoSummaryCache();
-    await storage.logRecordAccess({
-      userId: user.id,
-      actionType: "deleted",
-      resourceType: "admin_video_bulk_delete",
-      detail: `${count} video(s) older than ${days} day(s) (cutoff ${cutoff.toISOString().slice(0, 10)})`,
-      ipAddress: req.ip,
-      userAgent: req.get("user-agent") ?? undefined,
-    });
-    res.json({ count });
-  });
+  // Deliberately no admin-facing delete route for videos, individual or
+  // bulk -- videos only ever leave disk through the automatic sweeps
+  // (sweepVideoRetentionCap, sweepStaleAccountVideos) or the one-time
+  // backlog cleanup, none of which an admin triggers by hand. An admin
+  // reviewing this list has no way of knowing which video an athlete or
+  // their coach still cares about, so that decision doesn't belong here.
 
   // Read view for the audit log itself -- see getRecordAccessAuditLog's own
   // comment for the honest, still-partial scope of what's instrumented.
