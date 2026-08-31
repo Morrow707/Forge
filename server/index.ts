@@ -284,5 +284,17 @@ app.use((req, res, next) => {
     startReflectionJob();
     startDataRetentionJob();
     startVideoRetentionJob();
+    // One-time backlog cleanup for the dev-testing account's accumulated
+    // video volume -- see oneTimeCleanupPreexistingVideosForAccount's own
+    // comment for why this is safe to leave as permanent boot-time code
+    // (self-limiting by a fixed cutoff, not "now" on every boot).
+    storage
+      .oneTimeCleanupPreexistingVideosForAccount("athlete@forge.app", new Date("2026-08-31T02:52:49.000Z"))
+      .then((result) => {
+        if (!result.skipped && result.count > 0) {
+          log(`One-time video cleanup: removed ${result.count} pre-existing video(s) for athlete@forge.app.`);
+        }
+      })
+      .catch((err) => console.error("One-time video cleanup failed:", err));
   });
 })();

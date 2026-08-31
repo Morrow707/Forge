@@ -20073,6 +20073,90 @@ ${catalog}`;
     }
   },
 
+  // One-time, no-admin-UI cleanup for a real backlog of test/QA video
+  // volume accumulated on a single dev-testing account well before
+  // sweepStaleAccountVideos existed to catch it -- that new sweep won't
+  // touch this account since it's still genuinely active (real camera-
+  // tracker testing keeps its lastActivityAt current), and its videos
+  // predate any account-dormancy rule by design. Cutoff'd to a fixed
+  // moment (the day this shipped) rather than "now" on every call, so this
+  // is naturally self-limiting: anything uploaded to this account AFTER
+  // that moment is never touched, on this run or any future one, and once
+  // the existing backlog is gone there's nothing left for a later run to
+  // ever match. Immediate, no grace window -- unlike the automatic sweeps
+  // above, this targets known-already-stale data by explicit request, not
+  // a live account someone might still want to react to a warning about.
+  // Scoped to set/skill videos only, matching every other automatic
+  // cleanup path's exclusion of comment attachments.
+  async oneTimeCleanupPreexistingVideosForAccount(
+    email: string,
+    cutoff: Date,
+  ): Promise<{ count: number; skipped: true } | { count: number; skipped: false }> {
+    const [account] = await db.select({ id: users.id }).from(users).where(eq(users.email, email));
+    if (!account) return { count: 0, skipped: true };
+
+    const [setRows, skillRows] = await Promise.all([
+      db
+        .select({ id: workoutSetEntries.id, videoUrl: workoutSetEntries.formCheckVideoUrl })
+        .from(workoutSetEntries)
+        .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
+        .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
+        .where(
+          and(
+            eq(workoutLogs.athleteId, account.id),
+            isNotNull(workoutSetEntries.formCheckVideoUrl),
+            lt(workoutSetEntries.videoUploadedAt, cutoff),
+          ),
+        ),
+      db
+        .select({
+          id: skillSessionLogs.id,
+          videoUrl: skillSessionLogs.videoUrl,
+          coachAnnotationUrl: skillSessionLogs.coachAnnotationUrl,
+        })
+        .from(skillSessionLogs)
+        .where(
+          and(
+            eq(skillSessionLogs.athleteId, account.id),
+            isNotNull(skillSessionLogs.videoUrl),
+            lt(skillSessionLogs.createdAt, cutoff),
+          ),
+        ),
+    ]);
+
+    await Promise.all([
+      ...setRows.map((r) => deleteUploadedFile(r.videoUrl)),
+      ...skillRows.flatMap((r) => [deleteUploadedFile(r.videoUrl), deleteUploadedFile(r.coachAnnotationUrl)]),
+    ]);
+
+    if (setRows.length) {
+      await db
+        .update(workoutSetEntries)
+        .set({
+          formCheckVideoUrl: null,
+          formCheckFlag: null,
+          videoFavorited: false,
+          pendingDeletionAt: null,
+          staleAccountPendingDeletionAt: null,
+        })
+        .where(inArray(workoutSetEntries.id, setRows.map((r) => r.id)));
+    }
+    if (skillRows.length) {
+      await db
+        .update(skillSessionLogs)
+        .set({
+          videoUrl: null,
+          coachAnnotationUrl: null,
+          videoFavorited: false,
+          pendingDeletionAt: null,
+          staleAccountPendingDeletionAt: null,
+        })
+        .where(inArray(skillSessionLogs.id, skillRows.map((r) => r.id)));
+    }
+
+    return { count: setRows.length + skillRows.length, skipped: false };
+  },
+
   // Starts a video's 7-day deletion grace window -- split out from
   // sweepVideoRetentionCap itself so the caller only calls this once the
   // cap-warning notification has actually been delivered (see that
