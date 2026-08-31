@@ -16,6 +16,21 @@ if (import.meta.env.VITE_SENTRY_DSN) {
   Sentry.init({ dsn: import.meta.env.VITE_SENTRY_DSN });
 }
 
+// Fires when a lazy-loaded route's chunk 404s -- happens whenever someone
+// has the app open in a tab from before a deploy and then navigates to a
+// page whose JS file has since been replaced by a new deploy's differently-
+// hashed filename (the old one no longer exists on the server at all). Not
+// a real bug in the app, just a stale tab; a fresh load picks up the
+// current index.html and current chunk hashes, which fixes it completely.
+// sessionStorage guard is a one-shot: if reloading doesn't actually help
+// (a genuinely broken deploy, not a stale tab), this falls through to the
+// normal ErrorBoundary fallback below instead of reload-looping forever.
+window.addEventListener("vite:preloadError", () => {
+  if (sessionStorage.getItem("reloaded-after-preload-error")) return;
+  sessionStorage.setItem("reloaded-after-preload-error", "1");
+  window.location.reload();
+});
+
 // A crash here means something in the React tree itself threw, so this
 // can't lean on client-side routing (wouter) still working -- a full
 // reload is the one recovery path guaranteed to work regardless of what
