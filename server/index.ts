@@ -296,9 +296,11 @@ app.use((req, res, next) => {
       .oneTimeCleanupPreexistingVideosForAccount("athlete@forge.app", new Date("2026-08-31T02:52:49.000Z"))
       .then((result) => {
         storage.invalidateAdminVideoSummaryCache();
-        if (!result.skipped && result.count > 0) {
-          log(`One-time video cleanup: removed ${result.count} pre-existing video(s) for athlete@forge.app.`);
-        }
+        // Always logged, not just on a nonzero count -- this ran silent-on-
+        // no-op before, which made "did it even run, and did it find the
+        // right account" impossible to answer from the Render logs alone
+        // after the numbers didn't move.
+        log(`One-time video cleanup: ${JSON.stringify(result)}`);
       })
       .catch((err) => console.error("One-time video cleanup failed:", err));
   });

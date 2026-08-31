@@ -20039,9 +20039,18 @@ ${catalog}`;
   async oneTimeCleanupPreexistingVideosForAccount(
     email: string,
     cutoff: Date,
-  ): Promise<{ count: number; skipped: true } | { count: number; skipped: false }> {
+  ): Promise<{
+    accountFound: boolean;
+    accountId: number | null;
+    setMatched: number;
+    skillMatched: number;
+    commentMatched: number;
+    count: number;
+  }> {
     const [account] = await db.select({ id: users.id }).from(users).where(eq(users.email, email));
-    if (!account) return { count: 0, skipped: true };
+    if (!account) {
+      return { accountFound: false, accountId: null, setMatched: 0, skillMatched: 0, commentMatched: 0, count: 0 };
+    }
 
     const [setRows, skillRows, commentRows] = await Promise.all([
       db
@@ -20053,7 +20062,14 @@ ${catalog}`;
           and(
             eq(workoutLogs.athleteId, account.id),
             isNotNull(workoutSetEntries.formCheckVideoUrl),
-            lt(workoutSetEntries.videoUploadedAt, cutoff),
+            // videoUploadedAt is nullable (a video saved before that column
+            // existed, or through any path that never set it, leaves it
+            // null forever) -- lt() against a null column is never true in
+            // SQL, which would silently exempt those rows from this cutoff
+            // check entirely. coalesce onto the set's own workout date
+            // (always present) as a reference time instead, so a real old
+            // video with a missing upload timestamp still gets caught.
+            lt(sql`coalesce(${workoutSetEntries.videoUploadedAt}, ${workoutLogs.date}::timestamp)`, cutoff),
           ),
         ),
       db
@@ -20120,7 +20136,14 @@ ${catalog}`;
         .where(inArray(workoutComments.id, commentRows.map((r) => r.id)));
     }
 
-    return { count: setRows.length + skillRows.length + commentRows.length, skipped: false };
+    return {
+      accountFound: true,
+      accountId: account.id,
+      setMatched: setRows.length,
+      skillMatched: skillRows.length,
+      commentMatched: commentRows.length,
+      count: setRows.length + skillRows.length + commentRows.length,
+    };
   },
 
   // Starts a video's 7-day deletion grace window -- split out from
