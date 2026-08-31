@@ -15,6 +15,7 @@ import { visionJointsToWorldLandmarks, visionImplementToPoint, type ImplementPoi
 import type { PoseFrame as NativePoseFrame, CaptureDeviceInfo } from "@/lib/native-av-preview";
 import {
   calibrateFromFrames,
+  calibrationMethodBreakdown,
   scaleWorldLandmarks,
   percentile,
   wristConfidence,
@@ -24,6 +25,7 @@ import {
 import { analyzeMechanics, type MechanicsFrame } from "@/lib/mechanics-tracking";
 import { MIN_TRACKING_CONFIDENCE } from "@/lib/bar-tracking";
 import { videoFilenameForBlob } from "@/lib/video-recording";
+import { buildTrackingDiagnostics, type TrackingDiagnostics } from "@/lib/tracking-diagnostics";
 
 /** AVFoundation + Vision med ball throw tracking -- genuinely new, no ARKit equivalent was ever
  * built for this mode (unlike every other tracker this AV pipeline replaced). It exists at all
@@ -67,6 +69,7 @@ export type MedballSetMetrics = {
   releaseHeightCm: number | null;
   trust: SetTrustScore | null;
   captureDeviceInfo: CaptureDeviceInfo | null;
+  trackingDiagnostics?: TrackingDiagnostics | null;
 };
 
 const EMPTY_MEDBALL_METRICS: MedballSetMetrics = {
@@ -128,7 +131,13 @@ export function AvMedballTrackerDialog({
     setUploadProgress(0);
   }, [open]);
 
-  async function saveEmptyAndWarn(blob: Blob, message: string) {
+  async function saveEmptyAndWarn(
+    blob: Blob,
+    message: string,
+    captureDeviceInfo: CaptureDeviceInfo,
+    trackingDiagnostics: TrackingDiagnostics,
+  ) {
+    const emptyMetrics: MedballSetMetrics = { ...EMPTY_MEDBALL_METRICS, captureDeviceInfo, trackingDiagnostics };
     if (recordVideo) {
       setSaving(true);
       setUploadProgress(0);
@@ -148,9 +157,9 @@ export function AvMedballTrackerDialog({
               { duration: 10000 },
             );
           }
-          onCapture(EMPTY_MEDBALL_METRICS);
+          onCapture(emptyMetrics);
         } else {
-          onCapture(EMPTY_MEDBALL_METRICS, result.url);
+          onCapture(emptyMetrics, result.url);
         }
         onOpenChange(false);
       } catch (err) {
@@ -167,7 +176,7 @@ export function AvMedballTrackerDialog({
   async function stopTracking() {
     const result = await stopRecordingAndAnalyze();
     if (!result) return; // error/cancellation already reported by the hook
-    await finishWithRecording(result.blob, result.rawFrames, result.captureDeviceInfo);
+    await finishWithRecording(result.blob, result.rawFrames, result.captureDeviceInfo, result.recordingStats);
   }
 
   // Frame-to-frame speed across an implement's own confident trace -- same robust-percentile
@@ -198,13 +207,29 @@ export function AvMedballTrackerDialog({
     return { speedMps, confidence };
   }
 
-  async function finishWithRecording(blob: Blob, rawFrames: NativePoseFrame[], captureDeviceInfo: CaptureDeviceInfo) {
+  async function finishWithRecording(
+    blob: Blob,
+    rawFrames: NativePoseFrame[],
+    captureDeviceInfo: CaptureDeviceInfo,
+    recordingStats: { frameCount: number; trackedFrameCount: number; elapsedSeconds: number },
+  ) {
     const calibrationInput = rawFrames.map((f) => ({ worldLandmarks: visionJointsToWorldLandmarks(f) }));
     const scaleFactor = calibrateFromFrames(calibrationInput, heightIn);
+    const calibrationFrames = calibrationMethodBreakdown(calibrationInput);
     if (scaleFactor == null) {
+      const message =
+        "Couldn't calibrate real-world scale for this take -- make sure your height is set in your profile and you're clearly visible standing at some point in frame.";
       await saveEmptyAndWarn(
         blob,
-        "Couldn't calibrate real-world scale for this take -- make sure your height is set in your profile and you're clearly visible standing at some point in frame.",
+        message,
+        captureDeviceInfo,
+        buildTrackingDiagnostics({
+          outcome: "empty_calibration_failed",
+          message,
+          rawFrames,
+          recording: recordingStats,
+          calibration: { scaleFactor: null, ...calibrationFrames },
+        }),
       );
       return;
     }
@@ -259,11 +284,34 @@ export function AvMedballTrackerDialog({
     const releaseHeightCm = mechanicsResult.releaseHeightM != null ? Math.round(mechanicsResult.releaseHeightM * 100) : null;
 
     if (peakSpeedMps == null) {
-      await saveEmptyAndWarn(blob, "Couldn't get a clean read -- make sure your whole throwing motion, ball included, stays in frame.");
+      const message = "Couldn't get a clean read -- make sure your whole throwing motion, ball included, stays in frame.";
+      await saveEmptyAndWarn(
+        blob,
+        message,
+        captureDeviceInfo,
+        buildTrackingDiagnostics({
+          outcome: "empty_no_clean_read",
+          message,
+          rawFrames,
+          recording: recordingStats,
+          calibration: { scaleFactor, ...calibrationFrames },
+        }),
+      );
       return;
     }
 
-    const metrics: MedballSetMetrics = { peakSpeedMps, releaseHeightCm, trust: blended!.trust, captureDeviceInfo };
+    const metrics: MedballSetMetrics = {
+      peakSpeedMps,
+      releaseHeightCm,
+      trust: blended!.trust,
+      captureDeviceInfo,
+      trackingDiagnostics: buildTrackingDiagnostics({
+        outcome: "tracked",
+        rawFrames,
+        recording: recordingStats,
+        calibration: { scaleFactor, ...calibrationFrames },
+      }),
+    };
 
     if (!recordVideo) {
       onCapture(metrics);

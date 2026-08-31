@@ -315,6 +315,26 @@ type CaptureDeviceInfo = {
   adjustingExposureSampleCount: number;
 };
 
+// Same shape as tracking-diagnostics.ts's TrackingDiagnostics -- see buildTrackingDiagnostics
+// for how it's built.
+type TrackingDiagnostics = {
+  outcome: "tracked" | "empty_calibration_failed" | "empty_no_clean_read";
+  message: string | null;
+  recording: { frameCount: number; trackedFrameCount: number; elapsedSeconds: number } | null;
+  bodyPose: { framesTotal: number; framesWithBody: number; avgWristConfidence: number | null };
+  objectDetection: {
+    framesWithLeftImplement: number;
+    framesWithRightImplement: number;
+    avgImplementConfidence: number | null;
+  };
+  calibration: {
+    scaleFactor: number | null;
+    noseToAnkleFrames: number;
+    shoulderToAnkleFrames: number;
+    unresolvedFrames: number;
+  } | null;
+};
+
 type SetMetrics = {
   peakVelocityMps: number | null;
   meanVelocityMps: number | null;
@@ -389,6 +409,9 @@ type SetMetrics = {
   // Session-level camera/AI context for this recording (device, lens, format, AF/AE
   // stability) -- see use-av-body-tracking.ts's extractCaptureDeviceInfo.
   captureDeviceInfo: CaptureDeviceInfo | null;
+  // Pipeline-stage diagnostics (calibration, body-pose/object-detection frame stats, and why an
+  // empty set came back empty) -- see tracking-diagnostics.ts's buildTrackingDiagnostics.
+  trackingDiagnostics: TrackingDiagnostics | null;
 };
 
 type LogEntry = {
@@ -545,6 +568,7 @@ function buildItem(
       armDriveAsymmetry: existingSet?.armDriveAsymmetry ?? null,
       trustScores: existingSet?.trustScores ?? null,
       captureDeviceInfo: existingSet?.captureDeviceInfo ?? null,
+      trackingDiagnostics: existingSet?.trackingDiagnostics ?? null,
     };
   });
   const materials = materialsFrom(prescribed.exercise);
@@ -1004,6 +1028,7 @@ export function WorkoutPage({
           armDriveAsymmetry: s.armDriveAsymmetry,
           trustScores: s.trustScores,
           captureDeviceInfo: s.captureDeviceInfo,
+          trackingDiagnostics: s.trackingDiagnostics,
         })),
       })),
     };
@@ -1506,6 +1531,7 @@ export function WorkoutPage({
               armDriveAsymmetry: null,
               trustScores: null,
               captureDeviceInfo: null,
+              trackingDiagnostics: null,
             },
           ],
         };
@@ -2846,6 +2872,7 @@ function ExerciseLogContent({
                   barPathTrace: metrics.pathTrace,
                   formFaults: metrics.formFaults,
                   captureDeviceInfo: metrics.captureDeviceInfo ?? null,
+                  trackingDiagnostics: metrics.trackingDiagnostics ?? null,
                   ...videoPatch,
                 },
                 // A tracked capture is expensive to redo -- save it the
@@ -2875,6 +2902,7 @@ function ExerciseLogContent({
                   armDriveAsymmetry: metrics.armDriveAsymmetry ?? null,
                   trustScores: metrics.trustScores ?? null,
                   captureDeviceInfo: metrics.captureDeviceInfo ?? null,
+                  trackingDiagnostics: metrics.trackingDiagnostics ?? null,
                   ...videoPatch,
                 },
                 { immediate: true },
@@ -2907,6 +2935,7 @@ function ExerciseLogContent({
                 swingHeadSwayCm: metrics.headSwayCm,
                 swingTrustScore: metrics.trust,
                 captureDeviceInfo: metrics.captureDeviceInfo,
+                trackingDiagnostics: metrics.trackingDiagnostics ?? null,
                 ...videoPatch,
               },
               { immediate: true },
@@ -2929,6 +2958,7 @@ function ExerciseLogContent({
                 medBallReleaseHeightCm: metrics.releaseHeightCm,
                 medBallTrustScore: metrics.trust,
                 captureDeviceInfo: metrics.captureDeviceInfo,
+                trackingDiagnostics: metrics.trackingDiagnostics ?? null,
                 ...videoPatch,
               },
               { immediate: true },
@@ -2951,6 +2981,7 @@ function ExerciseLogContent({
                 kbSwingPeakHeightCm: metrics.peakHeightCm,
                 kbSwingTrustScore: metrics.trust,
                 captureDeviceInfo: metrics.captureDeviceInfo,
+                trackingDiagnostics: metrics.trackingDiagnostics ?? null,
                 ...videoPatch,
               },
               { immediate: true },

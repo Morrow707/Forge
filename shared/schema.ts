@@ -2062,6 +2062,10 @@ export const workoutSetEntries = pgTable(
   // captureDeviceInfoSchema's own comment. Null for sets logged before this existed, and for
   // any set that isn't camera-tracked (nothing to capture).
   captureDeviceInfo: json("capture_device_info"),
+  // Pipeline-stage diagnostics (calibration, body-pose, object detection, why an empty set came
+  // back empty) -- see trackingDiagnosticsSchema's own comment. Null for sets logged before
+  // this existed, and for any set that isn't camera-tracked.
+  trackingDiagnostics: json("tracking_diagnostics"),
   },
   (table) => ({
     // Same reasoning as workoutLogEntries.workoutLogIdx just above -- the
@@ -5943,6 +5947,63 @@ export const captureDeviceInfoSchema = z.object({
   adjustingExposureSampleCount: z.number().optional().nullable(),
 });
 
+// Pipeline-level diagnostics for a single tracked set -- why tracking succeeded or failed, and
+// what each stage (calibration, body-pose detection, object/implement detection) actually saw
+// along the way. Distinct from captureDeviceInfo above (device/lens/format context only) and
+// from trustScores (per-rep confidence on already-successful tracking) -- this is the "what
+// actually happened in the pipeline" record, most valuable on a set that came back with no
+// tracked data at all (see av-bar-tracker-dialog.tsx's saveEmptyAndWarn and its siblings),
+// where every other field on this row is empty and this is the only place left to look. Built
+// client-side by tracking-diagnostics.ts's buildTrackingDiagnostics from data every AV tracker
+// dialog already has in hand (the raw per-frame Vision output, the calibration result) --
+// nothing new captured natively, just packaged and persisted instead of discarded.
+export const trackingDiagnosticsSchema = z.object({
+  outcome: z.enum(["tracked", "empty_calibration_failed", "empty_no_clean_read"]),
+  // The exact toast message shown to the athlete in the moment (see saveEmptyAndWarn) -- null
+  // when outcome is "tracked".
+  message: z.string().optional().nullable(),
+  // analyzeAvRecording's own return value (AvBodyTrackingPlugin.swift's analyzeRecording) --
+  // how many frames Vision looked at vs. how many it found a body in, and how long the
+  // on-device pass took.
+  recording: z
+    .object({
+      frameCount: z.number(),
+      trackedFrameCount: z.number(),
+      elapsedSeconds: z.number(),
+    })
+    .optional()
+    .nullable(),
+  // "The AI" -- VNDetectHumanBodyPoseRequest's own per-frame output, summarized: how many of
+  // the analyzed frames had a body at all, and how confident it was in the wrist joints
+  // specifically (the one every tracker's fusion math actually leans on).
+  bodyPose: z.object({
+    framesTotal: z.number(),
+    framesWithBody: z.number(),
+    avgWristConfidence: z.number().optional().nullable(),
+  }),
+  // Object detection -- AvImplementTracker.swift's per-frame bar/implement lock, summarized the
+  // same way. All-zero here on an exercise that uses a bar/implement is the single most useful
+  // "why did this fail" signal: it means the implement tracker never found anything to lock
+  // onto for the whole clip, regardless of how well the body itself tracked.
+  objectDetection: z.object({
+    framesWithLeftImplement: z.number(),
+    framesWithRightImplement: z.number(),
+    avgImplementConfidence: z.number().optional().nullable(),
+  }),
+  // Which of pose-tracking.ts's two calibration methods (nose-to-ankle, or the shoulder-to-
+  // ankle fallback) each frame actually resolved through -- see calibrationMethodBreakdown's
+  // own comment. unresolvedFrames > 0 across the whole clip is why calibration failed.
+  calibration: z
+    .object({
+      scaleFactor: z.number().optional().nullable(),
+      noseToAnkleFrames: z.number(),
+      shoulderToAnkleFrames: z.number(),
+      unresolvedFrames: z.number(),
+    })
+    .optional()
+    .nullable(),
+});
+
 // One entry per detected jump within a "jump" tracking-mode set -- see
 // jump-tracking.ts's summarizeJumpSet for how these are derived from the
 // ankle-height trace. Distinct from repBreakdownEntrySchema above since a
@@ -6018,6 +6079,7 @@ export const setLogInputSchema = z.object({
   horizontalLoadDistanceYards: z.number().optional().nullable(),
   horizontalLoadAvgSpeedYardsPerSec: z.number().optional().nullable(),
   captureDeviceInfo: captureDeviceInfoSchema.optional().nullable(),
+  trackingDiagnostics: trackingDiagnosticsSchema.optional().nullable(),
 });
 
 export const logEntryInputSchema = z

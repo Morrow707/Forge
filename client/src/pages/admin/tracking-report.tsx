@@ -25,6 +25,7 @@ type TrackingReportEntry = {
   dataPoints: ReportField[];
   trust: ReportField[];
   device: ReportField[];
+  diagnostics: ReportField[];
 };
 
 function trustBadgeClass(value: string): string {
@@ -35,6 +36,9 @@ function trustBadgeClass(value: string): string {
 
 function EntryCard({ entry }: { entry: TrackingReportEntry }) {
   const [showDevice, setShowDevice] = useState(false);
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const failureReason = entry.diagnostics.find((f) => f.label === "Why this set has no data");
+  const restOfDiagnostics = entry.diagnostics.filter((f) => f !== failureReason);
   return (
     <Card>
       <CardContent className="space-y-3 p-4">
@@ -77,6 +81,17 @@ function EntryCard({ entry }: { entry: TrackingReportEntry }) {
           </dl>
         )}
 
+        {/* The single most useful line on an empty set -- exactly which pipeline stage gave up
+            and why (calibration never resolved, or no clean rep-phase in the trace), instead of
+            leaving "no data points recorded" as the only signal. Surfaced unconditionally
+            (not behind the Pipeline diagnostics toggle below) since this is normally the first
+            thing worth reading on a failed set. */}
+        {failureReason && (
+          <p className="rounded-md border border-destructive/30 bg-destructive/10 px-2 py-1.5 text-xs text-destructive">
+            {failureReason.value}
+          </p>
+        )}
+
         {entry.trust.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {entry.trust.map((t, i) => (
@@ -104,6 +119,29 @@ function EntryCard({ entry }: { entry: TrackingReportEntry }) {
             {showDevice && (
               <dl className="mt-1.5 space-y-1 rounded-md bg-muted/30 p-2 text-[11px]">
                 {entry.device.map((f) => (
+                  <div key={f.label} className="flex justify-between gap-2">
+                    <dt className="shrink-0 text-muted-foreground">{f.label}</dt>
+                    <dd className="text-right">{f.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+          </div>
+        )}
+
+        {restOfDiagnostics.length > 0 && (
+          <div>
+            <button
+              type="button"
+              onClick={() => setShowDiagnostics((v) => !v)}
+              className="flex items-center gap-1 text-[11px] font-semibold text-muted-foreground hover:text-foreground"
+            >
+              {showDiagnostics ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+              Pipeline diagnostics
+            </button>
+            {showDiagnostics && (
+              <dl className="mt-1.5 space-y-1 rounded-md bg-muted/30 p-2 text-[11px]">
+                {restOfDiagnostics.map((f) => (
                   <div key={f.label} className="flex justify-between gap-2">
                     <dt className="shrink-0 text-muted-foreground">{f.label}</dt>
                     <dd className="text-right">{f.value}</dd>

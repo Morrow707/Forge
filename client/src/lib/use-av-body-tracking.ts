@@ -198,7 +198,13 @@ export function useAvBodyTracking(active: boolean) {
   // plugin's own "Not recording" guard and surfaces as a spurious error on what the athlete
   // experienced as a single, ordinary tap.
   async function stopRecordingAndAnalyze(): Promise<
-    { blob: Blob; rawFrames: NativePoseFrame[]; captureDeviceInfo: CaptureDeviceInfo } | null
+    | {
+        blob: Blob;
+        rawFrames: NativePoseFrame[];
+        captureDeviceInfo: CaptureDeviceInfo;
+        recordingStats: { frameCount: number; trackedFrameCount: number; elapsedSeconds: number };
+      }
+    | null
   > {
     if (stoppingRef.current) return null;
     stoppingRef.current = true;
@@ -210,7 +216,13 @@ export function useAvBodyTracking(active: boolean) {
   }
 
   async function doStopRecordingAndAnalyze(): Promise<
-    { blob: Blob; rawFrames: NativePoseFrame[]; captureDeviceInfo: CaptureDeviceInfo } | null
+    | {
+        blob: Blob;
+        rawFrames: NativePoseFrame[];
+        captureDeviceInfo: CaptureDeviceInfo;
+        recordingStats: { frameCount: number; trackedFrameCount: number; elapsedSeconds: number };
+      }
+    | null
   > {
     setRecording(false);
     setAnalyzing(true);
@@ -238,8 +250,9 @@ export function useAvBodyTracking(active: boolean) {
       rawFrames.push(frame);
       setAnalyzedFrames((n) => n + 1);
     });
+    let recordingStats: { frameCount: number; trackedFrameCount: number; elapsedSeconds: number };
     try {
-      await analyzeAvRecording(path);
+      recordingStats = await analyzeAvRecording(path);
     } catch (err) {
       unsubscribe();
       void deleteAvRecording(path);
@@ -254,7 +267,7 @@ export function useAvBodyTracking(active: boolean) {
     void deleteAvRecording(path);
     recordingPathRef.current = null;
     setAnalyzing(false);
-    return { blob, rawFrames, captureDeviceInfo };
+    return { blob, rawFrames, captureDeviceInfo, recordingStats };
   }
 
   function cancelAnalysis() {

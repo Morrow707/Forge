@@ -26,11 +26,13 @@ import {
   LOWER_BODY_MOVEMENT_TYPES,
   wristConfidence,
   calibrateFromFrames,
+  calibrationMethodBreakdown,
   scaleWorldLandmarks,
   type PoseFrame,
   type CameraAlignment,
   type FormFaultThresholds,
 } from "@/lib/pose-tracking";
+import { buildTrackingDiagnostics, type TrackingDiagnostics } from "@/lib/tracking-diagnostics";
 import {
   summarizeTrackedSet,
   interpolateOcclusionGap,
@@ -183,7 +185,13 @@ export function AvBarTrackerDialog({
   // still wants a video of every set even with no trustworthy numbers to go
   // with it, same reasoning as ArBarTrackerDialog/AvJumpTrackerDialog's own
   // near-identical branches.
-  async function saveEmptyAndWarn(blob: Blob, message: string) {
+  async function saveEmptyAndWarn(
+    blob: Blob,
+    message: string,
+    captureDeviceInfo: CaptureDeviceInfo,
+    trackingDiagnostics: TrackingDiagnostics,
+  ) {
+    const emptyMetrics: RepMetrics = { ...EMPTY_REP_METRICS, captureDeviceInfo, trackingDiagnostics };
     if (recordVideo) {
       setSaving(true);
       setUploadProgress(0);
@@ -203,9 +211,9 @@ export function AvBarTrackerDialog({
               { duration: 10000 },
             );
           }
-          onCapture(EMPTY_REP_METRICS);
+          onCapture(emptyMetrics);
         } else {
-          onCapture(EMPTY_REP_METRICS, result.url);
+          onCapture(emptyMetrics, result.url);
         }
         onOpenChange(false);
       } catch (err) {
@@ -222,16 +230,32 @@ export function AvBarTrackerDialog({
   async function stopTracking() {
     const result = await stopRecordingAndAnalyze();
     if (!result) return; // error/cancellation already reported by the hook
-    await finishWithRecording(result.blob, result.rawFrames, result.captureDeviceInfo);
+    await finishWithRecording(result.blob, result.rawFrames, result.captureDeviceInfo, result.recordingStats);
   }
 
-  async function finishWithRecording(blob: Blob, rawFrames: NativePoseFrame[], captureDeviceInfo: CaptureDeviceInfo) {
+  async function finishWithRecording(
+    blob: Blob,
+    rawFrames: NativePoseFrame[],
+    captureDeviceInfo: CaptureDeviceInfo,
+    recordingStats: { frameCount: number; trackedFrameCount: number; elapsedSeconds: number },
+  ) {
     const calibrationInput = rawFrames.map((f) => ({ worldLandmarks: visionJointsToWorldLandmarks(f) }));
     const scaleFactor = calibrateFromFrames(calibrationInput, heightIn);
+    const calibrationFrames = calibrationMethodBreakdown(calibrationInput);
     if (scaleFactor == null) {
+      const message =
+        "Couldn't calibrate real-world scale for this take -- make sure your height is set in your profile and you're clearly visible standing at some point in frame.";
       await saveEmptyAndWarn(
         blob,
-        "Couldn't calibrate real-world scale for this take -- make sure your height is set in your profile and you're clearly visible standing at some point in frame.",
+        message,
+        captureDeviceInfo,
+        buildTrackingDiagnostics({
+          outcome: "empty_calibration_failed",
+          message,
+          rawFrames,
+          recording: recordingStats,
+          calibration: { scaleFactor: null, ...calibrationFrames },
+        }),
       );
       return;
     }
@@ -347,7 +371,19 @@ export function AvBarTrackerDialog({
 
     const metrics = summarizeTrackedSet(trace, loadKg, heightIn, undefined, rejectionEvents);
     if (!metrics) {
-      await saveEmptyAndWarn(blob, "Couldn't get a clean read -- make sure the bar stays in frame throughout the set.");
+      const message = "Couldn't get a clean read -- make sure the bar stays in frame throughout the set.";
+      await saveEmptyAndWarn(
+        blob,
+        message,
+        captureDeviceInfo,
+        buildTrackingDiagnostics({
+          outcome: "empty_no_clean_read",
+          message,
+          rawFrames,
+          recording: recordingStats,
+          calibration: { scaleFactor, ...calibrationFrames },
+        }),
+      );
       return;
     }
 
@@ -424,6 +460,12 @@ export function AvBarTrackerDialog({
       chainPenalties,
     );
     metrics.captureDeviceInfo = captureDeviceInfo;
+    metrics.trackingDiagnostics = buildTrackingDiagnostics({
+      outcome: "tracked",
+      rawFrames,
+      recording: recordingStats,
+      calibration: { scaleFactor, ...calibrationFrames },
+    });
 
     if (!recordVideo) {
       onCapture(metrics);

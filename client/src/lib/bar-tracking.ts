@@ -5,6 +5,7 @@
 // Type-only -- erased at compile time, so this doesn't actually pull native-av-preview.ts's
 // real Capacitor bridge code (or its runtime dependency on a native platform) into this module.
 import type { CaptureDeviceInfo } from "./native-av-preview";
+import type { TrackingDiagnostics } from "./tracking-diagnostics";
 
 // x/y/z are real-world meters from MediaPipe's worldLandmarks (hip-centered
 // origin), not pixels -- no pixelsPerMeter calibration needed to interpret
@@ -170,6 +171,10 @@ export type RepMetrics = {
   // recording -- populated by the caller from use-av-body-tracking.ts's
   // stopRecordingAndAnalyze, same "caller fills it in" pattern as trustScores above.
   captureDeviceInfo?: CaptureDeviceInfo | null;
+  // Pipeline-stage diagnostics (calibration, body-pose/object-detection frame stats) --
+  // populated by the caller from tracking-diagnostics.ts's buildTrackingDiagnostics, same
+  // "caller fills it in" pattern as captureDeviceInfo above.
+  trackingDiagnostics?: TrackingDiagnostics | null;
 };
 
 // Decimates a raw world-space (meters) trace to at most ~200 points and

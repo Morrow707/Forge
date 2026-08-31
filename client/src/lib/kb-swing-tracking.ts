@@ -28,6 +28,7 @@ import {
 } from "./bar-tracking";
 import type { SetTrustScore } from "./pose-tracking";
 import type { CaptureDeviceInfo } from "./native-av-preview";
+import type { TrackingDiagnostics } from "./tracking-diagnostics";
 
 // Elite/hard kettlebell swing bell speeds run roughly 3-6 m/s at the bottom of the arc --
 // meaningfully faster than a controlled barbell lift's own MAX_PLAUSIBLE_LIFT_VELOCITY_MPS (3
@@ -113,6 +114,9 @@ export type KbSwingSetMetrics = {
   // Filled in by the dialog, same pattern as trust above -- see bar-tracking.ts's RepMetrics'
   // own comment on this field.
   captureDeviceInfo: CaptureDeviceInfo | null;
+  // Filled in by the dialog, same pattern as captureDeviceInfo above -- see bar-tracking.ts's
+  // RepMetrics' own comment on this field.
+  trackingDiagnostics?: TrackingDiagnostics | null;
 };
 
 // heightIn: same athlete-height nudge to the rep-amplitude floor every other tracked mode

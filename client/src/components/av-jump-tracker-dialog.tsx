@@ -17,14 +17,16 @@ import {
   detectFormFaults,
   computeLandingAsymmetry,
   calibrateFromFrames,
+  calibrationMethodBreakdown,
   scaleWorldLandmarks,
   type PoseFrame,
   type FormFaultThresholds,
 } from "@/lib/pose-tracking";
 import { summarizeJumpSet, type JumpSetMetrics } from "@/lib/jump-tracking";
-import type { CaptureDeviceInfo } from "@/lib/native-av-preview";
+import type { CaptureDeviceInfo, PoseFrame as NativePoseFrame } from "@/lib/native-av-preview";
 import type { TrackedPoint } from "@/lib/bar-tracking";
 import { videoFilenameForBlob } from "@/lib/video-recording";
+import { buildTrackingDiagnostics } from "@/lib/tracking-diagnostics";
 
 /** AVFoundation + Vision jump tracking (vertical/broad/box) -- the second real tracker built
  * on the new pipeline, directly parallel to ar-jump-tracker-dialog.tsx (which stays completely
@@ -113,6 +115,8 @@ export function AvJumpTrackerDialog({
       result.blob,
       result.rawFrames.map((f) => ({ t: f.timestamp * 1000, worldLandmarks: visionJointsToWorldLandmarks(f) })),
       result.captureDeviceInfo,
+      result.rawFrames,
+      result.recordingStats,
     );
   }
 
@@ -120,10 +124,22 @@ export function AvJumpTrackerDialog({
     blob: Blob,
     rawFrames: { t: number; worldLandmarks: PoseFrame["worldLandmarks"] }[],
     captureDeviceInfo: CaptureDeviceInfo,
+    nativeRawFrames: NativePoseFrame[],
+    recordingStats: { frameCount: number; trackedFrameCount: number; elapsedSeconds: number },
   ) {
     const scaleFactor = calibrateFromFrames(rawFrames, heightIn);
+    const calibrationFrames = calibrationMethodBreakdown(rawFrames);
 
     if (scaleFactor == null) {
+      const diagnostics = buildTrackingDiagnostics({
+        outcome: "empty_calibration_failed",
+        message:
+          "Couldn't calibrate real-world scale for this take -- make sure your height is set in your profile and you're clearly visible standing at some point in frame.",
+        rawFrames: nativeRawFrames,
+        recording: recordingStats,
+        calibration: { scaleFactor: null, ...calibrationFrames },
+      });
+      const emptyMetrics: JumpSetMetrics = { ...EMPTY_JUMP_METRICS, captureDeviceInfo, trackingDiagnostics: diagnostics };
       // No number is better than a wrong one -- see this file's own comment
       // on why an uncalibrated Vision reading can't degrade gracefully the
       // way ARKit's can. Same "couldn't get a clean read, but the clip
@@ -148,9 +164,9 @@ export function AvJumpTrackerDialog({
                 { duration: 10000 },
               );
             }
-            onCapture(EMPTY_JUMP_METRICS);
+            onCapture(emptyMetrics);
           } else {
-            onCapture(EMPTY_JUMP_METRICS, result.url);
+            onCapture(emptyMetrics, result.url);
           }
           onOpenChange(false);
         } catch (err) {
@@ -181,6 +197,14 @@ export function AvJumpTrackerDialog({
 
     const metrics = summarizeJumpSet(trace, heightIn, jumpHeightOutlierPercent ?? undefined);
     if (!metrics) {
+      const diagnostics = buildTrackingDiagnostics({
+        outcome: "empty_no_clean_read",
+        message: "Couldn't get a clean read -- make sure your feet leave the ground clearly in frame.",
+        rawFrames: nativeRawFrames,
+        recording: recordingStats,
+        calibration: { scaleFactor, ...calibrationFrames },
+      });
+      const emptyMetrics: JumpSetMetrics = { ...EMPTY_JUMP_METRICS, captureDeviceInfo, trackingDiagnostics: diagnostics };
       if (recordVideo) {
         setSaving(true);
         setUploadProgress(0);
@@ -200,9 +224,9 @@ export function AvJumpTrackerDialog({
                 { duration: 10000 },
               );
             }
-            onCapture(EMPTY_JUMP_METRICS);
+            onCapture(emptyMetrics);
           } else {
-            onCapture(EMPTY_JUMP_METRICS, result.url);
+            onCapture(emptyMetrics, result.url);
           }
           onOpenChange(false);
         } catch (err) {
@@ -233,6 +257,12 @@ export function AvJumpTrackerDialog({
       metrics.repBreakdown.map((rep) => ({ landingT: rep.landingT })),
     );
     metrics.captureDeviceInfo = captureDeviceInfo;
+    metrics.trackingDiagnostics = buildTrackingDiagnostics({
+      outcome: "tracked",
+      rawFrames: nativeRawFrames,
+      recording: recordingStats,
+      calibration: { scaleFactor, ...calibrationFrames },
+    });
 
     if (!recordVideo) {
       onCapture(metrics);

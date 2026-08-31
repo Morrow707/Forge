@@ -1,6 +1,7 @@
 // Type-only -- see bar-tracking.ts's own comment on why this import is safe (erased at
 // compile time, no runtime Capacitor dependency pulled into this pure module).
 import type { CaptureDeviceInfo } from "./native-av-preview";
+import type { TrackingDiagnostics } from "./tracking-diagnostics";
 
 // Jump-flight analysis for the camera tracker's "jump" mode, applied to
 // ankle-midpoint vertical position instead of wrist/bar position. This uses
@@ -111,6 +112,9 @@ export type JumpSetMetrics = {
   // Session-level camera/AI context for this recording -- see bar-tracking.ts's RepMetrics'
   // own comment on this same field.
   captureDeviceInfo?: CaptureDeviceInfo | null;
+  // Pipeline-stage diagnostics -- see bar-tracking.ts's RepMetrics' own comment on this same
+  // field.
+  trackingDiagnostics?: TrackingDiagnostics | null;
 };
 
 const BASE_MIN_FLIGHT_AMPLITUDE_CM = 15;

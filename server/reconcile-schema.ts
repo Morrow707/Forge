@@ -2129,6 +2129,11 @@ CREATE TABLE IF NOT EXISTS "pricing_overrides" (
 -- existing one).
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "stale_account_pending_deletion_at" date;
 ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "stale_account_pending_deletion_at" date;
+
+-- Pipeline-stage diagnostics for a tracked recording (calibration method, body-pose/object-
+-- detection frame stats, and why an empty set came back empty) -- see
+-- trackingDiagnosticsSchema's own comment in shared/schema.ts.
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "tracking_diagnostics" json;
 `;
 
 async function main() {

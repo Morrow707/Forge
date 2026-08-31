@@ -613,6 +613,46 @@ function impliedStandingHeightPixels(worldLandmarks: Landmark[], verticalSign: 1
   return shoulderToAnkle > 0 ? shoulderToAnkle / SHOULDER_HEIGHT_FRACTION : null;
 }
 
+// Diagnostic-only mirror of impliedStandingHeightPixels' own branching, for the AR Diagnosis
+// admin page (see tracking-diagnostics.ts) -- reports which method each frame actually
+// resolved calibration through (or neither) without touching calibrateFromFrames' own
+// median-of-samples math at all. Deliberately a separate pass over the same frames rather
+// than threading a method tag through the real calibration path -- calibrateFromFrames has
+// six call sites across every AV tracker dialog, and this keeps that path's behavior
+// completely unchanged while still answering "why didn't this calibrate" for a failed set.
+export function calibrationMethodBreakdown(
+  frames: { worldLandmarks: Landmark[] }[],
+): { noseToAnkleFrames: number; shoulderToAnkleFrames: number; unresolvedFrames: number } {
+  let noseToAnkleFrames = 0;
+  let shoulderToAnkleFrames = 0;
+  let unresolvedFrames = 0;
+  let lastSign: 1 | -1 = 1;
+  for (const f of frames) {
+    const sign: 1 | -1 = worldVerticalSign(f.worldLandmarks) ?? lastSign;
+    lastSign = sign;
+    const lAnkle = f.worldLandmarks[POSE_LANDMARKS.LEFT_ANKLE];
+    const rAnkle = f.worldLandmarks[POSE_LANDMARKS.RIGHT_ANKLE];
+    if (!visible(lAnkle) || !visible(rAnkle)) {
+      unresolvedFrames++;
+      continue;
+    }
+    const ankleY = (lAnkle.y + rAnkle.y) / 2;
+    const nose = f.worldLandmarks[POSE_LANDMARKS.NOSE];
+    if (visible(nose) && sign * (ankleY - nose.y) > 0) {
+      noseToAnkleFrames++;
+      continue;
+    }
+    const lShoulder = f.worldLandmarks[POSE_LANDMARKS.LEFT_SHOULDER];
+    const rShoulder = f.worldLandmarks[POSE_LANDMARKS.RIGHT_SHOULDER];
+    if (visible(lShoulder) && visible(rShoulder) && sign * (ankleY - (lShoulder.y + rShoulder.y) / 2) > 0) {
+      shoulderToAnkleFrames++;
+    } else {
+      unresolvedFrames++;
+    }
+  }
+  return { noseToAnkleFrames, shoulderToAnkleFrames, unresolvedFrames };
+}
+
 // First of Vision's two calibration mechanisms: the athlete's own known real height compared
 // against their implied height in the pipeline's pixel-space units, at the same "standing
 // fully visible" moment computeImpliedStandingHeightM's callers already sample from. Returns

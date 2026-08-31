@@ -15,6 +15,7 @@ import { visionJointsToWorldLandmarks, visionImplementToPoint, type ImplementPoi
 import type { PoseFrame as NativePoseFrame, CaptureDeviceInfo } from "@/lib/native-av-preview";
 import {
   calibrateFromFrames,
+  calibrationMethodBreakdown,
   scaleWorldLandmarks,
   POSE_LANDMARKS,
   visible,
@@ -24,6 +25,7 @@ import {
 import { summarizeKbSwingSet, MAX_PLAUSIBLE_KB_SWING_SPEED_MPS, type KbSwingSetMetrics } from "@/lib/kb-swing-tracking";
 import { MIN_TRACKING_CONFIDENCE, type TrackedPoint } from "@/lib/bar-tracking";
 import { videoFilenameForBlob } from "@/lib/video-recording";
+import { buildTrackingDiagnostics, type TrackingDiagnostics } from "@/lib/tracking-diagnostics";
 
 /** AVFoundation + Vision kettlebell swing tracking -- the "arc" trajectory pattern's first
  * built mode (see kb-swing-tracking.ts's own file comment for the full reasoning: a swing's
@@ -103,7 +105,13 @@ export function AvKbSwingTrackerDialog({
     setUploadProgress(0);
   }, [open]);
 
-  async function saveEmptyAndWarn(blob: Blob, message: string) {
+  async function saveEmptyAndWarn(
+    blob: Blob,
+    message: string,
+    captureDeviceInfo: CaptureDeviceInfo,
+    trackingDiagnostics: TrackingDiagnostics,
+  ) {
+    const emptyMetrics: KbSwingSetMetrics = { ...EMPTY_KB_SWING_METRICS, captureDeviceInfo, trackingDiagnostics };
     if (recordVideo) {
       setSaving(true);
       setUploadProgress(0);
@@ -123,9 +131,9 @@ export function AvKbSwingTrackerDialog({
               { duration: 10000 },
             );
           }
-          onCapture(EMPTY_KB_SWING_METRICS);
+          onCapture(emptyMetrics);
         } else {
-          onCapture(EMPTY_KB_SWING_METRICS, result.url);
+          onCapture(emptyMetrics, result.url);
         }
         onOpenChange(false);
       } catch (err) {
@@ -142,16 +150,32 @@ export function AvKbSwingTrackerDialog({
   async function stopTracking() {
     const result = await stopRecordingAndAnalyze();
     if (!result) return; // error/cancellation already reported by the hook
-    await finishWithRecording(result.blob, result.rawFrames, result.captureDeviceInfo);
+    await finishWithRecording(result.blob, result.rawFrames, result.captureDeviceInfo, result.recordingStats);
   }
 
-  async function finishWithRecording(blob: Blob, rawFrames: NativePoseFrame[], captureDeviceInfo: CaptureDeviceInfo) {
+  async function finishWithRecording(
+    blob: Blob,
+    rawFrames: NativePoseFrame[],
+    captureDeviceInfo: CaptureDeviceInfo,
+    recordingStats: { frameCount: number; trackedFrameCount: number; elapsedSeconds: number },
+  ) {
     const calibrationInput = rawFrames.map((f) => ({ worldLandmarks: visionJointsToWorldLandmarks(f) }));
     const scaleFactor = calibrateFromFrames(calibrationInput, heightIn);
+    const calibrationFrames = calibrationMethodBreakdown(calibrationInput);
     if (scaleFactor == null) {
+      const message =
+        "Couldn't calibrate real-world scale for this take -- make sure your height is set in your profile and you're clearly visible standing at some point in frame.";
       await saveEmptyAndWarn(
         blob,
-        "Couldn't calibrate real-world scale for this take -- make sure your height is set in your profile and you're clearly visible standing at some point in frame.",
+        message,
+        captureDeviceInfo,
+        buildTrackingDiagnostics({
+          outcome: "empty_calibration_failed",
+          message,
+          rawFrames,
+          recording: recordingStats,
+          calibration: { scaleFactor: null, ...calibrationFrames },
+        }),
       );
       return;
     }
@@ -195,7 +219,19 @@ export function AvKbSwingTrackerDialog({
 
     const wristMetrics = summarizeKbSwingSet(trace, heightIn);
     if (!wristMetrics) {
-      await saveEmptyAndWarn(blob, "Couldn't get a clean read -- make sure both hands and the kettlebell stay in frame throughout the set.");
+      const message = "Couldn't get a clean read -- make sure both hands and the kettlebell stay in frame throughout the set.";
+      await saveEmptyAndWarn(
+        blob,
+        message,
+        captureDeviceInfo,
+        buildTrackingDiagnostics({
+          outcome: "empty_no_clean_read",
+          message,
+          rawFrames,
+          recording: recordingStats,
+          calibration: { scaleFactor, ...calibrationFrames },
+        }),
+      );
       return;
     }
 
@@ -240,6 +276,12 @@ export function AvKbSwingTrackerDialog({
       peakSpeedMps: blended?.speedMps ?? wristMetrics.peakSpeedMps,
       trust: blended?.trust ?? null,
       captureDeviceInfo,
+      trackingDiagnostics: buildTrackingDiagnostics({
+        outcome: "tracked",
+        rawFrames,
+        recording: recordingStats,
+        calibration: { scaleFactor, ...calibrationFrames },
+      }),
     };
 
     if (!recordVideo) {

@@ -26,6 +26,25 @@ type CaptureDeviceInfo = {
   adjustingFocusSampleCount?: number | null;
   adjustingExposureSampleCount?: number | null;
 };
+// Mirrors client/src/lib/tracking-diagnostics.ts's TrackingDiagnostics -- kept in sync by hand,
+// same pattern CaptureDeviceInfo above already uses.
+type TrackingDiagnostics = {
+  outcome: "tracked" | "empty_calibration_failed" | "empty_no_clean_read";
+  message?: string | null;
+  recording?: { frameCount: number; trackedFrameCount: number; elapsedSeconds: number } | null;
+  bodyPose: { framesTotal: number; framesWithBody: number; avgWristConfidence?: number | null };
+  objectDetection: {
+    framesWithLeftImplement: number;
+    framesWithRightImplement: number;
+    avgImplementConfidence?: number | null;
+  };
+  calibration?: {
+    scaleFactor: number | null;
+    noseToAnkleFrames: number;
+    shoulderToAnkleFrames: number;
+    unresolvedFrames: number;
+  } | null;
+};
 
 // Modes that run a second, independent object tracker (the barbell, the ball, the bell)
 // alongside body-pose tracking, rather than deriving everything from joints alone -- matches
@@ -211,6 +230,77 @@ function formatTrust(r: TrackedSetRow): ReportField[] {
   return lines;
 }
 
+function pct(n: number | null | undefined): string | null {
+  return n == null ? null : `${Math.round(n * 100)}%`;
+}
+
+// Pipeline-stage diagnostics -- what calibration, body-pose detection ("the AI"), and
+// object/implement detection actually saw for this recording, and (most valuable on a set with
+// no data points at all -- see formatDataPoints returning nothing) exactly why tracking came
+// back empty instead of just leaving the coach to guess. See trackingDiagnosticsSchema's own
+// comment in shared/schema.ts.
+function formatTrackingDiagnostics(r: TrackedSetRow): ReportField[] {
+  const d = r.trackingDiagnostics as TrackingDiagnostics | null | undefined;
+  if (!d) {
+    return [
+      {
+        label: "Pipeline diagnostics",
+        value: "not captured for this set (recorded before this existed, or the set isn't camera-tracked)",
+      },
+    ];
+  }
+  const lines: ReportField[] = [];
+  if (d.outcome !== "tracked") {
+    lines.push({
+      label: "Why this set has no data",
+      value:
+        d.message ??
+        (d.outcome === "empty_calibration_failed" ? "Calibration failed." : "Couldn't get a clean read."),
+    });
+  }
+  if (d.recording) {
+    lines.push({
+      label: "Frames analyzed",
+      value: `${d.recording.trackedFrameCount}/${d.recording.frameCount} had a body detected -- ${
+        Math.round(d.recording.elapsedSeconds * 10) / 10
+      }s on-device to analyze`,
+    });
+  }
+  lines.push({
+    label: "Body-pose detection (\"the AI\")",
+    value: `${d.bodyPose.framesWithBody}/${d.bodyPose.framesTotal} frames had a body${
+      pct(d.bodyPose.avgWristConfidence) ? `, avg wrist confidence ${pct(d.bodyPose.avgWristConfidence)}` : ""
+    }`,
+  });
+  const framesTotal = d.bodyPose.framesTotal;
+  const noImplementAtAll =
+    d.objectDetection.framesWithLeftImplement === 0 && d.objectDetection.framesWithRightImplement === 0;
+  lines.push({
+    label: "Object detection (implement tracker)",
+    value: noImplementAtAll
+      ? "never locked onto an implement in this clip"
+      : `left hand ${d.objectDetection.framesWithLeftImplement}/${framesTotal}, right hand ${
+          d.objectDetection.framesWithRightImplement
+        }/${framesTotal} frames${
+          pct(d.objectDetection.avgImplementConfidence)
+            ? `, avg confidence ${pct(d.objectDetection.avgImplementConfidence)}`
+            : ""
+        }`,
+  });
+  if (d.calibration) {
+    const c = d.calibration;
+    const totalFrames = c.noseToAnkleFrames + c.shoulderToAnkleFrames + c.unresolvedFrames;
+    lines.push({
+      label: "Calibration",
+      value:
+        c.scaleFactor != null
+          ? `succeeded -- nose-to-ankle on ${c.noseToAnkleFrames}/${totalFrames} frames, shoulder-to-ankle fallback on ${c.shoulderToAnkleFrames}/${totalFrames}`
+          : `failed -- unresolved (neither method found ankles+nose or ankles+shoulders) on ${c.unresolvedFrames}/${totalFrames} frames`,
+    });
+  }
+  return lines;
+}
+
 export type TrackingReportEntry = {
   date: string;
   athleteName: string;
@@ -225,6 +315,7 @@ export type TrackingReportEntry = {
   dataPoints: ReportField[];
   trust: ReportField[];
   device: ReportField[];
+  diagnostics: ReportField[];
 };
 
 // Shared assembly step both formatTrackingReport (plain text) and the JSON entries route build
@@ -247,6 +338,7 @@ function buildEntries(rows: TrackedSetRow[]): TrackingReportEntry[] {
       dataPoints: formatDataPoints(r),
       trust: formatTrust(r),
       device: formatCaptureDeviceInfo(r),
+      diagnostics: formatTrackingDiagnostics(r),
     };
   });
 }
@@ -281,6 +373,7 @@ export function formatTrackingReport(rows: TrackedSetRow[]): string {
         ...e.dataPoints.map((f) => `  ${f.label}: ${f.value}`),
         ...e.trust.map((f) => `  ${f.label}: ${f.value}`),
         e.dataPoints.length === 0 ? "  (no data points recorded for this set)" : null,
+        ...e.diagnostics.map((f) => `  ${f.label}: ${f.value}`),
       ]
         .filter((l): l is string => l != null)
         .join("\n"),
