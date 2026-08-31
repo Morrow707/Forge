@@ -568,19 +568,49 @@ export function scaleWorldLandmarks(worldLandmarks: Landmark[], factor: number):
 // this is a genuinely different calibration problem: bootstrapping meters-per-pixel-unit from
 // scratch, not nudging an existing metric estimate.
 
+// Average shoulder (acromion) height as a fraction of standing height --
+// Drillis & Contini's widely-cited anthropometric proportions, the same
+// family of "body segment as a fraction of stature" data ergonomics/
+// biomechanics references use. Only reached as a FALLBACK below when no
+// frame ever showed the athlete's whole body (nose to ankles) at once --
+// real people vary around this average more than a direct height
+// measurement does, so this is deliberately less precise than the primary
+// method, not a replacement for it.
+const SHOULDER_HEIGHT_FRACTION = 0.818;
+
 // Same nose-to-ankle-span idea as computeImpliedStandingHeightM, but returns the RAW pixel-
 // space span with no anthropometric NOSE_TO_CROWN_M add-on -- that 0.12m constant is
 // real-meters-specific, and estimating its pixel-space equivalent would need a scale factor
 // this function's own job is to produce, a circular dependency not worth introducing for a
 // small, consistent underestimate of true standing height.
+//
+// Falls back to a shoulder-to-ankle span (scaled by SHOULDER_HEIGHT_FRACTION above) when nose
+// isn't visible in any frame that has both ankles -- a phone mounted at a typical rack-facing
+// distance/height clips the top of the frame (the head, especially mid-rep when it tips down or
+// reaches overhead) far more often than it clips the feet, and requiring the exact nose-to-ankle
+// reading meant an athlete had to consciously stand back and check themselves fully into frame
+// before every single set for calibration to work at all. Shoulders are the most reliably
+// visible landmark pair in an ordinary lifting frame (already relied on elsewhere for exactly
+// this reason -- see implement-tracking.ts's own shoulderPixelsPerMeter), so this fallback
+// succeeds in most of the cases the strict version used to reject outright.
 function impliedStandingHeightPixels(worldLandmarks: Landmark[], verticalSign: 1 | -1): number | null {
-  const nose = worldLandmarks[POSE_LANDMARKS.NOSE];
   const lAnkle = worldLandmarks[POSE_LANDMARKS.LEFT_ANKLE];
   const rAnkle = worldLandmarks[POSE_LANDMARKS.RIGHT_ANKLE];
-  if (!visible(nose) || !visible(lAnkle) || !visible(rAnkle)) return null;
+  if (!visible(lAnkle) || !visible(rAnkle)) return null;
   const ankleY = (lAnkle.y + rAnkle.y) / 2;
-  const span = verticalSign * (ankleY - nose.y);
-  return span > 0 ? span : null;
+
+  const nose = worldLandmarks[POSE_LANDMARKS.NOSE];
+  if (visible(nose)) {
+    const span = verticalSign * (ankleY - nose.y);
+    if (span > 0) return span;
+  }
+
+  const lShoulder = worldLandmarks[POSE_LANDMARKS.LEFT_SHOULDER];
+  const rShoulder = worldLandmarks[POSE_LANDMARKS.RIGHT_SHOULDER];
+  if (!visible(lShoulder) || !visible(rShoulder)) return null;
+  const shoulderY = (lShoulder.y + rShoulder.y) / 2;
+  const shoulderToAnkle = verticalSign * (ankleY - shoulderY);
+  return shoulderToAnkle > 0 ? shoulderToAnkle / SHOULDER_HEIGHT_FRACTION : null;
 }
 
 // First of Vision's two calibration mechanisms: the athlete's own known real height compared
