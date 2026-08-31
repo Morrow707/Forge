@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogClose, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { resolveApiUrl } from "@/lib/queryClient";
-import { RotateCcw, Trash2, ThumbsUp, ThumbsDown, Wand2, X, Heart, Trophy } from "lucide-react";
+import { RotateCcw, Trash2, ThumbsUp, ThumbsDown, Wand2, X, Heart, Trophy, VideoOff } from "lucide-react";
 import { VideoAnalysisDialog } from "@/components/video-analysis-dialog";
 
 export type FlaggedSetVideo = {
@@ -85,6 +85,15 @@ export function SetVideoPreviewDialog({
   isPr?: boolean;
 }) {
   const [analyzing, setAnalyzing] = useState(false);
+  // Same reasoning as VideoAnalysisDialog's own loadError -- without this,
+  // a failed <video> load (an expired/malformed signed URL, a genuinely
+  // missing file) just silently renders the browser's bare "no source"
+  // icon with no explanation and no controls, indistinguishable from the
+  // video never having recorded at all.
+  const [loadError, setLoadError] = useState(false);
+  useEffect(() => {
+    setLoadError(false);
+  }, [videoUrl]);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {/* Full-screen (same pattern as VideoAnalysisDialog/
@@ -129,12 +138,24 @@ export function SetVideoPreviewDialog({
               PR
             </span>
           )}
-          <video
-            src={resolveApiUrl(videoUrl)}
-            controls
-            playsInline
-            className="h-full max-h-full w-full max-w-full object-contain"
-          />
+          {loadError ? (
+            <div className="flex flex-col items-center gap-2 px-6 text-center text-sm text-white/70">
+              <VideoOff className="h-8 w-8" />
+              This video couldn't be loaded — it may not have finished uploading, or the file is missing.
+            </div>
+          ) : (
+            <video
+              // Same cross-origin canvas-taint fix as VideoAnalysisDialog's
+              // own video element -- Analysis Tools below opens that exact
+              // dialog on this same video, which draws it onto a canvas.
+              crossOrigin="anonymous"
+              src={resolveApiUrl(videoUrl)}
+              controls
+              playsInline
+              className="h-full max-h-full w-full max-w-full object-contain"
+              onError={() => setLoadError(true)}
+            />
+          )}
         </div>
         <div className="shrink-0 space-y-3 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3">
           <Button variant="outline" className="w-full" onClick={() => setAnalyzing(true)}>
