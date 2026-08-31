@@ -169,7 +169,9 @@ function formatCaptureDeviceInfo(r: TrackedSetRow): ReportField[] {
     label: "Object tracker",
     value: usesObjectTracker
       ? "yes -- an independent motion-diff tracker followed the implement itself, alongside body-pose tracking"
-      : "no -- this mode reads body joints only, nothing else being tracked",
+      : "no -- this mode's own metrics are body joints only. The native implement tracker still " +
+        "runs on every frame regardless of mode (see Object detection under Pipeline diagnostics " +
+        "below for what it actually saw), but this mode doesn't factor that signal into its numbers.",
   });
   if (!info) {
     lines.push({
