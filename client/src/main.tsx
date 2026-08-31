@@ -25,7 +25,22 @@ if (import.meta.env.VITE_SENTRY_DSN) {
 // sessionStorage guard is a one-shot: if reloading doesn't actually help
 // (a genuinely broken deploy, not a stale tab), this falls through to the
 // normal ErrorBoundary fallback below instead of reload-looping forever.
-window.addEventListener("vite:preloadError", () => {
+//
+// event.preventDefault() matters here, confirmed against Vite's own
+// generated preload-helper source (node_modules/vite/dist/node/chunks --
+// the preload() function's handlePreloadError): the failed dynamic import
+// is caught internally and only re-thrown if this event's defaultPrevented
+// is still false after dispatch. Without this call, this listener still
+// kicks off the reload, but the original error is ALSO re-thrown right
+// after -- and since reload() doesn't halt JS execution immediately, that
+// re-thrown error was winning the race into React.lazy's Suspense boundary
+// and crashing into the Sentry ErrorBoundary a tick before the reload
+// actually took effect (exactly the "'text/html' is not a valid JavaScript
+// MIME type" TypeError Sentry flagged as a production crash -- the reload
+// recovery was already firing, this was just also reporting noise on the
+// way out).
+window.addEventListener("vite:preloadError", (event) => {
+  event.preventDefault();
   if (sessionStorage.getItem("reloaded-after-preload-error")) return;
   sessionStorage.setItem("reloaded-after-preload-error", "1");
   window.location.reload();
