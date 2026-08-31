@@ -19,12 +19,14 @@ import {
   calibrateFromFrames,
   calibrationMethodBreakdown,
   scaleWorldLandmarks,
+  POSE_LANDMARKS,
+  visible,
   type PoseFrame,
   type FormFaultThresholds,
 } from "@/lib/pose-tracking";
 import { summarizeJumpSet, type JumpSetMetrics } from "@/lib/jump-tracking";
 import type { CaptureDeviceInfo, PoseFrame as NativePoseFrame } from "@/lib/native-av-preview";
-import type { TrackedPoint } from "@/lib/bar-tracking";
+import { interpolateOcclusionGap, type TrackedPoint } from "@/lib/bar-tracking";
 import { videoFilenameForBlob } from "@/lib/video-recording";
 import { buildTrackingDiagnostics } from "@/lib/tracking-diagnostics";
 
@@ -188,12 +190,29 @@ export function AvJumpTrackerDialog({
       landmarks: [],
       worldLandmarks: scaleWorldLandmarks(f.worldLandmarks, scaleFactor),
     }));
-    const trace: TrackedPoint[] = frames
-      .map((f) => {
-        const point = deriveJumpPoint(f.worldLandmarks);
-        return point ? { t: f.t, x: point.x, y: point.y, z: point.z } : null;
-      })
-      .filter((p): p is TrackedPoint => p != null);
+    // Same occlusion-gap bridging av-bar-tracker-dialog.tsx's own trace-building loop already
+    // does. A jump's fastest, most blurred instant is exactly its mid-air phase -- a brief
+    // ankle dropout there is common, and previously just silently dropped that frame from the
+    // trace entirely rather than bridging it. On a set with a lot of scattered dropouts, that
+    // can leave summarizeJumpSet's takeoff/landing state machine too few real samples to ever
+    // register a genuine excursion as a jump at all -- exactly the "feet never left the ground"
+    // false negative on a real, completed jump.
+    const trace: TrackedPoint[] = [];
+    for (const f of frames) {
+      const point = deriveJumpPoint(f.worldLandmarks);
+      if (!point) continue;
+      const lAnkle = f.worldLandmarks[POSE_LANDMARKS.LEFT_ANKLE];
+      const rAnkle = f.worldLandmarks[POSE_LANDMARKS.RIGHT_ANKLE];
+      const lOk = visible(lAnkle);
+      const rOk = visible(rAnkle);
+      const confidence = lOk && rOk ? Math.min(lAnkle.visibility, rAnkle.visibility) : lOk ? lAnkle.visibility : rOk ? rAnkle.visibility : 0;
+      const trackedPoint: TrackedPoint = { t: f.t, x: point.x, y: point.y, z: point.z, confidence };
+      const prevPoint = trace[trace.length - 1];
+      if (prevPoint) {
+        for (const gapPoint of interpolateOcclusionGap(prevPoint, trackedPoint)) trace.push(gapPoint);
+      }
+      trace.push(trackedPoint);
+    }
 
     const metrics = summarizeJumpSet(trace, heightIn, jumpHeightOutlierPercent ?? undefined);
     if (!metrics) {
