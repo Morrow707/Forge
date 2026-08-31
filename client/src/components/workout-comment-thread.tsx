@@ -135,10 +135,14 @@ export function WorkoutCommentThread({
               <p className="mt-0.5 whitespace-pre-wrap text-muted-foreground">{c.body}</p>
               {c.imageUrl && (
                 <a
-                  href={c.imageUrl}
+                  // Native app: Browser.open() (inside externalLinkClick) needs an
+                  // absolute URL, not the bare "/uploads/..." path the API returns --
+                  // a relative path here silently no-ops on tap (caught + swallowed
+                  // by that helper's own .catch). resolveApiUrl is a no-op on web.
+                  href={resolveApiUrl(c.imageUrl)}
                   target="_blank"
                   rel="noreferrer"
-                  onClick={externalLinkClick(c.imageUrl)}
+                  onClick={externalLinkClick(resolveApiUrl(c.imageUrl))}
                   className="mt-1 block"
                 >
                   <img
@@ -151,10 +155,10 @@ export function WorkoutCommentThread({
               {c.videoUrl && (
                 <div className="mt-1 flex items-center gap-3">
                   <a
-                    href={c.videoUrl}
+                    href={resolveApiUrl(c.videoUrl)}
                     target="_blank"
                     rel="noreferrer"
-                    onClick={externalLinkClick(c.videoUrl)}
+                    onClick={externalLinkClick(resolveApiUrl(c.videoUrl))}
                     className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
                   >
                     <Video className="h-3 w-3" /> Watch video
@@ -171,7 +175,7 @@ export function WorkoutCommentThread({
                   <button
                     type="button"
                     disabled={downloadingId === c.id}
-                    onClick={() => downloadWithWatermark(c.id, c.videoUrl!)}
+                    onClick={() => downloadWithWatermark(c.id, resolveApiUrl(c.videoUrl!))}
                     className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline disabled:opacity-60"
                   >
                     {downloadingId === c.id ? (
