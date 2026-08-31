@@ -1,6 +1,7 @@
 import { Capacitor } from "@capacitor/core";
 import { Filesystem, Directory } from "@capacitor/filesystem";
 import { Share } from "@capacitor/share";
+import { Media } from "@capacitor-community/media";
 import { resolveApiUrl, getNativeToken } from "@/lib/queryClient";
 
 function blobToBase64(blob: Blob): Promise<string> {
@@ -22,9 +23,18 @@ function blobToBase64(blob: Blob): Promise<string> {
  * Inside the native app, neither the Web Share API nor the <a download>
  * fallback below actually works -- WKWebView doesn't have a download
  * manager, and navigator.share is generally unavailable there. The file
- * has to be written to disk first (via @capacitor/filesystem) and handed
- * to the native share sheet by its local file:// URI (via @capacitor/share)
- * instead. */
+ * has to be written to disk first (via @capacitor/filesystem). From there,
+ * a photo or video goes straight into the camera roll (via
+ * @capacitor-community/media) -- the whole point of tapping "download" on a
+ * form-check clip or a PR card, and exactly what NSPhotoLibraryAddUsageDescription
+ * in Info.plist already promises ("save form-check videos and shareable PR
+ * cards to your Photos library when you choose to download them"). A share
+ * sheet that then asks the athlete to pick "Save to Files" or "Send" is a
+ * confusing extra step for what should be a one-tap save. Anything else (a
+ * CSV/PDF/ICS export) has no business in Photos, so those -- and any
+ * photo/video save that fails (permission denied, or Android without an
+ * album identifier configured) -- keep going through the native share sheet
+ * instead (via @capacitor/share), same as before this existed. */
 export async function shareOrDownloadBlob(blob: Blob, filename: string, shareTitle?: string) {
   if (Capacitor.isNativePlatform()) {
     try {
@@ -33,6 +43,17 @@ export async function shareOrDownloadBlob(blob: Blob, filename: string, shareTit
         data: await blobToBase64(blob),
         directory: Directory.Cache,
       });
+      const isPhoto = blob.type.startsWith("image/");
+      const isVideo = blob.type.startsWith("video/");
+      if (isPhoto || isVideo) {
+        try {
+          if (isPhoto) await Media.savePhoto({ path: written.uri });
+          else await Media.saveVideo({ path: written.uri });
+          return;
+        } catch (err) {
+          console.warn("Could not save directly to Photos, falling back to the share sheet", err);
+        }
+      }
       await Share.share({ title: shareTitle, files: [written.uri] });
     } catch (err) {
       // A cancelled/dismissed share sheet rejects too on some platforms --
