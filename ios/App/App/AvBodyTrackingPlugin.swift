@@ -734,13 +734,19 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             return
         }
         let sampleEveryNthFrame = max(1, call.getInt("sampleEveryNthFrame") ?? 1)
+        // Box jump only (see this file's own comment on detectBoxTop below) -- every other AV
+        // dialog omits this and pays nothing extra per frame.
+        let detectBox = call.getBool("detectBox") ?? false
         let url = URL(fileURLWithPath: pathString)
-        logDiag("analyzeRecording() called for \(url.lastPathComponent), sampleEveryNthFrame=\(sampleEveryNthFrame)")
+        logDiag(
+            "analyzeRecording() called for \(url.lastPathComponent), sampleEveryNthFrame=\(sampleEveryNthFrame), "
+                + "detectBox=\(detectBox)"
+        )
         analysisCancelled = false
         leftImplementTracker.reset()
         rightImplementTracker.reset()
         Self.analysisQueue.async {
-            self.runPoseAnalysis(url: url, sampleEveryNthFrame: sampleEveryNthFrame, call: call)
+            self.runPoseAnalysis(url: url, sampleEveryNthFrame: sampleEveryNthFrame, detectBox: detectBox, call: call)
         }
     }
 
@@ -759,7 +765,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
     // and Vision's synchronous perform() are both blocking calls, potentially for seconds
     // across a whole clip, and nothing here touches UI directly (notifyListeners/call.resolve
     // are dispatched to main explicitly where it matters).
-    private func runPoseAnalysis(url: URL, sampleEveryNthFrame: Int, call: CAPPluginCall) {
+    private func runPoseAnalysis(url: URL, sampleEveryNthFrame: Int, detectBox: Bool, call: CAPPluginCall) {
         // Background-execution edge case, same as stopRecording's finalize step -- a coach
         // backgrounding the app to check something mid-analysis shouldn't kill this partway
         // through a clip.
@@ -805,6 +811,24 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         reader.startReading()
 
         let poseRequest = VNDetectHumanBodyPoseRequest()
+        // Box jump's own object-detection signal -- see this file's own comment on
+        // detectBoxTopCandidate below for the full reasoning. Configured once, reused every
+        // sampled frame (Vision requests are safe to reuse across perform() calls -- only
+        // .results gets overwritten each time).
+        let rectanglesRequest = VNDetectRectanglesRequest()
+        rectanglesRequest.minimumConfidence = 0.5
+        rectanglesRequest.minimumSize = 0.15
+        rectanglesRequest.maximumObservations = 8
+        var boxTopCandidates: [Double] = []
+        // Every frame would be needless extra Vision work for a signal that's checking a
+        // STATIONARY object -- the box doesn't move frame to frame the way an implement does,
+        // so a sparse sample across the whole clip is exactly as informative as every frame,
+        // for a fraction of the cost. See detectBoxTopCandidate's own comment for why sampling
+        // across the whole clip (not just an early "calibration window") and taking the median
+        // is the right shape here, same reasoning calibrateFromFrames already established for
+        // height calibration in pose-tracking.ts.
+        let boxDetectionStride = 5
+
         var frameIndex = 0
         var processedCount = 0
         var trackedCount = 0
@@ -846,6 +870,8 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             var tracked = false
             var leftWristJoint: (x: Double, y: Double)?
             var rightWristJoint: (x: Double, y: Double)?
+            var leftAnkleJoint: (x: Double, y: Double)?
+            var rightAnkleJoint: (x: Double, y: Double)?
             let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: orientation, options: [:])
             do {
                 try handler.perform([poseRequest])
@@ -873,11 +899,23 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                             leftWristJoint = (x: Double(point.location.x), y: Double(point.location.y))
                         } else if label == "rightWrist" {
                             rightWristJoint = (x: Double(point.location.x), y: Double(point.location.y))
+                        } else if label == "leftAnkle" {
+                            leftAnkleJoint = (x: Double(point.location.x), y: Double(point.location.y))
+                        } else if label == "rightAnkle" {
+                            rightAnkleJoint = (x: Double(point.location.x), y: Double(point.location.y))
                         }
                     }
                 }
             } catch {
                 logDiag("Vision request failed on frame \(thisFrameIndex): \(error.localizedDescription)")
+            }
+
+            if detectBox, thisFrameIndex % boxDetectionStride == 0,
+               let candidate = detectBoxTopCandidate(
+                   handler: handler, request: rectanglesRequest,
+                   leftAnkle: leftAnkleJoint, rightAnkle: rightAnkleJoint
+               ) {
+                boxTopCandidates.append(candidate)
             }
 
             // Phase 5: object/implement tracking -- only worth the extra downscale+render
@@ -935,17 +973,107 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         if let error = reader.error {
             logDiag("analyzeRecording finished with reader error: \(error.localizedDescription)")
         }
+        // Below MIN_BOX_TOP_SAMPLES, this isn't a confident read -- reporting a "detection"
+        // off one or two lucky/unlucky frames would be worse than reporting nothing at all
+        // (the JS side's own no-number-is-better-than-a-wrong-one philosophy, see
+        // av-jump-tracker-dialog.tsx's file comment). Median, not mean, so the handful of
+        // frames where the athlete's own body occludes the box mid-flight (a wildly wrong
+        // candidate, not just a noisy one) can't drag the result toward themselves the way an
+        // average would.
+        let minBoxTopSamples = 5
+        let boxTopNormalizedY: Double? = boxTopCandidates.count >= minBoxTopSamples
+            ? Self.median(boxTopCandidates) : nil
+        if detectBox {
+            logDiag(
+                "box detection: \(boxTopCandidates.count) candidate frames, "
+                    + (boxTopNormalizedY.map { "boxTopNormalizedY=\(String(format: "%.4f", $0))" } ?? "no confident read")
+            )
+        }
         logDiag(
             "analyzeRecording finished: \(processedCount) frames processed, "
                 + "\(trackedCount) tracked, \(String(format: "%.2f", elapsed))s elapsed"
         )
         DispatchQueue.main.async {
-            call.resolve([
+            var result: [String: Any] = [
                 "frameCount": processedCount,
                 "trackedFrameCount": trackedCount,
                 "elapsedSeconds": elapsed,
-            ])
+            ]
+            // Omit-when-nil, same convention as leftImplement/rightImplement above -- the JS
+            // bridge treats a missing key as "no confident box read," not a zeroed default.
+            if let boxTopNormalizedY = boxTopNormalizedY {
+                result["boxTopNormalizedY"] = boxTopNormalizedY
+            }
+            call.resolve(result)
         }
+    }
+
+    private static func median(_ values: [Double]) -> Double {
+        let sorted = values.sorted()
+        let mid = sorted.count / 2
+        return sorted.count % 2 == 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid]
+    }
+
+    // Box jump has a real, physical target the athlete jumps ONTO -- unlike a barbell/med
+    // ball/kettlebell (AvImplementTracker's own job, motion-diff based: nothing to follow by
+    // recognition), a box is stationary, so motion-diff finds nothing to track. What it DOES
+    // have is a real, detectable shape: VNDetectRectanglesRequest finds the box's own top
+    // surface as a (perspective-distorted) quadrilateral, the same public Vision API this
+    // pipeline already builds everything else on. topLeft/topRight are the two corners with
+    // the largest y (Vision's bottom-left-origin convention -- larger y is higher up the
+    // frame), i.e. the physical top edge of whatever rectangle this is.
+    //
+    // Picking WHICH rectangle in frame is the box (not a doorframe, a mat, a rack upright) uses
+    // the same plausibility-bound philosophy as ArImplementTracker.swift's own
+    // maxPlausibleImplementSpeedMps: reject anything that couldn't physically be the box rather
+    // than trying to positively identify it by appearance. Requires an ankle joint that frame
+    // to check against (nothing to validate proximity to otherwise) and keeps only the
+    // candidate whose horizontal center sits closest to the ankle's own x -- the athlete stands
+    // right in front of (or on top of) the box, so the box is never far from directly under
+    // their own feet in frame.
+    //
+    // UNTUNED, flagged honestly rather than assumed -- there's no camera to calibrate any of
+    // these fractions against in this environment, same caveat as every other constant in this
+    // pipeline picked by reasoning instead of measurement (see e.g. AvImplementTracker's own
+    // motionDiffThreshold comment).
+    private let boxHorizontalToleranceFraction = 0.3
+    private let boxMaxHeightAboveAnkleFraction = 0.6
+
+    private func detectBoxTopCandidate(
+        handler: VNImageRequestHandler,
+        request: VNDetectRectanglesRequest,
+        leftAnkle: (x: Double, y: Double)?,
+        rightAnkle: (x: Double, y: Double)?
+    ) -> Double? {
+        let ankles = [leftAnkle, rightAnkle].compactMap { $0 }
+        guard !ankles.isEmpty else { return nil }
+        let ankleX = ankles.map { $0.x }.reduce(0, +) / Double(ankles.count)
+        let ankleY = ankles.map { $0.y }.reduce(0, +) / Double(ankles.count)
+
+        do {
+            try handler.perform([request])
+        } catch {
+            return nil
+        }
+        guard let observations = request.results as? [VNRectangleObservation] else { return nil }
+
+        var best: (topY: Double, horizontalDistance: Double)?
+        for obs in observations {
+            let topY = Double(obs.topLeft.y + obs.topRight.y) / 2
+            let centerX = Double(obs.topLeft.x + obs.topRight.x + obs.bottomLeft.x + obs.bottomRight.x) / 4
+            // The box's top has to sit above the athlete's own standing ankle level (it's an
+            // elevated platform) but not implausibly far above it (a doorway lintel, a ceiling
+            // beam) -- see this function's own comment on why these are reasoned bounds, not
+            // measured ones.
+            let heightAboveAnkle = topY - ankleY
+            guard heightAboveAnkle > 0, heightAboveAnkle <= boxMaxHeightAboveAnkleFraction else { continue }
+            let horizontalDistance = abs(centerX - ankleX)
+            guard horizontalDistance <= boxHorizontalToleranceFraction else { continue }
+            if best == nil || horizontalDistance < best!.horizontalDistance {
+                best = (topY: topY, horizontalDistance: horizontalDistance)
+            }
+        }
+        return best?.topY
     }
 
     private func cgOrientation(for transform: CGAffineTransform) -> CGImagePropertyOrientation {

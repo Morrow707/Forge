@@ -197,30 +197,40 @@ export function useAvBodyTracking(active: boolean) {
   // the file's even finished writing), so a second call in flight at the same time hits that
   // plugin's own "Not recording" guard and surfaces as a spurious error on what the athlete
   // experienced as a single, ordinary tap.
-  async function stopRecordingAndAnalyze(): Promise<
+  async function stopRecordingAndAnalyze(options?: { detectBox?: boolean }): Promise<
     | {
         blob: Blob;
         rawFrames: NativePoseFrame[];
         captureDeviceInfo: CaptureDeviceInfo;
-        recordingStats: { frameCount: number; trackedFrameCount: number; elapsedSeconds: number };
+        recordingStats: {
+          frameCount: number;
+          trackedFrameCount: number;
+          elapsedSeconds: number;
+          boxTopNormalizedY?: number;
+        };
       }
     | null
   > {
     if (stoppingRef.current) return null;
     stoppingRef.current = true;
     try {
-      return await doStopRecordingAndAnalyze();
+      return await doStopRecordingAndAnalyze(options);
     } finally {
       stoppingRef.current = false;
     }
   }
 
-  async function doStopRecordingAndAnalyze(): Promise<
+  async function doStopRecordingAndAnalyze(options?: { detectBox?: boolean }): Promise<
     | {
         blob: Blob;
         rawFrames: NativePoseFrame[];
         captureDeviceInfo: CaptureDeviceInfo;
-        recordingStats: { frameCount: number; trackedFrameCount: number; elapsedSeconds: number };
+        recordingStats: {
+          frameCount: number;
+          trackedFrameCount: number;
+          elapsedSeconds: number;
+          boxTopNormalizedY?: number;
+        };
       }
     | null
   > {
@@ -250,9 +260,14 @@ export function useAvBodyTracking(active: boolean) {
       rawFrames.push(frame);
       setAnalyzedFrames((n) => n + 1);
     });
-    let recordingStats: { frameCount: number; trackedFrameCount: number; elapsedSeconds: number };
+    let recordingStats: {
+      frameCount: number;
+      trackedFrameCount: number;
+      elapsedSeconds: number;
+      boxTopNormalizedY?: number;
+    };
     try {
-      recordingStats = await analyzeAvRecording(path);
+      recordingStats = await analyzeAvRecording(path, undefined, options?.detectBox);
     } catch (err) {
       unsubscribe();
       void deleteAvRecording(path);

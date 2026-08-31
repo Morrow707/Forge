@@ -78,6 +78,16 @@ export type JumpRep = {
   // different lookup strategies per mode.
   takeoffT: number;
   landingT: number;
+  // How far this rep's peak ankle position rose above (positive) or fell short of (negative)
+  // the box's own detected top surface -- see summarizeJumpSet's boxTopWorldY parameter. Null
+  // whenever no box was detected for this clip (not a box-jump exercise, or Vision genuinely
+  // couldn't find one), same "unknown stays null, never a fabricated number" convention as
+  // horizontalDistanceCm above. Distinct from peakHeightCm: that's ankle rise off the ATHLETE's
+  // own pre-jump baseline (an imperfect proxy on a box jump specifically, since a bent-knee
+  // takeoff tucks the ankle up without the athlete rising that far in real terms), this is a
+  // direct comparison against the real, camera-detected box height -- the actual question a
+  // box jump is asking ("did they clear it"), not the one a vertical jump asks.
+  boxClearanceCm: number | null;
 };
 
 export type JumpSetMetrics = {
@@ -103,6 +113,11 @@ export type JumpSetMetrics = {
   // it at all (a MediaPipe caller with only 2D landmarks and no real depth
   // to trust the timing signal from).
   landingAsymmetry?: (LandingAsymmetryEntry | null)[];
+  // Max over repBreakdown's own boxClearanceCm -- see JumpRep's own comment. Null (not just
+  // absent) whenever no rep in the set has a box reading, same meaning as bestHorizontalDistanceCm
+  // reads when nothing qualified; undefined only for a caller (kb-swing/ar-jump, the untouched
+  // ARKit fallback) that never populates this field at all.
+  bestBoxClearanceCm?: number | null;
   // Session-level camera/AI context for this recording -- see bar-tracking.ts's RepMetrics'
   // own comment on this same field.
   captureDeviceInfo?: CaptureDeviceInfo | null;
@@ -140,6 +155,15 @@ export function summarizeJumpSet(
   // rep) doesn't trip it, while still catching a glitch like a 6cm read
   // sitting next to three 24cm reps (a ~75% deviation).
   outlierPercent = 35,
+  // Real, camera-detected height of the box's own top surface -- see
+  // AvBodyTrackingPlugin.swift's detectBoxTopCandidate and vision-body-landmarks.ts's
+  // visionBoxTopToWorldY for how this gets here. Same y-down, real-scale unit as rawPoints'
+  // own y (already run through the identical scaleWorldLandmarks() multiply the caller applies
+  // to every joint), so it's directly comparable to ySmoothed[peakIdx] below with no further
+  // conversion. Undefined/null for every non-box-jump caller, and for a box jump clip where
+  // Vision genuinely couldn't find a confident box read -- boxClearanceCm on every rep stays
+  // null in either case, never a fabricated number.
+  boxTopWorldY?: number | null,
 ): JumpSetMetrics | null {
   if (rawPoints.length < 6) return null;
   const minFlightAmplitudeCm = heightScaledAmplitudeCm(BASE_MIN_FLIGHT_AMPLITUDE_CM, heightIn);
@@ -247,6 +271,13 @@ export function summarizeJumpSet(
             const avgConfidence =
               repPoints.reduce((sum, p) => sum + (p.confidence ?? 1), 0) / repPoints.length;
 
+            // boxTopWorldY minus this rep's own peak (most-negative) y -- positive means the
+            // ankle's peak position rose ABOVE the box's detected top (cleared it), negative
+            // means it came up short. See this function's own boxTopWorldY parameter comment
+            // for why the two are directly comparable with no further scaling.
+            const boxClearanceCm =
+              boxTopWorldY != null ? Math.round((boxTopWorldY - ySmoothed[peakIdx]) * 100 * 10) / 10 : null;
+
             reps.push({
               repNumber: reps.length + 1,
               flightSeconds: Math.round(flightSeconds * 1000) / 1000,
@@ -257,6 +288,7 @@ export function summarizeJumpSet(
               likelyTrackingGlitch: avgConfidence < MIN_TRACKING_CONFIDENCE,
               takeoffT,
               landingT,
+              boxClearanceCm,
             });
 
             previousLandingT = landingT;
@@ -306,6 +338,8 @@ export function summarizeJumpSet(
     avgGroundContactSeconds && avgGroundContactSeconds > 0
       ? Math.round((bestJumpHeightCm / 100 / avgGroundContactSeconds) * 100) / 100
       : null;
+  const boxClearances = reps.map((r) => r.boxClearanceCm).filter((c): c is number => c != null);
+  const bestBoxClearanceCm = boxClearances.length ? Math.max(...boxClearances) : null;
 
   return {
     bestJumpHeightCm,
@@ -315,5 +349,6 @@ export function summarizeJumpSet(
     repBreakdown: reps,
     pathTrace: buildPathTrace(rawPoints, { x: rawPoints[0].x, y: rawPoints[0].y }),
     formFaults: [],
+    bestBoxClearanceCm,
   };
 }

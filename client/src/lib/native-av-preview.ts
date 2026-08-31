@@ -63,10 +63,17 @@ interface AvBodyTrackingPlugin {
   startRecording(): Promise<void>;
   stopRecording(): Promise<{ path: string }>;
   deleteRecording(options: { path: string }): Promise<void>;
-  analyzeRecording(options: { path: string; sampleEveryNthFrame?: number }): Promise<{
+  analyzeRecording(options: { path: string; sampleEveryNthFrame?: number; detectBox?: boolean }): Promise<{
     frameCount: number;
     trackedFrameCount: number;
     elapsedSeconds: number;
+    // Vision's own raw normalized (0-1, bottom-left-origin) convention, same as PoseJoint.y
+    // above -- see AvBodyTrackingPlugin.swift's detectBoxTopCandidate for how this is found
+    // (VNDetectRectanglesRequest, median across the whole clip) and vision-body-landmarks.ts's
+    // visionBoxTopToWorldY for the bridge into this app's own y-down, real-scale convention.
+    // Omitted (not present at all), not a zeroed default, when detectBox wasn't requested or
+    // no confident read was found -- box jump is the only caller that ever passes detectBox.
+    boxTopNormalizedY?: number;
   }>;
   cancelAnalysis(): Promise<void>;
   getDiagnosticLog(): Promise<{ log: string[] }>;
@@ -188,8 +195,9 @@ export async function deleteAvRecording(path: string): Promise<void> {
 export async function analyzeAvRecording(
   path: string,
   sampleEveryNthFrame?: number,
-): Promise<{ frameCount: number; trackedFrameCount: number; elapsedSeconds: number }> {
-  return AvBodyTracking.analyzeRecording({ path, sampleEveryNthFrame });
+  detectBox?: boolean,
+): Promise<{ frameCount: number; trackedFrameCount: number; elapsedSeconds: number; boxTopNormalizedY?: number }> {
+  return AvBodyTracking.analyzeRecording({ path, sampleEveryNthFrame, detectBox });
 }
 
 // Real native cancellation of an in-progress analyzeAvRecording call -- see

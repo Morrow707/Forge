@@ -123,6 +123,20 @@ export type ImplementPoint = {
   color?: { r: number; g: number; b: number };
 };
 
+// Same pixel-scale + Y-flip transform as visionJointsToWorldLandmarks above (see that
+// function's own comment), applied to AvBodyTrackingPlugin.swift's own boxTopNormalizedY
+// instead of a body joint. That value is a single scalar per clip (not per-frame -- see the
+// Swift side's own comment on why a whole-clip median beats trusting any one frame), so this
+// takes frameHeight directly rather than a NativePoseFrame -- av-jump-tracker-dialog.tsx reads
+// it off whichever tracked frame it already has (frame dimensions are constant for one
+// recording). Landing this in the exact same y-down, pixel-space unit worldLandmarks are
+// already in (before the real-scale calibration factor gets applied) is what lets jump-tracking.ts
+// compare it directly against the ankle trace after both go through the identical
+// scaleWorldLandmarks() multiply -- see av-jump-tracker-dialog.tsx's own call site.
+export function visionBoxTopToWorldY(boxTopNormalizedY: number, frameHeight: number): number {
+  return -(boxTopNormalizedY * frameHeight);
+}
+
 export function visionImplementToPoint(
   implement: { x: number; y: number; confidence: number; color?: { r: number; g: number; b: number } } | undefined,
   frame: NativePoseFrame,

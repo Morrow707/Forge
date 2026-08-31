@@ -6023,6 +6023,11 @@ export const jumpBreakdownEntrySchema = z.object({
   // statistical outlier against the rest of the set -- a likely tracking
   // glitch, flagged rather than silently dropped or corrected.
   likelyTrackingGlitch: z.boolean().optional(),
+  // How far this rep's peak ankle position cleared (positive) or fell short of (negative) the
+  // box's own real, camera-detected top surface -- see jump-tracking.ts's JumpRep.boxClearanceCm
+  // for the full reasoning. Optional (not just nullable) since every non-box-jump caller never
+  // sets this key at all, not even to null.
+  boxClearanceCm: z.number().nullable().optional(),
 });
 
 export const setLogInputSchema = z.object({

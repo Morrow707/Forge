@@ -3144,6 +3144,7 @@ function ExerciseLogContent({
                 heightIn={user?.heightIn}
                 movementType={item.movementType}
                 equipment={item.equipment}
+                usesBox={item.materials.usesBox}
                 recordVideo={mergedTracking}
                 onCapture={handleTrackerCapture}
                 videoContext={videoContextFor(trackingSet)}

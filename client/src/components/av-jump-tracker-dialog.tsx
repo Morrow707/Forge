@@ -11,7 +11,7 @@ import {
 import { toast } from "sonner";
 import { Circle, Square, X, XCircle, AlertTriangle } from "lucide-react";
 import { useAvBodyTracking } from "@/lib/use-av-body-tracking";
-import { visionJointsToWorldLandmarks } from "@/lib/vision-body-landmarks";
+import { visionJointsToWorldLandmarks, visionBoxTopToWorldY } from "@/lib/vision-body-landmarks";
 import {
   deriveJumpPoint,
   detectFormFaults,
@@ -68,6 +68,7 @@ export function AvJumpTrackerDialog({
   heightIn,
   movementType,
   equipment,
+  usesBox,
   recordVideo,
   onCapture,
   videoContext,
@@ -79,6 +80,14 @@ export function AvJumpTrackerDialog({
   heightIn?: number | null;
   movementType?: string | null;
   equipment?: string | null;
+  // Drives the box-top object-detection pass (see stopTracking below and
+  // AvBodyTrackingPlugin.swift's detectBoxTopCandidate) -- every other jump exercise
+  // (vertical, broad, bound) has no physical object to detect, and skips this Vision work
+  // entirely rather than pay its cost for nothing. Comes from workout.tsx's
+  // item.materials.usesBox, the same flag that already drives the peakHeightCm substitution
+  // (see that file's own comment) -- a box jump is identified by its equipment, not a
+  // dedicated movementType string.
+  usesBox?: boolean;
   recordVideo?: boolean;
   onCapture: (metrics: JumpSetMetrics, videoUrl?: string) => void;
   videoContext?: VideoRecordContext;
@@ -111,7 +120,7 @@ export function AvJumpTrackerDialog({
   }, [open]);
 
   async function stopTracking() {
-    const result = await stopRecordingAndAnalyze();
+    const result = await stopRecordingAndAnalyze({ detectBox: usesBox === true });
     if (!result) return; // error/cancellation already reported by the hook
     await finishWithRecording(
       result.blob,
@@ -127,7 +136,12 @@ export function AvJumpTrackerDialog({
     rawFrames: { t: number; worldLandmarks: PoseFrame["worldLandmarks"] }[],
     captureDeviceInfo: CaptureDeviceInfo,
     nativeRawFrames: NativePoseFrame[],
-    recordingStats: { frameCount: number; trackedFrameCount: number; elapsedSeconds: number },
+    recordingStats: {
+      frameCount: number;
+      trackedFrameCount: number;
+      elapsedSeconds: number;
+      boxTopNormalizedY?: number;
+    },
   ) {
     const scaleFactor = calibrateFromFrames(rawFrames, heightIn);
     const calibrationFrames = calibrationMethodBreakdown(rawFrames);
@@ -228,7 +242,17 @@ export function AvJumpTrackerDialog({
       trace.push(trackedPoint);
     }
 
-    const metrics = summarizeJumpSet(trace, heightIn, jumpHeightOutlierPercent ?? undefined);
+    // Same pixel-scale multiply scaleWorldLandmarks already applied to every joint above --
+    // see vision-body-landmarks.ts's visionBoxTopToWorldY and summarizeJumpSet's own
+    // boxTopWorldY parameter comment for why this needs the identical transform to be
+    // comparable against the ankle trace. frameWidth/frameHeight are constant for one
+    // recording (see native-av-preview.ts's PoseFrame comment), so any tracked frame's own
+    // frameHeight is as good as any other's.
+    const boxTopWorldY =
+      recordingStats.boxTopNormalizedY != null && nativeRawFrames[0]
+        ? visionBoxTopToWorldY(recordingStats.boxTopNormalizedY, nativeRawFrames[0].frameHeight) * scaleFactor
+        : null;
+    const metrics = summarizeJumpSet(trace, heightIn, jumpHeightOutlierPercent ?? undefined, boxTopWorldY);
     if (!metrics) {
       const diagnostics = buildTrackingDiagnostics({
         outcome: "empty_no_clean_read",
@@ -296,6 +320,21 @@ export function AvJumpTrackerDialog({
       recording: recordingStats,
       calibration: { scaleFactor, ...calibrationFrames },
     });
+
+    // Direct answer to "did I clear it" -- the real payoff of detecting the box at all rather
+    // than only ever inferring height off the athlete's own ankle rise (see jump-tracking.ts's
+    // own comment on why that alone is an imperfect proxy for a box jump specifically). Silent
+    // when usesBox is false (nothing was requested) or Vision genuinely couldn't get a
+    // confident box read this take (bestBoxClearanceCm stays null either way) -- same
+    // no-number-is-better-than-a-wrong-one restraint as the calibration-failure paths above,
+    // not a warning nagging the athlete about a signal that was never available.
+    if (usesBox && metrics.bestBoxClearanceCm != null) {
+      if (metrics.bestBoxClearanceCm >= 0) {
+        toast.success(`Cleared the box by ${metrics.bestBoxClearanceCm.toFixed(1)} cm`);
+      } else {
+        toast.warning(`Came up ${Math.abs(metrics.bestBoxClearanceCm).toFixed(1)} cm short of the box`);
+      }
+    }
 
     if (!recordVideo) {
       onCapture(metrics);
