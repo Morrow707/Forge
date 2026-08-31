@@ -65,7 +65,7 @@ const PAGE_SIZE = 50;
 export default function AdminVideos() {
   const [loadedPages, setLoadedPages] = useState(1);
 
-  const { data: summary } = useQuery<{ totalBytes: number; totalCount: number }>({
+  const { data: summary } = useQuery<{ totalBytes: number; totalCount: number; diskFreeBytes: number | null }>({
     queryKey: ["/api/admin/videos/storage-summary"],
     queryFn: () => getJson("/api/admin/videos/storage-summary"),
     staleTime: 60_000,
@@ -97,11 +97,23 @@ export default function AdminVideos() {
               an account going 12+ months inactive), never by an admin picking one out.
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold">{summary ? formatBytes(summary.totalBytes) : "…"}</p>
-            <p className="text-sm text-muted-foreground">
-              across {summary?.totalCount ?? "…"} video{summary?.totalCount === 1 ? "" : "s"}
-            </p>
+          <CardContent className="flex flex-wrap items-end justify-between gap-6">
+            <div>
+              <p className="text-2xl font-bold">{summary ? formatBytes(summary.totalBytes) : "…"}</p>
+              <p className="text-sm text-muted-foreground">
+                across {summary?.totalCount ?? "…"} video{summary?.totalCount === 1 ? "" : "s"}
+              </p>
+            </div>
+            {summary && summary.diskFreeBytes !== null && (
+              <div className="text-right">
+                <p
+                  className={`text-2xl font-bold ${summary.diskFreeBytes < 1024 * 1024 * 1024 ? "text-destructive" : ""}`}
+                >
+                  {formatBytes(summary.diskFreeBytes)}
+                </p>
+                <p className="text-sm text-muted-foreground">free on the uploads disk right now</p>
+              </div>
+            )}
           </CardContent>
         </Card>
 

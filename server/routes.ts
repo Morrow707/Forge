@@ -23,7 +23,7 @@ import { buildRecruitingProfilePdf } from "./recruiting-profile";
 import { buildTrainingHistoryCsv, buildTrainingHistoryPdf, csvField } from "./training-history-export";
 import { buildCaraComplianceCsv, buildCaraCompliancePdf } from "./cara-export";
 import { buildMovementScreenSheetPdf } from "./movement-screen-export";
-import { readUploadedFile } from "./uploaded-files";
+import { readUploadedFile, getUploadsDiskFreeBytes } from "./uploaded-files";
 import { buildComplianceReportPdf } from "./compliance-report";
 import { buildLegalDocumentPdf } from "./legal-document-export";
 import { GUARDIAN_NOTICE_LIVE, derivePrivacyTier } from "@shared/privacy-tiers";
@@ -141,6 +141,33 @@ import { startOfWeek, addWeeks } from "date-fns";
 // There is no automatic/background upload of raw video anywhere in the app.
 const UPLOADS_DIR = path.join(process.cwd(), "server", "uploads", "form-videos");
 fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+
+// Video retention (storage.sweepVideoRetentionCap) only actually trims anything once
+// BILLING_ENFORCEMENT_ENABLED is set -- see getVideoRetentionLimits in billing.ts, which
+// returns unlimited for every account otherwise (true in production today). Nothing else caps
+// disk growth, so a fixed-size disk (render.yaml: 10GB) can genuinely fill up from ordinary
+// video-tracked use alone. Below this floor, a write that's still accepted risks silently
+// truncating -- multer's disk storage generally surfaces an ENOSPC as a real error, but this
+// catches the disk approaching full well before that point instead of only failing at the
+// literal last byte, and gives a clear, specific reason instead of a generic upload failure.
+const MIN_FREE_DISK_BYTES = 500 * 1024 * 1024;
+
+async function requireDiskSpace(_req: express.Request, res: express.Response, next: express.NextFunction) {
+  const freeBytes = await getUploadsDiskFreeBytes();
+  // null means the check itself failed (see getUploadsDiskFreeBytes) -- fail open, same as any
+  // other best-effort safety net, rather than blocking every upload on a broken statfs call.
+  if (freeBytes !== null && freeBytes < MIN_FREE_DISK_BYTES) {
+    console.error(
+      `Video upload rejected: only ${Math.round(freeBytes / (1024 * 1024))}MB free on the uploads disk ` +
+        `(floor ${MIN_FREE_DISK_BYTES / (1024 * 1024)}MB) -- the disk needs attention (free up space or resize it).`,
+    );
+    return res.status(507).json({
+      message:
+        "Server storage is nearly full, so this video couldn't be saved. Please try again shortly -- an admin has been notified.",
+    });
+  }
+  next();
+}
 
 // Coach-drawn markup on a paused video frame -- sent as a PNG data URL
 // (small, canvas-generated) rather than multipart, decoded and written to
@@ -1474,7 +1501,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Shared by both a coach (their own class) and an admin (a Forge class);
   // ownership of the class itself is still enforced by the classes PUT
   // route that actually persists this URL onto a content page.
-  app.post("/api/classes/lesson-media/video", requireRole(["coach", "admin"]), (req, res) => {
+  app.post("/api/classes/lesson-media/video", requireRole(["coach", "admin"]), requireDiskSpace, (req, res) => {
     uploadLessonVideo.single("video")(req, res, (err: unknown) => {
       if (err) {
         const message = err instanceof Error ? err.message : "Upload failed";
@@ -6800,6 +6827,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post(
     "/api/athlete/skill-video",
     requireRole("athlete"),
+    requireDiskSpace,
     (req, res) => {
       const user = currentUser(req);
       uploadSkillVideo.single("video")(req, res, async (err: unknown) => {
@@ -7014,6 +7042,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post(
     "/api/athlete/form-video",
     requireRole("athlete"),
+    requireDiskSpace,
     (req, res) => {
       const user = currentUser(req);
       uploadFormVideo.single("video")(req, res, async (err: unknown) => {

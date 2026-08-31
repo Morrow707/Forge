@@ -51,6 +51,24 @@ export async function statUploadedFile(url: string | null | undefined): Promise<
   }
 }
 
+// Real free space on the volume server/uploads lives on (see render.yaml's
+// forge-uploads disk, a fixed 10GB mount) -- shared by the upload-time
+// requireDiskSpace guard in routes.ts and the admin storage-summary route,
+// so both read the exact same number instead of two statfs calls drifting
+// apart. Returns null (never throws) if the check itself fails, e.g. statfs
+// isn't supported on the host filesystem -- callers decide how to treat
+// "unknown" themselves (routes.ts fails open; the admin summary just omits
+// the figure).
+export async function getUploadsDiskFreeBytes(): Promise<number | null> {
+  try {
+    const stats = await fs.statfs(UPLOADS_ROOT);
+    return stats.bavail * stats.bsize;
+  } catch (err) {
+    console.error("Disk space check failed", err);
+    return null;
+  }
+}
+
 // Same null-safe, non-throwing contract as the two above -- reads an
 // uploaded file's bytes for embedding elsewhere (e.g. a coach's brand logo
 // into a PDF export), rather than serving it back over HTTP.

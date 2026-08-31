@@ -219,7 +219,7 @@ import type { WidgetLayoutEntry } from "@shared/dashboard-widgets";
 import type { RosterGroup } from "@shared/roster-groups";
 import { askClaude, askClaudeStructured, askClaudeWithTools, askClaudeVision, askClaudeVisionStructured, aiEnabled, fastModel, type SystemPrompt } from "./ai";
 import { fetchUrlSafely, UnsafeUrlError } from "./safe-fetch";
-import { deleteUploadedFile, statUploadedFile } from "./uploaded-files";
+import { deleteUploadedFile, statUploadedFile, getUploadsDiskFreeBytes } from "./uploaded-files";
 import { isGatedUploadPath } from "./media-url-signing";
 import {
   tierForAppleProductId,
@@ -17439,10 +17439,22 @@ ${catalog}`;
   // cached figure instantly. A page-count list mutation (delete/bulk-
   // delete) invalidates it immediately rather than waiting out the TTL,
   // so the total never visibly lags behind an admin's own delete.
-  async getAdminVideoStorageSummary(): Promise<{ totalBytes: number; totalCount: number }> {
+  async getAdminVideoStorageSummary(): Promise<{
+    totalBytes: number;
+    totalCount: number;
+    diskFreeBytes: number | null;
+  }> {
+    // Cheap (a single statfs syscall against the real mounted volume, see
+    // render.yaml's forge-uploads disk) so it's read fresh on every call --
+    // unlike totalBytes/totalCount below, it never rides the video-scan
+    // cache. This is the number that actually answers "is the disk full,"
+    // independent of whatever this platform's own video rows add up to
+    // (other subdirectories -- lesson videos, attachments, team logos --
+    // share the same disk and aren't counted in totalBytes at all).
+    const diskFreeBytes = await getUploadsDiskFreeBytes();
     const now = Date.now();
     if (adminVideoSummaryCache && now - adminVideoSummaryCache.at < ADMIN_VIDEO_SUMMARY_CACHE_MS) {
-      return adminVideoSummaryCache.value;
+      return { ...adminVideoSummaryCache.value, diskFreeBytes };
     }
     const epochAtCall = adminVideoSummaryEpoch;
     if (adminVideoSummaryInFlight) {
@@ -17459,7 +17471,8 @@ ${catalog}`;
         await adminVideoSummaryInFlight.promise;
         return this.getAdminVideoStorageSummary();
       }
-      return adminVideoSummaryInFlight.promise;
+      const value = await adminVideoSummaryInFlight.promise;
+      return { ...value, diskFreeBytes };
     }
     const startEpoch = epochAtCall;
     const promise = (async () => {
@@ -17493,7 +17506,7 @@ ${catalog}`;
         if (startEpoch === adminVideoSummaryEpoch) {
           adminVideoSummaryCache = { at: Date.now(), value };
         }
-        return value;
+        return { ...value, diskFreeBytes };
       } finally {
         adminVideoSummaryInFlight = null;
       }
