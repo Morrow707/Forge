@@ -2093,17 +2093,13 @@ WHERE
 -- stability) -- see captureDeviceInfoSchema's own comment in shared/schema.ts.
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "capture_device_info" json;
 
--- A dedicated admin login for the tracking-report bot, separate from any human admin's own
--- account -- reads /api/admin/tracking-report via a real, ordinary login (same requireRole
--- gate as every other admin route), not a bearer-token-in-URL, so it's revocable/auditable the
--- same way a human admin's access already is. The password hash below is a one-time-generated
--- scrypt hash (auth-utils.ts's own hashPassword format, hex.salt) -- the plaintext was only ever
--- known at generation time, never stored here or anywhere else in this codebase. Guarded by
--- email so re-running this reconciliation (every deploy) never touches an already-created
--- account, including one whose password has since been rotated by an admin.
-INSERT INTO "users" ("email", "password_hash", "name", "role")
-SELECT 'claude-report-bot@forge.app', '767e659819d1605188e06850579076e9b5fc8d65bfd3e829e99114e90552e88e6da597a2a8925c45469bd0ea8ece2f7ad2dcc79091ab3dba4fbfd81178fede02.2367fa9be6ca03230b2a4003814d3bf6', 'Forge Tracking Report Bot', 'admin'
-WHERE NOT EXISTS (SELECT 1 FROM "users" WHERE "email" = 'claude-report-bot@forge.app');
+-- The tracking-report bot account (and the .github/workflows/tracking-report.yml that used
+-- it) has been removed -- it was a full-admin login whose credential lived in this public
+-- repo, and the workflow printed real athlete tracking data straight into this public repo's
+-- Actions log. Delete it wherever it was already created (e.g. production, from an earlier
+-- deploy) rather than just stopping future creation, since a stale row is still a live
+-- full-admin account.
+DELETE FROM "users" WHERE "email" = 'claude-report-bot@forge.app';
 
 -- Golf Swing/Hitting/Pitching sport-specialist AI coach chats -- one table for all three
 -- add-ons, keyed by add_on (see shared/free-agent-tiers.ts's FreeAgentAddOnId), same shape
