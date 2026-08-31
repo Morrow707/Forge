@@ -2083,6 +2083,7 @@ type AdminVideoRow = {
   id: number;
   videoUrl: string;
   secondaryUrl: string | null;
+  athleteId: number;
   athleteName: string;
   label: string;
   date: string;
@@ -17135,11 +17136,12 @@ ${catalog}`;
             id: number;
             date: string;
             video_url: string;
+            athlete_id: number;
             athlete_name: string;
             label: string;
           }>(sql`
             SELECT wse.id AS id, to_char(wl.date, 'YYYY-MM-DD') AS date,
-              wse.form_check_video_url AS video_url, u.name AS athlete_name,
+              wse.form_check_video_url AS video_url, u.id AS athlete_id, u.name AS athlete_name,
               coalesce(ex_pe.name, ex_c.name) || ' — Set ' || wse.set_number AS label
             FROM workout_set_entries wse
             JOIN workout_log_entries wle ON wle.id = wse.log_entry_id
@@ -17158,12 +17160,13 @@ ${catalog}`;
             date: string;
             video_url: string;
             secondary_url: string | null;
+            athlete_id: number;
             athlete_name: string;
             label: string;
           }>(sql`
             SELECT ssl.id AS id, to_char(ssl.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS date,
               ssl.video_url AS video_url, ssl.coach_annotation_url AS secondary_url,
-              u.name AS athlete_name, se.name AS label
+              u.id AS athlete_id, u.name AS athlete_name, se.name AS label
             FROM skill_session_logs ssl
             JOIN users u ON u.id = ssl.athlete_id
             JOIN skill_program_exercises spe ON spe.id = ssl.skill_program_exercise_id
@@ -17177,11 +17180,12 @@ ${catalog}`;
             date: string;
             video_url: string;
             secondary_url: string | null;
+            athlete_id: number;
             athlete_name: string;
           }>(sql`
             SELECT wc.id AS id,
               to_char(coalesce(wc.date::timestamp, wc.created_at), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS date,
-              wc.video_url AS video_url, wc.image_url AS secondary_url, u.name AS athlete_name
+              wc.video_url AS video_url, wc.image_url AS secondary_url, u.id AS athlete_id, u.name AS athlete_name
             FROM workout_comments wc
             JOIN assignments a ON a.id = wc.assignment_id
             JOIN users u ON u.id = a.athlete_id
@@ -17209,16 +17213,16 @@ ${catalog}`;
       if (r.source === "set") {
         const d = setById.get(r.id);
         if (!d) return [];
-        return [{ source: "set" as const, id: r.id, videoUrl: d.video_url, secondaryUrl: null, athleteName: d.athlete_name, label: d.label, date: d.date }];
+        return [{ source: "set" as const, id: r.id, videoUrl: d.video_url, secondaryUrl: null, athleteId: d.athlete_id, athleteName: d.athlete_name, label: d.label, date: d.date }];
       }
       if (r.source === "skill") {
         const d = skillById.get(r.id);
         if (!d) return [];
-        return [{ source: "skill" as const, id: r.id, videoUrl: d.video_url, secondaryUrl: d.secondary_url, athleteName: d.athlete_name, label: d.label, date: d.date }];
+        return [{ source: "skill" as const, id: r.id, videoUrl: d.video_url, secondaryUrl: d.secondary_url, athleteId: d.athlete_id, athleteName: d.athlete_name, label: d.label, date: d.date }];
       }
       const d = commentById.get(r.id);
       if (!d) return [];
-      return [{ source: "comment" as const, id: r.id, videoUrl: d.video_url, secondaryUrl: d.secondary_url, athleteName: d.athlete_name, label: "Comment attachment", date: d.date }];
+      return [{ source: "comment" as const, id: r.id, videoUrl: d.video_url, secondaryUrl: d.secondary_url, athleteId: d.athlete_id, athleteName: d.athlete_name, label: "Comment attachment", date: d.date }];
       },
     );
     const videos = await Promise.all(
@@ -17538,6 +17542,66 @@ ${catalog}`;
       await db
         .update(skillSessionLogs)
         .set({ videoUrl: null, coachAnnotationUrl: null })
+        .where(inArray(skillSessionLogs.id, skillRows.map((r) => r.id)));
+    }
+    if (commentRows.length) {
+      await db
+        .update(workoutComments)
+        .set({ videoUrl: null, imageUrl: null })
+        .where(inArray(workoutComments.id, commentRows.map((r) => r.id)));
+    }
+
+    return setRows.length + skillRows.length + commentRows.length;
+  },
+
+  // Same per-source cleanup as bulkDeleteAdminVideosOlderThan above, scoped
+  // to one athlete instead of a date cutoff -- for clearing out a single
+  // account's accumulated test/demo video volume (e.g. QA data left over
+  // from development) without touching anyone else's. Unlike the
+  // older-than variant, this also resets videoFavorited/pendingDeletionAt
+  // on the set/skill branches, matching deleteAdminVideo's single-row
+  // behavior: both flags are meaningless once the underlying clip is gone,
+  // and leaving them stale would let a since-purged video still show as
+  // "favorited" or "pending deletion" in the UI.
+  async bulkDeleteAdminVideosForAthlete(athleteId: number): Promise<number> {
+    const [setRows, skillRows, commentRows] = await Promise.all([
+      db
+        .select({ id: workoutSetEntries.id, videoUrl: workoutSetEntries.formCheckVideoUrl })
+        .from(workoutSetEntries)
+        .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
+        .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
+        .where(and(isNotNull(workoutSetEntries.formCheckVideoUrl), eq(workoutLogs.athleteId, athleteId))),
+      db
+        .select({
+          id: skillSessionLogs.id,
+          videoUrl: skillSessionLogs.videoUrl,
+          coachAnnotationUrl: skillSessionLogs.coachAnnotationUrl,
+        })
+        .from(skillSessionLogs)
+        .where(and(isNotNull(skillSessionLogs.videoUrl), eq(skillSessionLogs.athleteId, athleteId))),
+      db
+        .select({ id: workoutComments.id, videoUrl: workoutComments.videoUrl, imageUrl: workoutComments.imageUrl })
+        .from(workoutComments)
+        .innerJoin(assignments, eq(workoutComments.assignmentId, assignments.id))
+        .where(and(isNotNull(workoutComments.videoUrl), eq(assignments.athleteId, athleteId))),
+    ]);
+
+    await Promise.all([
+      ...setRows.map((r) => deleteUploadedFile(r.videoUrl)),
+      ...skillRows.flatMap((r) => [deleteUploadedFile(r.videoUrl), deleteUploadedFile(r.coachAnnotationUrl)]),
+      ...commentRows.flatMap((r) => [deleteUploadedFile(r.videoUrl), deleteUploadedFile(r.imageUrl)]),
+    ]);
+
+    if (setRows.length) {
+      await db
+        .update(workoutSetEntries)
+        .set({ formCheckVideoUrl: null, formCheckFlag: null, videoFavorited: false, pendingDeletionAt: null })
+        .where(inArray(workoutSetEntries.id, setRows.map((r) => r.id)));
+    }
+    if (skillRows.length) {
+      await db
+        .update(skillSessionLogs)
+        .set({ videoUrl: null, coachAnnotationUrl: null, videoFavorited: false, pendingDeletionAt: null })
         .where(inArray(skillSessionLogs.id, skillRows.map((r) => r.id)));
     }
     if (commentRows.length) {
