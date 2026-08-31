@@ -17087,12 +17087,20 @@ ${catalog}`;
     // program-exercise and corrective sets here since both just need
     // (id, date), unlike phase 2 below where the exercise name actually
     // requires knowing which of the two a given row is.
+    // LEFT JOINs here (not INNER) matter for more than just phase 2's
+    // display fallback below -- with INNER, a row whose parent chain is
+    // broken (see cleanupOrphanedVideoRows) drops out of this ranking
+    // query entirely while still counting toward countResult's raw total,
+    // which is exactly what made the admin list show "no videos" next to
+    // a nonzero total. coalesce'd to -infinity so an orphaned row (no real
+    // date to sort by) sinks to the bottom of the newest-first order
+    // instead of the NULL-sorts-first-in-DESC default putting it up top.
     const rankResult = await db.execute<{ source: "set" | "skill" | "comment"; id: number }>(sql`
       SELECT source, id FROM (
-        SELECT 'set' AS source, wse.id AS id, wl.date::timestamp AS date
+        SELECT 'set' AS source, wse.id AS id, coalesce(wl.date::timestamp, '-infinity'::timestamp) AS date
         FROM workout_set_entries wse
-        JOIN workout_log_entries wle ON wle.id = wse.log_entry_id
-        JOIN workout_logs wl ON wl.id = wle.workout_log_id
+        LEFT JOIN workout_log_entries wle ON wle.id = wse.log_entry_id
+        LEFT JOIN workout_logs wl ON wl.id = wle.workout_log_id
         WHERE wse.form_check_video_url IS NOT NULL
 
         UNION ALL
@@ -17305,6 +17313,97 @@ ${catalog}`;
         skill: mapRows(bySkill.rows),
         comment: mapRows(byComment.rows),
       },
+    };
+  },
+
+  // One-time, platform-wide cleanup for video/image rows whose parent
+  // chain is broken -- a workout_set_entries row whose workout_log_entries
+  // (or that entry's own workout_logs) no longer exists, a
+  // skill_session_logs row with no matching users/skill_program_exercises,
+  // or a workout_comments row whose assignment was deleted. Not scoped to
+  // one account or gated by a cutoff -- an orphaned row has no live parent
+  // to check an athleteId or upload date against, and doesn't need either
+  // kind of safety check: the app itself requires a live parent chain to
+  // ever display a video, so an orphaned row is unreachable through any
+  // real UI flow for any athlete, current or future -- there's no real
+  // upload this could ever mistakenly catch.
+  //
+  // Confirmed real via diagnoseVideoBacklog on production (2026-08-31
+  // 03:56 UTC log): raw count of "set" rows with a video was 1078, the
+  // athlete-joined version of the same query returned zero -- every single
+  // one has a dead parent. Local dev's DB enforces ON DELETE CASCADE on
+  // this relationship (confirmed via psql \d) so this couldn't be
+  // reproduced with a real local fixture, but production only ever gets
+  // db:reconcile (hand-written, additive-only) -- never the drizzle-kit
+  // push that actually applies schema.ts's cascade rules -- so its
+  // constraints are older/looser. Something upstream deleted parent rows
+  // (most likely stress-test cleanup) without removing these children.
+  async cleanupOrphanedVideoRows(): Promise<{ setOrphaned: number; skillOrphaned: number; commentOrphaned: number; count: number }> {
+    const [setRows, skillRows, commentRows] = await Promise.all([
+      db.execute<{ id: number; video_url: string }>(sql`
+        SELECT wse.id, wse.form_check_video_url AS video_url
+        FROM workout_set_entries wse
+        LEFT JOIN workout_log_entries wle ON wle.id = wse.log_entry_id
+        LEFT JOIN workout_logs wl ON wl.id = wle.workout_log_id
+        WHERE wse.form_check_video_url IS NOT NULL AND (wle.id IS NULL OR wl.id IS NULL)
+      `).then((r) => r.rows),
+      db.execute<{ id: number; video_url: string; coach_annotation_url: string | null }>(sql`
+        SELECT ssl.id, ssl.video_url, ssl.coach_annotation_url
+        FROM skill_session_logs ssl
+        LEFT JOIN users u ON u.id = ssl.athlete_id
+        LEFT JOIN skill_program_exercises spe ON spe.id = ssl.skill_program_exercise_id
+        WHERE ssl.video_url IS NOT NULL AND (u.id IS NULL OR spe.id IS NULL)
+      `).then((r) => r.rows),
+      db.execute<{ id: number; video_url: string; image_url: string | null }>(sql`
+        SELECT wc.id, wc.video_url, wc.image_url
+        FROM workout_comments wc
+        LEFT JOIN assignments a ON a.id = wc.assignment_id
+        WHERE wc.video_url IS NOT NULL AND a.id IS NULL
+      `).then((r) => r.rows),
+    ]);
+
+    await Promise.all([
+      ...setRows.map((r) => deleteUploadedFile(r.video_url)),
+      ...skillRows.flatMap((r) => [deleteUploadedFile(r.video_url), deleteUploadedFile(r.coach_annotation_url)]),
+      ...commentRows.flatMap((r) => [deleteUploadedFile(r.video_url), deleteUploadedFile(r.image_url)]),
+    ]);
+
+    if (setRows.length) {
+      await db
+        .update(workoutSetEntries)
+        .set({
+          formCheckVideoUrl: null,
+          formCheckFlag: null,
+          videoFavorited: false,
+          pendingDeletionAt: null,
+          staleAccountPendingDeletionAt: null,
+        })
+        .where(inArray(workoutSetEntries.id, setRows.map((r) => r.id)));
+    }
+    if (skillRows.length) {
+      await db
+        .update(skillSessionLogs)
+        .set({
+          videoUrl: null,
+          coachAnnotationUrl: null,
+          videoFavorited: false,
+          pendingDeletionAt: null,
+          staleAccountPendingDeletionAt: null,
+        })
+        .where(inArray(skillSessionLogs.id, skillRows.map((r) => r.id)));
+    }
+    if (commentRows.length) {
+      await db
+        .update(workoutComments)
+        .set({ videoUrl: null, imageUrl: null })
+        .where(inArray(workoutComments.id, commentRows.map((r) => r.id)));
+    }
+
+    return {
+      setOrphaned: setRows.length,
+      skillOrphaned: skillRows.length,
+      commentOrphaned: commentRows.length,
+      count: setRows.length + skillRows.length + commentRows.length,
     };
   },
 

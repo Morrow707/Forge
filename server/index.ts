@@ -308,14 +308,26 @@ app.use((req, res, next) => {
       })
       .catch((err) => console.error("One-time video cleanup failed:", err));
     // Read-only diagnostic -- see diagnoseVideoBacklog's own comment.
-    // Answers, with real production data instead of another guess: which
-    // athlete accounts actually hold the 1078 videos, how old they really
-    // are, and whether production has rows a join can't reach that the
-    // local dev DB's CASCADE constraints couldn't reproduce. Delete this
-    // call (and diagnoseVideoBacklog) once it's answered that.
+    // Kept running (harmless, cheap) as an ongoing sanity check that
+    // cleanupOrphanedVideoRows below is actually keeping up: rawCounts and
+    // byAthlete's summed counts should read equal on every future boot.
     storage
       .diagnoseVideoBacklog()
       .then((result) => log(`Video backlog diagnostic: ${JSON.stringify(result)}`))
       .catch((err) => console.error("Video backlog diagnostic failed:", err));
+    // Confirmed via the diagnostic above (production log, 2026-08-31 03:56
+    // UTC): all 1078 stuck videos are workout_set_entries rows whose
+    // parent chain is gone -- raw count 1078, athlete-joined count 0. See
+    // cleanupOrphanedVideoRows' own comment for why that's safe to purge
+    // unconditionally (unreachable through any real UI flow, for any
+    // athlete) and why local dev's DB couldn't reproduce this to test it
+    // against a real fixture beforehand.
+    storage
+      .cleanupOrphanedVideoRows()
+      .then((result) => {
+        storage.invalidateAdminVideoSummaryCache();
+        log(`Orphaned video cleanup: ${JSON.stringify(result)}`);
+      })
+      .catch((err) => console.error("Orphaned video cleanup failed:", err));
   });
 })();
