@@ -3195,13 +3195,25 @@ export const storage = {
   // non-gated path (lesson-videos, team-logos) is a no-op here, same as
   // isGatedUploadPath's own callers in media-url-signing.ts -- those were
   // never signed in the first place, so there's nothing to protect.
-  async assertUploadedFileOwnedBy(path: string, userId: number): Promise<void> {
+  //
+  // Returns the bare pathname (query string stripped) rather than void --
+  // every caller must persist THIS value, not the raw input, now that the
+  // upload routes return an already-signed URL (see routes.ts's own
+  // comment on skipMediaSign): storing a signed URL verbatim would still
+  // resolve correctly on a future signed read (signMediaUrl always strips
+  // and re-signs from the bare path first), but deleteUploadedFile does
+  // NOT strip a query string before resolving a filesystem path -- a
+  // stored `?exp=...&sig=...` suffix would make every future delete of
+  // that file silently no-op (ENOENT, caught and ignored), permanently
+  // orphaning it on disk.
+  async assertUploadedFileOwnedBy(path: string, userId: number): Promise<string> {
     const pathname = path.split("?")[0];
-    if (!isGatedUploadPath(pathname)) return;
+    if (!isGatedUploadPath(pathname)) return pathname;
     const [row] = await db.select().from(uploadedFiles).where(eq(uploadedFiles.path, pathname));
     if (!row || row.uploadedBy !== userId) {
       throw new ForbiddenReferenceError("That file isn't available to reference here.");
     }
+    return pathname;
   },
 
   // Who uploaded this file, if it's tracked at all -- backs the /uploads
@@ -8244,7 +8256,7 @@ Hard rules, no exceptions:
   // deliberately minimal (one row per capture, no completion/logging
   // system around it yet).
   async createSkillSessionLog(athleteId: number, input: CreateSkillSessionLogInput) {
-    if (input.videoUrl) await this.assertUploadedFileOwnedBy(input.videoUrl, athleteId);
+    const videoUrl = input.videoUrl ? await this.assertUploadedFileOwnedBy(input.videoUrl, athleteId) : null;
     const [row] = await db
       .insert(skillSessionLogs)
       .values({
@@ -8270,11 +8282,11 @@ Hard rules, no exceptions:
         releaseHeightM: input.releaseHeightM ?? null,
         setPointPauseSeconds: input.setPointPauseSeconds ?? null,
         kneeBendDepthDeg: input.kneeBendDepthDeg ?? null,
-        videoUrl: input.videoUrl ?? null,
+        videoUrl,
         // Only meaningful alongside a real videoUrl -- a favorite flag with
         // no clip to exempt from the cap sweep is a no-op either way, so no
         // extra guard needed here beyond what the client already does.
-        videoFavorited: input.videoUrl ? (input.videoFavorited ?? false) : false,
+        videoFavorited: videoUrl ? (input.videoFavorited ?? false) : false,
       })
       .returning();
     return row;
@@ -14128,8 +14140,8 @@ ${entriesText}`;
     authorId: number,
     input: CreateWorkoutCommentInput,
   ) {
-    if (input.videoUrl) await this.assertUploadedFileOwnedBy(input.videoUrl, authorId);
-    if (input.imageUrl) await this.assertUploadedFileOwnedBy(input.imageUrl, authorId);
+    const videoUrl = input.videoUrl ? await this.assertUploadedFileOwnedBy(input.videoUrl, authorId) : null;
+    const imageUrl = input.imageUrl ? await this.assertUploadedFileOwnedBy(input.imageUrl, authorId) : null;
     const [row] = await db
       .insert(workoutComments)
       .values({
@@ -14137,8 +14149,8 @@ ${entriesText}`;
         programDayId,
         authorId,
         body: input.body,
-        videoUrl: input.videoUrl || null,
-        imageUrl: input.imageUrl || null,
+        videoUrl,
+        imageUrl,
         date: input.date || null,
       })
       .returning();
@@ -15202,8 +15214,8 @@ ${entriesText}`;
     authorId: number,
     input: CreateSkillDayCommentInput,
   ) {
-    if (input.videoUrl) await this.assertUploadedFileOwnedBy(input.videoUrl, authorId);
-    if (input.imageUrl) await this.assertUploadedFileOwnedBy(input.imageUrl, authorId);
+    const videoUrl = input.videoUrl ? await this.assertUploadedFileOwnedBy(input.videoUrl, authorId) : null;
+    const imageUrl = input.imageUrl ? await this.assertUploadedFileOwnedBy(input.imageUrl, authorId) : null;
     const [row] = await db
       .insert(skillDayComments)
       .values({
@@ -15211,8 +15223,8 @@ ${entriesText}`;
         skillProgramDayId,
         authorId,
         body: input.body,
-        videoUrl: input.videoUrl || null,
-        imageUrl: input.imageUrl || null,
+        videoUrl,
+        imageUrl,
         date: input.date || null,
       })
       .returning();
@@ -15669,7 +15681,13 @@ ${catalog}`;
     // its insert loop so a bad reference never leaves a half-applied save.
     for (const entry of input.entries) {
       for (const s of entry.sets) {
-        if (s.formCheckVideoUrl) await this.assertUploadedFileOwnedBy(s.formCheckVideoUrl, athleteId);
+        // Mutates in place -- every later read of s.formCheckVideoUrl in
+        // this function (the actual insert below, and newVideoUrls' own
+        // orphan-detection diff) needs the same normalized bare path this
+        // returns, not the client's raw (possibly signed) submission. See
+        // assertUploadedFileOwnedBy's own comment for why a stored signed
+        // URL would silently break future deletes of the file.
+        if (s.formCheckVideoUrl) s.formCheckVideoUrl = await this.assertUploadedFileOwnedBy(s.formCheckVideoUrl, athleteId);
       }
     }
     const athlete = await db.query.users.findFirst({ where: eq(users.id, athleteId) });
@@ -15950,8 +15968,9 @@ ${catalog}`;
     // comment) -- caught here rather than left to propagate, matching this
     // function's own "never throws, false is the whole failure signal"
     // contract described above.
+    let videoUrl: string;
     try {
-      await this.assertUploadedFileOwnedBy(input.videoUrl, athleteId);
+      videoUrl = await this.assertUploadedFileOwnedBy(input.videoUrl, athleteId);
     } catch {
       return false;
     }
@@ -15979,7 +15998,7 @@ ${catalog}`;
 
     const [updated] = await db
       .update(workoutSetEntries)
-      .set({ formCheckVideoUrl: input.videoUrl })
+      .set({ formCheckVideoUrl: videoUrl })
       .where(
         and(
           eq(workoutSetEntries.logEntryId, entry.id),
@@ -17677,8 +17696,8 @@ ${catalog}`;
   // clip belonging to one of their own (or their staff's) athletes. Reuses
   // VideoAnnotationDialog/its PNG-decode route as-is; this just persists the
   // resulting imageUrl onto the Skills-side row.
-  async setSkillSessionAnnotation(coachId: number, skillSessionLogId: number, imageUrl: string) {
-    await this.assertUploadedFileOwnedBy(imageUrl, coachId);
+  async setSkillSessionAnnotation(coachId: number, skillSessionLogId: number, rawImageUrl: string) {
+    const imageUrl = await this.assertUploadedFileOwnedBy(rawImageUrl, coachId);
     const coachIds = await this.getEffectiveCoachIds(coachId);
     const [owned] = await db
       .select({ id: skillSessionLogs.id })

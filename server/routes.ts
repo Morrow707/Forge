@@ -5744,9 +5744,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     fs.writeFileSync(path.join(ANNOTATIONS_DIR, filename), buffer);
     const url = `/uploads/annotations/${filename}`;
     await storage.recordUploadedFile(url, user.id);
-    // Bare path, deliberately unsigned -- see the matching comment on the
-    // form-video upload route above.
-    res.locals.skipMediaSign = true;
+    // Signed like any other JSON response now -- see the matching comment
+    // on the form-video upload route above.
     res.status(201).json({ url });
   });
 
@@ -6813,9 +6812,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         const url = `/uploads/skill-videos/${req.file.filename}`;
         await storage.recordUploadedFile(url, user.id);
-        // Bare path, deliberately unsigned -- see the matching comment on
-        // the form-video upload route above.
-        res.locals.skipMediaSign = true;
+        // Signed like any other JSON response now -- see the matching
+        // comment on the form-video upload route above.
         res.status(201).json({ url });
       });
     },
@@ -7028,10 +7026,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         const url = `/uploads/form-videos/${req.file.filename}`;
         await storage.recordUploadedFile(url, user.id);
-        // Bare path, deliberately unsigned -- this is what the client saves
-        // verbatim as formCheckVideoUrl on a later write (see
-        // media-url-signing.ts); every subsequent read re-signs it fresh.
-        res.locals.skipMediaSign = true;
+        // Signed like any other JSON response now (no skipMediaSign) -- the
+        // athlete's own in-session review dialog (SetVideoPreviewDialog)
+        // opens immediately off this exact response's url, using this same
+        // client session's local state, with no intervening fetch to pick
+        // up a signature the way every other viewer (coach, admin) gets one
+        // for free. An unsigned bare path here 403'd that dialog's <video>
+        // load outright -- a real bug, not a coincidence of three unrelated
+        // components all failing the same way. The client still saves this
+        // verbatim as formCheckVideoUrl on the later workout-log write;
+        // assertUploadedFileOwnedBy strips the query string back off before
+        // that write ever reaches the database (see its own comment).
         res.status(201).json({ url });
       });
     },
