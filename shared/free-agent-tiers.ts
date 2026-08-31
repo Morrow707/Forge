@@ -73,9 +73,16 @@ export const APPLE_BUNDLE_ID = "com.foreperformancesystems.forge";
  * each Product in App Store Connect IS the real price shown to the
  * customer (via StoreKit's own Product.displayPrice) -- this file's
  * monthlyPriceCents is what that configuration should match, not a value
- * the app needs to independently re-charge or display on iOS. */
+ * the app needs to independently re-charge or display on iOS.
+ *
+ * The "_v2" suffix exists because the original unsuffixed ids
+ * (...freeagent.ai_coach etc.) were briefly created in App Store Connect as
+ * the wrong product type (Consumable) and deleted -- Apple permanently
+ * reserves a Product ID the moment it's created, even after deletion, so
+ * those exact strings can never be reused for the real subscription
+ * Products. Don't drop the suffix later; the original ids are dead. */
 export function appleProductIdForFreeAgentTier(tier: FreeAgentTierId): string {
-  return `${APPLE_BUNDLE_ID}.freeagent.${tier}`;
+  return `${APPLE_BUNDLE_ID}.freeagent.${tier}_v2`;
 }
 
 export type FreeAgentAddOnId = "golf_swing" | "hitting" | "pitching";

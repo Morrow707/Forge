@@ -39,10 +39,15 @@ public class AppleIapPlugin: CAPPlugin, CAPBridgedPlugin {
     // as real, priced auto-renewable subscription Products in one App Store
     // Connect subscription group before getProducts can ever return
     // anything.
+    //
+    // "_v2" suffix: the original unsuffixed ids were briefly created in App
+    // Store Connect as the wrong product type (Consumable) and deleted --
+    // Apple permanently reserves a Product ID once created, even after
+    // deletion, so those ids are dead and can never be reused.
     private static let productIds = [
-        "com.foreperformancesystems.forge.freeagent.ai_coach",
-        "com.foreperformancesystems.forge.freeagent.ai_coach_video",
-        "com.foreperformancesystems.forge.freeagent.family"
+        "com.foreperformancesystems.forge.freeagent.ai_coach_v2",
+        "com.foreperformancesystems.forge.freeagent.ai_coach_video_v2",
+        "com.foreperformancesystems.forge.freeagent.family_v2"
     ]
 
     private var updateListenerTask: Task<Void, Never>?
