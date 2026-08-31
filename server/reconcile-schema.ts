@@ -2122,6 +2122,13 @@ CREATE TABLE IF NOT EXISTS "pricing_overrides" (
   "price_cents" integer NOT NULL,
   "updated_at" timestamp NOT NULL DEFAULT now()
 );
+
+-- storage.sweepStaleAccountVideos' own grace-window clock, deliberately separate from
+-- pending_deletion_at (shared/schema.ts workoutSetEntries/skillSessionLogs.
+-- staleAccountPendingDeletionAt -- see that column's own comment for why it can't share the
+-- existing one).
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "stale_account_pending_deletion_at" date;
+ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "stale_account_pending_deletion_at" date;
 `;
 
 async function main() {

@@ -48,16 +48,57 @@ export async function runVideoRetentionSweep() {
   }
 }
 
+// Distinct from the cap sweep above: this purges every video for an
+// ATHLETE ACCOUNT that's shown no sign of life (no login, no logged
+// workout, no skill session) in 12 months, regardless of that athlete's
+// own retention cap -- someone who stopped using Forge entirely, whose
+// clips would otherwise sit on disk forever. Same warn-then-7-day-grace
+// safety pattern as the cap sweep, and for the same reason: a genuinely
+// active account that got flagged in error self-corrects on its next real
+// login, well before the grace window elapses. See
+// storage.sweepStaleAccountVideos's own comment for the exact mechanics.
+export async function runStaleAccountVideoSweep() {
+  try {
+    const { warned, purged } = await storage.sweepStaleAccountVideos();
+    let notified = 0;
+    for (const w of warned) {
+      // Same independent-per-item reasoning as the cap sweep above -- one
+      // failed notify shouldn't stop the rest, and the grace clock only
+      // starts once notifyUser actually succeeds for this one.
+      try {
+        await notifyUser(
+          w.athleteId,
+          "stale_account_video_warning",
+          `A ${w.itemName} video is about to be removed`,
+          `Your account hasn't been active in a while, so your saved videos are being cleared out to free up space -- log in within 7 days if you'd like to keep this one, or it'll be automatically removed.`,
+          w.link,
+        );
+        await storage.markStaleAccountVideoPendingDeletion(w.source, w.id);
+        notified++;
+      } catch (err) {
+        console.error(`Stale-account video sweep: failed to notify athlete ${w.athleteId} about ${w.source} ${w.id}:`, err);
+      }
+    }
+    if (notified > 0 || purged > 0) {
+      console.log(`Stale-account video sweep: warned ${notified}, purged ${purged}.`);
+    }
+  } catch (err) {
+    console.error("Stale-account video sweep failed:", err);
+  }
+}
+
 // Same boot-delay-then-daily-interval shape as data-retention-job.ts's
 // startDataRetentionJob -- data has to exist and this shouldn't block
 // startup.
 export function startVideoRetentionJob() {
   setTimeout(() => {
     runVideoRetentionSweep();
+    runStaleAccountVideoSweep();
   }, 120_000);
   setInterval(
     () => {
       runVideoRetentionSweep();
+      runStaleAccountVideoSweep();
     },
     24 * 60 * 60 * 1000,
   );

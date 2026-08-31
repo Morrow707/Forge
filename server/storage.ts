@@ -17353,6 +17353,7 @@ ${catalog}`;
           // documented invariant.
           videoFavorited: false,
           pendingDeletionAt: null,
+          staleAccountPendingDeletionAt: null,
         })
         .where(eq(workoutSetEntries.id, id));
       return { deleted: true, athleteId: row.athleteId };
@@ -17381,6 +17382,7 @@ ${catalog}`;
           // caller triggered this delete.
           videoFavorited: false,
           pendingDeletionAt: null,
+          staleAccountPendingDeletionAt: null,
         })
         .where(eq(skillSessionLogs.id, id));
       return { deleted: true, athleteId: row.athleteId };
@@ -19877,6 +19879,198 @@ ${catalog}`;
     }
 
     return { warned, purged };
+  },
+
+  // Distinct from sweepVideoRetentionCap above (which only trims an
+  // otherwise-ACTIVE athlete's excess videos per exercise/skill): this
+  // purges an ENTIRE dormant account's videos once the account itself has
+  // shown no sign of life for STALE_ACCOUNT_INACTIVE_MONTHS -- someone who
+  // stopped using Forge entirely, whose old clips would otherwise sit on
+  // disk forever with nobody left to ever watch or favorite them. Applies
+  // regardless of that athlete's own retention cap (even an unlimited/beta
+  // account can go stale), since this is about the account being gone, not
+  // about how many videos it's allowed to keep while active.
+  //
+  // "Activity" is the max of: users.lastActivityAt (touched on every real
+  // login, see completeLogin in auth.ts), the athlete's own most recent
+  // workout_logs.date, and their most recent skill_session_logs.createdAt
+  // -- not just login, since an athlete could in principle keep training
+  // without opening account settings, though in practice logging a
+  // workout requires being logged in anyway. Falls back to users.createdAt
+  // when all three are null (an account that was created but never used
+  // even once) so a permanently-dormant account doesn't stay exempt
+  // forever just because it was never touched to begin with.
+  //
+  // Scoped to strength-set and skill-session videos only, matching
+  // sweepVideoRetentionCap's own scope exactly -- workoutComments has no
+  // pendingDeletionAt/videoFavorited columns (a comment thread is a real
+  // conversation record, not just a clip), so it's deliberately left out
+  // of automatic pruning here the same way it already is there.
+  //
+  // Same notify-then-7-day-grace safety pattern as the cap sweep, and for
+  // the same reason: if "stale" is ever computed wrong for an account
+  // that's genuinely still active, that athlete's next real login updates
+  // lastActivityAt, which un-staleness them on tomorrow's sweep and clears
+  // pendingDeletionAt before the grace window elapses -- exact mirror of
+  // "fell back within the cap" below.
+  async sweepStaleAccountVideos(): Promise<{
+    warned: { source: "set" | "skill"; id: number; athleteId: number; itemName: string; link: string }[];
+    purged: number;
+  }> {
+    const STALE_ACCOUNT_INACTIVE_MONTHS = 12;
+    const STALE_ACCOUNT_GRACE_DAYS = 7;
+
+    const staleAthleteRows = await db.execute<{ id: number }>(sql`
+      SELECT u.id
+      FROM users u
+      WHERE u.role = 'athlete'
+        AND (
+          SELECT greatest(
+            u.last_activity_at,
+            (SELECT max(wl.date::timestamp) FROM workout_logs wl WHERE wl.athlete_id = u.id),
+            (SELECT max(ssl.created_at) FROM skill_session_logs ssl WHERE ssl.athlete_id = u.id),
+            u.created_at
+          )
+        ) < (now() - (${STALE_ACCOUNT_INACTIVE_MONTHS} || ' months')::interval)
+    `);
+    const staleAthleteIds = new Set(staleAthleteRows.rows.map((r) => r.id));
+
+    // Clear any grace-window flag left over from a PAST staleness episode
+    // that this athlete has since recovered from (a real login, workout, or
+    // skill session since) -- without this, a stuck old
+    // staleAccountPendingDeletionAt would make a brand-new dormant period
+    // skip straight to deletion with no fresh warning, since todayMs -
+    // (old timestamp) already exceeds the grace window. Scoped to just the
+    // previously-flagged rows (not a full table scan).
+    const [stuckSetRows, stuckSkillRows] = await Promise.all([
+      db
+        .select({ id: workoutSetEntries.id, athleteId: workoutLogs.athleteId })
+        .from(workoutSetEntries)
+        .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
+        .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
+        .where(isNotNull(workoutSetEntries.staleAccountPendingDeletionAt)),
+      db
+        .select({ id: skillSessionLogs.id, athleteId: skillSessionLogs.athleteId })
+        .from(skillSessionLogs)
+        .where(isNotNull(skillSessionLogs.staleAccountPendingDeletionAt)),
+    ]);
+    const recoveredSetIds = stuckSetRows.filter((r) => !staleAthleteIds.has(r.athleteId)).map((r) => r.id);
+    const recoveredSkillIds = stuckSkillRows.filter((r) => !staleAthleteIds.has(r.athleteId)).map((r) => r.id);
+    if (recoveredSetIds.length) {
+      await db
+        .update(workoutSetEntries)
+        .set({ staleAccountPendingDeletionAt: null })
+        .where(inArray(workoutSetEntries.id, recoveredSetIds));
+    }
+    if (recoveredSkillIds.length) {
+      await db
+        .update(skillSessionLogs)
+        .set({ staleAccountPendingDeletionAt: null })
+        .where(inArray(skillSessionLogs.id, recoveredSkillIds));
+    }
+
+    if (staleAthleteIds.size === 0) return { warned: [], purged: 0 };
+
+    type Candidate = {
+      source: "set" | "skill";
+      id: number;
+      staleAccountPendingDeletionAt: string | null;
+      athleteId: number;
+      itemName: string;
+      link: string;
+    };
+    const candidates: Candidate[] = [];
+
+    const setRows = await db
+      .select({
+        id: workoutSetEntries.id,
+        staleAccountPendingDeletionAt: workoutSetEntries.staleAccountPendingDeletionAt,
+        athleteId: workoutLogs.athleteId,
+        assignmentId: workoutLogs.assignmentId,
+        programDayId: workoutLogs.programDayId,
+        date: workoutLogs.date,
+        exerciseName: exercises.name,
+      })
+      .from(workoutSetEntries)
+      .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
+      .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
+      .innerJoin(programExercises, eq(workoutLogEntries.programExerciseId, programExercises.id))
+      .innerJoin(exercises, eq(programExercises.exerciseId, exercises.id))
+      .where(
+        and(inArray(workoutLogs.athleteId, [...staleAthleteIds]), isNotNull(workoutSetEntries.formCheckVideoUrl)),
+      );
+    for (const row of setRows) {
+      candidates.push({
+        source: "set",
+        id: row.id,
+        staleAccountPendingDeletionAt: row.staleAccountPendingDeletionAt,
+        athleteId: row.athleteId,
+        itemName: row.exerciseName,
+        link: `/athlete/day/${row.assignmentId}/${row.programDayId}/${row.date}`,
+      });
+    }
+
+    const skillRows = await db
+      .select({
+        id: skillSessionLogs.id,
+        staleAccountPendingDeletionAt: skillSessionLogs.staleAccountPendingDeletionAt,
+        athleteId: skillSessionLogs.athleteId,
+        skillExerciseName: skillExercises.name,
+      })
+      .from(skillSessionLogs)
+      .innerJoin(skillProgramExercises, eq(skillSessionLogs.skillProgramExerciseId, skillProgramExercises.id))
+      .innerJoin(skillExercises, eq(skillProgramExercises.skillExerciseId, skillExercises.id))
+      .where(and(inArray(skillSessionLogs.athleteId, [...staleAthleteIds]), isNotNull(skillSessionLogs.videoUrl)));
+    for (const row of skillRows) {
+      candidates.push({
+        source: "skill",
+        id: row.id,
+        staleAccountPendingDeletionAt: row.staleAccountPendingDeletionAt,
+        athleteId: row.athleteId,
+        itemName: row.skillExerciseName,
+        link: "/athlete/calendar",
+      });
+    }
+
+    const warned: { source: "set" | "skill"; id: number; athleteId: number; itemName: string; link: string }[] = [];
+    let purged = 0;
+    const todayMs = Date.now();
+    const graceMs = STALE_ACCOUNT_GRACE_DAYS * 24 * 60 * 60 * 1000;
+
+    for (const c of candidates) {
+      if (c.staleAccountPendingDeletionAt == null) {
+        // Same deliberate omission as sweepVideoRetentionCap:
+        // staleAccountPendingDeletionAt is only written once the caller
+        // confirms the notification actually went out
+        // (markStaleAccountVideoPendingDeletion below), so a failed notify
+        // can't silently start the grace clock unwarned.
+        warned.push({ source: c.source, id: c.id, athleteId: c.athleteId, itemName: c.itemName, link: c.link });
+      } else if (todayMs - new Date(c.staleAccountPendingDeletionAt).getTime() >= graceMs) {
+        const result = await this.deleteAdminVideo(c.source, c.id);
+        if (result.deleted) purged++;
+      }
+    }
+
+    return { warned, purged };
+  },
+
+  // Starts the stale-account grace window -- split out from
+  // sweepStaleAccountVideos itself so the caller only calls this once the
+  // dormancy-warning notification has actually been delivered (mirrors
+  // markVideoPendingDeletion's own reasoning below, one column over).
+  async markStaleAccountVideoPendingDeletion(source: "set" | "skill", id: number) {
+    const today = new Date().toISOString().slice(0, 10);
+    if (source === "set") {
+      await db
+        .update(workoutSetEntries)
+        .set({ staleAccountPendingDeletionAt: today })
+        .where(eq(workoutSetEntries.id, id));
+    } else {
+      await db
+        .update(skillSessionLogs)
+        .set({ staleAccountPendingDeletionAt: today })
+        .where(eq(skillSessionLogs.id, id));
+    }
   },
 
   // Starts a video's 7-day deletion grace window -- split out from

@@ -1451,6 +1451,11 @@ export const skillSessionLogs = pgTable(
     // reference time.
     videoFavorited: boolean("video_favorited").notNull().default(false),
     pendingDeletionAt: date("pending_deletion_at"),
+    // See workoutSetEntries.staleAccountPendingDeletionAt's own comment --
+    // exact mirror, kept separate from pendingDeletionAt above for the same
+    // reason: an account-level dormancy grace clock must never be
+    // conflatable with a per-(athlete, skillExercise) cap-excess one.
+    staleAccountPendingDeletionAt: date("stale_account_pending_deletion_at"),
   },
   (table) => ({
     athleteIdx: index("skill_session_logs_athlete_idx").on(table.athleteId),
@@ -1953,6 +1958,17 @@ export const workoutSetEntries = pgTable(
   // restarts that video's clock rather than losing it, the safe direction
   // for this particular edge case to fail.
   pendingDeletionAt: date("pending_deletion_at"),
+  // Separate grace-window clock for storage.sweepStaleAccountVideos --
+  // deliberately its own column rather than reusing pendingDeletionAt
+  // above, since that field is scoped to ONE video being excess under its
+  // own (athlete, exercise) cap, while this one is scoped to the whole
+  // ACCOUNT having gone dormant. Sharing one column between the two would
+  // mean an active-but-over-cap athlete's legitimate pendingDeletionAt
+  // could get silently cleared the moment that same athlete's account also
+  // happened to look "recovered" from a past dormant period, canceling a
+  // deletion the cap sweep genuinely still wants. Same
+  // resets-to-null-on-resubmission behavior as pendingDeletionAt above.
+  staleAccountPendingDeletionAt: date("stale_account_pending_deletion_at"),
   // "jump" tracking mode's numbers (see jump-tracking.ts) -- null unless
   // trackingLevel was "jump" when this set was logged. Best-of-set height
   // and distance rather than an average, same convention as peakVelocityMps
