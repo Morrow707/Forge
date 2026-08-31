@@ -33,6 +33,18 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
+// getAdminVideos falls back to the literal string "(unknown)" for a row
+// whose parent chain is broken (see storage.ts's own coalesce there) --
+// parseISO can't parse that, and format() on the resulting Invalid Date
+// throws, which crashed this ENTIRE page (React's top-level error
+// boundary) the moment a single row like that showed up in a page of
+// results. One bad row's date should never be able to take the whole list
+// down with it.
+function formatRowDate(date: string): string {
+  const parsed = parseISO(date);
+  return isNaN(parsed.getTime()) ? "Unknown date" : format(parsed, "MMM d, yyyy");
+}
+
 const PAGE_SIZE = 50;
 
 /** Admin-only, READ-ONLY storage-visibility page for every user-uploaded
