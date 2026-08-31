@@ -228,6 +228,11 @@ export function SetVideoCompareDialog({
   // by this rather than one per side, since only one can ever be open at a
   // time anyway.
   const [analyzing, setAnalyzing] = useState<{ url: string; title: string } | null>(null);
+  // Which set numbers' videos failed to load, keyed by setNumber -- same
+  // reasoning as SetVideoPreviewDialog's own loadError above: without this,
+  // a failed load (expired/malformed signed URL, genuinely missing file)
+  // just silently renders the browser's bare "no source" icon here too.
+  const [loadErrors, setLoadErrors] = useState<Record<number, boolean>>({});
 
   const left = sets.find((s) => s.setNumber === (leftNumber ?? pickDefault(sets, "worst", 0)));
   const right = sets.find(
@@ -273,7 +278,21 @@ export function SetVideoCompareDialog({
             </Badge>
           )}
         </div>
-        <video src={resolveApiUrl(video.videoUrl)} controls playsInline className="w-full rounded-md bg-black" />
+        {loadErrors[video.setNumber] ? (
+          <div className="flex h-40 flex-col items-center justify-center gap-1.5 rounded-md border border-border bg-black text-center text-xs text-white/70">
+            <VideoOff className="h-5 w-5" />
+            Couldn't load this video
+          </div>
+        ) : (
+          <video
+            crossOrigin="anonymous"
+            src={resolveApiUrl(video.videoUrl)}
+            controls
+            playsInline
+            className="w-full rounded-md bg-black"
+            onError={() => setLoadErrors((prev) => ({ ...prev, [video.setNumber]: true }))}
+          />
+        )}
         <Button size="sm" variant="outline" className="w-full" onClick={onAnalyze}>
           <Wand2 className="h-3.5 w-3.5" />
           Analysis Tools
