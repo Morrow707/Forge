@@ -205,6 +205,24 @@ const OCCLUSION_MIN_GAP_MS = 70;
 const OCCLUSION_MAX_GAP_MS = 200;
 const OCCLUSION_STEP_MS = 33;
 
+// How much to discount an interpolated point's confidence relative to a
+// straight blend of its two real neighbors' own confidence. These points
+// are a straight-line GUESS bridging a real dropout, not a measurement --
+// even when both real neighbors were highly confident, the guess itself
+// shouldn't come back reporting as trustworthy as an actual reading would.
+// Before this existed, these points left `confidence` unset, and every
+// downstream consumer fell back to its OWN default for that -- `?? 1` in
+// summarizeTrackedSet's outlier filters, Kalman-smoothing weights, and
+// phantom-phase detection, but `?? 0.6` in computeRepTrustScores. Neither
+// default reflected anything real about the gap being bridged, and the `?? 1`
+// case meant a fabricated stretch of a rep could outrank most of the set's
+// actual measurements (a real fused point's confidence tops out at 1 only
+// when both the wrist and the implement read perfectly, see fuseSide) --
+// exactly backwards for data nobody actually measured. Setting a real,
+// blended-and-discounted value here instead means every consumer reads the
+// same honest number.
+const OCCLUSION_CONFIDENCE_DISCOUNT = 0.7;
+
 // Linearly-interpolated points to splice in between `prev` and `curr` when
 // the gap between them looks like a brief dropout rather than real motion
 // -- empty array (nothing to insert) otherwise. Caller pushes these before
@@ -218,6 +236,12 @@ export function interpolateOcclusionGap(
   if (gap < OCCLUSION_MIN_GAP_MS || gap > maxGapMs) return [];
   const steps = Math.floor(gap / OCCLUSION_STEP_MS);
   if (steps < 2) return [];
+  // Missing confidence on a real neighbor shouldn't happen in practice
+  // (every fused trace point carries one, see fuseSide) but falls back to 0
+  // rather than 1 here -- an unmeasured neighbor is exactly the case where
+  // trusting the gap between them is least justified.
+  const prevConfidence = prev.confidence ?? 0;
+  const currConfidence = curr.confidence ?? 0;
   const points: TrackedPoint[] = [];
   for (let i = 1; i < steps; i++) {
     const frac = i / steps;
@@ -226,6 +250,7 @@ export function interpolateOcclusionGap(
       x: prev.x + (curr.x - prev.x) * frac,
       y: prev.y + (curr.y - prev.y) * frac,
       z: prev.z + (curr.z - prev.z) * frac,
+      confidence: (prevConfidence + (currConfidence - prevConfidence) * frac) * OCCLUSION_CONFIDENCE_DISCOUNT,
     });
   }
   return points;
