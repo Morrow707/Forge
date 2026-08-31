@@ -1088,7 +1088,27 @@ private final class AvImplementTracker {
     private let minHotPixels = 6
     private let minWristSpeedPx = 1.0
     private let lockRampFrames = 3.0
-    private let maxLockDriftFraction = 0.45
+    // Was 0.45 (nearly half the frame's shorter side) -- generous enough
+    // that a rack post or a spotter's arm well away from the wrist could
+    // still register as "plausible" and let a lock wander onto it
+    // undetected. Tightened to a value that still covers a
+    // kettlebell/med-ball's real offset from the hand without leaving that
+    // much room for a lock to drift onto an unrelated object. See
+    // implement-tracking.ts's own comment on this same constant -- still a
+    // starting point, not tuned against real footage.
+    private let maxLockDriftFraction = 0.3
+    // How many recent frames' drift-from-wrist ratio to average when
+    // scoring a held lock's confidence -- see driftRatioHistory below and
+    // implement-tracking.ts's matching DRIFT_HISTORY_WINDOW.
+    //
+    // FUTURE CALIBRATION NOTE (both this and maxLockDriftFraction above):
+    // picked by reasoning, not measured against a real recorded set -- see
+    // implement-tracking.ts's matching note for the full reasoning. Once
+    // real device testing gives actual numbers to react to, adjust these
+    // in SMALL increments first rather than swinging back toward the old
+    // looser values -- only jump further if a small nudge clearly isn't
+    // enough.
+    private let driftHistoryWindow = 5
 
     struct ColorSignature {
         var r: Double
@@ -1118,6 +1138,16 @@ private final class AvImplementTracker {
     private var lockPixelY: Double?
     private var lockStreak: Double = 0
     private var lastColor: ColorSignature?
+    // Rolling window of how far each recent frame's tracked point landed
+    // from the wrist, as a fraction of maxLockDriftFraction's own limit (0
+    // = right on the wrist, 1 = at the edge of what's still allowed as
+    // "plausible"). lockStreak alone used to be the only input to
+    // confidence, which meant a lock that had wandered to the very edge of
+    // plausibility reported the exact same full confidence as one still
+    // sitting right on the wrist, as long as both had held for
+    // lockRampFrames -- see implement-tracking.ts's matching
+    // driftRatioHistory for the full reasoning.
+    private var driftRatioHistory: [Double] = []
 
     func reset() {
         prevLuma = nil
@@ -1131,6 +1161,19 @@ private final class AvImplementTracker {
         lockPixelY = nil
         lockStreak = 0
         lastColor = nil
+        driftRatioHistory = []
+    }
+
+    // Average of driftRatioHistory, 0 (perfectly on the wrist) when
+    // nothing's been recorded yet -- confidence() below multiplies this in
+    // as a proximity factor alongside the existing streak-based ramp.
+    private func avgDriftRatio() -> Double {
+        guard !driftRatioHistory.isEmpty else { return 0 }
+        return driftRatioHistory.reduce(0, +) / Double(driftRatioHistory.count)
+    }
+
+    private func confidence() -> Double {
+        min(1.0, lockStreak / lockRampFrames) * (1 - avgDriftRatio())
     }
 
     // Same escape hatch as both ports this descends from -- a caller-side fusion
@@ -1187,7 +1230,7 @@ private final class AvImplementTracker {
                 return TrackResult(
                     x: lx / Double(width),
                     y: 1.0 - (ly / Double(height)),
-                    confidence: min(1.0, lockStreak / lockRampFrames),
+                    confidence: confidence(),
                     color: lastColor
                 )
             }
@@ -1224,10 +1267,19 @@ private final class AvImplementTracker {
         lockStreak = hasPlausibleLock ? lockStreak + 1 : 1
         lastColor = AvImplementTracker.sampleColor(rgba: rgba, width: width, height: height, x: centroid.x, y: centroid.y)
 
+        // How far THIS frame's freshly-found point landed from the wrist,
+        // against the same maxDrift the plausibility check above uses --
+        // pushed into the rolling window before reading it back out in
+        // confidence() below, so this frame's own reading is already
+        // counted in its own score.
+        let driftRatio = min(1.0, hypot(centroid.x - wristX, centroid.y - wristY) / maxDrift)
+        driftRatioHistory.append(driftRatio)
+        if driftRatioHistory.count > driftHistoryWindow { driftRatioHistory.removeFirst() }
+
         return TrackResult(
             x: centroid.x / Double(width),
             y: 1.0 - (centroid.y / Double(height)),
-            confidence: min(1.0, lockStreak / lockRampFrames),
+            confidence: confidence(),
             color: lastColor
         )
     }

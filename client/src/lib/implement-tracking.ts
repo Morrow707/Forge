@@ -199,8 +199,35 @@ const LOCK_RAMP_FRAMES = 3;
 // Generous enough to cover an implement that hangs or swings some real
 // distance from the hand (a kettlebell, a med ball at the chest), tight
 // enough that a lock can't wander clear across the frame onto some
-// unrelated moving object and stay stuck there.
-const MAX_LOCK_DRIFT_FRACTION = 0.45;
+// unrelated moving object and stay stuck there. Was 0.45 (nearly half the
+// frame's shorter side) -- generous enough that a rack post or a spotter's
+// arm well away from the wrist could still register as "plausible" and let
+// a lock wander onto it undetected. Tightened to a value that still covers
+// a kettlebell/med-ball's real offset from the hand without leaving that
+// much room for a lock to drift onto an unrelated object. Still a starting
+// point, not tuned against real footage -- same caveat as every other
+// constant in this file.
+const MAX_LOCK_DRIFT_FRACTION = 0.3;
+
+// How many recent frames' drift-from-wrist ratio to average when scoring a
+// held lock's confidence (see driftRatioHistory below) -- smooths out a
+// single noisy frame (motion blur, a momentary bad centroid) so it can't
+// swing confidence on its own, while a lock that's genuinely drifted for a
+// sustained stretch still drags the average down within about a sixth of a
+// second at 30fps.
+//
+// FUTURE CALIBRATION NOTE (both this and MAX_LOCK_DRIFT_FRACTION above):
+// picked by reasoning, not measured against a real recorded set -- this
+// environment has no camera. Once real device testing (bar tilt/shift
+// readings, confidence behavior across a real set) gives actual numbers to
+// react to, adjust these in SMALL increments first (e.g. DRIFT_HISTORY_
+// WINDOW +/-1-2 frames, MAX_LOCK_DRIFT_FRACTION +/-0.05) and see if that
+// alone fixes it, rather than swinging back toward the old looser values --
+// only jump further if a small nudge clearly isn't enough (e.g. the drift
+// problem persists essentially unchanged, or legitimate kettlebell/med-ball
+// tracking starts failing outright). Same tune-gradually-first approach for
+// LOCK_RAMP_FRAMES above if that ever needs revisiting too.
+const DRIFT_HISTORY_WINDOW = 5;
 
 export type BarTrackResult = {
   // World-space position the tracker itself is reporting this frame, in
@@ -255,6 +282,18 @@ export class ImplementTracker {
   // (cleared wherever the lock is) since a color sampled from a position
   // the tracker no longer trusts isn't a color worth reporting either.
   private lastColor: ColorSignature | null = null;
+  // Rolling window (see DRIFT_HISTORY_WINDOW) of how far each recent
+  // frame's tracked point landed from the wrist, as a fraction of
+  // MAX_LOCK_DRIFT_FRACTION's own limit (0 = right on the wrist, 1 = at the
+  // edge of what's still allowed as "plausible"). lockStreak alone used to
+  // be the only input to confidence, which meant a lock that had wandered
+  // to the very edge of plausibility reported the exact same full
+  // confidence as one still sitting right on the wrist, as long as both had
+  // held for LOCK_RAMP_FRAMES -- this is what actually lets the caller's
+  // fusion (see bar-tracker-dialog.tsx's own fuseSide) down-weight a
+  // drifting-but-technically-still-plausible lock instead of trusting it
+  // fully.
+  private driftRatioHistory: number[] = [];
 
   reset(): void {
     this.prevGray = null;
@@ -264,6 +303,19 @@ export class ImplementTracker {
     this.lockWorldY = null;
     this.lockStreak = 0;
     this.lastColor = null;
+    this.driftRatioHistory = [];
+  }
+
+  // Average of driftRatioHistory, 0 (perfectly on the wrist) when nothing's
+  // been recorded yet -- confidence() below multiplies this in as a
+  // proximity factor alongside the existing streak-based ramp.
+  private avgDriftRatio(): number {
+    if (this.driftRatioHistory.length === 0) return 0;
+    return this.driftRatioHistory.reduce((sum, r) => sum + r, 0) / this.driftRatioHistory.length;
+  }
+
+  private confidence(): number {
+    return Math.min(1, this.lockStreak / LOCK_RAMP_FRAMES) * (1 - this.avgDriftRatio());
   }
 
   private getCanvas(): HTMLCanvasElement {
@@ -276,6 +328,7 @@ export class ImplementTracker {
     this.lockPixelY = null;
     this.lockStreak = 0;
     this.lastColor = null;
+    this.driftRatioHistory = [];
   }
 
   // Public escape hatch for a caller-side sanity check this tracker has no
@@ -372,7 +425,7 @@ export class ImplementTracker {
         return {
           worldX: this.lockWorldX,
           worldY: this.lockWorldY,
-          confidence: Math.min(1, this.lockStreak / LOCK_RAMP_FRAMES),
+          confidence: this.confidence(),
           color: this.lastColor,
         };
       }
@@ -422,10 +475,19 @@ export class ImplementTracker {
     this.lockPixelY = centroid.y;
     this.lastColor = sampleAverageColor(data, w, h, centroid.x, centroid.y);
 
+    // How far THIS frame's freshly-found point landed from the wrist,
+    // against the same maxDrift the plausibility check above uses -- pushed
+    // into the rolling window before reading it back out in confidence()
+    // below, so this frame's own reading is already counted in its own
+    // score.
+    const driftRatio = Math.min(1, Math.hypot(centroid.x - wristX, centroid.y - wristY) / maxDrift);
+    this.driftRatioHistory.push(driftRatio);
+    if (this.driftRatioHistory.length > DRIFT_HISTORY_WINDOW) this.driftRatioHistory.shift();
+
     return {
       worldX: this.lockWorldX,
       worldY: this.lockWorldY,
-      confidence: Math.min(1, this.lockStreak / LOCK_RAMP_FRAMES),
+      confidence: this.confidence(),
       color: this.lastColor,
     };
   }
