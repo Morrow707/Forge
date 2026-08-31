@@ -15,7 +15,6 @@ type AdminVideoRow = {
   id: number;
   videoUrl: string;
   secondaryUrl: string | null;
-  athleteId: number;
   athleteName: string;
   label: string;
   date: string;
@@ -97,19 +96,6 @@ export default function AdminVideos() {
     onError: () => toast.error("Couldn't bulk-delete videos"),
   });
 
-  const bulkDeleteForAthleteMutation = useMutation({
-    mutationFn: async (athleteId: number) => {
-      const res = await apiRequest("POST", "/api/admin/videos/bulk-delete-for-athlete", { athleteId });
-      return (await res.json()) as { count: number };
-    },
-    onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/videos"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/videos/storage-summary"] });
-      toast.success(`Deleted ${result.count} video${result.count === 1 ? "" : "s"}`);
-    },
-    onError: () => toast.error("Couldn't delete this athlete's videos"),
-  });
-
   function handleBulkDelete() {
     const days = Number(olderThanDays);
     if (!Number.isFinite(days) || days < 1) {
@@ -131,14 +117,6 @@ export default function AdminVideos() {
       window.confirm(`Permanently delete this video (${video.athleteName} — ${video.label})? This can't be undone.`)
     ) {
       deleteMutation.mutate(video);
-    }
-  }
-
-  function handleDeleteForAthlete(athleteId: number, athleteName: string) {
-    if (
-      window.confirm(`Permanently delete every video/attachment for ${athleteName}? This can't be undone.`)
-    ) {
-      bulkDeleteForAthleteMutation.mutate(athleteId);
     }
   }
 
@@ -220,29 +198,16 @@ export default function AdminVideos() {
                         {v.label} · {format(parseISO(v.date), "MMM d, yyyy")} · {formatBytes(v.sizeBytes)}
                       </p>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="text-destructive hover:text-destructive"
-                        onClick={() => handleDelete(v)}
-                        disabled={deleteMutation.isPending}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                        Delete
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="text-destructive hover:text-destructive"
-                        onClick={() => handleDeleteForAthlete(v.athleteId, v.athleteName)}
-                        disabled={bulkDeleteForAthleteMutation.isPending}
-                        title={`Delete every video/attachment for ${v.athleteName}`}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                        Delete all for {v.athleteName}
-                      </Button>
-                    </div>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-destructive hover:text-destructive"
+                      onClick={() => handleDelete(v)}
+                      disabled={deleteMutation.isPending}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Delete
+                    </Button>
                   </div>
                 ))}
               </div>

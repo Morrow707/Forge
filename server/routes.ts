@@ -2413,26 +2413,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ count });
   });
 
-  app.post("/api/admin/videos/bulk-delete-for-athlete", requireRole("admin"), async (req, res) => {
-    const user = currentUser(req);
-    const athleteId = Number(req.body?.athleteId);
-    if (!Number.isFinite(athleteId)) {
-      return res.status(400).json({ message: "athleteId must be a number" });
-    }
-    const count = await storage.bulkDeleteAdminVideosForAthlete(athleteId);
-    storage.invalidateAdminVideoSummaryCache();
-    await storage.logRecordAccess({
-      userId: user.id,
-      targetAthleteId: athleteId,
-      actionType: "deleted",
-      resourceType: "admin_video_bulk_delete_for_athlete",
-      detail: `${count} video(s) for athlete ${athleteId}`,
-      ipAddress: req.ip,
-      userAgent: req.get("user-agent") ?? undefined,
-    });
-    res.json({ count });
-  });
-
   // Read view for the audit log itself -- see getRecordAccessAuditLog's own
   // comment for the honest, still-partial scope of what's instrumented.
   app.get("/api/admin/audit-log", requireRole("admin"), async (req, res) => {
