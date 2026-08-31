@@ -110,14 +110,12 @@ export function AvKbSwingTrackerDialog({
     message: string,
     captureDeviceInfo: CaptureDeviceInfo,
     trackingDiagnostics: TrackingDiagnostics,
+    uploadPromise: Promise<{ status: "uploaded"; url: string } | { status: "queued" }> | null,
   ) {
     const emptyMetrics: KbSwingSetMetrics = { ...EMPTY_KB_SWING_METRICS, captureDeviceInfo, trackingDiagnostics };
-    if (recordVideo) {
-      setSaving(true);
-      setUploadProgress(0);
+    if (recordVideo && uploadPromise) {
       try {
-        const filename = videoFilenameForBlob(blob, "form-check");
-        const result = await uploadOrQueueVideo(blob, filename, videoContext ?? { label: "Kettlebell Swing" }, setUploadProgress);
+        const result = await uploadPromise;
         toast.error(
           result.status === "queued"
             ? `${message} (No Wi-Fi -- video saved on your device, will upload for your coach once connected.)`
@@ -148,9 +146,44 @@ export function AvKbSwingTrackerDialog({
   }
 
   async function stopTracking() {
-    const result = await stopRecordingAndAnalyze();
-    if (!result) return; // error/cancellation already reported by the hook
-    await finishWithRecording(result.blob, result.rawFrames, result.captureDeviceInfo, result.recordingStats);
+    // Starts the upload the instant the recording exists rather than after analysis also
+    // finishes, so the two run concurrently -- see use-av-body-tracking.ts's own onBlobReady
+    // comment. saveEmptyAndWarn and finishWithRecording's own success path both just await
+    // this same in-flight upload instead of starting a fresh one once they're ready for it.
+    let uploadPromise: Promise<{ status: "uploaded"; url: string } | { status: "queued" }> | null = null;
+    const result = await stopRecordingAndAnalyze({
+      onBlobReady: recordVideo
+        ? (blob) => {
+            setSaving(true);
+            setUploadProgress(0);
+            const filename = videoFilenameForBlob(blob, "form-check");
+            uploadPromise = uploadOrQueueVideo(blob, filename, videoContext ?? { label: "Kettlebell Swing" }, setUploadProgress);
+          }
+        : undefined,
+    });
+    if (!result) {
+      // Analysis failed or was cancelled, but the upload above doesn't know or care -- it never
+      // depended on analysis succeeding. Left alone it would still finish in the background with
+      // no set to attach it to, so wait for it and hand it over anyway, same "the clip is worth
+      // keeping even without numbers" reasoning as saveEmptyAndWarn below.
+      const inFlightUpload = uploadPromise as Promise<
+        { status: "uploaded"; url: string } | { status: "queued" }
+      > | null;
+      if (inFlightUpload) {
+        try {
+          const uploadResult = await inFlightUpload;
+          toast.error("Couldn't finish analyzing this take, but your video was saved for your coach.");
+          onCapture(EMPTY_KB_SWING_METRICS, uploadResult.status === "uploaded" ? uploadResult.url : undefined);
+          onOpenChange(false);
+        } catch {
+          // Genuinely nothing left to salvage.
+        } finally {
+          setSaving(false);
+        }
+      }
+      return;
+    }
+    await finishWithRecording(result.blob, result.rawFrames, result.captureDeviceInfo, result.recordingStats, uploadPromise);
   }
 
   async function finishWithRecording(
@@ -158,6 +191,7 @@ export function AvKbSwingTrackerDialog({
     rawFrames: NativePoseFrame[],
     captureDeviceInfo: CaptureDeviceInfo,
     recordingStats: { frameCount: number; trackedFrameCount: number; elapsedSeconds: number },
+    uploadPromise: Promise<{ status: "uploaded"; url: string } | { status: "queued" }> | null,
   ) {
     const calibrationInput = rawFrames.map((f) => ({ worldLandmarks: visionJointsToWorldLandmarks(f) }));
     const scaleFactor = calibrateFromFrames(calibrationInput, heightIn);
@@ -176,6 +210,7 @@ export function AvKbSwingTrackerDialog({
           recording: recordingStats,
           calibration: { scaleFactor: null, ...calibrationFrames },
         }),
+        uploadPromise,
       );
       return;
     }
@@ -231,6 +266,7 @@ export function AvKbSwingTrackerDialog({
           recording: recordingStats,
           calibration: { scaleFactor, ...calibrationFrames },
         }),
+        uploadPromise,
       );
       return;
     }
@@ -290,11 +326,15 @@ export function AvKbSwingTrackerDialog({
       return;
     }
 
-    setSaving(true);
-    setUploadProgress(0);
+    // uploadPromise is always set here -- onBlobReady (stopTracking above) unconditionally
+    // starts it whenever recordVideo is true, and the early return above already covers
+    // !recordVideo. Falls back to a fresh upload rather than silently dropping the video if
+    // that invariant is ever wrong.
+    const inFlightUpload =
+      uploadPromise ??
+      uploadOrQueueVideo(blob, videoFilenameForBlob(blob, "form-check"), videoContext ?? { label: "Kettlebell Swing" }, setUploadProgress);
     try {
-      const filename = videoFilenameForBlob(blob, "form-check");
-      const result = await uploadOrQueueVideo(blob, filename, videoContext ?? { label: "Kettlebell Swing" }, setUploadProgress);
+      const result = await inFlightUpload;
       if (result.status === "queued") {
         if (!hasWarnedAboutQueueing()) {
           markWarnedAboutQueueing();
@@ -345,11 +385,11 @@ export function AvKbSwingTrackerDialog({
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/60">
                 <div className="h-8 w-8 animate-spin rounded-full border-2 border-teal-400 border-t-transparent" />
                 <p className="text-sm text-white">
-                  {saving
-                    ? `Saving your video… ${Math.round(uploadProgress * 100)}%`
-                    : `Analyzing recording -- ${analyzedFrames} frames processed…`}
+                  {analyzing
+                    ? `Analyzing recording -- ${analyzedFrames} frames processed…`
+                    : `Saving your video… ${Math.round(uploadProgress * 100)}%`}
                 </p>
-                {!saving && (
+                {analyzing && (
                   <Button variant="outline" size="sm" onClick={cancelAnalysis}>
                     <XCircle className="h-4 w-4" />
                     Cancel
@@ -405,7 +445,7 @@ export function AvKbSwingTrackerDialog({
             )}
             {(analyzing || saving) && (
               <Button size="lg" variant="secondary" disabled>
-                {saving ? `Saving… ${Math.round(uploadProgress * 100)}%` : "Analyzing…"}
+                {analyzing ? "Analyzing…" : `Saving… ${Math.round(uploadProgress * 100)}%`}
               </Button>
             )}
           </div>

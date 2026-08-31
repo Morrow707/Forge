@@ -18,6 +18,17 @@ import {
   type CaptureDeviceInfo,
 } from "@/lib/native-av-preview";
 
+// Every frame (analyzeAvRecording's own sampleEveryNthFrame default) was never actually
+// necessary -- interpolateOcclusionGap/kalmanSmooth (bar-tracking.ts) work off each frame's
+// REAL timestamp, not a frame count, specifically so a sparser trace degrades gracefully
+// instead of breaking (that's the whole reason jump mode was already switched to
+// kalmanSmooth this same work session). Every 2nd frame still gives a 30fps-equivalent
+// trace on a 60fps recording -- well above what any published video-based jump/bar-velocity
+// methodology needs -- for roughly half the Vision (VNDetectHumanBodyPoseRequest) work the
+// "Analyzing recording" step has to do per clip. Reported as the single biggest source of
+// wait between a set finishing and it actually being saved.
+const ANALYSIS_SAMPLE_STRIDE = 2;
+
 /** The AVFoundation + Vision camera/recording/analysis lifecycle shared by every tracker
  * dialog on the new pipeline (Sprint/Jump/Mechanics/Swing today, more to come) -- mirrors
  * use-ar-body-tracking.ts's own shape and reasoning almost exactly (capability check, the
@@ -197,7 +208,19 @@ export function useAvBodyTracking(active: boolean) {
   // the file's even finished writing), so a second call in flight at the same time hits that
   // plugin's own "Not recording" guard and surfaces as a spurious error on what the athlete
   // experienced as a single, ordinary tap.
-  async function stopRecordingAndAnalyze(options?: { detectBox?: boolean }): Promise<
+  async function stopRecordingAndAnalyze(options?: {
+    detectBox?: boolean;
+    // Fired the instant the recorded blob exists -- right after native stopRecording()
+    // resolves, BEFORE Vision analysis (the "Analyzing recording" step) even starts, let
+    // alone finishes. The upload doesn't depend on anything Vision produces (metrics get
+    // attached to the set separately), so a caller can start uploadOrQueueVideo here and run
+    // it concurrently with analysis instead of waiting for analysis to finish first -- see
+    // each dialog's own stopTracking for how this cuts the athlete's total wait to roughly
+    // the LONGER of the two steps instead of both stacked in series. Never awaited by this
+    // hook; a caller that doesn't pass it loses nothing (nothing changes from before this
+    // existed).
+    onBlobReady?: (blob: Blob) => void;
+  }): Promise<
     | {
         blob: Blob;
         rawFrames: NativePoseFrame[];
@@ -220,7 +243,10 @@ export function useAvBodyTracking(active: boolean) {
     }
   }
 
-  async function doStopRecordingAndAnalyze(options?: { detectBox?: boolean }): Promise<
+  async function doStopRecordingAndAnalyze(options?: {
+    detectBox?: boolean;
+    onBlobReady?: (blob: Blob) => void;
+  }): Promise<
     | {
         blob: Blob;
         rawFrames: NativePoseFrame[];
@@ -253,6 +279,7 @@ export function useAvBodyTracking(active: boolean) {
       return null;
     }
     recordingPathRef.current = path;
+    options?.onBlobReady?.(blob);
 
     const rawFrames: NativePoseFrame[] = [];
     const unsubscribe = onAvPoseFrame((frame) => {
@@ -267,7 +294,7 @@ export function useAvBodyTracking(active: boolean) {
       boxTopNormalizedY?: number;
     };
     try {
-      recordingStats = await analyzeAvRecording(path, undefined, options?.detectBox);
+      recordingStats = await analyzeAvRecording(path, ANALYSIS_SAMPLE_STRIDE, options?.detectBox);
     } catch (err) {
       unsubscribe();
       void deleteAvRecording(path);

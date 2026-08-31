@@ -190,14 +190,12 @@ export function AvBarTrackerDialog({
     message: string,
     captureDeviceInfo: CaptureDeviceInfo,
     trackingDiagnostics: TrackingDiagnostics,
+    uploadPromise: Promise<{ status: "uploaded"; url: string } | { status: "queued" }> | null,
   ) {
     const emptyMetrics: RepMetrics = { ...EMPTY_REP_METRICS, captureDeviceInfo, trackingDiagnostics };
-    if (recordVideo) {
-      setSaving(true);
-      setUploadProgress(0);
+    if (recordVideo && uploadPromise) {
       try {
-        const filename = videoFilenameForBlob(blob, "form-check");
-        const result = await uploadOrQueueVideo(blob, filename, videoContext ?? { label: exerciseName }, setUploadProgress);
+        const result = await uploadPromise;
         toast.error(
           result.status === "queued"
             ? `${message} (No Wi-Fi -- video saved on your device, will upload for your coach once connected.)`
@@ -228,9 +226,44 @@ export function AvBarTrackerDialog({
   }
 
   async function stopTracking() {
-    const result = await stopRecordingAndAnalyze();
-    if (!result) return; // error/cancellation already reported by the hook
-    await finishWithRecording(result.blob, result.rawFrames, result.captureDeviceInfo, result.recordingStats);
+    // Starts the upload the instant the recording exists rather than after analysis also
+    // finishes, so the two run concurrently -- see use-av-body-tracking.ts's own onBlobReady
+    // comment. saveEmptyAndWarn and finishWithRecording's own success path both just await
+    // this same in-flight upload instead of starting a fresh one once they're ready for it.
+    let uploadPromise: Promise<{ status: "uploaded"; url: string } | { status: "queued" }> | null = null;
+    const result = await stopRecordingAndAnalyze({
+      onBlobReady: recordVideo
+        ? (blob) => {
+            setSaving(true);
+            setUploadProgress(0);
+            const filename = videoFilenameForBlob(blob, "form-check");
+            uploadPromise = uploadOrQueueVideo(blob, filename, videoContext ?? { label: exerciseName }, setUploadProgress);
+          }
+        : undefined,
+    });
+    if (!result) {
+      // Analysis failed or was cancelled, but the upload above doesn't know or care -- it never
+      // depended on analysis succeeding. Left alone it would still finish in the background with
+      // no set to attach it to, so wait for it and hand it over anyway, same "the clip is worth
+      // keeping even without numbers" reasoning as saveEmptyAndWarn below.
+      const inFlightUpload = uploadPromise as Promise<
+        { status: "uploaded"; url: string } | { status: "queued" }
+      > | null;
+      if (inFlightUpload) {
+        try {
+          const uploadResult = await inFlightUpload;
+          toast.error("Couldn't finish analyzing this take, but your video was saved for your coach.");
+          onCapture(EMPTY_REP_METRICS, uploadResult.status === "uploaded" ? uploadResult.url : undefined);
+          onOpenChange(false);
+        } catch {
+          // Genuinely nothing left to salvage.
+        } finally {
+          setSaving(false);
+        }
+      }
+      return;
+    }
+    await finishWithRecording(result.blob, result.rawFrames, result.captureDeviceInfo, result.recordingStats, uploadPromise);
   }
 
   async function finishWithRecording(
@@ -238,6 +271,7 @@ export function AvBarTrackerDialog({
     rawFrames: NativePoseFrame[],
     captureDeviceInfo: CaptureDeviceInfo,
     recordingStats: { frameCount: number; trackedFrameCount: number; elapsedSeconds: number },
+    uploadPromise: Promise<{ status: "uploaded"; url: string } | { status: "queued" }> | null,
   ) {
     const calibrationInput = rawFrames.map((f) => ({ worldLandmarks: visionJointsToWorldLandmarks(f) }));
     const scaleFactor = calibrateFromFrames(calibrationInput, heightIn);
@@ -256,6 +290,7 @@ export function AvBarTrackerDialog({
           recording: recordingStats,
           calibration: { scaleFactor: null, ...calibrationFrames },
         }),
+        uploadPromise,
       );
       return;
     }
@@ -383,6 +418,7 @@ export function AvBarTrackerDialog({
           recording: recordingStats,
           calibration: { scaleFactor, ...calibrationFrames },
         }),
+        uploadPromise,
       );
       return;
     }
@@ -473,11 +509,15 @@ export function AvBarTrackerDialog({
       return;
     }
 
-    setSaving(true);
-    setUploadProgress(0);
+    // uploadPromise is always set here -- onBlobReady (stopTracking above) unconditionally
+    // starts it whenever recordVideo is true, and the early return above already covers
+    // !recordVideo. Falls back to a fresh upload rather than silently dropping the video if
+    // that invariant is ever wrong.
+    const inFlightUpload =
+      uploadPromise ??
+      uploadOrQueueVideo(blob, videoFilenameForBlob(blob, "form-check"), videoContext ?? { label: exerciseName }, setUploadProgress);
     try {
-      const filename = videoFilenameForBlob(blob, "form-check");
-      const result = await uploadOrQueueVideo(blob, filename, videoContext ?? { label: exerciseName }, setUploadProgress);
+      const result = await inFlightUpload;
       if (result.status === "queued") {
         if (!hasWarnedAboutQueueing()) {
           markWarnedAboutQueueing();
@@ -528,14 +568,20 @@ export function AvBarTrackerDialog({
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/60">
                 <div className="h-8 w-8 animate-spin rounded-full border-2 border-teal-400 border-t-transparent" />
                 <p className="text-sm text-white">
-                  {saving
-                    ? `Saving your video… ${Math.round(uploadProgress * 100)}%`
-                    : `Analyzing recording -- ${analyzedFrames} frames processed…`}
+                  {/* The upload now starts the instant the recording exists, running
+                      concurrently with analysis instead of waiting for it -- so both are
+                      routinely true at once. Analyzing's own progress stays the headline
+                      number while it's still running (saving is happening quietly behind it),
+                      and only takes over once analysis is done but the upload still has a tail
+                      left. */}
+                  {analyzing
+                    ? `Analyzing recording -- ${analyzedFrames} frames processed…`
+                    : `Saving your video… ${Math.round(uploadProgress * 100)}%`}
                 </p>
                 {/* Cancel only applies to the on-device analysis pass (cancelAnalysis calls
-                    the native cancelAvAnalysis) -- once that's done and the upload is
-                    underway there's nothing left to cancel, so this stops offering it. */}
-                {!saving && (
+                    the native cancelAvAnalysis) -- shown exactly while analysis is still
+                    running, independent of whether the (now-concurrent) upload has finished. */}
+                {analyzing && (
                   <Button variant="outline" size="sm" onClick={cancelAnalysis}>
                     <XCircle className="h-4 w-4" />
                     Cancel
@@ -591,7 +637,7 @@ export function AvBarTrackerDialog({
             )}
             {(analyzing || saving) && (
               <Button size="lg" variant="secondary" disabled>
-                {saving ? `Saving… ${Math.round(uploadProgress * 100)}%` : "Analyzing…"}
+                {analyzing ? "Analyzing…" : `Saving… ${Math.round(uploadProgress * 100)}%`}
               </Button>
             )}
           </div>

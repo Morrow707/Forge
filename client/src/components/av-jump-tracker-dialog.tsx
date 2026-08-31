@@ -120,14 +120,64 @@ export function AvJumpTrackerDialog({
   }, [open]);
 
   async function stopTracking() {
-    const result = await stopRecordingAndAnalyze({ detectBox: usesBox === true });
-    if (!result) return; // error/cancellation already reported by the hook
+    // Starts the upload the instant the recording exists -- not after analysis (kalmanSmooth,
+    // form faults, etc.) also finishes -- so the two run concurrently instead of stacked in
+    // series. The upload never depends on anything analysis produces (metrics get attached to
+    // the set separately, after the video's own URL comes back), so there's nothing to lose by
+    // starting it this early. See finishWithRecording's own use of this promise below for why
+    // every path (success, calibration-failed, no-clean-read) still just awaits the SAME
+    // in-flight upload rather than starting a fresh one.
+    let uploadPromise: Promise<{ status: "uploaded"; url: string } | { status: "queued" }> | null = null;
+    const result = await stopRecordingAndAnalyze({
+      detectBox: usesBox === true,
+      onBlobReady: recordVideo
+        ? (blob) => {
+            setSaving(true);
+            setUploadProgress(0);
+            const filename = videoFilenameForBlob(blob, "form-check");
+            uploadPromise = uploadOrQueueVideo(blob, filename, videoContext ?? { label: "Jump" }, setUploadProgress);
+          }
+        : undefined,
+    });
+    if (!result) {
+      // Analysis failed or was cancelled (the hook's own error state, or nothing, already
+      // reported it) -- but the upload above doesn't know or care about that, since it never
+      // depended on analysis succeeding. Left alone, it would still finish uploading in the
+      // background with no set to attach it to: a real video on disk, orphaned. Wait for it and
+      // hand it to the athlete's set anyway (with no computed metrics -- there aren't any),
+      // same "the clip is worth keeping even without numbers" reasoning as the
+      // calibration-failed/no-clean-read paths below, just for a third way this can happen.
+      // Cast (not just copied to a fresh const) before narrowing -- uploadPromise is a `let`
+      // reassigned only inside the onBlobReady closure above, and TypeScript's control-flow
+      // analysis doesn't trace into closures: outside one, it treats a closure-only-assigned
+      // `let` as having stayed at its initializer (null) forever, no matter the declared type,
+      // which narrows the truthy branch below to `never` without this cast overriding it.
+      const inFlightUpload = uploadPromise as Promise<
+        { status: "uploaded"; url: string } | { status: "queued" }
+      > | null;
+      if (inFlightUpload) {
+        try {
+          const uploadResult = await inFlightUpload;
+          toast.error("Couldn't finish analyzing this take, but your video was saved for your coach.");
+          onCapture(EMPTY_JUMP_METRICS, uploadResult.status === "uploaded" ? uploadResult.url : undefined);
+          onOpenChange(false);
+        } catch {
+          // Genuinely nothing left to salvage -- analysis already failed/cancelled and now the
+          // upload did too. Leave the dialog open (same as the no-uploadPromise case below) so
+          // whatever error state the hook already set stays visible.
+        } finally {
+          setSaving(false);
+        }
+      }
+      return;
+    }
     await finishWithRecording(
       result.blob,
       result.rawFrames.map((f) => ({ t: f.timestamp * 1000, worldLandmarks: visionJointsToWorldLandmarks(f) })),
       result.captureDeviceInfo,
       result.rawFrames,
       result.recordingStats,
+      uploadPromise,
     );
   }
 
@@ -142,6 +192,7 @@ export function AvJumpTrackerDialog({
       elapsedSeconds: number;
       boxTopNormalizedY?: number;
     },
+    uploadPromise: Promise<{ status: "uploaded"; url: string } | { status: "queued" }> | null,
   ) {
     const scaleFactor = calibrateFromFrames(rawFrames, heightIn);
     const calibrationFrames = calibrationMethodBreakdown(rawFrames);
@@ -161,12 +212,9 @@ export function AvJumpTrackerDialog({
       // way ARKit's can. Same "couldn't get a clean read, but the clip
       // still saves" UX ArJumpTrackerDialog already has for its own
       // different failure reason (summarizeJumpSet returning null).
-      if (recordVideo) {
-        setSaving(true);
-        setUploadProgress(0);
+      if (recordVideo && uploadPromise) {
         try {
-          const filename = videoFilenameForBlob(blob, "form-check");
-          const result = await uploadOrQueueVideo(blob, filename, videoContext ?? { label: "Jump" }, setUploadProgress);
+          const result = await uploadPromise;
           toast.error(
             result.status === "queued"
               ? "Couldn't calibrate real-world scale for this take -- make sure your height is set in your profile and you're clearly visible standing at some point in frame. (No Wi-Fi -- video saved on your device, will upload for your coach once connected.)"
@@ -262,12 +310,9 @@ export function AvJumpTrackerDialog({
         calibration: { scaleFactor, ...calibrationFrames },
       });
       const emptyMetrics: JumpSetMetrics = { ...EMPTY_JUMP_METRICS, captureDeviceInfo, trackingDiagnostics: diagnostics };
-      if (recordVideo) {
-        setSaving(true);
-        setUploadProgress(0);
+      if (recordVideo && uploadPromise) {
         try {
-          const filename = videoFilenameForBlob(blob, "form-check");
-          const result = await uploadOrQueueVideo(blob, filename, videoContext ?? { label: "Jump" }, setUploadProgress);
+          const result = await uploadPromise;
           toast.error(
             result.status === "queued"
               ? "Couldn't get a clean read -- make sure your feet leave the ground clearly in frame. (No Wi-Fi -- video saved on your device, will upload for your coach once connected.)"
@@ -342,11 +387,16 @@ export function AvJumpTrackerDialog({
       return;
     }
 
-    setSaving(true);
-    setUploadProgress(0);
+    // uploadPromise is always set by now -- onBlobReady (stopTracking above) unconditionally
+    // starts it whenever recordVideo is true, and recordVideo is true on every path that
+    // reaches here (the early return above already covers the other case). The fallback still
+    // starts a fresh upload rather than silently dropping the video if that invariant is ever
+    // wrong.
+    const inFlightUpload =
+      uploadPromise ??
+      uploadOrQueueVideo(blob, videoFilenameForBlob(blob, "form-check"), videoContext ?? { label: "Jump" }, setUploadProgress);
     try {
-      const filename = videoFilenameForBlob(blob, "form-check");
-      const result = await uploadOrQueueVideo(blob, filename, videoContext ?? { label: "Jump" }, setUploadProgress);
+      const result = await inFlightUpload;
       if (result.status === "queued") {
         if (!hasWarnedAboutQueueing()) {
           markWarnedAboutQueueing();
@@ -397,11 +447,17 @@ export function AvJumpTrackerDialog({
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/60">
                 <div className="h-8 w-8 animate-spin rounded-full border-2 border-teal-400 border-t-transparent" />
                 <p className="text-sm text-white">
-                  {saving
-                    ? `Saving your video… ${Math.round(uploadProgress * 100)}%`
-                    : `Analyzing recording -- ${analyzedFrames} frames processed…`}
+                  {/* The upload now starts the instant the recording exists, running
+                      concurrently with analysis rather than waiting for it (see stopTracking's
+                      own comment) -- so both are routinely true at once. Analyzing's own
+                      progress stays the headline number while it's still running (saving is
+                      happening quietly behind it), and only takes over once analysis is done
+                      but the upload still has a tail left. */}
+                  {analyzing
+                    ? `Analyzing recording -- ${analyzedFrames} frames processed…`
+                    : `Saving your video… ${Math.round(uploadProgress * 100)}%`}
                 </p>
-                {!saving && (
+                {analyzing && (
                   <Button variant="outline" size="sm" onClick={cancelAnalysis}>
                     <XCircle className="h-4 w-4" />
                     Cancel
@@ -457,7 +513,7 @@ export function AvJumpTrackerDialog({
             )}
             {(analyzing || saving) && (
               <Button size="lg" variant="secondary" disabled>
-                {saving ? `Saving… ${Math.round(uploadProgress * 100)}%` : "Analyzing…"}
+                {analyzing ? "Analyzing…" : `Saving… ${Math.round(uploadProgress * 100)}%`}
               </Button>
             )}
           </div>

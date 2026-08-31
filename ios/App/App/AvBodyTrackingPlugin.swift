@@ -249,6 +249,28 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             // audio the athlete had playing (e.g. their own music) even though this
             // session never touches audio. false tells it to leave the audio session alone.
             session.automaticallyConfiguresApplicationAudioSession = false
+            // "Leave it alone" above turned out to be incomplete: it only stops THIS session
+            // from actively grabbing .playAndRecord -- it does nothing about whatever category
+            // the shared AVAudioSession is ALREADY sitting in, which for an app that has never
+            // explicitly configured one is .soloAmbient, the one category that silences other
+            // apps' audio the instant anything (this capture session starting, a Web Audio
+            // AudioContext elsewhere in the WebView -- see audio-cues.ts's own comment on why
+            // that goes through this exact same shared session) makes the app's audio active.
+            // Reported still cutting out specifically at the save/upload step, after recording
+            // itself had already been fixed -- consistent with .soloAmbient being the thing
+            // that bites, not this session's own config, since nothing anywhere in this app had
+            // ever explicitly asked for a mixable category. .ambient + .mixWithOthers is the
+            // standard fix for "this app's audio (native or web) should coexist with whatever
+            // else is already playing, never silence it" -- set once here, early, and left
+            // active (never setActive(false)'d back off) so nothing later in the flow can fall
+            // back to the default non-mixing category.
+            do {
+                try AVAudioSession.sharedInstance().setCategory(.ambient, options: [.mixWithOthers])
+                try AVAudioSession.sharedInstance().setActive(true, options: [])
+                self.logDiag("audio session set to .ambient/.mixWithOthers")
+            } catch {
+                self.logDiag("WARNING: failed to configure audio session: \(error.localizedDescription)")
+            }
             session.beginConfiguration()
             if session.canSetSessionPreset(.hd1920x1080) {
                 session.sessionPreset = .hd1920x1080
