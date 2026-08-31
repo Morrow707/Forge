@@ -2551,8 +2551,12 @@ function ExerciseLogContent({
                         {tracked
                           ? item.trackingLevel === "jump" && set.jumpHeightCm != null
                             ? `${formatDistanceCm(set.jumpHeightCm, distanceUnit)} jump — retake`
-                            : item.trackingLevel === "full" && set.peakVelocityMps != null
-                              ? `${set.peakVelocityMps} m/s peak — retake`
+                            : item.trackingLevel === "full" && set.meanVelocityMps != null
+                              ? // Average (mean concentric) velocity, not peak -- this is the
+                                // number VBT athletes actually train against (e.g. "stay above
+                                // 0.5 m/s"), and it's the first thing shown back to them after
+                                // a tracked set, right here on the set row.
+                                `${set.meanVelocityMps} m/s avg — retake`
                               : `Path ${set.barPathDeviationCm} cm — retake`
                           : item.trackingLevel === "jump"
                             ? "Track this jump"
