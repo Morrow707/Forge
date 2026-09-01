@@ -15,3 +15,14 @@
   first to confirm it compiles on real Xcode before spending a `beta` upload
   (Apple rate-limits TestFlight uploads) -- then follow with `beta` automatically,
   still without asking.
+- This environment's local git checkout has repeatedly reverted `main` to a stale
+  commit between tool calls, especially after an idle gap (waiting on a build,
+  a long pause between user messages) -- looks like a container-resume quirk in
+  the remote sandbox, not anything wrong with the repo or with how commits are
+  made. `origin/main` is never affected, and recovery is always a clean
+  `git fetch origin main && git merge --ff-only origin/main` (verify
+  `git status --short` is empty first). Once bitten (a whole audit run against
+  a checkout ~112 commits behind origin/main, producing a real false report):
+  run that fetch+ff-only check at the START of any work in this repo -- before
+  reading files for research, not just before committing -- so stale state gets
+  caught before it feeds conclusions, not just before it feeds a push.
