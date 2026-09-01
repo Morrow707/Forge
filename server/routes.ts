@@ -5808,6 +5808,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(result);
   });
 
+  // AI Overwatch (Section 5): on-demand, not fetched automatically on page
+  // load -- same "coach clicks a button" cost-consciousness as
+  // /api/coach/roster/:athleteId/weakness-report's own generate action,
+  // since this calls Claude.
+  app.get("/api/coach/roster/:athleteId/exercises/:exerciseId/form-overwatch", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const athleteId = Number(req.params.athleteId);
+    const exerciseId = Number(req.params.exerciseId);
+    if (!Number.isFinite(athleteId) || !Number.isFinite(exerciseId)) {
+      return res.status(400).json({ message: "Invalid athlete or exercise id" });
+    }
+    const result = await storage.getFormOverwatchForExercise(user.id, athleteId, exerciseId);
+    if (!result) {
+      return res
+        .status(422)
+        .json({ message: "Not enough tracked sets of this exercise yet to look for a pattern." });
+    }
+    res.json(result);
+  });
+
   // ---------------- Coach: Leaderboard ----------------
   // Coach-only, ranks every athlete on the roster (never other coaches'
   // athletes) by their best estimated 1RM for a chosen exercise.

@@ -2077,6 +2077,13 @@ type AggregateAthleteRow = {
   deadliftMaxLbs: number | null;
 };
 
+type OverwatchFlaw = {
+  title: string;
+  faultCode: string;
+  coachingCue: string;
+  physiologicalNote: string;
+};
+
 type AdminVideoRow = {
   source: "set" | "skill" | "comment";
   id: number;
@@ -16563,6 +16570,99 @@ ${catalog}`;
       },
       pointCount: points.length,
     };
+  },
+
+  // Not persisted (unlike weaknessReports) -- computed fresh on every
+  // request from whatever's currently in the tracked-set window, so it's
+  // never stale and needs no new table.
+  // AI Overwatch (Master Blueprint Section 5): looks for a FORM FAULT
+  // PATTERN that recurs across an athlete's recent tracked sets of one
+  // exercise, not a single set. The fault codes themselves already exist --
+  // see pose-tracking.ts's detectFormFaults (shallow_depth, knee_valgus,
+  // hip_drop, forward_lean, bar_tilt, bar_path_drift, etc), computed
+  // on-device and stored per set -- this is the first thing that aggregates
+  // them into a trend and hands that trend to Claude for coaching language.
+  // Anonymized by construction: Claude only ever sees fault-code labels and
+  // frequency counts, never video, joint coordinates, or the athlete's name.
+  async getFormOverwatchForExercise(coachId: number, athleteId: number, exerciseId: number) {
+    const rows = await this.getExerciseAnalyticsForCoach(coachId, athleteId, exerciseId);
+    // Most recent window only -- a flaw from three months ago that's since
+    // been corrected shouldn't keep surfacing as "chronic" forever.
+    const recent = rows.slice(-15) as Array<{ formFaults: unknown }>;
+    const trackedRows = recent.filter((r) => r.formFaults != null);
+    if (trackedRows.length < 3) return null;
+
+    const faultCounts = new Map<string, { label: string; count: number }>();
+    for (const r of trackedRows) {
+      const faults = Array.isArray(r.formFaults)
+        ? (r.formFaults as { code?: string; label?: string }[])
+        : [];
+      for (const f of faults) {
+        if (!f?.code || !f?.label) continue;
+        const existing = faultCounts.get(f.code);
+        if (existing) existing.count++;
+        else faultCounts.set(f.code, { label: f.label, count: 1 });
+      }
+    }
+
+    // Nothing recurring at all -- a genuinely good sign, and not worth an
+    // API call to have Claude confirm what the counts already show.
+    if (faultCounts.size === 0) {
+      return {
+        summary: `No recurring form faults across the last ${trackedRows.length} tracked sets -- clean technique lately.`,
+        chronicFlaws: [] as OverwatchFlaw[],
+      };
+    }
+
+    const exerciseRow = await db.query.exercises.findFirst({
+      where: eq(exercises.id, exerciseId),
+      columns: { name: true },
+    });
+    const exerciseName = exerciseRow?.name ?? "this exercise";
+    const faultSummaryText = Array.from(faultCounts.entries())
+      .sort((a, b) => b[1].count - a[1].count)
+      .map(([code, { label, count }]) => `${label} (code: ${code}): flagged on ${count} of ${trackedRows.length} tracked sets`)
+      .join("; ");
+
+    const prompt = `Exercise: ${exerciseName}. Reviewing an athlete's last ${trackedRows.length} camera-tracked sets of this exercise (most recent tracked window, not their full history).
+
+Form-fault flags detected by on-device pose analysis across that window: ${faultSummaryText}
+
+These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, torso lean, bar path/tilt), not a medical assessment. Identify which of these, if any, represents a genuine CHRONIC pattern worth a coach's attention -- something recurring across multiple sessions, not a one-off. For each chronic pattern: a short title, the fault code it's based on, a plain-language coaching cue the coach could give the athlete, and one physiological/injury-risk note for why it's worth addressing. If nothing here rises to a real chronic pattern, return an empty array rather than manufacturing one.`;
+
+    const result = await askClaudeStructured<{ summary: string; chronicFlaws: OverwatchFlaw[] }>(
+      "You are an expert strength & conditioning coach reviewing camera-tracked biomechanics flags for one athlete's recent sets of one exercise. Distinguish a genuine recurring pattern from single-session noise. Never diagnose a medical condition, never invent a pattern the counts given don't support, and ground every claim in the specific counts provided.",
+      prompt,
+      {
+        name: "report_chronic_flaws",
+        description: "Report chronic biomechanical fault patterns worth a coach's attention.",
+        input_schema: {
+          type: "object",
+          properties: {
+            summary: {
+              type: "string",
+              description: "1-2 sentence plain-language overview of this exercise's recent tracked technique.",
+            },
+            chronicFlaws: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  title: { type: "string" },
+                  faultCode: { type: "string" },
+                  coachingCue: { type: "string" },
+                  physiologicalNote: { type: "string" },
+                },
+                required: ["title", "faultCode", "coachingCue", "physiologicalNote"],
+              },
+            },
+          },
+          required: ["summary", "chronicFlaws"],
+        },
+      },
+      { maxTokens: 1200 },
+    );
+    return result ?? null;
   },
 
   // One row per exercise -- the athlete's most recent PR at any rep count,

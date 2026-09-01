@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useSearch } from "wouter";
 import { useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { AppShell } from "@/components/app-shell";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -57,7 +58,7 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
-import { Pencil, Check } from "lucide-react";
+import { Pencil, Check, Sparkles, AlertTriangle } from "lucide-react";
 import { SkillsTrendsPanel } from "@/components/skills-trends-panel";
 import {
   LineChart,
@@ -763,6 +764,29 @@ export default function CoachAnalytics() {
     enabled: !!athleteId && !!exerciseId,
   });
 
+  // AI Overwatch (Section 5) -- unlike the queries above, this is not
+  // fetched on page load (enabled: false); it calls Claude, so it only
+  // runs when the coach explicitly asks via the button below.
+  const {
+    data: overwatchData,
+    refetch: fetchOverwatch,
+    isFetching: overwatchLoading,
+  } = useQuery<{
+    summary: string;
+    chronicFlaws: { title: string; faultCode: string; coachingCue: string; physiologicalNote: string }[];
+  }>({
+    queryKey: ["/api/coach/roster", athleteId, "exercises", exerciseId, "form-overwatch"],
+    queryFn: async () => {
+      const res = await apiRequest(
+        "GET",
+        `/api/coach/roster/${athleteId}/exercises/${exerciseId}/form-overwatch`,
+      );
+      return res.json();
+    },
+    enabled: false,
+    retry: false,
+  });
+
   const chartData = points.map((p) => ({
     ...p,
     label: `${format(parseISO(p.date), "MMM d")} · Set ${p.setNumber}`,
@@ -1382,6 +1406,71 @@ export default function CoachAnalytics() {
                     </ComposedChart>
                   </ResponsiveContainer>
                 </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {!!athleteId && !!exerciseId && (
+            <Card>
+              <CardHeader>
+                <CardTitle>AI Overwatch</CardTitle>
+                <CardDescription>
+                  Reviews this athlete's recent camera-tracked sets of this exercise for a form
+                  fault that keeps recurring across sessions -- not a single set, a real pattern.
+                  Anonymized: Claude only sees fault-code frequency counts, never video or joint
+                  coordinates.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Button
+                  size="sm"
+                  onClick={async () => {
+                    const result = await fetchOverwatch();
+                    if (result.error) {
+                      const message =
+                        result.error instanceof Error
+                          ? result.error.message
+                          : "Not enough tracked sets of this exercise yet to look for a pattern.";
+                      toast.info(message);
+                    }
+                  }}
+                  disabled={overwatchLoading}
+                >
+                  <Sparkles className="h-4 w-4" />
+                  {overwatchLoading ? "Analyzing…" : overwatchData ? "Re-check" : "Check for Chronic Flaws"}
+                </Button>
+                {overwatchData && (
+                  <div className="space-y-3">
+                    <p className="text-sm font-semibold">{overwatchData.summary}</p>
+                    {overwatchData.chronicFlaws.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        No concerning pattern found in this exercise's recent tracked sets.
+                      </p>
+                    ) : (
+                      overwatchData.chronicFlaws.map((f, i) => (
+                        <div key={i} className="space-y-2 rounded-md border border-border p-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="flex items-center gap-1.5 font-semibold">
+                              <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400" />
+                              {f.title}
+                            </p>
+                            <Badge variant="secondary">{f.faultCode}</Badge>
+                          </div>
+                          <div className="space-y-1.5 text-sm">
+                            <p>
+                              <span className="font-semibold text-muted-foreground">Coaching cue: </span>
+                              {f.coachingCue}
+                            </p>
+                            <p>
+                              <span className="font-semibold text-muted-foreground">Why it matters: </span>
+                              {f.physiologicalNote}
+                            </p>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
