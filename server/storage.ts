@@ -16460,7 +16460,19 @@ ${catalog}`;
       // programExerciseId null without touching the set's actual data.
       .innerJoin(exercises, eq(workoutLogEntries.exerciseId, exercises.id))
       .leftJoin(programExercises, eq(workoutLogEntries.programExerciseId, programExercises.id))
-      .where(and(isNotNull(programExercises.trackingLevel), sql`${programExercises.trackingLevel} != 'none'`))
+      .where(
+        and(
+          isNotNull(programExercises.trackingLevel),
+          sql`${programExercises.trackingLevel} != 'none'`,
+          // trackingLevel being set only means the EXERCISE is configured for camera
+          // tracking -- an athlete can still log a set for it by hand (typing reps/weight,
+          // never tapping Record & Analyze), which leaves trackingDiagnostics null and
+          // every CV column empty. Without this, this report fills up with exactly those
+          // untouched sets alongside the ones that actually ran through the pipeline,
+          // burying the real (and real-failure) entries the report exists to surface.
+          isNotNull(workoutSetEntries.trackingDiagnostics),
+        ),
+      )
       .orderBy(desc(workoutSetEntries.id))
       .limit(limit);
   },
