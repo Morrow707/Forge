@@ -1288,6 +1288,19 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
     // motionDiffThreshold comment).
     private let boxHorizontalToleranceFraction = 0.3
     private let boxMaxHeightAboveAnkleFraction = 0.6
+    // A box's top surface, viewed from roughly straight on (how this is filmed -- the athlete
+    // needs the whole jump in frame), reads as a quadrilateral somewhere between "almost square"
+    // and "noticeably wider than tall," never a thin sliver. A gym floor seam, a mat edge, or a
+    // shadow line is exactly the shape this was mistaking for a box top before this guard existed
+    // -- long and thin, nowhere near square. boundingBox is VNRectangleObservation's own
+    // normalized, axis-aligned bounding box of the (possibly perspective-skewed) quad; its
+    // width/height ratio is a cheap, resolution-independent proxy for "roughly box-shaped" that
+    // doesn't need the actual corner geometry the height/horizontal checks below already use for
+    // a different purpose (position, not shape). UNTUNED, same honest caveat as every other
+    // constant in this pipeline -- no camera in this environment to calibrate against a real box
+    // photographed from a real filming angle.
+    private let boxMinAspectRatio = 0.5
+    private let boxMaxAspectRatio = 3.0
 
     private func detectBoxTopCandidate(
         handler: VNImageRequestHandler,
@@ -1309,6 +1322,13 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
 
         var best: (topY: Double, horizontalDistance: Double)?
         for obs in observations {
+            // Cheapest check first -- rejects floor seams/mat edges/shadow lines before doing
+            // any of the position math below on a candidate that was never going to be the box
+            // regardless of where it sits.
+            let boundingBox = obs.boundingBox
+            guard boundingBox.height > 0 else { continue }
+            let aspectRatio = Double(boundingBox.width / boundingBox.height)
+            guard aspectRatio >= boxMinAspectRatio, aspectRatio <= boxMaxAspectRatio else { continue }
             let topY = Double(obs.topLeft.y + obs.topRight.y) / 2
             let centerX = Double(obs.topLeft.x + obs.topRight.x + obs.bottomLeft.x + obs.bottomRight.x) / 4
             // The box's top has to sit above the athlete's own standing ankle level (it's an

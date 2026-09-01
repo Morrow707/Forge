@@ -1,6 +1,5 @@
 import { registerPlugin } from "@capacitor/core";
 import { Capacitor } from "@capacitor/core";
-import { Filesystem } from "@capacitor/filesystem";
 
 // JS side of ios/App/App/AvBodyTrackingPlugin.swift -- Phase 1 of the AVFoundation + Vision
 // pipeline that replaces ARKit on iOS (see that Swift file's own comment, and
@@ -194,21 +193,28 @@ export async function startAvRecording(): Promise<void> {
 // own calling deleteAvRecording(path) once they're done with BOTH the blob (e.g. queued for
 // upload) and analysis -- purgeStaleRecordings() on the next native start() call is the
 // backstop if a caller never gets there (see AvBodyTrackingPlugin.swift's own comment).
+//
+// Streams the file straight into a Blob via Capacitor's own file:// URL scheme handler
+// (convertFileSrc + fetch) instead of Filesystem.readFile's base64 round-trip this used to go
+// through. readFile has to hand back the ENTIRE file as one base64 string -- ~33% larger than
+// the source bytes, and briefly resident in memory a second time again as the decoded Uint8Array
+// below -- which on a long 4K60 recording (100MB+) is real OOM risk on an older/lower-RAM
+// device, on top of the UI-thread string-decode cost of atob() against something that size.
+// fetch()/response.blob() streams the response body directly into a Blob without Capacitor's
+// bridge ever needing to serialize the whole file through a JS string at all.
 export async function stopAvRecording(): Promise<{ blob: Blob; path: string }> {
   const { path } = await AvBodyTracking.stopRecording();
-  // stopRecording() resolves the plugin's own raw filesystem path (no file:// scheme) --
-  // deleteAvRecording/analyzeAvRecording both pass that same raw path straight back to native
-  // calls that expect exactly that form (FileManager's removeItem(atPath:) and
-  // URL(fileURLWithPath:) respectively), so `path` below and the value this function returns
-  // both stay raw. Filesystem.readFile is the one consumer that needs an actual file:// URI --
-  // with no `directory` given, a bare path like "/private/var/.../foo.mov" isn't a valid URL on
-  // its own and readFile fails with "couldn't be opened."
-  const { data } = await Filesystem.readFile({ path: `file://${path}` });
-  const binary = atob(data as string);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return { blob: new Blob([bytes], { type: "video/quicktime" }), path };
+  // convertFileSrc wants the bare filesystem path -- same raw (no file:// scheme) path
+  // deleteAvRecording/analyzeAvRecording already pass straight back to native calls that
+  // expect exactly that form (FileManager's removeItem(atPath:) and URL(fileURLWithPath:)
+  // respectively). Prepending file:// here would double up the scheme Capacitor's own
+  // internal URL already adds.
+  const url = Capacitor.convertFileSrc(path);
+  const response = await fetch(url);
+  const blob = await response.blob();
+  return { blob, path };
 }
+
 
 export async function deleteAvRecording(path: string): Promise<void> {
   await AvBodyTracking.deleteRecording({ path }).catch(() => {
