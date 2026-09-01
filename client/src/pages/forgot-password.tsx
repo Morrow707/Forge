@@ -18,7 +18,13 @@ export default function ForgotPasswordPage() {
     mutationFn: async () => {
       await apiRequest("POST", "/api/auth/request-password-reset", { email });
     },
-    onSuccess: () => setSubmitted(true),
+    onSuccess: () => {
+      // Already true after the first submit -- setting it again is a no-op for the
+      // resend click, but the toast below is the only feedback a resend click gets,
+      // since the card's own copy doesn't change.
+      if (submitted) toast.success("Link resent.");
+      setSubmitted(true);
+    },
     onError: (err: ApiError) => toast.error(err.message || "Something went wrong"),
   });
 
@@ -79,11 +85,23 @@ export default function ForgotPasswordPage() {
                 </Button>
               </form>
             ) : (
-              <p className="text-sm text-muted-foreground">
-                If an account exists for that email, we've sent a link to reset your password.
-                It expires in an hour -- check your inbox (and spam folder), or try again if you
-                mistyped the email.
-              </p>
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  If an account exists for that email, we've sent a link to reset your password.
+                  It expires in an hour -- check your inbox (and spam folder), or try again if you
+                  mistyped the email.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  className="w-full"
+                  disabled={mutation.isPending}
+                  onClick={() => mutation.mutate()}
+                >
+                  {mutation.isPending ? "Sending…" : "Resend Link"}
+                </Button>
+              </div>
             )}
             <Link
               href="/login"
