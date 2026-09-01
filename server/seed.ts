@@ -6136,7 +6136,7 @@ Here's what Forge does do to protect the data it holds, in full:
 - For users under 18, raw video is automatically deleted after a set window (30 days under age 13, 90 days ages 13-17); performance numbers derived from that video are kept, but the footage itself is not retained indefinitely.
 - Every terms-of-service acceptance is written to an immutable, insert-only audit log (timestamp, IP address, the exact document version shown).
 - Any user can permanently delete their own account and every video tied to it themselves, at any time.
-- Forge does not send user data to any third-party analytics or error-tracking service -- there is no Google Analytics, Meta Pixel, Sentry, Mixpanel, or similar tool anywhere in the app.
+- Forge does not send user data to any third-party analytics or advertising tool -- there is no Google Analytics, Meta Pixel, Mixpanel, or similar tool anywhere in the app. The one exception is Sentry, used strictly for crash/error monitoring: it's configured to collect no cookies, headers, request/response bodies, database query data, or stack-frame variable values, and every error is passed through an additional filter that redacts anything email-shaped before it's sent.
 - The only feature that reports on athletes in aggregate strips names, emails, and team affiliation, and refuses to display any group smaller than five people.
 
 And what we don't have yet, stated plainly: no signed BAAs with our hosting or infrastructure vendors, no completed HIPAA Security Risk Assessment, no PHI-grade audit logging across the whole app (today that level of logging only covers video access), and no outside compliance certification. If your use case involves documenting patient assessments, diagnoses, or treatment plans, Forge is not yet the right tool for that -- we'd rather tell you now than have you find out later.`;
@@ -6145,6 +6145,21 @@ And what we don't have yet, stated plainly: no signed BAAs with our hosting or i
         ? healthcareNotice
         : `${currentAgreement}\n\n${healthcareNotice}`,
     );
+  }
+
+  // One-time correction: the healthcare notice above originally claimed Sentry wasn't used at
+  // all, which stopped being true once server/index.ts and client/src/main.tsx actually wired
+  // error monitoring up for real. Same idempotent-patch shape as the two blocks above -- finds
+  // the exact stale sentence in whatever's currently live and replaces it in place, a permanent
+  // no-op on every redeploy after the first successful run, and leaves every other part of the
+  // document (including any admin edits made since) untouched.
+  const STALE_SENTRY_CLAIM =
+    "Forge does not send user data to any third-party analytics or error-tracking service -- there is no Google Analytics, Meta Pixel, Sentry, Mixpanel, or similar tool anywhere in the app.";
+  const CORRECTED_SENTRY_CLAIM =
+    "Forge does not send user data to any third-party analytics or advertising tool -- there is no Google Analytics, Meta Pixel, Mixpanel, or similar tool anywhere in the app. The one exception is Sentry, used strictly for crash/error monitoring: it's configured to collect no cookies, headers, request/response bodies, database query data, or stack-frame variable values, and every error is passed through an additional filter that redacts anything email-shaped before it's sent.";
+  const agreementForSentryFix = await storage.getLegalAgreement();
+  if (agreementForSentryFix.includes(STALE_SENTRY_CLAIM)) {
+    await storage.updateLegalAgreement(agreementForSentryFix.replace(STALE_SENTRY_CLAIM, CORRECTED_SENTRY_CLAIM));
   }
 
   // Draft Terms of Service / Privacy Policy / Biometric Waiver -- same

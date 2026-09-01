@@ -1,6 +1,33 @@
 import "dotenv/config";
 import * as Sentry from "@sentry/node";
 
+const EMAIL_PATTERN = /[\w.+-]+@[\w-]+\.[\w.-]+/g;
+
+// Defense-in-depth on top of the dataCollection lockdown below -- that option controls
+// structured request/DB context the SDK attaches automatically, but not what ends up INSIDE a
+// thrown error's own message or a breadcrumb (e.g. an Error whose message happens to echo an
+// athlete's or guardian's email, which several routes in this app do interpolate into error
+// text). Redacts anything email-shaped out of every string field an event actually carries,
+// and strips request cookies/body/headers again here too in case a future SDK upgrade changes
+// what dataCollection's defaults capture -- this function is the one place that gets audited
+// when "does Forge send PII to Sentry" comes up, so it shouldn't rely on a setting living only
+// in the init() call below.
+function scrubPii(event: Sentry.ErrorEvent, _hint: Sentry.EventHint): Sentry.ErrorEvent {
+  if (event.message) event.message = event.message.replace(EMAIL_PATTERN, "[redacted-email]");
+  for (const ex of event.exception?.values ?? []) {
+    if (ex.value) ex.value = ex.value.replace(EMAIL_PATTERN, "[redacted-email]");
+  }
+  for (const crumb of event.breadcrumbs ?? []) {
+    if (crumb.message) crumb.message = crumb.message.replace(EMAIL_PATTERN, "[redacted-email]");
+  }
+  if (event.request) {
+    delete event.request.cookies;
+    delete event.request.data;
+    delete event.request.headers;
+  }
+  return event;
+}
+
 // Error reporting -- same "silently no-op until configured" pattern every
 // other optional integration in this file follows (AI, email, push). Has
 // to run this early (before express-async-errors and every other import
@@ -9,8 +36,28 @@ import * as Sentry from "@sentry/node";
 // tracesSampleRate/profiling here -- error monitoring only, matching what
 // was actually asked for; performance tracing is a separate Sentry
 // product this app isn't opting into.
+//
+// dataCollection is deliberately locked all the way down, not left on the SDK's own defaults:
+// Forge handles video and performance data on minors, and on this SDK version several
+// dataCollection categories (cookies, HTTP headers, request/response bodies, DB query data,
+// stack-frame local variables) default to ON independent of the older sendDefaultPii flag --
+// an unconfigured Sentry.init({ dsn }) would already be sending far more than "error monitoring
+// only" implies (a session cookie via httpHeaders, an athlete's info via a request body or a
+// captured local variable). scrubPii above is the second, independent layer on top of this.
 if (process.env.SENTRY_DSN) {
-  Sentry.init({ dsn: process.env.SENTRY_DSN });
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    dataCollection: {
+      userInfo: false,
+      cookies: false,
+      httpHeaders: { request: false, response: false },
+      httpBodies: [],
+      urlQueryParams: false,
+      databaseQueryData: false,
+      stackFrameVariables: false,
+    },
+    beforeSend: scrubPii,
+  });
 }
 
 // Express 4's router never awaits (or attaches a .catch to) an async route

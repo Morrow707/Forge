@@ -7,13 +7,51 @@ import { startOfflineVideoSync } from "@/lib/video-offline-store";
 import { bootstrapNativeShell } from "@/lib/native-bootstrap";
 import "./index.css";
 
+const EMAIL_PATTERN = /[\w.+-]+@[\w-]+\.[\w.-]+/g;
+
+// Client-side twin of server/index.ts's scrubPii -- see that file's own comment for why
+// dataCollection's defaults aren't trusted as-is and why this exists as a second, independent
+// pass over event text specifically (a thrown error whose message happens to echo a user's
+// email, which dataCollection doesn't touch since that's about structured request/DB context,
+// not string content).
+function scrubPii(event: Sentry.ErrorEvent, _hint: Sentry.EventHint): Sentry.ErrorEvent {
+  if (event.message) event.message = event.message.replace(EMAIL_PATTERN, "[redacted-email]");
+  for (const ex of event.exception?.values ?? []) {
+    if (ex.value) ex.value = ex.value.replace(EMAIL_PATTERN, "[redacted-email]");
+  }
+  for (const crumb of event.breadcrumbs ?? []) {
+    if (crumb.message) crumb.message = crumb.message.replace(EMAIL_PATTERN, "[redacted-email]");
+  }
+  if (event.request) {
+    delete event.request.cookies;
+    delete event.request.data;
+    delete event.request.headers;
+  }
+  return event;
+}
+
 // Client-side twin of server/index.ts's Sentry setup -- same silently
-// no-op-until-configured pattern. VITE_SENTRY_DSN (not SENTRY_DSN) since
-// Vite only exposes VITE_-prefixed env vars to client code, and needs it
-// at build time, not just runtime -- Render's build step already reads
-// the service's env vars either way.
+// no-op-until-configured pattern, and the same locked-all-the-way-down
+// dataCollection posture (see that file's own comment on why the SDK's own
+// defaults aren't trusted as-is for an app that handles minors' video and
+// performance data). VITE_SENTRY_DSN (not SENTRY_DSN) since Vite only
+// exposes VITE_-prefixed env vars to client code, and needs it at build
+// time, not just runtime -- Render's build step already reads the
+// service's env vars either way.
 if (import.meta.env.VITE_SENTRY_DSN) {
-  Sentry.init({ dsn: import.meta.env.VITE_SENTRY_DSN });
+  Sentry.init({
+    dsn: import.meta.env.VITE_SENTRY_DSN,
+    dataCollection: {
+      userInfo: false,
+      cookies: false,
+      httpHeaders: { request: false, response: false },
+      httpBodies: [],
+      urlQueryParams: false,
+      databaseQueryData: false,
+      stackFrameVariables: false,
+    },
+    beforeSend: scrubPii,
+  });
 }
 
 // Fires when a lazy-loaded route's chunk 404s -- happens whenever someone
