@@ -865,6 +865,22 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         var frameIndex = 0
         var processedCount = 0
         var trackedCount = 0
+        // Vision genuinely erroring on a frame (perform() throwing) is a different, worse
+        // signal than Vision running cleanly and just not finding a body -- the latter is
+        // normal (a rep's bottom position, the athlete stepping out of frame), the former means
+        // something is wrong with the frame/buffer itself. Counted separately so a clip that's
+        // mostly Vision *errors* isn't indistinguishable from one that's mostly clean "no body"
+        // reads.
+        var visionFailureCount = 0
+        // Largest gap between two consecutively-PROCESSED (i.e. already past the
+        // sampleEveryNthFrame stride) frames' own presentation timestamps -- a stall signal
+        // distinct from readerStatus/assetDurationSeconds above. Those catch the reader giving
+        // up outright; this catches the read loop staying alive but the underlying frames
+        // themselves having a large timestamp discontinuity (e.g. the capture session dropping
+        // frames under load), which reader status alone reads as "completed" and would
+        // otherwise look identical to a clean, evenly-paced recording.
+        var previousProcessedTimestamp: Double?
+        var maxInterFrameGapSeconds: Double?
         let startTime = Date()
 
         while reader.status == .reading {
@@ -880,6 +896,11 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             guard thisFrameIndex % sampleEveryNthFrame == 0 else { continue }
             guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { continue }
             let timestampSeconds = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sampleBuffer))
+            if let previous = previousProcessedTimestamp {
+                let gap = timestampSeconds - previous
+                if gap > (maxInterFrameGapSeconds ?? 0) { maxInterFrameGapSeconds = gap }
+            }
+            previousProcessedTimestamp = timestampSeconds
             // Vision's normalized joint coordinates are relative to the UPRIGHT (oriented)
             // image, not the raw pixel buffer's own native layout -- CVPixelBufferGetWidth/
             // Height report the raw buffer (landscape sensor order for a 90-degree-rotated
@@ -940,6 +961,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                     }
                 }
             } catch {
+                visionFailureCount += 1
                 logDiag("Vision request failed on frame \(thisFrameIndex): \(error.localizedDescription)")
             }
 
@@ -1026,6 +1048,20 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             "analyzeRecording asset duration=\(String(format: "%.2f", assetDurationSeconds))s, "
                 + "reader status=\(readerStatusString)"
         )
+        // Read once, at the end of analysis rather than the start -- this loop is the CPU-heavy
+        // part of the whole pipeline, so a phone that was fine when recording started but
+        // throttled/emptied its own free space partway through analysis is exactly what these
+        // are here to catch. See this file's own thermalStateDescription/
+        // availableDiskSpaceBytes comments for why each is worth reading at all.
+        let thermalState = thermalStateDescription(ProcessInfo.processInfo.thermalState)
+        let lowPowerModeEnabled = ProcessInfo.processInfo.isLowPowerModeEnabled
+        let freeDiskSpaceBytes = availableDiskSpaceBytes()
+        logDiag(
+            "analyzeRecording conditions: thermalState=\(thermalState) lowPowerMode=\(lowPowerModeEnabled) "
+                + "freeDiskSpaceBytes=\(freeDiskSpaceBytes.map { String($0) } ?? "unknown") "
+                + "visionFailureCount=\(visionFailureCount) "
+                + "maxInterFrameGapSeconds=\(maxInterFrameGapSeconds.map { String(format: "%.2f", $0) } ?? "n/a")"
+        )
         // Below MIN_BOX_TOP_SAMPLES, this isn't a confident read -- reporting a "detection"
         // off one or two lucky/unlucky frames would be worse than reporting nothing at all
         // (the JS side's own no-number-is-better-than-a-wrong-one philosophy, see
@@ -1053,6 +1089,9 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                 "elapsedSeconds": elapsed,
                 "assetDurationSeconds": assetDurationSeconds,
                 "readerStatus": readerStatusString,
+                "visionFailureCount": visionFailureCount,
+                "thermalState": thermalState,
+                "lowPowerModeEnabled": lowPowerModeEnabled,
             ]
             if let error = reader.error {
                 result["readerErrorMessage"] = error.localizedDescription
@@ -1062,6 +1101,12 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             if let boxTopNormalizedY = boxTopNormalizedY {
                 result["boxTopNormalizedY"] = boxTopNormalizedY
             }
+            if let freeDiskSpaceBytes = freeDiskSpaceBytes {
+                result["freeDiskSpaceBytes"] = freeDiskSpaceBytes
+            }
+            if let maxInterFrameGapSeconds = maxInterFrameGapSeconds {
+                result["maxInterFrameGapSeconds"] = maxInterFrameGapSeconds
+            }
             call.resolve(result)
         }
     }
@@ -1070,6 +1115,36 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         let sorted = values.sorted()
         let mid = sorted.count / 2
         return sorted.count % 2 == 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid]
+    }
+
+    // Same mapping ArCameraPreviewPlugin's own thermalStateDescription already uses (see that
+    // file) -- duplicated rather than shared since the two plugins don't otherwise share a base
+    // class. Read once at the end of analysis: this whole pipeline is CPU-bound Vision work, so
+    // if a phone throttled partway through a clip, that's a real, public, documented explanation
+    // for analysis slowing down or bailing out early -- exactly the kind of root cause
+    // assetDurationSeconds/readerStatus alone can't distinguish from anything else.
+    private func thermalStateDescription(_ state: ProcessInfo.ThermalState) -> String {
+        switch state {
+        case .nominal: return "nominal"
+        case .fair: return "fair"
+        case .serious: return "serious"
+        case .critical: return "critical"
+        @unknown default: return "unknown"
+        }
+    }
+
+    // Free space on the volume actually holding this app's documents, at the moment analysis
+    // finishes -- the same volume startRecording/stopRecording write clips to. Distinct from
+    // (and a cheaper, per-recording complement to) the admin Video Storage page's own
+    // system-wide free-space figure: this ties a specific low-space reading to a specific
+    // clip's own diagnostics instead of only being visible as a global snapshot an admin has to
+    // separately think to go check.
+    private func availableDiskSpaceBytes() -> Int64? {
+        guard let docsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            return nil
+        }
+        return try? docsURL.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
+            .volumeAvailableCapacityForImportantUsage
     }
 
     // Box jump has a real, physical target the athlete jumps ONTO -- unlike a barbell/med

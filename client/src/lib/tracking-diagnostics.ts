@@ -20,6 +20,11 @@ export type TrackingDiagnostics = {
     assetDurationSeconds?: number;
     readerStatus?: string;
     readerErrorMessage?: string;
+    visionFailureCount?: number;
+    thermalState?: string;
+    lowPowerModeEnabled?: boolean;
+    freeDiskSpaceBytes?: number;
+    maxInterFrameGapSeconds?: number;
   } | null;
   bodyPose: { framesTotal: number; framesWithBody: number; avgWristConfidence: number | null };
   objectDetection: {
@@ -106,6 +111,11 @@ export function buildTrackingDiagnostics(args: {
     assetDurationSeconds?: number;
     readerStatus?: string;
     readerErrorMessage?: string;
+    visionFailureCount?: number;
+    thermalState?: string;
+    lowPowerModeEnabled?: boolean;
+    freeDiskSpaceBytes?: number;
+    maxInterFrameGapSeconds?: number;
   } | null;
   calibration?: {
     scaleFactor: number | null;

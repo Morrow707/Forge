@@ -64,6 +64,19 @@ export type AvAnalysisResult = {
   assetDurationSeconds: number;
   readerStatus: "completed" | "failed" | "cancelled" | "reading" | "unknown";
   readerErrorMessage?: string;
+  // Analysis-time device/pipeline conditions, read once at the end of the Vision loop -- see
+  // AvBodyTrackingPlugin.swift's own comments on thermalStateDescription/
+  // availableDiskSpaceBytes and the visionFailureCount/maxInterFrameGapSeconds counters for why
+  // each is worth capturing. All diagnostic, same as assetDurationSeconds/readerStatus above --
+  // nothing here drives tracking math, only helps root-cause a bad clip after the fact.
+  visionFailureCount: number;
+  thermalState: "nominal" | "fair" | "serious" | "critical" | "unknown";
+  lowPowerModeEnabled: boolean;
+  // Omitted (not a zeroed default) when the free-space read itself failed, or when fewer than
+  // two processed frames exist to measure a gap between -- same omit-when-nil convention as
+  // boxTopNormalizedY below.
+  freeDiskSpaceBytes?: number;
+  maxInterFrameGapSeconds?: number;
   // Vision's own raw normalized (0-1, bottom-left-origin) convention, same as PoseJoint.y
   // above -- see AvBodyTrackingPlugin.swift's detectBoxTopCandidate for how this is found
   // (VNDetectRectanglesRequest, median across the whole clip) and vision-body-landmarks.ts's

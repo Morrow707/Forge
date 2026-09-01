@@ -38,6 +38,11 @@ type TrackingDiagnostics = {
     assetDurationSeconds?: number;
     readerStatus?: string;
     readerErrorMessage?: string;
+    visionFailureCount?: number;
+    thermalState?: string;
+    lowPowerModeEnabled?: boolean;
+    freeDiskSpaceBytes?: number;
+    maxInterFrameGapSeconds?: number;
   } | null;
   bodyPose: { framesTotal: number; framesWithBody: number; avgWristConfidence?: number | null };
   objectDetection: {
@@ -294,6 +299,26 @@ function formatTrackingDiagnostics(r: TrackedSetRow): ReportField[] {
             : ""),
       });
     }
+    // Device/pipeline conditions read once at the end of analysis -- see
+    // AvBodyTrackingPlugin.swift's own comments on why each is worth capturing. Only shown
+    // when at least the thermal state was captured (older diagnostics never set any of these).
+    if (d.recording.thermalState != null) {
+      const gbFree =
+        d.recording.freeDiskSpaceBytes != null
+          ? `${Math.round((d.recording.freeDiskSpaceBytes / 1024 / 1024 / 1024) * 10) / 10}GB free`
+          : null;
+      lines.push({
+        label: "Analysis conditions",
+        value:
+          `thermal state "${d.recording.thermalState}"` +
+          (d.recording.lowPowerModeEnabled ? ", Low Power Mode ON" : "") +
+          (gbFree ? `, ${gbFree}` : "") +
+          (d.recording.visionFailureCount ? `, Vision errored on ${d.recording.visionFailureCount} frames` : "") +
+          (d.recording.maxInterFrameGapSeconds != null
+            ? `, largest inter-frame gap ${Math.round(d.recording.maxInterFrameGapSeconds * 100) / 100}s`
+            : ""),
+      });
+    }
   }
   lines.push({
     label: "Body-pose detection (\"the AI\")",
@@ -362,6 +387,30 @@ function computeFlags(r: TrackedSetRow): string[] {
       `Recording is ~${Math.round(d.recording.assetDurationSeconds)}s but only ${
         d.recording.frameCount
       } frames were analyzed -- analysis likely stopped early`,
+    );
+  }
+
+  // Candidate root causes for a stalled/short analysis pass -- checked independently of the
+  // reader-status/duration-mismatch flags above (a set can be flagged for both: "analysis
+  // stopped early" plus "here's a real reason why").
+  if (d?.recording?.thermalState === "serious" || d?.recording?.thermalState === "critical") {
+    flags.push(`Device was thermally throttled during analysis (thermal state "${d.recording.thermalState}")`);
+  }
+  if (
+    d?.recording?.visionFailureCount != null &&
+    d.recording.visionFailureCount > 0 &&
+    d.recording.frameCount > 0 &&
+    d.recording.visionFailureCount / d.recording.frameCount > 0.1
+  ) {
+    flags.push(
+      `Vision failed outright (not just "no body") on ${d.recording.visionFailureCount}/${d.recording.frameCount} analyzed frames`,
+    );
+  }
+  if (d?.recording?.freeDiskSpaceBytes != null && d.recording.freeDiskSpaceBytes < 500 * 1024 * 1024) {
+    flags.push(
+      `Device was low on free storage during analysis (${
+        Math.round((d.recording.freeDiskSpaceBytes / 1024 / 1024 / 1024) * 10) / 10
+      }GB free)`,
     );
   }
 

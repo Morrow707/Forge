@@ -5978,6 +5978,15 @@ export const trackingDiagnosticsSchema = z.object({
       assetDurationSeconds: z.number().optional(),
       readerStatus: z.string().optional(),
       readerErrorMessage: z.string().optional(),
+      // Analysis-time device/pipeline conditions -- see AvBodyTrackingPlugin.swift's own
+      // comments on why each is worth reading. Optional for the same reason as
+      // assetDurationSeconds above: persisted diagnostics from before these fields existed
+      // never set them.
+      visionFailureCount: z.number().optional(),
+      thermalState: z.string().optional(),
+      lowPowerModeEnabled: z.boolean().optional(),
+      freeDiskSpaceBytes: z.number().optional(),
+      maxInterFrameGapSeconds: z.number().optional(),
     })
     .optional()
     .nullable(),
