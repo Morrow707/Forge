@@ -911,7 +911,35 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             settle { DispatchQueue.main.async { call.reject("Could not read recording") } }
             return
         }
-        let outputSettings: [String: Any] = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
+        // AVAssetReaderTrackOutput decodes and buffers EVERY frame in the track at whatever
+        // size outputSettings requests -- sampleEveryNthFrame's stride check (in the read loop
+        // below) only decides which of those already-decoded frames get analyzed, not which
+        // ones get decoded in the first place. On a 3840x2160@60fps clip run 25+ seconds, that's
+        // well over a thousand full-resolution (~33MB each, uncompressed BGRA) frames pushed
+        // through decode + buffer-pool churn even though only a small fraction are ever sampled
+        // -- a plausible trigger for the AVFoundationErrorDomain -11819 "Cannot Complete Action"
+        // (mediaServicesWereReset) failures real long-clip testing hit partway through analysis.
+        // kCVPixelBufferWidthKey/HeightKey ask VideoToolbox to decode-and-scale in one hardware-
+        // accelerated pass instead, which is far cheaper than decoding at native resolution and
+        // scaling after the fact -- and unlike a per-sampled-frame Vision-side downscale (tried
+        // first; made the failures worse, not better, likely by adding its own Core Image render
+        // pass on top of a decode still happening at full 4K), this actually reduces the cost of
+        // the bulk of the work: every frame the reader touches, not just the ones Vision sees.
+        // Values are computed from the track's own naturalSize (its RAW, pre-preferredTransform
+        // dimensions -- AVAssetReader hands back buffers in that same raw orientation, per this
+        // function's own comment above) so this holds regardless of capture resolution/aspect
+        // ratio; skipped entirely when the source is already at or under the budget (an older
+        // device, a non-4K capture format) since downscaling up would be pure loss for no gain.
+        // Doesn't touch the recorded video file at all -- this only changes what a SEPARATE
+        // re-read of it for analysis decodes into memory.
+        var outputSettings: [String: Any] = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
+        let naturalSize = track.naturalSize
+        let decodeMaxDim: CGFloat = 1280
+        if naturalSize.width > 0, naturalSize.height > 0, max(naturalSize.width, naturalSize.height) > decodeMaxDim {
+            let scale = decodeMaxDim / max(naturalSize.width, naturalSize.height)
+            outputSettings[kCVPixelBufferWidthKey as String] = Int((naturalSize.width * scale).rounded())
+            outputSettings[kCVPixelBufferHeightKey as String] = Int((naturalSize.height * scale).rounded())
+        }
         let trackOutput = AVAssetReaderTrackOutput(track: track, outputSettings: outputSettings)
         guard reader.canAdd(trackOutput) else {
             logDiag("analyzeRecording FAILED: cannot add track output")
@@ -1004,24 +1032,16 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             var rightWristJoint: (x: Double, y: Double)?
             var leftAnkleJoint: (x: Double, y: Double)?
             var rightAnkleJoint: (x: Double, y: Double)?
-            // Vision's own neural net has a small fixed input size regardless of what's handed
-            // in, so running it against a downscaled, already-upright copy instead of the raw
-            // (up to 4K) buffer costs nothing in joint accuracy -- see downscaledPoseImage's
-            // own comment for why, and for the "Cannot Complete Action" failures this is meant
-            // to relieve. orientation: .up here (not `orientation`) is deliberate: the CIImage
-            // downscaledPoseImage returns has already been rotated upright via .oriented(),
-            // unlike the raw pixelBuffer passed to the fallback branch below, which is still in
-            // its native sensor layout and needs Vision to do that rotation itself. Either way,
-            // the resulting joints land in the same normalized-against-the-upright-frame space
-            // the rest of this loop (and the JS bridge) already assumes.
-            let handler: VNImageRequestHandler
-            if let poseImage = downscaledPoseImage(
-                pixelBuffer: pixelBuffer, orientation: orientation, frameWidth: frameWidth, frameHeight: frameHeight
-            ) {
-                handler = VNImageRequestHandler(ciImage: poseImage, orientation: .up, options: [:])
-            } else {
-                handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: orientation, options: [:])
-            }
+            // pixelBuffer already comes back downscaled straight from the reader's own decode
+            // (see outputSettings' own comment above, where the reader is set up) -- no
+            // separate per-frame Vision-side downscale needed on top of that; a first attempt at
+            // exactly that (rendering a scaled CIImage per sampled frame) made the "Cannot
+            // Complete Action" failures below worse, not better, most likely by adding its own
+            // Core Image render pass on top of a decode that was still happening at full 4K
+            // regardless. Decoding smaller in the first place fixes the actual bulk of the cost
+            // (every frame gets decoded, not just the sampled ones) instead of shaving cost off
+            // only the fraction of frames Vision ever touches.
+            let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: orientation, options: [:])
             do {
                 try handler.perform([poseRequest])
                 if let observation = poseRequest.results?.first as? VNHumanBodyPoseObservation {
@@ -1338,56 +1358,6 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
     // frameWidth x frameHeight already computed by the caller), so the returned buffer's
     // pixel grid lines up with Vision's joints with nothing further to correct for.
     private static let implementWorkingMaxDim = 160
-
-    // Working resolution Vision's own body-pose/rectangle detection runs against, instead of
-    // the raw capture buffer (up to 3840x2160 @ 60fps on a modern device). Vision's neural net
-    // has its own small fixed input size regardless of what's handed in, so most of the cost
-    // of a 4K frame -- decoding, the internal resize, holding the buffer -- is pure overhead
-    // the model never uses; sustained over a full clip's worth of frames, that overhead is a
-    // plausible source of the AVAssetReader "Cannot Complete Action" failures real long-clip
-    // testing hit partway through analysis (see analyzeRecording's own diagnostics for why
-    // that reads as the reader itself giving up, not a Vision-side error). 960px on the long
-    // side is comfortably above what body-pose joint detection needs to stay accurate (well
-    // beyond implementWorkingMaxDim's 160px budget above, which is tuned for a completely
-    // different job -- localizing a moving blob's centroid, not fine joint placement) while
-    // cutting the pixel count Vision has to chew through by roughly 16x on a 4K frame. Doesn't
-    // touch the recorded video file at all -- this only changes what the ANALYSIS reads.
-    private static let poseWorkingMaxDim = 960
-
-    // Downscaled, upright CIImage for Vision's pose/rectangle requests -- nil when the source
-    // is already at or under the working budget (an older device, a non-4K capture format),
-    // since downscaling up would just blur real detail for zero benefit and the caller falls
-    // back to the raw buffer in that case. Mirrors extractWorkingFrame's own
-    // oriented-then-scaled math below (proven correct there against Vision's coordinate
-    // conventions) but stops at the CIImage itself instead of rendering into a raw RGBA byte
-    // buffer -- VNImageRequestHandler(ciImage:) takes a CIImage directly, so there's no reason
-    // to pay for a render this caller doesn't need the way extractWorkingFrame's raw
-    // rgba/luma output does for AvImplementTracker's own motion-diff scan.
-    private func downscaledPoseImage(
-        pixelBuffer: CVPixelBuffer,
-        orientation: CGImagePropertyOrientation,
-        frameWidth: Int,
-        frameHeight: Int
-    ) -> CIImage? {
-        guard frameWidth > 0, frameHeight > 0 else { return nil }
-        guard max(frameWidth, frameHeight) > Self.poseWorkingMaxDim else { return nil }
-
-        let maxDim = Double(Self.poseWorkingMaxDim)
-        var workingWidth = Self.poseWorkingMaxDim
-        var workingHeight = Int((maxDim * Double(frameHeight) / Double(frameWidth)).rounded())
-        if workingHeight > Self.poseWorkingMaxDim {
-            workingHeight = Self.poseWorkingMaxDim
-            workingWidth = Int((maxDim * Double(frameWidth) / Double(frameHeight)).rounded())
-        }
-        workingWidth = max(1, workingWidth)
-        workingHeight = max(1, workingHeight)
-
-        let oriented = CIImage(cvPixelBuffer: pixelBuffer).oriented(orientation)
-        guard oriented.extent.width > 0, oriented.extent.height > 0 else { return nil }
-        let scaleX = CGFloat(workingWidth) / oriented.extent.width
-        let scaleY = CGFloat(workingHeight) / oriented.extent.height
-        return oriented.transformed(by: CGAffineTransform(scaleX: scaleX, y: scaleY))
-    }
 
     private struct WorkingFrame {
         // Row-major, top-left origin, width*height*4 (rgba) / width*height (luma) --
