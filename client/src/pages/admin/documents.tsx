@@ -30,19 +30,6 @@ type ComplianceReportData = {
   notYetBuilt: string[];
 };
 
-type AuditLogRow = {
-  id: number;
-  userName: string | null;
-  userId: number;
-  targetAthleteName: string | null;
-  targetAthleteId: number | null;
-  actionType: string;
-  resourceType: string;
-  detail: string | null;
-  justification: string | null;
-  createdAt: string;
-};
-
 const TIER_LABEL: Record<string, string> = {
   tier1_under13: "Tier 1 -- Under 13",
   tier2_teen_13_17: "Tier 2 -- Teen (13-17)",
@@ -90,16 +77,12 @@ function DraftBadge() {
  * agreedToTermsText -- see legal-agreement's own comment, folded in below);
  * the other five are drafts with no live enforcement path yet. Every
  * document card is labeled LIVE or DRAFT so that distinction is never
- * ambiguous again. The compliance snapshot and audit log below aren't
- * documents at all -- they're system data for the same "review before
- * relying on it" purpose, kept on this page rather than given their own
- * nav slot. */
+ * ambiguous again. The compliance snapshot below isn't a document at all --
+ * it's system data for the same "review before relying on it" purpose,
+ * kept on this page rather than given their own nav slot. */
 export default function AdminDocuments() {
   const { data: compliance, isLoading: complianceLoading } = useQuery<ComplianceReportData>({
     queryKey: ["/api/admin/compliance-report"],
-  });
-  const { data: auditLog, isLoading: auditLoading } = useQuery<AuditLogRow[]>({
-    queryKey: ["/api/admin/audit-log"],
   });
 
   return (
@@ -110,16 +93,16 @@ export default function AdminDocuments() {
             <CardTitle>Legal & Compliance</CardTitle>
             <CardDescription>
               Every legal document on the platform (labeled LIVE or DRAFT below), plus the
-              privacy/compliance data snapshot and record-access audit log -- built for review
-              before any of it is relied on, not finished legal or security documents yet.
+              privacy/compliance data snapshot -- built for review before any of it is relied on,
+              not finished legal or security documents yet.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <p className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-500">
               <ShieldAlert className="h-4 w-4 shrink-0" />
-              Nothing on this page has been reviewed by counsel. Tier thresholds, retention
-              windows, and what the audit log does and doesn't cover are all real, current system
-              behavior -- not a claim that the underlying approach is legally sound.
+              Nothing on this page has been reviewed by counsel. Tier thresholds and retention
+              windows are real, current system behavior -- not a claim that the underlying
+              approach is legally sound.
             </p>
           </CardContent>
         </Card>
@@ -197,60 +180,6 @@ export default function AdminDocuments() {
                   ))}
                 </ul>
               </SubSection>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Record Access Audit Log</CardTitle>
-            <CardDescription>
-              Every time a staff member viewed the admin video list or deleted a video, with who,
-              which athlete (when there is one), and why (when given). Not yet wired into every
-              video-view path in the app -- today this only covers the admin video-management
-              page; a coach's routine viewing of their own roster isn't logged here.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <DownloadButton
-              url="/api/admin/audit-log.csv"
-              filename="forge-audit-log.csv"
-              shareTitle="Forge Audit Log"
-              label="Download CSV"
-            />
-            {auditLoading || !auditLog ? (
-              <p className="text-sm text-muted-foreground">Loading…</p>
-            ) : auditLog.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No access events logged yet.</p>
-            ) : (
-              <div className="overflow-x-auto rounded-md border border-border">
-                <table className="w-full min-w-[720px] border-collapse text-xs">
-                  <thead>
-                    <tr className="border-b border-border bg-surface-elevated text-left">
-                      {["When", "Staff", "Athlete", "Action", "Resource", "Detail", "Justification"].map((h) => (
-                        <th key={h} className="whitespace-nowrap px-3 py-2 font-semibold uppercase tracking-wide text-muted-foreground">
-                          {h}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {auditLog.map((row) => (
-                      <tr key={row.id} className="border-b border-border last:border-0">
-                        <td className="whitespace-nowrap px-3 py-2">{new Date(row.createdAt).toLocaleString()}</td>
-                        <td className="px-3 py-2">{row.userName ?? `#${row.userId}`}</td>
-                        <td className="px-3 py-2">
-                          {row.targetAthleteName ?? (row.targetAthleteId ? `#${row.targetAthleteId}` : "--")}
-                        </td>
-                        <td className="px-3 py-2 capitalize">{row.actionType}</td>
-                        <td className="px-3 py-2">{row.resourceType}</td>
-                        <td className="px-3 py-2 text-muted-foreground">{row.detail ?? "--"}</td>
-                        <td className="px-3 py-2 text-muted-foreground">{row.justification ?? "--"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
             )}
           </CardContent>
         </Card>
