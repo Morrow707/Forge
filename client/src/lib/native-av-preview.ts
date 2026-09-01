@@ -47,6 +47,32 @@ export type PoseFrame = {
   rightImplement?: PoseImplement;
 };
 
+// Shared by the plugin interface's own analyzeRecording method below and analyzeAvRecording's
+// exported return type -- one declaration instead of the same shape duplicated in both places.
+export type AvAnalysisResult = {
+  frameCount: number;
+  trackedFrameCount: number;
+  elapsedSeconds: number;
+  // What the recorded asset's own metadata claims its total length is, and what the native
+  // AVAssetReader's read loop actually stopped on ("completed" = genuinely reached the end of
+  // the track; "failed"/"cancelled" = the reader gave up partway through). Diagnostic only --
+  // nothing here reads these to drive tracking math -- added specifically to tell "the athlete's
+  // take was genuinely short" apart from "analysis stopped early on a long recording," which
+  // frameCount/elapsedSeconds alone can't distinguish (both read identically: a small frame
+  // count and a fast elapsed time). See AvBodyTrackingPlugin.swift's own comment on this same
+  // pair for the real bar-tracking bug that motivated adding it.
+  assetDurationSeconds: number;
+  readerStatus: "completed" | "failed" | "cancelled" | "reading" | "unknown";
+  readerErrorMessage?: string;
+  // Vision's own raw normalized (0-1, bottom-left-origin) convention, same as PoseJoint.y
+  // above -- see AvBodyTrackingPlugin.swift's detectBoxTopCandidate for how this is found
+  // (VNDetectRectanglesRequest, median across the whole clip) and vision-body-landmarks.ts's
+  // visionBoxTopToWorldY for the bridge into this app's own y-down, real-scale convention.
+  // Omitted (not present at all), not a zeroed default, when detectBox wasn't requested or
+  // no confident read was found -- box jump is the only caller that ever passes detectBox.
+  boxTopNormalizedY?: number;
+};
+
 interface AvBodyTrackingPlugin {
   isSupported(): Promise<{
     supported: boolean;
@@ -63,18 +89,7 @@ interface AvBodyTrackingPlugin {
   startRecording(): Promise<void>;
   stopRecording(): Promise<{ path: string }>;
   deleteRecording(options: { path: string }): Promise<void>;
-  analyzeRecording(options: { path: string; sampleEveryNthFrame?: number; detectBox?: boolean }): Promise<{
-    frameCount: number;
-    trackedFrameCount: number;
-    elapsedSeconds: number;
-    // Vision's own raw normalized (0-1, bottom-left-origin) convention, same as PoseJoint.y
-    // above -- see AvBodyTrackingPlugin.swift's detectBoxTopCandidate for how this is found
-    // (VNDetectRectanglesRequest, median across the whole clip) and vision-body-landmarks.ts's
-    // visionBoxTopToWorldY for the bridge into this app's own y-down, real-scale convention.
-    // Omitted (not present at all), not a zeroed default, when detectBox wasn't requested or
-    // no confident read was found -- box jump is the only caller that ever passes detectBox.
-    boxTopNormalizedY?: number;
-  }>;
+  analyzeRecording(options: { path: string; sampleEveryNthFrame?: number; detectBox?: boolean }): Promise<AvAnalysisResult>;
   cancelAnalysis(): Promise<void>;
   getDiagnosticLog(): Promise<{ log: string[] }>;
   addListener(
@@ -196,7 +211,7 @@ export async function analyzeAvRecording(
   path: string,
   sampleEveryNthFrame?: number,
   detectBox?: boolean,
-): Promise<{ frameCount: number; trackedFrameCount: number; elapsedSeconds: number; boxTopNormalizedY?: number }> {
+): Promise<AvAnalysisResult> {
   return AvBodyTracking.analyzeRecording({ path, sampleEveryNthFrame, detectBox });
 }
 

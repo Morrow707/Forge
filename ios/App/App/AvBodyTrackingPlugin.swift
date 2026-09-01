@@ -817,6 +817,17 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         // in, rather than assuming Phase 1's setup got it right.
         let orientation = cgOrientation(for: track.preferredTransform)
 
+        // Diagnostic only, not used to drive anything below -- what the asset's own metadata
+        // claims this clip's total length is, independent of how many frames the read loop
+        // below actually gets through. Reported alongside frameCount/trackedFrameCount so a
+        // clip where these two numbers disagree sharply (e.g. a 20s asset but the loop only
+        // processes 2s worth of frames) is visible in the persisted diagnostics instead of
+        // silently indistinguishable from "the athlete's take was genuinely short" -- exactly
+        // the ambiguity real box-squat testing hit (a recording confirmed long in person, but
+        // only ~2s/68 frames ever got analyzed, with nothing in the numbers alone to tell
+        // "short recording" apart from "analysis loop stopped early").
+        let assetDurationSeconds = CMTimeGetSeconds(asset.duration)
+
         guard let reader = try? AVAssetReader(asset: asset) else {
             logDiag("analyzeRecording FAILED: could not create AVAssetReader")
             DispatchQueue.main.async { call.reject("Could not read recording") }
@@ -992,9 +1003,29 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         }
 
         let elapsed = Date().timeIntervalSince(startTime)
+        // What the read loop actually stopped on -- .completed is the only status meaning "we
+        // genuinely reached the end of the track," so a mismatch against assetDurationSeconds
+        // above (e.g. status completed, but processedCount's own timestamp coverage falls far
+        // short of the asset's claimed duration) points at frame decoding/sampling, not the
+        // reader itself; .failed/.cancelled with real elapsed processedCount>0 means the reader
+        // itself gave up partway through -- exactly the "recording was long, only a fraction
+        // got analyzed" case this is here to distinguish from a genuinely short take.
+        let readerStatusString: String
+        switch reader.status {
+        case .completed: readerStatusString = "completed"
+        case .failed: readerStatusString = "failed"
+        case .cancelled: readerStatusString = "cancelled"
+        case .reading: readerStatusString = "reading"
+        case .unknown: readerStatusString = "unknown"
+        @unknown default: readerStatusString = "unknown"
+        }
         if let error = reader.error {
             logDiag("analyzeRecording finished with reader error: \(error.localizedDescription)")
         }
+        logDiag(
+            "analyzeRecording asset duration=\(String(format: "%.2f", assetDurationSeconds))s, "
+                + "reader status=\(readerStatusString)"
+        )
         // Below MIN_BOX_TOP_SAMPLES, this isn't a confident read -- reporting a "detection"
         // off one or two lucky/unlucky frames would be worse than reporting nothing at all
         // (the JS side's own no-number-is-better-than-a-wrong-one philosophy, see
@@ -1020,7 +1051,12 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                 "frameCount": processedCount,
                 "trackedFrameCount": trackedCount,
                 "elapsedSeconds": elapsed,
+                "assetDurationSeconds": assetDurationSeconds,
+                "readerStatus": readerStatusString,
             ]
+            if let error = reader.error {
+                result["readerErrorMessage"] = error.localizedDescription
+            }
             // Omit-when-nil, same convention as leftImplement/rightImplement above -- the JS
             // bridge treats a missing key as "no confident box read," not a zeroed default.
             if let boxTopNormalizedY = boxTopNormalizedY {

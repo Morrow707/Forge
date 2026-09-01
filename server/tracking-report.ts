@@ -31,7 +31,14 @@ type CaptureDeviceInfo = {
 type TrackingDiagnostics = {
   outcome: "tracked" | "empty_calibration_failed" | "empty_no_clean_read";
   message?: string | null;
-  recording?: { frameCount: number; trackedFrameCount: number; elapsedSeconds: number } | null;
+  recording?: {
+    frameCount: number;
+    trackedFrameCount: number;
+    elapsedSeconds: number;
+    assetDurationSeconds?: number;
+    readerStatus?: string;
+    readerErrorMessage?: string;
+  } | null;
   bodyPose: { framesTotal: number; framesWithBody: number; avgWristConfidence?: number | null };
   objectDetection: {
     framesWithLeftImplement: number;
@@ -267,6 +274,26 @@ function formatTrackingDiagnostics(r: TrackedSetRow): ReportField[] {
         Math.round(d.recording.elapsedSeconds * 10) / 10
       }s on-device to analyze`,
     });
+    // assetDurationSeconds/readerStatus are what the recorded FILE's own metadata says vs what
+    // the native read loop actually stopped on -- the one signal that can tell "the athlete's
+    // take was genuinely short" apart from "the analysis loop stopped early on a long
+    // recording." frameCount/elapsedSeconds alone read identically either way (both a small
+    // frame count and a fast elapsed time); this line is what actually distinguishes them.
+    // Missing entirely on diagnostics persisted before this field existed.
+    if (d.recording.assetDurationSeconds != null) {
+      const flagMismatch =
+        d.recording.readerStatus != null && d.recording.readerStatus !== "completed";
+      lines.push({
+        label: "Recorded clip length",
+        value:
+          `${Math.round(d.recording.assetDurationSeconds * 10) / 10}s per the file itself, ` +
+          `reader stopped on "${d.recording.readerStatus ?? "unknown"}"` +
+          (d.recording.readerErrorMessage ? ` (${d.recording.readerErrorMessage})` : "") +
+          (flagMismatch
+            ? " -- analysis did NOT reach the end of the recording, see the reader status above"
+            : ""),
+      });
+    }
   }
   lines.push({
     label: "Body-pose detection (\"the AI\")",

@@ -8,7 +8,19 @@ export type TrackingOutcome = "tracked" | "empty_calibration_failed" | "empty_no
 export type TrackingDiagnostics = {
   outcome: TrackingOutcome;
   message: string | null;
-  recording: { frameCount: number; trackedFrameCount: number; elapsedSeconds: number } | null;
+  recording: {
+    frameCount: number;
+    trackedFrameCount: number;
+    elapsedSeconds: number;
+    // What the recorded asset's own metadata says its total length is, and what the native
+    // AVAssetReader's read loop actually stopped on -- see AvBodyTrackingPlugin.swift's own
+    // comment on this same pair. Optional (not every recordingStats a caller has lying around
+    // predates this existing, e.g. anything computed before this field shipped) -- a report
+    // rendering this just omits the comparison rather than showing "undefined."
+    assetDurationSeconds?: number;
+    readerStatus?: string;
+    readerErrorMessage?: string;
+  } | null;
   bodyPose: { framesTotal: number; framesWithBody: number; avgWristConfidence: number | null };
   objectDetection: {
     framesWithLeftImplement: number;
@@ -87,7 +99,14 @@ export function buildTrackingDiagnostics(args: {
   outcome: TrackingOutcome;
   message?: string | null;
   rawFrames: NativePoseFrame[];
-  recording?: { frameCount: number; trackedFrameCount: number; elapsedSeconds: number } | null;
+  recording?: {
+    frameCount: number;
+    trackedFrameCount: number;
+    elapsedSeconds: number;
+    assetDurationSeconds?: number;
+    readerStatus?: string;
+    readerErrorMessage?: string;
+  } | null;
   calibration?: {
     scaleFactor: number | null;
     noseToAnkleFrames: number;

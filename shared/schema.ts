@@ -5970,6 +5970,14 @@ export const trackingDiagnosticsSchema = z.object({
       frameCount: z.number(),
       trackedFrameCount: z.number(),
       elapsedSeconds: z.number(),
+      // What the recorded asset's own metadata claims its total length is, and what the
+      // native AVAssetReader's read loop actually stopped on -- added to tell "the athlete's
+      // take was genuinely short" apart from "analysis stopped early on a long recording,"
+      // which frameCount/elapsedSeconds alone can't distinguish. Optional since older
+      // persisted diagnostics (from before this field existed) never set it.
+      assetDurationSeconds: z.number().optional(),
+      readerStatus: z.string().optional(),
+      readerErrorMessage: z.string().optional(),
     })
     .optional()
     .nullable(),

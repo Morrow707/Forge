@@ -16,6 +16,7 @@ import {
   extractCaptureDeviceInfo,
   type PoseFrame as NativePoseFrame,
   type CaptureDeviceInfo,
+  type AvAnalysisResult,
 } from "@/lib/native-av-preview";
 
 // Every frame (analyzeAvRecording's own sampleEveryNthFrame default) was never actually
@@ -225,12 +226,7 @@ export function useAvBodyTracking(active: boolean) {
         blob: Blob;
         rawFrames: NativePoseFrame[];
         captureDeviceInfo: CaptureDeviceInfo;
-        recordingStats: {
-          frameCount: number;
-          trackedFrameCount: number;
-          elapsedSeconds: number;
-          boxTopNormalizedY?: number;
-        };
+        recordingStats: AvAnalysisResult;
       }
     | null
   > {
@@ -251,12 +247,7 @@ export function useAvBodyTracking(active: boolean) {
         blob: Blob;
         rawFrames: NativePoseFrame[];
         captureDeviceInfo: CaptureDeviceInfo;
-        recordingStats: {
-          frameCount: number;
-          trackedFrameCount: number;
-          elapsedSeconds: number;
-          boxTopNormalizedY?: number;
-        };
+        recordingStats: AvAnalysisResult;
       }
     | null
   > {
@@ -287,12 +278,7 @@ export function useAvBodyTracking(active: boolean) {
       rawFrames.push(frame);
       setAnalyzedFrames((n) => n + 1);
     });
-    let recordingStats: {
-      frameCount: number;
-      trackedFrameCount: number;
-      elapsedSeconds: number;
-      boxTopNormalizedY?: number;
-    };
+    let recordingStats: AvAnalysisResult;
     try {
       recordingStats = await analyzeAvRecording(path, ANALYSIS_SAMPLE_STRIDE, options?.detectBox);
     } catch (err) {
