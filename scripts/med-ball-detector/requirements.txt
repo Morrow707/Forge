@@ -1,0 +1,5 @@
+# Pinned loosely (major version) rather than exact -- this pipeline runs
+# occasionally, by hand, not in CI; exact-pinning would just mean manually
+# bumping these every time a retrain is due.
+ultralytics>=8.3,<9
+coremltools>=8.0,<9
