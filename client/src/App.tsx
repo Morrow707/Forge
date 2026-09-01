@@ -99,7 +99,6 @@ const AdminMyWorkout = lazy(() => import("@/pages/admin/my-workout"));
 const AdminPlatformTrends = lazy(() => import("@/pages/admin/platform-trends"));
 const AdminBilling = lazy(() => import("@/pages/admin/billing"));
 const AdminUsers = lazy(() => import("@/pages/admin/users"));
-const AdminVideos = lazy(() => import("@/pages/admin/videos"));
 const AdminClasses = lazy(() => import("@/pages/admin/classes"));
 const AdminClassesAnalytics = lazy(() => import("@/pages/admin/classes-analytics"));
 const AdminClassBuilder = lazy(() => import("@/pages/admin/class-builder"));
@@ -463,9 +462,6 @@ function Router() {
         </Route>
         <Route path="/admin/users">
           <ProtectedRoute role="admin" component={AdminUsers} />
-        </Route>
-        <Route path="/admin/videos">
-          <ProtectedRoute role="admin" component={AdminVideos} />
         </Route>
         <Route component={NotFound} />
       </Switch>

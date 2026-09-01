@@ -2001,10 +2001,11 @@ CREATE INDEX IF NOT EXISTS "skill_day_logs_athlete_date_idx" ON "skill_day_logs"
 CREATE INDEX IF NOT EXISTS "teams_coach_idx" ON "teams" ("coach_id");
 CREATE INDEX IF NOT EXISTS "coach_athletes_athlete_idx" ON "coach_athletes" ("athlete_id");
 
--- Partial indexes for the "every video on the platform" admin scan
--- (getAdminVideos) -- only a small fraction of rows in each of these
--- tables has a non-null video column, but without a partial index the
--- WHERE ... IS NOT NULL filter was a full sequential scan every time.
+-- Partial indexes for the "every video on the platform" scans
+-- (diagnoseVideoBacklog, cleanupOrphanedVideoRows) -- only a small
+-- fraction of rows in each of these tables has a non-null video column,
+-- but without a partial index the WHERE ... IS NOT NULL filter was a
+-- full sequential scan every time.
 CREATE INDEX IF NOT EXISTS "workout_set_entries_video_idx" ON "workout_set_entries" ("form_check_video_url") WHERE "form_check_video_url" IS NOT NULL;
 CREATE INDEX IF NOT EXISTS "skill_session_logs_video_idx" ON "skill_session_logs" ("video_url") WHERE "video_url" IS NOT NULL;
 CREATE INDEX IF NOT EXISTS "workout_comments_video_idx" ON "workout_comments" ("video_url") WHERE "video_url" IS NOT NULL;

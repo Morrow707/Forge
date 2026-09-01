@@ -2071,11 +2071,11 @@ export const workoutSetEntries = pgTable(
     // Same reasoning as workoutLogEntries.workoutLogIdx just above -- the
     // last hop of the same roster-wide join chain.
     logEntryIdx: index("workout_set_entries_log_entry_id_idx").on(table.logEntryId),
-    // Partial index backing the admin video list/storage-summary "every set
-    // with a video" scan (getAdminVideos) -- only ~5% of rows have a
-    // non-null formCheckVideoUrl, but without this the WHERE ... IS NOT
-    // NULL filter was a full sequential scan of the whole (multi-million-
-    // row) table every time.
+    // Partial index backing the "every set with a video" scan
+    // (diagnoseVideoBacklog, cleanupOrphanedVideoRows) -- only ~5% of rows
+    // have a non-null formCheckVideoUrl, but without this the WHERE ... IS
+    // NOT NULL filter was a full sequential scan of the whole (multi-
+    // million-row) table every time.
     videoIdx: index("workout_set_entries_video_idx")
       .on(table.formCheckVideoUrl)
       .where(sql`${table.formCheckVideoUrl} is not null`),

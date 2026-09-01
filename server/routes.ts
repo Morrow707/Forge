@@ -2359,48 +2359,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  // Storage-management page: every user-uploaded video currently on disk,
-  // for an admin to review and prune -- see server/uploaded-files.ts and
-  // storage.getAdminVideos' own comment for why this exists (Render's web
-  // service disk is a fixed size, and nothing else in the app ever deletes
-  // a video's underlying file on its own).
-  // Paginated -- see getAdminVideos' own comment for why (a stress test
-  // found this unbounded at 20,000+ videos platform-wide). Same
-  // limit-query-param clamping convention as /api/admin/audit-log below.
-  app.get("/api/admin/videos", requireRole("admin"), async (req, res) => {
-    const user = currentUser(req);
-    const limit = Math.min(Number(req.query.limit) || 50, 200);
-    const offset = Math.max(Number(req.query.offset) || 0, 0);
-    const { videos, total } = await storage.getAdminVideos(limit, offset);
-    // No single target athlete for a bulk list -- see recordAccessAuditLogs'
-    // own schema comment on why targetAthleteId is nullable for exactly
-    // this case.
-    storage
-      .logRecordAccess({
-        userId: user.id,
-        actionType: "viewed",
-        resourceType: "admin_video_list",
-        detail: `${videos.length} of ${total} video(s) listed (offset ${offset})`,
-        ipAddress: req.ip,
-        userAgent: req.get("user-agent") ?? undefined,
-      })
-      .catch(() => {});
-    res.json({ videos, total });
-  });
-
-  // Decoupled from the paginated listing above and cached server-side --
-  // see getAdminVideoStorageSummary's own comment.
-  app.get("/api/admin/videos/storage-summary", requireRole("admin"), async (_req, res) => {
-    res.json(await storage.getAdminVideoStorageSummary());
-  });
-
-  // Deliberately no admin-facing delete route for videos, individual or
-  // bulk -- videos only ever leave disk through the automatic sweeps
-  // (sweepVideoRetentionCap, sweepStaleAccountVideos) or the one-time
-  // backlog cleanup, none of which an admin triggers by hand. An admin
-  // reviewing this list has no way of knowing which video an athlete or
-  // their coach still cares about, so that decision doesn't belong here.
-
   // Read view for the audit log itself -- see getRecordAccessAuditLog's own
   // comment for the honest, still-partial scope of what's instrumented.
   app.get("/api/admin/audit-log", requireRole("admin"), async (req, res) => {

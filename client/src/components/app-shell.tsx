@@ -33,7 +33,6 @@ import {
   Aperture,
   GraduationCap,
   BookOpen,
-  HardDrive,
   Target,
   TrendingUp,
   FileText,
@@ -175,7 +174,6 @@ const adminNav: NavItem[] = [
   { href: "/admin/platform-trends", label: "Platform Trends", icon: BarChart3, overflow: true },
   { href: "/admin/billing", label: "Billing", icon: CreditCard, overflow: true },
   { href: "/admin/users", label: "Users", icon: Users, overflow: true },
-  { href: "/admin/videos", label: "Video Storage", icon: HardDrive, overflow: true },
   { href: "/admin/documents", label: "Legal & Compliance", icon: ShieldCheck, overflow: true },
 ];
 

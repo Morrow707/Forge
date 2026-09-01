@@ -334,11 +334,7 @@ app.use((req, res, next) => {
     // One-time backlog cleanup for the dev-testing account's accumulated
     // video volume -- see oneTimeCleanupPreexistingVideosForAccount's own
     // comment for why this is safe to leave as permanent boot-time code
-    // (self-limiting by a fixed cutoff, not "now" on every boot). Always
-    // invalidates the admin storage-summary cache afterward, even when
-    // count is 0 -- a request landing between server.listen() and this
-    // finishing could otherwise cache a pre-cleanup total for up to
-    // ADMIN_VIDEO_SUMMARY_CACHE_MS with nothing left to ever refresh it.
+    // (self-limiting by a fixed cutoff, not "now" on every boot).
     //
     // Confirmed on production (2026-08-31 03:43 UTC log) that this finds
     // the right account and runs cleanly, but matches 0 rows -- Jordan's
@@ -349,10 +345,7 @@ app.use((req, res, next) => {
     // backlog actually lives.
     storage
       .oneTimeCleanupPreexistingVideosForAccount("athlete@forge.app", new Date("2026-08-31T03:30:37.000Z"))
-      .then((result) => {
-        storage.invalidateAdminVideoSummaryCache();
-        log(`One-time video cleanup: ${JSON.stringify(result)}`);
-      })
+      .then((result) => log(`One-time video cleanup: ${JSON.stringify(result)}`))
       .catch((err) => console.error("One-time video cleanup failed:", err));
     // Read-only diagnostic -- see diagnoseVideoBacklog's own comment.
     // Kept running (harmless, cheap) as an ongoing sanity check that
@@ -371,10 +364,7 @@ app.use((req, res, next) => {
     // against a real fixture beforehand.
     storage
       .cleanupOrphanedVideoRows()
-      .then((result) => {
-        storage.invalidateAdminVideoSummaryCache();
-        log(`Orphaned video cleanup: ${JSON.stringify(result)}`);
-      })
+      .then((result) => log(`Orphaned video cleanup: ${JSON.stringify(result)}`))
       .catch((err) => console.error("Orphaned video cleanup failed:", err));
   });
 })();
