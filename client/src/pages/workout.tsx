@@ -245,6 +245,12 @@ type RepBreakdownEntry = {
   peakVelocityMps: number;
   meanVelocityMps: number;
   concentricSeconds: number;
+  // Video-relative timestamps for this rep's window (start of the preceding
+  // eccentric phase through end of the concentric phase) -- required on the
+  // shared schema (repBreakdownEntrySchema), used by the ghost-overlay
+  // comparison mode below to align two different sets' videos by rep.
+  startT: number;
+  endT: number;
   depthDeg?: number | null;
   romCm?: number | null;
   peakPowerWatts?: number | null;
@@ -2258,7 +2264,12 @@ function ExerciseLogContent({
 
   const flaggedSetVideos = item.sets
     .filter((s) => s.formCheckVideoUrl)
-    .map((s) => ({ setNumber: s.setNumber, videoUrl: s.formCheckVideoUrl!, flag: s.formCheckFlag }));
+    .map((s) => ({
+      setNumber: s.setNumber,
+      videoUrl: s.formCheckVideoUrl!,
+      flag: s.formCheckFlag,
+      repBreakdown: s.repBreakdown,
+    }));
   const previewSet = previewSetNumber != null ? item.sets.find((s) => s.setNumber === previewSetNumber) : undefined;
 
   const [swapOpen, setSwapOpen] = useState(false);
