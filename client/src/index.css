@@ -40,9 +40,21 @@
 
 /*
   Forge theme tokens.
-  PLACEHOLDER PALETTE — swap these HSL values once exact adapt-ptp.com
-  colors are provided (screenshots/video). Everything in the UI reads
-  from these variables, so updating them here re-themes the whole app.
+  PLACEHOLDER PALETTE — swap these HSL values once Forge's own real brand colors
+  are decided. Everything in the UI reads from these variables, so updating them
+  here re-themes the base app instantly.
+
+  This is the DEFAULT a user sees with no custom branding applied -- it is NOT
+  the same thing as white-label branding, which is already fully built and live:
+  a coach/institution can already override --primary/--secondary/--ring/--accent
+  (and even the ambient --glow/--glow-alpha shadow layer and --neutral-hue
+  background retint) with their own logo and colors. See
+  client/src/lib/branding-style.ts (computeBrandingStyle) for how, and
+  shared/schema.ts's brandPrimaryColor/brandSecondaryColor/brandLogoUrl and a
+  coach's own personalAccentColor/personalSecondaryColor/personalBackgroundHue
+  for where it's stored. Every branded instance still credits Forge via the
+  "Powered by Forge" mark (components/powered-by-footer.tsx, app-shell.tsx's
+  header caption) -- re-skinning never removes that.
 */
 :root {
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
