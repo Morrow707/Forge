@@ -134,7 +134,7 @@ import {
 } from "@shared/schema";
 import { computeReadiness } from "@shared/wellness";
 import { z } from "zod";
-import { startOfWeek, addWeeks } from "date-fns";
+import { startOfWeek, addWeeks, formatISO } from "date-fns";
 
 // Form-check clips are opt-in and athlete-initiated: recorded in the
 // browser, previewed, then either saved here or discarded and never sent.
@@ -7120,6 +7120,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(404).json({ message: "Exercise not found" });
     }
     res.json(exercise);
+  });
+
+  // Same-day load-velocity projection -- lets an athlete see a live "today's
+  // projected max" as they work up in weight on tracked sets, without ever
+  // needing an actual 1RM attempt. Distinct from GET /api/coach/force-velocity
+  // (which trends the whole tracked history for a coach-facing chart); this
+  // scopes storage.getLoadVelocityProjectionForAthlete to a single date's own
+  // warm-up ramp. Defaults to today since that's the only date this is useful
+  // for mid-session, but takes an explicit date so the same set can be
+  // reviewed after the fact.
+  app.get("/api/athlete/exercises/:exerciseId/load-velocity-today", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const exerciseId = Number(req.params.exerciseId);
+    if (!Number.isFinite(exerciseId)) return res.status(400).json({ message: "Invalid exercise id" });
+    const date =
+      typeof req.query.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(req.query.date)
+        ? req.query.date
+        : formatISO(new Date(), { representation: "date" });
+    const result = await storage.getLoadVelocityProjectionForAthlete(user.id, exerciseId, date);
+    res.json(result);
   });
 
   app.get("/api/athlete/programs", requireRole("athlete"), requireFreeAgent, async (req, res) => {
