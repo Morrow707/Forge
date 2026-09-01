@@ -39,10 +39,9 @@
 }
 
 /*
-  Forge theme tokens.
-  PLACEHOLDER PALETTE — swap these HSL values once Forge's own real brand colors
-  are decided. Everything in the UI reads from these variables, so updating them
-  here re-themes the base app instantly.
+  Forge theme tokens -- dark charcoal + bold orange. This IS Forge's real, decided
+  brand palette, not a placeholder -- everything in the UI reads from these
+  variables, so any future rebrand still just means updating the values here.
 
   This is the DEFAULT a user sees with no custom branding applied -- it is NOT
   the same thing as white-label branding, which is already fully built and live:

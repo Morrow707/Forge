@@ -27,9 +27,9 @@ Tailwind CSS for styling.
 ## Design system
 
 The UI theme lives entirely in CSS variables in `client/src/index.css`. The current
-palette is a **placeholder** (dark charcoal + bold orange) standing in for Forge's
-own default brand colors until exact ones are provided — swap the values there to
-re-theme the base app instantly.
+palette (dark charcoal + bold orange) is Forge's real, decided default brand
+palette, not a placeholder — swap the values there for any future rebrand and it
+re-themes the base app instantly.
 
 That default is only what a user sees with no custom branding applied. Coaches and
 institutions can already fully re-skin their own experience on top of it — custom
@@ -37,8 +37,7 @@ logo, primary/secondary colors, and even the ambient glow/shadow effects, not ju
 flat colors (see `client/src/lib/branding-style.ts`, applied via `shared/schema.ts`'s
 `brandPrimaryColor`/`brandSecondaryColor`/`brandLogoUrl` and a coach's own personal
 `personalAccentColor`/`personalSecondaryColor`/`personalBackgroundHue`). That system
-is done and live — it's the base placeholder above, not the white-label branding,
-that's still waiting on real values. Every branded page still credits Forge via the
+is done and live too. Every branded page still credits Forge via the
 "Powered by Forge" mark (`client/src/components/powered-by-footer.tsx` and
 `app-shell.tsx`'s header caption) so a re-skinned instance never stops reading as
 built on Forge.
