@@ -106,15 +106,29 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
     private static let sessionQueue = DispatchQueue(label: "com.forge.avbodytracking.session")
     // Separate from sessionQueue -- Phase 2's frame-by-frame Vision analysis can run at the
     // same time a new preview session is starting for the next set, and shouldn't contend
-    // with (or block) camera setup.
-    private static let analysisQueue = DispatchQueue(label: "com.forge.avbodytracking.analysis")
+    // with (or block) camera setup. `var`, not `let`: see analyzeRecording's own watchdog
+    // comment on why a permanently stuck call here can force this to be swapped out for a
+    // fresh queue rather than jamming every future recording's analysis forever. Every read
+    // or write of this property goes through analysisQueueLock.
+    private static var analysisQueue = DispatchQueue(label: "com.forge.avbodytracking.analysis")
+    private static let analysisQueueLock = NSLock()
     private var analysisBackgroundTaskID: UIBackgroundTaskIdentifier = .invalid
     // Checked once per frame inside runPoseAnalysis's while loop -- real cancellation, not
     // just the JS side hiding its own spinner while the native loop keeps running to
     // completion regardless. Reset at the start of every new analyzeRecording call so a
     // stale cancellation from a previous (already-finished) analysis can't immediately
-    // abort the next one.
+    // abort the next one. NOTE: this flag alone can't interrupt a hang that happens BEFORE
+    // the loop starts (asset loading, AVAssetReader init/startReading) -- see
+    // currentAnalysisCancelNow below for the mechanism that actually covers that case.
     private var analysisCancelled = false
+    // Lets cancelAnalysis() force the CURRENTLY PENDING analyzeRecording call to fail
+    // immediately, instead of only setting analysisCancelled above (which runPoseAnalysis
+    // only checks once its read loop has already started) and otherwise leaving the JS side's
+    // "Analyzing recording" spinner waiting on a promise that won't resolve until the
+    // watchdog's own much longer timeout. Set at the start of every analyzeRecording call,
+    // cleared (via settle's own guard, see there) the moment that call actually finishes one
+    // way or another.
+    private var currentAnalysisCancelNow: (() -> Void)?
 
     // Phase 5: object/implement tracking (bar path, thrown ball) -- see AvImplementTracker's
     // own comment for why this runs entirely in pixel space with no live meters conversion,
@@ -767,27 +781,91 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         analysisCancelled = false
         leftImplementTracker.reset()
         rightImplementTracker.reset()
-        Self.analysisQueue.async {
-            self.runPoseAnalysis(url: url, sampleEveryNthFrame: sampleEveryNthFrame, detectBox: detectBox, call: call)
+
+        // Confirmed against a real field report: AVAssetReader/Vision setup can hang
+        // indefinitely before runPoseAnalysis's read loop even starts (stuck at "0 frames
+        // processed" forever) -- a point analysisCancelled can't reach (it's only checked
+        // INSIDE that loop). Because analysisQueue is a single serial queue, that same hang
+        // then silently blocked a completely fresh second recording's analysis too, since its
+        // call just sat queued behind the still-stuck first one. settle(...) below is the one
+        // place either a real result (from runPoseAnalysis), a user-initiated cancel (see
+        // cancelAnalysis), or this watchdog resolves the call -- whichever gets there first
+        // wins, guarded by a lock so only one of them actually fires.
+        let settleLock = NSLock()
+        var settled = false
+        func settle(_ finish: @escaping () -> Void) {
+            settleLock.lock()
+            let alreadySettled = settled
+            settled = true
+            settleLock.unlock()
+            guard !alreadySettled else { return }
+            self.currentAnalysisCancelNow = nil
+            finish()
+        }
+        currentAnalysisCancelNow = {
+            settle { DispatchQueue.main.async { call.reject("Analysis cancelled") } }
+        }
+
+        Self.analysisQueueLock.lock()
+        let queueForThisCall = Self.analysisQueue
+        Self.analysisQueueLock.unlock()
+
+        // Runs on a separate queue from analysisQueue on purpose -- if analysisQueue itself is
+        // what's stuck, a watchdog scheduled on that same queue would never get a turn to run
+        // either. On timeout, replaces analysisQueue with a fresh instance (only if nothing
+        // else already has) so every future call stops queueing up behind whatever's still
+        // wedged -- if that original call ever does finish on its own, it just finishes
+        // uselessly on the now-abandoned queue; nothing is still listening for its result.
+        let analysisTimeoutSeconds = 120.0
+        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + analysisTimeoutSeconds) { [weak self] in
+            settle {
+                self?.logDiag(
+                    "analyzeRecording WATCHDOG fired after \(Int(analysisTimeoutSeconds))s with no result -- "
+                        + "forcing failure and replacing analysisQueue so future calls aren't stuck behind this one"
+                )
+                self?.analysisCancelled = true
+                Self.analysisQueueLock.lock()
+                if Self.analysisQueue === queueForThisCall {
+                    Self.analysisQueue = DispatchQueue(label: "com.forge.avbodytracking.analysis")
+                }
+                Self.analysisQueueLock.unlock()
+                DispatchQueue.main.async { call.reject("Analysis timed out") }
+            }
+        }
+
+        queueForThisCall.async {
+            self.runPoseAnalysis(
+                url: url, sampleEveryNthFrame: sampleEveryNthFrame, detectBox: detectBox, call: call, settle: settle
+            )
         }
     }
 
     // A slow take on an older device is exactly the case Phase 1's own record-first design
     // was meant to protect against thermally, but nothing protected the athlete/coach from
     // just having to wait on a stuck-feeling analysis with no way out -- this gives them one.
-    // Only flips the flag; runPoseAnalysis's own loop is what actually stops, on its next
-    // iteration, wherever it happens to be.
+    // analysisCancelled covers the common case (the read loop is already running and checks it
+    // every iteration); currentAnalysisCancelNow additionally covers a hang before that loop
+    // even starts, forcing the pending call to fail right away instead of leaving the JS
+    // side's spinner waiting up to analyzeRecording's own much longer watchdog timeout.
     @objc func cancelAnalysis(_ call: CAPPluginCall) {
         analysisCancelled = true
         logDiag("cancelAnalysis() called")
+        currentAnalysisCancelNow?()
+        currentAnalysisCancelNow = nil
         call.resolve()
     }
 
-    // Runs on Self.analysisQueue, NOT the main thread -- AVAssetReader's copyNextSampleBuffer
-    // and Vision's synchronous perform() are both blocking calls, potentially for seconds
-    // across a whole clip, and nothing here touches UI directly (notifyListeners/call.resolve
-    // are dispatched to main explicitly where it matters).
-    private func runPoseAnalysis(url: URL, sampleEveryNthFrame: Int, detectBox: Bool, call: CAPPluginCall) {
+    // Runs on the queue analyzeRecording dispatched onto, NOT the main thread -- AVAssetReader's
+    // copyNextSampleBuffer and Vision's synchronous perform() are both blocking calls,
+    // potentially for seconds across a whole clip, and nothing here touches UI directly
+    // (notifyListeners/call.resolve are dispatched to main explicitly where it matters). Every
+    // exit point below goes through the passed-in settle(...) instead of calling
+    // call.resolve/call.reject directly -- see analyzeRecording's own comment on why (a
+    // watchdog or a user-initiated cancel might already have settled this call first).
+    private func runPoseAnalysis(
+        url: URL, sampleEveryNthFrame: Int, detectBox: Bool, call: CAPPluginCall,
+        settle: @escaping (@escaping () -> Void) -> Void
+    ) {
         // Background-execution edge case, same as stopRecording's finalize step -- a coach
         // backgrounding the app to check something mid-analysis shouldn't kill this partway
         // through a clip.
@@ -807,7 +885,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         let asset = AVAsset(url: url)
         guard let track = asset.tracks(withMediaType: .video).first else {
             logDiag("analyzeRecording FAILED: no video track in \(url.lastPathComponent)")
-            DispatchQueue.main.async { call.reject("No video track in recording") }
+            settle { DispatchQueue.main.async { call.reject("No video track in recording") } }
             return
         }
         // AVAssetReader hands back pixel buffers in their raw stored orientation -- it does
@@ -830,14 +908,14 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
 
         guard let reader = try? AVAssetReader(asset: asset) else {
             logDiag("analyzeRecording FAILED: could not create AVAssetReader")
-            DispatchQueue.main.async { call.reject("Could not read recording") }
+            settle { DispatchQueue.main.async { call.reject("Could not read recording") } }
             return
         }
         let outputSettings: [String: Any] = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
         let trackOutput = AVAssetReaderTrackOutput(track: track, outputSettings: outputSettings)
         guard reader.canAdd(trackOutput) else {
             logDiag("analyzeRecording FAILED: cannot add track output")
-            DispatchQueue.main.async { call.reject("Could not set up frame reader") }
+            settle { DispatchQueue.main.async { call.reject("Could not set up frame reader") } }
             return
         }
         reader.add(trackOutput)
@@ -887,7 +965,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             if analysisCancelled {
                 reader.cancelReading()
                 logDiag("analyzeRecording cancelled after \(processedCount) frames")
-                DispatchQueue.main.async { call.reject("Analysis cancelled") }
+                settle { DispatchQueue.main.async { call.reject("Analysis cancelled") } }
                 return
             }
             guard let sampleBuffer = trackOutput.copyNextSampleBuffer() else { break }
@@ -1082,32 +1160,34 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             "analyzeRecording finished: \(processedCount) frames processed, "
                 + "\(trackedCount) tracked, \(String(format: "%.2f", elapsed))s elapsed"
         )
-        DispatchQueue.main.async {
-            var result: [String: Any] = [
-                "frameCount": processedCount,
-                "trackedFrameCount": trackedCount,
-                "elapsedSeconds": elapsed,
-                "assetDurationSeconds": assetDurationSeconds,
-                "readerStatus": readerStatusString,
-                "visionFailureCount": visionFailureCount,
-                "thermalState": thermalState,
-                "lowPowerModeEnabled": lowPowerModeEnabled,
-            ]
-            if let error = reader.error {
-                result["readerErrorMessage"] = error.localizedDescription
+        settle {
+            DispatchQueue.main.async {
+                var result: [String: Any] = [
+                    "frameCount": processedCount,
+                    "trackedFrameCount": trackedCount,
+                    "elapsedSeconds": elapsed,
+                    "assetDurationSeconds": assetDurationSeconds,
+                    "readerStatus": readerStatusString,
+                    "visionFailureCount": visionFailureCount,
+                    "thermalState": thermalState,
+                    "lowPowerModeEnabled": lowPowerModeEnabled,
+                ]
+                if let error = reader.error {
+                    result["readerErrorMessage"] = error.localizedDescription
+                }
+                // Omit-when-nil, same convention as leftImplement/rightImplement above -- the JS
+                // bridge treats a missing key as "no confident box read," not a zeroed default.
+                if let boxTopNormalizedY = boxTopNormalizedY {
+                    result["boxTopNormalizedY"] = boxTopNormalizedY
+                }
+                if let freeDiskSpaceBytes = freeDiskSpaceBytes {
+                    result["freeDiskSpaceBytes"] = freeDiskSpaceBytes
+                }
+                if let maxInterFrameGapSeconds = maxInterFrameGapSeconds {
+                    result["maxInterFrameGapSeconds"] = maxInterFrameGapSeconds
+                }
+                call.resolve(result)
             }
-            // Omit-when-nil, same convention as leftImplement/rightImplement above -- the JS
-            // bridge treats a missing key as "no confident box read," not a zeroed default.
-            if let boxTopNormalizedY = boxTopNormalizedY {
-                result["boxTopNormalizedY"] = boxTopNormalizedY
-            }
-            if let freeDiskSpaceBytes = freeDiskSpaceBytes {
-                result["freeDiskSpaceBytes"] = freeDiskSpaceBytes
-            }
-            if let maxInterFrameGapSeconds = maxInterFrameGapSeconds {
-                result["maxInterFrameGapSeconds"] = maxInterFrameGapSeconds
-            }
-            call.resolve(result)
         }
     }
 
