@@ -64,6 +64,24 @@ function deriveMaterials(equipment: string, name: string) {
   return { usesWeight, usesBodyweight, usesBand, usesBox };
 }
 
+// The published demo logins (coach123, admin123, etc., documented in this
+// file's own console.log lines below and in READMEs) are meant for a local
+// dev database only. render.yaml runs this whole script -- including
+// account creation -- on every production deploy too, and these accounts
+// are real, full-privilege logins the instant they're created (one of them
+// is role: "admin"). A literal, published password on a real production
+// account is a live login anyone who reads this public repo can use.
+// Same account, same downstream behavior either way (a lot of this file's
+// later logic keys off coach.id/demoAdmin.id existing, e.g. the exercise-
+// library handoff to scott.morrow@live.com below) -- only the password
+// actually differs. In production the account gets an unguessable random
+// password instead of the published one; nobody (including whoever wrote
+// this file) can log into it without going through the same password-reset
+// flow a real user would.
+function demoPassword(publishedPassword: string): string {
+  return process.env.NODE_ENV === "production" ? crypto.randomUUID() : publishedPassword;
+}
+
 async function main() {
   console.log("Seeding Forge demo data...");
 
@@ -71,7 +89,7 @@ async function main() {
   if (!coach) {
     coach = await storage.createUser({
       email: "coach@forge.app",
-      passwordHash: await hashPassword("coach123"),
+      passwordHash: await hashPassword(demoPassword("coach123")),
       name: "Coach Riley",
       role: "coach",
     });
@@ -81,7 +99,7 @@ async function main() {
   if (!athlete) {
     athlete = await storage.createUser({
       email: "athlete@forge.app",
-      passwordHash: await hashPassword("athlete123"),
+      passwordHash: await hashPassword(demoPassword("athlete123")),
       name: "Jordan Athlete",
       role: "athlete",
     });
@@ -194,7 +212,7 @@ async function main() {
   if (!demoAdmin) {
     demoAdmin = await storage.createUser({
       email: "admin@forge.app",
-      passwordHash: await hashPassword("admin123"),
+      passwordHash: await hashPassword(demoPassword("admin123")),
       name: "Forge Admin",
       role: "admin",
     });
@@ -210,7 +228,7 @@ async function main() {
   if (!freeAgent) {
     freeAgent = await storage.createUser({
       email: "freeagent@forge.app",
-      passwordHash: await hashPassword("freeagent123"),
+      passwordHash: await hashPassword(demoPassword("freeagent123")),
       name: "Morgan Freeagent",
       role: "athlete",
       sport: "Basketball",
@@ -6182,9 +6200,14 @@ And what we don't have yet, stated plainly: no signed BAAs with our hosting or i
   }
 
   console.log("Seed complete.");
-  console.log("Coach login: coach@forge.app / coach123");
-  console.log("Athlete login: athlete@forge.app / athlete123");
-  console.log("Free Agent login: freeagent@forge.app / freeagent123");
+  // The published passwords below are only real in dev -- see demoPassword's own comment.
+  // Printing them in a production log would be misleading (they're random there, not these
+  // literals) without being useful (nobody's meant to actually use these accounts in prod).
+  if (process.env.NODE_ENV !== "production") {
+    console.log("Coach login: coach@forge.app / coach123");
+    console.log("Athlete login: athlete@forge.app / athlete123");
+    console.log("Free Agent login: freeagent@forge.app / freeagent123");
+  }
   console.log(`Coach code: ${coach.coachCode}`);
   process.exit(0);
 }
