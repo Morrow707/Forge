@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { apiRequest, getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { RefreshCw, FileText, Copy, ChevronDown, ChevronUp, BookOpen } from "lucide-react";
+import { RefreshCw, FileText, Copy, ChevronDown, ChevronUp, BookOpen, AlertTriangle } from "lucide-react";
 
 type ReportField = { label: string; value: string };
 type TrackingReportEntry = {
@@ -26,6 +26,7 @@ type TrackingReportEntry = {
   trust: ReportField[];
   device: ReportField[];
   diagnostics: ReportField[];
+  flags: string[];
 };
 
 function trustBadgeClass(value: string): string {
@@ -53,6 +54,21 @@ function EntryCard({ entry }: { entry: TrackingReportEntry }) {
             {entry.weight ? `, ${entry.weight}${entry.weightUnit ? ` ${entry.weightUnit}` : ""}` : ""}
           </p>
         </div>
+
+        {/* Right under the header, ahead of everything else -- the whole point of a flag is
+            that it's the first thing worth reading, not something to notice only after already
+            scanning past the data points. Amber rather than the destructive red used for
+            failureReason below: a flag means "this looks off," not "there's no data at all." */}
+        {entry.flags.length > 0 && (
+          <div className="space-y-1 rounded-md border border-amber-500/40 bg-amber-500/15 px-2 py-1.5">
+            {entry.flags.map((f, i) => (
+              <p key={i} className="flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-400">
+                <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+                <span>{f}</span>
+              </p>
+            ))}
+          </div>
+        )}
 
         <div className="flex flex-wrap gap-1.5">
           <Badge variant="secondary" className="text-[10px]">

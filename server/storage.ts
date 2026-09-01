@@ -16441,6 +16441,11 @@ ${catalog}`;
         armDriveAsymmetry: workoutSetEntries.armDriveAsymmetry,
         legDriveAsymmetry: workoutSetEntries.legDriveAsymmetry,
         trustScores: workoutSetEntries.trustScores,
+        // Per-rep arrays -- needed to compare how many reps tracking actually found against how
+        // many the athlete logged (reps above). Not selected for their own per-rep numbers
+        // (those already come through the aggregate columns here), purely for .length.
+        repBreakdown: workoutSetEntries.repBreakdown,
+        jumpBreakdown: workoutSetEntries.jumpBreakdown,
         jumpHeightCm: workoutSetEntries.jumpHeightCm,
         jumpDistanceCm: workoutSetEntries.jumpDistanceCm,
         groundContactSeconds: workoutSetEntries.groundContactSeconds,

@@ -330,6 +330,85 @@ function formatTrackingDiagnostics(r: TrackedSetRow): ReportField[] {
   return lines;
 }
 
+// Deterministic pattern-matching against known "this probably isn't right" signatures -- not
+// an LLM call (nothing here needs judgment, just threshold checks against numbers this file
+// already has in hand from formatTrackingDiagnostics/formatDataPoints' own data), but the
+// direct answer to "can something flag the bad ones for us" instead of a human reading every
+// entry by hand looking for it. Ranked roughly by how directly each one points at "why
+// tracking probably failed" -- e.g. the reader not completing explains everything else about
+// to be true of the same set, so it's checked (and returned alone, via the early `else`) ahead
+// of a duration mismatch that's really the same underlying symptom read a different way.
+function computeFlags(r: TrackedSetRow): string[] {
+  const flags: string[] = [];
+  const d = r.trackingDiagnostics as TrackingDiagnostics | null | undefined;
+  const mode = r.trackingLevel;
+
+  if (d?.recording?.readerStatus && d.recording.readerStatus !== "completed") {
+    flags.push(
+      `Analysis stopped early (reader status "${d.recording.readerStatus}")` +
+        (d.recording.readerErrorMessage ? `: ${d.recording.readerErrorMessage}` : ""),
+    );
+  } else if (
+    d?.recording?.assetDurationSeconds != null &&
+    d.recording.assetDurationSeconds > 5 &&
+    // A generous floor -- even heavy frame-sampling shouldn't land below ~5 analyzed frames
+    // per real second of footage. A genuine miss here is the exact "recording confirmed long
+    // in person, only a couple seconds of it ever got analyzed" pattern that motivated adding
+    // assetDurationSeconds/readerStatus at all, without needing to know this specific clip's
+    // sample rate to catch it.
+    d.recording.frameCount < d.recording.assetDurationSeconds * 5
+  ) {
+    flags.push(
+      `Recording is ~${Math.round(d.recording.assetDurationSeconds)}s but only ${
+        d.recording.frameCount
+      } frames were analyzed -- analysis likely stopped early`,
+    );
+  }
+
+  // Logged rep count vs. how many reps tracking actually produced -- the single most direct
+  // "did this set undercount" signal there is. Only checked on modes that report discrete reps
+  // (bar_path/full via repBreakdown, jump via jumpBreakdown) and only when the athlete actually
+  // logged a rep count to compare against. Under-counting only, deliberately -- over-counting
+  // is a different failure mode (summarizeTrackedSet/summarizeJumpSet's own phantom-phase
+  // filtering already leans conservative against it) and flagging it here risks a false
+  // positive on a set the athlete simply logged wrong.
+  const loggedReps = r.reps ? parseInt(r.reps, 10) : null;
+  if (loggedReps && loggedReps > 0) {
+    const trackedReps = Array.isArray(r.repBreakdown)
+      ? r.repBreakdown.length
+      : Array.isArray(r.jumpBreakdown)
+        ? r.jumpBreakdown.length
+        : null;
+    if (trackedReps != null && trackedReps < loggedReps) {
+      flags.push(`Logged ${loggedReps} reps but tracking only found ${trackedReps}`);
+    }
+  }
+
+  if (d?.bodyPose.avgWristConfidence != null && d.bodyPose.avgWristConfidence < 0.3) {
+    flags.push(`Very low body-tracking confidence (${pct(d.bodyPose.avgWristConfidence)})`);
+  }
+
+  if (
+    mode &&
+    OBJECT_TRACKER_MODES.has(mode) &&
+    d &&
+    d.objectDetection.framesWithLeftImplement === 0 &&
+    d.objectDetection.framesWithRightImplement === 0
+  ) {
+    flags.push("Object tracker never locked onto the implement for this whole clip");
+  }
+
+  if (d?.calibration) {
+    const c = d.calibration;
+    const totalFrames = c.noseToAnkleFrames + c.shoulderToAnkleFrames + c.unresolvedFrames;
+    if (totalFrames > 0 && c.unresolvedFrames / totalFrames > 0.5) {
+      flags.push(`Calibration unresolved on ${Math.round((c.unresolvedFrames / totalFrames) * 100)}% of frames`);
+    }
+  }
+
+  return flags;
+}
+
 export type TrackingReportEntry = {
   date: string;
   athleteName: string;
@@ -345,6 +424,10 @@ export type TrackingReportEntry = {
   trust: ReportField[];
   device: ReportField[];
   diagnostics: ReportField[];
+  // Deterministic anomaly flags -- see computeFlags' own comment. Empty array (not omitted)
+  // when nothing looked wrong, so a consumer can render "no flags" distinctly from "not
+  // checked yet."
+  flags: string[];
 };
 
 // Shared assembly step both formatTrackingReport (plain text) and the JSON entries route build
@@ -368,6 +451,7 @@ function buildEntries(rows: TrackedSetRow[]): TrackingReportEntry[] {
       trust: formatTrust(r),
       device: formatCaptureDeviceInfo(r),
       diagnostics: formatTrackingDiagnostics(r),
+      flags: computeFlags(r),
     };
   });
 }
@@ -385,17 +469,25 @@ export function formatTrackingReport(rows: TrackedSetRow[]): string {
   }
   const seenModes = new Set<string>();
   const blocks: string[] = [];
+  const entries = buildEntries(rows);
+  const flaggedCount = entries.filter((e) => e.flags.length > 0).length;
 
-  for (const e of buildEntries(rows)) {
-    const header = `${e.date}  ${e.athleteName} -- ${e.exerciseName} (set ${e.setNumber}${
-      e.reps ? `, ${e.reps} reps` : ""
-    }${e.weight ? `, ${e.weight}${e.weightUnit ? ` ${e.weightUnit}` : ""}` : ""})`;
+  for (const e of entries) {
+    const header = `${e.flags.length > 0 ? "⚠ " : ""}${e.date}  ${e.athleteName} -- ${e.exerciseName} (set ${
+      e.setNumber
+    }${e.reps ? `, ${e.reps} reps` : ""}${
+      e.weight ? `, ${e.weight}${e.weightUnit ? ` ${e.weightUnit}` : ""}` : ""
+    })`;
     const showMethodology = e.methodology && !seenModes.has(e.trackingMode);
     if (showMethodology) seenModes.add(e.trackingMode);
 
     blocks.push(
       [
         header,
+        // Right under the header, ahead of everything else -- the whole point of a flag is
+        // that it's the first thing worth reading, not something to notice only after already
+        // reading every data point and diagnostics line looking for what's wrong.
+        ...e.flags.map((f) => `  ⚠ FLAGGED: ${f}`),
         `  Tracking mode: ${e.trackingMode}${e.movementType ? ` (movement type: ${e.movementType})` : ""}`,
         showMethodology ? `  How this mode works: ${e.methodology}` : null,
         ...e.device.map((f) => `  ${f.label}: ${f.value}`),
@@ -411,7 +503,8 @@ export function formatTrackingReport(rows: TrackedSetRow[]): string {
 
   return (
     `Forge tracking report -- ${rows.length} most recent tracked set${rows.length === 1 ? "" : "s"}, newest first.\n` +
-    `Each entry lists every data point that mode records and, the first time a mode appears, a short methodology note.\n\n` +
+    `Each entry lists every data point that mode records and, the first time a mode appears, a short methodology note.\n` +
+    `${flaggedCount > 0 ? `${flaggedCount} of ${rows.length} sets below are flagged (⚠) for a likely tracking problem.` : "No sets below are flagged."}\n\n` +
     blocks.join("\n\n")
   );
 }
