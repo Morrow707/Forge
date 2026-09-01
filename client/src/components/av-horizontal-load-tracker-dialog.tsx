@@ -119,7 +119,7 @@ export function AvHorizontalLoadTrackerDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   recordVideo?: boolean;
-  onCapture: (metrics: HorizontalLoadSetMetrics, videoUrl?: string) => void;
+  onCapture: (metrics: HorizontalLoadSetMetrics | null, videoUrl?: string) => void;
   videoContext?: VideoRecordContext;
 }) {
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -128,6 +128,12 @@ export function AvHorizontalLoadTrackerDialog({
   const pointsRef = useRef<SprintPoint[]>([]);
   const stepRef = useRef<Step>("calibrate");
   const recordedBlobRef = useRef<Blob | null>(null);
+  // Set by stopCaptureAndAnalyze's onBlobReady the instant the recording exists, well before
+  // Vision analysis (let alone the review step) finishes -- see use-av-body-tracking.ts's own
+  // onBlobReady comment. saveMutation just awaits this same in-flight upload instead of
+  // starting a fresh one once the coach taps Save, so the two run concurrently rather than the
+  // upload only starting after analysis (and the whole review/manual-marking step) is done.
+  const uploadPromiseRef = useRef<Promise<{ status: "uploaded"; url: string } | { status: "queued" }> | null>(null);
   // Set once per capture (stopCaptureAndAnalyze), read by finishWithResult -- the manual
   // start/finish fallback re-scrubs the SAME already-recorded clip rather than capturing again,
   // so it has no fresh captureDeviceInfo of its own to attach; both paths funnel through
@@ -176,6 +182,7 @@ export function AvHorizontalLoadTrackerDialog({
     if (videoUrl) URL.revokeObjectURL(videoUrl);
     setVideoUrl(null);
     recordedBlobRef.current = null;
+    uploadPromiseRef.current = null;
     manualStartRef.current = null;
     setManualStartTime(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -244,8 +251,47 @@ export function AvHorizontalLoadTrackerDialog({
   async function stopCaptureAndAnalyze() {
     if (recordingTimeoutRef.current) clearTimeout(recordingTimeoutRef.current);
     changeStep("analyzing");
-    const captured = await stopRecordingAndAnalyze();
+    uploadPromiseRef.current = null;
+    const captured = await stopRecordingAndAnalyze({
+      onBlobReady: recordVideo
+        ? (blob) => {
+            setSaving(true);
+            setUploadProgress(0);
+            const filename = videoFilenameForBlob(blob, "form-check");
+            uploadPromiseRef.current = uploadOrQueueVideo(blob, filename, videoContext ?? { label: "Sled/Carry" }, setUploadProgress);
+          }
+        : undefined,
+    });
     if (!captured) {
+      // Analysis failed or was cancelled, but the upload above (if it started) doesn't know or
+      // care -- it never depended on analysis succeeding. Left alone it would still finish in
+      // the background with no set to attach it to, so wait for it and hand it over anyway --
+      // same "the clip is worth keeping even without numbers" reasoning as every other
+      // onBlobReady dialog's own failure branch.
+      //
+      // Cast (not just read directly) before narrowing -- uploadPromiseRef.current is only
+      // ever reassigned inside the onBlobReady closure above, and TypeScript's control-flow
+      // analysis doesn't trace into closures: outside one, it treats a closure-only-assigned
+      // ref field as having stayed at its initializer (null) forever, no matter the declared
+      // type, which narrows the truthy branch below to `never` without this cast overriding it
+      // (see av-jump-tracker-dialog.tsx's own stopTracking for the same quirk on a plain `let`).
+      const inFlightUpload = uploadPromiseRef.current as Promise<
+        { status: "uploaded"; url: string } | { status: "queued" }
+      > | null;
+      if (inFlightUpload) {
+        try {
+          const uploadResult = await inFlightUpload;
+          toast.error("Couldn't finish analyzing this take, but your video was saved for your coach.");
+          onCapture(null, uploadResult.status === "uploaded" ? uploadResult.url : undefined);
+          onOpenChange(false);
+          return;
+        } catch {
+          // Genuinely nothing left to salvage -- fall through to send the coach back to
+          // calibrate, same as the no-upload-in-flight case below.
+        } finally {
+          setSaving(false);
+        }
+      }
       changeStep("calibrate");
       return;
     }
@@ -307,6 +353,12 @@ export function AvHorizontalLoadTrackerDialog({
     if (videoUrl) URL.revokeObjectURL(videoUrl);
     setVideoUrl(null);
     recordedBlobRef.current = null;
+    // Deliberately not awaited/cancelled -- the take being discarded may already have an
+    // upload in flight from onBlobReady. Letting it finish in the background and just
+    // dropping the reference is the same tradeoff already accepted elsewhere in this pipeline
+    // (see stopCaptureAndAnalyze's own failure-salvage branch for why that one instead awaits
+    // and attaches it -- there's no "set" here to attach an orphaned retry-take's video to).
+    uploadPromiseRef.current = null;
     resetCheckpoints();
     setResult(null);
     setError(null);
@@ -320,17 +372,21 @@ export function AvHorizontalLoadTrackerDialog({
   async function saveMutation() {
     if (!result) return;
     setSaving(true);
-    setUploadProgress(0);
     try {
       let uploadedVideoUrl: string | undefined;
       if (recordVideo && recordedBlobRef.current) {
-        const filename = videoFilenameForBlob(recordedBlobRef.current, "form-check");
-        const uploadResult = await uploadOrQueueVideo(
-          recordedBlobRef.current,
-          filename,
-          videoContext ?? { label: "Sled/Carry" },
-          setUploadProgress,
-        );
+        // uploadPromiseRef.current is always set here -- onBlobReady (stopCaptureAndAnalyze
+        // above) unconditionally starts it whenever recordVideo is true. Falls back to a fresh
+        // upload rather than silently dropping the video if that invariant is ever wrong.
+        const inFlightUpload =
+          uploadPromiseRef.current ??
+          uploadOrQueueVideo(
+            recordedBlobRef.current,
+            videoFilenameForBlob(recordedBlobRef.current, "form-check"),
+            videoContext ?? { label: "Sled/Carry" },
+            setUploadProgress,
+          );
+        const uploadResult = await inFlightUpload;
         if (uploadResult.status === "queued") {
           if (!hasWarnedAboutQueueing()) {
             markWarnedAboutQueueing();

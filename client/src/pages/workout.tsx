@@ -2992,16 +2992,16 @@ function ExerciseLogContent({
             }
           }
 
-          function handleHorizontalLoadCapture(metrics: HorizontalLoadSetMetrics, videoUrl?: string) {
+          function handleHorizontalLoadCapture(metrics: HorizontalLoadSetMetrics | null, videoUrl?: string) {
             if (trackingSet == null) return;
             const videoPatch = videoUrl ? { formCheckVideoUrl: videoUrl } : {};
             onUpdateSet(
               trackingSet,
               {
-                horizontalLoadElapsedSeconds: metrics.elapsedSeconds,
-                horizontalLoadDistanceYards: metrics.distanceYards,
-                horizontalLoadAvgSpeedYardsPerSec: metrics.avgSpeedYardsPerSec,
-                captureDeviceInfo: metrics.captureDeviceInfo ?? null,
+                horizontalLoadElapsedSeconds: metrics?.elapsedSeconds ?? null,
+                horizontalLoadDistanceYards: metrics?.distanceYards ?? null,
+                horizontalLoadAvgSpeedYardsPerSec: metrics?.avgSpeedYardsPerSec ?? null,
+                captureDeviceInfo: metrics?.captureDeviceInfo ?? null,
                 ...videoPatch,
               },
               { immediate: true },
