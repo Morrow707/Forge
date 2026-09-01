@@ -118,10 +118,17 @@ export default function AdminLoginPage() {
           </Card>
         )}
 
-        <div className="mt-6 rounded-md border border-border bg-surface p-4 text-xs text-muted-foreground">
-          <p className="mb-1 font-semibold text-foreground">Demo admin account</p>
-          <p>admin@forge.app / admin123</p>
-        </div>
+        {/* Dev-only -- see login.tsx's own comment on this same pattern. This one's the
+            higher-stakes half: admin@forge.app is a full-privilege admin account, and even
+            with server/seed.ts's demoPassword() randomizing its real password in production,
+            publishing the email alone hands an attacker a known, always-existing admin
+            username to aim credential-stuffing or MFA-brute-force attempts at. */}
+        {import.meta.env.DEV && (
+          <div className="mt-6 rounded-md border border-border bg-surface p-4 text-xs text-muted-foreground">
+            <p className="mb-1 font-semibold text-foreground">Demo admin account</p>
+            <p>admin@forge.app / admin123</p>
+          </div>
+        )}
       </div>
     </div>
   );

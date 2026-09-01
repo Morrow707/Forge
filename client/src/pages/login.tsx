@@ -158,12 +158,19 @@ export default function LoginPage() {
           </Card>
         )}
 
-        <div className="mt-6 rounded-md border border-border bg-surface p-4 text-xs text-muted-foreground">
-          <p className="mb-1 font-semibold text-foreground">Demo accounts</p>
-          <p>Coach: coach@forge.app / coach123</p>
-          <p>Athlete: athlete@forge.app / athlete123</p>
-          <p>Free Agent: freeagent@forge.app / freeagent123</p>
-        </div>
+        {/* Dev-only -- server/seed.ts's demoPassword() randomizes these accounts' actual
+            passwords in production (crypto.randomUUID(), never these literals), but the
+            published emails alone are still enough to hand an attacker a head start on
+            credential-stuffing/enumeration against real, always-existing accounts. No reason
+            to advertise them outside local dev, where the literal passwords below are real. */}
+        {import.meta.env.DEV && (
+          <div className="mt-6 rounded-md border border-border bg-surface p-4 text-xs text-muted-foreground">
+            <p className="mb-1 font-semibold text-foreground">Demo accounts</p>
+            <p>Coach: coach@forge.app / coach123</p>
+            <p>Athlete: athlete@forge.app / athlete123</p>
+            <p>Free Agent: freeagent@forge.app / freeagent123</p>
+          </div>
+        )}
       </div>
     </div>
   );

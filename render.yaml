@@ -91,14 +91,17 @@ services:
         value: com.foreperformancesystems.forge
       # Resend API key for coach-driven progress report emails -- sign up at
       # resend.com (free tier), create an API key, and paste it in. Sending
-      # silently no-ops until this is set. RESEND_FROM_EMAIL defaults to
-      # Resend's shared sandbox address, which only delivers to your own
-      # verified account email -- verify a domain in Resend and set
-      # RESEND_FROM_EMAIL to send to athletes for real.
+      # silently no-ops until this is set. RESEND_FROM_EMAIL is sync: false
+      # (not a checked-in `value:`) on purpose: a hardcoded blueprint default
+      # here is exactly the kind of thing that could silently overwrite a
+      # real, working from-address on some future blueprint sync -- it needs
+      # a real domain verified in Resend first (see server/email.ts's own
+      # sandbox-address warning), which is a manual, account-specific step
+      # no blueprint default can stand in for.
       - key: RESEND_API_KEY
         sync: false
       - key: RESEND_FROM_EMAIL
-        value: "Forge <onboarding@resend.dev>"
+        sync: false
       # Claude API key powering every AI feature (chat coach, AI program
       # builder, AI form-check, exercise substitution) -- get one at
       # https://console.anthropic.com/settings/keys. Every AI feature
