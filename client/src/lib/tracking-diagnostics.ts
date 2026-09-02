@@ -32,12 +32,16 @@ export type TrackingDiagnostics = {
     framesWithLeftImplement: number;
     framesWithRightImplement: number;
     avgImplementConfidence: number | null;
-    // Med-ball-only (see AvCoreMlImplementDetector.swift/PoseCoreMlImplement) -- how many
-    // sampled frames had a CoreML detection at all, and of those, how many had an estimated
-    // real-world size implausible for an actual medicine ball (see
-    // pose-tracking.ts's isPlausibleMedBallSize). Null whenever calibration failed for this
-    // clip (no scale factor to convert pixels to meters with), not just when no CoreML model
-    // is bundled -- both cases mean "nothing to report," but for different reasons.
+    // Med-ball-only (see AvCoreMlImplementDetector.swift/PoseCoreMlImplement) -- the model's own
+    // reported confidence, averaged across every sampled frame that had a detection at all.
+    // Independent of scaleFactor (unlike coreMlSizeCheck below) -- this is the model's own
+    // opinion, not a real-world cross-check, so it's available even when calibration failed.
+    framesWithCoreMlImplement: number;
+    avgCoreMlConfidence: number | null;
+    // How many of those detections had an estimated real-world size implausible for an actual
+    // medicine ball (see pose-tracking.ts's isPlausibleMedBallSize). Null whenever calibration
+    // failed for this clip (no scale factor to convert pixels to meters with), not just when no
+    // CoreML model is bundled -- both cases mean "nothing to report," but for different reasons.
     coreMlSizeCheck: { framesChecked: number; implausibleCount: number } | null;
   };
   calibration: {
@@ -92,6 +96,8 @@ function summarizeObjectDetection(
   let framesWithRightImplement = 0;
   let implConfSum = 0;
   let implConfCount = 0;
+  let framesWithCoreMlImplement = 0;
+  let coreMlConfSum = 0;
   let coreMlFramesChecked = 0;
   let coreMlImplausibleCount = 0;
   for (const f of rawFrames) {
@@ -105,18 +111,24 @@ function summarizeObjectDetection(
       implConfSum += f.rightImplement.confidence;
       implConfCount++;
     }
-    if (f.coreMlImplement && scaleFactor != null) {
-      coreMlFramesChecked++;
-      const diameterM = estimateImplementDiameterM(
-        f.coreMlImplement, f.frameWidth, f.frameHeight, scaleFactor,
-      );
-      if (!isPlausibleMedBallSize(diameterM)) coreMlImplausibleCount++;
+    if (f.coreMlImplement) {
+      framesWithCoreMlImplement++;
+      coreMlConfSum += f.coreMlImplement.confidence;
+      if (scaleFactor != null) {
+        coreMlFramesChecked++;
+        const diameterM = estimateImplementDiameterM(
+          f.coreMlImplement, f.frameWidth, f.frameHeight, scaleFactor,
+        );
+        if (!isPlausibleMedBallSize(diameterM)) coreMlImplausibleCount++;
+      }
     }
   }
   return {
     framesWithLeftImplement,
     framesWithRightImplement,
     avgImplementConfidence: implConfCount > 0 ? round2(implConfSum / implConfCount) : null,
+    framesWithCoreMlImplement,
+    avgCoreMlConfidence: framesWithCoreMlImplement > 0 ? round2(coreMlConfSum / framesWithCoreMlImplement) : null,
     coreMlSizeCheck:
       scaleFactor != null ? { framesChecked: coreMlFramesChecked, implausibleCount: coreMlImplausibleCount } : null,
   };

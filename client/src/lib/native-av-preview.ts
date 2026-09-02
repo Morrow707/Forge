@@ -51,7 +51,7 @@ export type PoseImplement = {
 // signal wins when both this and the motion-diff implement trackers
 // report a position is deliberately left for a follow-up pass, once
 // there's real on-device data to validate the choice against.
-export type PoseCoreMlImplement = { x: number; y: number; width: number; height: number };
+export type PoseCoreMlImplement = { x: number; y: number; width: number; height: number; confidence: number };
 
 // Med-ball-only, same scope/reasoning as coreMlImplement above -- how far
 // this frame's background has drifted from the clip's first frame (camera

@@ -6006,10 +6006,14 @@ export const trackingDiagnosticsSchema = z.object({
     framesWithLeftImplement: z.number(),
     framesWithRightImplement: z.number(),
     avgImplementConfidence: z.number().optional().nullable(),
-    // Med-ball-only real-world-size plausibility check against a CoreML detection --
-    // see client/src/lib/pose-tracking.ts's isPlausibleMedBallSize. Optional/nullable since
-    // sets logged before this field existed won't have it, same as every other diagnostics
-    // field added after the original shape shipped.
+    // Med-ball-only CoreML detection stats -- see client/src/lib/tracking-diagnostics.ts's
+    // summarizeObjectDetection. Optional/nullable since sets logged before this field existed
+    // won't have it, same as every other diagnostics field added after the original shape
+    // shipped.
+    framesWithCoreMlImplement: z.number().optional(),
+    avgCoreMlConfidence: z.number().optional().nullable(),
+    // Real-world-size plausibility check against a CoreML detection -- see
+    // client/src/lib/pose-tracking.ts's isPlausibleMedBallSize.
     coreMlSizeCheck: z
       .object({
         framesChecked: z.number(),

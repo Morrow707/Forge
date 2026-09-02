@@ -1142,8 +1142,8 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             // against, not a coarse 160px proxy.
             var coreMlImplement: [String: Any]?
             if coreMlDetectionEnabled,
-               let box = coreMlImplementDetector.track(pixelBuffer: pixelBuffer, orientation: orientation) {
-                coreMlImplement = coreMlResultDict(box)
+               let result = coreMlImplementDetector.track(pixelBuffer: pixelBuffer, orientation: orientation) {
+                coreMlImplement = coreMlResultDict(result.box, confidence: result.confidence)
             }
 
             // Same gate as the CoreML detector above -- handheld camera shake is a real problem
@@ -1498,7 +1498,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         return dict
     }
 
-    private func coreMlResultDict(_ boundingBox: CGRect) -> [String: Any] {
+    private func coreMlResultDict(_ boundingBox: CGRect, confidence: Float) -> [String: Any] {
         // Vision's box is (x, y, width, height) with the same normalized,
         // bottom-left-origin convention as every joint this file already
         // hands back -- reporting the box's center point keeps the shape
@@ -1509,6 +1509,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             "y": Double(boundingBox.midY),
             "width": Double(boundingBox.width),
             "height": Double(boundingBox.height),
+            "confidence": Double(confidence),
         ]
     }
 }
@@ -1573,7 +1574,7 @@ private final class AvCoreMlImplementDetector {
     // can re-detect from scratch (the implement re-entering frame after a
     // full occlusion) rather than staying permanently silent for the rest
     // of the clip.
-    func track(pixelBuffer: CVPixelBuffer, orientation: CGImagePropertyOrientation) -> CGRect? {
+    func track(pixelBuffer: CVPixelBuffer, orientation: CGImagePropertyOrientation) -> (box: CGRect, confidence: Float)? {
         guard let visionModel = visionModel else { return nil }
 
         if let request = trackingRequest {
@@ -1586,7 +1587,7 @@ private final class AvCoreMlImplementDetector {
                     return nil
                 }
                 request.inputObservation = observation
-                return observation.boundingBox
+                return (observation.boundingBox, observation.confidence)
             } catch {
                 trackingRequest = nil
                 return nil
@@ -1609,7 +1610,7 @@ private final class AvCoreMlImplementDetector {
         let newRequest = VNTrackObjectRequest(detectedObjectObservation: seedObservation)
         newRequest.trackingLevel = .accurate
         trackingRequest = newRequest
-        return best.boundingBox
+        return (best.boundingBox, best.confidence)
     }
 }
 

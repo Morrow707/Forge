@@ -49,6 +49,9 @@ type TrackingDiagnostics = {
     framesWithLeftImplement: number;
     framesWithRightImplement: number;
     avgImplementConfidence?: number | null;
+    framesWithCoreMlImplement?: number;
+    avgCoreMlConfidence?: number | null;
+    coreMlSizeCheck?: { framesChecked: number; implausibleCount: number } | null;
   };
   calibration?: {
     scaleFactor: number | null;
@@ -341,6 +344,23 @@ function formatTrackingDiagnostics(r: TrackedSetRow): ReportField[] {
             : ""
         }`,
   });
+  // Med-ball-only -- see AvCoreMlImplementDetector.swift. Only shown when this clip's
+  // trackingMode actually enabled it; every other mode's framesWithCoreMlImplement stays 0.
+  if (d.objectDetection.framesWithCoreMlImplement) {
+    const sizeCheck = d.objectDetection.coreMlSizeCheck;
+    lines.push({
+      label: "Object detection (CoreML)",
+      value:
+        `${d.objectDetection.framesWithCoreMlImplement}/${framesTotal} frames detected${
+          pct(d.objectDetection.avgCoreMlConfidence)
+            ? `, avg confidence ${pct(d.objectDetection.avgCoreMlConfidence)}`
+            : ""
+        }` +
+        (sizeCheck && sizeCheck.framesChecked > 0
+          ? `, ${sizeCheck.implausibleCount}/${sizeCheck.framesChecked} implausibly sized for a real medicine ball`
+          : ""),
+    });
+  }
   if (d.calibration) {
     const c = d.calibration;
     const totalFrames = c.noseToAnkleFrames + c.shoulderToAnkleFrames + c.unresolvedFrames;
@@ -477,7 +497,32 @@ export type TrackingReportEntry = {
   // when nothing looked wrong, so a consumer can render "no flags" distinctly from "not
   // checked yet."
   flags: string[];
+  // Simple average of every 0-1 confidence signal this set actually has (wrist, motion-diff
+  // implement, CoreML detection, and any per-rep/per-set trust scores) -- a single sortable
+  // number for the admin UI's "show me the low-confidence ones" filter, not a replacement for
+  // reading the individual signals above it. Null when nothing here produced a confidence
+  // number at all (an empty/untracked set).
+  overallConfidence: number | null;
 };
+
+function computeOverallConfidence(r: TrackedSetRow): number | null {
+  const d = r.trackingDiagnostics as TrackingDiagnostics | null | undefined;
+  const values: number[] = [];
+  if (d?.bodyPose?.avgWristConfidence != null) values.push(d.bodyPose.avgWristConfidence);
+  if (d?.objectDetection?.avgImplementConfidence != null) values.push(d.objectDetection.avgImplementConfidence);
+  if (d?.objectDetection?.avgCoreMlConfidence != null) values.push(d.objectDetection.avgCoreMlConfidence);
+  const trustArrays: (SetTrustScore | RepTrustScore | null | undefined)[] = [
+    r.swingTrustScore as SetTrustScore | null,
+    r.medBallTrustScore as SetTrustScore | null,
+    r.kbSwingTrustScore as SetTrustScore | null,
+    ...((Array.isArray(r.trustScores) ? (r.trustScores as RepTrustScore[]) : [])),
+  ];
+  for (const t of trustArrays) {
+    if (t?.score != null) values.push(t.score);
+  }
+  if (values.length === 0) return null;
+  return Math.round((values.reduce((a, v) => a + v, 0) / values.length) * 100) / 100;
+}
 
 // Shared assembly step both formatTrackingReport (plain text) and the JSON entries route build
 // on -- one pass over the rows, so the two views of this same data can't drift apart.
@@ -501,6 +546,7 @@ function buildEntries(rows: TrackedSetRow[]): TrackingReportEntry[] {
       device: formatCaptureDeviceInfo(r),
       diagnostics: formatTrackingDiagnostics(r),
       flags: computeFlags(r),
+      overallConfidence: computeOverallConfidence(r),
     };
   });
 }

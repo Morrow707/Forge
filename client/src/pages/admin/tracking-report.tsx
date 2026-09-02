@@ -27,6 +27,7 @@ type TrackingReportEntry = {
   device: ReportField[];
   diagnostics: ReportField[];
   flags: string[];
+  overallConfidence: number | null;
 };
 
 function trustBadgeClass(value: string): string {
@@ -43,16 +44,28 @@ function EntryCard({ entry }: { entry: TrackingReportEntry }) {
   return (
     <Card>
       <CardContent className="space-y-3 p-4">
-        <div>
-          <p className="text-xs text-muted-foreground">{entry.date}</p>
-          <p className="text-sm font-semibold">
-            {entry.athleteName} <span className="text-muted-foreground">--</span> {entry.exerciseName}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Set {entry.setNumber}
-            {entry.reps ? `, ${entry.reps} reps` : ""}
-            {entry.weight ? `, ${entry.weight}${entry.weightUnit ? ` ${entry.weightUnit}` : ""}` : ""}
-          </p>
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <p className="text-xs text-muted-foreground">{entry.date}</p>
+            <p className="text-sm font-semibold">
+              {entry.athleteName} <span className="text-muted-foreground">--</span> {entry.exerciseName}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Set {entry.setNumber}
+              {entry.reps ? `, ${entry.reps} reps` : ""}
+              {entry.weight ? `, ${entry.weight}${entry.weightUnit ? ` ${entry.weightUnit}` : ""}` : ""}
+            </p>
+          </div>
+          {entry.overallConfidence != null && (
+            <span
+              className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${trustBadgeClass(
+                entry.overallConfidence >= 0.7 ? "high" : entry.overallConfidence >= 0.4 ? "medium" : "low",
+              )}`}
+              title="Average of every confidence signal this set produced (wrist, implement tracker, CoreML detection, trust scores)"
+            >
+              {Math.round(entry.overallConfidence * 100)}%
+            </span>
+          )}
         </div>
 
         {/* Right under the header, ahead of everything else -- the whole point of a flag is
@@ -183,10 +196,27 @@ export default function AdminTrackingReport() {
   const [limit, setLimit] = useState("20");
   const [appliedLimit, setAppliedLimit] = useState("20");
   const [showGlossary, setShowGlossary] = useState(false);
+  // Client-side filters over whatever the current limit already fetched -- same "no server-side
+  // query params" simplicity this page already has for limit/refresh, just applied after the
+  // fact rather than adding new backend filtering for a page an admin uses occasionally, not a
+  // high-traffic search tool.
+  const [maxConfidence, setMaxConfidence] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
   const { data: entries, isLoading, isError, error, refetch, isFetching } = useQuery<TrackingReportEntry[]>({
     queryKey: [`/api/admin/tracking-report/entries`, appliedLimit],
     queryFn: () => getJson(`/api/admin/tracking-report/entries?limit=${appliedLimit}`),
+  });
+
+  const maxConfidenceNum = maxConfidence.trim() === "" ? null : Number(maxConfidence) / 100;
+  const filteredEntries = (entries ?? []).filter((e) => {
+    if (maxConfidenceNum != null && (e.overallConfidence == null || e.overallConfidence > maxConfidenceNum)) {
+      return false;
+    }
+    if (dateFrom && e.date < dateFrom) return false;
+    if (dateTo && e.date > dateTo) return false;
+    return true;
   });
 
   async function copyRawReport() {
@@ -250,6 +280,59 @@ export default function AdminTrackingReport() {
               </Button>
             </div>
 
+            <div className="flex flex-wrap items-end gap-3 border-t border-border pt-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="report-max-confidence">Max confidence %</Label>
+                <Input
+                  id="report-max-confidence"
+                  type="number"
+                  min={0}
+                  max={100}
+                  placeholder="e.g. 50"
+                  value={maxConfidence}
+                  onChange={(e) => setMaxConfidence(e.target.value)}
+                  className="w-28"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="report-date-from">From date</Label>
+                <Input
+                  id="report-date-from"
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  className="w-40"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="report-date-to">To date</Label>
+                <Input
+                  id="report-date-to"
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  className="w-40"
+                />
+              </div>
+              {(maxConfidence || dateFrom || dateTo) && (
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setMaxConfidence("");
+                    setDateFrom("");
+                    setDateTo("");
+                  }}
+                >
+                  Clear filters
+                </Button>
+              )}
+              {entries && (
+                <p className="text-xs text-muted-foreground">
+                  Showing {filteredEntries.length} of {entries.length} fetched
+                </p>
+              )}
+            </div>
+
             {isLoading && <p className="text-sm text-muted-foreground">Loading report...</p>}
             {isError && (
               <p className="text-sm text-destructive">
@@ -294,9 +377,15 @@ export default function AdminTrackingReport() {
           </p>
         )}
 
-        {entries && entries.length > 0 && (
+        {entries && entries.length > 0 && filteredEntries.length === 0 && (
+          <p className="py-8 text-center text-sm text-muted-foreground">
+            No sets match the current filters.
+          </p>
+        )}
+
+        {filteredEntries.length > 0 && (
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {entries.map((entry, i) => (
+            {filteredEntries.map((entry, i) => (
               <EntryCard key={i} entry={entry} />
             ))}
           </div>
