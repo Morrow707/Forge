@@ -244,7 +244,19 @@ export async function stopAvRecording(): Promise<{ blob: Blob; path: string }> {
   // internal URL already adds.
   const url = Capacitor.convertFileSrc(path);
   const response = await fetch(url);
-  const blob = await response.blob();
+  const rawBlob = await response.blob();
+  // Same class of bug recordedVideoType() in video-recording.ts exists to fix on the OTHER
+  // (MediaRecorder) recording path: a Blob has to be labeled with the container it actually
+  // is, not whatever the fetch happened to infer. fetch()-ing a local file:// asset through
+  // Capacitor's handler doesn't reliably set blob.type at all, so this came back
+  // empty/generic -- which then fails server/routes.ts's uploadFormVideo fileFilter outright
+  // ("Unsupported video format") since it can't recognize the mimetype, rather than merely
+  // producing an unplayable-but-accepted file like the MediaRecorder-path bug does. Unlike
+  // that path, there's nothing to "read as source of truth" here -- AvBodyTrackingPlugin.swift
+  // always records via AVCaptureMovieFileOutput to a ".mov" path (see startRecording), which
+  // only ever writes a QuickTime container, so the correct type is a known constant, not
+  // something to detect.
+  const blob = rawBlob.type === "video/quicktime" ? rawBlob : new Blob([rawBlob], { type: "video/quicktime" });
   return { blob, path };
 }
 
