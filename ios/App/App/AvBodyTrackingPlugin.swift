@@ -146,6 +146,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
     // additive alongside the motion-diff trackers above, not a replacement.
     // See AvCoreMlImplementDetector's own header comment.
     private var coreMlImplementDetector = AvCoreMlImplementDetector()
+    private var cameraStabilizer = AvCameraStabilizer()
 
     // The public, documented Vision joint names this plugin reports -- unlike ARKit's own
     // joint-name strings (which needed on-device discovery to nail down, per
@@ -792,6 +793,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         leftImplementTracker.reset()
         rightImplementTracker.reset()
         coreMlImplementDetector.reset()
+        cameraStabilizer.reset()
 
         // Confirmed against a real field report: AVAssetReader/Vision setup can hang
         // indefinitely before runPoseAnalysis's read loop even starts (stuck at "0 frames
@@ -1144,6 +1146,16 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                 coreMlImplement = coreMlResultDict(box)
             }
 
+            // Same gate as the CoreML detector above -- handheld camera shake is a real problem
+            // for every tracking mode, but this starts scoped to med-ball throws too, matching
+            // the same "validate on one exercise first" decision. See AvCameraStabilizer's own
+            // header comment.
+            var cameraDrift: [String: Any]?
+            if coreMlDetectionEnabled,
+               let drift = cameraStabilizer.drift(for: pixelBuffer, orientation: orientation, frameWidth: frameWidth, frameHeight: frameHeight) {
+                cameraDrift = ["x": drift.x, "y": drift.y]
+            }
+
             processedCount += 1
             var eventData: [String: Any] = [
                 "frameIndex": thisFrameIndex,
@@ -1159,6 +1171,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             if let leftImplement = leftImplement { eventData["leftImplement"] = leftImplement }
             if let rightImplement = rightImplement { eventData["rightImplement"] = rightImplement }
             if let coreMlImplement = coreMlImplement { eventData["coreMlImplement"] = coreMlImplement }
+            if let cameraDrift = cameraDrift { eventData["cameraDrift"] = cameraDrift }
             DispatchQueue.main.async {
                 self.notifyListeners("poseFrame", data: eventData)
             }
@@ -1597,6 +1610,53 @@ private final class AvCoreMlImplementDetector {
         newRequest.trackingLevel = .accurate
         trackingRequest = newRequest
         return best.boundingBox
+    }
+}
+
+// Handheld camera shake corrupts velocity data -- if the coach's hands move
+// while filming, that camera movement is mathematically indistinguishable
+// from the implement itself moving, showing up as spurious spikes in the
+// tracked velocity readout. This measures how much the CAMERA moved (via
+// Apple's own VNTranslationalImageRegistrationRequest, comparing each frame's
+// background against the clip's first frame -- one steady reference point,
+// not frame-to-frame, so small per-step errors can't compound into drift of
+// their own), so a caller can later subtract it back out of the implement's
+// tracked X/Y. Same "med-ball only for now" scope and same complete-no-op-
+// on-failure guarantee as AvCoreMlImplementDetector above -- this is a
+// signal to subtract out, never something recording or analysis depends on.
+private final class AvCameraStabilizer {
+    private var referenceBuffer: CVPixelBuffer?
+
+    func reset() {
+        referenceBuffer = nil
+    }
+
+    // Cumulative (x, y) drift of this frame's background relative to the
+    // clip's first analyzed frame, normalized the same 0-1 way every other
+    // coordinate in this file is (divided by the same orientation-corrected
+    // frameWidth/frameHeight every caller already has on hand). nil on the
+    // very first frame (nothing to compare against yet -- that frame
+    // becomes the reference) or if Vision's registration itself fails.
+    func drift(
+        for pixelBuffer: CVPixelBuffer, orientation: CGImagePropertyOrientation,
+        frameWidth: Int, frameHeight: Int
+    ) -> (x: Double, y: Double)? {
+        guard let reference = referenceBuffer else {
+            referenceBuffer = pixelBuffer
+            return nil
+        }
+        guard frameWidth > 0, frameHeight > 0 else { return nil }
+
+        let request = VNTranslationalImageRegistrationRequest(
+            targetedCVPixelBuffer: pixelBuffer, orientation: orientation
+        )
+        let handler = VNImageRequestHandler(cvPixelBuffer: reference, orientation: orientation, options: [:])
+        guard (try? handler.perform([request])) != nil,
+            let observation = request.results?.first as? VNImageTranslationAlignmentObservation
+        else { return nil }
+
+        let transform = observation.alignmentTransform
+        return (x: Double(transform.tx) / Double(frameWidth), y: Double(transform.ty) / Double(frameHeight))
     }
 }
 

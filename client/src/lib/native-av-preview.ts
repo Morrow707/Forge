@@ -53,6 +53,14 @@ export type PoseImplement = {
 // there's real on-device data to validate the choice against.
 export type PoseCoreMlImplement = { x: number; y: number; width: number; height: number };
 
+// Med-ball-only, same scope/reasoning as coreMlImplement above -- how far
+// this frame's background has drifted from the clip's first frame (camera
+// shake, not implement motion), normalized the same 0-1 way as every other
+// coordinate here. See AvBodyTrackingPlugin.swift's AvCameraStabilizer.
+// Not yet subtracted from anything on this side -- same "data has somewhere
+// to land, wiring left for a follow-up pass" note as coreMlImplement.
+export type PoseCameraDrift = { x: number; y: number };
+
 export type PoseFrame = {
   frameIndex: number;
   timestamp: number;
@@ -63,6 +71,7 @@ export type PoseFrame = {
   leftImplement?: PoseImplement;
   rightImplement?: PoseImplement;
   coreMlImplement?: PoseCoreMlImplement;
+  cameraDrift?: PoseCameraDrift;
 };
 
 // Shared by the plugin interface's own analyzeRecording method below and analyzeAvRecording's
