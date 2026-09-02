@@ -1,6 +1,6 @@
 {
   "image": "IMG_0060.jpg",
   "boxes": [
-    { "class": "med_ball", "x_center": 0.523, "y_center": 0.503, "width": 0.20, "height": 0.14 }
+    { "class": "med_ball", "x_center": 0.521, "y_center": 0.5272, "width": 0.1824, "height": 0.1368 }
   ]
 }
