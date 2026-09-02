@@ -1,0 +1,11 @@
+{
+  "image": "IMG_0038.jpg",
+  "boxes": [
+    { "class": "kettlebell", "x_center": 0.1050, "y_center": 0.4850, "width": 0.1350, "height": 0.1800 },
+    { "class": "kettlebell", "x_center": 0.2730, "y_center": 0.4850, "width": 0.1400, "height": 0.1800 },
+    { "class": "kettlebell", "x_center": 0.4170, "y_center": 0.4850, "width": 0.1400, "height": 0.1800 },
+    { "class": "kettlebell", "x_center": 0.5530, "y_center": 0.4800, "width": 0.1550, "height": 0.1900 },
+    { "class": "kettlebell", "x_center": 0.6900, "y_center": 0.4800, "width": 0.1550, "height": 0.1900 },
+    { "class": "kettlebell", "x_center": 0.8130, "y_center": 0.4780, "width": 0.1700, "height": 0.1950 }
+  ]
+}

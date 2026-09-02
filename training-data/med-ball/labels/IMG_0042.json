@@ -1,0 +1,6 @@
+{
+  "image": "IMG_0042.jpg",
+  "boxes": [
+    { "class": "dumbbell", "x_center": 0.4900, "y_center": 0.5050, "width": 0.2870, "height": 0.1900 }
+  ]
+}

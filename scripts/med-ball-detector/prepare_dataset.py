@@ -27,9 +27,19 @@ DATASET_DIR = DETECTOR_DIR / "dataset"
 # "how can it tell the difference between a tennis ball and baseball?
 # similar shape, obviously different texture and different color" -- these
 # are exactly the features a CNN backbone learns to split on, given real
-# labeled examples of each, same as every class before them. Each future
-# object type (kettlebells, etc) gets its own new index the same way.
-CLASS_NAMES = ["med_ball", "plate", "baseball", "golf_ball", "tennis_ball"]
+# labeled examples of each, same as every class before them.
+#
+# kettlebell/dumbbell added from real gym photos already in raw/ that had
+# never been labeled (IMG_0038.jpg -- 6 kettlebells on a shelf; IMG_0016.jpg
+# and IMG_0042.jpg -- dumbbells on a rack and on the floor) -- "i have 5
+# photos with kbs in them and 9 photos with dbs in them, now in a few photos
+# both dbs and kbs are both seen, which is a great learning experience."
+# Neither object is a true circle from any angle (bell + handle; hex-head
+# barbell shape), so these boxes are manually measured against each photo's
+# pixel dimensions rather than Hough-circle-fit, the same technique used for
+# the plate class's angled/textured photos. Each future object type gets its
+# own new index the same way.
+CLASS_NAMES = ["med_ball", "plate", "baseball", "golf_ball", "tennis_ball", "kettlebell", "dumbbell"]
 
 VAL_FRACTION = 0.15
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".heic"}
