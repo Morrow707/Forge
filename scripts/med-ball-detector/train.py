@@ -10,6 +10,17 @@ the realistic expectations on a small dataset.
 
 CPU-trainable by design (imgsz/epochs/batch kept modest) -- this sandbox
 has no GPU. Slower than a GPU box, workable for a dataset this size.
+
+Verifying the result: coremltools' .predict() on the exported .mlpackage
+requires macOS ("Model prediction is only supported on macOS version
+10.13 or later") and this sandbox has none, so every retrain this session
+has been verified via direct inference on runs/detect/weights/best.pt
+(pre-CoreML-conversion, plain PyTorch, CPU-runnable anywhere) against a
+real reference photo of every class, not the .mlpackage itself. See
+SESSION_NOTES_2026-09-01.md for the exact verification numbers from the
+7-class (kettlebell/dumbbell added) retrain, and for a real labeling bug
+(IMG_0016.json) found and fixed after that model had already trained on
+the bad data -- a clean retrain is recommended before that model ships.
 """
 
 import sys
