@@ -3,17 +3,17 @@
   "boxes": [
     {
       "class": "dumbbell",
-      "x_center": 0.5135,
-      "y_center": 0.4989,
-      "width": 0.3548,
-      "height": 0.1296
+      "x_center": 0.4956,
+      "y_center": 0.5082,
+      "width": 0.2764,
+      "height": 0.1485
     },
     {
       "class": "plate",
-      "x_center": 0.4984,
-      "y_center": 0.5025,
-      "width": 0.3665,
-      "height": 0.2066
+      "x_center": 0.4859,
+      "y_center": 0.5103,
+      "width": 0.3196,
+      "height": 0.2041
     }
   ]
 }
