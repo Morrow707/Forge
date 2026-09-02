@@ -1999,10 +1999,10 @@ export const workoutSetEntries = pgTable(
   swingTrustScore: json("swing_trust_score"),
   // "med_ball" tracking mode's numbers (see av-medball-tracker-dialog.tsx) --
   // null unless trackingLevel was "med_ball" when this set was logged.
-  // Best-of-set single throw, same "best rep, not an average" convention
-  // jumpHeightCm/jumpDistanceCm already use -- no rep-segmentation exists
-  // for a throw yet, so this is the whole set's peak read rather than a
-  // per-rep breakdown. medBallPeakSpeedMps is a confidence-weighted blend of
+  // Hardest throw of the set (max(medBallRepBreakdown[].peakSpeedMps)) -- kept as the one
+  // headline number for whatever still reads just this (PRs, the exercise history chart), now
+  // computed from real per-rep detection (medBallRepBreakdown below) rather than one blend
+  // across the whole clip. medBallPeakSpeedMps is a confidence-weighted blend of
   // AvImplementTracker's own tracked ball speed and mechanics-tracking.ts's
   // peakWristSpeedMps proxy (see pose-tracking.ts's blendSpeedEstimates) --
   // whichever signal exists alone when the other one didn't track
@@ -2011,6 +2011,12 @@ export const workoutSetEntries = pgTable(
   medBallReleaseHeightCm: real("med_ball_release_height_cm"),
   // Confidence in medBallPeakSpeedMps (see blendSpeedEstimates) -- {score, label, notes}.
   medBallTrustScore: json("med_ball_trust_score"),
+  // One entry per detected throw within the recording (see pose-tracking.ts's
+  // detectThrowReps) -- {repNumber, peakSpeedMps, trust}[], same SetTrustScore shape as
+  // medBallTrustScore but per rep. "if i do 10 reps, it only shows one average m/s not 10
+  // averages, which is wrong" -- this is that fix. Null/empty for sets logged before this
+  // existed (medBallPeakSpeedMps/medBallTrustScore alone still describe those).
+  medBallRepBreakdown: json("med_ball_rep_breakdown"),
   // "kb_swing" tracking mode's numbers (see kb-swing-tracking.ts) -- null
   // unless trackingLevel was "kb_swing" when this set was logged.
   // Best-of-set peak, same "best rep, not an average" convention
@@ -5925,6 +5931,14 @@ export const setTrustScoreSchema = z.object({
   notes: z.array(z.string()),
 });
 
+// One detected throw within a med-ball recording (see pose-tracking.ts's detectThrowReps and
+// av-medball-tracker-dialog.tsx's per-rep blend) -- repNumber is 1-indexed, chronological.
+export const medBallRepBreakdownEntrySchema = z.object({
+  repNumber: z.number(),
+  peakSpeedMps: z.number(),
+  trust: setTrustScoreSchema,
+});
+
 // What the camera/AI pipeline was actually doing during this specific recording -- device,
 // lens, the resolution/frame-rate format the native side negotiated, and whether continuous
 // AF/AE had settled by the time telemetry was sampled (see AvBodyTrackingPlugin.swift's
@@ -6109,6 +6123,7 @@ export const setLogInputSchema = z.object({
   medBallPeakSpeedMps: z.number().optional().nullable(),
   medBallReleaseHeightCm: z.number().optional().nullable(),
   medBallTrustScore: setTrustScoreSchema.optional().nullable(),
+  medBallRepBreakdown: z.array(medBallRepBreakdownEntrySchema).optional().nullable(),
   kbSwingPeakSpeedMps: z.number().optional().nullable(),
   kbSwingPeakHeightCm: z.number().optional().nullable(),
   kbSwingTrustScore: setTrustScoreSchema.optional().nullable(),

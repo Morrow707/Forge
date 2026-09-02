@@ -24,7 +24,11 @@ import { BarTrackerDialog } from "@/components/bar-tracker-dialog";
 import { AvJumpTrackerDialog } from "@/components/av-jump-tracker-dialog";
 import { AvBarTrackerDialog } from "@/components/av-bar-tracker-dialog";
 import { AvSwingTrackerDialog, type AvSwingSetMetrics } from "@/components/av-swing-tracker-dialog";
-import { AvMedballTrackerDialog, type MedballSetMetrics } from "@/components/av-medball-tracker-dialog";
+import {
+  AvMedballTrackerDialog,
+  type MedballSetMetrics,
+  type MedballRepBreakdownEntry,
+} from "@/components/av-medball-tracker-dialog";
 import { AvKbSwingTrackerDialog } from "@/components/av-kb-swing-tracker-dialog";
 import type { KbSwingSetMetrics } from "@/lib/kb-swing-tracking";
 import { AvHorizontalLoadTrackerDialog, type HorizontalLoadSetMetrics } from "@/components/av-horizontal-load-tracker-dialog";
@@ -392,6 +396,8 @@ type SetMetrics = {
   medBallReleaseHeightCm: number | null;
   // Ball-vs-wrist blend trust score -- see pose-tracking.ts's blendSpeedEstimates.
   medBallTrustScore: SetTrustScore | null;
+  // One entry per detected throw in this recording -- see pose-tracking.ts's detectThrowReps.
+  medBallRepBreakdown: MedballRepBreakdownEntry[];
   // "kb_swing" tracking mode's numbers -- see kb-swing-tracking.ts.
   kbSwingPeakSpeedMps: number | null;
   kbSwingPeakHeightCm: number | null;
@@ -564,6 +570,7 @@ function buildItem(
       medBallPeakSpeedMps: existingSet?.medBallPeakSpeedMps ?? null,
       medBallReleaseHeightCm: existingSet?.medBallReleaseHeightCm ?? null,
       medBallTrustScore: existingSet?.medBallTrustScore ?? null,
+      medBallRepBreakdown: existingSet?.medBallRepBreakdown ?? [],
       kbSwingPeakSpeedMps: existingSet?.kbSwingPeakSpeedMps ?? null,
       kbSwingPeakHeightCm: existingSet?.kbSwingPeakHeightCm ?? null,
       kbSwingTrustScore: existingSet?.kbSwingTrustScore ?? null,
@@ -1024,6 +1031,7 @@ export function WorkoutPage({
           medBallPeakSpeedMps: s.medBallPeakSpeedMps,
           medBallReleaseHeightCm: s.medBallReleaseHeightCm,
           medBallTrustScore: s.medBallTrustScore,
+          medBallRepBreakdown: s.medBallRepBreakdown,
           kbSwingPeakSpeedMps: s.kbSwingPeakSpeedMps,
           kbSwingPeakHeightCm: s.kbSwingPeakHeightCm,
           kbSwingTrustScore: s.kbSwingTrustScore,
@@ -1527,6 +1535,7 @@ export function WorkoutPage({
               medBallPeakSpeedMps: null,
               medBallReleaseHeightCm: null,
               medBallTrustScore: null,
+              medBallRepBreakdown: [],
               kbSwingPeakSpeedMps: null,
               kbSwingPeakHeightCm: null,
               kbSwingTrustScore: null,
@@ -2771,11 +2780,20 @@ function ExerciseLogContent({
                 {(set.medBallPeakSpeedMps != null || set.medBallReleaseHeightCm != null) && (
                   <div className="mt-1 flex flex-wrap items-center gap-1 pl-9 text-[9px] text-muted-foreground">
                     <span className="font-semibold uppercase tracking-wide">Throw</span>
-                    {set.medBallPeakSpeedMps != null && (
+                    {set.medBallRepBreakdown.length > 1 ? (
+                      // One number per detected throw, not one blended number for the whole
+                      // take -- "if i do 10 reps, it only shows one average m/s not 10
+                      // averages, which is wrong."
+                      set.medBallRepBreakdown.map((rep) => (
+                        <span key={rep.repNumber} className="rounded bg-secondary px-1.5 py-0.5">
+                          #{rep.repNumber} {rep.peakSpeedMps} m/s
+                        </span>
+                      ))
+                    ) : set.medBallPeakSpeedMps != null ? (
                       <span className="rounded bg-secondary px-1.5 py-0.5">
                         Peak speed {set.medBallPeakSpeedMps} m/s
                       </span>
-                    )}
+                    ) : null}
                     {set.medBallReleaseHeightCm != null && (
                       <span className="rounded bg-secondary px-1.5 py-0.5">
                         Release {set.medBallReleaseHeightCm}cm
@@ -2968,6 +2986,7 @@ function ExerciseLogContent({
                 medBallPeakSpeedMps: metrics.peakSpeedMps,
                 medBallReleaseHeightCm: metrics.releaseHeightCm,
                 medBallTrustScore: metrics.trust,
+                medBallRepBreakdown: metrics.repBreakdown,
                 captureDeviceInfo: metrics.captureDeviceInfo,
                 trackingDiagnostics: metrics.trackingDiagnostics ?? null,
                 ...videoPatch,

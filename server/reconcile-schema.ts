@@ -1823,6 +1823,9 @@ ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "med_ball_peak_speed_
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "med_ball_release_height_cm" real;
 -- Ball-vs-wrist blend trust score (pose-tracking.ts's blendSpeedEstimates).
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "med_ball_trust_score" json;
+-- Per-detected-throw breakdown (pose-tracking.ts's detectThrowReps) -- {repNumber,
+-- peakSpeedMps, trust}[], null/empty for sets logged before this existed.
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "med_ball_rep_breakdown" json;
 
 -- Kettlebell swing tracking (shared/schema.ts workoutSetEntries's
 -- kbSwingPeakSpeedMps/kbSwingPeakHeightCm).

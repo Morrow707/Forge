@@ -370,6 +370,85 @@ export function blendSpeedEstimates(
   };
 }
 
+// A single time window within a longer recording that a throw-type motion (med-ball, kb-swing)
+// actually happened in -- the equivalent of bar-tracking.ts's own RepBreakdown.startT/endT for a
+// cyclic lift, just detected differently. A barbell rep is a direction reversal in a continuous
+// motion (segmentPhases' concentric/eccentric split); a thrown implement's reps are each their
+// own separate event with real dead time between them (the athlete resets, picks the ball back
+// up), so this segments on sustained above-threshold speed instead of a direction change.
+// startT/endT are in the same units as the samples passed in -- milliseconds, matching every
+// other startT/endT in this pipeline (RepBreakdown, jump-tracking.ts's own windows, every AV
+// tracker dialog's own `t = f.timestamp * 1000`), NOT seconds.
+export type ThrowRepWindow = { repNumber: number; startT: number; endT: number };
+
+// Below this speed, the implement isn't being thrown -- it's being held, carried back to the
+// start position, or handed off between reps. Deliberately low relative to
+// MAX_PLAUSIBLE_BALL_SPEED_MPS (av-medball-tracker-dialog.tsx) -- this only has to separate
+// "actively throwing" from "not," not judge how hard any given throw was. Untuned against real
+// footage, same caveat as every other plausibility constant in this pipeline.
+const THROW_ACTIVE_SPEED_FLOOR_MPS = 1.2;
+
+// Once the speed trace drops back under the floor, it has to stay there this long before a NEW
+// above-floor stretch counts as a separate rep rather than a continuation of the same one --
+// without this, a single throw's own natural speed dip mid-motion (deceleration through release,
+// into the follow-through, before the arm re-accelerates to reset) would split one real throw
+// into two counted reps. Milliseconds, not seconds -- see ThrowRepWindow's own comment on why.
+const MIN_REP_GAP_MS = 350;
+
+// Below this duration, an above-floor stretch is more likely a tracking spike (the implement
+// tracker briefly locking onto something wrong) than a real throw -- a real throw's
+// acceleration-to-release arc takes measurably longer than one bad frame reading a false speed.
+// Milliseconds, not seconds -- see ThrowRepWindow's own comment on why.
+const MIN_REP_DURATION_MS = 120;
+
+// Segments a chronological speed trace (frame-to-frame speed samples, already computed by the
+// caller from whichever signal best reflects the implement's own motion -- the ball's tracked
+// position for med-ball, same idea for kb-swing) into individual rep windows. samples[].t must be
+// milliseconds (see ThrowRepWindow's own comment) -- every other timestamp field in this pipeline
+// already is, so callers building a trace from an existing frames/points array (which already
+// carry a millisecond t) need no conversion. Merges near-adjacent above-floor stretches
+// (MIN_REP_GAP_MS) and drops anything too short to be a real throw (MIN_REP_DURATION_MS) -- same
+// "phantom phase" filtering bar-tracking.ts's own segmentPhases already does for cyclic lifts,
+// adapted to event-based motion instead of direction reversals. Returns zero windows (not a
+// fallback single window) when nothing in the trace ever clears the floor -- callers decide what
+// "no reps detected" means for them, same "no number is better than a wrong one" stance every
+// other signal in this file takes.
+export function detectThrowReps(samples: { t: number; speed: number }[]): ThrowRepWindow[] {
+  if (samples.length === 0) return [];
+  const sorted = [...samples].sort((a, b) => a.t - b.t);
+
+  type RawWindow = { startT: number; endT: number };
+  const raw: RawWindow[] = [];
+  let current: RawWindow | null = null;
+  for (const s of sorted) {
+    if (s.speed >= THROW_ACTIVE_SPEED_FLOOR_MPS) {
+      if (current == null) {
+        current = { startT: s.t, endT: s.t };
+      } else {
+        current.endT = s.t;
+      }
+    } else if (current != null) {
+      raw.push(current);
+      current = null;
+    }
+  }
+  if (current != null) raw.push(current);
+
+  const merged: RawWindow[] = [];
+  for (const w of raw) {
+    const last = merged[merged.length - 1];
+    if (last && w.startT - last.endT <= MIN_REP_GAP_MS) {
+      last.endT = w.endT;
+    } else {
+      merged.push({ ...w });
+    }
+  }
+
+  return merged
+    .filter((w) => w.endT - w.startT >= MIN_REP_DURATION_MS)
+    .map((w, i) => ({ repNumber: i + 1, startT: w.startT, endT: w.endT }));
+}
+
 // World landmarks' vertical axis isn't documented as matching (or opposing)
 // normalized image-space landmarks' "y grows downward" convention, and there
 // is no way to confirm it empirically without a live camera + real body in

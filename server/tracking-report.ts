@@ -162,6 +162,14 @@ function formatDataPoints(r: TrackedSetRow): ReportField[] {
 
   push("Peak throw speed", num(r.medBallPeakSpeedMps, " m/s"));
   push("Release height", num(r.medBallReleaseHeightCm, " cm"));
+  if (Array.isArray(r.medBallRepBreakdown) && r.medBallRepBreakdown.length) {
+    push(
+      "Per-rep throw speeds",
+      (r.medBallRepBreakdown as { repNumber: number; peakSpeedMps: number }[])
+        .map((rep) => `#${rep.repNumber}: ${rep.peakSpeedMps} m/s`)
+        .join(", "),
+    );
+  }
 
   push("Peak swing speed", num(r.kbSwingPeakSpeedMps, " m/s"));
   push("Peak height", num(r.kbSwingPeakHeightCm, " cm"));
@@ -518,10 +526,18 @@ function computeOverallConfidence(r: TrackedSetRow): number | null {
   if (d?.bodyPose?.avgWristConfidence != null) values.push(d.bodyPose.avgWristConfidence);
   if (d?.objectDetection?.avgImplementConfidence != null) values.push(d.objectDetection.avgImplementConfidence);
   if (d?.objectDetection?.avgCoreMlConfidence != null) values.push(d.objectDetection.avgCoreMlConfidence);
+  // medBallTrustScore is just the hardest rep's own trust (see medBallPeakSpeedMps's own
+  // comment) -- once real per-rep data exists, using both would double-count that one rep
+  // instead of averaging across the whole set the way trustScores (bar_path's per-rep array)
+  // already does below.
+  const medBallRepEntries = Array.isArray(r.medBallRepBreakdown)
+    ? (r.medBallRepBreakdown as { trust: SetTrustScore }[])
+    : [];
   const trustArrays: (SetTrustScore | RepTrustScore | null | undefined)[] = [
     r.swingTrustScore as SetTrustScore | null,
-    r.medBallTrustScore as SetTrustScore | null,
+    medBallRepEntries.length > 0 ? null : (r.medBallTrustScore as SetTrustScore | null),
     r.kbSwingTrustScore as SetTrustScore | null,
+    ...medBallRepEntries.map((rep) => rep.trust),
     ...((Array.isArray(r.trustScores) ? (r.trustScores as RepTrustScore[]) : [])),
   ];
   for (const t of trustArrays) {
