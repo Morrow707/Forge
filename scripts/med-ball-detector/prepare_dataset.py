@@ -19,11 +19,12 @@ RAW_DIR = REPO_ROOT / "training-data" / "med-ball" / "raw"
 LABELS_DIR = REPO_ROOT / "training-data" / "med-ball" / "labels"
 DATASET_DIR = DETECTOR_DIR / "dataset"
 
-# Single class for now -- see this pipeline's README on why (med-ball only,
-# per the explicit decision to validate on one exercise before expanding to
-# barbell plates/kettlebells/etc, each of which would get added here as a
-# new index rather than a new detector).
-CLASS_NAMES = ["med_ball"]
+# med_ball validated first per the original explicit decision to prove out
+# on one exercise before expanding; plate added as index 1 rather than a
+# separate detector, per the follow-up decision to extend once the med-ball
+# labeling technique (circle-fit precision) was proven out. Each future
+# object type (kettlebells, etc) gets its own new index the same way.
+CLASS_NAMES = ["med_ball", "plate"]
 
 VAL_FRACTION = 0.15
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".heic"}

@@ -1,0 +1,6 @@
+{
+  "image": "IMG_0024.jpg",
+  "boxes": [
+    { "class": "plate", "x_center": 0.3805, "y_center": 0.5367, "width": 0.6770, "height": 0.4954 }
+  ]
+}

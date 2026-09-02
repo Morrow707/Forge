@@ -1599,10 +1599,18 @@ private final class AvCoreMlImplementDetector {
         let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: orientation, options: [:])
         // Vision doesn't guarantee these come back sorted by confidence --
         // taking the max explicitly rather than assuming .first is the
-        // best candidate.
+        // best candidate. The bundled model now knows a second class
+        // ("plate", added alongside "med_ball" so the training set could
+        // include barbell plates as genuinely different-looking objects,
+        // not just more med-ball examples) -- this detector's only job is
+        // finding the ball, so a plate detection (even a confident one,
+        // e.g. a rack visible behind the athlete) must never be allowed to
+        // seed the tracker here.
         guard (try? handler.perform([detectRequest])) != nil,
             let results = detectRequest.results as? [VNRecognizedObjectObservation],
-            let best = results.max(by: { $0.confidence < $1.confidence }),
+            let best = results
+                .filter({ $0.labels.first?.identifier == "med_ball" })
+                .max(by: { $0.confidence < $1.confidence }),
             best.confidence >= minDetectionConfidence
         else { return nil }
 
