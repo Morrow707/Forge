@@ -1145,10 +1145,19 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             // proxy. coreMlTargetLabel picks which of the model's classes this call actually
             // cares about (see runPoseAnalysis's own comment) -- med-ball throws and now
             // barbell/dumbbell/kettlebell lifts share this exact detector and wiring, just
-            // pointed at a different class.
+            // pointed at a different class. wristRegionOfInterest (nil when neither wrist was
+            // found this frame) narrows the SEARCH area for a fresh detection to roughly where
+            // the equipment already is -- see AvCoreMlImplementDetector.regionOfInterest's own
+            // comment for why that's a meaningfully cheaper lever than downscaling the image
+            // (already tried, made things worse -- see extractWorkingFrame's own comment above)
+            // or running detection concurrently with capture (already tried, caused real
+            // on-device thermal throttling -- see this file's header comment).
             var coreMlImplement: [String: Any]?
             if coreMlDetectionEnabled, let targetLabel = coreMlTargetLabel,
-               let result = coreMlImplementDetector.track(pixelBuffer: pixelBuffer, orientation: orientation, targetLabel: targetLabel) {
+               let result = coreMlImplementDetector.track(
+                   pixelBuffer: pixelBuffer, orientation: orientation, targetLabel: targetLabel,
+                   regionOfInterest: AvCoreMlImplementDetector.regionOfInterest(leftWrist: leftWristJoint, rightWrist: rightWristJoint)
+               ) {
                 coreMlImplement = coreMlResultDict(result.box, confidence: result.confidence)
             }
 
@@ -1608,6 +1617,34 @@ private final class AvCoreMlImplementDetector {
     // without this a tracked-but-now-wrong-class region would just keep reporting confidently.
     private var trackingLabel: String?
 
+    // How far (as a fraction of the frame, in Vision's own normalized 0-1 space) a FRESH
+    // detection's search region extends past the wrist(s) actually driving it -- generous enough
+    // to comfortably contain a barbell/dumbbell/kettlebell at a normal grip offset from the hand
+    // (unlike extractWorkingFrame's implementWorkingMaxDim, sized for the motion-diff tracker's
+    // own much tighter local search), while still meaningfully narrower than the full frame this
+    // detector used to scan unconditionally.
+    private static let regionMarginFraction: CGFloat = 0.35
+
+    // Vision's own regionOfInterest convention: normalized 0-1, origin bottom-left, same as a
+    // VNRecognizedPoint's own location -- so leftWrist/rightWrist (as read straight off
+    // observation.recognizedPoint in runPoseAnalysis) plug in with no conversion. Returns nil
+    // when neither wrist was found this frame, the same "nothing to anchor a search on" case
+    // extractWorkingFrame's own caller already treats as "skip this frame's implement work
+    // entirely" for the motion-diff tracker -- track() below applies that same skip specifically
+    // to a FRESH detection (see its own comment on why an active track doesn't need this).
+    static func regionOfInterest(leftWrist: (x: Double, y: Double)?, rightWrist: (x: Double, y: Double)?) -> CGRect? {
+        let xs = [leftWrist?.x, rightWrist?.x].compactMap { $0 }
+        let ys = [leftWrist?.y, rightWrist?.y].compactMap { $0 }
+        guard let minX = xs.min(), let maxX = xs.max(), let minY = ys.min(), let maxY = ys.max() else {
+            return nil
+        }
+        let x0 = max(0, CGFloat(minX) - regionMarginFraction)
+        let x1 = min(1, CGFloat(maxX) + regionMarginFraction)
+        let y0 = max(0, CGFloat(minY) - regionMarginFraction)
+        let y1 = min(1, CGFloat(maxY) + regionMarginFraction)
+        return CGRect(x: x0, y: y0, width: x1 - x0, height: y1 - y0)
+    }
+
     // Vision's normalized (0-1, bottom-left-origin) bounding box for wherever the detector
     // currently believes `targetLabel` is, or nil on any failure -- no model bundled, no
     // confident detection of THIS class yet, or tracking lost this frame. A lost track (or a
@@ -1615,7 +1652,16 @@ private final class AvCoreMlImplementDetector {
     // frame can re-detect from scratch (the implement re-entering frame after a full occlusion,
     // or a caller now asking for a different class) rather than staying permanently silent for
     // the rest of the clip.
-    func track(pixelBuffer: CVPixelBuffer, orientation: CGImagePropertyOrientation, targetLabel: String) -> (box: CGRect, confidence: Float)? {
+    //
+    // regionOfInterest only ever narrows a FRESH detection (below) -- an already-locked
+    // VNTrackObjectRequest (right below) does its own local search around the previous frame's
+    // box already, via Vision's own tracking algorithm, so applying a wrist-anchored region on
+    // top of that would be redundant at best and could clip a fast-moving implement that's
+    // legitimately drifted outside the margin at worst. nil regionOfInterest (no wrist this
+    // frame) skips a fresh detection outright rather than falling back to a full-frame scan --
+    // same "only worth it when there's a wrist to anchor on" precedent
+    // extractWorkingFrame's own caller already established for the motion-diff tracker.
+    func track(pixelBuffer: CVPixelBuffer, orientation: CGImagePropertyOrientation, targetLabel: String, regionOfInterest: CGRect?) -> (box: CGRect, confidence: Float)? {
         guard let visionModel = visionModel else { return nil }
 
         if trackingLabel != targetLabel {
@@ -1640,8 +1686,18 @@ private final class AvCoreMlImplementDetector {
             }
         }
 
+        guard let regionOfInterest else { return nil }
+
         let detectRequest = VNCoreMLRequest(model: visionModel)
         detectRequest.imageCropAndScaleOption = .scaleFit
+        // Per Apple's documented Vision behavior, a request's regionOfInterest only narrows what
+        // gets ANALYZED -- the resulting observation.boundingBox below is still expressed in the
+        // full image's own normalized coordinate space, not the region's, so no extra coordinate
+        // conversion is needed here or on the JS side reading this detector's output. UNVERIFIED
+        // against this specific model/request combination on real hardware (this sandbox has no
+        // device to confirm on) -- if a real build ever shows the reported box visibly offset
+        // from the actual implement, this assumption is the first place to check.
+        detectRequest.regionOfInterest = regionOfInterest
         let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: orientation, options: [:])
         // Vision doesn't guarantee these come back sorted by confidence -- taking the max
         // explicitly rather than assuming .first is the best candidate. The bundled model knows
