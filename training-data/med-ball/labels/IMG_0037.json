@@ -1,0 +1,19 @@
+{
+  "image": "IMG_0037.jpg",
+  "boxes": [
+    {
+      "class": "kettlebell",
+      "x_center": 0.1225,
+      "y_center": 0.4491,
+      "width": 0.1657,
+      "height": 0.2328
+    },
+    {
+      "class": "kettlebell",
+      "x_center": 0.712,
+      "y_center": 0.4517,
+      "width": 0.2661,
+      "height": 0.2066
+    }
+  ]
+}
