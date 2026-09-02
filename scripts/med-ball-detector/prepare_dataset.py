@@ -47,7 +47,20 @@ DATASET_DIR = DETECTOR_DIR / "dataset"
 # pixel dimensions rather than Hough-circle-fit, the same technique used for
 # the plate class's angled/textured photos. Each future object type gets its
 # own new index the same way.
-CLASS_NAMES = ["med_ball", "plate", "baseball", "golf_ball", "tennis_ball", "kettlebell", "dumbbell"]
+#
+# barbell added 2026-09-02 (Scott: "Should be db, kb, the barbells... plates,
+# and the balls, all of the balls") from clean isolated rack photos
+# (IMG_0009.jpg, IMG_0041.jpg -- straight bar with plates loaded, sleeve +
+# collar clearly visible). Scott separately mentioned "one photo has a
+# safety squat bar" -- searched the full 63-photo set for it (every rack/
+# barbell overview shot, IMG_0001/2/3/4/6/7/8/9/10/11/12/13/37/39/40/41/43/44)
+# and did not find an unambiguous SSB silhouette (camber yoke + two forward
+# handles) -- what looked promising in IMG_0043/44 turned out to be a wall-
+# mounted resistance-band anchor post next to a straight bar, and the
+# apparent curve at the top of that same bar is consistent with wide-angle
+# phone lens barrel distortion, not a physical bend. Flagged back to Scott
+# rather than guessing and mislabeling a straight bar as an SSB.
+CLASS_NAMES = ["med_ball", "plate", "baseball", "golf_ball", "tennis_ball", "kettlebell", "dumbbell", "barbell"]
 
 VAL_FRACTION = 0.15
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".heic"}

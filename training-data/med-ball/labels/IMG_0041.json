@@ -1,0 +1,6 @@
+{
+  "image": "IMG_0041.jpg",
+  "boxes": [
+    { "class": "barbell", "x_center": 0.3151, "y_center": 0.4403, "width": 0.6303, "height": 0.0613 }
+  ]
+}
