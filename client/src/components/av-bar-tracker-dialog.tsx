@@ -235,6 +235,7 @@ export function AvBarTrackerDialog({
     analyzing,
     analyzedFrames,
     startRecording,
+    cancelRecording,
     stopRecordingAndAnalyze,
     cancelAnalysis,
   } = useAvBodyTracking(open);
@@ -647,7 +648,21 @@ export function AvBarTrackerDialog({
             <button
               type="button"
               aria-label="Close"
-              onClick={() => onOpenChange(false)}
+              onClick={() => {
+                // Live incident, 2026-09-02: tapping this while `analyzing` was true left a
+                // stuck overlay behind -- this button called onOpenChange(false) unconditionally
+                // and nothing else, so the native analysis (and its recording/upload state) kept
+                // running orphaned behind a dialog that was already gone, instead of actually
+                // being torn down. Attempting the real cancel first (same interrupt path the
+                // in-progress "Cancel" button already uses) at least gives the native side a
+                // chance to unwind cleanly. onOpenChange(false) still always fires immediately
+                // right after, not gated on that cancel completing -- this button's whole job is
+                // being a guaranteed way out even if analysis/recording itself is hung, the same
+                // problem that made waiting on it unacceptable in the first place.
+                if (analyzing) cancelAnalysis();
+                else if (recording) void cancelRecording();
+                onOpenChange(false);
+              }}
               className="absolute right-3 top-[max(0.75rem,env(safe-area-inset-top))] z-10 flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-colors hover:bg-black/70"
             >
               <X className="h-5 w-5" />
