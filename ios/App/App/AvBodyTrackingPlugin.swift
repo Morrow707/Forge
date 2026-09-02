@@ -831,11 +831,32 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         // else already has) so every future call stops queueing up behind whatever's still
         // wedged -- if that original call ever does finish on its own, it just finishes
         // uselessly on the now-abandoned queue; nothing is still listening for its result.
-        let analysisTimeoutSeconds = 120.0
-        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + analysisTimeoutSeconds) { [weak self] in
+        //
+        // TWO separate timeouts, not one -- a real field incident (2026-09-02, mid-workout)
+        // showed a single flat 120s ceiling means a genuine "stuck before frame 1 ever
+        // processed" hang (this function's own comment above -- the exact failure mode this
+        // watchdog exists for) makes the athlete stare at a spinner for a full 2 minutes before
+        // anything happens, on a screen that blocks starting the next set. That's a fast-failing
+        // case wearing a slow-failing number: if genuinely ZERO frames have processed yet, there
+        // is nothing further to wait for -- the read loop hasn't even started producing results,
+        // and no realistic device needs anywhere near 15s just to decode and analyze frame one.
+        // zeroProgressWatchdog below fails that case almost immediately. analysisTimeoutSeconds
+        // remains as a separate, longer backstop for the different (rarer) case where the reader
+        // DID start (progress.snapshot() > 0) but then stalled partway through a long clip on a
+        // slow device -- shortened from the original 120s to 60s since 2 minutes is too long to
+        // ask anyone to wait either way, while still leaving real headroom above what a normal
+        // stride-2 analysis pass should ever need. Neither number is calibrated against real
+        // device timing data (this sandbox has no device to test against) -- worth revisiting
+        // with real field numbers if either fires on a clip that would have genuinely succeeded
+        // given more time.
+        let zeroProgressTimeoutSeconds = 15.0
+        let analysisTimeoutSeconds = 60.0
+        let progress = AvAnalysisProgress()
+
+        let fireWatchdog: (String) -> Void = { [weak self] reason in
             settle {
                 self?.logDiag(
-                    "analyzeRecording WATCHDOG fired after \(Int(analysisTimeoutSeconds))s with no result -- "
+                    "analyzeRecording WATCHDOG fired (\(reason)) with \(progress.snapshot()) frames processed -- "
                         + "forcing failure and replacing analysisQueue so future calls aren't stuck behind this one"
                 )
                 self?.analysisCancelled = true
@@ -848,10 +869,19 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             }
         }
 
+        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + zeroProgressTimeoutSeconds) {
+            if progress.snapshot() == 0 {
+                fireWatchdog("zero progress after \(Int(zeroProgressTimeoutSeconds))s")
+            }
+        }
+        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + analysisTimeoutSeconds) {
+            fireWatchdog("absolute \(Int(analysisTimeoutSeconds))s ceiling")
+        }
+
         queueForThisCall.async {
             self.runPoseAnalysis(
                 url: url, sampleEveryNthFrame: sampleEveryNthFrame, detectBox: detectBox,
-                trackingMode: trackingMode, call: call, settle: settle
+                trackingMode: trackingMode, call: call, progress: progress, settle: settle
             )
         }
     }
@@ -880,8 +910,11 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
     // watchdog or a user-initiated cancel might already have settled this call first).
     private func runPoseAnalysis(
         url: URL, sampleEveryNthFrame: Int, detectBox: Bool, trackingMode: String?, call: CAPPluginCall,
+        progress: AvAnalysisProgress,
         settle: @escaping (@escaping () -> Void) -> Void
     ) {
+        // (AvAnalysisProgress itself is defined near the bottom of this file, alongside
+        // AvCoreMlImplementDetector and the other small per-call helper types.)
         let coreMlTargetLabel = AvCoreMlImplementDetector.targetLabel(forTrackingMode: trackingMode)
         let coreMlDetectionEnabled = coreMlTargetLabel != nil && coreMlImplementDetector.isAvailable
         // Background-execution edge case, same as stopRecording's finalize step -- a coach
@@ -1172,6 +1205,12 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             }
 
             processedCount += 1
+            // Mirrors processedCount into the thread-safe counter analyzeRecording's watchdog
+            // reads from a different queue -- see AvAnalysisProgress's own comment. Kept as a
+            // separate increment rather than replacing processedCount everywhere it's already
+            // used below, so this stays a pure addition with no risk to the existing diagnostic
+            // reporting this function already does.
+            progress.increment()
             var eventData: [String: Any] = [
                 "frameIndex": thisFrameIndex,
                 "timestamp": timestampSeconds,
@@ -1526,6 +1565,29 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             "height": Double(boundingBox.height),
             "confidence": Double(confidence),
         ]
+    }
+}
+
+// A frame-processed counter analyzeRecording's watchdog timers (see that function's own
+// comment on why there are two of them) can read from a DIFFERENT queue than the one actually
+// running runPoseAnalysis's frame loop -- a plain Int var read/written from two queues at once
+// is a data race; this is the minimal NSLock-guarded wrapper that isn't. One instance per
+// analyzeRecording call (not shared across calls the way AvCoreMlImplementDetector's single
+// instance is), created fresh in analyzeRecording and passed down into runPoseAnalysis.
+private final class AvAnalysisProgress {
+    private let lock = NSLock()
+    private var count = 0
+
+    func increment() {
+        lock.lock()
+        count += 1
+        lock.unlock()
+    }
+
+    func snapshot() -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return count
     }
 }
 
