@@ -420,3 +420,148 @@ single pass). Budget for that accordingly next time -- it is not a
   want it redone properly (full per-object verification loop, real time
   cost) as the next priority, or is the honest "attempted, mixed
   results, here's why" writeup enough for now?
+
+---
+
+## 8. UPDATE (morning of 2026-09-02, continuing the same session): pushed to Apple, fixed the coordinate-reading bug for real, added barbell
+
+Picks up right after section 7. Scott reviewed overnight and gave the
+explicit go-ahead: *"Let's do this. Just take everything we've built...
+push it to Apple, push this new object detection system."* Then, once
+pushed: *"Push what you have then do the rest of the photos you didn't
+do... image 063 is a bit off... image 005 you could do with the measuring
+tape... same with 014 and 015... image 016 is much better."*
+
+### 8a. Environment reset (logged for the record, no data lost)
+
+Mid-morning, the local git checkout silently reverted to a commit ~179
+behind `origin/main` and the Python environment (cv2, ultralytics,
+coremltools) was wiped -- a known quirk of this sandbox, documented in
+this repo's root `CLAUDE.md` now. Fixed with `git fetch && git merge
+--ff-only`. Nothing was actually lost -- everything that mattered had
+already been pushed -- but it's why the timestamps in this section jump
+around a bit.
+
+### 8b. Root-caused the coordinate-reading bug (same class of error, 4th time)
+
+IMG_0005, IMG_0014, IMG_0015 all had plate boxes that landed entirely on
+wall/window background -- IMG_0005 was even marked a true negative
+despite showing a clear plate. Root cause, confirmed by comparing against
+the times it worked: **reading pixel positions off a coarse, full-image
+grid is unreliable.** The fix that actually works, used from here on for
+every subsequent box: crop TIGHT around just the target object first,
+grid *that* crop at a fine (150px) interval, read the real-pixel-labeled
+gridlines directly, then render the candidate box back onto the full
+photo and visually verify before trusting it. All three plates fixed this
+way, using the real tape measure visible in each photo as a precise edge
+anchor the same way a plate's molded rim was used elsewhere. Also
+re-measured IMG_0042's plate+dumbbell (previously one combined box that
+threw away the plate signal entirely -- Scott caught this live: *"the 35
+lb plate with db on top... the square doesn't fit that, you need to draw
+this by hand"*) and gave IMG_0016 real training boxes for its 4 kettlebells
+for the first time (previously illustration-only, never written back to
+the actual label file -- an oversight from section 6a, found while
+rebuilding the gallery).
+
+### 8c. Illustration/gallery rendering settled into its final form
+
+Scott's direction, arrived at over several rounds of live feedback:
+- **Round objects (med_ball, baseball, golf_ball, tennis_ball, AND
+  plate)** draw as a filled ellipse fit to the labeled box. Plate was
+  originally miscategorized as "oblong" and drawn as a rectangle --
+  Scott caught it ("what happened to round objects, you draw a circle
+  not just the rough square") -- a plate is a disc, it draws as an
+  ellipse in-frame from camera angle, not because it's a different shape
+  class from a ball.
+- **Kettlebell and dumbbell** run through real `cv2.grabCut` two-pass
+  segmentation (`seg_lib.py`, unchanged from section 2), filled at 45%
+  opacity + solid outline. This is "your own system," per Scott, not a
+  hand-drawn primitive -- and it demonstrably works well on good-contrast
+  photos (IMG_0042's dumbbell, IMG_0038's kettlebells 3-6 all came out
+  clean). Added an area-fraction validity check (contour area / seed-box
+  area >= 0.40) that falls back to a filled ellipse instead of shipping a
+  visibly broken partial shape -- this catches the real failure mode
+  found on IMG_0016/IMG_0038: some kettlebells sit against a bright
+  window with near-zero color contrast between the black ball and the
+  glass behind it, so GrabCut reliably grabs the handle (which has a
+  contrasting rubber grip color) but not the ball. Tried CLAHE contrast
+  boosting, forced sure-foreground cores, tighter/looser padding -- none
+  reliably fixed it; this is a genuine GrabCut limitation on this class
+  of photo, not a tuning bug, and it's been left to fall back honestly
+  rather than over-fit to one image.
+- **Barbell** (new, see 8d) draws as a plain rectangle -- a bar is a
+  long thin diagonal shaft in a wide axis-aligned box, so GrabCut's
+  area-coverage check would reject even a perfect segmentation as "low
+  coverage," and a filled ellipse is simply the wrong shape for a
+  straight bar. The rectangle is the honest one here.
+
+The gallery-thumbnail builder was rewritten from scratch as
+`build_thumbs_v2.py` (scratchpad-only, same durability caveat as
+`seg_lib.py` -- see section 2) -- it now reads box data straight from
+`training-data/med-ball/labels/*.json`, no more hand-maintained "polys"
+side files that can drift out of sync with the real labels (this is
+exactly what happened with IMG_0016 in 8b).
+
+### 8d. Added `barbell` as an 8th class
+
+Scott: *"Should be db, kb, the barbells... plates, and the balls, all of
+the balls."* Two clean, isolated examples added -- IMG_0009.jpg (loaded
+45lb-plate barbell on J-hooks, box covers the full visible steel shaft
+end-to-end including where it enters the near-side plate's hub; also
+picked up a bonus `plate` box on the same photo, previously unlabeled
+entirely) and IMG_0041.jpg (unloaded bar resting on J-hooks). Both
+measured with the section-8b tight-crop-grid technique.
+
+**Did not find the safety squat bar.** Scott mentioned "one photo has a
+safety squat bar" -- searched every rack/barbell overview shot in the
+63-photo set (IMG_0001/2/3/4/6/7/8/9/10/11/12/13/37/39/40/41/43/44) and
+found only straight bars. IMG_0043/44 looked promising at a glance (a
+cambered-looking curve near the top of frame) but turned out to be a
+wall-mounted resistance-band anchor post ("TesZeal" branded) standing
+next to a straight bar -- the apparent curve is consistent with wide-
+angle phone lens barrel distortion, not a physical bend. Flagged back to
+Scott rather than guessing and mislabeling a straight bar as an SSB --
+**open question, see section 9.**
+
+### 8e. Retrain/verify/ship cycle, run twice tonight
+
+First a "v5" retrain picked up the section 8b fixes (IMG_0005/14/15/16
+box corrections, IMG_0042 split) -- verified clean on all 7 classes via
+`runs/detect/weights/best.pt` (coremltools `.mlpackage` inference still
+needs macOS, unavailable in this sandbox -- same standing limitation
+noted in `train.py`'s header), bundled, committed (`413ecb3`),
+`verify_build` succeeded, `beta` triggered. One real gotcha caught before
+shipping: a background retrain (`retrain_v2`, killed) had been kicked off
+using a `prepare_dataset.py` snapshot taken BEFORE the IMG_0005/14/15
+fixes landed -- would have shipped a model trained on the wrong plate
+coordinates. Always re-run `prepare_dataset.py` fresh immediately before
+`train.py`, not from a stale snapshot, whenever labels changed in
+between.
+
+Then a "v6" retrain added the section 8d barbell class (40 labeled photos
+total, 8 classes) -- this is the one currently running/just finished as
+this note is being written; see the commit this same push lands in for
+its actual verification numbers rather than duplicating them here (numbers
+belong with the code they describe, not frozen in a notes file that can
+drift).
+
+---
+
+## 9. Open questions for Scott (new batch, continuing section 7's pattern)
+
+- **Where is the safety squat bar photo?** Searched exhaustively (8d) and
+  came up empty -- either it's in one of the photos already labeled as
+  something else and I'm not recognizing it, or it needs a fresh photo.
+- IMG_0016's kettlebells are correctly classed but only 0.05-0.23
+  confidence in the v5 model (brand new example, harder backlighting,
+  single first pass) -- worth a dedicated few more real photos of this
+  specific kettlebell set to bring confidence up, or acceptable as a
+  known soft spot for now?
+- The GrabCut low-contrast limitation (8c) is a real, structural gap for
+  black objects photographed against bright windows -- worth revisiting
+  with a different technique (e.g. edge-based seeding instead of pure
+  color) at some point, or is the honest ellipse-fallback good enough
+  long-term?
+- Dense multi-object racks (IMG_0018/0019/0021/0022/0023) are still
+  entirely unlabeled/unreliable -- same open item as section 7, still not
+  attempted again since the mixed-quality IMG_0018 pass.
