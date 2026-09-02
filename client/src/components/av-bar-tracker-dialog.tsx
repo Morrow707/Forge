@@ -240,10 +240,17 @@ export function AvBarTrackerDialog({
   } = useAvBodyTracking(open);
 
   const usesSharedBar = usesSharedBarEquipment(equipment);
-  // See this file's header comment on why only these three equipment values turn the object
-  // detector on -- everything else (Bodyweight, Machine, Trap Bar, ...) leaves trackingMode
-  // undefined, same as before this existed.
-  const coreMlTrackingMode = equipment ? COREML_TRACKING_MODE_BY_EQUIPMENT[equipment] : undefined;
+  // KILL SWITCH -- 2026-09-02, mid-live-workout: a Bench Press (Barbell) recording hung at
+  // "0 frames processed" and never recovered. This was the very first real-device analysis pass
+  // ever to run with the CoreML detector enabled for a bar-tracker dialog (added earlier this
+  // same session), so it's the prime suspect even though root cause isn't confirmed yet -- a
+  // pre-existing, separately-documented AVAssetReader/Vision setup hang (see analyzeRecording's
+  // own watchdog comment) is also a real possibility and wasn't touched tonight. Forcing
+  // trackingMode undefined here (TS-only, no native change, no verify_build wait) restores
+  // exactly the pre-this-session behavior -- the plain wrist+motion-diff tracker, unaffected --
+  // while the actual cause gets investigated without risking the rest of a live training day.
+  // Re-enable (delete this override) once that's understood; see SESSION_NOTES_2026-09-02.md.
+  const coreMlTrackingMode: string | undefined = undefined;
 
   useEffect(() => {
     if (!open) return;
