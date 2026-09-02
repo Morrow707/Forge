@@ -1,8 +1,26 @@
 {
   "image": "IMG_0001.jpg",
   "boxes": [
-    { "class": "plate", "x_center": 0.4295, "y_center": 0.4105, "width": 0.2288, "height": 0.1453 },
-    { "class": "plate", "x_center": 0.4318, "y_center": 0.5462, "width": 0.2568, "height": 0.1261 },
-    { "class": "plate", "x_center": 0.4552, "y_center": 0.7055, "width": 0.3035, "height": 0.1926 }
+    {
+      "class": "plate",
+      "x_center": 0.5035,
+      "y_center": 0.419,
+      "width": 0.1531,
+      "height": 0.1451
+    },
+    {
+      "class": "plate",
+      "x_center": 0.5121,
+      "y_center": 0.5732,
+      "width": 0.1527,
+      "height": 0.1201
+    },
+    {
+      "class": "plate",
+      "x_center": 0.5223,
+      "y_center": 0.7294,
+      "width": 0.1753,
+      "height": 0.1371
+    }
   ]
 }

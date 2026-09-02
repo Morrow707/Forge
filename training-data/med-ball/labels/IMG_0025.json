@@ -1,6 +1,12 @@
 {
   "image": "IMG_0025.jpg",
   "boxes": [
-    { "class": "plate", "x_center": 0.4534, "y_center": 0.4726, "width": 0.7601, "height": 0.6552 }
+    {
+      "class": "plate",
+      "x_center": 0.4556,
+      "y_center": 0.4744,
+      "width": 0.8749,
+      "height": 0.6406
+    }
   ]
 }
