@@ -832,25 +832,18 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         // wedged -- if that original call ever does finish on its own, it just finishes
         // uselessly on the now-abandoned queue; nothing is still listening for its result.
         //
-        // TWO separate timeouts, not one -- a real field incident (2026-09-02, mid-workout)
-        // showed a single flat 120s ceiling means a genuine "stuck before frame 1 ever
-        // processed" hang (this function's own comment above -- the exact failure mode this
-        // watchdog exists for) makes the athlete stare at a spinner for a full 2 minutes before
-        // anything happens, on a screen that blocks starting the next set. That's a fast-failing
-        // case wearing a slow-failing number: if genuinely ZERO frames have processed yet, there
-        // is nothing further to wait for -- the read loop hasn't even started producing results,
-        // and no realistic device needs anywhere near 15s just to decode and analyze frame one.
-        // zeroProgressWatchdog below fails that case almost immediately. analysisTimeoutSeconds
-        // remains as a separate, longer backstop for the different (rarer) case where the reader
-        // DID start (progress.snapshot() > 0) but then stalled partway through a long clip on a
-        // slow device -- shortened from the original 120s to 60s since 2 minutes is too long to
-        // ask anyone to wait either way, while still leaving real headroom above what a normal
-        // stride-2 analysis pass should ever need. Neither number is calibrated against real
-        // device timing data (this sandbox has no device to test against) -- worth revisiting
-        // with real field numbers if either fires on a clip that would have genuinely succeeded
-        // given more time.
-        let zeroProgressTimeoutSeconds = 15.0
-        let analysisTimeoutSeconds = 60.0
+        // Continuous stall detection, not two fixed checkpoints -- the original single 120s
+        // timer (then a two-checkpoint 15s/60s version, see git history) both shared the same
+        // real gap: neither could tell "stuck since the start" apart from "made some progress,
+        // then stalled partway through" without either firing too early on a genuinely slow
+        // clip or too late on a real hang. re-checking on a short interval for however long the
+        // analysis runs answers the only question that actually matters -- has ANY progress
+        // happened recently -- the same way regardless of whether that's frame 0 or frame 400.
+        // This can't "nudge" a truly stuck native call into finishing (there's no safe way to
+        // force a blocked system call to make progress from another thread) -- it can only
+        // detect the stall faster and give up sooner, which is the most a watchdog can ever do.
+        let stallTimeoutSeconds = 15.0
+        let checkIntervalSeconds = 3.0
         let progress = AvAnalysisProgress()
 
         let fireWatchdog: (String) -> Void = { [weak self] reason in
@@ -869,14 +862,25 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             }
         }
 
-        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + zeroProgressTimeoutSeconds) {
-            if progress.snapshot() == 0 {
-                fireWatchdog("zero progress after \(Int(zeroProgressTimeoutSeconds))s")
+        // DispatchQueue has no built-in repeating asyncAfter, so this reschedules itself --
+        // stops as soon as `settled` is true (the call already resolved, whether by success, a
+        // user cancel, or this same watchdog already having fired) rather than polling forever
+        // for the lifetime of the app.
+        func scheduleStallCheck() {
+            DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + checkIntervalSeconds) {
+                settleLock.lock()
+                let alreadySettled = settled
+                settleLock.unlock()
+                if alreadySettled { return }
+                let idleSeconds = progress.secondsSinceLastProgress()
+                if idleSeconds >= stallTimeoutSeconds {
+                    fireWatchdog("no progress for \(Int(idleSeconds))s")
+                    return
+                }
+                scheduleStallCheck()
             }
         }
-        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + analysisTimeoutSeconds) {
-            fireWatchdog("absolute \(Int(analysisTimeoutSeconds))s ceiling")
-        }
+        scheduleStallCheck()
 
         queueForThisCall.async {
             self.runPoseAnalysis(
@@ -1568,19 +1572,23 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
     }
 }
 
-// A frame-processed counter analyzeRecording's watchdog timers (see that function's own
-// comment on why there are two of them) can read from a DIFFERENT queue than the one actually
-// running runPoseAnalysis's frame loop -- a plain Int var read/written from two queues at once
-// is a data race; this is the minimal NSLock-guarded wrapper that isn't. One instance per
-// analyzeRecording call (not shared across calls the way AvCoreMlImplementDetector's single
-// instance is), created fresh in analyzeRecording and passed down into runPoseAnalysis.
+// A frame-processed counter analyzeRecording's stall-check timer reads from a DIFFERENT queue
+// than the one actually running runPoseAnalysis's frame loop -- a plain Int/Date pair read/
+// written from two queues at once is a data race; this is the minimal NSLock-guarded wrapper
+// that isn't. One instance per analyzeRecording call (not shared across calls the way
+// AvCoreMlImplementDetector's single instance is), created fresh in analyzeRecording and passed
+// down into runPoseAnalysis. lastChangedAt starts at construction time (effectively "when this
+// analysis call began") rather than nil, so a stall check running before the very first
+// increment() still gets a real answer to "how long has it been since anything happened."
 private final class AvAnalysisProgress {
     private let lock = NSLock()
     private var count = 0
+    private var lastChangedAt = Date()
 
     func increment() {
         lock.lock()
         count += 1
+        lastChangedAt = Date()
         lock.unlock()
     }
 
@@ -1588,6 +1596,12 @@ private final class AvAnalysisProgress {
         lock.lock()
         defer { lock.unlock() }
         return count
+    }
+
+    func secondsSinceLastProgress() -> TimeInterval {
+        lock.lock()
+        defer { lock.unlock() }
+        return Date().timeIntervalSince(lastChangedAt)
     }
 }
 

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import * as Sentry from "@sentry/react";
 import {
   isAvBodyTrackingSupported,
   startAvPreview,
@@ -295,6 +296,23 @@ export function useAvBodyTracking(active: boolean) {
       setAnalyzing(false);
       if (!cancelledRef.current) {
         setError(err instanceof Error ? err.message : "Analysis failed");
+        // This path (native analysis throwing, most commonly AvBodyTrackingPlugin's own stall
+        // watchdog giving up -- see its own comment) was previously invisible: caught here,
+        // shown to the athlete as a toast in the calling dialog, and never reported anywhere,
+        // so a real recurring hang would have had no signal telling anyone it was happening at
+        // all. framesProcessedBeforeFailure (from analyzedFrames, the same counter the "N frames
+        // processed..." UI text already reads) is the one piece of context that actually
+        // distinguishes "stuck before frame 1" from "got partway through then stalled" -- the
+        // two failure shapes the native watchdog itself can't yet tell apart from out here.
+        Sentry.captureException(err instanceof Error ? err : new Error(String(err)), {
+          tags: { avAnalysisFailure: true, trackingMode: options?.trackingMode ?? "none" },
+          extra: {
+            framesProcessedBeforeFailure: analyzedFrames,
+            deviceModel: captureDeviceInfo.deviceModel,
+            systemVersion: captureDeviceInfo.systemVersion,
+            activeFormat: captureDeviceInfo.activeFormat,
+          },
+        });
       }
       return null;
     }
