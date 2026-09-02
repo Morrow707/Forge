@@ -178,6 +178,7 @@ export function AvMedballTrackerDialog({
     // this same in-flight upload instead of starting a fresh one once they're ready for it.
     let uploadPromise: Promise<{ status: "uploaded"; url: string } | { status: "queued" }> | null = null;
     const result = await stopRecordingAndAnalyze({
+      trackingMode: "med_ball",
       onBlobReady: recordVideo
         ? (blob) => {
             setSaving(true);

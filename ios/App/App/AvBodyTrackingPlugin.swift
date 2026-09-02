@@ -3,6 +3,7 @@ import AVFoundation
 import CoreMedia
 import CoreVideo
 import CoreImage
+import CoreML
 import Vision
 import UIKit
 import Capacitor
@@ -141,6 +142,10 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
     private let implementCIContext = CIContext(options: [.useSoftwareRenderer: false])
     private var leftImplementTracker = AvImplementTracker()
     private var rightImplementTracker = AvImplementTracker()
+    // Med-ball throws only (see analyzeRecording's trackingMode param) --
+    // additive alongside the motion-diff trackers above, not a replacement.
+    // See AvCoreMlImplementDetector's own header comment.
+    private var coreMlImplementDetector = AvCoreMlImplementDetector()
 
     // The public, documented Vision joint names this plugin reports -- unlike ARKit's own
     // joint-name strings (which needed on-device discovery to nail down, per
@@ -773,14 +778,20 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         // Box jump only (see this file's own comment on detectBoxTop below) -- every other AV
         // dialog omits this and pays nothing extra per frame.
         let detectBox = call.getBool("detectBox") ?? false
+        // Gates the additive CoreML implement detector below -- "med_ball" (the only value any
+        // caller passes today) or nil/anything else, which just means "not enabled." See
+        // AvCoreMlImplementDetector's own header comment for why this stays scoped to one
+        // exercise for now rather than running for every AvImplementTracker caller.
+        let trackingMode = call.getString("trackingMode")
         let url = URL(fileURLWithPath: pathString)
         logDiag(
             "analyzeRecording() called for \(url.lastPathComponent), sampleEveryNthFrame=\(sampleEveryNthFrame), "
-                + "detectBox=\(detectBox)"
+                + "detectBox=\(detectBox), trackingMode=\(trackingMode ?? "none")"
         )
         analysisCancelled = false
         leftImplementTracker.reset()
         rightImplementTracker.reset()
+        coreMlImplementDetector.reset()
 
         // Confirmed against a real field report: AVAssetReader/Vision setup can hang
         // indefinitely before runPoseAnalysis's read loop even starts (stuck at "0 frames
@@ -835,7 +846,8 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
 
         queueForThisCall.async {
             self.runPoseAnalysis(
-                url: url, sampleEveryNthFrame: sampleEveryNthFrame, detectBox: detectBox, call: call, settle: settle
+                url: url, sampleEveryNthFrame: sampleEveryNthFrame, detectBox: detectBox,
+                trackingMode: trackingMode, call: call, settle: settle
             )
         }
     }
@@ -863,9 +875,10 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
     // call.resolve/call.reject directly -- see analyzeRecording's own comment on why (a
     // watchdog or a user-initiated cancel might already have settled this call first).
     private func runPoseAnalysis(
-        url: URL, sampleEveryNthFrame: Int, detectBox: Bool, call: CAPPluginCall,
+        url: URL, sampleEveryNthFrame: Int, detectBox: Bool, trackingMode: String?, call: CAPPluginCall,
         settle: @escaping (@escaping () -> Void) -> Void
     ) {
+        let coreMlDetectionEnabled = trackingMode == "med_ball" && coreMlImplementDetector.isAvailable
         // Background-execution edge case, same as stopRecording's finalize step -- a coach
         // backgrounding the app to check something mid-analysis shouldn't kill this partway
         // through a clip.
@@ -1120,6 +1133,17 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                 }
             }
 
+            // Additive med-ball-only signal -- see AvCoreMlImplementDetector's own header
+            // comment. Runs on the full pixelBuffer (not the downscaled working frame the
+            // motion-diff trackers above use), since Vision's own CoreML/tracking requests do
+            // their own internal scaling and want real image data to track a visual appearance
+            // against, not a coarse 160px proxy.
+            var coreMlImplement: [String: Any]?
+            if coreMlDetectionEnabled,
+               let box = coreMlImplementDetector.track(pixelBuffer: pixelBuffer, orientation: orientation) {
+                coreMlImplement = coreMlResultDict(box)
+            }
+
             processedCount += 1
             var eventData: [String: Any] = [
                 "frameIndex": thisFrameIndex,
@@ -1134,6 +1158,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             // same as "no lock this frame," not a zeroed/default point.
             if let leftImplement = leftImplement { eventData["leftImplement"] = leftImplement }
             if let rightImplement = rightImplement { eventData["rightImplement"] = rightImplement }
+            if let coreMlImplement = coreMlImplement { eventData["coreMlImplement"] = coreMlImplement }
             DispatchQueue.main.async {
                 self.notifyListeners("poseFrame", data: eventData)
             }
@@ -1458,6 +1483,120 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             dict["color"] = ["r": color.r, "g": color.g, "b": color.b]
         }
         return dict
+    }
+
+    private func coreMlResultDict(_ boundingBox: CGRect) -> [String: Any] {
+        // Vision's box is (x, y, width, height) with the same normalized,
+        // bottom-left-origin convention as every joint this file already
+        // hands back -- reporting the box's center point keeps the shape
+        // consistent with implementResultDict's x/y (a point, not a rect)
+        // for whatever future JS-side code starts consuming this.
+        return [
+            "x": Double(boundingBox.midX),
+            "y": Double(boundingBox.midY),
+            "width": Double(boundingBox.width),
+            "height": Double(boundingBox.height),
+        ]
+    }
+}
+
+// Real, trained, on-device object detection for med-ball throws only (see the
+// trackingMode gate in analyzeRecording/runPoseAnalysis below) -- built to
+// directly address AvImplementTracker's own documented weak spot: motion-diff
+// tracking loses lock the instant the implement stops moving (the exact
+// bottom of a throw's countermovement) or gets briefly occluded. Runs Apple's
+// own VNCoreMLRequest once per clip to find the implement, then hands off to
+// VNTrackObjectRequest (Apple's Neural Engine object tracker) for every frame
+// after that -- cheap, and immune to the zero-velocity/occlusion cases
+// motion-diff can't handle, because it's tracking the implement's actual
+// visual appearance, not just which pixels changed.
+//
+// See scripts/med-ball-detector/ for the training pipeline that produces
+// MedBallDetector.mlmodelc. Deliberately, completely inert
+// (isAvailable == false, track() always returns nil) until that file is
+// actually bundled into the app -- nothing here ever blocks, delays, or
+// fails a recording or its analysis; every call site treats a nil result
+// exactly like AvImplementTracker returning nil (no signal this frame, not
+// an error), and med-ball throws keep working via AvImplementTracker alone
+// in the meantime. This is pure addition, never a replacement.
+private final class AvCoreMlImplementDetector {
+    private let modelName = "MedBallDetector"
+
+    // Loaded once per plugin instance lookup, not per clip -- Bundle.main
+    // is static for the life of the app, so there's nothing to gain from
+    // re-resolving this on every reset(), and MLModel/VNCoreMLModel
+    // construction isn't free.
+    private lazy var visionModel: VNCoreMLModel? = {
+        guard let url = Bundle.main.url(forResource: modelName, withExtension: "mlmodelc") else {
+            return nil
+        }
+        guard let mlModel = try? MLModel(contentsOf: url),
+            let vnModel = try? VNCoreMLModel(for: mlModel)
+        else {
+            return nil
+        }
+        return vnModel
+    }()
+
+    var isAvailable: Bool { visionModel != nil }
+
+    private var trackingRequest: VNTrackObjectRequest?
+    private let sequenceHandler = VNSequenceRequestHandler()
+    // A detection this weak is more likely a false positive (a shadow, a
+    // teammate's shirt) than a real med ball -- untuned starting value, same
+    // "no real footage to calibrate against yet" caveat every other
+    // heuristic constant in this file carries until real device testing
+    // gives actual numbers to react to.
+    private let minDetectionConfidence: VNConfidence = 0.4
+
+    func reset() {
+        trackingRequest = nil
+    }
+
+    // Vision's normalized (0-1, bottom-left-origin) bounding box for wherever
+    // the detector currently believes the implement is, or nil on any
+    // failure -- no model bundled, no confident detection yet, or tracking
+    // lost this frame. A lost track clears trackingRequest so a LATER frame
+    // can re-detect from scratch (the implement re-entering frame after a
+    // full occlusion) rather than staying permanently silent for the rest
+    // of the clip.
+    func track(pixelBuffer: CVPixelBuffer, orientation: CGImagePropertyOrientation) -> CGRect? {
+        guard let visionModel = visionModel else { return nil }
+
+        if let request = trackingRequest {
+            do {
+                try sequenceHandler.perform([request], on: pixelBuffer, orientation: orientation)
+                guard let observation = request.results?.first as? VNDetectedObjectObservation,
+                    observation.confidence >= minDetectionConfidence
+                else {
+                    trackingRequest = nil
+                    return nil
+                }
+                request.inputObservation = observation
+                return observation.boundingBox
+            } catch {
+                trackingRequest = nil
+                return nil
+            }
+        }
+
+        let detectRequest = VNCoreMLRequest(model: visionModel)
+        detectRequest.imageCropAndScaleOption = .scaleFit
+        let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: orientation, options: [:])
+        // Vision doesn't guarantee these come back sorted by confidence --
+        // taking the max explicitly rather than assuming .first is the
+        // best candidate.
+        guard (try? handler.perform([detectRequest])) != nil,
+            let results = detectRequest.results as? [VNRecognizedObjectObservation],
+            let best = results.max(by: { $0.confidence < $1.confidence }),
+            best.confidence >= minDetectionConfidence
+        else { return nil }
+
+        let seedObservation = VNDetectedObjectObservation(boundingBox: best.boundingBox)
+        let newRequest = VNTrackObjectRequest(detectedObjectObservation: seedObservation)
+        newRequest.trackingLevel = .accurate
+        trackingRequest = newRequest
+        return best.boundingBox
     }
 }
 

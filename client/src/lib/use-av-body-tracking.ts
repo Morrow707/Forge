@@ -211,6 +211,10 @@ export function useAvBodyTracking(active: boolean) {
   // experienced as a single, ordinary tap.
   async function stopRecordingAndAnalyze(options?: {
     detectBox?: boolean;
+    // "med_ball" turns on the additive CoreML implement detector (see
+    // native-av-preview.ts's PoseCoreMlImplement) -- every other caller
+    // omits this and analysis behaves exactly as before.
+    trackingMode?: string;
     // Fired the instant the recorded blob exists -- right after native stopRecording()
     // resolves, BEFORE Vision analysis (the "Analyzing recording" step) even starts, let
     // alone finishes. The upload doesn't depend on anything Vision produces (metrics get
@@ -241,6 +245,7 @@ export function useAvBodyTracking(active: boolean) {
 
   async function doStopRecordingAndAnalyze(options?: {
     detectBox?: boolean;
+    trackingMode?: string;
     onBlobReady?: (blob: Blob) => void;
   }): Promise<
     | {
@@ -280,7 +285,9 @@ export function useAvBodyTracking(active: boolean) {
     });
     let recordingStats: AvAnalysisResult;
     try {
-      recordingStats = await analyzeAvRecording(path, ANALYSIS_SAMPLE_STRIDE, options?.detectBox);
+      recordingStats = await analyzeAvRecording(
+        path, ANALYSIS_SAMPLE_STRIDE, options?.detectBox, options?.trackingMode
+      );
     } catch (err) {
       unsubscribe();
       void deleteAvRecording(path);

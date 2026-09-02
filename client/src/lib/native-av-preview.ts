@@ -35,6 +35,24 @@ export type PoseImplement = {
 // Vision measured joints against -- see AvBodyTrackingPlugin.swift's own comment on why this
 // isn't just the raw buffer's native width/height, and vision-body-landmarks.ts for why the
 // bridge needs real pixel dimensions (not just normalized 0-1 values) at all.
+// Med-ball-only (see analyzeAvRecording's trackingMode param): a real,
+// trained, on-device CoreML detection/tracking result, additive alongside
+// leftImplement/rightImplement above -- see AvBodyTrackingPlugin.swift's
+// AvCoreMlImplementDetector for the full reasoning. x/y is the box's
+// center point (same normalized 0-1, bottom-left-origin convention as
+// every other coordinate here); width/height let a caller draw or reason
+// about the actual box, not just a point. Omitted whenever the mode isn't
+// active, no model is bundled yet, or nothing was found this frame -- the
+// same omit-when-nil convention as leftImplement/rightImplement.
+//
+// Not yet consumed by any tracking/summarization math on this side (see
+// bar-tracking.ts) -- this type exists so the data has somewhere to land
+// once a real MedBallDetector.mlmodelc actually ships; wiring up which
+// signal wins when both this and the motion-diff implement trackers
+// report a position is deliberately left for a follow-up pass, once
+// there's real on-device data to validate the choice against.
+export type PoseCoreMlImplement = { x: number; y: number; width: number; height: number };
+
 export type PoseFrame = {
   frameIndex: number;
   timestamp: number;
@@ -44,6 +62,7 @@ export type PoseFrame = {
   frameHeight: number;
   leftImplement?: PoseImplement;
   rightImplement?: PoseImplement;
+  coreMlImplement?: PoseCoreMlImplement;
 };
 
 // Shared by the plugin interface's own analyzeRecording method below and analyzeAvRecording's
@@ -101,7 +120,12 @@ interface AvBodyTrackingPlugin {
   startRecording(): Promise<void>;
   stopRecording(): Promise<{ path: string }>;
   deleteRecording(options: { path: string }): Promise<void>;
-  analyzeRecording(options: { path: string; sampleEveryNthFrame?: number; detectBox?: boolean }): Promise<AvAnalysisResult>;
+  analyzeRecording(options: {
+    path: string;
+    sampleEveryNthFrame?: number;
+    detectBox?: boolean;
+    trackingMode?: string;
+  }): Promise<AvAnalysisResult>;
   cancelAnalysis(): Promise<void>;
   getDiagnosticLog(): Promise<{ log: string[] }>;
   addListener(
@@ -226,12 +250,17 @@ export async function deleteAvRecording(path: string): Promise<void> {
 // AvBodyTrackingPlugin.swift's analyzeRecording) -- entirely offline, not a live stream.
 // Subscribe with onAvPoseFrame BEFORE calling this to see per-frame results as they're
 // produced; the returned promise resolves once every frame has been processed.
+// trackingMode: "med_ball" turns on the additive CoreML implement detector
+// (see PoseCoreMlImplement's own comment) -- omitted or any other value
+// leaves every exercise's analysis exactly as it was before this param
+// existed.
 export async function analyzeAvRecording(
   path: string,
   sampleEveryNthFrame?: number,
   detectBox?: boolean,
+  trackingMode?: string,
 ): Promise<AvAnalysisResult> {
-  return AvBodyTracking.analyzeRecording({ path, sampleEveryNthFrame, detectBox });
+  return AvBodyTracking.analyzeRecording({ path, sampleEveryNthFrame, detectBox, trackingMode });
 }
 
 // Real native cancellation of an in-progress analyzeAvRecording call -- see
