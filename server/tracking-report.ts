@@ -497,16 +497,23 @@ export type TrackingReportEntry = {
   // when nothing looked wrong, so a consumer can render "no flags" distinctly from "not
   // checked yet."
   flags: string[];
-  // Simple average of every 0-1 confidence signal this set actually has (wrist, motion-diff
-  // implement, CoreML detection, and any per-rep/per-set trust scores) -- a single sortable
-  // number for the admin UI's "show me the low-confidence ones" filter, not a replacement for
-  // reading the individual signals above it. Null when nothing here produced a confidence
-  // number at all (an empty/untracked set).
+  // Simple average of every confidence signal this set actually has (wrist, motion-diff
+  // implement, CoreML detection, and any per-rep/per-set trust scores), normalized to 0-1 --
+  // a single sortable number for the admin UI's "show me the low-confidence ones" filter, not
+  // a replacement for reading the individual signals above it. Null when nothing here produced
+  // a confidence number at all (an empty/untracked set).
   overallConfidence: number | null;
 };
 
 function computeOverallConfidence(r: TrackedSetRow): number | null {
   const d = r.trackingDiagnostics as TrackingDiagnostics | null | undefined;
+  // bodyPose/objectDetection confidences are already 0-1 (Vision/CoreML's own convention);
+  // trust scores (SetTrustScore/RepTrustScore.score, e.g. blendSpeedEstimates' 30/60/90) are
+  // 0-100. Averaging them together unnormalized used to silently produce nonsense -- a set
+  // leaning on trust scores could return an "overallConfidence" of 30-90, which the client
+  // then reads as a 0-1 fraction (>=0.7 is "high"), so anything with a trust score at all
+  // trivially read as "high" regardless of what it actually said. Every value pushed here
+  // must be 0-1 before it goes in.
   const values: number[] = [];
   if (d?.bodyPose?.avgWristConfidence != null) values.push(d.bodyPose.avgWristConfidence);
   if (d?.objectDetection?.avgImplementConfidence != null) values.push(d.objectDetection.avgImplementConfidence);
@@ -518,7 +525,7 @@ function computeOverallConfidence(r: TrackedSetRow): number | null {
     ...((Array.isArray(r.trustScores) ? (r.trustScores as RepTrustScore[]) : [])),
   ];
   for (const t of trustArrays) {
-    if (t?.score != null) values.push(t.score);
+    if (t?.score != null) values.push(t.score / 100);
   }
   if (values.length === 0) return null;
   return Math.round((values.reduce((a, v) => a + v, 0) / values.length) * 100) / 100;
