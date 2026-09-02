@@ -6006,6 +6006,17 @@ export const trackingDiagnosticsSchema = z.object({
     framesWithLeftImplement: z.number(),
     framesWithRightImplement: z.number(),
     avgImplementConfidence: z.number().optional().nullable(),
+    // Med-ball-only real-world-size plausibility check against a CoreML detection --
+    // see client/src/lib/pose-tracking.ts's isPlausibleMedBallSize. Optional/nullable since
+    // sets logged before this field existed won't have it, same as every other diagnostics
+    // field added after the original shape shipped.
+    coreMlSizeCheck: z
+      .object({
+        framesChecked: z.number(),
+        implausibleCount: z.number(),
+      })
+      .optional()
+      .nullable(),
   }),
   // Which of pose-tracking.ts's two calibration methods (nose-to-ankle, or the shoulder-to-
   // ankle fallback) each frame actually resolved through -- see calibrationMethodBreakdown's

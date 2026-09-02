@@ -861,6 +861,46 @@ export const CALIBRATION_REFERENCES: CalibrationReference[] = [
   },
 ];
 
+// Real-world diameter band a genuine medicine/slam ball can plausibly fall within, in meters --
+// NOT an invented number: derived directly from this file's own CALIBRATION_REFERENCES entries
+// for the medicine-ball family above (med_ball_giant_20lb, med_ball_giant_15lb,
+// large_med_ball_10_30lb, hard_med_ball_2lb), taking the widest span any of their own
+// nominalSizeM +/- toleranceM bands reaches. If a new measured med-ball reference is ever added
+// above, this band should be revisited against it too rather than left to drift out of sync.
+export const MED_BALL_PLAUSIBLE_DIAMETER_RANGE_M = { min: 0.14, max: 0.27 };
+
+// Converts a CoreML-detected implement's own bounding box into an estimated real-world
+// diameter, using whatever pixels-per-meter scale calibrateFromFrames/computeReferenceObjectScale
+// already computed for this clip -- see AvBodyTrackingPlugin.swift's AvCoreMlImplementDetector
+// for where the box itself comes from and native-av-preview.ts's PoseCoreMlImplement for its
+// shape (normalized 0-1 width/height, same convention as every other coordinate this bridge
+// hands back). Takes the larger of width/height in pixels rather than an average -- a ball's
+// box should be roughly square, and the larger side is slightly more robust to partial
+// occlusion clipping one edge than an average would be.
+export function estimateImplementDiameterM(
+  box: { width: number; height: number },
+  frameWidth: number,
+  frameHeight: number,
+  metersPerPixel: number,
+): number {
+  const boxDiameterPx = Math.max(box.width * frameWidth, box.height * frameHeight);
+  return boxDiameterPx * metersPerPixel;
+}
+
+// Cross-checks an estimated implement diameter against MED_BALL_PLAUSIBLE_DIAMETER_RANGE_M --
+// e.g. a detection reading ~45cm across is far more likely a weight plate than a medicine ball,
+// even if the CoreML model itself was confident. Deliberately approximate, not a hard gate: the
+// calibration scale is anchored to the athlete's body plane, while a thrown ball is often at a
+// different depth in the scene at the moment of release, so this can only ever be a soft
+// corroborating signal -- same role as implement-appearance-memory.ts's color check plays for
+// the motion-diff tracker, never something tracking is rejected over on its own.
+export function isPlausibleMedBallSize(diameterM: number): boolean {
+  return (
+    diameterM >= MED_BALL_PLAUSIBLE_DIAMETER_RANGE_M.min &&
+    diameterM <= MED_BALL_PLAUSIBLE_DIAMETER_RANGE_M.max
+  );
+}
+
 // Turns an uncertainty fraction into the same kind of plain-language note
 // bar-tracking.ts's RepTrustScore.notes already surfaces for every other source of tracking
 // uncertainty (position-fusion confidence, tracker disagreement, camera alignment) -- this is

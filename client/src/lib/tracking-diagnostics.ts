@@ -1,4 +1,5 @@
 import type { PoseFrame as NativePoseFrame } from "@/lib/native-av-preview";
+import { estimateImplementDiameterM, isPlausibleMedBallSize } from "@/lib/pose-tracking";
 
 // Client-side mirror of trackingDiagnosticsSchema in shared/schema.ts -- kept in sync by hand,
 // same pattern CaptureDeviceInfo (native-av-preview.ts) already uses rather than importing the
@@ -31,6 +32,13 @@ export type TrackingDiagnostics = {
     framesWithLeftImplement: number;
     framesWithRightImplement: number;
     avgImplementConfidence: number | null;
+    // Med-ball-only (see AvCoreMlImplementDetector.swift/PoseCoreMlImplement) -- how many
+    // sampled frames had a CoreML detection at all, and of those, how many had an estimated
+    // real-world size implausible for an actual medicine ball (see
+    // pose-tracking.ts's isPlausibleMedBallSize). Null whenever calibration failed for this
+    // clip (no scale factor to convert pixels to meters with), not just when no CoreML model
+    // is bundled -- both cases mean "nothing to report," but for different reasons.
+    coreMlSizeCheck: { framesChecked: number; implausibleCount: number } | null;
   };
   calibration: {
     scaleFactor: number | null;
@@ -72,11 +80,20 @@ function summarizeBodyPose(rawFrames: NativePoseFrame[]): TrackingDiagnostics["b
 // All-zero on a bar/implement exercise is the single most useful "why did this fail" signal on
 // its own: it means the implement tracker never locked onto anything for the whole clip,
 // independent of how well the body itself tracked.
-function summarizeObjectDetection(rawFrames: NativePoseFrame[]): TrackingDiagnostics["objectDetection"] {
+// scaleFactor is the same pixels-per-meter... meters-per-pixel scale calibrateFromFrames
+// already computes for this clip -- null whenever calibration itself failed, in which case
+// coreMlSizeCheck comes back null too (nothing to convert CoreML boxes' pixel sizes into real
+// meters with).
+function summarizeObjectDetection(
+  rawFrames: NativePoseFrame[],
+  scaleFactor: number | null,
+): TrackingDiagnostics["objectDetection"] {
   let framesWithLeftImplement = 0;
   let framesWithRightImplement = 0;
   let implConfSum = 0;
   let implConfCount = 0;
+  let coreMlFramesChecked = 0;
+  let coreMlImplausibleCount = 0;
   for (const f of rawFrames) {
     if (f.leftImplement) {
       framesWithLeftImplement++;
@@ -88,11 +105,20 @@ function summarizeObjectDetection(rawFrames: NativePoseFrame[]): TrackingDiagnos
       implConfSum += f.rightImplement.confidence;
       implConfCount++;
     }
+    if (f.coreMlImplement && scaleFactor != null) {
+      coreMlFramesChecked++;
+      const diameterM = estimateImplementDiameterM(
+        f.coreMlImplement, f.frameWidth, f.frameHeight, scaleFactor,
+      );
+      if (!isPlausibleMedBallSize(diameterM)) coreMlImplausibleCount++;
+    }
   }
   return {
     framesWithLeftImplement,
     framesWithRightImplement,
     avgImplementConfidence: implConfCount > 0 ? round2(implConfSum / implConfCount) : null,
+    coreMlSizeCheck:
+      scaleFactor != null ? { framesChecked: coreMlFramesChecked, implausibleCount: coreMlImplausibleCount } : null,
   };
 }
 
@@ -129,7 +155,7 @@ export function buildTrackingDiagnostics(args: {
     message: args.message ?? null,
     recording: args.recording ?? null,
     bodyPose: summarizeBodyPose(args.rawFrames),
-    objectDetection: summarizeObjectDetection(args.rawFrames),
+    objectDetection: summarizeObjectDetection(args.rawFrames, args.calibration?.scaleFactor ?? null),
     calibration: args.calibration ?? null,
   };
 }
