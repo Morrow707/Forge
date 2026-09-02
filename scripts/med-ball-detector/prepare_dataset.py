@@ -5,6 +5,14 @@ See this directory's README.md for the label file format and the full
 pipeline this script is one step of. Deliberately dependency-free (stdlib
 only) -- this step just rearranges files and writes text, no reason to
 require ultralytics/coremltools before that's actually needed (train.py).
+
+See SESSION_NOTES_2026-09-01.md in this directory for the full account of
+where kettlebell/dumbbell came from, the real labeling bug found and fixed
+that night (IMG_0016.json had 3 dumbbell boxes on the wrong content --
+deleted, don't resurrect it without re-verifying against the real photo
+first), the segmentation (cv2.grabCut) precision work proven out on one
+photo but not yet built into this pipeline, and the still-open exhaustive
+multi-object labeling task for the dense kettlebell/dumbbell rack photos.
 """
 
 import hashlib
