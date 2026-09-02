@@ -3,6 +3,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { AdminTeachChatPanel } from "@/components/admin-teach-chat-panel";
 import { ForgeAiContent } from "./forge-ai";
 import { MovementKnowledgeContent } from "./movement-knowledge";
+import { CameraAiHistoryContent } from "./camera-ai-history";
 
 /** One page for every "teach the AI something" surface -- previously four
  * separate nav entries (Teach AI, Forge AI, Teach Nutrition AI, Teach
@@ -21,6 +22,7 @@ export default function AdminTeachAi() {
           <TabsTrigger value="forge-ai">Forge AI</TabsTrigger>
           <TabsTrigger value="nutrition">Nutrition</TabsTrigger>
           <TabsTrigger value="movement">Movement</TabsTrigger>
+          <TabsTrigger value="camera-ai">Camera AI</TabsTrigger>
         </TabsList>
 
         <TabsContent value="program-builder">
@@ -59,6 +61,10 @@ export default function AdminTeachAi() {
 
         <TabsContent value="movement">
           <MovementKnowledgeContent />
+        </TabsContent>
+
+        <TabsContent value="camera-ai">
+          <CameraAiHistoryContent />
         </TabsContent>
       </Tabs>
     </AppShell>
