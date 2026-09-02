@@ -99,3 +99,84 @@ artifact built from Scott's own data. None of the three do online/
 continuous learning -- Claude's weights are fixed and shared across every
 Anthropic customer; the camera model only improves when retrained and
 reshipped, same as every pass in this file.
+
+## 4. Analysis frame rate -- 60fps capture, ~30fps analyzed, why that's not
+   an easy 2x
+
+Scott asked whether analysis could just run at the full 60fps capture rate
+instead of `ANALYSIS_SAMPLE_STRIDE = 2` (every other frame). Two directions
+he floated -- analyze concurrently with recording, and downscale frames to
+make analysis cheaper -- have BOTH already been tried in this exact
+codebase and reverted, for real, documented reasons already sitting in
+`AvBodyTrackingPlugin.swift`'s own comments:
+
+- Live/concurrent Vision inference during capture is the OLD architecture
+  (ARKit-based) -- replaced specifically because of real, on-device-proven
+  thermal throttling. Going back risks reintroducing that.
+- A per-frame Vision-side downscale was tried first for the pose request
+  specifically and made the "Cannot Complete Action" failures worse, not
+  better (extra Core Image render pass on top of a still-full-res decode).
+  The fix that stuck was configuring AVAssetReader's own decode to scale
+  via VideoToolbox in one hardware-accelerated pass instead.
+
+What shipped instead (`612ad78`): a genuinely untried lever --
+`AvCoreMlImplementDetector`'s FRESH detection now searches only a region
+around wherever the wrist(s) already are (`regionOfInterest`, Vision's own
+mechanism, 0.35-frame margin), instead of scanning the whole frame. An
+already-locked `VNTrackObjectRequest` is untouched (Vision's own tracker
+already does a narrow local search). One real, honestly-flagged assumption
+in that code: Vision's documented behavior is that `regionOfInterest`
+narrows what's analyzed while `boundingBox` results stay in full-image
+coordinates -- unverified against this specific model/request combo on
+real hardware, since this sandbox has no device to confirm on. First place
+to check if a real build ever shows the reported box visibly offset from
+the actual implement.
+
+Analysis stride itself (2 -> 1, full 60fps analysis) was NOT changed --
+that's still an open, real product tradeoff (roughly doubles the
+"Analyzing recording..." wait on every device, every set) that needs a
+deliberate decision, not a silent change either way.
+
+## 5. "v10" model shipped WITH a known regression on baseball/golf/tennis/
+   barbell -- Scott's explicit call, not an oversight
+
+The "v10" retrain (picks up IMG_0042's tightened dumbbell+plate boxes,
+section 1) came back with a real, confirmed regression on four classes,
+verified against Scott's own reference photos the same way every previous
+retrain was (not a scoring artifact -- double-checked at a much lower
+confidence threshold and confirmed the model is firing on the WRONG class
+for these photos, not just being quiet):
+
+- **Barbell**: IMG_0006/IMG_0009 dropped from 0.81-0.99 (v9) to ~0.02
+- **Baseball**: IMG_0052 dropped from ~0.95-0.99 to ~0.15
+- **Golf ball**: IMG_0048 dropped from ~0.99 to ~0.02 (essentially undetected)
+- **Tennis ball**: IMG_0053 dropped from ~0.92 to ~0.28
+- **Dumbbell**: IMG_0042 (the just-tightened box) dropped from 0.791 to ~0.14
+
+Kettlebell and med-ball stayed solid; most plate photos too (IMG_0001 was
+already a known zero-signal soft spot before this).
+
+**Root cause**: `train.py` starts fresh from Ultralytics' COCO weights
+(`yolov8n.pt`) on EVERY retrain -- no warm-start from the previous run's
+weights -- combined with a forced 100 epochs (`patience=0`) and several
+classes that only have 1-3 example photos in the whole dataset. Nothing
+about the barbell/baseball/golf/tennis DATA changed between v9 and v10 --
+this run just landed unluckily on a dataset this small and imbalanced.
+This is a real, structural instability in the retrain pipeline, not a
+one-off -- worth fixing (most likely by warm-starting from the previous
+run's weights instead of COCO scratch each time) before the NEXT retrain,
+not necessarily before this one shipped.
+
+**Scott's call, given directly**: "I'm not working with baseballs today,
+ship what you have." Practical impact of shipping anyway: the object-
+detector/body-tracker confidence cohesion built this session (section 2)
+requires the detector to clear `minDetectionConfidence = 0.4` in Swift
+before it says anything at all -- at ~0.02-0.28, barbell/baseball/golf/
+tennis essentially won't clear that bar today, so the new cohesion signal
+will be mostly SILENT (not wrong, not harmful -- just quiet) for those
+classes until a future retrain fixes this. Kettlebell's cohesion signal
+works as intended. Nothing about the existing wrist+motion-diff tracker
+changed or degraded -- a silent CoreML signal just means that tracker's
+own number stands alone, same as before this whole feature existed.
+Bundled as `ios/App/App/MedBallDetector.mlpackage`, commit follows this
+note.
