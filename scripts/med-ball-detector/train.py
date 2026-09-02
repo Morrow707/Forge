@@ -41,7 +41,20 @@ def main() -> None:
         imgsz=IMAGE_SIZE,
         batch=BATCH_SIZE,
         device="cpu",
-        patience=20,  # early-stop if validation stops improving, small dataset overfits fast
+        # No early stopping. patience=20 seemed reasonable for the single-class
+        # med_ball case (which converged to 99% confidence well inside that
+        # window), but adding a second class exposed why it isn't a safe
+        # default here: with only a handful of examples per class, the
+        # classification head needs far longer to separate them than the
+        # box/objectness heads need to find "something round" at all -- a
+        # multi-class run val-plateaued for 20+ straight epochs while
+        # cls_loss was still visibly falling, early-stopped at epoch 4, and
+        # produced a model that couldn't confidently detect even its own
+        # training images (any class). Running the full EPOCHS with patience
+        # disabled let that same run break through by epoch ~80 to 99%+
+        # precision/recall. The cost is always paying for all EPOCHS instead
+        # of stopping early on an easy run -- cheap at this dataset's size.
+        patience=0,
         project=str(DETECTOR_DIR / "runs"),
         name="detect",
         exist_ok=True,
