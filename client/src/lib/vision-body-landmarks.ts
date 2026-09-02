@@ -150,3 +150,27 @@ export function visionImplementToPoint(
     color: implement.color,
   };
 }
+
+// Same pixel-scale + Y-flip transform as visionImplementToPoint above, applied to
+// AvCoreMlImplementDetector's own bounding box (native-av-preview.ts's PoseCoreMlImplement)
+// instead of a single tracked point -- box.x/box.y are Vision's bottom-left box origin
+// (VNRecognizedObjectObservation.boundingBox convention), so the box's own center
+// (x + width/2, y + height/2) is what stands in for "where the detector thinks the object is,"
+// the same single (x, y) shape visionImplementToPoint already returns for the motion-diff
+// tracker. Landing it in the identical pixel-space, consistent-sign-convention unit lets
+// av-bar-tracker-dialog.tsx's fuseSide cross-check it against that same call's wrist+motion-diff
+// fused point directly, no separate coordinate handling needed.
+export function visionCoreMlBoxToPoint(
+  box: { x: number; y: number; width: number; height: number; confidence: number } | undefined,
+  frame: NativePoseFrame,
+): ImplementPoint | null {
+  if (!box) return null;
+  const centerX = box.x + box.width / 2;
+  const centerY = box.y + box.height / 2;
+  return {
+    x: centerX * frame.frameWidth,
+    y: -(centerY * frame.frameHeight),
+    z: 0,
+    confidence: box.confidence,
+  };
+}

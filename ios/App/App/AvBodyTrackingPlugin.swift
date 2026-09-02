@@ -779,10 +779,12 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         // Box jump only (see this file's own comment on detectBoxTop below) -- every other AV
         // dialog omits this and pays nothing extra per frame.
         let detectBox = call.getBool("detectBox") ?? false
-        // Gates the additive CoreML implement detector below -- "med_ball" (the only value any
-        // caller passes today) or nil/anything else, which just means "not enabled." See
-        // AvCoreMlImplementDetector's own header comment for why this stays scoped to one
-        // exercise for now rather than running for every AvImplementTracker caller.
+        // Gates the additive CoreML implement detector below -- one of
+        // AvCoreMlImplementDetector.supportedTrackingModes (the object class the caller is
+        // actually trying to track, e.g. "med_ball" from AvMedBallTrackerDialog or "barbell"/
+        // "dumbbell"/"kettlebell" from AvBarTrackerDialog, mapped straight from that dialog's own
+        // `equipment` prop) or nil/anything else, which just means "not enabled." See
+        // AvCoreMlImplementDetector's own header comment.
         let trackingMode = call.getString("trackingMode")
         let url = URL(fileURLWithPath: pathString)
         logDiag(
@@ -880,7 +882,8 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         url: URL, sampleEveryNthFrame: Int, detectBox: Bool, trackingMode: String?, call: CAPPluginCall,
         settle: @escaping (@escaping () -> Void) -> Void
     ) {
-        let coreMlDetectionEnabled = trackingMode == "med_ball" && coreMlImplementDetector.isAvailable
+        let coreMlTargetLabel = AvCoreMlImplementDetector.targetLabel(forTrackingMode: trackingMode)
+        let coreMlDetectionEnabled = coreMlTargetLabel != nil && coreMlImplementDetector.isAvailable
         // Background-execution edge case, same as stopRecording's finalize step -- a coach
         // backgrounding the app to check something mid-analysis shouldn't kill this partway
         // through a clip.
@@ -1135,21 +1138,24 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                 }
             }
 
-            // Additive med-ball-only signal -- see AvCoreMlImplementDetector's own header
-            // comment. Runs on the full pixelBuffer (not the downscaled working frame the
-            // motion-diff trackers above use), since Vision's own CoreML/tracking requests do
-            // their own internal scaling and want real image data to track a visual appearance
-            // against, not a coarse 160px proxy.
+            // Additive signal -- see AvCoreMlImplementDetector's own header comment. Runs on the
+            // full pixelBuffer (not the downscaled working frame the motion-diff trackers above
+            // use), since Vision's own CoreML/tracking requests do their own internal scaling and
+            // want real image data to track a visual appearance against, not a coarse 160px
+            // proxy. coreMlTargetLabel picks which of the model's classes this call actually
+            // cares about (see runPoseAnalysis's own comment) -- med-ball throws and now
+            // barbell/dumbbell/kettlebell lifts share this exact detector and wiring, just
+            // pointed at a different class.
             var coreMlImplement: [String: Any]?
-            if coreMlDetectionEnabled,
-               let result = coreMlImplementDetector.track(pixelBuffer: pixelBuffer, orientation: orientation) {
+            if coreMlDetectionEnabled, let targetLabel = coreMlTargetLabel,
+               let result = coreMlImplementDetector.track(pixelBuffer: pixelBuffer, orientation: orientation, targetLabel: targetLabel) {
                 coreMlImplement = coreMlResultDict(result.box, confidence: result.confidence)
             }
 
             // Same gate as the CoreML detector above -- handheld camera shake is a real problem
-            // for every tracking mode, but this starts scoped to med-ball throws too, matching
-            // the same "validate on one exercise first" decision. See AvCameraStabilizer's own
-            // header comment.
+            // for every tracking mode; this rides along on the same enable/disable decision
+            // rather than a separate one, since a session worth enabling object detection for is
+            // also worth stabilizing.
             var cameraDrift: [String: Any]?
             if coreMlDetectionEnabled,
                let drift = cameraStabilizer.drift(for: pixelBuffer, orientation: orientation, frameWidth: frameWidth, frameHeight: frameHeight) {
@@ -1526,15 +1532,41 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
 // visual appearance, not just which pixels changed.
 //
 // See scripts/med-ball-detector/ for the training pipeline that produces
-// MedBallDetector.mlmodelc. Deliberately, completely inert
-// (isAvailable == false, track() always returns nil) until that file is
-// actually bundled into the app -- nothing here ever blocks, delays, or
+// MedBallDetector.mlmodelc, currently trained on 8 classes (med_ball, plate,
+// baseball, golf_ball, tennis_ball, kettlebell, dumbbell, barbell -- see
+// that pipeline's own CLASS_NAMES, the source of truth for valid
+// targetLabel/supportedTrackingModes values). Deliberately, completely
+// inert (isAvailable == false, track() always returns nil) until that file
+// is actually bundled into the app -- nothing here ever blocks, delays, or
 // fails a recording or its analysis; every call site treats a nil result
 // exactly like AvImplementTracker returning nil (no signal this frame, not
-// an error), and med-ball throws keep working via AvImplementTracker alone
-// in the meantime. This is pure addition, never a replacement.
+// an error), and every tracking mode this feeds keeps working via
+// AvImplementTracker/wrist fusion alone in the meantime. This is pure
+// addition, never a replacement -- not for med-ball throws, and not (now
+// that AvBarTrackerDialog also enables this for a lifted implement it
+// recognizes) for a barbell/dumbbell/kettlebell's own motion-diff tracker
+// either. One detector instance, one loaded model, reused across whatever
+// class each call asks it to look for -- track()'s targetLabel argument
+// picks the class per call rather than this class hardcoding one.
 private final class AvCoreMlImplementDetector {
     private let modelName = "MedBallDetector"
+
+    // trackingMode strings AvBodyTrackingPlugin's runPoseAnalysis will actually enable this
+    // detector for, and what Vision class label each maps to -- currently the identity mapping
+    // (the client already sends the exact class name: AvMedBallTrackerDialog sends "med_ball",
+    // AvBarTrackerDialog maps its own `equipment` prop, e.g. "Barbell" -> "barbell", before
+    // calling stopRecordingAndAnalyze), but kept as an explicit allow-list rather than trusting
+    // any client-supplied string straight through as a Vision label -- an unrecognized
+    // trackingMode should mean "stay off," the same as omitting it entirely, not "ask Vision to
+    // match a class it was never trained on."
+    static let supportedTrackingModes: Set<String> = [
+        "med_ball", "plate", "baseball", "golf_ball", "tennis_ball", "kettlebell", "dumbbell", "barbell",
+    ]
+
+    static func targetLabel(forTrackingMode trackingMode: String?) -> String? {
+        guard let trackingMode, supportedTrackingModes.contains(trackingMode) else { return nil }
+        return trackingMode
+    }
 
     // Loaded once per plugin instance lookup, not per clip -- Bundle.main
     // is static for the life of the app, so there's nothing to gain from
@@ -1565,17 +1597,31 @@ private final class AvCoreMlImplementDetector {
 
     func reset() {
         trackingRequest = nil
+        trackingLabel = nil
     }
 
-    // Vision's normalized (0-1, bottom-left-origin) bounding box for wherever
-    // the detector currently believes the implement is, or nil on any
-    // failure -- no model bundled, no confident detection yet, or tracking
-    // lost this frame. A lost track clears trackingRequest so a LATER frame
-    // can re-detect from scratch (the implement re-entering frame after a
-    // full occlusion) rather than staying permanently silent for the rest
-    // of the clip.
-    func track(pixelBuffer: CVPixelBuffer, orientation: CGImagePropertyOrientation) -> (box: CGRect, confidence: Float)? {
+    // Which class VNTrackObjectRequest is currently locked onto, so a stale lock from a
+    // previous call (or a previous frame's different targetLabel, if a caller ever changed
+    // trackingMode mid-clip -- reset() is the normal way this happens between clips, but this
+    // guards the same invariant defensively) never gets treated as this frame's answer for a
+    // now-different class. Vision's object tracker follows a pixel region, not a label, so
+    // without this a tracked-but-now-wrong-class region would just keep reporting confidently.
+    private var trackingLabel: String?
+
+    // Vision's normalized (0-1, bottom-left-origin) bounding box for wherever the detector
+    // currently believes `targetLabel` is, or nil on any failure -- no model bundled, no
+    // confident detection of THIS class yet, or tracking lost this frame. A lost track (or a
+    // targetLabel that no longer matches the active lock) clears trackingRequest so a LATER
+    // frame can re-detect from scratch (the implement re-entering frame after a full occlusion,
+    // or a caller now asking for a different class) rather than staying permanently silent for
+    // the rest of the clip.
+    func track(pixelBuffer: CVPixelBuffer, orientation: CGImagePropertyOrientation, targetLabel: String) -> (box: CGRect, confidence: Float)? {
         guard let visionModel = visionModel else { return nil }
+
+        if trackingLabel != targetLabel {
+            trackingRequest = nil
+            trackingLabel = targetLabel
+        }
 
         if let request = trackingRequest {
             do {
@@ -1597,19 +1643,17 @@ private final class AvCoreMlImplementDetector {
         let detectRequest = VNCoreMLRequest(model: visionModel)
         detectRequest.imageCropAndScaleOption = .scaleFit
         let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: orientation, options: [:])
-        // Vision doesn't guarantee these come back sorted by confidence --
-        // taking the max explicitly rather than assuming .first is the
-        // best candidate. The bundled model now knows a second class
-        // ("plate", added alongside "med_ball" so the training set could
-        // include barbell plates as genuinely different-looking objects,
-        // not just more med-ball examples) -- this detector's only job is
-        // finding the ball, so a plate detection (even a confident one,
-        // e.g. a rack visible behind the athlete) must never be allowed to
-        // seed the tracker here.
+        // Vision doesn't guarantee these come back sorted by confidence -- taking the max
+        // explicitly rather than assuming .first is the best candidate. The bundled model knows
+        // 8 classes total (see this class's own header comment); filtering to exactly
+        // targetLabel here (not just "any confident detection") is what keeps, say, a barbell
+        // call from seeding its tracker off a plate sitting on the same rack, or a med-ball call
+        // from seeding off a kettlebell in the background -- every other class's detection is
+        // real signal, just not for THIS call.
         guard (try? handler.perform([detectRequest])) != nil,
             let results = detectRequest.results as? [VNRecognizedObjectObservation],
             let best = results
-                .filter({ $0.labels.first?.identifier == "med_ball" })
+                .filter({ $0.labels.first?.identifier == targetLabel })
                 .max(by: { $0.confidence < $1.confidence }),
             best.confidence >= minDetectionConfidence
         else { return nil }

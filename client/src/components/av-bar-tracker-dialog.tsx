@@ -11,7 +11,12 @@ import {
 import { toast } from "sonner";
 import { Circle, Square, X, XCircle, AlertTriangle } from "lucide-react";
 import { useAvBodyTracking } from "@/lib/use-av-body-tracking";
-import { visionJointsToWorldLandmarks, visionImplementToPoint, type ImplementPoint } from "@/lib/vision-body-landmarks";
+import {
+  visionJointsToWorldLandmarks,
+  visionImplementToPoint,
+  visionCoreMlBoxToPoint,
+  type ImplementPoint,
+} from "@/lib/vision-body-landmarks";
 import type { PoseFrame as NativePoseFrame, CaptureDeviceInfo } from "@/lib/native-av-preview";
 import {
   POSE_LANDMARKS,
@@ -91,7 +96,69 @@ import type { Landmark } from "@mediapipe/tasks-vision";
  * Hands here either), and the single-frame implement-vs-wrist grip-offset plausibility check
  * (MAX_PLAUSIBLE_GRIP_OFFSET_M) -- present as an unused constant in ArBarTrackerDialog too. The
  * frame-to-frame isPlausibleVelocity check below, which IS ported, already catches a fused point
- * that jumped somewhere implausible between frames. */
+ * that jumped somewhere implausible between frames.
+ *
+ * A third signal, additive to the wrist+motion-diff fusion above rather than a replacement for
+ * it (same "additive, never a replacement" stance AvCoreMlImplementDetector's own Swift comment
+ * states): when `equipment` names a class the bundled object detector actually knows (see
+ * COREML_TRACKING_MODE_BY_EQUIPMENT below -- currently barbell/dumbbell/kettlebell), this dialog
+ * asks AvBodyTrackingPlugin to also run that detector during analysis, the same mechanism
+ * AvMedBallTrackerDialog already uses for "med_ball". Its per-frame box (native-av-preview.ts's
+ * PoseCoreMlImplement) gets checked against THIS frame's own wrist+motion-diff fused point in
+ * applyCoreMlCorroboration below: close agreement nudges that frame's confidence up a little,
+ * a confident-but-far-apart reading nudges it down a little -- the same modest, capped,
+ * never-overriding-position idiom this file's own appearanceMatch/gripConfirmed nudges already
+ * use, and the same "two independent reads agreeing is stronger evidence" reasoning
+ * av-medball-tracker-dialog.tsx's medBallTrustScore documents for its own two signals. For any
+ * other equipment (Bodyweight, Machine, Trap Bar, anything not in the map), trackingMode is
+ * omitted and analysis behaves exactly as it did before this existed -- no object detector, no
+ * cross-check, unchanged confidence math. */
+
+// Equipment this dialog can ask the bundled object detector to also look for, mapped to that
+// detector's own class name (scripts/med-ball-detector/prepare_dataset.py's CLASS_NAMES is the
+// source of truth). Only equipment with a real trained class is listed -- "Trap Bar"/"EZ-Bar"
+// share usesSharedBarEquipment's bar-tilt treatment but look visually different enough from a
+// straight barbell that mapping them to "barbell" would just seed the detector against the
+// wrong shape, so they (and everything else) fall through to undefined, same as today.
+const COREML_TRACKING_MODE_BY_EQUIPMENT: Record<string, string> = {
+  Barbell: "barbell",
+  Dumbbell: "dumbbell",
+  Kettlebell: "kettlebell",
+};
+
+// How far apart (meters) the CoreML box's center and this frame's own wrist+motion-diff fused
+// point can be before they count as "looking at the same object" -- same distance
+// bar-tracker-dialog.tsx's own MAX_PLAUSIBLE_IMPLEMENT_OFFSET_M already uses for the identical
+// judgment call between the wrist and the motion-diff implement tracker, reused here rather than
+// picking a new number, since it's the same question (two independent reads of where the
+// equipment is) asked of a third source instead of a second one.
+const COREML_AGREEMENT_MAX_OFFSET_M = 0.5;
+
+// Below this, a CoreML detection is too marginal to treat a large disagreement with the fused
+// point as meaningful -- same MIN_TRACKING_CONFIDENCE bar-tracking.ts already uses everywhere
+// else for "trust this frame's position at all." A weak detection simply gets no say either way
+// (neither boosts nor penalizes), rather than a barely-there reading dragging down an otherwise
+// solid wrist+motion-diff fix.
+const COREML_MIN_CONFIDENCE_TO_PENALIZE = 0.5;
+
+// Modest, capped nudge -- same +-15% magnitude as this file's own appearanceMatch adjustment,
+// deliberately small so a third corroborating (or conflicting) signal shifts confidence without
+// ever being able to single-handedly promote a bad fix to "trusted" or demote a good one to
+// "reject."
+function applyCoreMlCorroboration(
+  fused: { x: number; y: number; confidence: number },
+  coreMlPoint: ImplementPoint | null,
+): { x: number; y: number; confidence: number } {
+  if (!coreMlPoint) return fused;
+  const offsetM = Math.hypot(coreMlPoint.x - fused.x, coreMlPoint.y - fused.y);
+  if (offsetM <= COREML_AGREEMENT_MAX_OFFSET_M) {
+    return { ...fused, confidence: Math.min(1, fused.confidence * (1 + 0.15 * coreMlPoint.confidence)) };
+  }
+  if (coreMlPoint.confidence >= COREML_MIN_CONFIDENCE_TO_PENALIZE) {
+    return { ...fused, confidence: fused.confidence * 0.85 };
+  }
+  return fused;
+}
 
 const EMPTY_REP_METRICS: RepMetrics = {
   peakVelocityMps: 0,
@@ -173,6 +240,10 @@ export function AvBarTrackerDialog({
   } = useAvBodyTracking(open);
 
   const usesSharedBar = usesSharedBarEquipment(equipment);
+  // See this file's header comment on why only these three equipment values turn the object
+  // detector on -- everything else (Bodyweight, Machine, Trap Bar, ...) leaves trackingMode
+  // undefined, same as before this existed.
+  const coreMlTrackingMode = equipment ? COREML_TRACKING_MODE_BY_EQUIPMENT[equipment] : undefined;
 
   useEffect(() => {
     if (!open) return;
@@ -232,6 +303,7 @@ export function AvBarTrackerDialog({
     // this same in-flight upload instead of starting a fresh one once they're ready for it.
     let uploadPromise: Promise<{ status: "uploaded"; url: string } | { status: "queued" }> | null = null;
     const result = await stopRecordingAndAnalyze({
+      trackingMode: coreMlTrackingMode,
       onBlobReady: recordVideo
         ? (blob) => {
             setSaving(true);
@@ -322,6 +394,7 @@ export function AvBarTrackerDialog({
       prevFused: { x: number; y: number; t: number } | null,
       velocitySamples: VelocitySample[],
       t: number,
+      coreMlPoint: ImplementPoint | null,
     ): { fused: { x: number; y: number; confidence: number } | null; nextPrev: { x: number; y: number; t: number } | null } {
       const wristWorld = worldLm[side === "left" ? POSE_LANDMARKS.LEFT_WRIST : POSE_LANDMARKS.RIGHT_WRIST];
       const wristConf = wristConfidence(worldLm, side);
@@ -329,11 +402,14 @@ export function AvBarTrackerDialog({
       const total = wristConf + barConf;
       let fused: { x: number; y: number; confidence: number } | null =
         total > 0
-          ? {
-              x: (wristConf * wristWorld.x + barConf * (implement ? implement.x : 0)) / total,
-              y: (wristConf * wristWorld.y + barConf * (implement ? implement.y : 0)) / total,
-              confidence: total / 2,
-            }
+          ? applyCoreMlCorroboration(
+              {
+                x: (wristConf * wristWorld.x + barConf * (implement ? implement.x : 0)) / total,
+                y: (wristConf * wristWorld.y + barConf * (implement ? implement.y : 0)) / total,
+                confidence: total / 2,
+              },
+              coreMlPoint,
+            )
           : null;
       if (fused && !isPlausibleVelocity(prevFused, { ...fused, t })) {
         rejectionEvents.push(t);
@@ -370,9 +446,22 @@ export function AvBarTrackerDialog({
         ? { ...rightImplementRaw, x: rightImplementRaw.x * scaleFactor, y: rightImplementRaw.y * scaleFactor, z: 0 }
         : null;
 
-      const { fused: fusedLeft, nextPrev: nextPrevLeft } = fuseSide(worldLm, "left", leftImplement, prevFusedLeft, leftVelocitySamples, t);
+      // Same raw-Vision-convention-then-scale treatment as leftImplement/rightImplement above,
+      // applied to AvCoreMlImplementDetector's box instead of AvImplementTracker's point (see
+      // visionCoreMlBoxToPoint's own comment). Only ever populated when coreMlTrackingMode
+      // enabled it (see this file's header comment) -- undefined equipment means f.coreMlImplement
+      // is never present on any frame, so this is null every time for anyone not covered by
+      // COREML_TRACKING_MODE_BY_EQUIPMENT, same as if this whole feature didn't exist. One point,
+      // not per-side -- the detector finds the equipment, not a hand, so both sides check it
+      // against the same reading.
+      const coreMlPointRaw = visionCoreMlBoxToPoint(f.coreMlImplement, f);
+      const coreMlPoint: ImplementPoint | null = coreMlPointRaw
+        ? { ...coreMlPointRaw, x: coreMlPointRaw.x * scaleFactor, y: coreMlPointRaw.y * scaleFactor, z: 0 }
+        : null;
+
+      const { fused: fusedLeft, nextPrev: nextPrevLeft } = fuseSide(worldLm, "left", leftImplement, prevFusedLeft, leftVelocitySamples, t, coreMlPoint);
       prevFusedLeft = nextPrevLeft;
-      const { fused: fusedRight, nextPrev: nextPrevRight } = fuseSide(worldLm, "right", rightImplement, prevFusedRight, rightVelocitySamples, t);
+      const { fused: fusedRight, nextPrev: nextPrevRight } = fuseSide(worldLm, "right", rightImplement, prevFusedRight, rightVelocitySamples, t, coreMlPoint);
       prevFusedRight = nextPrevRight;
 
       if (
