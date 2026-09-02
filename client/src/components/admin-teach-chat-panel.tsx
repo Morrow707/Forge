@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { apiRequest, getJson } from "@/lib/queryClient";
 import { copyToClipboard } from "@/lib/clipboard";
+import { useSwipeToDismissKeyboard } from "@/hooks/use-swipe-to-dismiss-keyboard";
 import { format, parseISO } from "date-fns";
 import { toast } from "sonner";
 import { Send, Sparkles, Loader2, Copy, Check, BookOpen, Eye } from "lucide-react";
@@ -60,6 +61,11 @@ export function AdminTeachChatPanel({
   // rendered while the field has focus) is the only way off the keyboard on a phone screen.
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [inputFocused, setInputFocused] = useState(false);
+  // Same gesture iOS Mail/Messages use -- swipe down on the message list (not the input) while
+  // already scrolled to the top, and the keyboard closes, no "Done" tap needed.
+  const { containerRef: messageListRef } = useSwipeToDismissKeyboard<HTMLDivElement>(() =>
+    textareaRef.current?.blur(),
+  );
   const [copiedId, setCopiedId] = useState<number | null>(null);
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -123,7 +129,7 @@ export function AdminTeachChatPanel({
           <CardDescription>{chatDescription}</CardDescription>
         </CardHeader>
         <CardContent className="flex min-h-0 flex-1 flex-col gap-3">
-          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto">
+          <div ref={messageListRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto">
             {isLoading && <div className="h-24 animate-pulse rounded-md bg-surface" />}
             {!isLoading && messages.length === 0 && (
               <p className="py-8 text-center text-sm text-muted-foreground">{emptyStateHint}</p>

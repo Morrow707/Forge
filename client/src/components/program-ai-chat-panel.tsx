@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { Send, Sparkles, Lock, Loader2, Copy, Check, ChevronUp, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { copyToClipboard } from "@/lib/clipboard";
+import { useSwipeToDismissKeyboard } from "@/hooks/use-swipe-to-dismiss-keyboard";
 
 type ProgramChatMessage = {
   id: number;
@@ -80,6 +81,11 @@ export function ProgramAiChatPanel({
   // field actually has focus, so it's never visible taking up space the rest of the time.
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [inputFocused, setInputFocused] = useState(false);
+  // Same gesture iOS Mail/Messages use -- swipe down on the message list (not the input) while
+  // already scrolled to the top, and the keyboard closes, no "Done" tap needed.
+  const { containerRef: messageListRef } = useSwipeToDismissKeyboard<HTMLDivElement>(() =>
+    textareaRef.current?.blur(),
+  );
   // Collapsed by default -- a brand-new program shouldn't have to give up a
   // full-height column just to advertise a feature nobody's used yet. Once
   // a conversation already exists (loaded below), it opens automatically so
@@ -210,7 +216,7 @@ export function ProgramAiChatPanel({
       </CardHeader>
       {open && (
       <CardContent className="flex min-h-0 flex-1 flex-col gap-3">
-        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto">
+        <div ref={messageListRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto">
           {isLoading && <div className="h-24 animate-pulse rounded-md bg-surface" />}
           {!isLoading && !messages?.length && (
             <p className="py-8 text-center text-sm text-muted-foreground">

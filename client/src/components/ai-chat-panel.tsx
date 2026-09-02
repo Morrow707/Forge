@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { Send, Sparkles, Eye, Lock, Loader2, Copy, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { copyToClipboard } from "@/lib/clipboard";
+import { useSwipeToDismissKeyboard } from "@/hooks/use-swipe-to-dismiss-keyboard";
 
 type ChatMessage = {
   id: number;
@@ -42,6 +43,11 @@ export function AiChatPanel({
   // rendered while the field has focus) is the only way off the keyboard on a phone screen.
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [inputFocused, setInputFocused] = useState(false);
+  // Same gesture iOS Mail/Messages use -- swipe down on the message list (not the input) while
+  // already scrolled to the top, and the keyboard closes, no "Done" tap needed.
+  const { containerRef: messageListRef } = useSwipeToDismissKeyboard<HTMLDivElement>(() =>
+    textareaRef.current?.blur(),
+  );
   const [copiedId, setCopiedId] = useState<number | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -118,7 +124,7 @@ export function AiChatPanel({
         </CardDescription>
       </CardHeader>
       <CardContent className="flex min-h-0 flex-1 flex-col gap-3">
-        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto">
+        <div ref={messageListRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto">
           {isLoading && <div className="h-24 animate-pulse rounded-md bg-surface" />}
           {!isLoading && !messages?.length && (
             <p className="py-8 text-center text-sm text-muted-foreground">
