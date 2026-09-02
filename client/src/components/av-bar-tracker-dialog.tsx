@@ -33,6 +33,9 @@ import {
   calibrateFromFrames,
   calibrationMethodBreakdown,
   scaleWorldLandmarks,
+  computeReferenceObjectScale,
+  CALIBRATION_REFERENCES,
+  MIN_CALIBRATION_SAMPLES,
   type PoseFrame,
   type CameraAlignment,
   type FormFaultThresholds,
@@ -80,11 +83,16 @@ import type { Landmark } from "@mediapipe/tasks-vision";
  * Calibration is NOT optional here, same reasoning as AvJumpTrackerDialog: Vision's
  * worldLandmarks-slot values are pixel-space with no real-world meaning until calibrated (see
  * calibrateFromFrames's own comment), unlike ARKit/MediaPipe's already-approximately-real-meters
- * estimate. Without a successful height-based calibration this mode reports no read at all --
- * "no number is better than a wrong one" -- rather than a velocity/tilt/power number computed
- * from meaningless pixel units. The tolerance-aware reference-object calibration scaffolding in
- * pose-tracking.ts (computeReferenceObjectScale) is a future refinement for when real
- * plate/ball reference photos exist, not wired in here yet.
+ * estimate. Without a successful calibration this mode reports no read at all -- "no number is
+ * better than a wrong one" -- rather than a velocity/tilt/power number computed from
+ * meaningless pixel units. Two independent calibration sources feed the one scaleFactor
+ * finishWithRecording actually uses: calibrateFromFrames' athlete-height read (needs both
+ * ankles visible at some point -- see its own comment, including its shoulder-fallback, which
+ * still needs ankles), and plateScaleFromFrames' reference-object read off the CoreML "plate"
+ * detector (needs a bumper plate visible instead -- see coreMlTrackingMode's own comment on
+ * why bench press and other horizontal press/row barbell sets get this instead of the
+ * corroboration-only "barbell" mode, precisely because a lying-flat set framed on the bar path
+ * routinely never shows ankles). Either alone is enough; both together get averaged.
  *
  * Ported: occlusion-gap interpolation, left/right leg- and arm-drive asymmetry, per-rep trust
  * scores -- all bar-tracking.ts/pose-tracking.ts functions reused unmodified, same gating rules
@@ -158,6 +166,37 @@ function applyCoreMlCorroboration(
     return { ...fused, confidence: fused.confidence * 0.85 };
   }
   return fused;
+}
+
+// Second calibration mechanism, alongside calibrateFromFrames' athlete-height one -- see this
+// file's header comment and the coreMlTrackingMode assignment above for why bench press
+// specifically needs this: a lying-flat set framed on the bar path routinely never shows the
+// athlete's ankles, which calibrateFromFrames requires no matter what (even its own
+// shoulder-to-ankle fallback still needs ankles -- see pose-tracking.ts's
+// impliedStandingHeightPixels). Only ever has anything to find when coreMlTrackingMode was set
+// to "plate" for this clip (see above), which is why this reads frame.coreMlImplement directly
+// rather than taking a fusion result -- the box is a real, separate reference-object reading,
+// not the corroboration nudge applyCoreMlCorroboration applies to the wrist/motion-diff trace.
+//
+// Assumes this gym's own bumper plate (bumper_plate_perform_better in pose-tracking.ts) --
+// sourced from an actual tape measurement of the same plate this dataset's own "plate" class
+// was trained on (see CALIBRATION_REFERENCES' own comment), not a guess. Takes the box's LARGER
+// normalized-to-pixel axis as the measured diameter: a plate viewed at even a slight angle
+// foreshortens one axis but not the other, so the larger axis stays closer to the true diameter
+// than either the smaller axis or an average would.
+function plateScaleFromFrames(frames: NativePoseFrame[]): { scale: number; uncertaintyFraction: number } | null {
+  const samples: number[] = [];
+  for (const f of frames) {
+    const box = f.coreMlImplement;
+    if (!box || box.confidence < COREML_MIN_CONFIDENCE_TO_PENALIZE) continue;
+    const pixelSize = Math.max(box.width * f.frameWidth, box.height * f.frameHeight);
+    if (pixelSize > 0) samples.push(pixelSize);
+  }
+  if (samples.length < MIN_CALIBRATION_SAMPLES) return null;
+  samples.sort((a, b) => a - b);
+  const medianPixelSize = samples[Math.floor(samples.length / 2)];
+  const reference = CALIBRATION_REFERENCES.find((r) => r.id === "bumper_plate_perform_better")!;
+  return computeReferenceObjectScale(medianPixelSize, reference.nominalSizeM, reference.toleranceM);
 }
 
 const EMPTY_REP_METRICS: RepMetrics = {
@@ -265,17 +304,28 @@ export function AvBarTrackerDialog({
   } = useAvBodyTracking(open);
 
   const usesSharedBar = usesSharedBarEquipment(equipment);
-  // KILL SWITCH -- 2026-09-02, mid-live-workout: a Bench Press (Barbell) recording hung at
-  // "0 frames processed" and never recovered. This was the very first real-device analysis pass
-  // ever to run with the CoreML detector enabled for a bar-tracker dialog (added earlier this
-  // same session), so it's the prime suspect even though root cause isn't confirmed yet -- a
-  // pre-existing, separately-documented AVAssetReader/Vision setup hang (see analyzeRecording's
-  // own watchdog comment) is also a real possibility and wasn't touched tonight. Forcing
-  // trackingMode undefined here (TS-only, no native change, no verify_build wait) restores
-  // exactly the pre-this-session behavior -- the plain wrist+motion-diff tracker, unaffected --
-  // while the actual cause gets investigated without risking the rest of a live training day.
-  // Re-enable (delete this override) once that's understood; see SESSION_NOTES_2026-09-02.md.
-  const coreMlTrackingMode: string | undefined = undefined;
+  // Kill switch (2026-09-02, live incident) lifted: a Bench Press (Barbell) recording hung at
+  // "0 frames processed" mid-workout the first time CoreML detection ran in this dialog. Root
+  // cause was never pinned to CoreML specifically vs. the separate, pre-existing
+  // AVAssetReader/Vision setup hang analyzeRecording's own watchdog comment documents -- but
+  // that watchdog is no longer a single 120s timer either; it now fails fast (~15s of zero
+  // progress) and reports to Sentry (see use-av-body-tracking.ts), so a repeat of that exact
+  // hang no longer strands an athlete for two minutes and, for the first time, actually leaves a
+  // trace of which case it was. That's what makes re-enabling this tonight a reasonable bet
+  // instead of a repeat of the same blind spot.
+  //
+  // Bench press (and other horizontal press/row barbell sets) get "plate" instead of "barbell"
+  // here, not the equipment-map default below -- see this file's header comment on why
+  // calibrateFromFrames' ankle requirement structurally can never resolve for a lying-flat set
+  // framed on the bar path, and plateScaleFromFrames further down for how the plate detection
+  // this trades away corroboration for gets used to calibrate real-world scale instead. Every
+  // other equipment/movement combination keeps the original corroboration-only mapping.
+  const coreMlTrackingMode: string | undefined =
+    equipment === "Barbell" && expectedPatternFromName(exerciseName) === "horizontal_press_or_row"
+      ? "plate"
+      : equipment
+        ? COREML_TRACKING_MODE_BY_EQUIPMENT[equipment]
+        : undefined;
 
   useEffect(() => {
     if (!open) return;
@@ -401,11 +451,25 @@ export function AvBarTrackerDialog({
     forSetNumber: number,
   ) {
     const calibrationInput = rawFrames.map((f) => ({ worldLandmarks: visionJointsToWorldLandmarks(f) }));
-    const scaleFactor = calibrateFromFrames(calibrationInput, heightIn);
+    const heightScaleFactor = calibrateFromFrames(calibrationInput, heightIn);
+    // Plate-based scale (see plateScaleFromFrames' own comment) only ever has something to find
+    // when coreMlTrackingMode was "plate" for this clip -- everything else leaves this null and
+    // heightScaleFactor decides alone, unchanged from before this existed. When BOTH resolve
+    // (a bench-press set where the athlete's feet happened to still be in frame, say), average
+    // them -- two independent reads agreeing is stronger evidence than either alone, the same
+    // reasoning applyCoreMlCorroboration and medBallTrustScore already apply elsewhere in this
+    // codebase to exactly this "two signals, not one" situation.
+    const plateScale = plateScaleFromFrames(rawFrames);
+    const scaleFactor =
+      heightScaleFactor != null && plateScale != null
+        ? (heightScaleFactor + plateScale.scale) / 2
+        : (plateScale?.scale ?? heightScaleFactor);
     const calibrationFrames = calibrationMethodBreakdown(calibrationInput);
     if (scaleFactor == null) {
       const message =
-        "Couldn't calibrate real-world scale for this take -- make sure your height is set in your profile and you're clearly visible standing at some point in frame.";
+        coreMlTrackingMode === "plate"
+          ? "Couldn't calibrate real-world scale for this take -- make sure a bumper plate is clearly visible on the bar at some point in frame (or your height is set and you're visible standing)."
+          : "Couldn't calibrate real-world scale for this take -- make sure your height is set in your profile and you're clearly visible standing at some point in frame.";
       await saveEmptyAndWarn(
         blob,
         message,
