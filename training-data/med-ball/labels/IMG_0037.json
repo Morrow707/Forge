@@ -3,17 +3,17 @@
   "boxes": [
     {
       "class": "kettlebell",
-      "x_center": 0.1225,
-      "y_center": 0.4491,
-      "width": 0.1657,
-      "height": 0.2328
+      "x_center": 0.1418,
+      "y_center": 0.4702,
+      "width": 0.207,
+      "height": 0.1786
     },
     {
       "class": "kettlebell",
-      "x_center": 0.712,
-      "y_center": 0.4517,
-      "width": 0.2661,
-      "height": 0.2066
+      "x_center": 0.7309,
+      "y_center": 0.4533,
+      "width": 0.2418,
+      "height": 0.197
     }
   ]
 }
