@@ -37,6 +37,11 @@ export function AiChatPanel({
 }) {
   const qc = useQueryClient();
   const [content, setContent] = useState("");
+  // Same keyboard-dismiss gap as program-ai-chat-panel.tsx's own textarea -- Enter already means
+  // "send" here, so there's no keyboard action that closes it, and this small "Done" row (only
+  // rendered while the field has focus) is the only way off the keyboard on a phone screen.
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [inputFocused, setInputFocused] = useState(false);
   const [copiedId, setCopiedId] = useState<number | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -176,6 +181,17 @@ export function AiChatPanel({
           <div ref={bottomRef} />
         </div>
 
+        {postUrl && inputFocused && (
+          <div className="flex shrink-0 justify-end">
+            <button
+              type="button"
+              onClick={() => textareaRef.current?.blur()}
+              className="text-xs font-semibold text-primary"
+            >
+              Done
+            </button>
+          </div>
+        )}
         {postUrl && (
           <form
             onSubmit={(e) => {
@@ -186,8 +202,11 @@ export function AiChatPanel({
             className="flex shrink-0 items-end gap-2 border-t border-border pt-3"
           >
             <Textarea
+              ref={textareaRef}
               value={content}
               onChange={(e) => setContent(e.target.value)}
+              onFocus={() => setInputFocused(true)}
+              onBlur={() => setInputFocused(false)}
               placeholder="Ask your AI training chat something..."
               className="min-h-[44px] flex-1 resize-none"
               maxLength={2000}

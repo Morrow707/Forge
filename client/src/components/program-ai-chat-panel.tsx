@@ -72,6 +72,14 @@ export function ProgramAiChatPanel({
   const qc = useQueryClient();
   const [content, setContent] = useState("");
   const [copiedId, setCopiedId] = useState<number | null>(null);
+  // The on-screen keyboard has no built-in way to dismiss itself for a plain multiline
+  // textarea on iOS -- Enter already means "send" here (Shift+Enter for a real newline), not
+  // "done", so there's never a keyboard action that closes it, and this panel can fill enough
+  // of a phone screen that nothing tappable outside the input remains once the keyboard is up.
+  // inputFocused (via the ref below) drives a small "Done" row that appears only while the
+  // field actually has focus, so it's never visible taking up space the rest of the time.
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [inputFocused, setInputFocused] = useState(false);
   // Collapsed by default -- a brand-new program shouldn't have to give up a
   // full-height column just to advertise a feature nobody's used yet. Once
   // a conversation already exists (loaded below), it opens automatically so
@@ -117,6 +125,14 @@ export function ProgramAiChatPanel({
       setContent("");
       if (result.program) onApplied(result.program);
     },
+    // A slow/failed turn (a heavy request -- full exercise catalog, program structure, chat
+    // history, up to 8192 output tokens -- occasionally taking long enough to trip a proxy or
+    // network timeout) previously just failed outright with nothing but a toast, no second
+    // attempt. 2 retries with a real backoff (not React Query's default near-instant retry,
+    // which would just resend into the same still-busy request) gives a transient failure a real
+    // chance to succeed before the athlete has to notice and resend by hand.
+    retry: 2,
+    retryDelay: (attempt) => 1000 * 2 ** attempt,
     onError: () => toast.error("Couldn't send that -- try again"),
   });
 
@@ -260,6 +276,17 @@ export function ProgramAiChatPanel({
           <div ref={bottomRef} />
         </div>
 
+        {inputFocused && (
+          <div className="flex shrink-0 justify-end">
+            <button
+              type="button"
+              onClick={() => textareaRef.current?.blur()}
+              className="text-xs font-semibold text-primary"
+            >
+              Done
+            </button>
+          </div>
+        )}
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -269,8 +296,11 @@ export function ProgramAiChatPanel({
           className="flex shrink-0 items-end gap-2 border-t border-border pt-3"
         >
           <Textarea
+            ref={textareaRef}
             value={content}
             onChange={(e) => setContent(e.target.value)}
+            onFocus={() => setInputFocused(true)}
+            onBlur={() => setInputFocused(false)}
             placeholder="e.g. Add a 4th day focused on conditioning"
             className="min-h-[44px] flex-1 resize-none"
             maxLength={2000}
