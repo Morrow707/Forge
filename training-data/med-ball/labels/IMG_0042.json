@@ -1,6 +1,19 @@
 {
   "image": "IMG_0042.jpg",
   "boxes": [
-    { "class": "dumbbell", "x_center": 0.4900, "y_center": 0.5050, "width": 0.2870, "height": 0.1900 }
+    {
+      "class": "dumbbell",
+      "x_center": 0.5135,
+      "y_center": 0.4989,
+      "width": 0.3548,
+      "height": 0.1296
+    },
+    {
+      "class": "plate",
+      "x_center": 0.4984,
+      "y_center": 0.5025,
+      "width": 0.3665,
+      "height": 0.2066
+    }
   ]
 }
