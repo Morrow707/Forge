@@ -16522,56 +16522,6 @@ ${catalog}`;
     return { points: roundedPoints, profile };
   },
 
-  // Same-day counterpart to getForceVelocityProfileForAthlete above -- that one
-  // trends an athlete's whole tracked history for a coach-facing chart; this
-  // scopes computeForceVelocityProfile to a single date's own warm-up ramp so
-  // an athlete mid-session can see a live "today's projected max" as they work
-  // up in weight, without a real 1RM attempt. Queried directly (not through
-  // getExerciseAnalyticsForCoach) since that's roster-scoped through a coach's
-  // assignments and pulls a much wider column set than this needs -- an
-  // athlete asking about their own same-day sets has no coach in the loop here.
-  async getLoadVelocityProjectionForAthlete(athleteId: number, exerciseId: number, date: string) {
-    const rows = await db
-      .select({
-        weight: workoutSetEntries.weight,
-        weightUnit: workoutSetEntries.weightUnit,
-        weightMode: workoutLogEntries.weightMode,
-        meanVelocityMps: workoutSetEntries.meanVelocityMps,
-      })
-      .from(workoutSetEntries)
-      .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
-      .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
-      .innerJoin(programExercises, eq(workoutLogEntries.programExerciseId, programExercises.id))
-      .where(
-        and(
-          eq(workoutLogs.athleteId, athleteId),
-          eq(programExercises.exerciseId, exerciseId),
-          eq(workoutLogs.date, date),
-        ),
-      );
-
-    const points: LoadVelocityPoint[] = [];
-    for (const r of rows) {
-      if (r.weightMode !== "numeric" || !r.weight || r.meanVelocityMps == null) continue;
-      const weight = parseFloat(r.weight);
-      if (Number.isNaN(weight)) continue;
-      const loadKg = r.weightUnit === "kg" ? weight : weight / 2.20462;
-      points.push({ date, loadKg, meanVelocityMps: r.meanVelocityMps });
-    }
-
-    const rawProfile = computeForceVelocityProfile(points);
-    if (!rawProfile) return { profile: null, pointCount: points.length };
-    return {
-      profile: {
-        slope: Math.round(rawProfile.slope * 100) / 100,
-        intercept: Math.round(rawProfile.intercept * 10) / 10,
-        v0: Math.round(rawProfile.v0 * 100) / 100,
-        rSquared: Math.round(rawProfile.rSquared * 1000) / 1000,
-      },
-      pointCount: points.length,
-    };
-  },
-
   // Not persisted (unlike weaknessReports) -- computed fresh on every
   // request from whatever's currently in the tracked-set window, so it's
   // never stale and needs no new table.

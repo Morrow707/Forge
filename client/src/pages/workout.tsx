@@ -483,7 +483,6 @@ export type ItemState = {
   key: string;
   kind: "exercise" | "corrective";
   refId: number;
-  exerciseId: number;
   exerciseName: string;
   substitutedFrom: string | null;
   muscleGroup: string;
@@ -583,7 +582,6 @@ function buildItem(
     key: `${kind}-${prescribed.id}`,
     kind,
     refId: prescribed.id,
-    exerciseId: prescribed.exercise.id,
     exerciseName: prescribed.exercise.name,
     substitutedFrom: kind === "exercise" ? (prescribed as PrescribedExercise).substitutedFrom : null,
     muscleGroup: prescribed.exercise.muscleGroup,
@@ -824,37 +822,6 @@ function computeStats(items: ItemState[], displayUnit: WeightUnit) {
     }
   }
   return { totalReps, totalVolume: fromKg(totalVolumeKg, displayUnit), totalSets, completeSets };
-}
-
-// Live "today's projected max" for one exercise, computed from however many
-// numeric-weight tracked sets exist so far today (see the athlete-facing
-// GET route + storage.getLoadVelocityProjectionForAthlete for the actual
-// regression). Silent until there's enough same-day spread to fit a real
-// line -- an athlete on their first warm-up set shouldn't see a "not enough
-// data" card, they should just see nothing until it's actually useful.
-function TodaysLoadVelocityProjection({ exerciseId, unit }: { exerciseId: number; unit: "lbs" | "kg" }) {
-  const { data } = useQuery<{ profile: { intercept: number; v0: number; rSquared: number } | null }>({
-    queryKey: ["load-velocity-today", exerciseId],
-    queryFn: async () => {
-      const res = await apiRequest("GET", `/api/athlete/exercises/${exerciseId}/load-velocity-today`);
-      return res.json();
-    },
-    // No custom staleTime -- default refetch-on-focus/mount is exactly what
-    // this wants (fresh again after tracking a new set and coming back to
-    // this exercise), without needing to thread an explicit invalidation
-    // through every place a tracked set gets saved.
-  });
-  if (!data?.profile) return null;
-  const projected = Math.round(fromKg(data.profile.intercept, unit));
-  return (
-    <div className="mx-4 mb-2 flex items-center gap-1.5 rounded-md bg-primary/5 px-2.5 py-1.5 text-[10px] text-muted-foreground">
-      <TrendingUp className="h-3 w-3 shrink-0 text-primary" />
-      <span>
-        Today's projected max: <span className="font-semibold text-foreground">{projected} {unit}</span>
-        {" "}(from today's sets, {Math.round(data.profile.rSquared * 100)}% fit)
-      </span>
-    </div>
-  );
 }
 
 export function WorkoutPage({
@@ -2872,10 +2839,6 @@ function ExerciseLogContent({
           })}
         </div>
       </div>
-
-      {item.trackingLevel === "full" && item.materials.usesWeight && (
-        <TodaysLoadVelocityProjection exerciseId={item.exerciseId} unit={unit} />
-      )}
 
       {item.trackingLevel !== "none" &&
         (() => {
