@@ -295,6 +295,7 @@ export function AvMedballTrackerDialog({
           outcome: "empty_calibration_failed",
           message,
           rawFrames,
+          trackingMode: "med_ball",
           recording: recordingStats,
           calibration: { scaleFactor: null, ...calibrationFrames },
         }),
@@ -399,6 +400,7 @@ export function AvMedballTrackerDialog({
           outcome: "empty_no_clean_read",
           message,
           rawFrames,
+          trackingMode: "med_ball",
           recording: recordingStats,
           calibration: { scaleFactor, ...calibrationFrames },
         }),
@@ -416,6 +418,7 @@ export function AvMedballTrackerDialog({
       trackingDiagnostics: buildTrackingDiagnostics({
         outcome: "tracked",
         rawFrames,
+        trackingMode: "med_ball",
         recording: recordingStats,
         calibration: { scaleFactor, ...calibrationFrames },
       }),
