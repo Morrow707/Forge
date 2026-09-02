@@ -1,0 +1,7 @@
+{
+  "image": "IMG_0048.jpg",
+  "boxes": [
+    { "class": "golf_ball", "x_center": 0.3660, "y_center": 0.5220, "width": 0.0619, "height": 0.0464 },
+    { "class": "golf_ball", "x_center": 0.5543, "y_center": 0.5173, "width": 0.0603, "height": 0.0453 }
+  ]
+}

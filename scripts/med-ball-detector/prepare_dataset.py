@@ -20,11 +20,16 @@ LABELS_DIR = REPO_ROOT / "training-data" / "med-ball" / "labels"
 DATASET_DIR = DETECTOR_DIR / "dataset"
 
 # med_ball validated first per the original explicit decision to prove out
-# on one exercise before expanding; plate added as index 1 rather than a
-# separate detector, per the follow-up decision to extend once the med-ball
-# labeling technique (circle-fit precision) was proven out. Each future
+# on one exercise before expanding; plate added as index 1 once the med-ball
+# labeling technique (circle-fit precision) was proven out. baseball/
+# golf_ball/tennis_ball added the same way, from real photos of each
+# (training-data/med-ball/raw/IMG_0048/0052/0053.jpg) rather than invented --
+# "how can it tell the difference between a tennis ball and baseball?
+# similar shape, obviously different texture and different color" -- these
+# are exactly the features a CNN backbone learns to split on, given real
+# labeled examples of each, same as every class before them. Each future
 # object type (kettlebells, etc) gets its own new index the same way.
-CLASS_NAMES = ["med_ball", "plate"]
+CLASS_NAMES = ["med_ball", "plate", "baseball", "golf_ball", "tennis_ball"]
 
 VAL_FRACTION = 0.15
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".heic"}

@@ -1,0 +1,6 @@
+{
+  "image": "IMG_0053.jpg",
+  "boxes": [
+    { "class": "tennis_ball", "x_center": 0.1727, "y_center": 0.5118, "width": 0.0759, "height": 0.0569 }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "image": "IMG_0052.jpg",
+  "boxes": [
+    { "class": "baseball", "x_center": 0.1157, "y_center": 0.5344, "width": 0.0901, "height": 0.0676 },
+    { "class": "baseball", "x_center": 0.3517, "y_center": 0.5296, "width": 0.0883, "height": 0.0662 }
+  ]
+}
