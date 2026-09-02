@@ -89,6 +89,7 @@ import {
   Share2,
   Copy,
   ShieldAlert,
+  Loader2,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import type { MovementProfile } from "@shared/schema";
@@ -2053,6 +2054,18 @@ function ExerciseLogContent({
   const isCorrective = item.kind === "corrective";
   const [distanceUnit] = useDistanceUnit();
   const [trackingSet, setTrackingSet] = useState<number | null>(null);
+  // Set numbers whose AvBarTrackerDialog recording has stopped and is analyzing/uploading in
+  // the background -- see AvBarTrackerDialog's own onAnalysisStarted/onProcessingSettled prop
+  // comments. Lets the set's own row show an inline spinner instead of the athlete being stuck
+  // staring at a blocking full-screen "Analyzing..." dialog for however long that takes.
+  // KNOWN LIMITATION: this state (and the underlying AvBarTrackerDialog instance still running
+  // in the background) lives in ExerciseLogContent, which unmounts if the athlete pages to a
+  // DIFFERENT exercise while a set here is still processing -- same risk useAvBodyTracking's own
+  // unmount cleanup already has for an in-flight recording file. Moving between sets of THIS
+  // exercise is safe (ExerciseLogContent itself stays mounted); navigating away mid-analysis is
+  // not yet solved and could lose that set's numbers -- worth a follow-up if that turns out to
+  // happen in practice.
+  const [processingSets, setProcessingSets] = useState<Set<number>>(new Set());
   // "jump" mode profiles live under the literal movementType "jump" (jump
   // tracking is its own trackingLevel, not a movementType) -- see
   // shared/schema.ts's movementProfiles comment. Null/undefined here (no
@@ -2582,10 +2595,29 @@ function ExerciseLogContent({
                         Same as Set {prevSet!.setNumber} ({prevSet!.weight} {unit})
                       </button>
                     )}
-                    {item.trackingLevel !== "none" && !user?.trackingOptOut && (
+                    {item.trackingLevel !== "none" && !user?.trackingOptOut && processingSets.has(set.setNumber) && (
+                      // AvBarTrackerDialog already closed and handed control back here --
+                      // this set's recording is analyzing/uploading in the background (see
+                      // onAnalysisStarted/onProcessingSettled above). Disabled rather than the
+                      // normal button so a second tap can't start a new take for the same set
+                      // number while this one's still in flight.
+                      <span className="flex items-center gap-1.5 rounded-full border border-primary/40 px-2 py-0.5 text-[10px] font-semibold text-primary/70">
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        Processing…
+                      </span>
+                    )}
+                    {item.trackingLevel !== "none" && !user?.trackingOptOut && !processingSets.has(set.setNumber) && (
                       <button
                         type="button"
                         onClick={() => setTrackingSet(set.setNumber)}
+                        // Recording a new set while a DIFFERENT set's analysis is still running
+                        // in the background is intentionally allowed, not guarded -- recording
+                        // is hardware video encoding, a different chip from the Neural Engine/
+                        // GPU work Vision analysis does, and AvBodyTrackingPlugin's own
+                        // analysisQueue already serializes analysis calls onto one queue
+                        // natively (a second analyzeRecording request while one is in flight
+                        // just waits its turn, never runs concurrently) -- so there's nothing
+                        // for a client-side lock to protect here that isn't already handled.
                         className={cn(
                           "flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold",
                           tracked
@@ -2867,8 +2899,18 @@ function ExerciseLogContent({
               ? toKg(trackedWeight, unit)
               : undefined;
 
-          function handleTrackerCapture(metrics: RepMetrics | JumpSetMetrics, videoUrl?: string) {
-            if (trackingSet == null) return;
+          function handleTrackerCapture(
+            metrics: RepMetrics | JumpSetMetrics,
+            videoUrl?: string,
+            explicitSetNumber?: number,
+          ) {
+            // AvBarTrackerDialog now closes (and returns `trackingSet` to null) before its
+            // background analysis finishes, so it always passes its own captured setNumber
+            // explicitly rather than relying on this closure's live `trackingSet` -- see that
+            // dialog's own prop comment. Every other tracker dialog still only reads the live
+            // value here, unchanged from before.
+            const targetSetNumber = explicitSetNumber ?? trackingSet;
+            if (targetSetNumber == null) return;
             const videoPatch = videoUrl ? { formCheckVideoUrl: videoUrl } : {};
             if ("bestJumpHeightCm" in metrics) {
               // A box jump's flight time is cut short by landing on the
@@ -2891,7 +2933,7 @@ function ExerciseLogContent({
                   ? Math.max(...repBreakdown.map((r) => r.jumpHeightCm))
                   : metrics.bestJumpHeightCm;
               onUpdateSet(
-                trackingSet,
+                targetSetNumber,
                 {
                   jumpHeightCm,
                   jumpDistanceCm: metrics.bestHorizontalDistanceCm,
@@ -2911,7 +2953,7 @@ function ExerciseLogContent({
               );
             } else {
               onUpdateSet(
-                trackingSet,
+                targetSetNumber,
                 {
                   peakVelocityMps: metrics.peakVelocityMps,
                   meanVelocityMps: metrics.meanVelocityMps,
@@ -2941,8 +2983,8 @@ function ExerciseLogContent({
             // does below -- a merged capture's video is just as much a
             // real form-check clip as a standalone one.
             if (videoUrl) {
-              if (videoCheckMode === "ai") aiFormCheckMutation.mutate({ setNumber: trackingSet, videoUrl });
-              else postFormVideoMutation.mutate({ setNumber: trackingSet, videoUrl });
+              if (videoCheckMode === "ai") aiFormCheckMutation.mutate({ setNumber: targetSetNumber, videoUrl });
+              else postFormVideoMutation.mutate({ setNumber: targetSetNumber, videoUrl });
             }
           }
 
@@ -3203,6 +3245,23 @@ function ExerciseLogContent({
                 targetReps={parseTargetReps(item.prescribedReps)}
                 loadKg={loadKg}
                 recordVideo={mergedTracking}
+                // trackingSet is guaranteed non-null while this dialog can meaningfully be
+                // asked to stop (open only becomes true once it's set) -- the -1 fallback is
+                // just to satisfy the required-number prop type for the brief render where
+                // open is still false.
+                setNumber={trackingSet ?? -1}
+                onAnalysisStarted={(setNumber) => {
+                  setTrackingSet(null);
+                  setProcessingSets((prev) => new Set(prev).add(setNumber));
+                }}
+                onProcessingSettled={(setNumber) => {
+                  setProcessingSets((prev) => {
+                    if (!prev.has(setNumber)) return prev;
+                    const next = new Set(prev);
+                    next.delete(setNumber);
+                    return next;
+                  });
+                }}
                 onCapture={handleTrackerCapture}
                 videoContext={videoContextFor(trackingSet)}
                 formFaultThresholds={activeMovementProfile}

@@ -201,6 +201,9 @@ export function AvBarTrackerDialog({
   targetReps,
   loadKg,
   recordVideo,
+  setNumber,
+  onAnalysisStarted,
+  onProcessingSettled,
   onCapture,
   videoContext,
   formFaultThresholds,
@@ -216,7 +219,28 @@ export function AvBarTrackerDialog({
   targetReps?: number;
   loadKg?: number;
   recordVideo?: boolean;
-  onCapture: (metrics: RepMetrics, videoUrl?: string) => void;
+  // Which set this dialog instance is currently tracking -- read directly from this prop at the
+  // moment Stop Set is tapped (not from any state the PARENT might change later) and threaded
+  // through every callback below, so a background analysis that's still running when the
+  // athlete starts tracking a DIFFERENT set always reports back to the set it actually belongs
+  // to. See this file's own comment on onAnalysisStarted for why that race is real now that this
+  // dialog closes before analysis finishes.
+  setNumber: number;
+  // Fires once, right when recording stops and the slow on-device analysis is about to begin
+  // (native has the file, live camera preview is no longer needed) -- the caller uses this to
+  // close the dialog immediately and show an inline "processing" indicator on this set's own row
+  // instead, rather than blocking the whole screen on a spinner for however long analysis takes.
+  // Safe to close this dialog here: `open` only tears down the camera PREVIEW (see
+  // useAvBodyTracking's own effect), never the in-flight recording/analysis/upload this
+  // component's own async functions keep running regardless of `open`.
+  onAnalysisStarted: (setNumber: number) => void;
+  // Fires exactly once when this Stop Set's whole background flow is done, on every exit path
+  // (real metrics, empty/failed metrics, or a cancellation) -- the caller uses this to clear the
+  // inline "processing" indicator onAnalysisStarted turned on, regardless of how things turned
+  // out. Deliberately separate from onCapture, which only fires on paths that actually produce
+  // metrics to save.
+  onProcessingSettled: (setNumber: number) => void;
+  onCapture: (metrics: RepMetrics, videoUrl?: string, setNumber?: number) => void;
   videoContext?: VideoRecordContext;
   formFaultThresholds?: Partial<Record<keyof FormFaultThresholds, number | null>> | null;
 }) {
@@ -270,6 +294,7 @@ export function AvBarTrackerDialog({
     captureDeviceInfo: CaptureDeviceInfo,
     trackingDiagnostics: TrackingDiagnostics,
     uploadPromise: Promise<{ status: "uploaded"; url: string } | { status: "queued" }> | null,
+    forSetNumber: number,
   ) {
     const emptyMetrics: RepMetrics = { ...EMPTY_REP_METRICS, captureDeviceInfo, trackingDiagnostics };
     if (recordVideo && uploadPromise) {
@@ -288,9 +313,9 @@ export function AvBarTrackerDialog({
               { duration: 10000 },
             );
           }
-          onCapture(emptyMetrics);
+          onCapture(emptyMetrics, undefined, forSetNumber);
         } else {
-          onCapture(emptyMetrics, result.url);
+          onCapture(emptyMetrics, result.url, forSetNumber);
         }
         onOpenChange(false);
       } catch (err) {
@@ -305,45 +330,66 @@ export function AvBarTrackerDialog({
   }
 
   async function stopTracking() {
-    // Starts the upload the instant the recording exists rather than after analysis also
-    // finishes, so the two run concurrently -- see use-av-body-tracking.ts's own onBlobReady
-    // comment. saveEmptyAndWarn and finishWithRecording's own success path both just await
-    // this same in-flight upload instead of starting a fresh one once they're ready for it.
-    let uploadPromise: Promise<{ status: "uploaded"; url: string } | { status: "queued" }> | null = null;
-    const result = await stopRecordingAndAnalyze({
-      trackingMode: coreMlTrackingMode,
-      onBlobReady: recordVideo
-        ? (blob) => {
+    // Captured once, up front -- every callback below (onAnalysisStarted, onCapture,
+    // onProcessingSettled) uses this same value for the whole lifetime of this one Stop Set,
+    // never the `setNumber` prop's possibly-since-changed live value. See this dialog's own prop
+    // comment on why: this dialog now closes and returns control to the athlete before analysis
+    // finishes, so they can legitimately be tracking a different set by the time any of this
+    // settles.
+    const forSetNumber = setNumber;
+    try {
+      // Starts the upload the instant the recording exists rather than after analysis also
+      // finishes, so the two run concurrently -- see use-av-body-tracking.ts's own onBlobReady
+      // comment. saveEmptyAndWarn and finishWithRecording's own success path both just await
+      // this same in-flight upload instead of starting a fresh one once they're ready for it.
+      let uploadPromise: Promise<{ status: "uploaded"; url: string } | { status: "queued" }> | null = null;
+      const result = await stopRecordingAndAnalyze({
+        trackingMode: coreMlTrackingMode,
+        // Always provided now (not just when recordVideo) -- recording has stopped and the slow
+        // on-device analysis pass is about to start regardless of whether a video gets uploaded,
+        // and closing the dialog here (rather than leaving the athlete staring at "Analyzing
+        // recording...") is the whole point of this redesign, not something to skip when there's
+        // no video.
+        onBlobReady: (blob) => {
+          onAnalysisStarted(forSetNumber);
+          if (recordVideo) {
             setSaving(true);
             setUploadProgress(0);
             const filename = videoFilenameForBlob(blob, "form-check");
             uploadPromise = uploadOrQueueVideo(blob, filename, videoContext ?? { label: exerciseName }, setUploadProgress);
           }
-        : undefined,
-    });
-    if (!result) {
-      // Analysis failed or was cancelled, but the upload above doesn't know or care -- it never
-      // depended on analysis succeeding. Left alone it would still finish in the background with
-      // no set to attach it to, so wait for it and hand it over anyway, same "the clip is worth
-      // keeping even without numbers" reasoning as saveEmptyAndWarn below.
-      const inFlightUpload = uploadPromise as Promise<
-        { status: "uploaded"; url: string } | { status: "queued" }
-      > | null;
-      if (inFlightUpload) {
-        try {
-          const uploadResult = await inFlightUpload;
-          toast.error("Couldn't finish analyzing this take, but your video was saved for your coach.");
-          onCapture(EMPTY_REP_METRICS, uploadResult.status === "uploaded" ? uploadResult.url : undefined);
-          onOpenChange(false);
-        } catch {
-          // Genuinely nothing left to salvage.
-        } finally {
-          setSaving(false);
+        },
+      });
+      if (!result) {
+        // Analysis failed or was cancelled, but the upload above doesn't know or care -- it never
+        // depended on analysis succeeding. Left alone it would still finish in the background with
+        // no set to attach it to, so wait for it and hand it over anyway, same "the clip is worth
+        // keeping even without numbers" reasoning as saveEmptyAndWarn below.
+        const inFlightUpload = uploadPromise as Promise<
+          { status: "uploaded"; url: string } | { status: "queued" }
+        > | null;
+        if (inFlightUpload) {
+          try {
+            const uploadResult = await inFlightUpload;
+            toast.error("Couldn't finish analyzing this take, but your video was saved for your coach.");
+            onCapture(EMPTY_REP_METRICS, uploadResult.status === "uploaded" ? uploadResult.url : undefined, forSetNumber);
+            onOpenChange(false);
+          } catch {
+            // Genuinely nothing left to salvage.
+          } finally {
+            setSaving(false);
+          }
         }
+        return;
       }
-      return;
+      await finishWithRecording(
+        result.blob, result.rawFrames, result.captureDeviceInfo, result.recordingStats, uploadPromise, forSetNumber,
+      );
+    } finally {
+      // Fires no matter which of the paths above was taken -- see this dialog's own prop
+      // comment on onProcessingSettled for why this is deliberately separate from onCapture.
+      onProcessingSettled(forSetNumber);
     }
-    await finishWithRecording(result.blob, result.rawFrames, result.captureDeviceInfo, result.recordingStats, uploadPromise);
   }
 
   async function finishWithRecording(
@@ -352,6 +398,7 @@ export function AvBarTrackerDialog({
     captureDeviceInfo: CaptureDeviceInfo,
     recordingStats: { frameCount: number; trackedFrameCount: number; elapsedSeconds: number },
     uploadPromise: Promise<{ status: "uploaded"; url: string } | { status: "queued" }> | null,
+    forSetNumber: number,
   ) {
     const calibrationInput = rawFrames.map((f) => ({ worldLandmarks: visionJointsToWorldLandmarks(f) }));
     const scaleFactor = calibrateFromFrames(calibrationInput, heightIn);
@@ -371,6 +418,7 @@ export function AvBarTrackerDialog({
           calibration: { scaleFactor: null, ...calibrationFrames },
         }),
         uploadPromise,
+        forSetNumber,
       );
       return;
     }
@@ -516,6 +564,7 @@ export function AvBarTrackerDialog({
           calibration: { scaleFactor, ...calibrationFrames },
         }),
         uploadPromise,
+        forSetNumber,
       );
       return;
     }
@@ -601,7 +650,7 @@ export function AvBarTrackerDialog({
     });
 
     if (!recordVideo) {
-      onCapture(metrics);
+      onCapture(metrics, undefined, forSetNumber);
       onOpenChange(false);
       return;
     }
@@ -623,14 +672,14 @@ export function AvBarTrackerDialog({
             { duration: 10000 },
           );
         }
-        onCapture(metrics);
+        onCapture(metrics, undefined, forSetNumber);
       } else {
-        onCapture(metrics, result.url);
+        onCapture(metrics, result.url, forSetNumber);
       }
       onOpenChange(false);
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Saved the set, but the clip failed to upload");
-      onCapture(metrics);
+      onCapture(metrics, undefined, forSetNumber);
       onOpenChange(false);
     } finally {
       setSaving(false);
