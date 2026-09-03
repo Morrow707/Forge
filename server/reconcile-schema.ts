@@ -1505,6 +1505,7 @@ CREATE TABLE IF NOT EXISTS "movement_profiles" (
   "bar_path_deviation_max_cm" real,
   "bar_tilt_max_deg" real,
   "jump_height_outlier_percent" real,
+  "position_scale_correction" real,
   "camera_framing_notes" text,
   "source_summary" text,
   "created_by" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
@@ -2151,6 +2152,7 @@ ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "skill_day_log_id" int
 ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "set_number" integer;
 ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "manual_result" text;
 CREATE INDEX IF NOT EXISTS "skill_session_logs_day_log_set_idx" ON "skill_session_logs" ("skill_day_log_id", "skill_program_exercise_id", "set_number");
+ALTER TABLE "movement_profiles" ADD COLUMN IF NOT EXISTS "position_scale_correction" real;
 `;
 
 async function main() {

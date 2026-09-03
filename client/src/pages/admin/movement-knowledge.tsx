@@ -25,6 +25,7 @@ type ProfileFields = {
   barPathDeviationMaxCm: number | null;
   barTiltMaxDeg: number | null;
   jumpHeightOutlierPercent: number | null;
+  positionScaleCorrection: number | null;
   cameraFramingNotes: string | null;
 };
 
@@ -55,6 +56,7 @@ const FIELD_META: { key: NumericFieldKey; label: string; unit: string }[] = [
   { key: "barPathDeviationMaxCm", label: "Max bar-path deviation", unit: "cm" },
   { key: "barTiltMaxDeg", label: "Max bar tilt", unit: "°" },
   { key: "jumpHeightOutlierPercent", label: "Jump-height outlier threshold", unit: "%" },
+  { key: "positionScaleCorrection", label: "Position/velocity/power scale correction", unit: "×" },
 ];
 
 function formatValue(value: number | null, unit: string): string {

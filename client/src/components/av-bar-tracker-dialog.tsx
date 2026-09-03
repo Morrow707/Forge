@@ -248,6 +248,8 @@ export function AvBarTrackerDialog({
   onCapture,
   videoContext,
   formFaultThresholds,
+  positionScaleCorrection,
+  onUploadProgress,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -284,9 +286,32 @@ export function AvBarTrackerDialog({
   onCapture: (metrics: RepMetrics, videoUrl?: string, setNumber?: number) => void;
   videoContext?: VideoRecordContext;
   formFaultThresholds?: Partial<Record<keyof FormFaultThresholds, number | null>> | null;
+  // From the active MovementProfile's own positionScaleCorrection (see
+  // shared/schema.ts) -- passed separately from formFaultThresholds since
+  // it isn't a form-fault threshold, it corrects the raw trace itself
+  // before summarizeTrackedSet ever computes ROM/velocity/power from it.
+  // Null/undefined means no correction (today's behavior).
+  positionScaleCorrection?: number | null;
+  // Fired on every upload progress tick, in addition to this dialog's own local uploadProgress
+  // state -- the dialog closes as soon as onAnalysisStarted fires (see that prop's own
+  // comment), so its own uploadProgress state becomes invisible to the athlete from that point
+  // on. The caller uses this to keep showing real percentage on the inline "processing"
+  // indicator that replaces this dialog once it's closed, instead of a bare "Processing..."
+  // with no further detail for however long analysis+upload takes.
+  onUploadProgress?: (setNumber: number, percent: number) => void;
 }) {
   const [saving, setSaving] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+
+  // Wraps setUploadProgress so every progress tick also reaches the parent, keyed to whichever
+  // set this specific upload belongs to -- see onUploadProgress's own comment on why the
+  // parent needs this once this dialog itself has closed.
+  function reportUploadProgress(forSetNumber: number) {
+    return (percent: number) => {
+      setUploadProgress(percent);
+      onUploadProgress?.(forSetNumber, percent);
+    };
+  }
 
   const {
     containerRef,
@@ -414,7 +439,12 @@ export function AvBarTrackerDialog({
             setSaving(true);
             setUploadProgress(0);
             const filename = videoFilenameForBlob(blob, "form-check");
-            uploadPromise = uploadOrQueueVideo(blob, filename, videoContext ?? { label: exerciseName }, setUploadProgress);
+            uploadPromise = uploadOrQueueVideo(
+              blob,
+              filename,
+              videoContext ?? { label: exerciseName },
+              reportUploadProgress(forSetNumber),
+            );
           }
         },
       });
@@ -454,7 +484,13 @@ export function AvBarTrackerDialog({
     blob: Blob,
     rawFrames: NativePoseFrame[],
     captureDeviceInfo: CaptureDeviceInfo,
-    recordingStats: { frameCount: number; trackedFrameCount: number; elapsedSeconds: number },
+    recordingStats: {
+      frameCount: number;
+      trackedFrameCount: number;
+      elapsedSeconds: number;
+      readerStatus?: string;
+      assetDurationSeconds?: number;
+    },
     uploadPromise: Promise<{ status: "uploaded"; url: string } | { status: "queued" }> | null,
     forSetNumber: number,
   ) {
@@ -622,7 +658,14 @@ export function AvBarTrackerDialog({
       }
     }
 
-    const metrics = summarizeTrackedSet(trace, loadKg, heightIn, undefined, rejectionEvents);
+    const metrics = summarizeTrackedSet(
+      trace,
+      loadKg,
+      heightIn,
+      undefined,
+      rejectionEvents,
+      positionScaleCorrection ?? 1,
+    );
     if (!metrics) {
       const message = "Couldn't get a clean read -- make sure the bar stays in frame throughout the set.";
       await saveEmptyAndWarn(
@@ -724,6 +767,22 @@ export function AvBarTrackerDialog({
       calibration: { scaleFactor, ...calibrationFrames },
     });
 
+    // readerStatus exists specifically to tell "the athlete's take was genuinely short" apart
+    // from "the native reader gave up partway through a longer recording" (see
+    // AvAnalysisResult's own comment) -- until now that distinction only ever reached the
+    // buried diagnostics report, so a truncated read (numbers computed from whatever fraction
+    // of the set the reader got through before failing) looked identical to a clean, complete
+    // one everywhere the athlete/coach could actually see. Only warns on a real partial-
+    // progress failure (frameCount > 0) -- a reader that failed before processing anything
+    // already surfaces as the "couldn't get a clean read" empty path above. Deliberately not
+    // comparing elapsedSeconds (analysis wall-clock time) against assetDurationSeconds (the
+    // clip's own length) to judge how much got covered -- analysis is normally FASTER than the
+    // clip's real-time length (frame striding, no real-time playback constraint), so that
+    // comparison would false-positive on plenty of ordinary, complete reads.
+    if (recordingStats.readerStatus === "failed" && recordingStats.frameCount > 0) {
+      toast.warning("Analysis was cut short partway through this set -- numbers below may not cover every rep.");
+    }
+
     if (!recordVideo) {
       onCapture(metrics, undefined, forSetNumber);
       onOpenChange(false);
@@ -736,7 +795,12 @@ export function AvBarTrackerDialog({
     // that invariant is ever wrong.
     const inFlightUpload =
       uploadPromise ??
-      uploadOrQueueVideo(blob, videoFilenameForBlob(blob, "form-check"), videoContext ?? { label: exerciseName }, setUploadProgress);
+      uploadOrQueueVideo(
+        blob,
+        videoFilenameForBlob(blob, "form-check"),
+        videoContext ?? { label: exerciseName },
+        reportUploadProgress(forSetNumber),
+      );
     try {
       const result = await inFlightUpload;
       if (result.status === "queued") {

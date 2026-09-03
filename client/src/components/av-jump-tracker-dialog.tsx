@@ -191,6 +191,7 @@ export function AvJumpTrackerDialog({
       trackedFrameCount: number;
       elapsedSeconds: number;
       boxTopNormalizedY?: number;
+      readerStatus?: string;
     },
     uploadPromise: Promise<{ status: "uploaded"; url: string } | { status: "queued" }> | null,
   ) {
@@ -365,6 +366,15 @@ export function AvJumpTrackerDialog({
       recording: recordingStats,
       calibration: { scaleFactor, ...calibrationFrames },
     });
+
+    // See av-bar-tracker-dialog.tsx's own comment on this same check -- readerStatus "failed"
+    // with real partial progress means the native reader gave up partway through the
+    // recording, so the reps/metrics below only cover whatever fraction it got through, not
+    // the whole set. That distinction previously only ever reached the buried diagnostics
+    // report.
+    if (recordingStats.readerStatus === "failed" && recordingStats.frameCount > 0) {
+      toast.warning("Analysis was cut short partway through this set -- numbers below may not cover every rep.");
+    }
 
     // Direct answer to "did I clear it" -- the real payoff of detecting the box at all rather
     // than only ever inferring height off the athlete's own ankle rise (see jump-tracking.ts's

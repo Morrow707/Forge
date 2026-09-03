@@ -4920,6 +4920,19 @@ export const movementProfiles = pgTable(
     // jump height can deviate from the set's own median before it's
     // flagged as a likely tracking glitch rather than a real rep.
     jumpHeightOutlierPercent: real("jump_height_outlier_percent"),
+    // Multiplies every position sample (bar-tracking.ts's `points`, after the
+    // athlete-height auto-calibration already ran) before ROM/velocity/power
+    // are derived from them -- null means 1.0, i.e. today's uncorrected
+    // behavior. Exists because the height-based auto-calibration corrects for
+    // "wrong average body proportion assumption" but not for the residual,
+    // movement-specific bias a particular camera angle/distance/framing
+    // introduces -- squat, bench, and a jump are typically filmed from
+    // different distances and angles, so this is deliberately scoped per
+    // movementType rather than a single global constant: correcting squat
+    // from a real reference reading must never silently shift bench's or
+    // jump's numbers too. See sourceSummary on the profile that sets this for
+    // exactly what reference reading it was calibrated against.
+    positionScaleCorrection: real("position_scale_correction"),
     // Where to put the camera for this movement -- surfaced to the athlete
     // before they start recording, not just used to judge what came out.
     cameraFramingNotes: text("camera_framing_notes"),
@@ -4962,6 +4975,7 @@ export const applyMovementProfileProposalSchema = z.object({
   barPathDeviationMaxCm: z.number().optional().nullable(),
   barTiltMaxDeg: z.number().optional().nullable(),
   jumpHeightOutlierPercent: z.number().optional().nullable(),
+  positionScaleCorrection: z.number().optional().nullable(),
   cameraFramingNotes: z.string().trim().max(1000).optional().nullable(),
   sourceSummary: z.string().trim().max(2000).optional().nullable(),
 });

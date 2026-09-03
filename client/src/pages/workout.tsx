@@ -2137,6 +2137,12 @@ function ExerciseLogContent({
   // not yet solved and could lose that set's numbers -- worth a follow-up if that turns out to
   // happen in practice.
   const [processingSets, setProcessingSets] = useState<Set<number>>(new Set());
+  // Upload percentage for whichever set(s) are in processingSets above -- AvBarTrackerDialog's
+  // own uploadProgress state becomes invisible to the athlete the moment it closes early (see
+  // that dialog's onUploadProgress prop comment), so this is the only way the inline
+  // "Processing…" indicator below can show real progress instead of a bare spinner for however
+  // long analysis+upload takes.
+  const [processingProgress, setProcessingProgress] = useState<Record<number, number>>({});
   // "jump" mode profiles live under the literal movementType "jump" (jump
   // tracking is its own trackingLevel, not a movementType) -- see
   // shared/schema.ts's movementProfiles comment. Null/undefined here (no
@@ -2687,7 +2693,9 @@ function ExerciseLogContent({
                       // number while this one's still in flight.
                       <span className="flex items-center gap-1.5 rounded-full border border-primary/40 px-2 py-0.5 text-[10px] font-semibold text-primary/70">
                         <Loader2 className="h-3 w-3 animate-spin" />
-                        Processing…
+                        {processingProgress[set.setNumber] != null
+                          ? `Processing… ${processingProgress[set.setNumber]}%`
+                          : "Processing…"}
                       </span>
                     )}
                     {item.trackingLevel !== "none" && !user?.trackingOptOut && !processingSets.has(set.setNumber) && (
@@ -3345,10 +3353,19 @@ function ExerciseLogContent({
                     next.delete(setNumber);
                     return next;
                   });
+                  setProcessingProgress((prev) => {
+                    if (!(setNumber in prev)) return prev;
+                    const { [setNumber]: _removed, ...rest } = prev;
+                    return rest;
+                  });
                 }}
+                onUploadProgress={(setNumber, percent) =>
+                  setProcessingProgress((prev) => ({ ...prev, [setNumber]: percent }))
+                }
                 onCapture={handleTrackerCapture}
                 videoContext={videoContextFor(trackingSet)}
                 formFaultThresholds={activeMovementProfile}
+                positionScaleCorrection={activeMovementProfile?.positionScaleCorrection}
               />
             );
           }

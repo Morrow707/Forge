@@ -1401,6 +1401,7 @@ const movementProfileProposalResultSchema = z.object({
   barPathDeviationMaxCm: z.number().optional(),
   barTiltMaxDeg: z.number().optional(),
   jumpHeightOutlierPercent: z.number().optional(),
+  positionScaleCorrection: z.number().optional(),
   cameraFramingNotes: z.string().optional(),
   summary: z.string(),
 });
@@ -12466,6 +12467,11 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
             description:
               "Jump tracking only (movementType \"jump\"): how far (%) a single rep's jump height can deviate from the set's own median before it's flagged as a likely tracking glitch rather than a real rep.",
           },
+          positionScaleCorrection: {
+            type: "number",
+            description:
+              "Multiplier (near 1.0) applied to every tracked position for this movement before ROM/velocity/power are computed from them -- e.g. 0.78 to shrink readings that are running consistently high. Only set this from a real reference reading for THIS movementType specifically (a trusted external device's readings for the same set, a tape-measured ROM) -- never guess one, and never carry a number learned for one movement over to another, even a similar one (bench and squat are filmed at different distances/angles and need their own reading).",
+          },
           cameraFramingNotes: {
             type: "string",
             description:
@@ -12496,6 +12502,7 @@ Current active profile for ${movementType}${
               barPathDeviationMaxCm: currentProfile.barPathDeviationMaxCm,
               barTiltMaxDeg: currentProfile.barTiltMaxDeg,
               jumpHeightOutlierPercent: currentProfile.jumpHeightOutlierPercent,
+              positionScaleCorrection: currentProfile.positionScaleCorrection,
               cameraFramingNotes: currentProfile.cameraFramingNotes,
             },
             null,
@@ -12558,6 +12565,8 @@ Respond to the admin's latest message by calling ask_question or propose_movemen
         barTiltMaxDeg: parsed.data.barTiltMaxDeg ?? currentProfile?.barTiltMaxDeg ?? null,
         jumpHeightOutlierPercent:
           parsed.data.jumpHeightOutlierPercent ?? currentProfile?.jumpHeightOutlierPercent ?? null,
+        positionScaleCorrection:
+          parsed.data.positionScaleCorrection ?? currentProfile?.positionScaleCorrection ?? null,
         cameraFramingNotes: parsed.data.cameraFramingNotes ?? currentProfile?.cameraFramingNotes ?? null,
         sourceSummary: parsed.data.summary.trim(),
         summary: parsed.data.summary.trim(),
@@ -12597,6 +12606,7 @@ Respond to the admin's latest message by calling ask_question or propose_movemen
           barPathDeviationMaxCm: proposal.barPathDeviationMaxCm ?? null,
           barTiltMaxDeg: proposal.barTiltMaxDeg ?? null,
           jumpHeightOutlierPercent: proposal.jumpHeightOutlierPercent ?? null,
+          positionScaleCorrection: proposal.positionScaleCorrection ?? null,
           cameraFramingNotes: proposal.cameraFramingNotes ?? null,
           sourceSummary: proposal.sourceSummary ?? null,
           createdBy: adminId,

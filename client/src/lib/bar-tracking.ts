@@ -833,6 +833,18 @@ export function summarizeTrackedSet(
   // this filtering applied. See the phantomPhase comment below for what it
   // actually gates.
   rejectionEvents: number[] = [],
+  // From the active MovementProfile's positionScaleCorrection (see
+  // shared/schema.ts) -- a multiplier near 1.0 correcting a residual,
+  // movement-specific bias the athlete-height auto-calibration doesn't
+  // reach (a particular camera distance/angle this movement is typically
+  // filmed at). Defaults to 1 (no correction, today's behavior) so every
+  // existing caller keeps working unchanged until it's wired to fetch and
+  // pass its own movementType's profile. Applied once, here, to every x/y/z
+  // in the trace before anything downstream reads it -- ROM (a position
+  // difference), velocity (position's own derivative), and power (derived
+  // from velocity) all scale by exactly this factor as a result, with no
+  // separate correction needed for each.
+  positionScaleCorrection = 1,
 ): RepMetrics | null {
   if (rawPoints.length < 6) return null;
   const minRepAmplitudeCm = heightScaledAmplitudeCm(BASE_MIN_REP_AMPLITUDE_CM, heightIn);
@@ -841,7 +853,11 @@ export function summarizeTrackedSet(
   // downstream (smoothing, phase segmentation, bar-path deviation) ever
   // sees them -- see rejectImplausibleAccelerationSpikes above. `points` is
   // used everywhere below instead of the raw parameter.
-  const points = rejectImplausibleAccelerationSpikes(rawPoints);
+  const repairedPoints = rejectImplausibleAccelerationSpikes(rawPoints);
+  const points =
+    positionScaleCorrection !== 1
+      ? repairedPoints.map((p) => ({ ...p, x: p.x * positionScaleCorrection, y: p.y * positionScaleCorrection, z: p.z * positionScaleCorrection }))
+      : repairedPoints;
 
   const ySmoothed = kalmanSmooth(
     points.map((p) => p.y),
