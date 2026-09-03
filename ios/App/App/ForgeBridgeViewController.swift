@@ -7,10 +7,11 @@ import Capacitor
 // dependency with its own Package.swift/podspec). It never scans the app
 // target's own Objective-C runtime for CAPBridgedPlugin conformance the way
 // older Capacitor versions did, so a plugin that lives directly in this
-// target's source (ArCameraPreviewPlugin.swift, ArMeasurePlugin.swift --
+// target's source (ArMeasurePlugin.swift, AvBodyTrackingPlugin.swift --
 // neither is a separate installed package) compiles into the binary fine but
 // is never actually told to register itself. That's exactly what produced
-// `"ArCameraPreview" plugin is not implemented on ios` on a real device even
+// `"ArCameraPreview" plugin is not implemented on ios` on a real device (back
+// when ArCameraPreviewPlugin.swift, since removed, was one of these) even
 // though the Swift file, its @objc/jsName, and its Xcode Sources build phase
 // entry were all individually correct -- registration was simply never
 // invoked for it.
@@ -19,12 +20,11 @@ import Capacitor
 // explicit registration via bridge.registerPluginInstance(...), called from
 // capacitorDidLoad() -- the one hook that runs after the bridge exists but
 // before the web view loads any JS, so both plugins are already in the
-// registry by the time client/src/lib/native-ar-preview.ts or
+// registry by the time client/src/lib/native-av-preview.ts or
 // native-measure.ts (if that exists) makes its first call. SceneDelegate.swift
 // instantiates this subclass instead of the bare CAPBridgeViewController.
 class ForgeBridgeViewController: CAPBridgeViewController {
     override func capacitorDidLoad() {
-        bridge?.registerPluginInstance(ArCameraPreviewPlugin())
         bridge?.registerPluginInstance(ArMeasurePlugin())
         bridge?.registerPluginInstance(PasswordPickerPlugin())
         bridge?.registerPluginInstance(AvBodyTrackingPlugin())

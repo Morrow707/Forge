@@ -19,17 +19,25 @@ import {
   type PoseFrame,
   type SetTrustScore,
 } from "@/lib/pose-tracking";
-import { summarizeRotation } from "@/lib/rotation-tracking";
+import { summarizeRotation, type RotationSample } from "@/lib/rotation-tracking";
 import { summarizeSwing } from "@/lib/swing-tracking";
 import type { Landmark } from "@mediapipe/tasks-vision";
 import { videoFilenameForBlob } from "@/lib/video-recording";
-import { type SwingSetMetrics } from "@/components/ar-swing-tracker-dialog";
 import type { CaptureDeviceInfo, PoseFrame as NativePoseFrame } from "@/lib/native-av-preview";
 import { buildTrackingDiagnostics, type TrackingDiagnostics } from "@/lib/tracking-diagnostics";
 
-// SwingSetMetrics itself is defined in ar-swing-tracker-dialog.tsx (untouched, dead-code
-// fallback only -- see this file's own header comment), so the trust score this dialog adds is
-// carried as an extension here rather than a change to that shared type.
+// Was defined in ar-swing-tracker-dialog.tsx (the now-deleted ARKit dialog this one replaced)
+// and imported from there -- moved here, its one remaining consumer, now that the ARKit path
+// is gone.
+export type SwingSetMetrics = {
+  peakSeparationDeg: number | null;
+  tempoRatio: number | null;
+  backswingMs: number | null;
+  downswingMs: number | null;
+  headSwayCm: number | null;
+  rotationTrace: RotationSample[];
+};
+
 export type AvSwingSetMetrics = SwingSetMetrics & {
   trust: SetTrustScore | null;
   captureDeviceInfo: CaptureDeviceInfo | null;

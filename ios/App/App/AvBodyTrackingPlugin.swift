@@ -8,12 +8,15 @@ import Vision
 import UIKit
 import Capacitor
 
-// Phase 1 of the AVFoundation + Vision tracking pipeline that replaces ARKit on iOS (see
-// ArCameraPreviewPlugin.swift's own file comment for why -- a long on-device investigation
-// confirmed ARKit's captured pixel data is genuinely, unfixably out of focus, with no public
-// API to control focus/zoom/lens selection at all). ArCameraPreviewPlugin.swift and the
-// ar-*-tracker-dialog.tsx files it powers are NOT touched by this work -- they stay exactly
-// as they are, kept only as an untouched fallback, dead code once this pipeline replaces them.
+// The AVFoundation + Vision tracking pipeline that replaced ARKit on iOS -- a long on-device
+// investigation found ARKit's captured pixel data was genuinely, unfixably out of focus, with
+// no public API to control focus/zoom/lens selection at all. ArCameraPreviewPlugin.swift, its
+// ArImplementTracker.swift, and the ar-*-tracker-dialog.tsx/ar-*-capture-dialog.tsx files it
+// powered have since been deleted outright, once this pipeline (and the AV/Vision-based
+// goniometer and overhead-squat capture dialogs built on top of it afterward) covered
+// everything they did -- not kept around as a fallback. Historical comments elsewhere in this
+// file that still compare against "ArCameraPreviewPlugin.swift's own comment" are referring to
+// that now-removed file's reasoning, not a file still present in this target.
 //
 // Phase 1 proved the camera side: a plain AVCaptureSession (the same foundation the stock
 // Camera app uses) gives real zoom, real lens switching, and real autofocus/exposure that
@@ -21,16 +24,15 @@ import Capacitor
 // Vision body-pose detection run OFFLINE against a recording already on disk -- not a live
 // sample-buffer delegate -- see this file's own comment on record-first/analyze-later for why:
 // running VNDetectHumanBodyPoseRequest live against a 60fps 4K feed would thermally throttle
-// an older device the same way live ARKit inference risked. Still no object/implement tracking
-// -- that's Phase 5.
+// an older device the same way live ARKit inference risked.
 //
-// Positioned behind the WebView the same way ArCameraPreviewPlugin's ARSCNView is (see its own
-// comment on webView.isOpaque / insertSubview(belowSubview:)) -- the JS side punches a
-// transparent hole in its own DOM at whatever rect its video container occupies, and this
-// plugin's AVCaptureVideoPreviewLayer renders behind that hole.
+// Positioned behind the WebView the same way ArCameraPreviewPlugin's ARSCNView used to be (see
+// this file's own comment on webView.isOpaque / insertSubview(belowSubview:)) -- the JS side
+// punches a transparent hole in its own DOM at whatever rect its video container occupies, and
+// this plugin's AVCaptureVideoPreviewLayer renders behind that hole.
 //
 // Records to disk via AVCaptureMovieFileOutput -- AVFoundation's own native movie writer, not
-// the hand-rolled AVAssetWriter-per-frame loop ArCameraPreviewPlugin.swift had to build for
+// the hand-rolled AVAssetWriter-per-frame loop the old ARKit plugin had to build for
 // ARFrame.capturedImage. Record-first, analyze-later: Vision processing against the recorded
 // clip runs offline afterward (Phase 2+), not live against the capture session, to avoid
 // thermally throttling an older device the way live 60fps ML inference against a 4K feed

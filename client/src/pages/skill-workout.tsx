@@ -18,7 +18,7 @@ import { externalLinkClick } from "@/lib/open-external";
 import { extractVideoFrames } from "@/lib/video-frames";
 import { cn } from "@/lib/utils";
 import { colorForLabel, borderTintForLabel } from "@/lib/supersets";
-import { isArPreviewPlatform } from "@/lib/native-ar-preview";
+import { isAvPreviewPlatform } from "@/lib/native-av-preview";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import {
@@ -513,7 +513,7 @@ export default function SkillWorkoutPage() {
       {/* AVFoundation + Vision pipeline (see AvBodyTrackingPlugin.swift's file comment) is
           the only iOS path now -- ArSprintTrackerDialog and the ARKit plugin underneath stay
           in the repo untouched as a dead-code fallback but nothing routes to them anymore. */}
-      {sprintExercise && (isArPreviewPlatform() ? (
+      {sprintExercise && (isAvPreviewPlatform() ? (
         <AvSprintTrackerDialog
           open={!!sprintExercise}
           onOpenChange={(o) => !o && setSprintExercise(null)}
@@ -537,7 +537,7 @@ export default function SkillWorkoutPage() {
         />
       ))}
 
-      {mechanicsExercise && (isArPreviewPlatform() ? (
+      {mechanicsExercise && (isAvPreviewPlatform() ? (
         <AvMechanicsTrackerDialog
           open={!!mechanicsExercise}
           onOpenChange={(o) => !o && setMechanicsExercise(null)}

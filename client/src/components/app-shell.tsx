@@ -29,7 +29,6 @@ import {
   UserCog,
   Info,
   CreditCard,
-  Camera,
   Aperture,
   GraduationCap,
   BookOpen,
@@ -770,17 +769,6 @@ export function AppShell({
                       Customize navigation
                     </button>
                   )}
-                  {Capacitor.getPlatform() === "ios" && (
-                    <Link
-                      href="/dev/ar-preview-test"
-                      role="menuitem"
-                      onClick={() => setAccountMenuOpen(false)}
-                      className="flex w-full items-center gap-2 border-t border-border px-4 py-2.5 text-left text-sm font-medium text-muted-foreground hover:bg-surface-elevated"
-                    >
-                      <Camera className="h-4 w-4" />
-                      ARKit preview test
-                    </Link>
-                  )}
                   {Capacitor.getPlatform() === "ios" && user?.role === "admin" && (
                     <Link
                       href="/dev/av-preview-test"
@@ -1130,16 +1118,6 @@ export function AppShell({
                   >
                     <Aperture className="h-4 w-4" />
                     AV preview test (Phase 1)
-                  </Link>
-                )}
-                {Capacitor.getPlatform() === "ios" && (
-                  <Link
-                    href="/dev/ar-preview-test"
-                    onClick={() => setMobileNavOpen(false)}
-                    className="flex w-full items-center gap-2 py-2 text-left text-sm font-semibold text-foreground"
-                  >
-                    <Camera className="h-4 w-4" />
-                    ARKit preview test
                   </Link>
                 )}
                 <button

@@ -24,8 +24,8 @@ import {
 } from "@shared/goniometer";
 import { cameraSupportsGoniometerMovement } from "@/lib/movement-screen-vision";
 import { GoniometerCaptureDialog } from "@/components/goniometer-capture-dialog";
-import { ArGoniometerCaptureDialog } from "@/components/ar-goniometer-capture-dialog";
-import { isArPreviewPlatform } from "@/lib/native-ar-preview";
+import { AvGoniometerCaptureDialog } from "@/components/av-goniometer-capture-dialog";
+import { isAvPreviewPlatform } from "@/lib/native-av-preview";
 
 type GoniometerReading = {
   id: number;
@@ -225,8 +225,8 @@ export function GoniometerPanel({ athleteId }: { athleteId: number }) {
                 setCameraCaptureOpen(false);
               },
             };
-            return isArPreviewPlatform() ? (
-              <ArGoniometerCaptureDialog {...captureProps} />
+            return isAvPreviewPlatform() ? (
+              <AvGoniometerCaptureDialog {...captureProps} />
             ) : (
               <GoniometerCaptureDialog {...captureProps} />
             );

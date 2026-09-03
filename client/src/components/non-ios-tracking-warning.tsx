@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle } from "lucide-react";
-import { isArPreviewPlatform } from "@/lib/native-ar-preview";
+import { isAvPreviewPlatform } from "@/lib/native-av-preview";
 
 const SEEN_KEY = "forge:non-ios-accuracy-notice-seen";
 
@@ -19,7 +19,7 @@ const SEEN_KEY = "forge:non-ios-accuracy-notice-seen";
  * would otherwise never see it). */
 export function NonIosTrackingNotice() {
   const [open, setOpen] = useState(() => {
-    if (isArPreviewPlatform()) return false;
+    if (isAvPreviewPlatform()) return false;
     if (typeof window === "undefined") return false;
     return window.localStorage.getItem(SEEN_KEY) !== "1";
   });

@@ -34,7 +34,7 @@ import {
 import { AvKbSwingTrackerDialog } from "@/components/av-kb-swing-tracker-dialog";
 import type { KbSwingSetMetrics } from "@/lib/kb-swing-tracking";
 import { AvHorizontalLoadTrackerDialog, type HorizontalLoadSetMetrics } from "@/components/av-horizontal-load-tracker-dialog";
-import { isArPreviewPlatform } from "@/lib/native-ar-preview";
+import { isAvPreviewPlatform } from "@/lib/native-av-preview";
 import { FormVideoRecorderDialog } from "@/components/form-video-recorder-dialog";
 import { SetVideoPreviewDialog, SetVideoCompareDialog } from "@/components/set-video-review";
 import { extractVideoFrames } from "@/lib/video-frames";
@@ -3189,7 +3189,7 @@ function ExerciseLogContent({
             // -- see trackingLevelEnum's own comment in shared/schema.ts). Android/web falls
             // through to a plain video-only capture, same fallback pattern med_ball/golf/
             // baseball swing already use for "no non-iOS pipeline exists yet."
-            if (isArPreviewPlatform()) {
+            if (isAvPreviewPlatform()) {
               if (item.trackingLevel === "kb_swing") {
                 return (
                   <AvKbSwingTrackerDialog
@@ -3230,11 +3230,11 @@ function ExerciseLogContent({
           if (item.trackingLevel === "med_ball") {
             // AVFoundation + Vision pipeline only -- no ARKit equivalent was ever built for
             // med ball tracking (see av-medball-tracker-dialog.tsx's own file comment), so
-            // there's no isArPreviewPlatform() branch to an Ar* fallback dialog the way every
+            // there's no isAvPreviewPlatform() branch to an Ar* fallback dialog the way every
             // other mode has. Android/web falls through to a plain video-only capture, same
             // fallback golf/baseball swing already uses for the identical "no non-iOS pipeline
             // exists yet" reason.
-            if (isArPreviewPlatform()) {
+            if (isAvPreviewPlatform()) {
               return (
                 <AvMedballTrackerDialog
                   open={trackingSet !== null}
@@ -3266,7 +3266,7 @@ function ExerciseLogContent({
             // is the only iOS path now -- ArSwingTrackerDialog and the ARKit plugin
             // underneath stay in the repo untouched as a dead-code fallback (per the plan's
             // Context section) but nothing routes to them anymore.
-            if (isArPreviewPlatform()) {
+            if (isAvPreviewPlatform()) {
               return (
                 <AvSwingTrackerDialog
                   open={trackingSet !== null}
@@ -3307,7 +3307,7 @@ function ExerciseLogContent({
           // Context section) but nothing routes to them anymore. Every other mode, and jump
           // mode on anything that isn't native iOS, keeps using the existing MediaPipe-based
           // dialog unchanged.
-          if (isArPreviewPlatform() && item.trackingLevel === "jump") {
+          if (isAvPreviewPlatform() && item.trackingLevel === "jump") {
             return (
               <AvJumpTrackerDialog
                 open={trackingSet !== null}
@@ -3355,7 +3355,7 @@ function ExerciseLogContent({
           // underneath stay in the repo untouched as a dead-code fallback (per the plan's
           // Context section) but nothing routes to them anymore. See AvBarTrackerDialog's own
           // file comment for what's ported vs deliberately still MediaPipe-only.
-          if (isArPreviewPlatform() && (item.trackingLevel === "bar_path" || item.trackingLevel === "full")) {
+          if (isAvPreviewPlatform() && (item.trackingLevel === "bar_path" || item.trackingLevel === "full")) {
             return (
               <AvBarTrackerDialog
                 open={trackingSet !== null}

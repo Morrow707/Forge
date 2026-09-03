@@ -21,8 +21,8 @@ import { format, parseISO, formatISO } from "date-fns";
 import { Plus, ClipboardCheck, AlertTriangle, Camera, PenLine, Loader2, Ruler } from "lucide-react";
 import { resolveMovementScreenUnitLabel, formatMovementScreenScore } from "@shared/movement-screen";
 import { OverheadSquatCaptureDialog } from "@/components/overhead-squat-capture-dialog";
-import { ArOverheadSquatCaptureDialog } from "@/components/ar-overhead-squat-capture-dialog";
-import { isArPreviewPlatform } from "@/lib/native-ar-preview";
+import { AvOverheadSquatCaptureDialog } from "@/components/av-overhead-squat-capture-dialog";
+import { isAvPreviewPlatform } from "@/lib/native-av-preview";
 import { isArMeasureSupported, measureWithAR } from "@/lib/ar-measure";
 
 type Battery = { id: number; name: string; isForgeOfficial: boolean; editable: boolean };
@@ -394,8 +394,8 @@ function NewScreenDialog({
                     setSquatCaptureOpen(false);
                   },
                 };
-                return isArPreviewPlatform() ? (
-                  <ArOverheadSquatCaptureDialog {...squatCaptureProps} />
+                return isAvPreviewPlatform() ? (
+                  <AvOverheadSquatCaptureDialog {...squatCaptureProps} />
                 ) : (
                   <OverheadSquatCaptureDialog {...squatCaptureProps} />
                 );

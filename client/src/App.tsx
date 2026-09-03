@@ -30,7 +30,6 @@ import LegalPage from "@/pages/legal";
 import { TermsOfServicePage, PrivacyPolicyPage } from "@/pages/legal-document";
 import DeleteAccountPage from "@/pages/delete-account";
 import NotFound from "@/pages/not-found";
-const ArPreviewTestPage = lazy(() => import("@/pages/dev/ar-preview-test"));
 const AvPreviewTestPage = lazy(() => import("@/pages/dev/av-preview-test"));
 
 const CoachDashboard = lazy(() => import("@/pages/coach/dashboard"));
@@ -244,7 +243,6 @@ function Router() {
         <Route path="/terms" component={TermsOfServicePage} />
         <Route path="/privacy" component={PrivacyPolicyPage} />
         <Route path="/delete-account" component={DeleteAccountPage} />
-        <Route path="/dev/ar-preview-test" component={ArPreviewTestPage} />
         <Route path="/dev/av-preview-test">
           <ProtectedRoute role="admin" component={AvPreviewTestPage} />
         </Route>
