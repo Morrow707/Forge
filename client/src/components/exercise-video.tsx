@@ -21,8 +21,22 @@ export function extractYouTubeId(url: string): string | null {
  * in-app browser sheet natively, a new tab on web -- see externalLinkClick).
  * Used at the top of the exercise logging card. Previously an inline
  * YouTube thumbnail/player filling the card's width -- too large a chunk of
- * the card for a demo clip, so it's a labeled button now instead. */
-export function ExerciseVideoThumb({ url, name }: { url: string | null; name: string }) {
+ * the card for a demo clip, so it's a labeled button now instead.
+ *
+ * `accentColor`: a coach's Personal Page override (see shared/schema.ts's
+ * ExercisePageTheme.watchDemoColor) -- an explicit hex, applied as an
+ * inline style so it wins over the default muted-foreground/border classes
+ * without needing a new CSS custom property. Omitted/null keeps the
+ * existing neutral look untouched. */
+export function ExerciseVideoThumb({
+  url,
+  name,
+  accentColor,
+}: {
+  url: string | null;
+  name: string;
+  accentColor?: string | null;
+}) {
   if (!url) return null;
   return (
     <a
@@ -32,6 +46,7 @@ export function ExerciseVideoThumb({ url, name }: { url: string | null; name: st
       onClick={externalLinkClick(url)}
       aria-label={`Watch ${name} demo video`}
       className="inline-flex items-center gap-1.5 self-start rounded-full border border-border px-2.5 py-1 text-[11px] font-semibold text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
+      style={accentColor ? { borderColor: accentColor, color: accentColor } : undefined}
     >
       <Play className="h-3 w-3" />
       Watch Demo

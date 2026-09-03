@@ -1,4 +1,5 @@
 import { hexToHslTriplet } from "@/lib/color";
+import type { ExercisePageTheme } from "@shared/schema";
 
 export type EffectiveBranding = {
   brandTeamName?: string | null;
@@ -15,6 +16,12 @@ export type EffectiveBranding = {
   // GET. Read-only from here: nothing PATCHes navLabelOverrides through
   // this route, only /api/coach/nav-prefs (primary-coach-gated) can.
   navLabelOverrides?: Record<string, string>;
+  // Personal Page (paid add-on, see shared/billing-tiers.ts) -- an athlete's
+  // coach's exercise-page color overrides, or null if never set/not
+  // entitled. Read-only from here, same as navLabelOverrides above; only
+  // /api/coach/exercise-page-theme (primary-coach-gated) writes it.
+  // client/src/pages/workout.tsx is the only consumer.
+  exercisePageTheme?: ExercisePageTheme | null;
 };
 
 // Mirrors users.personalAccentColor/personalSecondaryColor/

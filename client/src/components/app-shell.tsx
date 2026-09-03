@@ -61,6 +61,7 @@ import { NotificationBell } from "@/components/notification-bell";
 import { NotificationSettingsDialog } from "@/components/notification-settings-dialog";
 import { CoachingStaffDialog } from "@/components/coaching-staff-dialog";
 import { TeamBrandingDialog } from "@/components/team-branding-dialog";
+import { ExercisePageThemeDialog } from "@/components/exercise-page-theme-dialog";
 import { NavCustomizeDialog } from "@/components/nav-customize-dialog";
 import { AccountSettingsDialog } from "@/components/account-settings-dialog";
 import { NonIosTrackingNotice } from "@/components/non-ios-tracking-warning";
@@ -227,6 +228,7 @@ export function AppShell({
   const [notifSettingsOpen, setNotifSettingsOpen] = useState(false);
   const [coachingStaffOpen, setCoachingStaffOpen] = useState(false);
   const [brandingOpen, setBrandingOpen] = useState(false);
+  const [exerciseThemeOpen, setExerciseThemeOpen] = useState(false);
   const [navCustomizeOpen, setNavCustomizeOpen] = useState(false);
   const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
@@ -745,6 +747,20 @@ export function AppShell({
                       type="button"
                       role="menuitem"
                       onClick={() => {
+                        setExerciseThemeOpen(true);
+                        setAccountMenuOpen(false);
+                      }}
+                      className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-foreground hover:bg-surface-elevated"
+                    >
+                      <Sparkles className="h-4 w-4" />
+                      Exercise screen colors
+                    </button>
+                  )}
+                  {user?.role === "coach" && user.isPrimaryCoach && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
                         setNavCustomizeOpen(true);
                         setAccountMenuOpen(false);
                       }}
@@ -1071,6 +1087,19 @@ export function AppShell({
                   <button
                     type="button"
                     onClick={() => {
+                      setExerciseThemeOpen(true);
+                      setMobileNavOpen(false);
+                    }}
+                    className="flex w-full items-center gap-2 py-2 text-left text-sm font-semibold text-foreground"
+                  >
+                    <Sparkles className="h-4 w-4" />
+                    Exercise screen colors
+                  </button>
+                )}
+                {user?.role === "coach" && user.isPrimaryCoach && (
+                  <button
+                    type="button"
+                    onClick={() => {
                       setNavCustomizeOpen(true);
                       setMobileNavOpen(false);
                     }}
@@ -1194,6 +1223,9 @@ export function AppShell({
       )}
       {user?.role === "coach" && user.isPrimaryCoach && (
         <TeamBrandingDialog open={brandingOpen} onOpenChange={setBrandingOpen} scope={{ type: "org" }} />
+      )}
+      {user?.role === "coach" && user.isPrimaryCoach && (
+        <ExercisePageThemeDialog open={exerciseThemeOpen} onOpenChange={setExerciseThemeOpen} />
       )}
       {user?.role === "coach" && user.isPrimaryCoach && (
         <NavCustomizeDialog

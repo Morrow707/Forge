@@ -2138,6 +2138,10 @@ ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "stale_account_pending
 -- detection frame stats, and why an empty set came back empty) -- see
 -- trackingDiagnosticsSchema's own comment in shared/schema.ts.
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "tracking_diagnostics" json;
+
+-- Per-coach exercise-logging-screen color overrides, gated behind the "personal_page"
+-- billing add-on -- see ExercisePageTheme's own comment in shared/schema.ts.
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "exercise_page_theme" json;
 `;
 
 async function main() {

@@ -170,6 +170,8 @@ import type {
   UpdateMovementScreenBatteryInput,
   CreateFoodLogEntryInput,
   UpdateBrandingInput,
+  UpdateExercisePageThemeInput,
+  ExercisePageTheme,
   UpdateTeamBrandingInput,
   UpdateNavPrefsInput,
   UpdateCoachBillingInput,
@@ -14349,6 +14351,50 @@ ${entriesText}`;
     return row ?? null;
   },
 
+  // Personal Page (see shared/billing-tiers.ts) -- a coach's own read/edit
+  // view of their exercise-page theme, entitlement-unchecked here (routes.ts
+  // gates the PATCH; GET always reads the raw stored value regardless of
+  // current entitlement, same as branding, so a coach who downgraded can
+  // still see exactly what's live for their athletes).
+  async getExercisePageTheme(primaryCoachId: number): Promise<ExercisePageTheme | null> {
+    const row = await db.query.users.findFirst({
+      where: eq(users.id, primaryCoachId),
+      columns: { exercisePageTheme: true },
+    });
+    return row?.exercisePageTheme ?? null;
+  },
+
+  // Merges into the existing stored theme rather than replacing it wholesale
+  // -- unlike updateCoachBranding's individual columns (where an untouched
+  // field naturally stays as-is), all four pieces here share one JSON
+  // column, so a PATCH that only sends backdropColor must not blow away an
+  // already-set watchDemoColor. `null` on an incoming field clears just that
+  // one piece; `undefined` (omitted from the request) leaves it untouched.
+  async updateExercisePageTheme(
+    primaryCoachId: number,
+    values: UpdateExercisePageThemeInput,
+  ): Promise<ExercisePageTheme | null> {
+    const existing = await this.getExercisePageTheme(primaryCoachId);
+    const merged: ExercisePageTheme = { ...existing };
+    const fields: (keyof ExercisePageTheme)[] = [
+      "backdropColor",
+      "watchDemoColor",
+      "completedSetColor",
+      "navArrowColor",
+    ];
+    for (const field of fields) {
+      if (values[field] === undefined) continue;
+      if (values[field] === null) delete merged[field];
+      else merged[field] = values[field] as string;
+    }
+    const [row] = await db
+      .update(users)
+      .set({ exercisePageTheme: merged })
+      .where(eq(users.id, primaryCoachId))
+      .returning({ exercisePageTheme: users.exercisePageTheme });
+    return row?.exercisePageTheme ?? null;
+  },
+
   async updateCoachLogo(primaryCoachId: number, logoUrl: string | null) {
     const existing = await db.query.users.findFirst({ where: eq(users.id, primaryCoachId) });
     if (existing?.brandLogoUrl && existing.brandLogoUrl !== logoUrl) {
@@ -14375,11 +14421,12 @@ ${entriesText}`;
 
     if (user.role === "coach" || user.role === "admin") {
       const coachIds = await this.getEffectiveCoachIds(userId);
-      const [branding, features] = await Promise.all([
+      const [branding, features, exercisePageTheme] = await Promise.all([
         this.getCoachBranding(coachIds[0]),
         this.getCoachFeatures(coachIds[0]),
+        this.getExercisePageTheme(coachIds[0]),
       ]);
-      return { ...branding, features };
+      return { ...branding, features, exercisePageTheme };
     }
 
     // Athlete: base branding comes from their coach's org.
@@ -14394,6 +14441,7 @@ ${entriesText}`;
       brandWelcomeMessage: null,
       navLabelOverrides: {},
       features: resolveCoachFeatures(null),
+      exercisePageTheme: null,
     };
     const coaches = await this.getCoachesForAthlete(userId);
     if (coaches.length === 0) {
@@ -14405,11 +14453,13 @@ ${entriesText}`;
     // primary-coach-set term through this same GET -- this route is
     // read-only (no PATCH accepts navLabelOverrides through it), so an
     // athlete can never write it; only /api/coach/nav-prefs, gated to the
-    // primary coach, can.
-    const [orgBranding, features, navPrefs] = await Promise.all([
+    // primary coach, can. exercisePageTheme rides along the same way --
+    // read-only from here, /api/coach/exercise-page-theme is the only PATCH.
+    const [orgBranding, features, navPrefs, exercisePageTheme] = await Promise.all([
       this.getCoachBranding(coachIds[0]),
       this.getCoachFeatures(coachIds[0]),
       this.getNavPrefsForCoach(coachIds[0]),
+      this.getExercisePageTheme(coachIds[0]),
     ]);
 
     const athleteTeams = await this.getTeamsForAthlete(userId);
@@ -14431,6 +14481,7 @@ ${entriesText}`;
       brandWelcomeMessage: orgBranding?.brandWelcomeMessage ?? null,
       navLabelOverrides: navPrefs.navLabelOverrides,
       features,
+      exercisePageTheme,
     };
   },
 

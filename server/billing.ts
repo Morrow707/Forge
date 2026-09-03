@@ -27,6 +27,9 @@ export interface Entitlements {
   hasTeamIdentity: boolean;
   hasWorkflowCustomization: boolean;
   hasMultiTeam: boolean;
+  /** Gates users.exercisePageTheme (see shared/schema.ts) -- distinct from
+   * hasCustomColors, which only governs the org-wide header/nav re-skin. */
+  hasPersonalPage: boolean;
 }
 
 const UNLIMITED_ENTITLEMENTS: Entitlements = {
@@ -35,6 +38,7 @@ const UNLIMITED_ENTITLEMENTS: Entitlements = {
   hasTeamIdentity: true,
   hasWorkflowCustomization: true,
   hasMultiTeam: true,
+  hasPersonalPage: true,
 };
 
 export interface BillingAccount {
@@ -70,6 +74,7 @@ export function getEntitlements(account: BillingAccount): Entitlements {
     hasWorkflowCustomization:
       Boolean(tier?.includesFullPersonalization) || hasFullBundle || addOns.has("workflow"),
     hasMultiTeam: Boolean(tier?.includesMultiTeam),
+    hasPersonalPage: Boolean(tier?.includesFullPersonalization) || hasFullBundle || addOns.has("personal_page"),
   };
 }
 

@@ -35,7 +35,7 @@ export const ORG_BASE_CENTS = 1000; // $10.00 flat account fee
 export const ORG_PER_ATHLETE_CENTS = 350; // $3.50/athlete, flat, every band, no discount
 
 export type BillingTierId = string;
-export type AddOnId = "custom_colors" | "team_identity" | "workflow" | "full_bundle";
+export type AddOnId = "custom_colors" | "team_identity" | "workflow" | "full_bundle" | "personal_page";
 
 export interface BillingTierDef {
   id: BillingTierId;
@@ -163,12 +163,28 @@ export const BILLING_ADD_ONS: Record<AddOnId, AddOnDef> = {
     monthlyPriceCents: 2499,
     description: "Custom Colors + Team Identity + Workflow Customization together, at a discount over buying separately.",
   },
+  // Distinct from custom_colors above -- that one governs the org-wide
+  // header/nav re-skin (brandPrimaryColor/brandSecondaryColor), where a
+  // primary color is already free at every tier and only the secondary
+  // color is gated. This one is a coach's athletes' actual exercise-logging
+  // screen -- the backdrop behind the set-paging controls, the Watch Demo
+  // button, the completed-set indicator, and the set-paging arrows -- and
+  // is entirely paid, nothing free, for any tier that hasn't bought it or
+  // doesn't include full personalization. See shared/schema.ts's
+  // users.exercisePageTheme for exactly what it drives.
+  personal_page: {
+    id: "personal_page",
+    label: "Personal Page",
+    monthlyPriceCents: 999,
+    description: "Recolor your athletes' exercise-logging screen -- the backdrop, the Watch Demo button, the completed-set indicator, and the set-paging arrows -- all yours, not just Forge's defaults.",
+  },
 };
 
 export const BILLING_ADD_ON_ORDER: AddOnId[] = [
   "custom_colors",
   "team_identity",
   "workflow",
+  "personal_page",
   "full_bundle",
 ];
 

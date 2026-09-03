@@ -20,6 +20,17 @@ import { z } from "zod";
 import { BODY_PAIN_PARTS } from "./wellness";
 import type { WidgetLayoutEntry } from "./dashboard-widgets";
 import type { RosterGroup } from "./roster-groups";
+
+// Per-field hex overrides for a coach's athletes' exercise-logging screen --
+// see users.exercisePageTheme's own comment below for the gating story.
+// Every field optional/independent; unset means Forge's own default for
+// that one piece specifically, not "reset the whole theme."
+export type ExercisePageTheme = {
+  backdropColor?: string;
+  watchDemoColor?: string;
+  completedSetColor?: string;
+  navArrowColor?: string;
+};
 import {
   BILLING_TIER_ORDER,
   BILLING_ADD_ON_ORDER,
@@ -459,6 +470,20 @@ export const users = pgTable(
     // the About page) in that this is meant to read like a note from the
     // coach, not a program description.
     brandWelcomeMessage: text("brand_welcome_message"),
+    // Exercise-logging screen personalization -- entirely gated behind the
+    // "personal_page" billing add-on (see shared/billing-tiers.ts and
+    // server/billing.ts's hasPersonalPage), unlike brandPrimaryColor/
+    // brandSecondaryColor above (a primary color is free at every tier,
+    // only secondary is gated). Every field is an optional, independent
+    // override; unset means Forge's own default for that one piece. Primary
+    // coach only to write (same as brandPrimaryColor/etc above), but reads
+    // through the same "coach sets it, their athletes see it" path via
+    // getEffectiveBrandingForUser -- NOT a personalAccentColor-style
+    // viewer-only override (see that field's own comment below). Entitlement
+    // is checked only at write time (same precedent as brandSecondaryColor):
+    // a value already saved keeps applying to athletes even if the org's
+    // plan later lapses, rather than this needing its own read-time gate.
+    exercisePageTheme: json("exercise_page_theme").$type<ExercisePageTheme>(),
     // Any staff member's own personal touch -- three independent knobs a
     // coach can set on their own account, none gated to the primary coach
     // the way org branding is (see computeBrandingStyle for exactly which
@@ -5423,6 +5448,17 @@ export const updateBrandingSchema = z.object({
   welcomeMessage: z.string().trim().max(300).optional().nullable(),
 });
 
+// Exercise-page theme -- see ExercisePageTheme's own comment up top and
+// users.exercisePageTheme below for what's gated and why. Every field
+// optional/nullable, same "null clears just this one piece" convention as
+// updateBrandingSchema above.
+export const updateExercisePageThemeSchema = z.object({
+  backdropColor: hexColor.optional().nullable(),
+  watchDemoColor: hexColor.optional().nullable(),
+  completedSetColor: hexColor.optional().nullable(),
+  navArrowColor: hexColor.optional().nullable(),
+});
+
 // Team-level override never carries its own name -- teams already have
 // `name`; only the visual identity is overridable per-field.
 export const updateTeamBrandingSchema = z.object({
@@ -6233,6 +6269,7 @@ export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 export type UpdateNotificationPrefsInput = z.infer<typeof updateNotificationPrefsSchema>;
 export type UpdatePushCategoryPrefsInput = z.infer<typeof updatePushCategoryPrefsSchema>;
 export type UpdateBrandingInput = z.infer<typeof updateBrandingSchema>;
+export type UpdateExercisePageThemeInput = z.infer<typeof updateExercisePageThemeSchema>;
 export type UpdateTeamBrandingInput = z.infer<typeof updateTeamBrandingSchema>;
 export type UpdateStaffTitleInput = z.infer<typeof updateStaffTitleSchema>;
 export type UpdateNavPrefsInput = z.infer<typeof updateNavPrefsSchema>;

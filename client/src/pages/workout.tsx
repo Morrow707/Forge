@@ -13,8 +13,10 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { apiRequest, ApiError, resolveApiUrl, getNativeToken } from "@/lib/queryClient";
+import { apiRequest, ApiError, resolveApiUrl, getNativeToken, getJson } from "@/lib/queryClient";
+import type { EffectiveBranding } from "@/lib/branding-style";
 import { cn } from "@/lib/utils";
+import { contrastForegroundHsl } from "@/lib/color";
 import { groupConsecutiveBySupersetGroup, colorForLabel } from "@/lib/supersets";
 import { ExerciseVideoThumb } from "@/components/exercise-video";
 import { RestTimerControl, type RestTimerHandle } from "@/components/rest-timer";
@@ -92,7 +94,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
-import type { MovementProfile } from "@shared/schema";
+import type { MovementProfile, ExercisePageTheme } from "@shared/schema";
 import { parseProgression } from "@/lib/progression";
 import { PlateCalculatorDialog } from "@/components/plate-calculator-dialog";
 import { ReadinessBanner } from "@/components/readiness-banner";
@@ -867,6 +869,21 @@ export function WorkoutPage({
   const [, navigate] = useLocation();
   const qc = useQueryClient();
   const { user } = useAuth();
+  // Personal Page (paid add-on, see shared/billing-tiers.ts) -- a coach's
+  // exercise-page color overrides, resolved for whoever's logged in
+  // (athlete sees their coach's, coach/admin sees their own) via the same
+  // /api/branding/me AppShell already queries -- react-query dedupes by
+  // queryKey, so this doesn't refetch on top of AppShell's own call.
+  // exercisePageTheme is null/undefined whenever nothing's been set or the
+  // org isn't entitled, in which case every override below is a no-op and
+  // this screen looks exactly as it did before this feature existed.
+  const { data: branding } = useQuery<EffectiveBranding>({
+    queryKey: ["/api/branding/me"],
+    queryFn: () => getJson("/api/branding/me"),
+    enabled: !!user,
+    staleTime: 5 * 60_000,
+  });
+  const exerciseTheme = branding?.exercisePageTheme ?? null;
   const dayKey = dayCacheKey(assignmentId, programDayId, date);
   const [offline, setOffline] = useState(false);
   const [pendingSync, setPendingSync] = useState(() => hasPendingLog(dayKey));
@@ -1921,6 +1938,7 @@ export function WorkoutPage({
                         videoCheckMode={videoCheckMode}
                         canSubstituteExercise={canSubstituteExercise}
                         programId={data.programId}
+                        exerciseTheme={exerciseTheme}
                         onUpdateItem={(patch) => updateItem(item.key, patch)}
                         onUpdateSet={(setNumber, patch, options) => updateSet(item.key, setNumber, patch, options)}
                         onAddSet={() => addSet(item.key)}
@@ -1990,7 +2008,10 @@ export function WorkoutPage({
       {viewMode === "logging" && pages.length > 0 && (
         <div
           className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-surface"
-          style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+          style={{
+            paddingBottom: "env(safe-area-inset-bottom)",
+            ...(exerciseTheme?.backdropColor ? { backgroundColor: exerciseTheme.backdropColor } : null),
+          }}
         >
           <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3 sm:px-8">
             <button
@@ -1999,6 +2020,7 @@ export function WorkoutPage({
                 pageIndex === 0 ? setViewMode("overview") : setPageIndex((p) => p - 1)
               }
               className="flex items-center gap-1.5 text-sm font-semibold text-primary"
+              style={exerciseTheme?.navArrowColor ? { color: exerciseTheme.navArrowColor } : undefined}
             >
               <ChevronLeft className="h-4 w-4" />
               Back
@@ -2009,6 +2031,7 @@ export function WorkoutPage({
               onClick={() => setPageIndex((p) => Math.min(pages.length - 1, p + 1))}
               disabled={pageIndex === pages.length - 1}
               className="flex items-center gap-1.5 text-sm font-semibold text-primary disabled:pointer-events-none disabled:opacity-30"
+              style={exerciseTheme?.navArrowColor ? { color: exerciseTheme.navArrowColor } : undefined}
             >
               Next
               <ChevronRight className="h-4 w-4" />
@@ -2035,6 +2058,7 @@ function ExerciseLogContent({
   videoCheckMode,
   canSubstituteExercise,
   programId,
+  exerciseTheme,
   onUpdateItem,
   onUpdateSet,
   onAddSet,
@@ -2053,6 +2077,9 @@ function ExerciseLogContent({
   videoCheckMode: "comment" | "ai" | "off";
   canSubstituteExercise: boolean;
   programId: number;
+  /** A coach's Personal Page overrides (paid add-on), or null -- see
+   * WorkoutPage's own comment on where this is fetched from. */
+  exerciseTheme: ExercisePageTheme | null;
   onUpdateItem: (patch: Partial<ItemState>) => void;
   onUpdateSet: (setNumber: number, patch: Partial<SetRow>, options?: { immediate?: boolean }) => void;
   onAddSet: () => void;
@@ -2294,7 +2321,7 @@ function ExerciseLogContent({
 
   return (
     <div className="space-y-3">
-      <ExerciseVideoThumb url={item.videoUrl} name={item.exerciseName} />
+      <ExerciseVideoThumb url={item.videoUrl} name={item.exerciseName} accentColor={exerciseTheme?.watchDemoColor} />
       <div>
         <div className="flex items-start justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
@@ -2577,6 +2604,18 @@ function ExerciseLogContent({
                           ? "border-success bg-success text-success-foreground"
                           : "border-dashed border-muted-foreground/30 bg-secondary",
                     )}
+                    style={
+                      // Personal Page override -- only for the plain-complete
+                      // state, never PR (that's its own amber/crown signal,
+                      // not something a coach's theme should be able to hide).
+                      complete && !isPR && exerciseTheme?.completedSetColor
+                        ? {
+                            borderColor: exerciseTheme.completedSetColor,
+                            backgroundColor: exerciseTheme.completedSetColor,
+                            color: `hsl(${contrastForegroundHsl(exerciseTheme.completedSetColor)})`,
+                          }
+                        : undefined
+                    }
                     title={isPR ? "New PR!" : undefined}
                   >
                     {isPR ? (

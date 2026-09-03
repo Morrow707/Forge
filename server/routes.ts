@@ -75,6 +75,7 @@ import {
   coachAnalyticsQuerySchema,
   createTeamPostSchema,
   updateBrandingSchema,
+  updateExercisePageThemeSchema,
   updateTeamBrandingSchema,
   updateNavPrefsSchema,
   MAX_PINNED_ATHLETES,
@@ -4527,6 +4528,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const branding = await storage.updateCoachLogo(coachIds[0], null);
     res.json(branding);
   });
+
+  // ---------------- Personal Page (exercise-page theme, paid add-on) ----------------
+  // Distinct from the org branding block above: this is a coach's athletes'
+  // real exercise-logging screen (client/src/pages/workout.tsx), entirely
+  // gated behind hasPersonalPage -- see shared/billing-tiers.ts's
+  // personal_page add-on. Unlike branding's PATCH (which silently drops
+  // whichever fields aren't entitled and still saves the rest), this whole
+  // feature is locked or unlocked, matching the "a normal coach can't edit
+  // this at all" ask it was built for -- an underentitled PATCH is rejected
+  // outright (402), not partially applied.
+
+  app.get("/api/coach/exercise-page-theme", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const coachIds = await storage.getEffectiveCoachIds(user.id);
+    const [theme, entitlements] = await Promise.all([
+      storage.getExercisePageTheme(coachIds[0]),
+      getEntitlementsForCoach(user.id),
+    ]);
+    res.json({ theme: theme ?? {}, entitled: entitlements.hasPersonalPage });
+  });
+
+  app.patch(
+    "/api/coach/exercise-page-theme",
+    requireRole("coach"),
+    requirePrimaryCoach,
+    async (req, res) => {
+      const user = currentUser(req);
+      const parsed = updateExercisePageThemeSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      const entitlements = await getEntitlementsForCoach(user.id);
+      if (!entitlements.hasPersonalPage) {
+        return res.status(402).json({
+          message: "Personal Page is a paid upgrade -- upgrade to customize your athletes' exercise screen.",
+          personalPagePaywall: true,
+        });
+      }
+      const coachIds = await storage.getEffectiveCoachIds(user.id);
+      const theme = await storage.updateExercisePageTheme(coachIds[0], parsed.data);
+      res.json({ theme: theme ?? {}, entitled: true });
+    },
+  );
 
   // "Report a problem" -- available to every role from the account menu
   // (see ReportProblemDialog), not just coaches/athletes, so this is
