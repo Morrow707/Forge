@@ -1951,9 +1951,11 @@ export function WorkoutPage({
                                       White = not done yet, gold = done; the segment
                                       for the set currently showing gets a ring so
                                       it's still clear which one that is even when
-                                      it's white. */}
+                                      it's white. Labeled ("Set 1", not a bare bar)
+                                      and sized like a real tap target now, not a
+                                      thin progress sliver. */}
                                   {item.sets.length > 0 && (
-                                    <div className="mt-1.5 flex max-w-[140px] gap-1">
+                                    <div className="mt-1.5 flex flex-wrap gap-1.5">
                                       {item.sets.map((set, i) => (
                                         <button
                                           key={set.setNumber}
@@ -1962,12 +1964,16 @@ export function WorkoutPage({
                                           aria-pressed={i === visibleSetIndex}
                                           onClick={() => jumpToSet(item, i)}
                                           className={cn(
-                                            "h-1.5 flex-1 rounded-full transition-colors",
-                                            isSetComplete(item, set) ? "bg-amber-400" : "bg-white",
+                                            "rounded-full px-2.5 py-1 text-[11px] font-bold transition-colors",
+                                            isSetComplete(item, set)
+                                              ? "bg-amber-400 text-black"
+                                              : "bg-white text-black",
                                             i === visibleSetIndex &&
                                               "ring-2 ring-orange-400 ring-offset-1 ring-offset-background",
                                           )}
-                                        />
+                                        >
+                                          Set {set.setNumber}
+                                        </button>
                                       ))}
                                     </div>
                                   )}
@@ -1997,7 +2003,6 @@ export function WorkoutPage({
                                   <ExerciseLogContent
                                     item={item}
                                     linked={isSuperset}
-                                    badgeLabel={label}
                                     unit={item.weightUnit}
                                     onUnitChange={(u) => setItemWeightUnit(item.key, u)}
                                     assignmentId={Number(assignmentId)}
@@ -2074,7 +2079,6 @@ export function WorkoutPage({
 function ExerciseLogContent({
   item,
   linked,
-  badgeLabel,
   unit,
   onUnitChange,
   assignmentId,
@@ -2094,7 +2098,6 @@ function ExerciseLogContent({
 }: {
   item: ItemState;
   linked: boolean;
-  badgeLabel: string;
   unit: "lbs" | "kg";
   onUnitChange: (unit: "lbs" | "kg") => void;
   assignmentId: number;
@@ -2360,19 +2363,13 @@ function ExerciseLogContent({
     <div className="space-y-3">
       <ExerciseVideoThumb url={item.videoUrl} name={item.exerciseName} accentColor={exerciseTheme?.watchDemoColor} />
       <div>
-        <div className="flex items-start justify-between gap-2">
+        {/* No name/badge here -- the collapsible header above (in
+            WorkoutPage's own render) already shows both, and repeating
+            them just doubled the header when expanded. This row only
+            carries what that header doesn't: the swap indicator, the
+            superset link mark, and the per-exercise controls. */}
+        <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
-            <span
-              className={cn(
-                "flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-extrabold",
-                isCorrective ? "bg-cyan-500 text-white" : colorForLabel(badgeLabel),
-              )}
-            >
-              {badgeLabel}
-            </span>
-            <p className="truncate font-display text-xl font-extrabold sm:text-2xl">
-              {item.exerciseName}
-            </p>
             {item.substitutedFrom && (
               <Badge
                 variant="secondary"
@@ -2384,7 +2381,7 @@ function ExerciseLogContent({
             )}
             {linked && <Link2 className="h-4 w-4 shrink-0 text-primary" />}
           </div>
-          <div className="flex shrink-0 items-center gap-1.5 pt-1.5">
+          <div className="flex shrink-0 items-center gap-1.5">
             {item.materials.usesWeight && (
               // Per-exercise, not the old page-wide toggle -- a paired
               // exercise in the same superset might genuinely need a
@@ -2421,7 +2418,7 @@ function ExerciseLogContent({
             )}
           </div>
         </div>
-        <p className="mt-1 pl-11 text-xs text-muted-foreground">
+        <p className="mt-1 text-xs text-muted-foreground">
           Prescribed: {item.prescribedSets} × {item.prescribedReps}
           {item.prescribedWeight ? ` @ ${item.prescribedWeight}` : ""}
           {suggestedFromOneRm != null ? ` (≈ ${suggestedFromOneRm} ${unit})` : ""}
@@ -2430,7 +2427,7 @@ function ExerciseLogContent({
             : ""}
           {item.restSeconds ? ` · Rest ${item.restSeconds}s` : ""}
         </p>
-        <div className="pl-11">
+        <div>
           {suggestedFromOneRm != null && item.weightMode === "numeric" && (
             <div className="mt-0.5 flex items-center gap-1.5 text-xs">
               <Calculator className="h-3 w-3 shrink-0 text-blue-500" />
