@@ -88,6 +88,18 @@ export type RepBreakdown = {
   // rest of the lift reads very differently from one that's still
   // accelerating right up to lockout, even at the same total duration.
   timeToPeakVelocitySeconds: number;
+  // OVR (the matched commercial VBT device referenced throughout this file's own calibration
+  // work) shows a per-rep "EAI" column alongside Peak/TPV with no formula documented anywhere
+  // public -- reverse-engineered here by cross-checking OVR's own displayed EAI against its own
+  // displayed Peak/TPV across two real sets (20 reps total): peakVelocityMps / timeToPeak-
+  // VelocitySeconds reproduces every one of OVR's own EAI values to within its own 2-decimal
+  // display rounding, consistently (never a random miss on some reps and a match on others),
+  // which is what confirms the formula rather than a coincidence. Functionally an average
+  // acceleration to peak -- how fast the bar got up to its fastest point, not just how fast it
+  // ultimately got there. Named to match OVR's own label since that's what a coach comparing
+  // the two devices side by side is looking for; the literal acronym expansion isn't publicly
+  // documented anywhere this could be sourced from, so it isn't guessed at here.
+  eai: number;
   startT: number;
   endT: number;
   depthDeg?: number | null;
@@ -130,6 +142,10 @@ export type RepMetrics = {
   // armPathTrace above. Null when the movement doesn't apply or no rep had
   // enough clean data.
   legDriveAsymmetry?: LegDriveAsymmetryEntry[] | null;
+  // Average of repBreakdown's own eai across the set -- same "whole-set number is the average
+  // of the per-rep ones" pattern as romCm above, matching the average row OVR's own per-set
+  // table shows under this same column.
+  meanEai: number;
   // Populated by the caller from this module's own computeArmDriveAsymmetry
   // -- only for a shared-bar press/pull (see bar-tracker-dialog.tsx's gate),
   // same "caller fills it in" pattern as legDriveAsymmetry above. Null when
@@ -990,8 +1006,12 @@ export function summarizeTrackedSet(
     const pairedEccentric = i > 0 ? phaseStats[i - 1] : null;
     const romCm = Math.round(Math.abs(points[phase.endIdx].y - points[phase.startIdx].y) * 1000) / 10;
 
-    const timeToPeakVelocitySeconds =
-      Math.round(((points[phase.peakIdx].t - points[phase.startIdx].t) / 1000) * 100) / 100;
+    const rawTimeToPeakSeconds = (points[phase.peakIdx].t - points[phase.startIdx].t) / 1000;
+    const timeToPeakVelocitySeconds = Math.round(rawTimeToPeakSeconds * 100) / 100;
+    // Divides the RAW (unrounded) peak/time, not the already-rounded display fields above --
+    // see this rep's own `eai` field comment for why matching OVR meant reverse-engineering
+    // against its full-precision internal values, not its 2-decimal display.
+    const eai = rawTimeToPeakSeconds > 0 ? Math.round((phase.peak / rawTimeToPeakSeconds) * 100) / 100 : 0;
 
     repBreakdown.push({
       repNumber: repBreakdown.length + 1,
@@ -999,6 +1019,7 @@ export function summarizeTrackedSet(
       meanVelocityMps: Math.round(phase.mean * 100) / 100,
       concentricSeconds: Math.round(phase.duration * 100) / 100,
       timeToPeakVelocitySeconds,
+      eai,
       startT: points[repStartIdx].t,
       endT: points[phase.endIdx].t,
       velocityCurve,
@@ -1120,6 +1141,10 @@ export function summarizeTrackedSet(
             (repBreakdown.reduce((a, r) => a + r.romCm, 0) / repBreakdown.length) * 10,
           ) / 10
         : 0,
+    meanEai:
+      repBreakdown.length > 0
+        ? Math.round((repBreakdown.reduce((a, r) => a + r.eai, 0) / repBreakdown.length) * 100) / 100
+        : 0,
     velocityLossPercent:
       repBreakdown.length > 1 && repBreakdown[0].meanVelocityMps > 0
         ? Math.round(
@@ -1240,6 +1265,15 @@ export function fuseSideVelocity(
       meanVelocityMps,
       peakPowerWatts: loadKg && loadKg > 0 ? Math.round(loadKg * GRAVITY_MPS2 * peakVelocityMps) : null,
       meanPowerWatts: loadKg && loadKg > 0 ? Math.round(loadKg * GRAVITY_MPS2 * meanVelocityMps) : null,
+      // Recomputed against the fused peak so it doesn't go stale against rep's own original
+      // (pre-fusion) eai -- see this rep's own `eai` field comment for the formula. This blend
+      // has no raw (unrounded) time-to-peak available the way the primary computation does, so
+      // this divides by the already-rounded timeToPeakVelocitySeconds -- a small precision loss
+      // that's immaterial next to the fusion blend itself being an approximation.
+      eai:
+        rep.timeToPeakVelocitySeconds > 0
+          ? Math.round((peakVelocityMps / rep.timeToPeakVelocitySeconds) * 100) / 100
+          : rep.eai,
     };
   });
 

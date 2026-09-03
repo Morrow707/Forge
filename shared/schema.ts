@@ -1967,6 +1967,10 @@ export const workoutSetEntries = pgTable(
   // traveled during the concentric (lifting) phase, from the same trace
   // barPathDeviationCm is derived from.
   romCm: real("rom_cm"),
+  // Average of repBreakdown's own per-rep "eai" (see bar-tracking.ts's RepBreakdown comment for
+  // the full reverse-engineered-from-OVR explanation) across the set -- same "average of the
+  // per-rep numbers" pattern as romCm above.
+  meanEai: real("mean_eai"),
   // Fatigue within the set: how much peak concentric velocity dropped from
   // the first rep to the last, as a percentage. Null for single-rep sets
   // (nothing to compare against).
@@ -5980,6 +5984,10 @@ export const repBreakdownEntrySchema = z.object({
   // bar-tracking.ts's RepBreakdown comment. Optional since sets logged
   // before this field existed won't have it.
   timeToPeakVelocitySeconds: z.number().optional(),
+  // See bar-tracking.ts's RepBreakdown.eai comment -- OVR's own "EAI" column, reverse-
+  // engineered as peakVelocityMps / timeToPeakVelocitySeconds. Optional for the same reason as
+  // timeToPeakVelocitySeconds above: sets logged before this field existed won't have it.
+  eai: z.number().optional(),
   startT: z.number(),
   endT: z.number(),
   depthDeg: z.number().optional().nullable(),
@@ -6222,6 +6230,7 @@ export const setLogInputSchema = z.object({
   meanPowerWatts: z.number().optional().nullable(),
   eccentricMeanVelocityMps: z.number().optional().nullable(),
   romCm: z.number().optional().nullable(),
+  meanEai: z.number().optional().nullable(),
   velocityLossPercent: z.number().optional().nullable(),
   formCheckVideoUrl: z.string().trim().max(500).optional().nullable(),
   formCheckFlag: z.enum(["best", "worst"]).optional().nullable(),

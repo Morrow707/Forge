@@ -2562,6 +2562,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           meanPowerWatts: z.number().optional().nullable(),
           eccentricMeanVelocityMps: z.number().optional().nullable(),
           romCm: z.number().optional().nullable(),
+          meanEai: z.number().optional().nullable(),
           velocityLossPercent: z.number().optional().nullable(),
         })
         .optional(),
@@ -7475,6 +7476,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             meanPowerWatts: z.number().optional().nullable(),
             eccentricMeanVelocityMps: z.number().optional().nullable(),
             romCm: z.number().optional().nullable(),
+            meanEai: z.number().optional().nullable(),
             velocityLossPercent: z.number().optional().nullable(),
             trustScores: z
               .object({

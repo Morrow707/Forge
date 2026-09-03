@@ -260,6 +260,7 @@ type RepBreakdownEntry = {
   endT: number;
   depthDeg?: number | null;
   romCm?: number | null;
+  eai?: number | null;
   peakPowerWatts?: number | null;
   eccentricSeconds?: number | null;
   eccentricVelocityMps?: number | null;
@@ -362,6 +363,7 @@ type SetMetrics = {
   meanPowerWatts: number | null;
   eccentricMeanVelocityMps: number | null;
   romCm: number | null;
+  meanEai: number | null;
   velocityLossPercent: number | null;
   // A per-set form-check clip (not the single per-exercise video the app
   // used to support) -- one exercise with N sets can have up to N of these.
@@ -554,6 +556,7 @@ function buildItem(
       meanPowerWatts: existingSet?.meanPowerWatts ?? null,
       eccentricMeanVelocityMps: existingSet?.eccentricMeanVelocityMps ?? null,
       romCm: existingSet?.romCm ?? null,
+      meanEai: existingSet?.meanEai ?? null,
       velocityLossPercent: existingSet?.velocityLossPercent ?? null,
       formCheckVideoUrl: existingSet?.formCheckVideoUrl ?? null,
       formCheckFlag: existingSet?.formCheckFlag ?? null,
@@ -1049,6 +1052,7 @@ export function WorkoutPage({
           meanPowerWatts: s.meanPowerWatts,
           eccentricMeanVelocityMps: s.eccentricMeanVelocityMps,
           romCm: s.romCm,
+          meanEai: s.meanEai,
           velocityLossPercent: s.velocityLossPercent,
           formCheckVideoUrl: s.formCheckVideoUrl,
           formCheckFlag: s.formCheckFlag,
@@ -1552,6 +1556,7 @@ export function WorkoutPage({
               meanPowerWatts: null,
               eccentricMeanVelocityMps: null,
               romCm: null,
+              meanEai: null,
               velocityLossPercent: null,
               formCheckVideoUrl: null,
               formCheckFlag: null,
@@ -2304,6 +2309,7 @@ function ExerciseLogContent({
               meanPowerWatts: trackedSet.meanPowerWatts,
               eccentricMeanVelocityMps: trackedSet.eccentricMeanVelocityMps,
               romCm: trackedSet.romCm,
+              meanEai: trackedSet.meanEai,
               velocityLossPercent: trackedSet.velocityLossPercent,
               // Per-rep tracking confidence (see RepTrustScore's own comment:
               // position-fusion confidence, tracker-disagreement rejections,
@@ -3060,6 +3066,7 @@ function ExerciseLogContent({
                   meanPowerWatts: metrics.meanPowerWatts,
                   eccentricMeanVelocityMps: metrics.eccentricMeanVelocityMps,
                   romCm: metrics.romCm,
+                  meanEai: metrics.meanEai,
                   velocityLossPercent: metrics.velocityLossPercent,
                   legDriveAsymmetry: metrics.legDriveAsymmetry ?? null,
                   armDriveAsymmetry: metrics.armDriveAsymmetry ?? null,

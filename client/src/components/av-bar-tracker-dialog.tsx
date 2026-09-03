@@ -209,6 +209,7 @@ const EMPTY_REP_METRICS: RepMetrics = {
   barPathDeviationCm: 0,
   barPathTrace: [],
   repBreakdown: [],
+  meanEai: 0,
   formFaults: [],
   peakPowerWatts: null,
   meanPowerWatts: null,

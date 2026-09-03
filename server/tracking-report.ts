@@ -141,6 +141,10 @@ function formatDataPoints(r: TrackedSetRow): ReportField[] {
   push("Eccentric duration", num(r.eccentricSeconds, " s"));
   push("Bar path deviation", num(r.barPathDeviationCm, " cm"));
   push("Range of motion", num(r.romCm, " cm"));
+  // See bar-tracking.ts's RepBreakdown.eai comment for what this is and how it was
+  // reverse-engineered (OVR's own name, no public formula) -- peak velocity / time-to-peak,
+  // averaged across the set the same way every other per-rep number here is.
+  push("EAI (avg)", num(r.meanEai, ""));
   push("Velocity loss across set", num(r.velocityLossPercent, "%"));
   push("Peak power", num(r.peakPowerWatts, " W"));
   push("Mean power", num(r.meanPowerWatts, " W"));
