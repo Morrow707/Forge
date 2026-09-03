@@ -2408,6 +2408,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.send(lines.join("\n"));
   });
 
+  // Schedule preview for the admin's own self-assign dialog -- exact mirror
+  // of /api/coach/programs/:id/schedule, just gated to admin. See that
+  // route's own comment for the query shape.
+  app.get("/api/admin/programs/:id/schedule", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const program = await storage.getProgramIfUsableByCoach(user.id, id);
+    if (!program) return res.status(404).json({ message: "Program not found" });
+    const schema = z.object({
+      startDate: z.string(),
+      trainingWeekdays: z
+        .preprocess(
+          (v) => (v === undefined ? undefined : Array.isArray(v) ? v : [v]),
+          z.array(z.coerce.number().int().min(0).max(6)),
+        )
+        .optional(),
+    });
+    const parsed = schema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "startDate query param required" });
+    }
+    const schedule = await storage.getProgramSchedule(id, parsed.data.startDate, parsed.data.trainingWeekdays);
+    res.json(schedule);
+  });
+
   // Self-assignment: coachId and athleteId are both the admin's own id.
   // Deliberately bypasses the coach roster-membership check that guards
   // /api/coach/assignments -- an admin is never on their own roster, so
@@ -2919,17 +2944,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(groups);
   });
 
+  // trainingWeekdays (0=Sun..6=Sat, repeatable query param) recomputes
+  // every non-rest day's defaultDate against that weekly pattern instead of
+  // the plain "every 7 days from startDate" grid -- see
+  // storage.getProgramSchedule's own comment. Omitted means the old grid,
+  // unchanged. Same query shape at every apiBase's own schedule route
+  // (this one, /api/admin/programs/:id/schedule, /api/athlete/programs/:id/schedule).
   app.get("/api/coach/programs/:id/schedule", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     const id = Number(req.params.id);
     const program = await storage.getProgramIfUsableByCoach(user.id, id);
     if (!program) return res.status(404).json({ message: "Program not found" });
-    const schema = z.object({ startDate: z.string() });
+    const schema = z.object({
+      startDate: z.string(),
+      trainingWeekdays: z
+        .preprocess(
+          (v) => (v === undefined ? undefined : Array.isArray(v) ? v : [v]),
+          z.array(z.coerce.number().int().min(0).max(6)),
+        )
+        .optional(),
+    });
     const parsed = schema.safeParse(req.query);
     if (!parsed.success) {
       return res.status(400).json({ message: "startDate query param required" });
     }
-    const schedule = await storage.getProgramSchedule(id, parsed.data.startDate);
+    const schedule = await storage.getProgramSchedule(id, parsed.data.startDate, parsed.data.trainingWeekdays);
     res.json(schedule);
   });
 
@@ -7433,6 +7472,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
       if (!result) return res.status(400).json({ message: "This program isn't AI-authored yet" });
       res.status(201).json(result);
+    },
+  );
+
+  // Schedule preview for a Free Agent's own self-assign dialog -- exact
+  // mirror of /api/coach/programs/:id/schedule, gated to a Free Agent
+  // athlete instead. See that route's own comment for the query shape.
+  app.get(
+    "/api/athlete/programs/:id/schedule",
+    requireRole("athlete"),
+    requireFreeAgent,
+    async (req, res) => {
+      const user = currentUser(req);
+      const id = Number(req.params.id);
+      const program = await storage.getProgramIfUsableByCoach(user.id, id);
+      if (!program) return res.status(404).json({ message: "Program not found" });
+      const schema = z.object({
+        startDate: z.string(),
+        trainingWeekdays: z
+          .preprocess(
+            (v) => (v === undefined ? undefined : Array.isArray(v) ? v : [v]),
+            z.array(z.coerce.number().int().min(0).max(6)),
+          )
+          .optional(),
+      });
+      const parsed = schema.safeParse(req.query);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "startDate query param required" });
+      }
+      const schedule = await storage.getProgramSchedule(id, parsed.data.startDate, parsed.data.trainingWeekdays);
+      res.json(schedule);
     },
   );
 

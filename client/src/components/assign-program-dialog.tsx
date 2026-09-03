@@ -26,6 +26,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Stethoscope, Plus, Trash2, Clock, CalendarCog, ChevronDown, Repeat } from "lucide-react";
 import type { Exercise } from "@shared/schema";
+import { WEEKDAY_OPTIONS } from "@/lib/weekdays";
 
 const DURATION_OPTIONS = Array.from({ length: 12 }, (_, i) => String(i + 1));
 
@@ -36,6 +37,8 @@ type ScheduleDay = {
   weekNumber: number;
   dayNumber: number;
   title: string;
+  isRestDay: boolean;
+  exercisePreview: string;
   defaultDate: string;
 };
 type CreatedAssignment = { id: number; athleteId: number; correctivesEnabled: boolean };
@@ -79,6 +82,11 @@ export function AssignProgramDialog({
   const [correctivesQueue, setCorrectivesQueue] = useState<CorrectivesQueueItem[] | null>(null);
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [dateOverrides, setDateOverrides] = useState<Map<number, string>>(new Map());
+  // 0=Sun..6=Sat -- which weekdays the roster trains on. Empty means the
+  // old "every day in a row from the start date" default. Games/practices
+  // still move an individual day off this pattern via dateOverrides below,
+  // same as it always could -- this only changes what the STARTING point is.
+  const [trainingWeekdays, setTrainingWeekdays] = useState<number[]>([]);
 
   useEffect(() => {
     if (open) {
@@ -88,26 +96,29 @@ export function AssignProgramDialog({
       setDurationWeeks(1);
       setScheduleOpen(false);
       setDateOverrides(new Map());
+      setTrainingWeekdays([]);
     }
     // Reset only when the dialog transitions open -- initialAthleteIds/programId
     // are read fresh at that moment.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  // Discard any per-day overrides whenever the program or start date
-  // changes -- they were computed against a schedule that no longer
-  // applies, and silently keeping stale ones would land exercises on the
-  // wrong dates.
+  // Discard any per-day overrides whenever the program, start date, or
+  // weekday pattern changes -- they were computed against a schedule that
+  // no longer applies, and silently keeping stale ones would land
+  // exercises on the wrong dates.
   useEffect(() => {
     setDateOverrides(new Map());
-  }, [selectedProgramId, startDate]);
+  }, [selectedProgramId, startDate, trainingWeekdays.join(",")]);
 
   const { data: schedule = [] } = useQuery<ScheduleDay[]>({
-    queryKey: ["/api/coach/programs", selectedProgramId, "schedule", startDate],
+    queryKey: ["/api/coach/programs", selectedProgramId, "schedule", startDate, trainingWeekdays.join(",")],
     queryFn: async () => {
+      const params = new URLSearchParams({ startDate });
+      for (const wd of trainingWeekdays) params.append("trainingWeekdays", String(wd));
       const res = await apiRequest(
         "GET",
-        `/api/coach/programs/${selectedProgramId}/schedule?startDate=${startDate}`,
+        `/api/coach/programs/${selectedProgramId}/schedule?${params.toString()}`,
       );
       return res.json();
     },
@@ -124,12 +135,22 @@ export function AssignProgramDialog({
 
   const assignMutation = useMutation({
     mutationFn: async () => {
+      // Whenever a weekday pattern is set, every day needs its (already
+      // weekday-walked) date sent explicitly -- not just the ones manually
+      // tweaked in "Customize schedule" -- since /api/coach/assignments
+      // itself only ever knows the plain day-in-a-row grid or whatever
+      // dateOverrides it's handed. Manual edits still win over the pattern
+      // for whichever day they touched.
+      const effectiveOverrides =
+        trainingWeekdays.length > 0
+          ? new Map(schedule.map((d) => [d.programDayId, dateOverrides.get(d.programDayId) ?? d.defaultDate]))
+          : dateOverrides;
       const res = await apiRequest("POST", "/api/coach/assignments", {
         programId: Number(selectedProgramId),
         startDate,
         durationWeeks,
         dateOverrides:
-          dateOverrides.size > 0 ? Object.fromEntries(dateOverrides) : undefined,
+          effectiveOverrides.size > 0 ? Object.fromEntries(effectiveOverrides) : undefined,
         athletes: Array.from(assignAthletes.entries()).map(([athleteId, correctivesEnabled]) => ({
           athleteId,
           correctivesEnabled,
@@ -265,6 +286,39 @@ export function AssignProgramDialog({
               </p>
             </div>
 
+            <div className="space-y-1.5">
+              <Label>Which days does the team train?</Label>
+              <div className="flex gap-1.5">
+                {WEEKDAY_OPTIONS.map((wd) => (
+                  <button
+                    key={wd.value}
+                    type="button"
+                    aria-pressed={trainingWeekdays.includes(wd.value)}
+                    onClick={() =>
+                      setTrainingWeekdays((prev) =>
+                        prev.includes(wd.value)
+                          ? prev.filter((v) => v !== wd.value)
+                          : [...prev, wd.value].sort(),
+                      )
+                    }
+                    className={cn(
+                      "flex h-8 w-8 items-center justify-center rounded-full border text-xs font-bold transition-colors",
+                      trainingWeekdays.includes(wd.value)
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border text-muted-foreground hover:border-primary/50",
+                    )}
+                  >
+                    {wd.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {trainingWeekdays.length > 0
+                  ? "Sets each day to the next one of these on or after the start date, so the program stays spaced out every week instead of running days in a row -- still adjust any individual day below for a game or practice."
+                  : "Leave blank to just run the days back-to-back starting from the start date."}
+              </p>
+            </div>
+
             {schedule.length > 0 && (
               <div className="rounded-md border border-border">
                 <button
@@ -295,8 +349,23 @@ export function AssignProgramDialog({
                           key={day.programDayId}
                           className="flex items-center justify-between gap-2 rounded px-1.5 py-1 text-xs"
                         >
-                          <span className="min-w-0 truncate text-muted-foreground">
-                            Wk {day.weekNumber} · {day.title}
+                          <span className="min-w-0 flex-1">
+                            <span className="flex items-center gap-1.5 truncate text-muted-foreground">
+                              Wk {day.weekNumber} · {day.title}
+                              {day.isRestDay && (
+                                <span className="shrink-0 rounded-full border border-border px-1.5 py-0 text-[9px] font-bold uppercase text-muted-foreground">
+                                  Rest
+                                </span>
+                              )}
+                            </span>
+                            {/* Quick "what's actually on this day" so a coach
+                                (or Free Agent placing an old program) doesn't
+                                have to remember or reopen the builder. */}
+                            {day.exercisePreview && (
+                              <span className="block truncate text-[10px] text-muted-foreground/70">
+                                {day.exercisePreview}
+                              </span>
+                            )}
                           </span>
                           <div className="flex shrink-0 items-center gap-1.5">
                             <Input

@@ -13918,6 +13918,14 @@ ${entriesText}`;
   // callers combining this with durationWeeks > 1 will see the weekday
   // pattern hold for the first cycle and the default grid resume after,
   // same pre-existing limitation manual per-day overrides already have.
+  // Includes rest days now (it used to skip them) -- a coach moving days
+  // around for games/practices needs to see and place a rest day too, not
+  // just the training days either side of it; a rest day's own date is
+  // always the plain grid, never the weekday walk, since it was never part
+  // of "which days do you train." exercisePreview is a quick "what's
+  // actually on this day" so a coach or Free Agent scheduling an old
+  // program doesn't have to remember or reopen the builder just to place it
+  // correctly -- empty for a rest day, since there's nothing to preview.
   async getProgramSchedule(programId: number, startDate: string, trainingWeekdays?: number[]) {
     const program = await this.getProgramFull(programId);
     if (!program) return [];
@@ -13926,6 +13934,8 @@ ${entriesText}`;
       weekNumber: number;
       dayNumber: number;
       title: string;
+      isRestDay: boolean;
+      exercisePreview: string;
       defaultDate: string;
     }[] = [];
     const weekdaySet = trainingWeekdays && trainingWeekdays.length > 0 ? new Set(trainingWeekdays) : null;
@@ -13935,9 +13945,8 @@ ${entriesText}`;
     }
     for (const week of program.weeks) {
       for (const day of week.days) {
-        if (day.isRestDay) continue;
         let defaultDate: string;
-        if (weekdaySet && cursor) {
+        if (!day.isRestDay && weekdaySet && cursor) {
           defaultDate = formatISO(cursor, { representation: "date" });
           cursor = addDays(cursor, 1);
           while (!weekdaySet.has(cursor.getDay())) cursor = addDays(cursor, 1);
@@ -13952,6 +13961,8 @@ ${entriesText}`;
           weekNumber: week.weekNumber,
           dayNumber: day.dayNumber,
           title: day.title,
+          isRestDay: day.isRestDay,
+          exercisePreview: day.isRestDay ? "" : day.exercises.map((pe) => pe.exercise.name).join(", "),
           defaultDate,
         });
       }
