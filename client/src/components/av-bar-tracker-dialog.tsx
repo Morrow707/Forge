@@ -85,14 +85,16 @@ import type { Landmark } from "@mediapipe/tasks-vision";
  * calibrateFromFrames's own comment), unlike ARKit/MediaPipe's already-approximately-real-meters
  * estimate. Without a successful calibration this mode reports no read at all -- "no number is
  * better than a wrong one" -- rather than a velocity/tilt/power number computed from
- * meaningless pixel units. Two independent calibration sources feed the one scaleFactor
+ * meaningless pixel units. Two independent calibration sources can feed the one scaleFactor
  * finishWithRecording actually uses: calibrateFromFrames' athlete-height read (needs both
  * ankles visible at some point -- see its own comment, including its shoulder-fallback, which
- * still needs ankles), and plateScaleFromFrames' reference-object read off the CoreML "plate"
- * detector (needs a bumper plate visible instead -- see coreMlTrackingMode's own comment on
- * why bench press and other horizontal press/row barbell sets get this instead of the
- * corroboration-only "barbell" mode, precisely because a lying-flat set framed on the bar path
- * routinely never shows ankles). Either alone is enough; both together get averaged.
+ * still needs ankles -- so frame the camera wide enough to keep feet in shot for a lying-flat
+ * set like bench press), and plateScaleFromFrames' reference-object read off the CoreML "plate"
+ * detector (needs a bumper plate visible instead). Either alone is enough; both together get
+ * averaged -- though in practice only the height read fires today, since nothing currently sets
+ * coreMlTrackingMode to "plate" (see its own comment on why an earlier attempt at forcing that
+ * trade for bench press cost more in bar-path corroboration than it gained in calibration
+ * coverage).
  *
  * Ported: occlusion-gap interpolation, left/right leg- and arm-drive asymmetry, per-rep trust
  * scores -- all bar-tracking.ts/pose-tracking.ts functions reused unmodified, same gating rules
@@ -314,18 +316,24 @@ export function AvBarTrackerDialog({
   // trace of which case it was. That's what makes re-enabling this tonight a reasonable bet
   // instead of a repeat of the same blind spot.
   //
-  // Bench press (and other horizontal press/row barbell sets) get "plate" instead of "barbell"
-  // here, not the equipment-map default below -- see this file's header comment on why
-  // calibrateFromFrames' ankle requirement structurally can never resolve for a lying-flat set
-  // framed on the bar path, and plateScaleFromFrames further down for how the plate detection
-  // this trades away corroboration for gets used to calibrate real-world scale instead. Every
-  // other equipment/movement combination keeps the original corroboration-only mapping.
-  const coreMlTrackingMode: string | undefined =
-    equipment === "Barbell" && expectedPatternFromName(exerciseName) === "horizontal_press_or_row"
-      ? "plate"
-      : equipment
-        ? COREML_TRACKING_MODE_BY_EQUIPMENT[equipment]
-        : undefined;
+  // Every equipment/movement combination uses the same corroboration-only mapping below,
+  // including bench press. An earlier version of this line special-cased "horizontal_press_or_row"
+  // Barbell sets to "plate" instead, trading bar-path corroboration away for calibration --
+  // reasonable in theory (calibrateFromFrames' ankle requirement can't resolve for a lying-flat
+  // set with feet out of frame), but live field data the same night showed the real cost: with
+  // "barbell" corroboration off, the fused bar-path signal got noisy enough to both invent
+  // spurious extra reps (16 rep-velocity readings logged for a real 10-rep set) and get whole
+  // real reps rejected by the trust filter (a separate set found only 4 of 10). Framing the
+  // camera wide enough to keep the athlete's ankles in shot -- which this same athlete had
+  // already done -- gets calibrateFromFrames working via height anyway, without that trade.
+  // plateScaleFromFrames below still exists and still runs on whatever coreMlImplement data a
+  // clip happens to have (harmless no-op when trackingMode was never "plate"), so nothing stops
+  // it being wired back in through a real fix -- tracking both classes in one analysis pass,
+  // which the native detector already gets both classes' detections for and just discards one of
+  // -- once that's built and verified, rather than forcing the choice per movement pattern.
+  const coreMlTrackingMode: string | undefined = equipment
+    ? COREML_TRACKING_MODE_BY_EQUIPMENT[equipment]
+    : undefined;
 
   useEffect(() => {
     if (!open) return;
@@ -478,6 +486,7 @@ export function AvBarTrackerDialog({
           outcome: "empty_calibration_failed",
           message,
           rawFrames,
+          trackingMode: coreMlTrackingMode,
           recording: recordingStats,
           calibration: { scaleFactor: null, ...calibrationFrames },
         }),
@@ -624,6 +633,7 @@ export function AvBarTrackerDialog({
           outcome: "empty_no_clean_read",
           message,
           rawFrames,
+          trackingMode: coreMlTrackingMode,
           recording: recordingStats,
           calibration: { scaleFactor, ...calibrationFrames },
         }),
@@ -709,6 +719,7 @@ export function AvBarTrackerDialog({
     metrics.trackingDiagnostics = buildTrackingDiagnostics({
       outcome: "tracked",
       rawFrames,
+      trackingMode: coreMlTrackingMode,
       recording: recordingStats,
       calibration: { scaleFactor, ...calibrationFrames },
     });

@@ -39,9 +39,16 @@ export type TrackingDiagnostics = {
     framesWithCoreMlImplement: number;
     avgCoreMlConfidence: number | null;
     // How many of those detections had an estimated real-world size implausible for an actual
-    // medicine ball (see pose-tracking.ts's isPlausibleMedBallSize). Null whenever calibration
-    // failed for this clip (no scale factor to convert pixels to meters with), not just when no
-    // CoreML model is bundled -- both cases mean "nothing to report," but for different reasons.
+    // medicine ball (see pose-tracking.ts's isPlausibleMedBallSize). Only ever populated when
+    // trackingMode was "med_ball" -- MED_BALL_PLAUSIBLE_DIAMETER_RANGE_M is a med-ball-specific
+    // bound, and running it against a barbell/plate/dumbbell/kettlebell detection would flag
+    // essentially every reading as "implausible" (those are all bigger than a med ball), a false
+    // alarm that looked like a real failure on a live Bench Press clip -- there's no equivalent
+    // plausibility range for the other classes yet, so this stays null rather than reporting a
+    // check that isn't actually measuring anything meaningful for them. Also null whenever
+    // calibration failed for this clip (no scale factor to convert pixels to meters with), not
+    // just when no CoreML model is bundled -- all three cases mean "nothing to report," but for
+    // different reasons.
     coreMlSizeCheck: { framesChecked: number; implausibleCount: number } | null;
   };
   calibration: {
@@ -91,6 +98,7 @@ function summarizeBodyPose(rawFrames: NativePoseFrame[]): TrackingDiagnostics["b
 function summarizeObjectDetection(
   rawFrames: NativePoseFrame[],
   scaleFactor: number | null,
+  trackingMode: string | null,
 ): TrackingDiagnostics["objectDetection"] {
   let framesWithLeftImplement = 0;
   let framesWithRightImplement = 0;
@@ -100,6 +108,7 @@ function summarizeObjectDetection(
   let coreMlConfSum = 0;
   let coreMlFramesChecked = 0;
   let coreMlImplausibleCount = 0;
+  const checkSize = trackingMode === "med_ball";
   for (const f of rawFrames) {
     if (f.leftImplement) {
       framesWithLeftImplement++;
@@ -114,7 +123,7 @@ function summarizeObjectDetection(
     if (f.coreMlImplement) {
       framesWithCoreMlImplement++;
       coreMlConfSum += f.coreMlImplement.confidence;
-      if (scaleFactor != null) {
+      if (checkSize && scaleFactor != null) {
         coreMlFramesChecked++;
         const diameterM = estimateImplementDiameterM(
           f.coreMlImplement, f.frameWidth, f.frameHeight, scaleFactor,
@@ -130,7 +139,9 @@ function summarizeObjectDetection(
     framesWithCoreMlImplement,
     avgCoreMlConfidence: framesWithCoreMlImplement > 0 ? round2(coreMlConfSum / framesWithCoreMlImplement) : null,
     coreMlSizeCheck:
-      scaleFactor != null ? { framesChecked: coreMlFramesChecked, implausibleCount: coreMlImplausibleCount } : null,
+      checkSize && scaleFactor != null
+        ? { framesChecked: coreMlFramesChecked, implausibleCount: coreMlImplausibleCount }
+        : null,
   };
 }
 
@@ -142,6 +153,11 @@ export function buildTrackingDiagnostics(args: {
   outcome: TrackingOutcome;
   message?: string | null;
   rawFrames: NativePoseFrame[];
+  // Which CoreML class (if any) was actually requested for this clip -- see
+  // summarizeObjectDetection's own checkSize for why coreMlSizeCheck only means something for
+  // "med_ball". Omitted callers (any tracker dialog that hasn't been updated to pass this yet)
+  // get the same safe "don't report a check that isn't real" behavior as an explicit null.
+  trackingMode?: string | null;
   recording?: {
     frameCount: number;
     trackedFrameCount: number;
@@ -167,7 +183,9 @@ export function buildTrackingDiagnostics(args: {
     message: args.message ?? null,
     recording: args.recording ?? null,
     bodyPose: summarizeBodyPose(args.rawFrames),
-    objectDetection: summarizeObjectDetection(args.rawFrames, args.calibration?.scaleFactor ?? null),
+    objectDetection: summarizeObjectDetection(
+      args.rawFrames, args.calibration?.scaleFactor ?? null, args.trackingMode ?? null,
+    ),
     calibration: args.calibration ?? null,
   };
 }
