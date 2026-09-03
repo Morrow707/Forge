@@ -70,6 +70,7 @@ import {
   createWorkoutCommentSchema,
   createSkillDayCommentSchema,
   setSkillDayCompleteSchema,
+  upsertSkillSetEntrySchema,
   createExerciseReportSchema,
   resolveSubmissionSchema,
   coachAnalyticsQuerySchema,
@@ -6779,6 +6780,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
       if (!log) return res.status(404).json({ message: "Skill assignment not found" });
       res.status(200).json(log);
+    },
+  );
+
+  // Hand-typed value for one specific planned set of a drill -- the skill
+  // sheet's equivalent of the strength side's per-set weight/reps save. See
+  // upsertSkillSetEntrySchema's own comment for why exactly one of
+  // elapsedSeconds/manualResult is the meaningful field depending on the
+  // drill's trackingLevel.
+  app.put(
+    "/api/athlete/skill-day/:skillAssignmentId/:skillProgramDayId/:skillProgramExerciseId/sets/:setNumber",
+    requireRole("athlete"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const parsed = upsertSkillSetEntrySchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      const { date, ...entry } = parsed.data;
+      const row = await storage.upsertSkillSetEntry(
+        user.id,
+        Number(req.params.skillAssignmentId),
+        Number(req.params.skillProgramDayId),
+        date,
+        Number(req.params.skillProgramExerciseId),
+        Number(req.params.setNumber),
+        entry,
+      );
+      if (!row) return res.status(404).json({ message: "Skill drill not found" });
+      res.status(200).json(row);
     },
   );
 

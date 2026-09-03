@@ -1418,6 +1418,26 @@ export const skillSessionLogs = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     trackingLevel: trackingLevelEnum("tracking_level").notNull(),
+    // The two columns below are what make a specific planned set (Set 1,
+    // Set 2, ...) individually addressable -- editable in place rather than
+    // just appended to -- the same way workoutSetEntries always has been
+    // for the strength side. Null on every row that predates this (a plain
+    // camera capture never picked a set slot, it just appended): those stay
+    // in the table as history but don't populate the skill sheet's
+    // set-pager UI. skillDayLogId (not a bare date column) anchors a row to
+    // one specific occurrence of a recurring day, exactly like
+    // workoutLogEntries anchors to workoutLogs instead of storing its own
+    // date -- so editing last week's Set 2 can never collide with today's.
+    skillDayLogId: integer("skill_day_log_id").references(() => skillDayLogs.id, {
+      onDelete: "cascade",
+    }),
+    setNumber: integer("set_number"),
+    // A hand-typed result for a mechanics/untracked drill (e.g. "18/20
+    // makes", "felt smooth") -- there's no single natural number to type for
+    // those the way a sprint's elapsedSeconds already covers a 40-yard-dash
+    // time, so this stays a flexible free-text column instead of trying to
+    // force every skillType into a numeric field.
+    manualResult: text("manual_result"),
     elapsedSeconds: real("elapsed_seconds"),
     distanceYards: real("distance_yards"),
     // Which SPRINT_PRESETS entry (sprint-tracking.ts) this capture used --
@@ -1490,6 +1510,14 @@ export const skillSessionLogs = pgTable(
     videoIdx: index("skill_session_logs_video_idx")
       .on(table.videoUrl)
       .where(sql`${table.videoUrl} is not null`),
+    // Backs the skill sheet's per-set lookup (find/upsert this exact set's
+    // row) and the whole-day read that builds every drill's sets[] array in
+    // one query -- both filter by skillDayLogId first.
+    dayLogSetIdx: index("skill_session_logs_day_log_set_idx").on(
+      table.skillDayLogId,
+      table.skillProgramExerciseId,
+      table.setNumber,
+    ),
   }),
 );
 
@@ -5828,6 +5856,16 @@ export const createSkillSessionLogSchema = z.object({
   skillProgramDayId: z.number(),
   skillProgramExerciseId: z.number(),
   trackingLevel: z.enum(["sprint", "mechanics"]),
+  // Both optional and both new -- older clients (or a capture with no
+  // set-pager context) omit them and get the pre-existing "just append a
+  // row" behavior. date lets a capture taken while viewing a specific day
+  // (which may not be today) attribute correctly to THAT day's skillDayLogs
+  // occurrence rather than always assuming "now"; setNumber slots the
+  // capture into a specific Set N the same way a manual entry does, so
+  // recording while the sheet is showing Set 2 actually fills Set 2 instead
+  // of just appending to an undifferentiated list.
+  date: z.string().trim().optional(),
+  setNumber: z.number().int().min(1).max(50).optional(),
   elapsedSeconds: z.number().min(0).max(120).optional().nullable(),
   distanceYards: z.number().min(0).max(200).optional().nullable(),
   presetId: z.string().trim().max(20).optional().nullable(),
@@ -5864,6 +5902,24 @@ export const createSkillSessionLogSchema = z.object({
   // is absent, same as the exercise side's equivalent field.
   videoFavorited: z.boolean().optional(),
 });
+
+// A hand-typed value for one specific planned set of a drill -- the skill
+// sheet's equivalent of updating one of workoutSetEntries' reps/weight
+// fields. Exactly one of the two is meaningful per trackingLevel (see the
+// route): elapsedSeconds for a sprint-type drill (a real number, so it
+// counts the same way everywhere a camera-timed 40 would), manualResult
+// free text for everything else. Either can be sent as null to clear it.
+export const upsertSkillSetEntrySchema = z
+  .object({
+    date: z.string().trim().min(1),
+    elapsedSeconds: z.number().min(0).max(120).optional().nullable(),
+    manualResult: z.string().trim().max(200).optional().nullable(),
+  })
+  .refine((data) => data.elapsedSeconds !== undefined || data.manualResult !== undefined, {
+    message: "Provide a value to save",
+  });
+
+export type UpsertSkillSetEntryInput = z.infer<typeof upsertSkillSetEntrySchema>;
 
 export const setSkillSessionAnnotationSchema = z.object({
   imageUrl: z.string().trim().max(500).min(1),

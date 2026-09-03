@@ -73,6 +73,8 @@ export function AvMechanicsTrackerDialog({
   skillAssignmentId,
   skillProgramDayId,
   skillProgramExerciseId,
+  date,
+  setNumber,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -83,6 +85,11 @@ export function AvMechanicsTrackerDialog({
   skillAssignmentId: number;
   skillProgramDayId: number;
   skillProgramExerciseId: number;
+  // Both optional, both new -- when the skill sheet is open to a specific
+  // set, passing these slots the capture into that exact Set N instead of
+  // just appending a row (see createSkillSessionLog's own comment).
+  date?: string;
+  setNumber?: number;
 }) {
   const qc = useQueryClient();
   const recordedBlobRef = useRef<Blob | null>(null);
@@ -233,6 +240,8 @@ export function AvMechanicsTrackerDialog({
         kneeBendDepthDeg: result.kneeBendDepthDeg,
         videoUrl: uploadedVideoUrl,
         videoFavorited: uploadedVideoUrl ? favoriteClip : false,
+        date,
+        setNumber,
       });
       toast.success(`${actionLabel} saved`);
       qc.invalidateQueries({ queryKey: ["/api/athlete/skill-day", skillAssignmentId, skillProgramDayId] });

@@ -7,7 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import type { CalendarEntry } from "@/components/calendar-view";
-import { SkillDayViewDialog } from "@/components/skill-day-view-dialog";
 import { NutritionQuickSummary } from "@/components/nutrition-quick-summary";
 import { TeamChatQuickSummary } from "@/components/team-chat-quick-summary";
 import { DigestBanner } from "@/components/digest-banner";
@@ -68,11 +67,6 @@ export default function AthleteDashboard() {
   const { user } = useAuth();
   const [, navigate] = useLocation();
   const widgetVisibility = useWidgetVisibility("athlete");
-  const [viewingSkill, setViewingSkill] = useState<{
-    skillAssignmentId: number;
-    skillProgramDayId: number;
-    date: string;
-  } | null>(null);
 
   // Same query AppShell already makes for its own CSS-var re-skin --
   // React Query dedupes the identical in-flight request, so reading it
@@ -165,13 +159,11 @@ export default function AthleteDashboard() {
           calendarHref="/athlete/calendar"
           description="Quick look at what's coming up -- synced with the full calendar."
           onEntryClick={(e) =>
-            e.kind === "skill"
-              ? setViewingSkill({
-                  skillAssignmentId: e.assignmentId,
-                  skillProgramDayId: e.programDayId,
-                  date: e.date,
-                })
-              : navigate(`/athlete/day/${e.assignmentId}/${e.programDayId}/${e.date}`)
+            navigate(
+              e.kind === "skill"
+                ? `/athlete/skill-day/${e.assignmentId}/${e.programDayId}/${e.date}`
+                : `/athlete/day/${e.assignmentId}/${e.programDayId}/${e.date}`,
+            )
           }
         />
       </SortableHideableWidget>
@@ -344,19 +336,6 @@ export default function AthleteDashboard() {
         )}
       </div>
       </div>
-
-      {viewingSkill && (
-        <SkillDayViewDialog
-          open
-          onOpenChange={(open) => !open && setViewingSkill(null)}
-          source={{
-            kind: "athlete",
-            skillAssignmentId: viewingSkill.skillAssignmentId,
-            skillProgramDayId: viewingSkill.skillProgramDayId,
-            date: viewingSkill.date,
-          }}
-        />
-      )}
     </AppShell>
   );
 }

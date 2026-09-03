@@ -138,6 +138,8 @@ export function AvSprintTrackerDialog({
   skillAssignmentId,
   skillProgramDayId,
   skillProgramExerciseId,
+  date,
+  setNumber,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -145,6 +147,11 @@ export function AvSprintTrackerDialog({
   skillAssignmentId: number;
   skillProgramDayId: number;
   skillProgramExerciseId: number;
+  // Both optional, both new -- when the skill sheet is open to a specific
+  // set, passing these slots the capture into that exact Set N instead of
+  // just appending a row (see createSkillSessionLog's own comment).
+  date?: string;
+  setNumber?: number;
 }) {
   const qc = useQueryClient();
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -430,6 +437,8 @@ export function AvSprintTrackerDialog({
         faults,
         videoUrl: uploadedVideoUrl,
         videoFavorited: uploadedVideoUrl ? favoriteClip : false,
+        date,
+        setNumber,
       });
       toast.success("Sprint saved");
       qc.invalidateQueries({ queryKey: ["/api/athlete/skill-day", skillAssignmentId, skillProgramDayId] });

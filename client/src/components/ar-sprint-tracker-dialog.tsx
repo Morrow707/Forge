@@ -473,10 +473,9 @@ export function ArSprintTrackerDialog({
       toast.success("Sprint saved");
       // Prefix match (no date/trailing key segments) so this invalidates
       // every cached occurrence of this day, not just whichever date the
-      // athlete happened to open it from -- the parent dialog's "X of Y
-      // sets recorded" count (see getSkillDayForAthlete's completedSets)
-      // would otherwise still show the pre-save count until some unrelated
-      // refetch happened to run.
+      // athlete happened to open it from -- the skill sheet's set-pager
+      // rail would otherwise still show the pre-save state until some
+      // unrelated refetch happened to run.
       qc.invalidateQueries({ queryKey: ["/api/athlete/skill-day", skillAssignmentId, skillProgramDayId] });
       onOpenChange(false);
     } catch (err: any) {

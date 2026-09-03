@@ -137,6 +137,7 @@ import type {
   ProgramStructureInput,
   SkillProgramStructureInput,
   CreateSkillSessionLogInput,
+  UpsertSkillSetEntryInput,
   SubmitWorkoutLogInput,
   AttachVideoToSetInput,
   UpdateProgramDayInput,
@@ -8246,38 +8247,74 @@ Hard rules, no exceptions:
   // system around it yet).
   async createSkillSessionLog(athleteId: number, input: CreateSkillSessionLogInput) {
     const videoUrl = input.videoUrl ? await this.assertUploadedFileOwnedBy(input.videoUrl, athleteId) : null;
-    const [row] = await db
-      .insert(skillSessionLogs)
-      .values({
-        skillAssignmentId: input.skillAssignmentId,
-        skillProgramDayId: input.skillProgramDayId,
-        skillProgramExerciseId: input.skillProgramExerciseId,
+    const values = {
+      skillAssignmentId: input.skillAssignmentId,
+      skillProgramDayId: input.skillProgramDayId,
+      skillProgramExerciseId: input.skillProgramExerciseId,
+      athleteId,
+      trackingLevel: input.trackingLevel,
+      elapsedSeconds: input.elapsedSeconds ?? null,
+      distanceYards: input.distanceYards ?? null,
+      presetId: input.presetId ?? null,
+      cameraAngle: input.cameraAngle ?? null,
+      faults: input.faults ?? null,
+      hipShoulderSeparationDeg: input.hipShoulderSeparationDeg ?? null,
+      weightTransferPct: input.weightTransferPct ?? null,
+      hipRotationDeg: input.hipRotationDeg ?? null,
+      armSlotDeg: input.armSlotDeg ?? null,
+      armSlotLabel: input.armSlotLabel ?? null,
+      wellSequenced: input.wellSequenced ?? null,
+      peakWristSpeedMps: input.peakWristSpeedMps ?? null,
+      strideLengthM: input.strideLengthM ?? null,
+      elbowExtensionDeg: input.elbowExtensionDeg ?? null,
+      releaseHeightM: input.releaseHeightM ?? null,
+      setPointPauseSeconds: input.setPointPauseSeconds ?? null,
+      kneeBendDepthDeg: input.kneeBendDepthDeg ?? null,
+      videoUrl,
+      // Only meaningful alongside a real videoUrl -- a favorite flag with
+      // no clip to exempt from the cap sweep is a no-op either way, so no
+      // extra guard needed here beyond what the client already does.
+      videoFavorited: videoUrl ? (input.videoFavorited ?? false) : false,
+    };
+
+    // When the capture identifies which planned set it belongs to (the
+    // skill sheet always sends both date and setNumber together -- see
+    // upsertSkillSetEntry's identical slotting logic), upsert into that
+    // exact slot instead of always appending: re-recording Set 2 replaces
+    // Set 2's result rather than leaving two rows both claiming to be it,
+    // which would make getSkillDayForAthlete's setRowsByKey lookup
+    // ambiguous. A caller with no date/setNumber context (or an older
+    // client) falls straight through to the old plain-append behavior.
+    if (input.setNumber != null && input.date) {
+      const dayLog = await this.getOrCreateSkillDayLog(
         athleteId,
-        trackingLevel: input.trackingLevel,
-        elapsedSeconds: input.elapsedSeconds ?? null,
-        distanceYards: input.distanceYards ?? null,
-        presetId: input.presetId ?? null,
-        cameraAngle: input.cameraAngle ?? null,
-        faults: input.faults ?? null,
-        hipShoulderSeparationDeg: input.hipShoulderSeparationDeg ?? null,
-        weightTransferPct: input.weightTransferPct ?? null,
-        hipRotationDeg: input.hipRotationDeg ?? null,
-        armSlotDeg: input.armSlotDeg ?? null,
-        armSlotLabel: input.armSlotLabel ?? null,
-        wellSequenced: input.wellSequenced ?? null,
-        peakWristSpeedMps: input.peakWristSpeedMps ?? null,
-        strideLengthM: input.strideLengthM ?? null,
-        elbowExtensionDeg: input.elbowExtensionDeg ?? null,
-        releaseHeightM: input.releaseHeightM ?? null,
-        setPointPauseSeconds: input.setPointPauseSeconds ?? null,
-        kneeBendDepthDeg: input.kneeBendDepthDeg ?? null,
-        videoUrl,
-        // Only meaningful alongside a real videoUrl -- a favorite flag with
-        // no clip to exempt from the cap sweep is a no-op either way, so no
-        // extra guard needed here beyond what the client already does.
-        videoFavorited: videoUrl ? (input.videoFavorited ?? false) : false,
-      })
-      .returning();
+        input.skillAssignmentId,
+        input.skillProgramDayId,
+        input.date,
+      );
+      const existing = await db.query.skillSessionLogs.findFirst({
+        where: and(
+          eq(skillSessionLogs.skillDayLogId, dayLog.id),
+          eq(skillSessionLogs.skillProgramExerciseId, input.skillProgramExerciseId),
+          eq(skillSessionLogs.setNumber, input.setNumber),
+        ),
+      });
+      if (existing) {
+        const [row] = await db
+          .update(skillSessionLogs)
+          .set(values)
+          .where(eq(skillSessionLogs.id, existing.id))
+          .returning();
+        return row;
+      }
+      const [row] = await db
+        .insert(skillSessionLogs)
+        .values({ ...values, skillDayLogId: dayLog.id, setNumber: input.setNumber })
+        .returning();
+      return row;
+    }
+
+    const [row] = await db.insert(skillSessionLogs).values(values).returning();
     return row;
   },
 
@@ -15168,27 +15205,21 @@ ${entriesText}`;
         })
       : undefined;
 
-    // How many camera captures (createSkillSessionLog rows -- see that
-    // function's own comment) this athlete already has against each drill
-    // today, so the UI can show real "3 of 10 sets recorded" progress
-    // instead of a single record button with no memory of how many times
-    // it's been used. skillSessionLogs has no date column of its own (a
-    // capture just timestamps itself via createdAt, same as any other
-    // event log in this app) -- created_at::date scopes it to just this
-    // occurrence of a recurring day rather than every capture ever logged
-    // against this drill across every week it's been assigned.
-    const setCountByExerciseId = new Map<number, number>();
-    if (date) {
-      const counts = await db.execute<{ skill_program_exercise_id: number; cnt: string }>(sql`
-        SELECT skill_program_exercise_id, count(*) AS cnt
-        FROM skill_session_logs
-        WHERE skill_program_day_id = ${skillProgramDayId}
-          AND athlete_id = ${athleteId}
-          AND created_at::date = ${date}::date
-        GROUP BY skill_program_exercise_id
-      `);
-      for (const row of counts.rows) {
-        setCountByExerciseId.set(row.skill_program_exercise_id, Number(row.cnt));
+    // Every planned set (manual entry or a camera capture that targeted a
+    // specific set -- see upsertSkillSetEntry/createSkillSessionLog) for
+    // this exact occurrence of the day, keyed by "exerciseId:setNumber" so
+    // each exercise's sets[] array below can be built by simple lookup
+    // instead of N separate queries. log is undefined the first time this
+    // day's ever opened (getOrCreateSkillDayLog only runs on a write), so
+    // there's nothing to look up yet -- every set just renders empty.
+    const setRowsByKey = new Map<string, (typeof skillSessionLogs.$inferSelect)>();
+    if (log) {
+      const rows = await db.query.skillSessionLogs.findMany({
+        where: eq(skillSessionLogs.skillDayLogId, log.id),
+      });
+      for (const row of rows) {
+        if (row.setNumber == null) continue;
+        setRowsByKey.set(`${row.skillProgramExerciseId}:${row.setNumber}`, row);
       }
     }
 
@@ -15209,22 +15240,64 @@ ${entriesText}`;
         id: ex.id,
         name: ex.skillExercise.name,
         skillType: ex.skillExercise.skillType,
-        sets: ex.sets,
+        prescribedSets: ex.sets,
         reps: ex.reps,
         restSeconds: ex.restSeconds,
         notes: ex.notes,
         videoUrl: ex.skillExercise.videoUrl,
         trackingLevel: ex.trackingLevel,
-        completedSets: date ? setCountByExerciseId.get(ex.id) ?? 0 : undefined,
+        // One row per planned set regardless of whether it's been touched
+        // yet -- exact parallel of how a strength exercise's sets[] always
+        // has prescribedSets entries from the start (see
+        // getWorkoutDayDetail), not just the ones already logged.
+        sets: date
+          ? Array.from({ length: ex.sets }, (_, i) => {
+              const setNumber = i + 1;
+              const row = setRowsByKey.get(`${ex.id}:${setNumber}`);
+              return {
+                setNumber,
+                elapsedSeconds: row?.elapsedSeconds ?? null,
+                manualResult: row?.manualResult ?? null,
+                videoUrl: row?.videoUrl ?? null,
+              };
+            })
+          : [],
       })),
     };
   },
 
+  // Get-or-create the one skillDayLogs row for this occurrence of a
+  // recurring skill day -- the anchor every per-set entry (manual or
+  // camera-captured) hangs off of via skillDayLogId, so editing/reading
+  // "today's Set 2" can never collide with a different week's Set 2 for the
+  // same recurring day. Deliberately never touches completed/completedAt --
+  // setSkillDayComplete below updates that separately once the row is
+  // guaranteed to exist, and a plain per-set save shouldn't silently mark
+  // the whole day done.
+  async getOrCreateSkillDayLog(
+    athleteId: number,
+    skillAssignmentId: number,
+    skillProgramDayId: number,
+    date: string,
+  ) {
+    const existing = await db.query.skillDayLogs.findFirst({
+      where: and(
+        eq(skillDayLogs.skillAssignmentId, skillAssignmentId),
+        eq(skillDayLogs.skillProgramDayId, skillProgramDayId),
+        eq(skillDayLogs.date, date),
+      ),
+    });
+    if (existing) return existing;
+    const [row] = await db
+      .insert(skillDayLogs)
+      .values({ skillAssignmentId, skillProgramDayId, athleteId, date })
+      .returning();
+    return row;
+  },
+
   // Day-level "I did this" toggle for a skill day -- exact mirror of the
   // completed/completedAt half of submitWorkoutLog, without the rest of
-  // that function's strength-specific set/rep/trophy/CARA machinery, since
-  // a skill day has no per-set numbers of its own to save (camera captures
-  // already save themselves, independently, via createSkillSessionLog).
+  // that function's strength-specific set/rep/trophy/CARA machinery.
   async setSkillDayComplete(
     athleteId: number,
     skillAssignmentId: number,
@@ -15240,25 +15313,93 @@ ${entriesText}`;
     });
     if (!assignment) return undefined;
 
-    const existing = await db.query.skillDayLogs.findFirst({
+    const dayLog = await this.getOrCreateSkillDayLog(
+      athleteId,
+      skillAssignmentId,
+      skillProgramDayId,
+      date,
+    );
+    const completedAt = completed ? new Date() : null;
+    const [row] = await db
+      .update(skillDayLogs)
+      .set({ completed, completedAt })
+      .where(eq(skillDayLogs.id, dayLog.id))
+      .returning();
+    return row;
+  },
+
+  // Hand-typed value for one specific planned set of a drill -- the skill
+  // sheet's equivalent of updateSet on the strength side (see workout.tsx's
+  // onUpdateSet). Ownership-checked the same way createSkillSessionLog is:
+  // the assignment must actually be this athlete's own, and the exercise
+  // must actually belong to this day (same enumerable-id-gap reasoning as
+  // getSkillDayForAthlete's own comment).
+  async upsertSkillSetEntry(
+    athleteId: number,
+    skillAssignmentId: number,
+    skillProgramDayId: number,
+    date: string,
+    skillProgramExerciseId: number,
+    setNumber: number,
+    input: Omit<UpsertSkillSetEntryInput, "date">,
+  ) {
+    const assignment = await db.query.skillAssignments.findFirst({
       where: and(
-        eq(skillDayLogs.skillAssignmentId, skillAssignmentId),
-        eq(skillDayLogs.skillProgramDayId, skillProgramDayId),
-        eq(skillDayLogs.date, date),
+        eq(skillAssignments.id, skillAssignmentId),
+        eq(skillAssignments.athleteId, athleteId),
       ),
     });
-    const completedAt = completed ? new Date() : null;
+    if (!assignment) return undefined;
+
+    const exercise = await db.query.skillProgramExercises.findFirst({
+      where: and(
+        eq(skillProgramExercises.id, skillProgramExerciseId),
+        eq(skillProgramExercises.dayId, skillProgramDayId),
+      ),
+    });
+    if (!exercise) return undefined;
+
+    const dayLog = await this.getOrCreateSkillDayLog(
+      athleteId,
+      skillAssignmentId,
+      skillProgramDayId,
+      date,
+    );
+
+    const existing = await db.query.skillSessionLogs.findFirst({
+      where: and(
+        eq(skillSessionLogs.skillDayLogId, dayLog.id),
+        eq(skillSessionLogs.skillProgramExerciseId, skillProgramExerciseId),
+        eq(skillSessionLogs.setNumber, setNumber),
+      ),
+    });
+
+    // Only touch the field(s) actually sent -- a request that only means to
+    // clear the time shouldn't also blank out a result someone else typed.
+    const patch: Partial<typeof skillSessionLogs.$inferInsert> = {};
+    if (input.elapsedSeconds !== undefined) patch.elapsedSeconds = input.elapsedSeconds;
+    if (input.manualResult !== undefined) patch.manualResult = input.manualResult;
+
     if (existing) {
       const [row] = await db
-        .update(skillDayLogs)
-        .set({ completed, completedAt })
-        .where(eq(skillDayLogs.id, existing.id))
+        .update(skillSessionLogs)
+        .set(patch)
+        .where(eq(skillSessionLogs.id, existing.id))
         .returning();
       return row;
     }
     const [row] = await db
-      .insert(skillDayLogs)
-      .values({ skillAssignmentId, skillProgramDayId, athleteId, date, completed, completedAt })
+      .insert(skillSessionLogs)
+      .values({
+        skillAssignmentId,
+        skillProgramDayId,
+        skillProgramExerciseId,
+        athleteId,
+        trackingLevel: exercise.trackingLevel,
+        skillDayLogId: dayLog.id,
+        setNumber,
+        ...patch,
+      })
       .returning();
     return row;
   },

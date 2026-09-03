@@ -165,7 +165,6 @@ export default function CoachCalendar() {
           onOpenChange={(open) => !open && setViewingSkill(null)}
           athleteName={viewingSkill.athleteName}
           source={{
-            kind: "coach",
             skillProgramId: viewingSkill.skillProgramId,
             skillProgramDayId: viewingSkill.skillProgramDayId,
           }}

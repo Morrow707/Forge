@@ -4,7 +4,6 @@ import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { CalendarView, type CalendarEntry } from "@/components/calendar-view";
 import { CalendarLinkDialog } from "@/components/calendar-link-dialog";
-import { SkillDayViewDialog } from "@/components/skill-day-view-dialog";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { usePullToRefresh } from "@/hooks/use-pull-to-refresh";
@@ -24,11 +23,6 @@ export default function AthleteCalendar() {
   const [, navigate] = useLocation();
   const [range, setRange] = useState<{ start: string; end: string }>({ start: "", end: "" });
   const [syncOpen, setSyncOpen] = useState(false);
-  const [viewingSkill, setViewingSkill] = useState<{
-    skillAssignmentId: number;
-    skillProgramDayId: number;
-    date: string;
-  } | null>(null);
 
   const { data: entries = [], refetch } = useQuery<CalendarEntry[]>({
     queryKey: ["/api/athlete/calendar", range.start, range.end],
@@ -93,13 +87,11 @@ export default function AthleteCalendar() {
           initialView="day"
           onRangeChange={(start, end) => setRange({ start, end })}
           onEntryClick={(e) =>
-            e.kind === "skill"
-              ? setViewingSkill({
-                  skillAssignmentId: e.assignmentId,
-                  skillProgramDayId: e.programDayId,
-                  date: e.date,
-                })
-              : navigate(`/athlete/day/${e.assignmentId}/${e.programDayId}/${e.date}`)
+            navigate(
+              e.kind === "skill"
+                ? `/athlete/skill-day/${e.assignmentId}/${e.programDayId}/${e.date}`
+                : `/athlete/day/${e.assignmentId}/${e.programDayId}/${e.date}`,
+            )
           }
           dayPreviewFetchUrl={(e) =>
             `/api/athlete/day-preview?assignmentId=${e.assignmentId}&programDayId=${e.programDayId}`
@@ -113,19 +105,6 @@ export default function AthleteCalendar() {
         title="Sync Your Calendar"
         fetchUrl="/api/athlete/calendar-link"
       />
-
-      {viewingSkill && (
-        <SkillDayViewDialog
-          open
-          onOpenChange={(open) => !open && setViewingSkill(null)}
-          source={{
-            kind: "athlete",
-            skillAssignmentId: viewingSkill.skillAssignmentId,
-            skillProgramDayId: viewingSkill.skillProgramDayId,
-            date: viewingSkill.date,
-          }}
-        />
-      )}
     </AppShell>
   );
 }

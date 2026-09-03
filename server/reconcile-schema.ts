@@ -2142,6 +2142,15 @@ ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "tracking_diagnostics
 -- Per-coach exercise-logging-screen color overrides, gated behind the "personal_page"
 -- billing add-on -- see ExercisePageTheme's own comment in shared/schema.ts.
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "exercise_page_theme" json;
+
+-- Makes a specific planned set of a skill drill individually addressable
+-- (Set 1, Set 2, ...) instead of skill_session_logs only ever being an
+-- append-only capture list -- see skillSessionLogs' own comment on
+-- skillDayLogId/setNumber/manualResult in shared/schema.ts.
+ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "skill_day_log_id" integer REFERENCES "skill_day_logs"("id") ON DELETE CASCADE;
+ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "set_number" integer;
+ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "manual_result" text;
+CREATE INDEX IF NOT EXISTS "skill_session_logs_day_log_set_idx" ON "skill_session_logs" ("skill_day_log_id", "skill_program_exercise_id", "set_number");
 `;
 
 async function main() {
