@@ -18,22 +18,39 @@ services:
     startCommand: npm start
     healthCheckPath: /
     # Coach/athlete-uploaded form-check and skill videos, plus coach-drawn
-    # annotation PNGs, live on local disk under server/uploads (see
-    # UPLOADS_DIR/SKILL_VIDEOS_DIR/ANNOTATIONS_DIR in server/routes.ts) --
-    # without a persistent disk, a web service's filesystem is wiped on
-    # every redeploy and every restart, silently deleting every video
-    # anyone has ever saved. Free-plan web services can't attach a disk at
-    # all, hence the "starter" plan above -- if this ever needs to move off
-    # Render's own disks (multi-instance scaling, wanting a CDN in front of
-    # video), swap the uploads' multer disk storage for an S3-compatible
-    # object store instead and drop this block.
+    # annotation PNGs, live on disk (see UPLOADS_ROOT in
+    # server/uploaded-files.ts, and STORAGE_PATH below) -- without a
+    # persistent disk, a web service's filesystem is wiped on every redeploy
+    # and every restart, silently deleting every video anyone has ever
+    # saved. Free-plan web services can't attach a disk at all, hence the
+    # "starter" plan above -- if this ever needs to move off Render's own
+    # disks (multi-instance scaling, wanting a CDN in front of video), swap
+    # the uploads' multer disk storage for an S3-compatible object store
+    # instead and drop this block.
+    #
+    # Mounted OUTSIDE the source tree (/var/data, not
+    # /opt/render/project/src/...). Confirmed via a live diagnostic
+    # (server's own GET /api/admin/storage-check route, added specifically
+    # for this) on 2026-09-02/03: a video uploaded and confirmed viewable
+    # was reported missing from disk minutes later, at the exact previous
+    # in-tree mount path -- not a suspicion, a direct statfs-backed
+    # existence check on the file that should have been there. Render's own
+    # docs describe an in-tree mount path as supported, but the observed
+    # behavior on this service didn't match, so this relocation is the
+    # actual fix being tried, not a theoretical precaution.
     disk:
       name: forge-uploads
-      mountPath: /opt/render/project/src/server/uploads
+      mountPath: /var/data/forge-uploads
       sizeGB: 10
     envVars:
       - key: NODE_ENV
         value: production
+      # Where UPLOADS_ROOT (server/uploaded-files.ts) actually writes/reads
+      # uploaded files -- must exactly match disk.mountPath above. Local dev
+      # has neither this var nor a disk; UPLOADS_ROOT's own fallback covers
+      # that case.
+      - key: STORAGE_PATH
+        value: /var/data/forge-uploads
       - key: SESSION_SECRET
         generateValue: true
       # Signs the short-lived /uploads access tokens (server/media-url-signing.ts)
