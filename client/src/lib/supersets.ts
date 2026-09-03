@@ -22,6 +22,27 @@ export function colorForLabel(label: string): string {
   return LETTER_BADGE_COLORS[index % LETTER_BADGE_COLORS.length] ?? LETTER_BADGE_COLORS[0];
 }
 
+// Same letter-index scheme as colorForLabel above, so a superset's badge
+// and its block's own border+background tint are always the same hue --
+// what actually lets an athlete tell one superset apart from the next at a
+// glance on the accordion workout view (client/src/pages/workout.tsx),
+// instead of every block reading as the same generic card.
+const LETTER_BORDER_COLORS = [
+  "border-primary bg-primary/5",
+  "border-blue-500 bg-blue-500/5",
+  "border-purple-500 bg-purple-500/5",
+  "border-emerald-500 bg-emerald-500/5",
+  "border-amber-500 bg-amber-500/5",
+  "border-pink-500 bg-pink-500/5",
+  "border-teal-500 bg-teal-500/5",
+  "border-rose-500 bg-rose-500/5",
+];
+
+export function borderTintForLabel(label: string): string {
+  const index = label.toUpperCase().charCodeAt(0) - 65;
+  return LETTER_BORDER_COLORS[index % LETTER_BORDER_COLORS.length] ?? LETTER_BORDER_COLORS[0];
+}
+
 /**
  * A(linked), B, C -> "A1","A2","B","C". Consecutive items with
  * linkedToNext=true share a letter with sub-numbers; everything else gets

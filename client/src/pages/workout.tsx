@@ -17,7 +17,7 @@ import { apiRequest, ApiError, resolveApiUrl, getNativeToken, getJson } from "@/
 import type { EffectiveBranding } from "@/lib/branding-style";
 import { cn } from "@/lib/utils";
 import { contrastForegroundHsl } from "@/lib/color";
-import { groupConsecutiveBySupersetGroup, colorForLabel } from "@/lib/supersets";
+import { groupConsecutiveBySupersetGroup, colorForLabel, borderTintForLabel } from "@/lib/supersets";
 import { ExerciseVideoThumb } from "@/components/exercise-video";
 import { RestTimerControl, type RestTimerHandle } from "@/components/rest-timer";
 import { useWakeLock } from "@/hooks/use-wake-lock";
@@ -73,8 +73,7 @@ import {
   Plus,
   Minus,
   Check,
-  ChevronLeft,
-  ChevronRight,
+  ChevronDown,
   TrendingUp,
   WifiOff,
   CloudUpload,
@@ -947,18 +946,16 @@ export function WorkoutPage({
 
   const [items, setItems] = useState<ItemState[]>([]);
   const [hydrated, setHydrated] = useState(false);
-  const [pageIndex, setPageIndex] = useState(0);
-  const [viewMode, setViewMode] = useState<"overview" | "logging">("overview");
+  // Peek + Rail accordion: at most one exercise expanded at a time (its own
+  // ItemState.key), the whole workout always visible/scrollable above and
+  // below it -- replaces the old separate "overview list" vs. "full-screen
+  // single-exercise" viewMode split. null means nothing's expanded yet.
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const restTimerRef = useRef<RestTimerHandle>(null);
 
   // Keep the screen awake for the length of an active logging session --
   // athletes are usually mid-set with the phone propped up, not holding it.
-  useWakeLock(viewMode === "logging");
-
-  function openPage(index: number) {
-    setPageIndex(index);
-    setViewMode("logging");
-  }
+  useWakeLock(expandedKey !== null);
 
   useEffect(() => {
     if (data && !hydrated) {
@@ -983,7 +980,7 @@ export function WorkoutPage({
       );
       setItems([...correctiveItems, ...exerciseItems]);
       setHydrated(true);
-      setPageIndex(0);
+      setExpandedKey(null);
     }
   }, [data, hydrated, user]);
 
@@ -1603,7 +1600,6 @@ export function WorkoutPage({
   }
 
   const pages = buildPages(items);
-  const currentPage = pages[Math.min(pageIndex, pages.length - 1)];
   // Display-only default for the page-wide total below (and the share
   // card) -- individual exercises each carry their own unit now (see
   // ItemState.weightUnit), this is just what the combined total is shown
@@ -1657,30 +1653,48 @@ export function WorkoutPage({
   // it's the athlete's own call to make.
   const canSubstituteExercise = !hasCoachForThisProgram;
 
+  // Closing the exercise that's currently open -- tapping its own name/
+  // chevron again, or opening a different one -- mirrors the old "Done --
+  // Back to Workout" step: autosave, and warn about anything left
+  // unfinished in just that one exercise (never blocks -- an athlete who
+  // genuinely couldn't finish a set should still be able to move on, but
+  // this names exactly what got skipped instead of a silent unfilled
+  // circle).
+  function collapseExercise(item: ItemState, page: Page) {
+    autosaveNow(items);
+    const missing = incompleteExerciseNames([{ kind: page.kind, items: [item], labels: page.labels }]);
+    if (missing.length > 0) {
+      toast.warning(`Saved, but not fully logged: ${missing.join(", ")}.`);
+    }
+  }
+
+  function toggleExercise(item: ItemState, page: Page) {
+    if (expandedKey === item.key) {
+      collapseExercise(item, page);
+      setExpandedKey(null);
+    } else {
+      setExpandedKey(item.key);
+    }
+  }
+
   return (
     <>
       <AppShell
         title={
-          // Hidden on the single-exercise logging screen -- that screen
-          // already has its own "Back to full workout" link, so the date
-          // header here is just repeated chrome eating vertical space right
-          // where the athlete needs to see the exercise and log a set.
-          viewMode === "overview" ? (
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  autosaveNow(items);
-                  navigate(routeBase);
-                }}
-                aria-label="Back to calendar"
-                className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
-              >
-                <ArrowLeft className="h-6 w-6 md:h-7 md:w-7" />
-              </button>
-              <span>{format(parseISO(date), "EEEE, MMM d")}</span>
-            </div>
-          ) : null
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                autosaveNow(items);
+                navigate(routeBase);
+              }}
+              aria-label="Back to calendar"
+              className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <ArrowLeft className="h-6 w-6 md:h-7 md:w-7" />
+            </button>
+            <span>{format(parseISO(date), "EEEE, MMM d")}</span>
+          </div>
         }
       actions={
         // The lbs/kg toggle used to live here as one page-wide switch --
@@ -1716,13 +1730,10 @@ export function WorkoutPage({
       {/* Only for an actual training day -- a rest day has nothing to check
           in about. Inline and always editable (not a blocking gate), so an
           athlete who under- or over-estimated their soreness or stress can
-          come back and fix it before or during the session. The readiness
-          card itself is overview-only -- once the athlete is inside a
-          single exercise, logging a set is the priority and this is just
-          space taken from that. */}
+          come back and fix it before or during the session. */}
       {user?.role === "athlete" && !data.day.isRestDay && (
         <div className="mb-4 space-y-2">
-          {viewMode === "overview" && <WellnessGate />}
+          <WellnessGate />
           <CaraTimer />
         </div>
       )}
@@ -1750,8 +1761,8 @@ export function WorkoutPage({
           </CardContent>
         </Card>
       ) : (
-        <div className={cn("space-y-4", viewMode === "logging" && "pb-4")}>
-          {viewMode === "overview" && stats.totalSets > 0 && (
+        <div className="space-y-4">
+          {stats.totalSets > 0 && (
             <div className="rounded-lg border border-border bg-surface p-4">
               <div className="mb-3 flex items-baseline gap-8">
                 <div>
@@ -1794,184 +1805,166 @@ export function WorkoutPage({
             </div>
           )}
 
-          {viewMode === "overview" ? (
-            <div className="space-y-3">
-              {showReadinessBanner && <ReadinessBanner date={date} />}
-              {apiBase === "/api/athlete" && (
-                <ModifiedWorkoutBanner
-                  apiBase={apiBase}
-                  assignmentId={assignmentId}
-                  programDayId={programDayId}
-                  date={date}
-                  todayPainParts={data.todayPainParts}
-                  hasModifiableRisk={data.hasModifiableRisk}
-                  isModified={data.isModified}
-                />
-              )}
-              <p className="text-xs text-muted-foreground">
-                Everything for today, A to Z — tap any exercise to prep or start logging.
+          <div className="space-y-3">
+            {showReadinessBanner && <ReadinessBanner date={date} />}
+            {apiBase === "/api/athlete" && (
+              <ModifiedWorkoutBanner
+                apiBase={apiBase}
+                assignmentId={assignmentId}
+                programDayId={programDayId}
+                date={date}
+                todayPainParts={data.todayPainParts}
+                hasModifiableRisk={data.hasModifiableRisk}
+                isModified={data.isModified}
+              />
+            )}
+            {pages.length === 0 ? (
+              <p className="py-10 text-center text-sm text-muted-foreground">
+                Nothing prescribed for this day yet.
               </p>
-              {pages.length === 0 ? (
-                <p className="py-10 text-center text-sm text-muted-foreground">
-                  Nothing prescribed for this day yet.
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {pages.map((page, i) => {
-                    const complete = isPageComplete(page);
+            ) : (
+              <>
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs text-muted-foreground">
+                    Everything for today, A to Z — tap an exercise to expand it and log your sets.
+                  </p>
+                  <RestTimerControl ref={restTimerRef} defaultSeconds={pages[0]?.items[0]?.restSeconds} />
+                </div>
+
+                {/* Peek + Rail: every exercise is always visible and always
+                    shows its own set-completion rail (even collapsed), so
+                    the whole workout's status reads at a glance without
+                    opening anything. At most one exercise expanded at a
+                    time -- tapping its name/chevron again (or opening a
+                    different one) collapses it; the mini rail is read-only
+                    progress, not a separate control. Each superset (and
+                    each standalone exercise) gets its own color via
+                    borderTintForLabel/colorForLabel, the same letter -> hue
+                    mapping the badge already used, so the list reads as
+                    distinct chained groups instead of one long
+                    undifferentiated wall. exerciseTheme.backdropColor (a
+                    Personal Page override, see ExerciseLogContent's own
+                    comment) tints the expanded body specifically -- the
+                    surface an athlete actually stares at while logging,
+                    the closest real equivalent to the old sticky bar's
+                    backdrop this replaces. navArrowColor recolors the
+                    expand/collapse chevron itself now, a more literal
+                    match than the old Back/Next paging arrows it used to
+                    drive. */}
+                <div className="space-y-2.5">
+                  {pages.map((page, pageIdx) => {
+                    const isSuperset = page.kind === "exercise" && page.items.length > 1;
+                    const tint =
+                      page.kind === "corrective"
+                        ? "border-cyan-900/40 bg-cyan-950/10"
+                        : borderTintForLabel(page.labels[page.items[0].key]);
                     return (
-                      <button
-                        key={i}
-                        type="button"
-                        onClick={() => openPage(i)}
-                        className={cn(
-                          "flex w-full items-start gap-3 rounded-md border p-3 text-left transition-colors hover:border-primary/50",
-                          page.kind === "corrective"
-                            ? "border-cyan-900/40 bg-cyan-950/10"
-                            : "border-border",
+                      <div key={pageIdx} className={cn("space-y-3 rounded-md border-l-4 border p-3", tint)}>
+                        {page.kind === "corrective" && (
+                          <p className="label-xs flex items-center gap-1.5 text-cyan-400">
+                            <Stethoscope className="h-3.5 w-3.5 shrink-0" />
+                            Correctives
+                          </p>
                         )}
-                      >
-                        <div className="min-w-0 flex-1 space-y-2">
-                          {page.kind === "corrective" && (
-                            <p className="label-xs flex items-center gap-1.5 text-cyan-400">
-                              <Stethoscope className="h-3.5 w-3.5 shrink-0" />
-                              Correctives
-                            </p>
-                          )}
-                          {page.items.map((it) => (
-                            <div key={it.key}>
-                              <span className="flex items-center gap-1.5 text-sm font-semibold">
+                        {isSuperset && <p className="label-xs text-muted-foreground">Superset</p>}
+                        {page.items.map((item) => {
+                          const expanded = expandedKey === item.key;
+                          const label = page.labels[item.key];
+                          return (
+                            <div key={item.key}>
+                              <button
+                                type="button"
+                                onClick={() => toggleExercise(item, page)}
+                                className="flex w-full items-start gap-3 text-left"
+                              >
                                 <span
                                   className={cn(
-                                    "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-extrabold",
-                                    page.kind === "corrective"
-                                      ? "bg-cyan-500 text-white"
-                                      : colorForLabel(page.labels[it.key]),
+                                    "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-extrabold",
+                                    page.kind === "corrective" ? "bg-cyan-500 text-white" : colorForLabel(label),
                                   )}
                                 >
-                                  {page.labels[it.key]}
+                                  {label}
                                 </span>
-                                {it.exerciseName}
-                              </span>
-                              <p className="pl-9 text-xs font-semibold text-muted-foreground">
-                                {it.prescribedSets} × {it.prescribedReps}
-                                {it.prescribedWeight ? ` @ ${it.prescribedWeight}` : ""}
-                              </p>
+                                <div className="min-w-0 flex-1">
+                                  <span className="flex items-center gap-1.5 text-sm font-semibold">
+                                    <span className="truncate">{item.exerciseName}</span>
+                                    {item.trackingLevel === "none" && (
+                                      <span className="shrink-0 text-[10px] font-medium text-muted-foreground">
+                                        No video needed
+                                      </span>
+                                    )}
+                                  </span>
+                                  <p className="text-xs font-semibold text-muted-foreground">
+                                    {item.prescribedSets} × {item.prescribedReps}
+                                    {item.prescribedWeight ? ` @ ${item.prescribedWeight}` : ""}
+                                  </p>
+                                  {item.sets.length > 0 && (
+                                    <div className="mt-1.5 flex max-w-[140px] gap-1">
+                                      {item.sets.map((set) => (
+                                        <span
+                                          key={set.setNumber}
+                                          className={cn(
+                                            "h-1.5 flex-1 rounded-full",
+                                            isSetComplete(item, set) ? "bg-success" : "bg-secondary",
+                                          )}
+                                        />
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                                <ChevronDown
+                                  className={cn(
+                                    "mt-1 h-4 w-4 shrink-0 text-foreground transition-transform",
+                                    expanded && "rotate-180 text-primary",
+                                  )}
+                                  style={expanded && exerciseTheme?.navArrowColor ? { color: exerciseTheme.navArrowColor } : undefined}
+                                />
+                              </button>
+                              {expanded && (
+                                <div
+                                  className="mt-3 border-t border-border pt-3"
+                                  style={exerciseTheme?.backdropColor ? { backgroundColor: exerciseTheme.backdropColor } : undefined}
+                                >
+                                  <ExerciseLogContent
+                                    item={item}
+                                    linked={isSuperset}
+                                    badgeLabel={label}
+                                    unit={item.weightUnit}
+                                    onUnitChange={(u) => setItemWeightUnit(item.key, u)}
+                                    assignmentId={Number(assignmentId)}
+                                    programDayId={Number(programDayId)}
+                                    date={date}
+                                    apiBase={apiBase}
+                                    programsApiBase={programsApiBase}
+                                    videoCheckMode={videoCheckMode}
+                                    canSubstituteExercise={canSubstituteExercise}
+                                    programId={data.programId}
+                                    exerciseTheme={exerciseTheme}
+                                    onUpdateItem={(patch) => updateItem(item.key, patch)}
+                                    onUpdateSet={(setNumber, patch, options) =>
+                                      updateSet(item.key, setNumber, patch, options)
+                                    }
+                                    onAddSet={() => addSet(item.key)}
+                                    onRemoveSet={() => removeSet(item.key)}
+                                  />
+                                </div>
+                              )}
                             </div>
-                          ))}
-                        </div>
-                        <div
-                          className={cn(
-                            "flex h-7 w-7 shrink-0 items-center justify-center rounded-full border",
-                            complete
-                              ? "border-success bg-success text-success-foreground"
-                              : "border-dashed border-muted-foreground/30",
-                          )}
-                        >
-                          {complete && <Check className="h-4 w-4" />}
-                        </div>
-                      </button>
+                          );
+                        })}
+                      </div>
                     );
                   })}
                 </div>
-              )}
-              {pages.length > 0 && (
+
                 <div className="flex flex-col gap-2 sm:flex-row">
-                  <Button variant="secondary" className="flex-1" onClick={() => openPage(0)}>
+                  <Button
+                    variant="secondary"
+                    className="flex-1"
+                    onClick={() => setExpandedKey(pages[0].items[0].key)}
+                  >
                     Start with {pages[0].kind === "corrective" ? "Correctives" : pages[0].labels[pages[0].items[0].key]}
                   </Button>
-                  <Button
-                    className="flex-1"
-                    onClick={() => markWorkoutComplete(items)}
-                    disabled={justCompleted}
-                  >
-                    <CheckCircle2 className="h-4 w-4" />
-                    {justCompleted ? "Workout Complete" : "Mark Workout Complete"}
-                  </Button>
-                </div>
-              )}
-            </div>
-          ) : currentPage ? (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <button
-                  type="button"
-                  onClick={() => {
-                    autosaveNow(items);
-                    setViewMode("overview");
-                  }}
-                  className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
-                >
-                  <ArrowLeft className="h-3.5 w-3.5" />
-                  Back to full workout
-                </button>
-              </div>
-              {currentPage.kind === "corrective" && (
-                <p className="label-xs flex items-center gap-1.5 text-cyan-400">
-                  <Stethoscope className="h-3.5 w-3.5" />
-                  Correctives
-                </p>
-              )}
-              <Card
-                className={cn(
-                  currentPage.kind === "corrective"
-                    ? "border-cyan-900/40 bg-cyan-950/10"
-                    : currentPage.items.length > 1
-                      ? "border-primary/40"
-                      : undefined,
-                )}
-              >
-                <CardContent className="divide-y divide-border p-4">
-                  {currentPage.items.map((item, i) => (
-                    <div key={item.key} className={i > 0 ? "pt-4" : ""}>
-                      <ExerciseLogContent
-                        item={item}
-                        linked={currentPage.kind === "exercise" && currentPage.items.length > 1}
-                        badgeLabel={currentPage.labels[item.key]}
-                        unit={item.weightUnit}
-                        onUnitChange={(u) => setItemWeightUnit(item.key, u)}
-                        assignmentId={Number(assignmentId)}
-                        programDayId={Number(programDayId)}
-                        date={date}
-                        apiBase={apiBase}
-                        programsApiBase={programsApiBase}
-                        videoCheckMode={videoCheckMode}
-                        canSubstituteExercise={canSubstituteExercise}
-                        programId={data.programId}
-                        exerciseTheme={exerciseTheme}
-                        onUpdateItem={(patch) => updateItem(item.key, patch)}
-                        onUpdateSet={(setNumber, patch, options) => updateSet(item.key, setNumber, patch, options)}
-                        onAddSet={() => addSet(item.key)}
-                        onRemoveSet={() => removeSet(item.key)}
-                      />
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-
-              <div className="flex flex-col gap-2 sm:flex-row">
-                {pageIndex < pages.length - 1 ? (
-                  <Button
-                    className="flex-1"
-                    onClick={() => {
-                      autosaveNow(items);
-                      // Doesn't block leaving the page -- an athlete who
-                      // genuinely couldn't finish a set should still be able
-                      // to move on -- but names exactly what's unfinished
-                      // instead of silently dropping them at the overview
-                      // with nothing but an unfilled circle to explain why.
-                      const missing = incompleteExerciseNames([currentPage]);
-                      if (missing.length > 0) {
-                        toast.warning(`Saved, but not fully logged: ${missing.join(", ")}.`);
-                      }
-                      setViewMode("overview");
-                    }}
-                    disabled={submitMutation.isPending}
-                  >
-                    <CheckCircle2 className="h-4 w-4" />
-                    Done — Back to Workout
-                  </Button>
-                ) : (
                   <Button
                     className="flex-1"
                     onClick={() => {
@@ -1980,21 +1973,20 @@ export function WorkoutPage({
                       if (missing.length > 0) {
                         toast.warning(`Marked complete, but not fully logged: ${missing.join(", ")}.`);
                       }
-                      setViewMode("overview");
                     }}
                     disabled={justCompleted}
                   >
                     <CheckCircle2 className="h-4 w-4" />
                     {justCompleted ? "Workout Complete" : "Mark Workout Complete"}
                   </Button>
-                )}
-              </div>
-            </div>
-          ) : null}
+                </div>
+              </>
+            )}
+          </div>
         </div>
       )}
 
-      <div className={cn("mt-4", viewMode === "logging" && pages.length > 0 && "pb-14")}>
+      <div className="mt-4">
         {hasCoachForThisProgram && (
           <WorkoutCommentThread
             role="athlete"
@@ -2004,41 +1996,6 @@ export function WorkoutPage({
           />
         )}
       </div>
-
-      {viewMode === "logging" && pages.length > 0 && (
-        <div
-          className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-surface"
-          style={{
-            paddingBottom: "env(safe-area-inset-bottom)",
-            ...(exerciseTheme?.backdropColor ? { backgroundColor: exerciseTheme.backdropColor } : null),
-          }}
-        >
-          <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3 sm:px-8">
-            <button
-              type="button"
-              onClick={() =>
-                pageIndex === 0 ? setViewMode("overview") : setPageIndex((p) => p - 1)
-              }
-              className="flex items-center gap-1.5 text-sm font-semibold text-primary"
-              style={exerciseTheme?.navArrowColor ? { color: exerciseTheme.navArrowColor } : undefined}
-            >
-              <ChevronLeft className="h-4 w-4" />
-              Back
-            </button>
-            <RestTimerControl ref={restTimerRef} defaultSeconds={currentPage?.items[0]?.restSeconds} />
-            <button
-              type="button"
-              onClick={() => setPageIndex((p) => Math.min(pages.length - 1, p + 1))}
-              disabled={pageIndex === pages.length - 1}
-              className="flex items-center gap-1.5 text-sm font-semibold text-primary disabled:pointer-events-none disabled:opacity-30"
-              style={exerciseTheme?.navArrowColor ? { color: exerciseTheme.navArrowColor } : undefined}
-            >
-              Next
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-      )}
       </AppShell>
     </>
   );
