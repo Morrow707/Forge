@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type TouchEvent } from "react";
 import { useParams, useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
@@ -958,6 +958,12 @@ export function WorkoutPage({
   // was left. Missing key means set 1.
   const [visibleSetByKey, setVisibleSetByKey] = useState<Record<string, number>>({});
   const restTimerRef = useRef<RestTimerHandle>(null);
+  // Swipe left/right on the open exercise's card pages between sets (see
+  // handleSwipeStart/handleSwipeEnd below) -- declared up here with the
+  // rest of the hooks, not next to those handlers, since this component
+  // has an early return for the loading state further down and a hook
+  // can't sit after that without breaking React's hook-order rule.
+  const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
 
   // Keep the screen awake for the length of an active logging session --
   // athletes are usually mid-set with the phone propped up, not holding it.
@@ -1693,6 +1699,31 @@ export function WorkoutPage({
     if (expandedKey !== item.key) setExpandedKey(item.key);
   }
 
+  // Swipe left/right on the open exercise's body pages between sets, same
+  // destination as tapping a rail segment. swipeStartRef (declared up with
+  // the component's other hooks) is a single ref, which is enough since
+  // only one exercise is ever expanded (and therefore swipeable) at a
+  // time. Requires a mostly-horizontal, decisively-past-a-scroll-flick
+  // drag so it doesn't fight the page's own vertical scroll.
+  function handleSwipeStart(e: TouchEvent<HTMLDivElement>) {
+    const t = e.touches[0];
+    swipeStartRef.current = { x: t.clientX, y: t.clientY };
+  }
+
+  function handleSwipeEnd(item: ItemState, e: TouchEvent<HTMLDivElement>) {
+    const start = swipeStartRef.current;
+    swipeStartRef.current = null;
+    if (!start || item.sets.length < 2) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - start.x;
+    const dy = t.clientY - start.y;
+    if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    const current = visibleSetByKey[item.key] ?? 0;
+    const next = current + (dx < 0 ? 1 : -1);
+    if (next < 0 || next >= item.sets.length) return;
+    jumpToSet(item, next);
+  }
+
   return (
     <>
       <AppShell
@@ -1934,7 +1965,7 @@ export function WorkoutPage({
                                             "h-1.5 flex-1 rounded-full transition-colors",
                                             isSetComplete(item, set) ? "bg-amber-400" : "bg-white",
                                             i === visibleSetIndex &&
-                                              "ring-2 ring-primary ring-offset-1 ring-offset-background",
+                                              "ring-2 ring-orange-400 ring-offset-1 ring-offset-background",
                                           )}
                                         />
                                       ))}
@@ -1960,6 +1991,8 @@ export function WorkoutPage({
                                 <div
                                   className="mt-3 border-t border-border pt-3"
                                   style={exerciseTheme?.backdropColor ? { backgroundColor: exerciseTheme.backdropColor } : undefined}
+                                  onTouchStart={handleSwipeStart}
+                                  onTouchEnd={(e) => handleSwipeEnd(item, e)}
                                 >
                                   <ExerciseLogContent
                                     item={item}
