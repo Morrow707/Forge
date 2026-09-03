@@ -3416,6 +3416,7 @@ function ExerciseLogContent({
               loadKg={loadKg}
               formFaultThresholds={activeMovementProfile}
               jumpHeightOutlierPercent={activeMovementProfile?.jumpHeightOutlierPercent}
+              positionScaleCorrection={activeMovementProfile?.positionScaleCorrection}
               recordVideo={mergedTracking}
               onCapture={handleTrackerCapture}
               videoContext={videoContextFor(trackingSet)}

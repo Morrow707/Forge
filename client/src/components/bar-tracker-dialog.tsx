@@ -322,6 +322,7 @@ export function BarTrackerDialog({
   loadKg,
   formFaultThresholds,
   jumpHeightOutlierPercent,
+  positionScaleCorrection,
   recordVideo,
   onCapture,
   videoContext,
@@ -344,6 +345,16 @@ export function BarTrackerDialog({
   // The active "jump" MovementProfile's jumpHeightOutlierPercent, same
   // deal -- undefined/null falls back to summarizeJumpSet's own default.
   jumpHeightOutlierPercent?: number | null;
+  // The active MovementProfile's own positionScaleCorrection (see
+  // shared/schema.ts) -- corrects the raw trace itself before
+  // summarizeTrackedSet ever computes ROM/velocity/power from it, same as
+  // av-bar-tracker-dialog.tsx's own identical prop. Previously only wired
+  // up on that iOS dialog -- this platform silently defaulted to no
+  // correction (1) regardless of what a coach/admin set on the profile,
+  // even though the column itself was always meant to be shared across
+  // both tracking pipelines, not iOS-only. Null/undefined means no
+  // correction, unchanged from today's behavior.
+  positionScaleCorrection?: number | null;
   // The exercise's equipment (Barbell/Dumbbell/Bodyweight/etc.) -- gates bar
   // tilt and bar-path-drift off entirely for anything that isn't a shared
   // two-handed implement (see SHARED_BAR_EQUIPMENT in pose-tracking.ts):
@@ -1713,6 +1724,7 @@ export function BarTrackerDialog({
       heightIn,
       inferFirstPhaseHint(movementType, exerciseName),
       rejectionEventsRef.current,
+      positionScaleCorrection ?? 1,
     );
     if (!metrics) {
       toast.error("Couldn't get a clean read — try again with your whole body in frame.");
