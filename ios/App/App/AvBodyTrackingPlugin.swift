@@ -1183,7 +1183,12 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                         // so the JS bridge can group a frame's joints back into per-hand sets.
                         guard let points = try? observation.recognizedPoints(forGroupKey: .all) else { continue }
                         for (jointName, label) in Self.handPoseJoints {
-                            guard let point = points[jointName], point.confidence > 0.1 else { continue }
+                            // recognizedPoints(forGroupKey:) returns [VNRecognizedPointKey: VNRecognizedPoint] --
+                            // JointName's own .rawValue is what actually indexes it, not the JointName enum
+                            // case directly (real compiler error caught in CI: "cannot convert value of type
+                            // 'VNHumanHandPoseObservation.JointName' to expected argument type
+                            // 'VNRecognizedPointKey'").
+                            guard let point = points[jointName.rawValue], point.confidence > 0.1 else { continue }
                             handJoints.append([
                                 "hand": handIndex,
                                 "name": label,
