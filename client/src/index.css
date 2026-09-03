@@ -146,6 +146,44 @@
   --radius: 0.6rem;
 }
 
+/* Light mode -- opt-in only (see lib/theme.ts), dark above stays the
+   default for everyone who's never touched the toggle in Account
+   Settings. Same token set as :root, so nothing in any component needs
+   to know or care which theme is active; only the values below change.
+   --primary/--accent/--ring/--destructive/--success are deliberately left
+   alone -- the same "deep ember" orange already has plenty of contrast
+   against white, no reason to re-tune a color that isn't the problem.
+   --rim flips from white to a dark neutral: it's the frosted-card
+   border/inset-highlight tint (see card.tsx), and a white rim at low
+   opacity is invisible against a white/near-white card the way it reads
+   as a highlight against a near-black one. */
+:root.light {
+  color-scheme: light;
+
+  --background: 0 0% 100%;
+  --foreground: var(--neutral-hue) 25% 14%;
+
+  --card: 0 0% 100%;
+  --card-foreground: var(--neutral-hue) 25% 14%;
+
+  --popover: 0 0% 100%;
+  --popover-foreground: var(--neutral-hue) 25% 14%;
+
+  --surface: var(--neutral-hue) 25% 98%;
+  --surface-elevated: var(--neutral-hue) 20% 94%;
+
+  --secondary: var(--neutral-hue) 20% 94%;
+  --secondary-foreground: var(--neutral-hue) 25% 16%;
+
+  --muted: var(--neutral-hue) 25% 96%;
+  --muted-foreground: var(--neutral-hue) 10% 40%;
+
+  --border: var(--neutral-hue) 18% 88%;
+  --input: var(--neutral-hue) 18% 88%;
+
+  --rim: var(--neutral-hue) 20% 22%;
+}
+
 * {
   @apply border-border;
 }

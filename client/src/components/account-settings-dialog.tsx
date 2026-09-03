@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
@@ -15,9 +15,10 @@ import { Label } from "@/components/ui/label";
 import { ColorField } from "@/components/color-field";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { Ticket, AlertTriangle } from "lucide-react";
+import { Ticket, AlertTriangle, Moon, Sun } from "lucide-react";
 import { contrastForegroundHsl, meetsWcagAA, nearestAccessibleColor } from "@/lib/color";
 import { cn } from "@/lib/utils";
+import { getStoredTheme, setTheme, type Theme } from "@/lib/theme";
 import type { PublicUser } from "@shared/schema";
 
 // Same five hues shown in the "Coach Themes" concept deck -- named presets
@@ -50,6 +51,20 @@ export function AccountSettingsDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const qc = useQueryClient();
+
+  // Per-device, applies immediately -- no Save step, same "no batching"
+  // treatment NotificationSettingsDialog already uses for biometric
+  // lock/health sync (a plain look, not account data worth a server
+  // round-trip). Read fresh each time this dialog opens so it can't drift
+  // from whatever another tab/device just set.
+  const [theme, setThemeState] = useState<Theme>(() => getStoredTheme());
+  useEffect(() => {
+    if (open) setThemeState(getStoredTheme());
+  }, [open]);
+  function handleSetTheme(next: Theme) {
+    setTheme(next);
+    setThemeState(next);
+  }
 
   const [name, setName] = useState(user.name);
   const nameMutation = useMutation({
@@ -240,6 +255,44 @@ export function AccountSettingsDialog({
             >
               Update password
             </Button>
+          </div>
+
+          <div className="space-y-1.5 border-t border-border pt-4">
+            <Label>Appearance</Label>
+            <p className="text-xs text-muted-foreground">
+              Dark is the default. This is just a look for this device -- it switches immediately,
+              nothing to save.
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                aria-pressed={theme === "dark"}
+                onClick={() => handleSetTheme("dark")}
+                className={cn(
+                  "flex flex-1 items-center justify-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium transition-colors",
+                  theme === "dark"
+                    ? "border-primary bg-primary/10 text-foreground"
+                    : "border-border text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <Moon className="h-4 w-4" />
+                Dark
+              </button>
+              <button
+                type="button"
+                aria-pressed={theme === "light"}
+                onClick={() => handleSetTheme("light")}
+                className={cn(
+                  "flex flex-1 items-center justify-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium transition-colors",
+                  theme === "light"
+                    ? "border-primary bg-primary/10 text-foreground"
+                    : "border-border text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <Sun className="h-4 w-4" />
+                Light
+              </button>
+            </div>
           </div>
 
           {user.role === "coach" && (

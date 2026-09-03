@@ -2,6 +2,20 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!-- Applies a saved light-mode choice before the first paint -- dark is
+         the default and needs no class at all (see index.css's :root vs
+         :root.light), so this only ever has to ADD the class, never flip a
+         separate default one off. Keep this in sync with applyTheme in
+         src/lib/theme.ts -- same class, same localStorage key, just here
+         too so a light-mode user's very first paint is already correct
+         instead of flashing dark before React mounts and fixes it. -->
+    <script>
+      try {
+        if (localStorage.getItem("forge:theme") === "light") {
+          document.documentElement.classList.add("light");
+        }
+      } catch (e) {}
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>Forge — Coach. Program. Perform.</title>
     <meta name="description" content="Forge is a coaching platform for building exercise libraries, programming training blocks, and syncing athlete calendars." />
