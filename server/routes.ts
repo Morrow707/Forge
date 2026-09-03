@@ -23,7 +23,7 @@ import { buildRecruitingProfilePdf } from "./recruiting-profile";
 import { buildTrainingHistoryCsv, buildTrainingHistoryPdf, csvField } from "./training-history-export";
 import { buildCaraComplianceCsv, buildCaraCompliancePdf } from "./cara-export";
 import { buildMovementScreenSheetPdf } from "./movement-screen-export";
-import { readUploadedFile, getUploadsDiskFreeBytes, UPLOADS_ROOT } from "./uploaded-files";
+import { readUploadedFile, getUploadsDiskFreeBytes, statUploadedFile, UPLOADS_ROOT } from "./uploaded-files";
 import { buildComplianceReportPdf } from "./compliance-report";
 import { buildLegalDocumentPdf } from "./legal-document-export";
 import { GUARDIAN_NOTICE_LIVE, derivePrivacyTier } from "@shared/privacy-tiers";
@@ -905,6 +905,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // failure.
   app.use("/uploads", (_req, res) => {
     res.status(404).json({ message: "File not found" });
+  });
+
+  // Temporary live diagnostic (2026-09-02 video-persistence investigation) --
+  // answers "does this exact file exist on the mounted disk right now"
+  // without needing shell/SSH access, which turned out to be unusable in
+  // the moment (Render's web Shell mangled a pasted command via
+  // bracketed-paste escape sequences on a phone browser). Admin-only,
+  // read-only, one file per request. Safe to remove once this investigation
+  // is closed out -- it's diagnostic scaffolding, not a feature.
+  app.get("/api/admin/storage-check", requireRole("admin"), async (req, res) => {
+    const raw = typeof req.query.path === "string" ? req.query.path : null;
+    if (!raw) {
+      return res.status(400).json({ message: "Provide ?path=/uploads/form-videos/<filename>" });
+    }
+    const pathname = raw.split("?")[0]; // strip a signed URL's ?exp=&sig= if pasted in whole
+    const sizeBytes = await statUploadedFile(pathname);
+    res.json({ path: pathname, uploadsRoot: UPLOADS_ROOT, exists: sizeBytes !== null, sizeBytes });
   });
 
   // Deliberately unauthenticated -- the signup page has to show this before
