@@ -23,7 +23,7 @@ import { buildRecruitingProfilePdf } from "./recruiting-profile";
 import { buildTrainingHistoryCsv, buildTrainingHistoryPdf, csvField } from "./training-history-export";
 import { buildCaraComplianceCsv, buildCaraCompliancePdf } from "./cara-export";
 import { buildMovementScreenSheetPdf } from "./movement-screen-export";
-import { readUploadedFile, getUploadsDiskFreeBytes } from "./uploaded-files";
+import { readUploadedFile, getUploadsDiskFreeBytes, UPLOADS_ROOT } from "./uploaded-files";
 import { buildComplianceReportPdf } from "./compliance-report";
 import { buildLegalDocumentPdf } from "./legal-document-export";
 import { GUARDIAN_NOTICE_LIVE, derivePrivacyTier } from "@shared/privacy-tiers";
@@ -139,7 +139,7 @@ import { startOfWeek, addWeeks, formatISO } from "date-fns";
 // Form-check clips are opt-in and athlete-initiated: recorded in the
 // browser, previewed, then either saved here or discarded and never sent.
 // There is no automatic/background upload of raw video anywhere in the app.
-const UPLOADS_DIR = path.join(process.cwd(), "server", "uploads", "form-videos");
+const UPLOADS_DIR = path.join(UPLOADS_ROOT, "form-videos");
 fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
 // Video retention (storage.sweepVideoRetentionCap) only actually trims anything once
@@ -172,7 +172,7 @@ async function requireDiskSpace(_req: express.Request, res: express.Response, ne
 // Coach-drawn markup on a paused video frame -- sent as a PNG data URL
 // (small, canvas-generated) rather than multipart, decoded and written to
 // disk here the same way an uploaded video is.
-const ANNOTATIONS_DIR = path.join(process.cwd(), "server", "uploads", "annotations");
+const ANNOTATIONS_DIR = path.join(UPLOADS_ROOT, "annotations");
 fs.mkdirSync(ANNOTATIONS_DIR, { recursive: true });
 const MAX_ANNOTATION_BYTES = 5 * 1024 * 1024;
 
@@ -234,7 +234,7 @@ const uploadFormVideo = multer({
 // "save for coach" on the mechanics or sprint tracker's review screen (see
 // MechanicsTrackerDialog/SprintTrackerDialog); a session the athlete never
 // opts into never uploads video at all.
-const SKILL_VIDEOS_DIR = path.join(process.cwd(), "server", "uploads", "skill-videos");
+const SKILL_VIDEOS_DIR = path.join(UPLOADS_ROOT, "skill-videos");
 fs.mkdirSync(SKILL_VIDEOS_DIR, { recursive: true });
 
 // Which gated /uploads directories the record-access audit log's streaming
@@ -265,7 +265,7 @@ const uploadSkillVideo = multer({
 // same upload mechanics as the athlete/skill clip uploads above, just a
 // separate directory since this is authored instructional content, not an
 // athlete's own captured rep.
-const LESSON_VIDEOS_DIR = path.join(process.cwd(), "server", "uploads", "lesson-videos");
+const LESSON_VIDEOS_DIR = path.join(UPLOADS_ROOT, "lesson-videos");
 fs.mkdirSync(LESSON_VIDEOS_DIR, { recursive: true });
 
 const uploadLessonVideo = multer({
@@ -288,7 +288,7 @@ const uploadLessonVideo = multer({
 // PDF only, kept to a narrow allowlist (never an executable/script type)
 // since this ends up served back as a direct download link to any athlete
 // enrolled in the class.
-const LESSON_ATTACHMENTS_DIR = path.join(process.cwd(), "server", "uploads", "lesson-attachments");
+const LESSON_ATTACHMENTS_DIR = path.join(UPLOADS_ROOT, "lesson-attachments");
 fs.mkdirSync(LESSON_ATTACHMENTS_DIR, { recursive: true });
 
 const uploadLessonAttachment = multer({
@@ -318,7 +318,7 @@ const IMAGE_EXTENSION_BY_MIME: Record<string, string> = {
   "image/svg+xml": ".svg",
 };
 
-const LESSON_IMAGES_DIR = path.join(process.cwd(), "server", "uploads", "lesson-images");
+const LESSON_IMAGES_DIR = path.join(UPLOADS_ROOT, "lesson-images");
 fs.mkdirSync(LESSON_IMAGES_DIR, { recursive: true });
 
 const uploadLessonImage = multer({
@@ -350,7 +350,7 @@ const TEAM_LOGO_EXTENSION_BY_MIME: Record<string, string> = {
   "image/webp": ".webp",
 };
 
-const TEAM_LOGOS_DIR = path.join(process.cwd(), "server", "uploads", "team-logos");
+const TEAM_LOGOS_DIR = path.join(UPLOADS_ROOT, "team-logos");
 fs.mkdirSync(TEAM_LOGOS_DIR, { recursive: true });
 
 const uploadTeamLogo = multer({
@@ -374,7 +374,7 @@ const uploadTeamLogo = multer({
 // subdirectory, not TEAM_LOGOS_DIR, so a team's file can be replaced/deleted
 // independently of the org-wide logo without any risk of the two colliding
 // on disk. Same rasterized-only policy/size limit as the org logo above.
-const TEAM_BRANDING_DIR = path.join(process.cwd(), "server", "uploads", "team-branding");
+const TEAM_BRANDING_DIR = path.join(UPLOADS_ROOT, "team-branding");
 fs.mkdirSync(TEAM_BRANDING_DIR, { recursive: true });
 
 const uploadTeamBrandingLogo = multer({
@@ -398,7 +398,7 @@ const uploadTeamBrandingLogo = multer({
 // as team logos above, gated behind media-url-signing.ts's signed-URL
 // scheme (see its GATED_UPLOAD_DIRS) rather than left public, since a
 // screenshot of "here's the bug" can just as easily show an athlete's page.
-const PROBLEM_REPORTS_DIR = path.join(process.cwd(), "server", "uploads", "problem-reports");
+const PROBLEM_REPORTS_DIR = path.join(UPLOADS_ROOT, "problem-reports");
 fs.mkdirSync(PROBLEM_REPORTS_DIR, { recursive: true });
 
 const uploadProblemReportPhoto = multer({
@@ -891,7 +891,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     next();
   });
-  app.use("/uploads", express.static(path.join(process.cwd(), "server", "uploads")));
+  app.use("/uploads", express.static(UPLOADS_ROOT));
   // express.static calls next() rather than responding when a file isn't
   // found, so a missing upload (a video whose row survived some past
   // ephemeral-disk wipe, or any other vanished file) would otherwise fall

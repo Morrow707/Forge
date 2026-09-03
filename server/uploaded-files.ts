@@ -10,7 +10,15 @@
 import fs from "fs/promises";
 import path from "path";
 
-const UPLOADS_ROOT = path.join(process.cwd(), "server", "uploads");
+// STORAGE_PATH (render.yaml) points this at the persistent disk's mount point
+// (outside the deployed source tree) in production; falls back to the old
+// in-repo path for local dev, where there's no disk to mount at all. Exported
+// so routes.ts derives every one of its own upload subdirectories (form
+// videos, skill videos, annotations, lesson media, logos, ...) from this
+// exact same value instead of each recomputing process.cwd() independently --
+// two paths that are SUPPOSED to be identical but are computed separately are
+// exactly the kind of thing that quietly drifts apart during a refactor.
+export const UPLOADS_ROOT = process.env.STORAGE_PATH || path.join(process.cwd(), "server", "uploads");
 
 // Every URL this is ever called with is one this server generated itself
 // (crypto.randomUUID()-named, returned from an /api/*/form-video or
