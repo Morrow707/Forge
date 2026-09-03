@@ -97,6 +97,7 @@ import type { MovementProfile, ExercisePageTheme } from "@shared/schema";
 import { parseProgression } from "@/lib/progression";
 import { PlateCalculatorDialog } from "@/components/plate-calculator-dialog";
 import { ReadinessBanner } from "@/components/readiness-banner";
+import { ExerciseSheetTutorial } from "@/components/exercise-sheet-tutorial";
 import { ModifiedWorkoutBanner } from "@/components/modified-workout-banner";
 import { WellnessGate } from "@/components/wellness-gate";
 import { CaraTimer } from "@/components/cara-timer";
@@ -1853,6 +1854,7 @@ export function WorkoutPage({
           )}
 
           <div className="space-y-3">
+            {pages.length > 0 && <ExerciseSheetTutorial />}
             {showReadinessBanner && <ReadinessBanner date={date} />}
             {apiBase === "/api/athlete" && (
               <ModifiedWorkoutBanner
