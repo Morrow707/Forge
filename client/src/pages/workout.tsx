@@ -836,7 +836,15 @@ export function WorkoutPage({
   apiBase,
   routeBase,
   showComments = true,
-  showReadinessBanner = true,
+  // Off by default -- ReadinessBanner ("Coach's Brief") already shows on
+  // every dashboard this page is reached from (athlete/coach/admin alike),
+  // and it's deliberately non-dismissible (see its own comment: "the one
+  // headline for the day, not a dismissible tip"), so repeating it here was
+  // just permanent, un-clearable clutter on top of the same message. No
+  // caller currently opts back in via true; kept as a prop rather than
+  // deleted outright in case a future single-page-entry flow (no separate
+  // dashboard hop) ever wants it after all.
+  showReadinessBanner = false,
   // Where the AI form-check/chat endpoints live -- historically always
   // "/api/admin" since only admin's own programs could ever be aiAuthored.
   // Now an athlete's own self-built programs can be too (see
