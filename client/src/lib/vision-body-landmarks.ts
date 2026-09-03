@@ -41,7 +41,7 @@
 // that genuinely needs real-world scale (bar velocity, jump height, wrist speed) stays
 // uncalibrated until Phase 5's known-object/athlete-height calibration multiplies these
 // pixel-space values by a real scale factor.
-import type { Landmark } from "@mediapipe/tasks-vision";
+import type { Landmark, NormalizedLandmark } from "@mediapipe/tasks-vision";
 import { POSE_LANDMARKS } from "./pose-tracking";
 import type { PoseFrame as NativePoseFrame } from "./native-av-preview";
 
@@ -135,6 +135,39 @@ export type ImplementPoint = {
 // scaleWorldLandmarks() multiply -- see av-jump-tracker-dialog.tsx's own call site.
 export function visionBoxTopToWorldY(boxTopNormalizedY: number, frameHeight: number): number {
   return -(boxTopNormalizedY * frameHeight);
+}
+
+// Skeleton-overlay replay (see video-analysis-dialog.tsx's own drawSkeleton) needs the OTHER
+// convention visionJointsToWorldLandmarks above deliberately doesn't produce: normalized 0-1
+// image-space, not real-world/pixel-scaled meters -- drawSkeleton already multiplies by the
+// canvas's own width/height itself (landmarks[i].x * width), same as the live MediaPipe path on
+// every other platform already does, so feeding it pixel- or meter-scaled values would double
+// up the scaling. Reuses the exact same JOINT_NAME_TO_LANDMARK table above (Vision's joint
+// names are the same regardless of which coordinate space the caller wants out), just without
+// the frameWidth/frameHeight multiply -- x passes through unflipped (Vision and canvas both
+// treat 0 as the video's own left edge), y flips from Vision's bottom-origin (1 = top) to
+// canvas's top-origin (1 = bottom) with a plain `1 - y`, not the pixel-then-negate the
+// meters-space version needs (there's no "pixel space" here to negate into, this stays
+// normalized start to finish).
+export function visionJointsToNormalizedLandmarks(frame: NativePoseFrame): NormalizedLandmark[] {
+  const landmarks: NormalizedLandmark[] = Array.from({ length: 33 }, () => ({
+    x: 0,
+    y: 0,
+    z: 0,
+    visibility: 0,
+  }));
+  if (!frame.tracked) return landmarks;
+  for (const joint of frame.joints) {
+    const key = JOINT_NAME_TO_LANDMARK[joint.name];
+    if (!key || joint.confidence < MIN_JOINT_CONFIDENCE) continue;
+    landmarks[POSE_LANDMARKS[key]] = {
+      x: joint.x,
+      y: 1 - joint.y,
+      z: 0,
+      visibility: joint.confidence,
+    };
+  }
+  return landmarks;
 }
 
 export function visionImplementToPoint(
