@@ -8,10 +8,26 @@
 // to bypass it. A muted iPhone genuinely won't play this, confirmed against
 // a real device; the only fix is shipping as a native app (e.g. wrapped
 // with Capacitor) so it can ask for that native audio session category.
+// Lazily created once and never closed, reused across every cue -- previously each of
+// playSuccessChime/playStreakMilestoneChime/playRestOverAlarm created a brand-new AudioContext
+// and closed it ~900ms later on every single call. Per this file's own top comment, iOS routes
+// Web Audio through the SAME shared AVAudioSession the native camera plugin manages
+// (AvBodyTrackingPlugin.swift's own .ambient/.mixWithOthers fix) -- creating and tearing down a
+// context is a real session-negotiation event each time, not a free no-op, so a workout that
+// plays several cues in quick succession (a PR chime, then a trophy chime, then a rest-over
+// alarm) was churning that shared session repeatedly for no benefit. One persistent context
+// removes that churn entirely; `resume()` below handles the one real downside (a context can
+// start/end up "suspended" after a period with no user gesture) without needing a fresh one.
+let sharedCtx: AudioContext | null = null;
+
 function getAudioContext(): AudioContext | null {
   try {
-    const AudioCtx = window.AudioContext ?? (window as any).webkitAudioContext;
-    return new AudioCtx();
+    if (!sharedCtx) {
+      const AudioCtx = window.AudioContext ?? (window as any).webkitAudioContext;
+      sharedCtx = new AudioCtx();
+    }
+    if (sharedCtx.state === "suspended") void sharedCtx.resume();
+    return sharedCtx;
   } catch {
     return null;
   }
@@ -44,7 +60,6 @@ export function playSuccessChime() {
     const ctx = getAudioContext();
     if (!ctx) return;
     [0, 0.25, 0.5].forEach((delay) => tone(ctx, 880, ctx.currentTime + delay, 0.2));
-    setTimeout(() => ctx.close(), 900);
   } catch {
     // Web Audio isn't available in every environment -- cues just stay silent.
   }
@@ -74,7 +89,6 @@ export function playStreakMilestoneChime() {
       const isLast = i === notes.length - 1;
       tone(ctx, freq, now + offset, isLast ? 0.35 : 0.16, "triangle", isLast ? 0.4 : 0.3);
     });
-    setTimeout(() => ctx.close(), 900);
   } catch {
     // Web Audio isn't available in every environment -- cues just stay silent.
   }
@@ -94,7 +108,6 @@ export function playRestOverAlarm() {
       tone(ctx, 600, now + delay, 0.28, "square", 0.45);
       tone(ctx, 840, now + delay + 0.15, 0.28, "square", 0.45);
     });
-    setTimeout(() => ctx.close(), 1300);
   } catch {
     // Web Audio isn't available in every environment -- cues just stay silent.
   }

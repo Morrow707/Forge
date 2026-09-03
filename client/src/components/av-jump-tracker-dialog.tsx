@@ -70,6 +70,10 @@ export function AvJumpTrackerDialog({
   equipment,
   usesBox,
   recordVideo,
+  setNumber,
+  onAnalysisStarted,
+  onProcessingSettled,
+  onUploadProgress,
   onCapture,
   videoContext,
   formFaultThresholds,
@@ -89,13 +93,33 @@ export function AvJumpTrackerDialog({
   // dedicated movementType string.
   usesBox?: boolean;
   recordVideo?: boolean;
-  onCapture: (metrics: JumpSetMetrics, videoUrl?: string) => void;
+  // Same "closes before analysis finishes" redesign as AvBarTrackerDialog -- see that
+  // component's own comments on setNumber/onAnalysisStarted/onProcessingSettled/
+  // onUploadProgress for the full reasoning; identical contract here.
+  setNumber: number;
+  onAnalysisStarted: (setNumber: number) => void;
+  onProcessingSettled: (setNumber: number) => void;
+  onUploadProgress?: (setNumber: number, percent: number) => void;
+  onCapture: (metrics: JumpSetMetrics, videoUrl?: string, setNumber?: number) => void;
   videoContext?: VideoRecordContext;
   formFaultThresholds?: Partial<Record<keyof FormFaultThresholds, number | null>> | null;
   jumpHeightOutlierPercent?: number | null;
 }) {
   const [saving, setSaving] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+
+  // See AvBarTrackerDialog's own identical helper for why this wraps setUploadProgress
+  // rather than replacing it -- this dialog's own uploadProgress state becomes invisible to
+  // the athlete once it closes early, so the parent needs its own copy of every tick.
+  function reportUploadProgress(forSetNumber: number) {
+    return (fraction: number) => {
+      // See AvBarTrackerDialog's own identical helper for why this converts fraction->percent
+      // only for the onUploadProgress callback, not for setUploadProgress -- this dialog's own
+      // render already does that conversion itself for the local uploadProgress state.
+      setUploadProgress(fraction);
+      onUploadProgress?.(forSetNumber, Math.round(fraction * 100));
+    };
+  }
 
   const {
     containerRef,
@@ -120,65 +144,90 @@ export function AvJumpTrackerDialog({
   }, [open]);
 
   async function stopTracking() {
-    // Starts the upload the instant the recording exists -- not after analysis (kalmanSmooth,
-    // form faults, etc.) also finishes -- so the two run concurrently instead of stacked in
-    // series. The upload never depends on anything analysis produces (metrics get attached to
-    // the set separately, after the video's own URL comes back), so there's nothing to lose by
-    // starting it this early. See finishWithRecording's own use of this promise below for why
-    // every path (success, calibration-failed, no-clean-read) still just awaits the SAME
-    // in-flight upload rather than starting a fresh one.
-    let uploadPromise: Promise<{ status: "uploaded"; url: string } | { status: "queued" }> | null = null;
-    const result = await stopRecordingAndAnalyze({
-      detectBox: usesBox === true,
-      onBlobReady: recordVideo
-        ? (blob) => {
+    // Captured once, up front -- see AvBarTrackerDialog's own identical comment on why every
+    // callback below uses this value for the whole lifetime of this one Stop, never the
+    // `setNumber` prop's possibly-since-changed live value.
+    const forSetNumber = setNumber;
+    try {
+      // Starts the upload the instant the recording exists -- not after analysis (kalmanSmooth,
+      // form faults, etc.) also finishes -- so the two run concurrently instead of stacked in
+      // series. The upload never depends on anything analysis produces (metrics get attached to
+      // the set separately, after the video's own URL comes back), so there's nothing to lose by
+      // starting it this early. See finishWithRecording's own use of this promise below for why
+      // every path (success, calibration-failed, no-clean-read) still just awaits the SAME
+      // in-flight upload rather than starting a fresh one.
+      let uploadPromise: Promise<{ status: "uploaded"; url: string } | { status: "queued" }> | null = null;
+      const result = await stopRecordingAndAnalyze({
+        detectBox: usesBox === true,
+        // Always provided now (not just when recordVideo) -- see AvBarTrackerDialog's own
+        // identical comment: recording has stopped and analysis is about to start regardless
+        // of whether a video gets uploaded, and closing the dialog here (instead of leaving
+        // the athlete staring at "Analyzing recording...") is the whole point of this redesign.
+        onBlobReady: (blob) => {
+          onAnalysisStarted(forSetNumber);
+          if (recordVideo) {
             setSaving(true);
             setUploadProgress(0);
             const filename = videoFilenameForBlob(blob, "form-check");
-            uploadPromise = uploadOrQueueVideo(blob, filename, videoContext ?? { label: "Jump" }, setUploadProgress);
+            uploadPromise = uploadOrQueueVideo(
+              blob,
+              filename,
+              videoContext ?? { label: "Jump" },
+              reportUploadProgress(forSetNumber),
+            );
           }
-        : undefined,
-    });
-    if (!result) {
-      // Analysis failed or was cancelled (the hook's own error state, or nothing, already
-      // reported it) -- but the upload above doesn't know or care about that, since it never
-      // depended on analysis succeeding. Left alone, it would still finish uploading in the
-      // background with no set to attach it to: a real video on disk, orphaned. Wait for it and
-      // hand it to the athlete's set anyway (with no computed metrics -- there aren't any),
-      // same "the clip is worth keeping even without numbers" reasoning as the
-      // calibration-failed/no-clean-read paths below, just for a third way this can happen.
-      // Cast (not just copied to a fresh const) before narrowing -- uploadPromise is a `let`
-      // reassigned only inside the onBlobReady closure above, and TypeScript's control-flow
-      // analysis doesn't trace into closures: outside one, it treats a closure-only-assigned
-      // `let` as having stayed at its initializer (null) forever, no matter the declared type,
-      // which narrows the truthy branch below to `never` without this cast overriding it.
-      const inFlightUpload = uploadPromise as Promise<
-        { status: "uploaded"; url: string } | { status: "queued" }
-      > | null;
-      if (inFlightUpload) {
-        try {
-          const uploadResult = await inFlightUpload;
-          toast.error("Couldn't finish analyzing this take, but your video was saved for your coach.");
-          onCapture(EMPTY_JUMP_METRICS, uploadResult.status === "uploaded" ? uploadResult.url : undefined);
-          onOpenChange(false);
-        } catch {
-          // Genuinely nothing left to salvage -- analysis already failed/cancelled and now the
-          // upload did too. Leave the dialog open (same as the no-uploadPromise case below) so
-          // whatever error state the hook already set stays visible.
-        } finally {
-          setSaving(false);
+        },
+      });
+      if (!result) {
+        // Analysis failed or was cancelled (the hook's own error state, or nothing, already
+        // reported it) -- but the upload above doesn't know or care about that, since it never
+        // depended on analysis succeeding. Left alone, it would still finish uploading in the
+        // background with no set to attach it to: a real video on disk, orphaned. Wait for it and
+        // hand it to the athlete's set anyway (with no computed metrics -- there aren't any),
+        // same "the clip is worth keeping even without numbers" reasoning as the
+        // calibration-failed/no-clean-read paths below, just for a third way this can happen.
+        // Cast (not just copied to a fresh const) before narrowing -- uploadPromise is a `let`
+        // reassigned only inside the onBlobReady closure above, and TypeScript's control-flow
+        // analysis doesn't trace into closures: outside one, it treats a closure-only-assigned
+        // `let` as having stayed at its initializer (null) forever, no matter the declared type,
+        // which narrows the truthy branch below to `never` without this cast overriding it.
+        const inFlightUpload = uploadPromise as Promise<
+          { status: "uploaded"; url: string } | { status: "queued" }
+        > | null;
+        if (inFlightUpload) {
+          try {
+            const uploadResult = await inFlightUpload;
+            toast.error("Couldn't finish analyzing this take, but your video was saved for your coach.");
+            onCapture(
+              EMPTY_JUMP_METRICS,
+              uploadResult.status === "uploaded" ? uploadResult.url : undefined,
+              forSetNumber,
+            );
+            onOpenChange(false);
+          } catch {
+            // Genuinely nothing left to salvage -- analysis already failed/cancelled and now the
+            // upload did too. Leave the dialog open (same as the no-uploadPromise case below) so
+            // whatever error state the hook already set stays visible.
+          } finally {
+            setSaving(false);
+          }
         }
+        return;
       }
-      return;
+      await finishWithRecording(
+        result.blob,
+        result.rawFrames.map((f) => ({ t: f.timestamp * 1000, worldLandmarks: visionJointsToWorldLandmarks(f) })),
+        result.captureDeviceInfo,
+        result.rawFrames,
+        result.recordingStats,
+        uploadPromise,
+        forSetNumber,
+      );
+    } finally {
+      // Fires no matter which of the paths above was taken -- see AvBarTrackerDialog's own
+      // identical comment on why this is deliberately separate from onCapture.
+      onProcessingSettled(forSetNumber);
     }
-    await finishWithRecording(
-      result.blob,
-      result.rawFrames.map((f) => ({ t: f.timestamp * 1000, worldLandmarks: visionJointsToWorldLandmarks(f) })),
-      result.captureDeviceInfo,
-      result.rawFrames,
-      result.recordingStats,
-      uploadPromise,
-    );
   }
 
   async function finishWithRecording(
@@ -194,6 +243,7 @@ export function AvJumpTrackerDialog({
       readerStatus?: string;
     },
     uploadPromise: Promise<{ status: "uploaded"; url: string } | { status: "queued" }> | null,
+    forSetNumber: number,
   ) {
     const scaleFactor = calibrateFromFrames(rawFrames, heightIn);
     const calibrationFrames = calibrationMethodBreakdown(rawFrames);
@@ -229,9 +279,9 @@ export function AvJumpTrackerDialog({
                 { duration: 10000 },
               );
             }
-            onCapture(emptyMetrics);
+            onCapture(emptyMetrics, undefined, forSetNumber);
           } else {
-            onCapture(emptyMetrics, result.url);
+            onCapture(emptyMetrics, result.url, forSetNumber);
           }
           onOpenChange(false);
         } catch (err) {
@@ -327,9 +377,9 @@ export function AvJumpTrackerDialog({
                 { duration: 10000 },
               );
             }
-            onCapture(emptyMetrics);
+            onCapture(emptyMetrics, undefined, forSetNumber);
           } else {
-            onCapture(emptyMetrics, result.url);
+            onCapture(emptyMetrics, result.url, forSetNumber);
           }
           onOpenChange(false);
         } catch (err) {
@@ -392,7 +442,7 @@ export function AvJumpTrackerDialog({
     }
 
     if (!recordVideo) {
-      onCapture(metrics);
+      onCapture(metrics, undefined, forSetNumber);
       onOpenChange(false);
       return;
     }
@@ -404,7 +454,12 @@ export function AvJumpTrackerDialog({
     // wrong.
     const inFlightUpload =
       uploadPromise ??
-      uploadOrQueueVideo(blob, videoFilenameForBlob(blob, "form-check"), videoContext ?? { label: "Jump" }, setUploadProgress);
+      uploadOrQueueVideo(
+        blob,
+        videoFilenameForBlob(blob, "form-check"),
+        videoContext ?? { label: "Jump" },
+        reportUploadProgress(forSetNumber),
+      );
     try {
       const result = await inFlightUpload;
       if (result.status === "queued") {
@@ -415,14 +470,14 @@ export function AvJumpTrackerDialog({
             { duration: 10000 },
           );
         }
-        onCapture(metrics);
+        onCapture(metrics, undefined, forSetNumber);
       } else {
-        onCapture(metrics, result.url);
+        onCapture(metrics, result.url, forSetNumber);
       }
       onOpenChange(false);
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Saved the set, but the clip failed to upload");
-      onCapture(metrics);
+      onCapture(metrics, undefined, forSetNumber);
       onOpenChange(false);
     } finally {
       setSaving(false);

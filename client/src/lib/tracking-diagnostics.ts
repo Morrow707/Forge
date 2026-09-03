@@ -26,6 +26,9 @@ export type TrackingDiagnostics = {
     lowPowerModeEnabled?: boolean;
     freeDiskSpaceBytes?: number;
     maxInterFrameGapSeconds?: number;
+    // Box-jump-only -- see shared/schema.ts's trackingDiagnosticsSchema comment on this same
+    // field for the full explanation of why it's separate from objectDetection below.
+    boxTopNormalizedY?: number;
   } | null;
   bodyPose: { framesTotal: number; framesWithBody: number; avgWristConfidence: number | null };
   objectDetection: {
@@ -170,6 +173,7 @@ export function buildTrackingDiagnostics(args: {
     lowPowerModeEnabled?: boolean;
     freeDiskSpaceBytes?: number;
     maxInterFrameGapSeconds?: number;
+    boxTopNormalizedY?: number;
   } | null;
   calibration?: {
     scaleFactor: number | null;

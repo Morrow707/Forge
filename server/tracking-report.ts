@@ -43,6 +43,7 @@ type TrackingDiagnostics = {
     lowPowerModeEnabled?: boolean;
     freeDiskSpaceBytes?: number;
     maxInterFrameGapSeconds?: number;
+    boxTopNormalizedY?: number;
   } | null;
   bodyPose: { framesTotal: number; framesWithBody: number; avgWristConfidence?: number | null };
   objectDetection: {
@@ -352,6 +353,22 @@ function formatTrackingDiagnostics(r: TrackedSetRow): ReportField[] {
             : ""
         }`,
   });
+  // Box-jump-only, and a DIFFERENT detector from the implement tracker directly above (a
+  // wrist-implement motion-diff tracker, not a box-top finder) -- see
+  // AvBodyTrackingPlugin.swift's detectBoxTopCandidate. Only shown for jump-mode sets so this
+  // doesn't clutter a report for a movement that was never asked to look for a box; a jump-mode
+  // set with no reading here means either this exercise isn't a box jump, or Vision genuinely
+  // never got a confident read -- this field can't tell those two apart, same as the "cleared
+  // the box by X cm" toast the athlete sees (which also only fires when this succeeds).
+  if (r.trackingLevel === "jump") {
+    lines.push({
+      label: "Box detection",
+      value:
+        d.recording?.boxTopNormalizedY != null
+          ? `found -- top surface at normalized Y ${d.recording.boxTopNormalizedY.toFixed(4)}`
+          : "not detected this clip (either this exercise wasn't a box jump, or Vision never got a confident read on the box's top surface)",
+    });
+  }
   // Med-ball-only -- see AvCoreMlImplementDetector.swift. Only shown when this clip's
   // trackingMode actually enabled it; every other mode's framesWithCoreMlImplement stays 0.
   if (d.objectDetection.framesWithCoreMlImplement) {

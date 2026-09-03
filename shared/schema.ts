@@ -6115,6 +6115,15 @@ export const trackingDiagnosticsSchema = z.object({
       lowPowerModeEnabled: z.boolean().optional(),
       freeDiskSpaceBytes: z.number().optional(),
       maxInterFrameGapSeconds: z.number().optional(),
+      // Box-jump-only (see AvBodyTrackingPlugin.swift's detectBoxTopCandidate) -- Vision's own
+      // median-of-candidate-frames read on where the box's top surface sits, in normalized
+      // image-space Y. This is a DIFFERENT detector from objectDetection below (that's the
+      // wrist-implement motion-diff tracker, always running regardless of mode but only
+      // meaningful for a barbell/dumbbell/kettlebell/med-ball) -- undefined here means either
+      // this clip never requested box detection (not a box-jump exercise) or Vision genuinely
+      // never got a confident read, indistinguishable from this field alone; the report
+      // renders both as "not detected" since neither has a number worth showing.
+      boxTopNormalizedY: z.number().optional(),
     })
     .optional()
     .nullable(),

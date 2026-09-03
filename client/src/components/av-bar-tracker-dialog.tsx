@@ -307,9 +307,16 @@ export function AvBarTrackerDialog({
   // set this specific upload belongs to -- see onUploadProgress's own comment on why the
   // parent needs this once this dialog itself has closed.
   function reportUploadProgress(forSetNumber: number) {
-    return (percent: number) => {
-      setUploadProgress(percent);
-      onUploadProgress?.(forSetNumber, percent);
+    return (fraction: number) => {
+      // uploadOrQueueVideo's own onProgress contract is a 0-1 fraction (see
+      // video-offline-store.ts) -- this dialog's own render already knows that and does the
+      // *100 conversion itself (Math.round(uploadProgress * 100)), so setUploadProgress keeps
+      // getting the raw fraction unchanged. onUploadProgress is a DIFFERENT contract though --
+      // its own name and every caller (workout.tsx's inline "Processing… N%" indicator) expect
+      // an actual whole-number percent, not a fraction -- so it gets converted here, once, at
+      // the source, rather than trusting every future caller to remember to do it themselves.
+      setUploadProgress(fraction);
+      onUploadProgress?.(forSetNumber, Math.round(fraction * 100));
     };
   }
 

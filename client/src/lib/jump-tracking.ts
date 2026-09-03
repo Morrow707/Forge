@@ -226,6 +226,26 @@ export function summarizeJumpSet(
       // A rise below the trigger, or a downward move, isn't a takeoff --
       // keep waiting rather than resetting the baseline off a noisy frame.
     } else {
+      // Recovery valve: without this, a landing whose post-touchdown tracking never settles
+      // (never holds still for a full SETTLE_FRAMES stretch -- a box landing's own balance
+      // wobble is a real, common way this happens, more so than a flat-ground landing) leaves
+      // `state` stuck at "airborne" for the ENTIRE REST of the recording, since the only way
+      // back to "grounded" below is the settled check succeeding. Every later rep in the set
+      // -- even a cleanly-tracked one -- would then silently never get looked for at all, the
+      // exact "logged 5 reps but tracking only found 1" failure mode. 2x MAX_FLIGHT_SECONDS
+      // (not 1x) gives a genuinely messy-but-real landing generous room to still resolve
+      // through the normal settled path below before this gives up on it; this only fires for
+      // a landing that's had every reasonable chance and still hasn't settled. Deliberately
+      // does NOT push a rep for whatever triggered this -- the amplitude/flight-time can't be
+      // trusted when the tracking was this unclear, same "no number is better than a wrong
+      // one" stance the rest of this function already takes -- it only recovers the STATE so
+      // every jump after this point still gets a fair shot at being detected.
+      if (rawPoints[i].t - rawPoints[takeoffIdx].t > MAX_FLIGHT_SECONDS * 1000 * 2) {
+        state = "grounded";
+        baseline = ySmoothed[i];
+        baselineIdx = i;
+        continue;
+      }
       if (ySmoothed[i] < ySmoothed[peakIdx]) peakIdx = i;
 
       // Landing doesn't have to return to the pre-jump baseline -- a box

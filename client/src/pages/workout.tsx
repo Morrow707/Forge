@@ -3310,6 +3310,31 @@ function ExerciseLogContent({
                 equipment={item.equipment}
                 usesBox={item.materials.usesBox}
                 recordVideo={mergedTracking}
+                // trackingSet is guaranteed non-null while this dialog can meaningfully be
+                // asked to stop -- same reasoning as AvBarTrackerDialog's own identical
+                // setNumber prop comment; the -1 fallback only satisfies the required-number
+                // type for the brief render where open is still false.
+                setNumber={trackingSet ?? -1}
+                onAnalysisStarted={(setNumber) => {
+                  setTrackingSet(null);
+                  setProcessingSets((prev) => new Set(prev).add(setNumber));
+                }}
+                onProcessingSettled={(setNumber) => {
+                  setProcessingSets((prev) => {
+                    if (!prev.has(setNumber)) return prev;
+                    const next = new Set(prev);
+                    next.delete(setNumber);
+                    return next;
+                  });
+                  setProcessingProgress((prev) => {
+                    if (!(setNumber in prev)) return prev;
+                    const { [setNumber]: _removed, ...rest } = prev;
+                    return rest;
+                  });
+                }}
+                onUploadProgress={(setNumber, percent) =>
+                  setProcessingProgress((prev) => ({ ...prev, [setNumber]: percent }))
+                }
                 onCapture={handleTrackerCapture}
                 videoContext={videoContextFor(trackingSet)}
                 formFaultThresholds={activeMovementProfile}
