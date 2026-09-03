@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { isAvPreviewPlatform } from "@/lib/native-av-preview";
 import { useAvBodyTracking } from "@/lib/use-av-body-tracking";
+import { AvCameraChrome } from "@/components/av-camera-chrome";
 import { visionJointsToWorldLandmarks } from "@/lib/vision-body-landmarks";
 import { calibrateFromFrames, scaleWorldLandmarks } from "@/lib/pose-tracking";
 import {
@@ -323,7 +324,9 @@ export function AvMechanicsTrackerDialog({
             )}
             <div className="relative aspect-[9/16] overflow-hidden rounded-md bg-black">
               {showsCamera && isAvPreviewPlatform() && (
-                <div ref={containerRef} className="absolute inset-0" style={{ background: "transparent" }} />
+                <div ref={containerRef} className="absolute inset-0" style={{ background: "transparent" }}>
+                  <AvCameraChrome containerRef={containerRef} active={showsCamera} />
+                </div>
               )}
               {showsCamera && (
                 <div className="absolute left-2 top-2 z-10 select-text space-y-0.5 rounded-md bg-black/60 px-2 py-1 font-mono text-[9px] leading-tight text-white/80">

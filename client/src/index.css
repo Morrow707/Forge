@@ -226,6 +226,23 @@ html.av-camera-active .app-shell-root {
   visibility: hidden !important;
 }
 
+/* AvCameraChrome's tap-to-focus ring -- flashes and fades at the tap point, same visual
+   language as Apple's own Camera app's yellow focus square. */
+@keyframes av-focus-ring {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.3);
+  }
+  20% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
 .font-display {
   font-family: var(--font-display);
   letter-spacing: 0.01em;

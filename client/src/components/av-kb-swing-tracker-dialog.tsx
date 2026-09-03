@@ -11,6 +11,7 @@ import {
 import { toast } from "sonner";
 import { Circle, Square, X, XCircle, AlertTriangle } from "lucide-react";
 import { useAvBodyTracking } from "@/lib/use-av-body-tracking";
+import { AvCameraChrome } from "@/components/av-camera-chrome";
 import { visionJointsToWorldLandmarks, visionImplementToPoint, type ImplementPoint } from "@/lib/vision-body-landmarks";
 import type { PoseFrame as NativePoseFrame, CaptureDeviceInfo } from "@/lib/native-av-preview";
 import {
@@ -363,8 +364,9 @@ export function AvKbSwingTrackerDialog({
         overlayClassName="bg-transparent backdrop-blur-none"
         className="inset-0 top-0 left-0 h-screen w-screen max-w-none max-h-none translate-x-0 translate-y-0 gap-0 rounded-none border-0 bg-transparent backdrop-blur-none p-0 overflow-hidden [&>button]:hidden"
       >
-        <div className="relative flex h-full w-full flex-col">
-          <div ref={containerRef} className="relative flex-1" style={{ background: "transparent" }}>
+        <div className="relative h-full w-full">
+          <div ref={containerRef} className="absolute inset-0" style={{ background: "transparent" }}>
+            <AvCameraChrome containerRef={containerRef} active={open} />
             <button
               type="button"
               aria-label="Close"
@@ -423,7 +425,7 @@ export function AvKbSwingTrackerDialog({
             )}
           </div>
 
-          <div className="flex shrink-0 flex-wrap items-center justify-center gap-2 bg-black/70 px-3 py-4 backdrop-blur-sm">
+          <div className="absolute inset-x-0 bottom-0 z-10 flex flex-wrap items-center justify-center gap-2 bg-gradient-to-t from-black/80 via-black/40 to-transparent px-3 pb-[max(1rem,env(safe-area-inset-bottom))] pt-8">
             {!recording && !analyzing && !saving && (
               <Button
                 size="lg"

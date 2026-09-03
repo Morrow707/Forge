@@ -17,6 +17,7 @@ import {
 import { POSE_LANDMARKS } from "@/lib/pose-tracking";
 import { type PoseFrame as NativePoseFrame, type CaptureDeviceInfo } from "@/lib/native-av-preview";
 import { useAvBodyTracking } from "@/lib/use-av-body-tracking";
+import { AvCameraChrome } from "@/components/av-camera-chrome";
 import {
   detectSprintCrossings,
   deriveSprintReferencePoint,
@@ -423,8 +424,9 @@ export function AvHorizontalLoadTrackerDialog({
         }
       >
         {showsCamera && (
-          <div className="relative flex h-full w-full flex-col">
-            <div ref={containerRef} className="relative flex-1" style={{ background: "transparent" }}>
+          <div className="relative h-full w-full">
+            <div ref={containerRef} className="absolute inset-0" style={{ background: "transparent" }}>
+              <AvCameraChrome containerRef={containerRef} active={showsCamera} />
               <button
                 type="button"
                 aria-label="Close"
@@ -471,7 +473,7 @@ export function AvHorizontalLoadTrackerDialog({
               )}
             </div>
 
-            <div className="flex shrink-0 flex-col gap-2 bg-black/70 px-3 py-4 backdrop-blur-sm">
+            <div className="absolute inset-x-0 bottom-0 z-10 flex flex-col gap-2 bg-gradient-to-t from-black/80 via-black/40 to-transparent px-3 pb-[max(1rem,env(safe-area-inset-bottom))] pt-8">
               {step === "calibrate" && (
                 <>
                   <p className="text-center text-sm text-white">
