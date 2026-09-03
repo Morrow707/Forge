@@ -4207,8 +4207,12 @@ export const aiKnowledge = pgTable("ai_knowledge", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+// No max -- shared by the coach-AI and nutrition-AI teaching chats, both of
+// which need to accept a single large paste (a whole reference document,
+// not just a chat message) in one turn. Same reasoning as
+// sendForgeAiChatMessageSchema below.
 export const sendAiKnowledgeChatMessageSchema = z.object({
-  content: z.string().trim().min(1).max(2000),
+  content: z.string().trim().min(1),
 });
 
 export type SendAiKnowledgeChatMessageInput = z.infer<typeof sendAiKnowledgeChatMessageSchema>;
@@ -4230,8 +4234,10 @@ export const updateLegalAgreementSchema = z.object({
 });
 export type UpdateLegalAgreementInput = z.infer<typeof updateLegalAgreementSchema>;
 
+// No max -- a guidelines document distilled from a large source (e.g. a
+// whole reference textbook) can legitimately run long.
 export const applyKnowledgeProposalSchema = z.object({
-  guidelines: z.string().trim().min(1).max(20000),
+  guidelines: z.string().trim().min(1),
 });
 
 export type ApplyKnowledgeProposalInput = z.infer<typeof applyKnowledgeProposalSchema>;
@@ -4910,7 +4916,9 @@ export type MovementProfile = typeof movementProfiles.$inferSelect;
 
 export const sendMovementKnowledgeChatMessageSchema = z
   .object({
-    content: z.string().trim().min(1).max(5000).optional(),
+    // No max on content -- same reasoning as sendAiKnowledgeChatMessageSchema,
+    // this needs to accept a whole reference document pasted in one turn.
+    content: z.string().trim().min(1).optional(),
     url: z.string().trim().url().max(2000).optional(),
   })
   .refine((data) => Boolean(data.content?.trim()) || Boolean(data.url?.trim()), {

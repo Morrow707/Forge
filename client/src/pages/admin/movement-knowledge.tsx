@@ -259,7 +259,6 @@ export function MovementKnowledgeContent() {
                 onChange={(e) => setContent(e.target.value)}
                 placeholder="Teach it something about this movement's mechanics..."
                 className="min-h-[44px] resize-none"
-                maxLength={5000}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();

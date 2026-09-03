@@ -249,8 +249,11 @@ app.post(
 
 // Raised from Express's 100kb default -- the AI form-check route accepts a
 // handful of base64-encoded JPEG frames per request, which clears 100kb
-// easily even resized down.
-app.use(express.json({ limit: "10mb" }));
+// easily even resized down. Raised again to 200mb so the admin AI-teaching
+// chats (coach AI, nutrition AI, camera/movement AI) can accept a single
+// large paste -- a whole reference document, not just a chat message -- in
+// one request; those routes' own Zod schemas have no length cap either.
+app.use(express.json({ limit: "200mb" }));
 app.use(express.urlencoded({ extended: false }));
 
 app.use((req, res, next) => {
