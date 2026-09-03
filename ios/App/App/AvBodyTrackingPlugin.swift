@@ -166,6 +166,21 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         (.leftAnkle, "leftAnkle"), (.rightAnkle, "rightAnkle"),
     ]
 
+    // Apple's own documented VNHumanHandPoseObservation.JointName constants -- 21 per hand
+    // (wrist + 4 joints on each of 5 fingers), the direct Vision equivalent of MediaPipe's own
+    // Hand Landmarker (see hand-tracking.ts on the Android/web side). Grip-point refinement is
+    // the only consumer today (see vision-body-landmarks.ts's visionRefineGripSeed) -- this
+    // table intentionally mirrors bodyPoseJoints' own shape/style rather than inventing a
+    // different convention for a second joint set.
+    private static let handPoseJoints: [(VNHumanHandPoseObservation.JointName, String)] = [
+        (.wrist, "wrist"),
+        (.thumbCMC, "thumbCMC"), (.thumbMP, "thumbMP"), (.thumbIP, "thumbIP"), (.thumbTip, "thumbTip"),
+        (.indexMCP, "indexMCP"), (.indexPIP, "indexPIP"), (.indexDIP, "indexDIP"), (.indexTip, "indexTip"),
+        (.middleMCP, "middleMCP"), (.middlePIP, "middlePIP"), (.middleDIP, "middleDIP"), (.middleTip, "middleTip"),
+        (.ringMCP, "ringMCP"), (.ringPIP, "ringPIP"), (.ringDIP, "ringDIP"), (.ringTip, "ringTip"),
+        (.littleMCP, "littleMCP"), (.littlePIP, "littlePIP"), (.littleDIP, "littleDIP"), (.littleTip, "littleTip"),
+    ]
+
     @objc func isSupported(_ call: CAPPluginCall) {
         let status = AVCaptureDevice.authorizationStatus(for: .video)
         call.resolve([
@@ -1007,6 +1022,13 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         reader.startReading()
 
         let poseRequest = VNDetectHumanBodyPoseRequest()
+        // Grip-point corroboration signal (see av-bar-tracker-dialog.tsx's own fuseSide comment
+        // on why this only ever nudges an existing confidence value, never replaces the wrist
+        // seed the way Android's MediaPipe HandLandmarker can) -- configured once, reused every
+        // sampled frame, same "safe to reuse across perform() calls" reasoning as poseRequest.
+        // maximumHandCount=2 matches hand-tracking.ts's own numHands:2 on the MediaPipe side.
+        let handPoseRequest = VNDetectHumanHandPoseRequest()
+        handPoseRequest.maximumHandCount = 2
         // Box jump's own object-detection signal -- see this file's own comment on
         // detectBoxTopCandidate below for the full reasoning. Configured once, reused every
         // sampled frame (Vision requests are safe to reuse across perform() calls -- only
@@ -1045,6 +1067,11 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         var previousProcessedTimestamp: Double?
         var maxInterFrameGapSeconds: Double?
         let startTime = Date()
+        // Measured as its own separate handler.perform() call (see below), not folded into the
+        // existing poseRequest timing -- the whole point is isolating hand-pose's OWN
+        // incremental per-frame cost, since that's what actually decides whether it's safe to
+        // keep running on every sampled frame (see this file's own thermal-throttling history).
+        var handPoseElapsedSeconds: Double = 0
 
         while reader.status == .reading {
             if analysisCancelled {
@@ -1136,6 +1163,46 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                 visionFailureCount += 1
                 logDiag("Vision request failed on frame \(thisFrameIndex): \(error.localizedDescription)")
             }
+
+            // A separate perform() call reusing the same handler -- same precedent
+            // detectBoxTopCandidate below already establishes for rectanglesRequest -- rather
+            // than bundling into the poseRequest call above, specifically so
+            // handPoseElapsedSeconds measures hand-pose's own cost in isolation, not a total
+            // that conflates it with the already-accepted pose-only cost.
+            var handJoints: [[String: Any]] = []
+            let handPoseStart = Date()
+            do {
+                try handler.perform([handPoseRequest])
+                if let handObservations = handPoseRequest.results as? [VNHumanHandPoseObservation] {
+                    for (handIndex, observation) in handObservations.enumerated() {
+                        // Chirality (.left/.right/.unknown) is available here but deliberately
+                        // not read -- see vision-body-landmarks.ts's visionRefineGripSeed for
+                        // why grip-seed matching goes by proximity to the Pose-derived wrist
+                        // instead: its sense depends on camera mirroring this app doesn't
+                        // consistently control. `hand` is just a stable per-frame index (0/1)
+                        // so the JS bridge can group a frame's joints back into per-hand sets.
+                        guard let points = try? observation.recognizedPoints(forGroupKey: .all) else { continue }
+                        for (jointName, label) in Self.handPoseJoints {
+                            guard let point = points[jointName], point.confidence > 0.1 else { continue }
+                            handJoints.append([
+                                "hand": handIndex,
+                                "name": label,
+                                "x": Double(point.location.x),
+                                "y": Double(point.location.y),
+                                "confidence": Double(point.confidence),
+                            ])
+                        }
+                    }
+                }
+            } catch {
+                // Deliberately not folded into visionFailureCount -- that counter's whole
+                // purpose (see its own comment above) is distinguishing "Vision errored" from
+                // "Vision ran cleanly and found nothing," and conflating a brand-new, still-
+                // unproven request's failures with the already-trusted pose request's would
+                // hide exactly the signal Section A5's on-device validation needs to see.
+                logDiag("Hand pose request failed on frame \(thisFrameIndex): \(error.localizedDescription)")
+            }
+            handPoseElapsedSeconds += Date().timeIntervalSince(handPoseStart)
 
             if detectBox, thisFrameIndex % boxDetectionStride == 0,
                let candidate = detectBoxTopCandidate(
@@ -1232,6 +1299,10 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             if let rightImplement = rightImplement { eventData["rightImplement"] = rightImplement }
             if let coreMlImplement = coreMlImplement { eventData["coreMlImplement"] = coreMlImplement }
             if let cameraDrift = cameraDrift { eventData["cameraDrift"] = cameraDrift }
+            // Omit-when-empty, not always-present like joints above -- a hand out of frame is
+            // genuinely "nothing to report this frame," the same semantics leftImplement/
+            // cameraDrift already use, not core per-frame state every consumer depends on.
+            if !handJoints.isEmpty { eventData["handJoints"] = handJoints }
             DispatchQueue.main.async {
                 self.notifyListeners("poseFrame", data: eventData)
             }
@@ -1273,7 +1344,9 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             "analyzeRecording conditions: thermalState=\(thermalState) lowPowerMode=\(lowPowerModeEnabled) "
                 + "freeDiskSpaceBytes=\(freeDiskSpaceBytes.map { String($0) } ?? "unknown") "
                 + "visionFailureCount=\(visionFailureCount) "
-                + "maxInterFrameGapSeconds=\(maxInterFrameGapSeconds.map { String(format: "%.2f", $0) } ?? "n/a")"
+                + "maxInterFrameGapSeconds=\(maxInterFrameGapSeconds.map { String(format: "%.2f", $0) } ?? "n/a") "
+                + "handPoseElapsedSeconds=\(String(format: "%.2f", handPoseElapsedSeconds)) "
+                + "(avg \(processedCount > 0 ? String(format: "%.4f", handPoseElapsedSeconds / Double(processedCount)) : "n/a")s/frame)"
         )
         // Below MIN_BOX_TOP_SAMPLES, this isn't a confident read -- reporting a "detection"
         // off one or two lucky/unlucky frames would be worse than reporting nothing at all
@@ -1306,6 +1379,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                     "visionFailureCount": visionFailureCount,
                     "thermalState": thermalState,
                     "lowPowerModeEnabled": lowPowerModeEnabled,
+                    "handPoseElapsedSeconds": handPoseElapsedSeconds,
                 ]
                 if let error = reader.error {
                     result["readerErrorMessage"] = error.localizedDescription

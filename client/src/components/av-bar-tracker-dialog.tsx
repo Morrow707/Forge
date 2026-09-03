@@ -16,6 +16,7 @@ import {
   visionJointsToWorldLandmarks,
   visionImplementToPoint,
   visionCoreMlBoxToPoint,
+  visionRefineGripSeed,
   type ImplementPoint,
 } from "@/lib/vision-body-landmarks";
 import type { PoseFrame as NativePoseFrame, CaptureDeviceInfo } from "@/lib/native-av-preview";
@@ -569,9 +570,22 @@ export function AvBarTrackerDialog({
       velocitySamples: VelocitySample[],
       t: number,
       coreMlPoint: ImplementPoint | null,
+      frame: NativePoseFrame,
     ): { fused: { x: number; y: number; confidence: number } | null; nextPrev: { x: number; y: number; t: number } | null } {
       const wristWorld = worldLm[side === "left" ? POSE_LANDMARKS.LEFT_WRIST : POSE_LANDMARKS.RIGHT_WRIST];
-      const wristConf = wristConfidence(worldLm, side);
+      const rawWristConf = wristConfidence(worldLm, side);
+      // Corroboration nudge, not a seed replacement -- AvImplementTracker's own motion-diff
+      // search already ran natively, seeded off the raw wrist joint, before this function ever
+      // sees the frame, so (unlike bar-tracker-dialog.tsx's MediaPipe/Android equivalent) there's
+      // no seed left to refine here. A real hand detected right where Pose predicted the wrist is
+      // treated as an independent vote against a ghost-skeleton/phantom-landmark misread, the
+      // same 1.25x-capped-at-1 nudge bar-tracker-dialog.tsx's own gripConfirmed applies. Matched
+      // against the RAW (pre-pixel-scale) wrist joint -- visionRefineGripSeed operates in the
+      // same normalized 0-1 space frame.handJoints' own x/y already are, not worldLm's
+      // pixel-scaled space.
+      const rawWristJoint = frame.joints.find((j) => j.name === (side === "left" ? "leftWrist" : "rightWrist"));
+      const gripConfirmed = rawWristJoint ? visionRefineGripSeed(frame, rawWristJoint.x, rawWristJoint.y) != null : false;
+      const wristConf = gripConfirmed ? Math.min(1, rawWristConf * 1.25) : rawWristConf;
       const barConf = implement ? implement.confidence : 0;
       const total = wristConf + barConf;
       let fused: { x: number; y: number; confidence: number } | null =
@@ -633,9 +647,9 @@ export function AvBarTrackerDialog({
         ? { ...coreMlPointRaw, x: coreMlPointRaw.x * scaleFactor, y: coreMlPointRaw.y * scaleFactor, z: 0 }
         : null;
 
-      const { fused: fusedLeft, nextPrev: nextPrevLeft } = fuseSide(worldLm, "left", leftImplement, prevFusedLeft, leftVelocitySamples, t, coreMlPoint);
+      const { fused: fusedLeft, nextPrev: nextPrevLeft } = fuseSide(worldLm, "left", leftImplement, prevFusedLeft, leftVelocitySamples, t, coreMlPoint, f);
       prevFusedLeft = nextPrevLeft;
-      const { fused: fusedRight, nextPrev: nextPrevRight } = fuseSide(worldLm, "right", rightImplement, prevFusedRight, rightVelocitySamples, t, coreMlPoint);
+      const { fused: fusedRight, nextPrev: nextPrevRight } = fuseSide(worldLm, "right", rightImplement, prevFusedRight, rightVelocitySamples, t, coreMlPoint, f);
       prevFusedRight = nextPrevRight;
 
       if (

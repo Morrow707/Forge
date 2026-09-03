@@ -61,6 +61,17 @@ export type PoseCoreMlImplement = { x: number; y: number; width: number; height:
 // to land, wiring left for a follow-up pass" note as coreMlImplement.
 export type PoseCameraDrift = { x: number; y: number };
 
+// Apple's own VNDetectHumanHandPoseRequest output -- the direct Vision equivalent of
+// MediaPipe's Hand Landmarker (see hand-tracking.ts on the Android/web side). Same raw Vision
+// convention as PoseJoint (normalized 0-1, bottom-left origin, no Y-flip at this layer --
+// that belongs in vision-body-landmarks.ts, same as every other coordinate here). `hand` is a
+// stable per-frame index (0/1), not a left/right label -- chirality isn't reported here since
+// its sense depends on camera mirroring this app doesn't consistently control; see
+// vision-body-landmarks.ts's visionRefineGripSeed for why grip-seed matching goes by proximity
+// instead. Omitted (not an empty array) on a frame with no hand detected -- same omit-when-nil
+// convention as leftImplement above.
+export type PoseHandJoint = { hand: number; name: string; x: number; y: number; confidence: number };
+
 export type PoseFrame = {
   frameIndex: number;
   timestamp: number;
@@ -72,6 +83,7 @@ export type PoseFrame = {
   rightImplement?: PoseImplement;
   coreMlImplement?: PoseCoreMlImplement;
   cameraDrift?: PoseCameraDrift;
+  handJoints?: PoseHandJoint[];
 };
 
 // Shared by the plugin interface's own analyzeRecording method below and analyzeAvRecording's
@@ -111,6 +123,12 @@ export type AvAnalysisResult = {
   // Omitted (not present at all), not a zeroed default, when detectBox wasn't requested or
   // no confident read was found -- box jump is the only caller that ever passes detectBox.
   boxTopNormalizedY?: number;
+  // Total time (across every sampled frame) VNDetectHumanHandPoseRequest itself took, measured
+  // as its own separate handler.perform() call so it's isolated from the already-accepted
+  // poseRequest cost -- see AvBodyTrackingPlugin.swift's own comment. Diagnostic only, same as
+  // visionFailureCount/maxInterFrameGapSeconds -- this is what decides whether hand tracking
+  // needs its own sparser stride later, not something any metric reads.
+  handPoseElapsedSeconds: number;
 };
 
 interface AvBodyTrackingPlugin {

@@ -43,7 +43,7 @@
 // pixel-space values by a real scale factor.
 import type { Landmark, NormalizedLandmark } from "@mediapipe/tasks-vision";
 import { POSE_LANDMARKS } from "./pose-tracking";
-import type { PoseFrame as NativePoseFrame } from "./native-av-preview";
+import type { PoseFrame as NativePoseFrame, PoseHandJoint } from "./native-av-preview";
 
 type LandmarkKey = keyof typeof POSE_LANDMARKS;
 
@@ -205,5 +205,60 @@ export function visionCoreMlBoxToPoint(
     y: -(centerY * frame.frameHeight),
     z: 0,
     confidence: box.confidence,
+  };
+}
+
+// Wrist plus the four MCP/knuckle joints -- the same PALM_BASE_INDICES selection
+// hand-tracking.ts's own palmBaseCentroid() uses for MediaPipe's Hand Landmarker on the
+// Android/web side, applied to Vision's differently-named-but-topologically-equivalent joints.
+// thumbCMC is the thumb's own base, not a finger MCP, so it's excluded here to match the exact
+// same "four knuckle joints, not the thumb" set the Android side uses -- see that file's own
+// comment for why the thumb's more mobile base joint is a worse proxy for where a gripped bar
+// sits across the palm.
+const PALM_BASE_JOINT_NAMES = ["wrist", "indexMCP", "middleMCP", "ringMCP", "littleMCP"];
+
+function visionPalmBaseCentroid(handJoints: PoseHandJoint[], handIndex: number): { x: number; y: number } | null {
+  const points = PALM_BASE_JOINT_NAMES
+    .map((name) => handJoints.find((j) => j.hand === handIndex && j.name === name))
+    .filter((j): j is PoseHandJoint => j != null);
+  if (points.length === 0) return null;
+  return {
+    x: points.reduce((a, p) => a + p.x, 0) / points.length,
+    y: points.reduce((a, p) => a + p.y, 0) / points.length,
+  };
+}
+
+// Same MAX_MATCH_DISTANCE=0.12 normalized-units proximity match hand-tracking.ts's own
+// refineGripPoint() already uses -- reused rather than re-derived, since it's the same
+// question (does a detected hand sit close enough to the Pose-predicted wrist to plausibly be
+// the same hand?) asked of a different source. Deliberately does NOT use Vision's own
+// chirality (.left/.right on the native side) to pick a hand -- see PoseHandJoint's own
+// comment on why that label isn't trusted here.
+const MAX_MATCH_DISTANCE = 0.12;
+
+// iOS's twin of hand-tracking.ts's refineGripPoint() -- unlike that function, this is never
+// used to replace the seed AvImplementTracker's native motion-diff search starts from (that
+// search already ran, server-side, before this bridge ever sees the frame -- see
+// av-bar-tracker-dialog.tsx's own fuseSide comment on why only the confidence-nudge half of
+// the Android pattern applies here). This only ever answers "was a real hand detected close to
+// where Pose says the wrist is" -- true/non-null is corroboration against a ghost-skeleton
+// misread, not a replacement position. poseNormX/poseNormY are the RAW (pre-pixel-scale, pre
+// Y-flip) wrist joint position -- the same space handJoints' own x/y are already in -- not the
+// pixel-scaled worldLandmarks-space wrist visionJointsToWorldLandmarks produces.
+export function visionRefineGripSeed(
+  frame: NativePoseFrame,
+  poseNormX: number,
+  poseNormY: number,
+): { x: number; y: number } | null {
+  if (!frame.handJoints || frame.handJoints.length === 0) return null;
+  const handIndices = [...new Set(frame.handJoints.map((j) => j.hand))];
+  const matches = handIndices
+    .map((idx) => visionPalmBaseCentroid(frame.handJoints!, idx))
+    .filter((c): c is { x: number; y: number } => c != null)
+    .filter((c) => Math.hypot(c.x - poseNormX, c.y - poseNormY) < MAX_MATCH_DISTANCE);
+  if (matches.length === 0) return null;
+  return {
+    x: matches.reduce((a, p) => a + p.x, 0) / matches.length,
+    y: matches.reduce((a, p) => a + p.y, 0) / matches.length,
   };
 }
