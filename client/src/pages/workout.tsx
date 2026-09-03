@@ -951,6 +951,12 @@ export function WorkoutPage({
   // below it -- replaces the old separate "overview list" vs. "full-screen
   // single-exercise" viewMode split. null means nothing's expanded yet.
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  // The mini-rail under each exercise's name is the set pager, not just a
+  // progress readout -- tapping segment N shows set N and nothing else
+  // (see ExerciseLogContent's own visibleSetIndex). Keyed per exercise so
+  // switching which exercise is open doesn't lose where a collapsed one
+  // was left. Missing key means set 1.
+  const [visibleSetByKey, setVisibleSetByKey] = useState<Record<string, number>>({});
   const restTimerRef = useRef<RestTimerHandle>(null);
 
   // Keep the screen awake for the length of an active logging session --
@@ -1677,6 +1683,16 @@ export function WorkoutPage({
     }
   }
 
+  // The rail's own tap target -- independent from toggleExercise (name/
+  // chevron), so tapping a set segment jumps to that set instead of
+  // opening/closing the exercise. Opens it too if it wasn't already, since
+  // otherwise there's nothing to see the change on -- matches how the mini
+  // rail behaves whether the exercise is collapsed or already open.
+  function jumpToSet(item: ItemState, setIndex: number) {
+    setVisibleSetByKey((prev) => ({ ...prev, [item.key]: setIndex }));
+    if (expandedKey !== item.key) setExpandedKey(item.key);
+  }
+
   return (
     <>
       <AppShell
@@ -1870,13 +1886,10 @@ export function WorkoutPage({
                         {page.items.map((item) => {
                           const expanded = expandedKey === item.key;
                           const label = page.labels[item.key];
+                          const visibleSetIndex = visibleSetByKey[item.key] ?? 0;
                           return (
                             <div key={item.key}>
-                              <button
-                                type="button"
-                                onClick={() => toggleExercise(item, page)}
-                                className="flex w-full items-start gap-3 text-left"
-                              >
+                              <div className="flex w-full items-start gap-3 text-left">
                                 <span
                                   className={cn(
                                     "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-extrabold",
@@ -1886,40 +1899,63 @@ export function WorkoutPage({
                                   {label}
                                 </span>
                                 <div className="min-w-0 flex-1">
-                                  <span className="flex items-center gap-1.5 text-sm font-semibold">
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleExercise(item, page)}
+                                    className="flex w-full items-center gap-1.5 text-left text-sm font-semibold"
+                                  >
                                     <span className="truncate">{item.exerciseName}</span>
                                     {item.trackingLevel === "none" && (
                                       <span className="shrink-0 text-[10px] font-medium text-muted-foreground">
                                         No video needed
                                       </span>
                                     )}
-                                  </span>
+                                  </button>
                                   <p className="text-xs font-semibold text-muted-foreground">
                                     {item.prescribedSets} × {item.prescribedReps}
                                     {item.prescribedWeight ? ` @ ${item.prescribedWeight}` : ""}
                                   </p>
+                                  {/* The set pager -- its own tap target (jumpToSet),
+                                      independent from the name/chevron toggle above.
+                                      White = not done yet, gold = done; the segment
+                                      for the set currently showing gets a ring so
+                                      it's still clear which one that is even when
+                                      it's white. */}
                                   {item.sets.length > 0 && (
                                     <div className="mt-1.5 flex max-w-[140px] gap-1">
-                                      {item.sets.map((set) => (
-                                        <span
+                                      {item.sets.map((set, i) => (
+                                        <button
                                           key={set.setNumber}
+                                          type="button"
+                                          aria-label={`Show set ${set.setNumber}`}
+                                          aria-pressed={i === visibleSetIndex}
+                                          onClick={() => jumpToSet(item, i)}
                                           className={cn(
-                                            "h-1.5 flex-1 rounded-full",
-                                            isSetComplete(item, set) ? "bg-success" : "bg-secondary",
+                                            "h-1.5 flex-1 rounded-full transition-colors",
+                                            isSetComplete(item, set) ? "bg-amber-400" : "bg-white",
+                                            i === visibleSetIndex &&
+                                              "ring-2 ring-primary ring-offset-1 ring-offset-background",
                                           )}
                                         />
                                       ))}
                                     </div>
                                   )}
                                 </div>
-                                <ChevronDown
-                                  className={cn(
-                                    "mt-1 h-4 w-4 shrink-0 text-foreground transition-transform",
-                                    expanded && "rotate-180 text-primary",
-                                  )}
-                                  style={expanded && exerciseTheme?.navArrowColor ? { color: exerciseTheme.navArrowColor } : undefined}
-                                />
-                              </button>
+                                <button
+                                  type="button"
+                                  aria-label={expanded ? "Collapse exercise" : "Expand exercise"}
+                                  onClick={() => toggleExercise(item, page)}
+                                  className="shrink-0"
+                                >
+                                  <ChevronDown
+                                    className={cn(
+                                      "mt-1 h-4 w-4 text-foreground transition-transform",
+                                      expanded && "rotate-180 text-primary",
+                                    )}
+                                    style={expanded && exerciseTheme?.navArrowColor ? { color: exerciseTheme.navArrowColor } : undefined}
+                                  />
+                                </button>
+                              </div>
                               {expanded && (
                                 <div
                                   className="mt-3 border-t border-border pt-3"
@@ -1940,6 +1976,7 @@ export function WorkoutPage({
                                     canSubstituteExercise={canSubstituteExercise}
                                     programId={data.programId}
                                     exerciseTheme={exerciseTheme}
+                                    visibleSetIndex={visibleSetIndex}
                                     onUpdateItem={(patch) => updateItem(item.key, patch)}
                                     onUpdateSet={(setNumber, patch, options) =>
                                       updateSet(item.key, setNumber, patch, options)
@@ -2016,6 +2053,7 @@ function ExerciseLogContent({
   canSubstituteExercise,
   programId,
   exerciseTheme,
+  visibleSetIndex,
   onUpdateItem,
   onUpdateSet,
   onAddSet,
@@ -2037,6 +2075,9 @@ function ExerciseLogContent({
   /** A coach's Personal Page overrides (paid add-on), or null -- see
    * WorkoutPage's own comment on where this is fetched from. */
   exerciseTheme: ExercisePageTheme | null;
+  /** Which set is currently shown -- WorkoutPage owns this per exercise
+   * (its own header mini-rail is the pager), not a local toggle here. */
+  visibleSetIndex: number;
   onUpdateItem: (patch: Partial<ItemState>) => void;
   onUpdateSet: (setNumber: number, patch: Partial<SetRow>, options?: { immediate?: boolean }) => void;
   onAddSet: () => void;
@@ -2096,6 +2137,12 @@ function ExerciseLogContent({
   const [previewSetNumber, setPreviewSetNumber] = useState<number | null>(null);
   const [compareOpen, setCompareOpen] = useState(false);
   const [plateCalcOpen, setPlateCalcOpen] = useState(false);
+  // Peek + Rail: only one set's row is visible at a time, driven by the
+  // header's own mini-rail (WorkoutPage owns visibleSetIndex per exercise
+  // and passes it down here) -- not a local toggle, since that rail has to
+  // keep working while this exercise is collapsed too. Clamped defensively
+  // in case a set gets removed out from under a mid-range index.
+  const activeSetIndex = Math.max(0, Math.min(visibleSetIndex, item.sets.length - 1));
   const topSetWeight = Math.max(0, ...item.sets.map((s) => parseFloat(s.weight) || 0));
   // Only a real barbell (or hex/trap bar, loaded the same way) has plates
   // to calculate -- a cable stack, dumbbells, or a machine's weight isn't
@@ -2502,6 +2549,7 @@ function ExerciseLogContent({
               item.weightMode === "numeric" &&
               !!prevSet?.weight.trim() &&
               set.weight.trim() !== prevSet.weight.trim();
+            if (set.setNumber - 1 !== activeSetIndex) return null;
             return (
               <div key={set.setNumber}>
                 <div

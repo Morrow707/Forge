@@ -6,6 +6,7 @@ export default function AdminProgramBuilder() {
       apiBase="/api/admin"
       routeBase="/admin/programs"
       showAssign={false}
+      showSelfAssign
       showAiChat
     />
   );

@@ -16,6 +16,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { ExercisePickerDialog } from "@/components/exercise-picker-dialog";
 import { AssignProgramDialog } from "@/components/assign-program-dialog";
 import { RadioChipGroup } from "@/components/filter-chip-group";
@@ -58,6 +65,7 @@ import {
   Send,
   Lock,
   Layers,
+  CalendarPlus,
 } from "lucide-react";
 import type { Exercise } from "@shared/schema";
 import {
@@ -272,11 +280,18 @@ export function ProgramBuilderPage({
   apiBase,
   routeBase,
   showAssign = true,
+  showSelfAssign = false,
   showAiChat = false,
 }: {
   apiBase: string;
   routeBase: string;
   showAssign?: boolean;
+  /** Assigns straight to the caller's own calendar (coachId === athleteId)
+   * -- admin's own training, a coach's own training, or a Free Agent's
+   * self-built program. Mirrors ProgramListPage's own showSelfAssign,
+   * added here so a program built via this page (not just one reached from
+   * the list) has somewhere to actually land on a calendar. */
+  showSelfAssign?: boolean;
   showAiChat?: boolean;
 }) {
   const { id } = useParams<{ id: string }>();
@@ -312,6 +327,11 @@ export function ProgramBuilderPage({
   const [pickerForDay, setPickerForDay] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
+  const [selfAssignOpen, setSelfAssignOpen] = useState(false);
+  const [selfAssignDate, setSelfAssignDate] = useState(() => new Date().toISOString().slice(0, 10));
+  // 0=Sun..6=Sat -- which weekdays this program's non-rest days land on.
+  // Empty means the old "every day in a row from the start date" default.
+  const [selfAssignWeekdays, setSelfAssignWeekdays] = useState<number[]>([]);
 
   useEffect(() => {
     if (program && !hydrated) {
@@ -465,6 +485,35 @@ export function ProgramBuilderPage({
     onError: (err: ApiError) => toast.error(err.message || "Could not save program"),
   });
 
+  // Self-assignment: coachId === athleteId -- lands straight on the
+  // caller's own calendar, no roster/athlete picker. Same save-first
+  // reasoning as the "Assign Program" button above: assigning reads
+  // whatever the program looks like in the database, so an edit sitting
+  // unsaved on screen would otherwise silently ship the old version.
+  const selfAssignMutation = useMutation({
+    mutationFn: async () => {
+      if (editable) await saveMutation.mutateAsync();
+      const res = await apiRequest("POST", `${apiBase}/my/assignments`, {
+        programId,
+        startDate: selfAssignDate,
+        trainingWeekdays: selfAssignWeekdays.length > 0 ? selfAssignWeekdays : undefined,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      // The calendar this lands on lives under a different path for each
+      // caller (admin's own training, a coach's own, a Free Agent
+      // athlete's) -- invalidating all three is harmless and avoids this
+      // shared component needing to know which one it's in.
+      qc.invalidateQueries({ queryKey: ["/api/admin/my/calendar"] });
+      qc.invalidateQueries({ queryKey: ["/api/coach/my/calendar"] });
+      qc.invalidateQueries({ queryKey: ["/api/athlete/calendar"] });
+      toast.success("Added to your calendar");
+      setSelfAssignOpen(false);
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Could not add to your calendar"),
+  });
+
   if (isLoading || !hydrated) {
     return (
       <AppShell title="Loading Program…">
@@ -508,6 +557,30 @@ export function ProgramBuilderPage({
               >
                 <Send className="h-4 w-4" />
                 Assign Program
+              </Button>
+            )}
+            {showSelfAssign && (
+              <Button
+                variant="secondary"
+                disabled={saveMutation.isPending}
+                onClick={async () => {
+                  // Same reasoning as "Assign Program" above -- save first
+                  // so this can't land a stale (or empty) version on the
+                  // calendar.
+                  if (editable) {
+                    try {
+                      await saveMutation.mutateAsync();
+                    } catch {
+                      return;
+                    }
+                  }
+                  setSelfAssignDate(new Date().toISOString().slice(0, 10));
+                  setSelfAssignWeekdays([]);
+                  setSelfAssignOpen(true);
+                }}
+              >
+                <CalendarPlus className="h-4 w-4" />
+                Add to My Calendar
               </Button>
             )}
           </div>
@@ -758,9 +831,87 @@ export function ProgramBuilderPage({
           programId={programId}
         />
       )}
+
+      {showSelfAssign && (
+        <Dialog open={selfAssignOpen} onOpenChange={setSelfAssignOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Add to My Calendar</DialogTitle>
+            </DialogHeader>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                selfAssignMutation.mutate();
+              }}
+              className="space-y-4"
+            >
+              <div className="space-y-1.5">
+                <Label htmlFor="self-assign-date">Start date</Label>
+                <Input
+                  id="self-assign-date"
+                  type="date"
+                  value={selfAssignDate}
+                  onChange={(e) => setSelfAssignDate(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Which days do you train?</Label>
+                <div className="flex gap-1.5">
+                  {WEEKDAY_OPTIONS.map((wd) => (
+                    <button
+                      key={wd.value}
+                      type="button"
+                      aria-pressed={selfAssignWeekdays.includes(wd.value)}
+                      onClick={() =>
+                        setSelfAssignWeekdays((prev) =>
+                          prev.includes(wd.value)
+                            ? prev.filter((v) => v !== wd.value)
+                            : [...prev, wd.value].sort(),
+                        )
+                      }
+                      className={cn(
+                        "flex h-9 w-9 items-center justify-center rounded-full border text-xs font-bold transition-colors",
+                        selfAssignWeekdays.includes(wd.value)
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border text-muted-foreground hover:border-primary/50",
+                      )}
+                    >
+                      {wd.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {selfAssignWeekdays.length > 0
+                    ? "Day 1 lands on the first one of these on or after your start date, and each day after that goes to the next one -- so a 3-day program stays spaced out every week instead of landing three days in a row."
+                    : "Leave blank to just run the days back-to-back starting from your start date."}
+                </p>
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setSelfAssignOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={selfAssignMutation.isPending}>
+                  {selfAssignMutation.isPending ? "Adding…" : "Add to Calendar"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      )}
     </AppShell>
   );
 }
+
+const WEEKDAY_OPTIONS = [
+  { value: 0, label: "Su" },
+  { value: 1, label: "Mo" },
+  { value: 2, label: "Tu" },
+  { value: 3, label: "We" },
+  { value: 4, label: "Th" },
+  { value: 5, label: "Fr" },
+  { value: 6, label: "Sa" },
+];
 
 // A run of 2+ consecutive exercises chained by linkedToNext is one "group"
 // for rest-scope purposes -- these two helpers find where the group this

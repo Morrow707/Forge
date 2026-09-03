@@ -8,6 +8,7 @@ export default function AthleteProgramBuilder() {
         apiBase="/api/athlete"
         routeBase="/athlete/programs"
         showAssign={false}
+        showSelfAssign
         showAiChat
       />
     </FreeAgentGate>

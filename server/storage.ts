@@ -13908,7 +13908,17 @@ ${entriesText}`;
   // and the calendar date that position would land on for a given start
   // date -- the raw material for the manual-schedule editor in the assign
   // dialog (a coach adjusting individual days for games/travel/rest).
-  async getProgramSchedule(programId: number, startDate: string) {
+  // trainingWeekdays (0=Sun..6=Sat), when given, replaces the rigid "every 7
+  // days from startDate" grid with a walk: the program's own non-rest days,
+  // in week/day order, land on the next date whose weekday is in the set --
+  // e.g. a 3-day/week program with [1,3,5] selected lands on Mon/Wed/Fri
+  // every week instead of three days in a row. Only ever computed for a
+  // single pass through the program (see resolveAssignmentDate's own
+  // comment on why a dateOverride can't vary by durationWeeks cycle) --
+  // callers combining this with durationWeeks > 1 will see the weekday
+  // pattern hold for the first cycle and the default grid resume after,
+  // same pre-existing limitation manual per-day overrides already have.
+  async getProgramSchedule(programId: number, startDate: string, trainingWeekdays?: number[]) {
     const program = await this.getProgramFull(programId);
     if (!program) return [];
     const schedule: {
@@ -13918,18 +13928,31 @@ ${entriesText}`;
       title: string;
       defaultDate: string;
     }[] = [];
+    const weekdaySet = trainingWeekdays && trainingWeekdays.length > 0 ? new Set(trainingWeekdays) : null;
+    let cursor = weekdaySet ? parseISO(startDate) : null;
+    if (cursor) {
+      while (!weekdaySet!.has(cursor.getDay())) cursor = addDays(cursor, 1);
+    }
     for (const week of program.weeks) {
       for (const day of week.days) {
         if (day.isRestDay) continue;
-        const offset = (week.weekNumber - 1) * 7 + (day.dayNumber - 1);
+        let defaultDate: string;
+        if (weekdaySet && cursor) {
+          defaultDate = formatISO(cursor, { representation: "date" });
+          cursor = addDays(cursor, 1);
+          while (!weekdaySet.has(cursor.getDay())) cursor = addDays(cursor, 1);
+        } else {
+          const offset = (week.weekNumber - 1) * 7 + (day.dayNumber - 1);
+          defaultDate = formatISO(addDays(parseISO(startDate), offset), {
+            representation: "date",
+          });
+        }
         schedule.push({
           programDayId: day.id,
           weekNumber: week.weekNumber,
           dayNumber: day.dayNumber,
           title: day.title,
-          defaultDate: formatISO(addDays(parseISO(startDate), offset), {
-            representation: "date",
-          }),
+          defaultDate,
         });
       }
     }

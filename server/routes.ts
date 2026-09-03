@@ -2421,6 +2421,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       startDate: z.string(),
       durationWeeks: z.number().int().min(1).max(12).default(1),
       dateOverrides: z.record(z.string(), z.string()).optional(),
+      trainingWeekdays: z.array(z.number().int().min(0).max(6)).max(7).optional(),
       correctivesEnabled: z.boolean().default(true),
     });
     const parsed = schema.safeParse(req.body);
@@ -2430,12 +2431,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const usable = await storage.getProgramIfUsableByCoach(user.id, parsed.data.programId);
     if (!usable) return res.status(404).json({ message: "Program not found" });
 
+    let dateOverrides = parsed.data.dateOverrides;
+    if (parsed.data.trainingWeekdays && parsed.data.trainingWeekdays.length > 0) {
+      const schedule = await storage.getProgramSchedule(
+        parsed.data.programId,
+        parsed.data.startDate,
+        parsed.data.trainingWeekdays,
+      );
+      dateOverrides = Object.fromEntries(schedule.map((d) => [String(d.programDayId), d.defaultDate]));
+    }
+
     const result = await storage.createAssignment(
       user.id,
       parsed.data.programId,
       [{ athleteId: user.id, correctivesEnabled: parsed.data.correctivesEnabled }],
       parsed.data.startDate,
-      parsed.data.dateOverrides,
+      dateOverrides,
       parsed.data.durationWeeks,
     );
     res.status(201).json(result);
@@ -5492,6 +5503,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       startDate: z.string(),
       durationWeeks: z.number().int().min(1).max(12).default(1),
       dateOverrides: z.record(z.string(), z.string()).optional(),
+      trainingWeekdays: z.array(z.number().int().min(0).max(6)).max(7).optional(),
       correctivesEnabled: z.boolean().default(true),
     });
     const parsed = schema.safeParse(req.body);
@@ -5501,12 +5513,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const usable = await storage.getProgramIfUsableByCoach(user.id, parsed.data.programId);
     if (!usable) return res.status(404).json({ message: "Program not found" });
 
+    let dateOverrides = parsed.data.dateOverrides;
+    if (parsed.data.trainingWeekdays && parsed.data.trainingWeekdays.length > 0) {
+      const schedule = await storage.getProgramSchedule(
+        parsed.data.programId,
+        parsed.data.startDate,
+        parsed.data.trainingWeekdays,
+      );
+      dateOverrides = Object.fromEntries(schedule.map((d) => [String(d.programDayId), d.defaultDate]));
+    }
+
     const result = await storage.createAssignment(
       user.id,
       parsed.data.programId,
       [{ athleteId: user.id, correctivesEnabled: parsed.data.correctivesEnabled }],
       parsed.data.startDate,
-      parsed.data.dateOverrides,
+      dateOverrides,
       parsed.data.durationWeeks,
     );
     res.status(201).json(result);
@@ -7425,6 +7447,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       startDate: z.string(),
       durationWeeks: z.number().int().min(1).max(12).default(1),
       dateOverrides: z.record(z.string(), z.string()).optional(),
+      // 0=Sun..6=Sat -- "I train Mon/Wed/Fri," not three days in a row. See
+      // storage.getProgramSchedule's own comment for the walk this drives
+      // and why it only holds for a single pass through the program.
+      trainingWeekdays: z.array(z.number().int().min(0).max(6)).max(7).optional(),
       correctivesEnabled: z.boolean().default(true),
     });
     const parsed = schema.safeParse(req.body);
@@ -7434,12 +7460,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const usable = await storage.getProgramIfUsableByCoach(user.id, parsed.data.programId);
     if (!usable) return res.status(404).json({ message: "Program not found" });
 
+    let dateOverrides = parsed.data.dateOverrides;
+    if (parsed.data.trainingWeekdays && parsed.data.trainingWeekdays.length > 0) {
+      const schedule = await storage.getProgramSchedule(
+        parsed.data.programId,
+        parsed.data.startDate,
+        parsed.data.trainingWeekdays,
+      );
+      dateOverrides = Object.fromEntries(schedule.map((d) => [String(d.programDayId), d.defaultDate]));
+    }
+
     const result = await storage.createAssignment(
       user.id,
       parsed.data.programId,
       [{ athleteId: user.id, correctivesEnabled: parsed.data.correctivesEnabled }],
       parsed.data.startDate,
-      parsed.data.dateOverrides,
+      dateOverrides,
       parsed.data.durationWeeks,
     );
     res.status(201).json(result);
