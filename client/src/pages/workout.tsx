@@ -2294,7 +2294,7 @@ function ExerciseLogContent({
 
   return (
     <div className="space-y-3">
-      <ExerciseVideoThumb url={item.videoUrl} name={item.exerciseName} size="lg" />
+      <ExerciseVideoThumb url={item.videoUrl} name={item.exerciseName} />
       <div>
         <div className="flex items-start justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
