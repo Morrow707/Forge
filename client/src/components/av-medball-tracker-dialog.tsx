@@ -24,6 +24,7 @@ import {
   detectThrowReps,
   type SetTrustScore,
   type BlendedSpeedResult,
+  type PoseFrame,
 } from "@/lib/pose-tracking";
 import { analyzeMechanics, type MechanicsFrame } from "@/lib/mechanics-tracking";
 import { MIN_TRACKING_CONFIDENCE } from "@/lib/bar-tracking";
@@ -116,7 +117,7 @@ export function AvMedballTrackerDialog({
   onOpenChange: (open: boolean) => void;
   heightIn?: number | null;
   recordVideo?: boolean;
-  onCapture: (metrics: MedballSetMetrics, videoUrl?: string) => void;
+  onCapture: (metrics: MedballSetMetrics, videoUrl?: string, skeletonFrames?: PoseFrame[] | null) => void;
   videoContext?: VideoRecordContext;
 }) {
   const [saving, setSaving] = useState(false);
@@ -223,7 +224,9 @@ export function AvMedballTrackerDialog({
       }
       return;
     }
-    await finishWithRecording(result.blob, result.rawFrames, result.captureDeviceInfo, result.recordingStats, uploadPromise);
+    await finishWithRecording(
+      result.blob, result.rawFrames, result.skeletonFrames, result.captureDeviceInfo, result.recordingStats, uploadPromise,
+    );
   }
 
   // Frame-to-frame speed across an implement's own confident trace -- same robust-percentile
@@ -278,6 +281,7 @@ export function AvMedballTrackerDialog({
   async function finishWithRecording(
     blob: Blob,
     rawFrames: NativePoseFrame[],
+    skeletonFrames: PoseFrame[],
     captureDeviceInfo: CaptureDeviceInfo,
     recordingStats: { frameCount: number; trackedFrameCount: number; elapsedSeconds: number },
     uploadPromise: Promise<{ status: "uploaded"; url: string } | { status: "queued" }> | null,
@@ -436,7 +440,7 @@ export function AvMedballTrackerDialog({
     );
 
     if (!recordVideo) {
-      onCapture(metrics);
+      onCapture(metrics, undefined, null);
       onOpenChange(false);
       return;
     }
@@ -458,14 +462,14 @@ export function AvMedballTrackerDialog({
             { duration: 10000 },
           );
         }
-        onCapture(metrics);
+        onCapture(metrics, undefined, skeletonFrames);
       } else {
-        onCapture(metrics, result.url);
+        onCapture(metrics, result.url, skeletonFrames);
       }
       onOpenChange(false);
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Saved the set, but the clip failed to upload");
-      onCapture(metrics);
+      onCapture(metrics, undefined, skeletonFrames);
       onOpenChange(false);
     } finally {
       setSaving(false);

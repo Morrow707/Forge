@@ -2129,6 +2129,15 @@ export const workoutSetEntries = pgTable(
   // back empty) -- see trackingDiagnosticsSchema's own comment. Null for sets logged before
   // this existed, and for any set that isn't camera-tracked.
   trackingDiagnostics: json("tracking_diagnostics"),
+  // Real per-frame skeleton positions from the SAME live tracking pass that produced this set's
+  // other numbers -- see skeletonReplayFrameSchema's own comment for why this exists. iOS-only
+  // for now (see video-analysis-dialog.tsx's toggleSkeleton): Android/MediaPipe's skeleton replay
+  // re-runs its own tracker fresh against the saved video file on demand and never needed this,
+  // but Vision framework has no such "replay the model against a stored clip from any device"
+  // path, so the ONLY way to show a real skeleton overlay on an iOS-tracked set's video is to
+  // have saved the joints live, during the original capture, and play those back. Null for
+  // every set that isn't camera-tracked on iOS, and for sets logged before this existed.
+  skeletonFrames: json("skeleton_frames"),
   },
   (table) => ({
     // Same reasoning as workoutLogEntries.workoutLogIdx just above -- the
@@ -5864,6 +5873,33 @@ export const barPathPointSchema = z.object({
   y: z.number(),
 });
 
+// One iOS Vision joint, in the exact same shape @mediapipe/tasks-vision's own Landmark/
+// NormalizedLandmark types already use client-side (x/y/z + visibility 0-1) -- see
+// vision-body-landmarks.ts's visionJointsToNormalizedLandmarks/visionJointsToWorldLandmarks,
+// the two functions that actually produce these. A missing/undetected joint is a zero-visibility
+// entry at its usual array index, never a hole in the array -- every frame's landmarks/
+// worldLandmarks arrays are always the same fixed length.
+export const skeletonLandmarkSchema = z.object({
+  x: z.number(),
+  y: z.number(),
+  z: z.number(),
+  visibility: z.number(),
+});
+
+// One saved frame of a real, live-tracked skeleton -- see workoutSetEntries.skeletonFrames'
+// own comment for why this exists (real per-frame Vision joints, saved once during capture, so
+// video-analysis-dialog.tsx's skeleton replay has something real to draw for an iOS-tracked set
+// without re-running a different model against the stored video). landmarks is normalized 0-1
+// image-space (what the replay canvas draws directly); worldLandmarks is the same aspect-
+// corrected pixel-space pose-tracking.ts's own angle math already expects (see
+// visionJointsToWorldLandmarks) -- both carried together so the replay's Angle tool keeps
+// working on an iOS-tracked set the same as it does on a freshly re-analyzed Android one.
+export const skeletonReplayFrameSchema = z.object({
+  t: z.number(),
+  landmarks: z.array(skeletonLandmarkSchema),
+  worldLandmarks: z.array(skeletonLandmarkSchema),
+});
+
 export const formFaultSchema = z.object({
   code: z.string(),
   label: z.string(),
@@ -6264,6 +6300,7 @@ export const setLogInputSchema = z.object({
   horizontalLoadAvgSpeedYardsPerSec: z.number().optional().nullable(),
   captureDeviceInfo: captureDeviceInfoSchema.optional().nullable(),
   trackingDiagnostics: trackingDiagnosticsSchema.optional().nullable(),
+  skeletonFrames: z.array(skeletonReplayFrameSchema).optional().nullable(),
 });
 
 export const logEntryInputSchema = z

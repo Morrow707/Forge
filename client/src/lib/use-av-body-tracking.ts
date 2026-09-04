@@ -19,6 +19,8 @@ import {
   type CaptureDeviceInfo,
   type AvAnalysisResult,
 } from "@/lib/native-av-preview";
+import { buildSkeletonReplayFrames } from "@/lib/vision-body-landmarks";
+import type { PoseFrame } from "@/lib/pose-tracking";
 
 // Every frame (analyzeAvRecording's own sampleEveryNthFrame default) was never actually
 // necessary -- interpolateOcclusionGap/kalmanSmooth (bar-tracking.ts) work off each frame's
@@ -230,6 +232,7 @@ export function useAvBodyTracking(active: boolean) {
     | {
         blob: Blob;
         rawFrames: NativePoseFrame[];
+        skeletonFrames: PoseFrame[];
         captureDeviceInfo: CaptureDeviceInfo;
         recordingStats: AvAnalysisResult;
       }
@@ -252,6 +255,7 @@ export function useAvBodyTracking(active: boolean) {
     | {
         blob: Blob;
         rawFrames: NativePoseFrame[];
+        skeletonFrames: PoseFrame[];
         captureDeviceInfo: CaptureDeviceInfo;
         recordingStats: AvAnalysisResult;
       }
@@ -320,7 +324,13 @@ export function useAvBodyTracking(active: boolean) {
     void deleteAvRecording(path);
     recordingPathRef.current = null;
     setAnalyzing(false);
-    return { blob, rawFrames, captureDeviceInfo, recordingStats };
+    // Built here, once, for every caller -- see buildSkeletonReplayFrames' own comment for why
+    // this is the only way iOS's skeleton replay can work at all (unlike Android/MediaPipe,
+    // there's no "re-run the model against a stored clip" path). A caller that doesn't attach
+    // this to its own capture payload loses nothing beyond skeleton replay -- it's dead weight,
+    // not a dependency of anything else this hook returns.
+    const skeletonFrames = buildSkeletonReplayFrames(rawFrames);
+    return { blob, rawFrames, skeletonFrames, captureDeviceInfo, recordingStats };
   }
 
   function cancelAnalysis() {

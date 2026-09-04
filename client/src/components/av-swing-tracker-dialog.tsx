@@ -91,7 +91,7 @@ export function AvSwingTrackerDialog({
   sport: "golf" | "baseball";
   heightIn?: number | null;
   recordVideo?: boolean;
-  onCapture: (metrics: AvSwingSetMetrics, videoUrl?: string) => void;
+  onCapture: (metrics: AvSwingSetMetrics, videoUrl?: string, skeletonFrames?: PoseFrame[] | null) => void;
   videoContext?: VideoRecordContext;
 }) {
   const label = sport === "golf" ? "Golf Swing" : "Baseball Swing";
@@ -161,6 +161,7 @@ export function AvSwingTrackerDialog({
     await finishTracking(
       result.blob,
       result.rawFrames.map((f) => ({ t: f.timestamp * 1000, worldLandmarks: visionJointsToWorldLandmarks(f) })),
+      result.skeletonFrames,
       result.captureDeviceInfo,
       result.rawFrames,
       result.recordingStats,
@@ -171,6 +172,7 @@ export function AvSwingTrackerDialog({
   async function finishTracking(
     blob: Blob,
     rawFrames: { t: number; worldLandmarks: Landmark[] }[],
+    skeletonFrames: PoseFrame[],
     captureDeviceInfo: CaptureDeviceInfo,
     nativeRawFrames: NativePoseFrame[],
     recordingStats: { frameCount: number; trackedFrameCount: number; elapsedSeconds: number },
@@ -251,7 +253,7 @@ export function AvSwingTrackerDialog({
     }
 
     if (!recordVideo) {
-      onCapture(metrics);
+      onCapture(metrics, undefined, null);
       onOpenChange(false);
       return;
     }
@@ -272,14 +274,14 @@ export function AvSwingTrackerDialog({
             { duration: 10000 },
           );
         }
-        onCapture(metrics);
+        onCapture(metrics, undefined, skeletonFrames);
       } else {
-        onCapture(metrics, result.url);
+        onCapture(metrics, result.url, skeletonFrames);
       }
       onOpenChange(false);
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Saved the set, but the clip failed to upload");
-      onCapture(metrics);
+      onCapture(metrics, undefined, skeletonFrames);
       onOpenChange(false);
     } finally {
       setSaving(false);

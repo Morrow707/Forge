@@ -40,6 +40,7 @@ import { SetVideoPreviewDialog, SetVideoCompareDialog } from "@/components/set-v
 import { extractVideoFrames } from "@/lib/video-frames";
 import type { RepMetrics } from "@/lib/bar-tracking";
 import type { JumpSetMetrics } from "@/lib/jump-tracking";
+import type { PoseFrame } from "@/lib/pose-tracking";
 import { toKg, fromKg } from "@/lib/bar-tracking";
 import { useDistanceUnit, formatDistanceCm } from "@/lib/distance-unit";
 import { DistanceUnitToggle } from "@/components/distance-unit-toggle";
@@ -429,6 +430,12 @@ type SetMetrics = {
   // Pipeline-stage diagnostics (calibration, body-pose/object-detection frame stats, and why an
   // empty set came back empty) -- see tracking-diagnostics.ts's buildTrackingDiagnostics.
   trackingDiagnostics: TrackingDiagnostics | null;
+  // Real per-frame skeleton positions saved live during an iOS set's original capture -- see
+  // workoutSetEntries.skeletonFrames' own comment in shared/schema.ts. Null on Android/web (that
+  // path's own skeleton replay re-runs MediaPipe fresh against the saved video instead, on
+  // demand -- see video-analysis-dialog.tsx's toggleSkeleton) and for sets logged before this
+  // existed.
+  skeletonFrames: PoseFrame[] | null;
 };
 
 type LogEntry = {
@@ -588,6 +595,7 @@ function buildItem(
       trustScores: existingSet?.trustScores ?? null,
       captureDeviceInfo: existingSet?.captureDeviceInfo ?? null,
       trackingDiagnostics: existingSet?.trackingDiagnostics ?? null,
+      skeletonFrames: existingSet?.skeletonFrames ?? null,
     };
   });
   const materials = materialsFrom(prescribed.exercise);
@@ -1083,6 +1091,7 @@ export function WorkoutPage({
           trustScores: s.trustScores,
           captureDeviceInfo: s.captureDeviceInfo,
           trackingDiagnostics: s.trackingDiagnostics,
+          skeletonFrames: s.skeletonFrames,
         })),
       })),
     };
@@ -1588,6 +1597,7 @@ export function WorkoutPage({
               trustScores: null,
               captureDeviceInfo: null,
               trackingDiagnostics: null,
+              skeletonFrames: null,
             },
           ],
         };
@@ -2347,6 +2357,7 @@ function ExerciseLogContent({
       videoUrl: s.formCheckVideoUrl!,
       flag: s.formCheckFlag,
       repBreakdown: s.repBreakdown,
+      skeletonFrames: s.skeletonFrames,
     }));
   const previewSet = previewSetNumber != null ? item.sets.find((s) => s.setNumber === previewSetNumber) : undefined;
 
@@ -3001,6 +3012,7 @@ function ExerciseLogContent({
             metrics: RepMetrics | JumpSetMetrics,
             videoUrl?: string,
             explicitSetNumber?: number,
+            skeletonFrames?: PoseFrame[] | null,
           ) {
             // AvBarTrackerDialog now closes (and returns `trackingSet` to null) before its
             // background analysis finishes, so it always passes its own captured setNumber
@@ -3042,6 +3054,7 @@ function ExerciseLogContent({
                   formFaults: metrics.formFaults,
                   captureDeviceInfo: metrics.captureDeviceInfo ?? null,
                   trackingDiagnostics: metrics.trackingDiagnostics ?? null,
+                  skeletonFrames: skeletonFrames ?? null,
                   ...videoPatch,
                 },
                 // A tracked capture is expensive to redo -- save it the
@@ -3073,6 +3086,7 @@ function ExerciseLogContent({
                   trustScores: metrics.trustScores ?? null,
                   captureDeviceInfo: metrics.captureDeviceInfo ?? null,
                   trackingDiagnostics: metrics.trackingDiagnostics ?? null,
+                  skeletonFrames: skeletonFrames ?? null,
                   ...videoPatch,
                 },
                 { immediate: true },
@@ -3092,7 +3106,7 @@ function ExerciseLogContent({
           // JumpSetMetrics union that function already narrows between,
           // and reusing that narrowing here would mean widening it across
           // every other call site that pattern-matches on it instead.
-          function handleSwingCapture(metrics: AvSwingSetMetrics, videoUrl?: string) {
+          function handleSwingCapture(metrics: AvSwingSetMetrics, videoUrl?: string, skeletonFrames?: PoseFrame[] | null) {
             if (trackingSet == null) return;
             const videoPatch = videoUrl ? { formCheckVideoUrl: videoUrl } : {};
             onUpdateSet(
@@ -3106,6 +3120,7 @@ function ExerciseLogContent({
                 swingTrustScore: metrics.trust,
                 captureDeviceInfo: metrics.captureDeviceInfo,
                 trackingDiagnostics: metrics.trackingDiagnostics ?? null,
+                skeletonFrames: skeletonFrames ?? null,
                 ...videoPatch,
               },
               { immediate: true },
@@ -3118,7 +3133,7 @@ function ExerciseLogContent({
 
           // Separate from handleTrackerCapture above, same reasoning as handleSwingCapture --
           // MedballSetMetrics doesn't fit the RepMetrics/JumpSetMetrics union either.
-          function handleMedballCapture(metrics: MedballSetMetrics, videoUrl?: string) {
+          function handleMedballCapture(metrics: MedballSetMetrics, videoUrl?: string, skeletonFrames?: PoseFrame[] | null) {
             if (trackingSet == null) return;
             const videoPatch = videoUrl ? { formCheckVideoUrl: videoUrl } : {};
             onUpdateSet(
@@ -3130,6 +3145,7 @@ function ExerciseLogContent({
                 medBallRepBreakdown: metrics.repBreakdown,
                 captureDeviceInfo: metrics.captureDeviceInfo,
                 trackingDiagnostics: metrics.trackingDiagnostics ?? null,
+                skeletonFrames: skeletonFrames ?? null,
                 ...videoPatch,
               },
               { immediate: true },
@@ -3142,7 +3158,7 @@ function ExerciseLogContent({
 
           // Separate from handleTrackerCapture above, same reasoning as handleSwingCapture --
           // KbSwingSetMetrics doesn't fit the RepMetrics/JumpSetMetrics union either.
-          function handleKbSwingCapture(metrics: KbSwingSetMetrics, videoUrl?: string) {
+          function handleKbSwingCapture(metrics: KbSwingSetMetrics, videoUrl?: string, skeletonFrames?: PoseFrame[] | null) {
             if (trackingSet == null) return;
             const videoPatch = videoUrl ? { formCheckVideoUrl: videoUrl } : {};
             onUpdateSet(
@@ -3153,6 +3169,7 @@ function ExerciseLogContent({
                 kbSwingTrustScore: metrics.trust,
                 captureDeviceInfo: metrics.captureDeviceInfo,
                 trackingDiagnostics: metrics.trackingDiagnostics ?? null,
+                skeletonFrames: skeletonFrames ?? null,
                 ...videoPatch,
               },
               { immediate: true },
@@ -3163,7 +3180,11 @@ function ExerciseLogContent({
             }
           }
 
-          function handleHorizontalLoadCapture(metrics: HorizontalLoadSetMetrics | null, videoUrl?: string) {
+          function handleHorizontalLoadCapture(
+            metrics: HorizontalLoadSetMetrics | null,
+            videoUrl?: string,
+            skeletonFrames?: PoseFrame[] | null,
+          ) {
             if (trackingSet == null) return;
             const videoPatch = videoUrl ? { formCheckVideoUrl: videoUrl } : {};
             onUpdateSet(
@@ -3173,6 +3194,7 @@ function ExerciseLogContent({
                 horizontalLoadDistanceYards: metrics?.distanceYards ?? null,
                 horizontalLoadAvgSpeedYardsPerSec: metrics?.avgSpeedYardsPerSec ?? null,
                 captureDeviceInfo: metrics?.captureDeviceInfo ?? null,
+                skeletonFrames: skeletonFrames ?? null,
                 ...videoPatch,
               },
               { immediate: true },
@@ -3465,6 +3487,7 @@ function ExerciseLogContent({
             });
             setPreviewSetNumber(null);
           }}
+          skeletonFrames={previewSet.skeletonFrames}
         />
       )}
 

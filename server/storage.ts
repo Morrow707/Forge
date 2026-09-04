@@ -16167,6 +16167,7 @@ ${catalog}`;
                 horizontalLoadAvgSpeedYardsPerSec: s.horizontalLoadAvgSpeedYardsPerSec ?? null,
                 captureDeviceInfo: s.captureDeviceInfo ?? null,
                 trackingDiagnostics: s.trackingDiagnostics ?? null,
+                skeletonFrames: s.skeletonFrames ?? null,
               };
             }),
           );

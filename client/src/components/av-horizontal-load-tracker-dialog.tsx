@@ -14,7 +14,7 @@ import {
   markWarnedAboutQueueing,
   type VideoRecordContext,
 } from "@/lib/video-offline-store";
-import { POSE_LANDMARKS } from "@/lib/pose-tracking";
+import { POSE_LANDMARKS, type PoseFrame } from "@/lib/pose-tracking";
 import { type PoseFrame as NativePoseFrame, type CaptureDeviceInfo } from "@/lib/native-av-preview";
 import { useAvBodyTracking } from "@/lib/use-av-body-tracking";
 import { AvCameraChrome } from "@/components/av-camera-chrome";
@@ -120,7 +120,7 @@ export function AvHorizontalLoadTrackerDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   recordVideo?: boolean;
-  onCapture: (metrics: HorizontalLoadSetMetrics | null, videoUrl?: string) => void;
+  onCapture: (metrics: HorizontalLoadSetMetrics | null, videoUrl?: string, skeletonFrames?: PoseFrame[] | null) => void;
   videoContext?: VideoRecordContext;
 }) {
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -140,6 +140,11 @@ export function AvHorizontalLoadTrackerDialog({
   // so it has no fresh captureDeviceInfo of its own to attach; both paths funnel through
   // finishWithResult, so stashing it here once covers both.
   const captureDeviceInfoRef = useRef<CaptureDeviceInfo | null>(null);
+  // See workoutSetEntries.skeletonFrames' own comment in shared/schema.ts -- carried the same
+  // way captureDeviceInfoRef is (set once analysis finishes, read back much later at saveMutation,
+  // since this dialog's manual-scrub fallback means onCapture doesn't fire right after analysis
+  // the way every other AV dialog's does).
+  const skeletonFramesRef = useRef<PoseFrame[] | null>(null);
   const recordingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const manualStartRef = useRef<number | null>(null);
 
@@ -283,7 +288,7 @@ export function AvHorizontalLoadTrackerDialog({
         try {
           const uploadResult = await inFlightUpload;
           toast.error("Couldn't finish analyzing this take, but your video was saved for your coach.");
-          onCapture(null, uploadResult.status === "uploaded" ? uploadResult.url : undefined);
+          onCapture(null, uploadResult.status === "uploaded" ? uploadResult.url : undefined, null);
           onOpenChange(false);
           return;
         } catch {
@@ -297,6 +302,7 @@ export function AvHorizontalLoadTrackerDialog({
       return;
     }
     captureDeviceInfoRef.current = captured.captureDeviceInfo;
+    skeletonFramesRef.current = captured.skeletonFrames;
     finishCapture(captured.blob, captured.rawFrames);
   }
 
@@ -400,11 +406,11 @@ export function AvHorizontalLoadTrackerDialog({
           uploadedVideoUrl = uploadResult.url;
         }
       }
-      onCapture(result, uploadedVideoUrl);
+      onCapture(result, uploadedVideoUrl, skeletonFramesRef.current);
       onOpenChange(false);
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Saved the set, but the clip failed to upload");
-      onCapture(result);
+      onCapture(result, undefined, skeletonFramesRef.current);
       onOpenChange(false);
     } finally {
       setSaving(false);

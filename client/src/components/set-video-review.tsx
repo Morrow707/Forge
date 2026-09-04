@@ -27,6 +27,7 @@ import {
   Pause,
 } from "lucide-react";
 import { VideoAnalysisDialog } from "@/components/video-analysis-dialog";
+import type { PoseFrame } from "@/lib/pose-tracking";
 
 export type FlaggedSetVideo = {
   setNumber: number;
@@ -37,6 +38,12 @@ export type FlaggedSetVideo = {
   // a plain form-check clip with no CV data still compares fine, just
   // unaligned (offset falls back to 0).
   repBreakdown?: { repNumber: number; startT: number; endT: number }[] | null;
+  // Real per-frame skeleton positions saved live during an iOS set's original capture -- see
+  // workoutSetEntries.skeletonFrames' own comment in shared/schema.ts. Optional/nullable same as
+  // repBreakdown above: absent for a plain form-check clip, for any Android/web-tracked set (that
+  // path's own skeleton replay re-runs MediaPipe fresh against the video instead), and for sets
+  // logged before this existed.
+  skeletonFrames?: PoseFrame[] | null;
 };
 
 function FlagButton({
@@ -85,6 +92,7 @@ export function SetVideoPreviewDialog({
   favorited,
   onToggleFavorite,
   isPr,
+  skeletonFrames,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -102,6 +110,9 @@ export function SetVideoPreviewDialog({
   /** Auto-computed server-side (submitWorkoutLog) -- purely a badge, never
    * user-set, never a reason a video survives the cap on its own. */
   isPr?: boolean;
+  /** See FlaggedSetVideo.skeletonFrames' own comment -- threaded straight through to
+   * VideoAnalysisDialog's own prop of the same name. */
+  skeletonFrames?: PoseFrame[] | null;
 }) {
   const [analyzing, setAnalyzing] = useState(false);
   // Same reasoning as VideoAnalysisDialog's own loadError -- without this,
@@ -214,6 +225,7 @@ export function SetVideoPreviewDialog({
         onOpenChange={setAnalyzing}
         videoUrl={videoUrl}
         title={`Set ${setNumber} — Form Check`}
+        skeletonFrames={skeletonFrames ?? null}
       />
     </Dialog>
   );
@@ -246,7 +258,9 @@ export function SetVideoCompareDialog({
   // the single-video preview, not here. One shared dialog instance driven
   // by this rather than one per side, since only one can ever be open at a
   // time anyway.
-  const [analyzing, setAnalyzing] = useState<{ url: string; title: string } | null>(null);
+  const [analyzing, setAnalyzing] = useState<{ url: string; title: string; skeletonFrames: PoseFrame[] | null } | null>(
+    null,
+  );
   // Which set numbers' videos failed to load, keyed by setNumber -- same
   // reasoning as SetVideoPreviewDialog's own loadError above: without this,
   // a failed load (expired/malformed signed URL, genuinely missing file)
@@ -442,12 +456,16 @@ export function SetVideoCompareDialog({
             <Slot
               video={left}
               onPick={setLeftNumber}
-              onAnalyze={() => left && setAnalyzing({ url: left.videoUrl, title: `Set ${left.setNumber}` })}
+              onAnalyze={() =>
+                left && setAnalyzing({ url: left.videoUrl, title: `Set ${left.setNumber}`, skeletonFrames: left.skeletonFrames ?? null })
+              }
             />
             <Slot
               video={right}
               onPick={setRightNumber}
-              onAnalyze={() => right && setAnalyzing({ url: right.videoUrl, title: `Set ${right.setNumber}` })}
+              onAnalyze={() =>
+                right && setAnalyzing({ url: right.videoUrl, title: `Set ${right.setNumber}`, skeletonFrames: right.skeletonFrames ?? null })
+              }
             />
           </div>
         ) : (
@@ -551,6 +569,7 @@ export function SetVideoCompareDialog({
         onOpenChange={(o) => !o && setAnalyzing(null)}
         videoUrl={analyzing?.url ?? ""}
         title={analyzing?.title}
+        skeletonFrames={analyzing?.skeletonFrames ?? null}
       />
     </Dialog>
   );

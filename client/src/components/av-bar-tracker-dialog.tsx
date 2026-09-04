@@ -286,7 +286,7 @@ export function AvBarTrackerDialog({
   // out. Deliberately separate from onCapture, which only fires on paths that actually produce
   // metrics to save.
   onProcessingSettled: (setNumber: number) => void;
-  onCapture: (metrics: RepMetrics, videoUrl?: string, setNumber?: number) => void;
+  onCapture: (metrics: RepMetrics, videoUrl?: string, setNumber?: number, skeletonFrames?: PoseFrame[] | null) => void;
   videoContext?: VideoRecordContext;
   formFaultThresholds?: Partial<Record<keyof FormFaultThresholds, number | null>> | null;
   // From the active MovementProfile's own positionScaleCorrection (see
@@ -481,7 +481,7 @@ export function AvBarTrackerDialog({
         return;
       }
       await finishWithRecording(
-        result.blob, result.rawFrames, result.captureDeviceInfo, result.recordingStats, uploadPromise, forSetNumber,
+        result.blob, result.rawFrames, result.skeletonFrames, result.captureDeviceInfo, result.recordingStats, uploadPromise, forSetNumber,
       );
     } finally {
       // Fires no matter which of the paths above was taken -- see this dialog's own prop
@@ -493,6 +493,7 @@ export function AvBarTrackerDialog({
   async function finishWithRecording(
     blob: Blob,
     rawFrames: NativePoseFrame[],
+    skeletonFrames: PoseFrame[],
     captureDeviceInfo: CaptureDeviceInfo,
     recordingStats: {
       frameCount: number;
@@ -807,7 +808,9 @@ export function AvBarTrackerDialog({
     }
 
     if (!recordVideo) {
-      onCapture(metrics, undefined, forSetNumber);
+      // No video saved this set -- skeleton replay has nothing to overlay, so there's nothing
+      // worth attaching here (skeletonFrames without a video is orphaned data).
+      onCapture(metrics, undefined, forSetNumber, null);
       onOpenChange(false);
       return;
     }
@@ -834,14 +837,14 @@ export function AvBarTrackerDialog({
             { duration: 10000 },
           );
         }
-        onCapture(metrics, undefined, forSetNumber);
+        onCapture(metrics, undefined, forSetNumber, skeletonFrames);
       } else {
-        onCapture(metrics, result.url, forSetNumber);
+        onCapture(metrics, result.url, forSetNumber, skeletonFrames);
       }
       onOpenChange(false);
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Saved the set, but the clip failed to upload");
-      onCapture(metrics, undefined, forSetNumber);
+      onCapture(metrics, undefined, forSetNumber, skeletonFrames);
       onOpenChange(false);
     } finally {
       setSaving(false);

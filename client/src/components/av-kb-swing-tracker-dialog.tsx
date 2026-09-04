@@ -22,6 +22,7 @@ import {
   visible,
   percentile,
   blendSpeedEstimates,
+  type PoseFrame,
 } from "@/lib/pose-tracking";
 import { summarizeKbSwingSet, MAX_PLAUSIBLE_KB_SWING_SPEED_MPS, type KbSwingSetMetrics } from "@/lib/kb-swing-tracking";
 import { MIN_TRACKING_CONFIDENCE, type TrackedPoint } from "@/lib/bar-tracking";
@@ -78,7 +79,7 @@ export function AvKbSwingTrackerDialog({
   onOpenChange: (open: boolean) => void;
   heightIn?: number | null;
   recordVideo?: boolean;
-  onCapture: (metrics: KbSwingSetMetrics, videoUrl?: string) => void;
+  onCapture: (metrics: KbSwingSetMetrics, videoUrl?: string, skeletonFrames?: PoseFrame[] | null) => void;
   videoContext?: VideoRecordContext;
 }) {
   const [saving, setSaving] = useState(false);
@@ -184,12 +185,15 @@ export function AvKbSwingTrackerDialog({
       }
       return;
     }
-    await finishWithRecording(result.blob, result.rawFrames, result.captureDeviceInfo, result.recordingStats, uploadPromise);
+    await finishWithRecording(
+      result.blob, result.rawFrames, result.skeletonFrames, result.captureDeviceInfo, result.recordingStats, uploadPromise,
+    );
   }
 
   async function finishWithRecording(
     blob: Blob,
     rawFrames: NativePoseFrame[],
+    skeletonFrames: PoseFrame[],
     captureDeviceInfo: CaptureDeviceInfo,
     recordingStats: { frameCount: number; trackedFrameCount: number; elapsedSeconds: number },
     uploadPromise: Promise<{ status: "uploaded"; url: string } | { status: "queued" }> | null,
@@ -322,7 +326,7 @@ export function AvKbSwingTrackerDialog({
     };
 
     if (!recordVideo) {
-      onCapture(metrics);
+      onCapture(metrics, undefined, null);
       onOpenChange(false);
       return;
     }
@@ -344,14 +348,14 @@ export function AvKbSwingTrackerDialog({
             { duration: 10000 },
           );
         }
-        onCapture(metrics);
+        onCapture(metrics, undefined, skeletonFrames);
       } else {
-        onCapture(metrics, result.url);
+        onCapture(metrics, result.url, skeletonFrames);
       }
       onOpenChange(false);
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Saved the set, but the clip failed to upload");
-      onCapture(metrics);
+      onCapture(metrics, undefined, skeletonFrames);
       onOpenChange(false);
     } finally {
       setSaving(false);

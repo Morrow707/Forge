@@ -101,7 +101,7 @@ export function AvJumpTrackerDialog({
   onAnalysisStarted: (setNumber: number) => void;
   onProcessingSettled: (setNumber: number) => void;
   onUploadProgress?: (setNumber: number, percent: number) => void;
-  onCapture: (metrics: JumpSetMetrics, videoUrl?: string, setNumber?: number) => void;
+  onCapture: (metrics: JumpSetMetrics, videoUrl?: string, setNumber?: number, skeletonFrames?: PoseFrame[] | null) => void;
   videoContext?: VideoRecordContext;
   formFaultThresholds?: Partial<Record<keyof FormFaultThresholds, number | null>> | null;
   jumpHeightOutlierPercent?: number | null;
@@ -218,6 +218,7 @@ export function AvJumpTrackerDialog({
       await finishWithRecording(
         result.blob,
         result.rawFrames.map((f) => ({ t: f.timestamp * 1000, worldLandmarks: visionJointsToWorldLandmarks(f) })),
+        result.skeletonFrames,
         result.captureDeviceInfo,
         result.rawFrames,
         result.recordingStats,
@@ -234,6 +235,7 @@ export function AvJumpTrackerDialog({
   async function finishWithRecording(
     blob: Blob,
     rawFrames: { t: number; worldLandmarks: PoseFrame["worldLandmarks"] }[],
+    skeletonFrames: PoseFrame[],
     captureDeviceInfo: CaptureDeviceInfo,
     nativeRawFrames: NativePoseFrame[],
     recordingStats: {
@@ -443,7 +445,7 @@ export function AvJumpTrackerDialog({
     }
 
     if (!recordVideo) {
-      onCapture(metrics, undefined, forSetNumber);
+      onCapture(metrics, undefined, forSetNumber, null);
       onOpenChange(false);
       return;
     }
@@ -471,14 +473,14 @@ export function AvJumpTrackerDialog({
             { duration: 10000 },
           );
         }
-        onCapture(metrics, undefined, forSetNumber);
+        onCapture(metrics, undefined, forSetNumber, skeletonFrames);
       } else {
-        onCapture(metrics, result.url, forSetNumber);
+        onCapture(metrics, result.url, forSetNumber, skeletonFrames);
       }
       onOpenChange(false);
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Saved the set, but the clip failed to upload");
-      onCapture(metrics, undefined, forSetNumber);
+      onCapture(metrics, undefined, forSetNumber, skeletonFrames);
       onOpenChange(false);
     } finally {
       setSaving(false);

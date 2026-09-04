@@ -152,11 +152,18 @@ export function VideoAnalysisDialog({
   onOpenChange,
   videoUrl,
   title,
+  skeletonFrames,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   videoUrl: string;
   title?: string;
+  // Real per-frame skeleton positions saved live during this set's original iOS capture -- see
+  // workoutSetEntries.skeletonFrames' own comment in shared/schema.ts. Absent/null for a plain
+  // form-check clip, an Android/MediaPipe-tracked set (that path recomputes fresh below instead),
+  // or a set logged before this existed -- toggleSkeleton falls back to the old "not available"
+  // message on iOS in exactly those cases, same as before this prop existed.
+  skeletonFrames?: PoseFrame[] | null;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -386,19 +393,26 @@ export function VideoAnalysisDialog({
       requestAnimationFrame(() => redrawRef.current());
       return;
     }
-    // This re-analyzes an already-recorded, flat video file with MediaPipe
-    // from scratch -- on iOS, where a live set was already tracked live by
-    // the native AVFoundation + Vision pipeline (see native-av-preview.ts),
-    // running MediaPipe here is a second, independent pass with its own
-    // detection noise, not a replay of what was actually seen live.
-    // No skeleton replay from the ORIGINAL tracked frames exists yet either
-    // -- that needs saving full per-frame joint data alongside a set, which
-    // isn't in place today (only the derived bar-path trail and per-rep
-    // summary stats are persisted). Rather than silently fall back to the
-    // MediaPipe re-derivation, this is honest about the gap instead.
+    // On iOS, a live set was already tracked live by the native AVFoundation + Vision pipeline
+    // (see native-av-preview.ts) -- re-running MediaPipe against the saved video here (the
+    // Android/web path just below) would be a second, independent pass with its own detection
+    // noise, not a replay of what was actually seen live, and Vision framework itself has no
+    // "re-run the model against a stored clip" path the way MediaPipe does. skeletonFrames (see
+    // this component's own prop comment) is the real per-frame joint data saved during that
+    // original capture -- when present, it drops straight into poseFramesRef with no re-analysis
+    // needed at all. Only genuinely missing for a set logged before this existed, or a plain
+    // form-check clip with no tracking behind it -- honest about the gap in exactly those cases,
+    // rather than silently falling back to a MediaPipe re-derivation that wouldn't match.
     if (isAvPreviewPlatform()) {
+      if (skeletonFrames && skeletonFrames.length > 0) {
+        poseFramesRef.current = skeletonFrames;
+        analyzedUrlRef.current = videoUrl;
+        setShowSkeleton(true);
+        requestAnimationFrame(() => redrawRef.current());
+        return;
+      }
       setAnalyzeMessage(
-        "Skeleton replay isn't available here yet on iPhone -- re-running a 2D tracking model on the saved video wouldn't match what was actually tracked live during the set.",
+        "No skeleton data was saved for this set -- older sets tracked before this feature, or a plain form-check clip, don't have it to replay.",
       );
       setShowSkeleton(false);
       return;

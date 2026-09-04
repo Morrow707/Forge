@@ -42,7 +42,7 @@
 // uncalibrated until Phase 5's known-object/athlete-height calibration multiplies these
 // pixel-space values by a real scale factor.
 import type { Landmark, NormalizedLandmark } from "@mediapipe/tasks-vision";
-import { POSE_LANDMARKS } from "./pose-tracking";
+import { POSE_LANDMARKS, type PoseFrame } from "./pose-tracking";
 import type { PoseFrame as NativePoseFrame, PoseHandJoint } from "./native-av-preview";
 
 type LandmarkKey = keyof typeof POSE_LANDMARKS;
@@ -261,4 +261,36 @@ export function visionRefineGripSeed(
     x: matches.reduce((a, p) => a + p.x, 0) / matches.length,
     y: matches.reduce((a, p) => a + p.y, 0) / matches.length,
   };
+}
+
+// Every Nth already-sampled frame -- see buildSkeletonReplayFrames below. Skeleton replay is a
+// scrub-through visual aid for video-analysis-dialog.tsx, not precision tracking data (that's
+// rawFrames' own denser stride, set by use-av-body-tracking.ts's ANALYSIS_SAMPLE_STRIDE), so it
+// doesn't need to keep every frame the tracking math itself does. 2 more on top of that halves
+// what actually gets persisted to workoutSetEntries.skeletonFrames again, and still comfortably
+// clears smooth-to-the-eye playback (a 60fps recording at ANALYSIS_SAMPLE_STRIDE=2 is already
+// 30fps; this lands it around 15fps, on par with the frame rate the Android/MediaPipe replay
+// path itself renders skeleton overlays at during scrubbed playback).
+const SKELETON_REPLAY_STRIDE = 2;
+
+// Real per-frame skeleton positions, saved once during an iOS set's original live capture, for
+// video-analysis-dialog.tsx's skeleton-replay overlay to draw later -- see
+// workoutSetEntries.skeletonFrames' own comment in shared/schema.ts for why persisting this is
+// the only way iOS gets a real replay at all (unlike Android/MediaPipe, Vision framework has no
+// "re-run the model against a stored clip" path). Deliberately reuses pose-tracking.ts's own
+// PoseFrame shape ({t, landmarks, worldLandmarks}) rather than inventing a parallel type -- once
+// persisted and read back, these frames drop straight into video-analysis-dialog.tsx's existing
+// poseFramesRef with no adapter, the same object shape the Android path's own analyzeVideoPose
+// already produces for a freshly re-analyzed video.
+export function buildSkeletonReplayFrames(rawFrames: NativePoseFrame[]): PoseFrame[] {
+  const out: PoseFrame[] = [];
+  for (let i = 0; i < rawFrames.length; i += SKELETON_REPLAY_STRIDE) {
+    const f = rawFrames[i];
+    out.push({
+      t: f.timestamp * 1000,
+      landmarks: visionJointsToNormalizedLandmarks(f),
+      worldLandmarks: visionJointsToWorldLandmarks(f),
+    });
+  }
+  return out;
 }

@@ -2154,6 +2154,11 @@ ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "manual_result" text;
 CREATE INDEX IF NOT EXISTS "skill_session_logs_day_log_set_idx" ON "skill_session_logs" ("skill_day_log_id", "skill_program_exercise_id", "set_number");
 ALTER TABLE "movement_profiles" ADD COLUMN IF NOT EXISTS "position_scale_correction" real;
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "mean_eai" real;
+
+-- Real per-frame skeleton positions saved live during an iOS-tracked set's original capture --
+-- see skeletonReplayFrameSchema's own comment in shared/schema.ts for why this exists (Vision
+-- framework has no "re-run the model against a stored clip" replay path the way MediaPipe does).
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "skeleton_frames" json;
 `;
 
 async function main() {
