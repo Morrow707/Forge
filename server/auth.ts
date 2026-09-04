@@ -33,6 +33,107 @@ import { notifyUser } from "./notify";
 
 const PgStore = connectPgSimple(session);
 
+// A hardcoded fallback secret in a public repo is the same as no secret at
+// all: anyone can forge a session cookie or a native bearer token. The
+// fallback still exists so `npm run dev` works with an empty .env, but it
+// is refused outright in production -- a missing or renamed env var should
+// fail the boot loudly, not quietly downgrade every signature in the app
+// to a publicly known constant.
+// express-session writes the session row back on essentially every request
+// once `rolling: true` is on: even when nothing in the session changed,
+// the cookie's expiry moved, so connect-pg-simple's `touch` fires an
+// UPDATE. With the API limiter allowing 600 requests per 15 minutes per
+// user, that is hundreds of Postgres writes per user per hour that exist
+// only to push an expiry 30 days out that is already 30 days out.
+//
+// The 30-days-of-inactivity behaviour is worth keeping, so instead of
+// dropping `rolling`, this store collapses the touches: it remembers the
+// expiry it last persisted for a session and skips the UPDATE until the
+// new expiry has moved by more than TOUCH_THROTTLE_MS. The stored expiry
+// therefore trails real activity by at most that window -- five minutes
+// against a thirty-day window -- while the write rate drops from
+// per-request to at most one per session per five minutes.
+const TOUCH_THROTTLE_MS = 5 * 60 * 1000;
+// Bounds the bookkeeping map so a long-lived process that has seen a very
+// large number of sessions can't grow it without limit. Dropping entries
+// only costs an extra (correct) touch the next time those sessions are
+// seen, so a blunt clear is safe.
+const MAX_TRACKED_SESSIONS = 20000;
+
+function expiryOf(sess: session.SessionData): number | null {
+  const expires = sess?.cookie?.expires;
+  if (!expires) return null;
+  const ms = new Date(expires).getTime();
+  return Number.isFinite(ms) ? ms : null;
+}
+
+class ThrottledPgStore extends PgStore {
+  // sid -> the cookie expiry currently believed to be in Postgres.
+  private persistedExpiry = new Map<string, number>();
+
+  private remember(sid: string, expiry: number | null) {
+    if (expiry === null) return;
+    if (this.persistedExpiry.size >= MAX_TRACKED_SESSIONS) this.persistedExpiry.clear();
+    this.persistedExpiry.set(sid, expiry);
+  }
+
+  get(sid: string, cb: (err: any, session?: session.SessionData | null) => void) {
+    super.get(sid, (err: any, sess: session.SessionData | null | undefined) => {
+      if (!err && sess) this.remember(sid, expiryOf(sess));
+      cb(err, sess);
+    });
+  }
+
+  set(sid: string, sess: session.SessionData, cb?: (err?: any) => void) {
+    super.set(sid, sess, (err?: any) => {
+      // A real write already moved the expiry; that becomes the new baseline.
+      if (!err) this.remember(sid, expiryOf(sess));
+      cb?.(err);
+    });
+  }
+
+  touch(sid: string, sess: session.SessionData, cb?: (err?: any) => void) {
+    const next = expiryOf(sess);
+    const persisted = this.persistedExpiry.get(sid);
+    if (next !== null && persisted !== undefined && next - persisted < TOUCH_THROTTLE_MS) {
+      // Expiry has barely moved since the last write -- skip the UPDATE.
+      cb?.();
+      return;
+    }
+    super.touch(sid, sess, (err?: any) => {
+      if (!err) this.remember(sid, next);
+      cb?.(err);
+    });
+  }
+
+  destroy(sid: string, cb?: (err?: any) => void) {
+    this.persistedExpiry.delete(sid);
+    super.destroy(sid, cb);
+  }
+}
+
+const DEV_SECRET_FALLBACK = "forge-dev-secret";
+
+function requireSecret(name: string): string {
+  const value = process.env[name];
+  if (value && value.trim().length > 0) return value;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      `${name} is not set. Refusing to start in production: without it, session ` +
+        `cookies and native app tokens would be signed with a public constant and ` +
+        `could be forged by anyone. Set ${name} to a long random value.`,
+    );
+  }
+  console.warn(
+    `[auth] ${name} is not set -- falling back to the shared development secret. ` +
+      `This is fine locally and fatal in production.`,
+  );
+  return DEV_SECRET_FALLBACK;
+}
+
+const SESSION_SECRET = requireSecret("SESSION_SECRET");
+
+
 // Keyed by IP (express-rate-limit's default) rather than by the submitted
 // email -- an attacker can supply any email in the body, but not spoof
 // their own connecting IP, which is what actually bounds a credential-
@@ -157,7 +258,7 @@ async function toPublicUserWithSections(user: any): Promise<PublicUser> {
 // actually working for the native app, not just the web cookie session
 // (which was always revocable, by deleting its row from connect-pg-simple's
 // own session table).
-const NATIVE_TOKEN_SECRET = process.env.SESSION_SECRET || "forge-dev-secret";
+const NATIVE_TOKEN_SECRET = SESSION_SECRET;
 const NATIVE_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // matches the cookie session's own maxAge
 
 function signNativeToken(userId: number, sessionRecordId: number): string {
@@ -259,8 +360,8 @@ export function setupAuth(app: Express) {
   app.set("trust proxy", 1);
   app.use(
     session({
-      store: new PgStore({ pool, tableName: "session", createTableIfMissing: true }),
-      secret: process.env.SESSION_SECRET || "forge-dev-secret",
+      store: new ThrottledPgStore({ pool, tableName: "session", createTableIfMissing: true }),
+      secret: SESSION_SECRET,
       resave: false,
       saveUninitialized: false,
       // Without this, the 30-day window is fixed from the moment you log
