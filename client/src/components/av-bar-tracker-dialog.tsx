@@ -190,7 +190,24 @@ function applyCoreMlCorroboration(
 // normalized-to-pixel axis as the measured diameter: a plate viewed at even a slight angle
 // foreshortens one axis but not the other, so the larger axis stays closer to the true diameter
 // than either the smaller axis or an average would.
-function plateScaleFromFrames(frames: NativePoseFrame[]): { scale: number; uncertaintyFraction: number } | null {
+//
+// The trackingMode parameter is NOT decoration, and its absence was a real bug. The paragraph
+// above asserts this "only ever has anything to find when coreMlTrackingMode was set to
+// 'plate'" -- but that was an assumption about the caller, never a check, and the caller does
+// not honour it. A barbell bench press runs with coreMlTrackingMode "barbell"
+// (COREML_TRACKING_MODE_BY_EQUIPMENT), the native detector then populates coreMlImplement with
+// a BARBELL box, and the payload carries no class label to tell them apart. So this function
+// measured a barbell -- metres of it, across the frame -- and divided the 0.45m bumper-plate
+// constant by it, then handed that to the caller to be AVERAGED into the real scale factor.
+// It escaped notice only because the currently bundled model has a known barbell regression
+// (confidences around 0.02, far under the 0.4 detection floor), so no box is produced in
+// practice today. That is a model-quality accident, not a guard: the moment barbell detection
+// improves, every barbell set's scale would be silently corrupted. Gated properly now.
+function plateScaleFromFrames(
+  frames: NativePoseFrame[],
+  trackingMode: string | undefined,
+): { scale: number; uncertaintyFraction: number } | null {
+  if (trackingMode !== "plate") return null;
   const samples: number[] = [];
   for (const f of frames) {
     const box = f.coreMlImplement;
@@ -516,7 +533,7 @@ export function AvBarTrackerDialog({
     // them -- two independent reads agreeing is stronger evidence than either alone, the same
     // reasoning applyCoreMlCorroboration and medBallTrustScore already apply elsewhere in this
     // codebase to exactly this "two signals, not one" situation.
-    const plateScale = plateScaleFromFrames(rawFrames);
+    const plateScale = plateScaleFromFrames(rawFrames, coreMlTrackingMode);
     const scaleFactor =
       heightScaleFactor != null && plateScale != null
         ? (heightScaleFactor + plateScale.scale) / 2
