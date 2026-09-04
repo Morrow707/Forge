@@ -23,6 +23,16 @@ registerRoute(
   new StaleWhileRevalidate({ cacheName: "mediapipe-wasm" }),
 );
 
+// Same reasoning and treatment as mediapipe-wasm above, for
+// implement-detection.ts's own ONNX runtime (see vite.config.ts's matching
+// globIgnores entry) -- excluded from the precache manifest (too large,
+// only touched by the object-detection corroboration signal, not every
+// session), runtime-cached here instead.
+registerRoute(
+  ({ url }) => url.pathname.startsWith("/onnxruntime-wasm/"),
+  new StaleWhileRevalidate({ cacheName: "onnxruntime-wasm" }),
+);
+
 // SPA navigation fallback (serve the cached app shell for any offline
 // deep link) -- excluding API routes so a request for JSON never gets
 // index.html back. API responses are never precached/served from here at

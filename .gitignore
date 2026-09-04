@@ -1,6 +1,9 @@
 # Build artifact copied from node_modules by scripts/copy-mediapipe-wasm.mjs
 client/public/mediapipe-wasm
 
+# Build artifact copied from node_modules by scripts/copy-onnxruntime-wasm.mjs
+client/public/onnxruntime-wasm
+
 # Logs
 logs
 *.log
@@ -156,3 +159,4 @@ scripts/med-ball-detector/dataset/
 scripts/med-ball-detector/runs/
 scripts/med-ball-detector/*.mlpackage
 scripts/med-ball-detector/*.pt
+scripts/med-ball-detector/*.onnx

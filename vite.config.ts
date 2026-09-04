@@ -49,8 +49,12 @@ export default defineConfig({
         // They're only needed by the camera bar-tracking feature, not the
         // app shell, so there's no reason to precache them at install time
         // anyway -- sw.ts adds a runtime cache for them instead, so they're
-        // still cached after the first time a set gets tracked.
-        globIgnores: ["**/mediapipe-wasm/**"],
+        // still cached after the first time a set gets tracked. Same
+        // reasoning and same runtime-cache treatment for onnxruntime-wasm
+        // (copy-onnxruntime-wasm.mjs) -- implement-detection.ts's own ONNX
+        // runtime, 14-25MB per file, only touched by the object-detection
+        // corroboration signal.
+        globIgnores: ["**/mediapipe-wasm/**", "**/onnxruntime-wasm/**"],
       },
     }),
   ],
@@ -59,6 +63,20 @@ export default defineConfig({
       "@": path.resolve(import.meta.dirname, "client", "src"),
       "@shared": path.resolve(import.meta.dirname, "shared"),
     },
+    // onnxruntime-web's "./wasm" subpath resolves by default to its
+    // "bundle" build (ort.wasm.bundle.min.mjs), which embeds a
+    // `new URL("ort-wasm-simd-threaded.wasm", import.meta.url)` specifically
+    // so bundlers auto-detect and copy the binary themselves -- Vite obliges,
+    // emitting a SECOND, unused 14MB copy into assets/ (implement-detection.ts
+    // already points onnxruntime-web at the one copy-onnxruntime-wasm.mjs
+    // deployed to public/onnxruntime-wasm/ via ort.env.wasm.wasmPaths, so the
+    // bundler-managed copy is pure dead weight, and its size fails the PWA
+    // precache build the same way the original whole-dist-folder copy did).
+    // This custom condition (documented in onnxruntime-web's own package.json
+    // exports map, not this codebase's invention) selects the non-bundle
+    // variant instead, which has no such static reference and defers entirely
+    // to wasmPaths at runtime, matching how this app already manages the file.
+    conditions: ["onnxruntime-web-use-extern-wasm"],
   },
   root: path.resolve(import.meta.dirname, "client"),
   build: {

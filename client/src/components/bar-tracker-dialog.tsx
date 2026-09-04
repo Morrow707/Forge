@@ -35,7 +35,8 @@ import {
   type ColorSignature,
 } from "@/lib/implement-appearance-memory";
 import { summarizeJumpSet, type JumpSetMetrics } from "@/lib/jump-tracking";
-import { ImplementTracker } from "@/lib/implement-tracking";
+import { ImplementTracker, shoulderPixelsPerMeter } from "@/lib/implement-tracking";
+import { WebImplementDetector } from "@/lib/implement-detection";
 import { getHandLandmarker, refineGripPoint } from "@/lib/hand-tracking";
 import { PoseSmoother } from "@/lib/one-euro-filter";
 import { hapticLight } from "@/lib/haptics";
@@ -310,6 +311,46 @@ function isPlausibleVelocity(
   return distanceM / dtSec <= MAX_PLAUSIBLE_VELOCITY_MPS;
 }
 
+// Android/web's own equipment-to-detector-class map -- same idea as
+// av-bar-tracker-dialog.tsx's COREML_TRACKING_MODE_BY_EQUIPMENT (both read
+// off the same trained model's class set, see implement-detection.ts's own
+// header comment), but a separate constant on this side rather than an
+// import, so retuning which equipment gets a detector pass on one platform
+// never silently changes the other.
+const WEB_DETECTOR_TRACKING_MODE_BY_EQUIPMENT: Record<string, string> = {
+  Barbell: "barbell",
+  Dumbbell: "dumbbell",
+  Kettlebell: "kettlebell",
+};
+
+// A third, additive signal alongside the wrist+motion-diff fusion above --
+// same "close agreement nudges confidence up a little, confident-but-far-
+// apart nudges it down a little, never overrides position" idiom as
+// av-bar-tracker-dialog.tsx's applyCoreMlCorroboration, reimplemented here
+// (not imported) so the two platforms stay independently tunable. Values
+// below are reasoned starting points mirroring that file's own constants,
+// not copied wholesale -- untuned pending real footage, same caveat every
+// heuristic constant in this codebase carries.
+const WEB_DETECTOR_AGREEMENT_MAX_OFFSET_M = 0.5;
+const WEB_DETECTOR_MIN_CONFIDENCE_TO_PENALIZE = 0.5;
+
+function applyWebDetectorCorroboration(
+  confidence: number,
+  fusedX: number,
+  fusedY: number,
+  detection: { x: number; y: number; confidence: number } | null,
+): number {
+  if (!detection) return confidence;
+  const offsetM = Math.hypot(detection.x - fusedX, detection.y - fusedY);
+  if (offsetM <= WEB_DETECTOR_AGREEMENT_MAX_OFFSET_M) {
+    return Math.min(1, confidence * (1 + 0.15 * detection.confidence));
+  }
+  if (detection.confidence >= WEB_DETECTOR_MIN_CONFIDENCE_TO_PENALIZE) {
+    return confidence * 0.85;
+  }
+  return confidence;
+}
+
 export function BarTrackerDialog({
   open,
   onOpenChange,
@@ -495,6 +536,18 @@ export function BarTrackerDialog({
   // below, so a rough edge here can't put the primary numbers at risk.
   const leftImplementTrackerRef = useRef(new ImplementTracker());
   const rightImplementTrackerRef = useRef(new ImplementTracker());
+  // Third, independent implement signal -- the app's own trained object
+  // detector (see implement-detection.ts's header comment), run only when
+  // `equipment` maps to a class it actually knows (WEB_DETECTOR_TRACKING_
+  // MODE_BY_EQUIPMENT above). track() is async (onnxruntime-web's
+  // session.run returns a Promise), which the live rAF tick loop below
+  // can't await without stalling every frame on it -- so this fires
+  // fire-and-forget each tick and the tick loop reads back whatever the
+  // last resolved call left in lastWebDetectionRef, same "background
+  // signal a synchronous loop polls" shape as a periodic sensor read
+  // rather than a blocking call.
+  const webImplementDetectorRef = useRef(new WebImplementDetector());
+  const lastWebDetectionRef = useRef<{ x: number; y: number; confidence: number } | null>(null);
   // Rolling buffer of the last few LIVE tilt readings (raw single-frame
   // tiltDegreesFromPoints output, only pushed when a frame actually
   // produced one) -- see liveTiltDeg's own comment below for why this
@@ -622,6 +675,12 @@ export function BarTrackerDialog({
   // below the same way detectFormFaults gates the saved bar_tilt/
   // bar_path_drift faults at Stop.
   const usesSharedBar = mode !== "jump" && usesSharedBarEquipment(equipment);
+  // See WEB_DETECTOR_TRACKING_MODE_BY_EQUIPMENT's own comment -- undefined
+  // for jump mode and any equipment the trained detector doesn't know,
+  // which is what turns the corroboration signal below off entirely for
+  // those clips (same "omitted trackingMode, unchanged confidence math"
+  // behavior av-bar-tracker-dialog.tsx documents for its own detector).
+  const webDetectorTargetLabel = equipment ? WEB_DETECTOR_TRACKING_MODE_BY_EQUIPMENT[equipment] : undefined;
 
   useEffect(() => {
     if (!open) return;
@@ -660,6 +719,15 @@ export function BarTrackerDialog({
     implementTrackerRef.current.reset();
     leftImplementTrackerRef.current.reset();
     rightImplementTrackerRef.current.reset();
+    webImplementDetectorRef.current.reset();
+    lastWebDetectionRef.current = null;
+    // Kicked off here (setup screen), not at Start Set, so the model is
+    // likely already warm by the time tracking actually begins -- same
+    // "preload early" reasoning as WebImplementDetector.preload's own
+    // comment. No-op when this equipment has no mapped detector class.
+    if (equipment && WEB_DETECTOR_TRACKING_MODE_BY_EQUIPMENT[equipment]) {
+      void webImplementDetectorRef.current.preload();
+    }
     lastDisplayYRef.current = null;
     readyStartTimeRef.current = null;
     autoStartTriggeredRef.current = false;
@@ -1102,6 +1170,8 @@ export function BarTrackerDialog({
     implementTrackerRef.current.reset();
     leftImplementTrackerRef.current.reset();
     rightImplementTrackerRef.current.reset();
+    webImplementDetectorRef.current.reset();
+    lastWebDetectionRef.current = null;
 
     if (recordVideo && streamRef.current) {
       videoChunksRef.current = [];
@@ -1304,6 +1374,44 @@ export function BarTrackerDialog({
           barTrack = null;
         }
         setImplementDetected(!!barTrack);
+        // Third, additive implement signal (see webImplementDetectorRef's
+        // own comment for why this is fire-and-forget rather than awaited
+        // inline). Anchored on THIS frame's own wrist reading -- reusing
+        // shoulderPixelsPerMeter with workingWidth/workingHeight both 1
+        // turns its normal pixels-per-meter output into normalized-units-
+        // per-meter instead, since the shoulder distance it measures off
+        // normalized landmarks scales identically either way -- letting
+        // the detector's own normalized 0-1 box convert into world meters
+        // with the exact same "offset from the wrist, scaled by shoulder
+        // width" math ImplementTracker's own fresh-acquisition path uses,
+        // without duplicating that scale-lookup logic here.
+        if (webDetectorTargetLabel && normalizedWrist) {
+          const normPerMeter = shoulderPixelsPerMeter(landmarks, worldLandmarks, 1, 1);
+          if (normPerMeter) {
+            const seedWristNormX = normalizedWrist.x;
+            const seedWristNormY = normalizedWrist.y;
+            const seedWristWorldX = worldPoint.x;
+            const seedWristWorldY = worldPoint.y;
+            webImplementDetectorRef.current
+              .track(video, webDetectorTargetLabel)
+              .then((result) => {
+                if (!result) {
+                  lastWebDetectionRef.current = null;
+                  return;
+                }
+                const centerNormX = (result.box.x0 + result.box.x1) / 2;
+                const centerNormY = (result.box.y0 + result.box.y1) / 2;
+                lastWebDetectionRef.current = {
+                  x: seedWristWorldX + (centerNormX - seedWristNormX) / normPerMeter,
+                  y: seedWristWorldY + (centerNormY - seedWristNormY) / normPerMeter,
+                  confidence: result.confidence,
+                };
+              })
+              .catch(() => {
+                lastWebDetectionRef.current = null;
+              });
+          }
+        }
         // Confirmed-good implement color, sampled only from a fully-ramped
         // lock (LOCK_RAMP_FRAMES worth of continuous, unbroken,
         // plausibility-checked tracking) -- see confirmedColorSamplesRef's
@@ -1367,7 +1475,23 @@ export function BarTrackerDialog({
         // confidence field) and computeRepTrustScores (derived from this
         // trace at Stop) both weight by how much this specific frame was
         // actually trusted, instead of treating every frame equally.
-        const point = { t, x, y, z: worldPoint.z, confidence: Math.min(1, totalConfidence / 2) };
+        const point = {
+          t,
+          x,
+          y,
+          z: worldPoint.z,
+          // Compared against x/rawY (both still in the pre-vertical-sign
+          // convention lastWebDetectionRef's own seedWristWorldY uses --
+          // see its comment), not the sign-corrected y above -- the nudge
+          // only ever touches confidence, so the coordinate space just
+          // needs to be self-consistent, not the display convention.
+          confidence: applyWebDetectorCorroboration(
+            Math.min(1, totalConfidence / 2),
+            x,
+            rawY,
+            lastWebDetectionRef.current,
+          ),
+        };
         // A brief camera dropout right before this point (an arm crossing
         // the bar, a chalk cloud) shouldn't read as one giant instantaneous
         // jump once it resolves -- see interpolateOcclusionGap's own
