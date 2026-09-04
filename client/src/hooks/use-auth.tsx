@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, type ReactNode } from "react";
+import { App } from "@capacitor/app";
 import { useMutation, useQuery, useQueryClient, useIsRestoring } from "@tanstack/react-query";
 import { apiRequest, ApiError, getQueryFn, setNativeToken } from "@/lib/queryClient";
 import { savePasswordToKeychain } from "@/lib/native-auth";
@@ -207,33 +208,62 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoading, isError, user]);
 
-  // Report this device's time zone once a session resolves, and only when
-  // it differs from what the server already has. The server has no other
-  // way to know it -- it runs in UTC, and inferring a zone from the request
-  // IP would let a VPN or a road trip silently move an athlete's training
-  // day. See users.timeZone's own comment in shared/schema.ts for what
-  // depends on getting this right.
+  // Report this device's own time zone, read straight off the OS via Intl.
+  // The athlete does nothing and sees nothing: no prompt, no setting, no
+  // permission. In the native app this runs inside the web view, so it is
+  // the phone's zone with no plugin involved.
   //
-  // Fire-and-forget: this is a background correction, and an athlete whose
-  // zone fails to save should still get their workout page. It retries
-  // naturally on the next app load, since the comparison below will still
-  // find a mismatch.
+  // The server has no other way to know it -- it runs in UTC, and inferring
+  // a zone from the request IP would let a VPN or a road trip silently move
+  // an athlete's training day. See users.timeZone's own comment in
+  // shared/schema.ts for what depends on getting this right (streaks, most
+  // visibly: without a zone, a US athlete's streak reads zero every evening
+  // between UTC midnight and their own, then repairs itself overnight).
+  //
+  // Posts only when the device disagrees with what the server already has,
+  // so this is one request per device per actual change and silent
+  // thereafter.
+  //
+  // Fire-and-forget: a background correction should never keep an athlete
+  // off their workout page. A failure retries by itself, because the next
+  // check still finds the same mismatch.
   useEffect(() => {
     if (!user) return;
-    const resolved = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    if (!resolved || resolved === user.timeZone) return;
-    apiRequest("POST", "/api/me/time-zone", { timeZone: resolved })
-      .then(() => {
-        // Patch the cached user rather than refetching the whole thing --
-        // this is one field, and leaving the cache stale would make every
-        // later mount re-post the same zone for the rest of the session.
-        qc.setQueryData(["/api/auth/me"], (prev: PublicUser | null | undefined) =>
-          prev ? { ...prev, timeZone: resolved } : prev,
-        );
-      })
-      .catch(() => {});
+    let cancelled = false;
+
+    const report = () => {
+      const resolved = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      // Read through the cache rather than closing over `user`, so the
+      // resume listener below compares against the freshest known value
+      // instead of whatever was current when this effect was created.
+      const current = qc.getQueryData<PublicUser | null>(["/api/auth/me"])?.timeZone;
+      if (!resolved || resolved === current) return;
+      apiRequest("POST", "/api/me/time-zone", { timeZone: resolved })
+        .then(() => {
+          if (cancelled) return;
+          // Patch the one field rather than refetching. Leaving the cache
+          // stale would have every later mount re-post the same zone for
+          // the rest of the session.
+          qc.setQueryData(["/api/auth/me"], (prev: PublicUser | null | undefined) =>
+            prev ? { ...prev, timeZone: resolved } : prev,
+          );
+        })
+        .catch(() => {});
+    };
+
+    report();
+    // Again whenever the app comes back to the foreground. An athlete who
+    // flies somewhere gets their new zone the moment they next open the
+    // app, rather than keeping the old one until something happens to force
+    // a full reload -- which on a phone that never gets closed could be
+    // weeks. Same resume-listener pattern the wellness card already uses.
+    const resumeListener = App.addListener("resume", report);
+    return () => {
+      cancelled = true;
+      resumeListener.then((l) => l.remove()).catch(() => {});
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, user?.timeZone]);
+  }, [user?.id]);
 
   return (
     <AuthContext.Provider

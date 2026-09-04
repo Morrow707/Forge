@@ -1,5 +1,7 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { storage } from "./storage";
+import { db } from "./db";
+import { foodLogEntries } from "@shared/schema";
 import {
   makeAssignedProgram,
   makeAthlete,
@@ -238,5 +240,52 @@ describe("streaks count against the athlete's own day, not the server's", () => 
     const streaks = await storage.computeStreaks([athlete.id]);
     expect(streaks.get(athlete.id)?.currentStreak).toBe(1);
     expect(streaks.get(athlete.id)?.totalCompleted).toBe(1);
+  });
+});
+
+describe("nutrition streak counts against the athlete's own day", () => {
+  beforeEach(resetDatabase);
+  afterEach(() => vi.useRealTimers());
+
+  // Same bug as workout streaks and the same symptom: the walk back started
+  // on the athlete's TOMORROW every evening -- a day they cannot have
+  // logged yet -- so it broke immediately and the streak read zero between
+  // UTC midnight and their own, then repaired itself overnight.
+  it("still counts a streak during the athlete's own evening", async () => {
+    const athlete = await makeAthlete({ timeZone: "America/Los_Angeles" });
+    for (const date of ["2026-01-04", "2026-01-05", "2026-01-06"]) {
+      await db.insert(foodLogEntries).values({
+        athleteId: athlete.id,
+        date,
+        description: "Chicken and rice",
+        source: "manual" as const,
+        caloriesKcal: 600,
+        proteinG: 50,
+        carbsG: 60,
+        fatG: 12,
+      });
+    }
+
+    // 5pm Tuesday in California, already Wednesday in UTC.
+    vi.setSystemTime(new Date("2026-01-07T01:00:00Z"));
+
+    const streak = await storage.getFoodLogStreakForAthlete(athlete.id);
+    expect(streak.currentStreak).toBe(3);
+  });
+
+  it("falls back to the server's day for an athlete with no zone", async () => {
+    const athlete = await makeAthlete({ timeZone: null });
+    await db.insert(foodLogEntries).values({
+      athleteId: athlete.id,
+      date: "2026-01-06",
+      description: "Oats",
+      source: "manual" as const,
+      caloriesKcal: 300,
+      proteinG: 10,
+      carbsG: 50,
+      fatG: 5,
+    });
+    vi.setSystemTime(new Date("2026-01-06T12:00:00Z"));
+    expect((await storage.getFoodLogStreakForAthlete(athlete.id)).currentStreak).toBe(1);
   });
 });

@@ -18783,6 +18783,12 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     return out;
   },
 
+  // Single-athlete form of todayByAthlete above, for the readers that only
+  // ever deal with one.
+  async todayForAthlete(athleteId: number): Promise<string> {
+    return (await this.todayByAthlete([athleteId])).get(athleteId) ?? utcToday();
+  },
+
   async computeStreaks(athleteIds: number[]) {
     const athleteAssignments = await db.query.assignments.findMany({
       where: inArray(assignments.athleteId, athleteIds),
@@ -18894,11 +18900,16 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     const loggedDates = new Set(rows.map((r) => r.date));
     if (loggedDates.size === 0) return { currentStreak: 0, longestStreak: 0, totalDaysLogged: 0 };
 
-    const today = new Date();
+    // Walked back from the ATHLETE's today, not the server's. On a UTC
+    // server this loop started on the athlete's tomorrow every evening --
+    // a day they cannot have logged yet -- so it broke on the first
+    // iteration and the streak read zero from UTC midnight until their own,
+    // then repaired itself overnight. Exactly the symptom computeStreaks
+    // had, for the same reason.
+    const today = await this.todayForAthlete(athleteId);
     let currentStreak = 0;
     for (let i = 0; ; i++) {
-      const dateStr = formatISO(subDays(today, i), { representation: "date" });
-      if (loggedDates.has(dateStr)) currentStreak++;
+      if (loggedDates.has(shiftIsoDate(today, -i))) currentStreak++;
       else break;
     }
 
