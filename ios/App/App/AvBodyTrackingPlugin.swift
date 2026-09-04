@@ -1267,7 +1267,18 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                     try handler.perform([body3DRequest])
                     if #available(iOS 17.0, *), let observation = body3DRequest.results?.first as? VNHumanBodyPose3DObservation {
                         for (jointName, label) in Self.body3DPoseJoints {
-                            guard let point = try? observation.recognizedPoint(jointName), point.confidence > 0.1 else {
+                            // Unlike the 2D VNRecognizedPoint this plugin's other requests use,
+                            // VNHumanBodyRecognizedPoint3D has no confidence property at all (its
+                            // real class hierarchy -- confirmed against Apple's own docs after
+                            // verify_build caught the build assuming one -- is
+                            // NSObject -> VNPoint3D(position) -> VNRecognizedPoint3D(identifier) ->
+                            // VNHumanBodyRecognizedPoint3D(localPosition, parentJoint), nothing in
+                            // that chain adds confidence). recognizedPoint(_:) itself is the
+                            // availability gate: it throws for any joint Vision isn't reporting this
+                            // frame, so a joint that reaches here at all is one Vision is already
+                            // vouching for -- try? converts that throw into skip via continue, same
+                            // effect the old confidence guard was reaching for.
+                            guard let point = try? observation.recognizedPoint(jointName) else {
                                 continue
                             }
                             // .position is a simd_float4x4 (Apple's own documented convention for
@@ -1283,7 +1294,12 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                                 "x": Double(translation.x),
                                 "y": Double(translation.y),
                                 "z": Double(translation.z),
-                                "confidence": Double(point.confidence),
+                                // No real per-joint confidence to report (see above) -- 1.0 for
+                                // every joint that resolved, so the JS bridge's shared Landmark
+                                // shape (visibility/confidence-gated like every other source) still
+                                // treats these as fully trusted rather than reading a fabricated
+                                // partial score.
+                                "confidence": 1.0,
                             ])
                         }
                     }
