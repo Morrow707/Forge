@@ -6899,10 +6899,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // updateUserProfile's testingResults snapshot logic) -- so a video-timed
     // 40 or 5-10-5 shows up on the team leaderboard/trend chart without the
     // coach re-typing a number they just watched the app measure.
+    //
+    // recordCameraTimedCombineResult, not updateUserProfile: an automatic
+    // capture only ever improves the athlete's number, never replaces a
+    // faster one with a slower rep. See that function's own comment for why
+    // a manual edit deliberately keeps the opposite (set-what-I-typed)
+    // behavior.
     if (parsed.data.trackingLevel === "sprint" && parsed.data.presetId && parsed.data.elapsedSeconds != null) {
       const testingField = SPRINT_PRESET_TESTING_FIELD[parsed.data.presetId];
       if (testingField) {
-        await storage.updateUserProfile(user.id, { [testingField]: parsed.data.elapsedSeconds });
+        await storage.recordCameraTimedCombineResult(user.id, testingField, parsed.data.elapsedSeconds);
       }
     }
 

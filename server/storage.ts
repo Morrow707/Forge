@@ -2892,20 +2892,74 @@ export const storage = {
       (field) => field in input && input[field] !== before?.[field],
     );
     if (testingChanged) {
-      const today = new Date().toISOString().slice(0, 10);
-      const snapshot = Object.fromEntries(TESTING_FIELDS.map((f) => [f, row[f]])) as Record<
-        (typeof TESTING_FIELDS)[number],
-        number | null
-      >;
-      await db
-        .insert(testingResults)
-        .values({ athleteId: userId, date: today, ...snapshot })
-        .onConflictDoUpdate({
-          target: [testingResults.athleteId, testingResults.date],
-          set: snapshot,
-        });
+      await this.snapshotTestingResults(row);
     }
 
+    return row;
+  },
+
+  // Writes today's dated testing_results row from an athlete's current
+  // combine numbers. Shared by updateUserProfile above (a manual athlete or
+  // coach edit) and recordCameraTimedCombineResult below (an automatic
+  // sprint capture) so both reach the team trend chart through the same
+  // history table, rather than one of them writing a shape the other
+  // doesn't. Callers decide WHETHER anything changed; this only writes.
+  async snapshotTestingResults(row: typeof users.$inferSelect) {
+    const today = new Date().toISOString().slice(0, 10);
+    const snapshot = Object.fromEntries(TESTING_FIELDS.map((f) => [f, row[f]])) as Record<
+      (typeof TESTING_FIELDS)[number],
+      number | null
+    >;
+    await db
+      .insert(testingResults)
+      .values({ athleteId: row.id, date: today, ...snapshot })
+      .onConflictDoUpdate({
+        target: [testingResults.athleteId, testingResults.date],
+        set: snapshot,
+      });
+  },
+
+  // A camera-timed sprint's own way into the athlete's combine numbers,
+  // deliberately NOT updateUserProfile above. A manual edit is an
+  // assertion -- a coach correcting a mistimed 4.2 to the real 4.9 has to
+  // be able to move the number in either direction -- but an automatic
+  // capture is a measurement, and the athlete ran what they ran. A slower
+  // rep is a slower rep, not a correction, so it must never overwrite a
+  // faster one already on record; before this, the last capture of the day
+  // simply won, and one bad rep replaced a real 40 on the leaderboard and
+  // the trend chart.
+  //
+  // The comparison is a WHERE guard on the UPDATE itself rather than a read
+  // followed by a write: two captures landing at once (a retake and the
+  // original both syncing off the offline queue, say) would otherwise both
+  // read the old value, and the slower one could land last.
+  //
+  // Direction comes from TESTING_METRICS' own lowerIsBetter rather than
+  // assuming "faster wins" -- every sprint preset maps to a timed field
+  // today, but that mapping lives in routes.ts and nothing stops a future
+  // preset pointing at a jump or a max instead.
+  //
+  // Returns null when the athlete's existing number was already as good or
+  // better, in which case nothing is written and no testing_results
+  // snapshot is created -- same rule updateUserProfile already follows for
+  // a re-save of unchanged values, so neither path leaves a phantom entry
+  // in the athlete's testing history.
+  async recordCameraTimedCombineResult(
+    athleteId: number,
+    field: "fortyYardDash" | "proAgilitySeconds" | "threeConeSeconds",
+    value: number,
+  ): Promise<typeof users.$inferSelect | null> {
+    const column = users[field];
+    const existingIsWorse = testingMetricLowerIsBetter(field)
+      ? gt(column, value)
+      : lt(column, value);
+    const [row] = await db
+      .update(users)
+      .set({ [field]: value })
+      .where(and(eq(users.id, athleteId), or(isNull(column), existingIsWorse)))
+      .returning();
+    if (!row) return null;
+    await this.snapshotTestingResults(row);
     return row;
   },
 
