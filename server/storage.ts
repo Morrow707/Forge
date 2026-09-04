@@ -16614,6 +16614,22 @@ ${catalog}`;
       // Keyed by (exercise, set number) since row ids don't survive a
       // resubmission but that pair does.
       const priorVideoByKey = new Map<string, { url: string; uploadedAt: Date | null }>();
+      // The same snapshot, on the same key, for the frame-by-frame capture columns.
+      //
+      // It exists so a client can OMIT these columns from a save without destroying them. One
+      // tracked set serialises to roughly 1.9MB of skeleton frames and bar path, the day
+      // payload carries every set, and a debounced autosave fires on every keystroke in a reps
+      // or weight field -- so typing a weight re-uploaded megabytes that had not changed.
+      // Capture data only changes when a set is newly tracked.
+      //
+      // An OMITTED key carries the stored value forward. An EXPLICIT null still clears it, so
+      // a retake can legitimately wipe capture data. Zod preserves that distinction:
+      // `.optional()` leaves an omitted key off the parsed object entirely, while
+      // `.nullable()` keeps a null. Without it these columns would become impossible to delete.
+      const priorCaptureByKey = new Map<
+        string,
+        { skeletonFrames: unknown; barPathTrace: unknown; armPathTrace: unknown }
+      >();
       if (log) {
         const priorEntries = await tx.query.workoutLogEntries.findMany({
           where: eq(workoutLogEntries.workoutLogId, log.id),
@@ -16628,6 +16644,15 @@ ${catalog}`;
                 uploadedAt: s.videoUploadedAt ?? null,
               });
               priorVideoUrls.add(s.formCheckVideoUrl);
+            }
+            // Same snapshot, same key, for the frame-by-frame capture columns -- see
+            // priorCaptureByKey's own comment on why a client is now allowed to omit them.
+            if (s.skeletonFrames != null || s.barPathTrace != null || s.armPathTrace != null) {
+              priorCaptureByKey.set(`${exerciseKey}:${s.setNumber}`, {
+                skeletonFrames: s.skeletonFrames ?? null,
+                barPathTrace: s.barPathTrace ?? null,
+                armPathTrace: s.armPathTrace ?? null,
+              });
             }
           }
         }
@@ -16699,6 +16724,19 @@ ${catalog}`;
 
         if (entry.sets.length > 0) {
           const exerciseKey = entry.programExerciseId != null ? `pe:${entry.programExerciseId}` : `c:${entry.correctiveId}`;
+          // Reads a capture column for one set, honouring the omit contract: a key the client
+          // did not send at all carries the stored value forward, while an explicit null
+          // clears it. `in` is the test that separates them -- `?? null` cannot, because it
+          // collapses undefined and null to the same thing, which is exactly how a save that
+          // simply left the field out used to erase it. See priorCaptureByKey above.
+          const captureField = (
+            set: Record<string, unknown>,
+            setNumber: number,
+            field: "skeletonFrames" | "barPathTrace" | "armPathTrace",
+          ) => {
+            if (field in set) return set[field] ?? null;
+            return priorCaptureByKey.get(`${exerciseKey}:${setNumber}`)?.[field] ?? null;
+          };
           // This exercise's own unit -- see logEntryInputSchema's comment.
           // Falls back to the athlete's account-level default only when
           // this entry didn't send one.
@@ -16789,10 +16827,10 @@ ${catalog}`;
                 concentricSeconds: s.concentricSeconds ?? null,
                 eccentricSeconds: s.eccentricSeconds ?? null,
                 barPathDeviationCm: s.barPathDeviationCm ?? null,
-                barPathTrace: s.barPathTrace ?? null,
+                barPathTrace: captureField(s as Record<string, unknown>, s.setNumber, "barPathTrace"),
                 formFaults: s.formFaults ?? null,
                 repBreakdown: s.repBreakdown ?? null,
-                armPathTrace: s.armPathTrace ?? null,
+                armPathTrace: captureField(s as Record<string, unknown>, s.setNumber, "armPathTrace"),
                 peakPowerWatts: s.peakPowerWatts ?? null,
                 meanPowerWatts: s.meanPowerWatts ?? null,
                 eccentricMeanVelocityMps: s.eccentricMeanVelocityMps ?? null,
@@ -16837,7 +16875,7 @@ ${catalog}`;
                 horizontalLoadAvgSpeedYardsPerSec: s.horizontalLoadAvgSpeedYardsPerSec ?? null,
                 captureDeviceInfo: s.captureDeviceInfo ?? null,
                 trackingDiagnostics: s.trackingDiagnostics ?? null,
-                skeletonFrames: s.skeletonFrames ?? null,
+                skeletonFrames: captureField(s as Record<string, unknown>, s.setNumber, "skeletonFrames"),
               };
             }),
           );

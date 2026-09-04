@@ -1076,7 +1076,33 @@ export function WorkoutPage({
   // state directly, since the autosave/capture paths need to save data from
   // the instant right after a setItems update, before this component has
   // re-rendered with it.
-  function buildLogPayload(itemsSnapshot: ItemState[], completed: boolean) {
+  // Set keys whose capture data the SERVER is confirmed to hold. Only these may be omitted
+  // from a payload, and only because submitWorkoutLog now carries an omitted column forward
+  // (see priorCaptureByKey there). Confirmed means the save came back synced === true.
+  //
+  // synced is the load-bearing word. onSuccess is NOT proof of storage in this component: the
+  // save's mutationFn catches every non-permanent failure -- network error, 401, 5xx -- queues
+  // the payload offline and RESOLVES with { synced: false }, so onSuccess runs for exactly the
+  // case where nothing reached the server. Recording persistence on onSuccess alone would mark
+  // data as safely stored at the moment it demonstrably was not, and the next autosave would
+  // then omit it against a server that never had it.
+  const capturePersistedRef = useRef<Set<string>>(new Set());
+  const captureKey = (itemKey: string, setNumber: number) => `${itemKey}:${setNumber}`;
+
+  function setHasCapture(s: SetRow) {
+    return s.skeletonFrames != null || s.barPathTrace != null || s.armPathTrace != null;
+  }
+
+  // omitPersistedCapture drops the frame-by-frame columns for sets the server already holds.
+  // One tracked set is roughly 1.9MB of skeleton frames and bar path, and this payload carries
+  // every set of the day, so a debounced autosave on every keystroke was re-uploading megabytes
+  // that had not changed. Capture data only changes when a set is newly tracked, and that save
+  // goes through autosaveNow, which never omits.
+  function buildLogPayload(
+    itemsSnapshot: ItemState[],
+    completed: boolean,
+    omitPersistedCapture = false,
+  ) {
     return {
       assignmentId: Number(assignmentId),
       programDayId: Number(programDayId),
@@ -1089,7 +1115,20 @@ export function WorkoutPage({
         weightUnit: it.weightUnit,
         rpe: it.rpe ? Number(it.rpe) : null,
         notes: it.athleteNotes || null,
-        sets: it.sets.map((s) => ({
+        sets: it.sets.map((s) => {
+          // Omitted, not nulled. The server treats an absent key as "keep what you have" and
+          // an explicit null as "clear it", so nulling here would erase the very data this is
+          // trying to avoid re-uploading.
+          const omitCapture =
+            omitPersistedCapture && capturePersistedRef.current.has(captureKey(it.key, s.setNumber));
+          const capture = omitCapture
+            ? {}
+            : {
+                barPathTrace: s.barPathTrace,
+                armPathTrace: s.armPathTrace,
+                skeletonFrames: s.skeletonFrames,
+              };
+          return {
           setNumber: s.setNumber,
           reps: s.reps || null,
           weight: s.weight || null,
@@ -1101,10 +1140,8 @@ export function WorkoutPage({
           concentricSeconds: s.concentricSeconds,
           eccentricSeconds: s.eccentricSeconds,
           barPathDeviationCm: s.barPathDeviationCm,
-          barPathTrace: s.barPathTrace,
           formFaults: s.formFaults,
           repBreakdown: s.repBreakdown,
-          armPathTrace: s.armPathTrace,
           peakPowerWatts: s.peakPowerWatts,
           meanPowerWatts: s.meanPowerWatts,
           eccentricMeanVelocityMps: s.eccentricMeanVelocityMps,
@@ -1140,8 +1177,9 @@ export function WorkoutPage({
           trustScores: s.trustScores,
           captureDeviceInfo: s.captureDeviceInfo,
           trackingDiagnostics: s.trackingDiagnostics,
-          skeletonFrames: s.skeletonFrames,
-        })),
+          ...capture,
+          };
+        }),
       })),
     };
   }
@@ -1206,6 +1244,16 @@ export function WorkoutPage({
     onSuccess: ({ synced, silent, data }, { payload }) => {
       consecutiveAutosaveFailuresRef.current = 0;
       lastPermanentRejectionRef.current = null;
+      // synced, not merely reaching onSuccess. An offline save resolves here with
+      // synced === false after queueing, so trusting the hook alone would mark capture data
+      // as server-held at the exact moment it was not. See capturePersistedRef.
+      if (synced) {
+        for (const it of itemsRef.current) {
+          for (const st of it.sets) {
+            if (setHasCapture(st)) capturePersistedRef.current.add(captureKey(it.key, st.setNumber));
+          }
+        }
+      }
       // The offline banner needs to reflect reality regardless of which
       // save path triggered it -- only the toast and the query refetch
       // (items only ever hydrates from `data` once per mount, so refetching
@@ -1373,8 +1421,16 @@ export function WorkoutPage({
     runQueuedSave(args);
   }
 
-  function queueSave(args: { completed: boolean; itemsSnapshot: ItemState[]; silent: boolean }) {
-    queueRawSave({ payload: buildLogPayload(args.itemsSnapshot, args.completed), silent: args.silent });
+  function queueSave(args: {
+    completed: boolean;
+    itemsSnapshot: ItemState[];
+    silent: boolean;
+    omitPersistedCapture?: boolean;
+  }) {
+    queueRawSave({
+      payload: buildLogPayload(args.itemsSnapshot, args.completed, args.omitPersistedCapture),
+      silent: args.silent,
+    });
   }
 
   // Both "Mark Workout Complete" taps (overview and the last logging page)
@@ -1425,6 +1481,10 @@ export function WorkoutPage({
         completed: dayCompletedRef.current,
         itemsSnapshot: nextItems,
         silent: true,
+        // The only caller that omits. This is the keystroke path -- typing a rep count cannot
+        // change capture data. autosaveNow below, which is what a finished camera set goes
+        // through, always sends it in full.
+        omitPersistedCapture: true,
       });
     }, 1200);
   }
