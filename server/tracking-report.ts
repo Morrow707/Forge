@@ -478,7 +478,18 @@ function computeFlags(r: TrackedSetRow): string[] {
   // is a different failure mode (summarizeTrackedSet/summarizeJumpSet's own phantom-phase
   // filtering already leans conservative against it) and flagging it here risks a false
   // positive on a set the athlete simply logged wrong.
-  const loggedReps = r.reps ? parseInt(r.reps, 10) : null;
+  // Skipped entirely when the pipeline DELIBERATELY withheld its numbers. Those outcomes
+  // store an all-zero metrics row, so this check would read zero tracked reps and report
+  // "Logged 10 reps but tracking only found 0" -- which points at the wrong thing. Tracking
+  // found reps in that take; they were thrown away on purpose because the scale behind them
+  // was wrong, and the outcome's own message already says so. Seen on a real bench set that
+  // showed this flag, "Calibration unresolved on 78% of frames", and a 299cm range-of-motion
+  // warning all at once, three symptoms of one cause presented as three problems.
+  const withheldDeliberately =
+    d?.outcome === "empty_implausible_scale" ||
+    d?.outcome === "empty_calibration_failed" ||
+    d?.outcome === "empty_no_clean_read";
+  const loggedReps = r.reps && !withheldDeliberately ? parseInt(r.reps, 10) : null;
   if (loggedReps && loggedReps > 0) {
     const trackedReps = Array.isArray(r.repBreakdown)
       ? r.repBreakdown.length
