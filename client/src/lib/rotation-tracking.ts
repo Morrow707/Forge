@@ -78,6 +78,70 @@ export function computeSeparationDeg(landmarks: Landmark[]): number | null {
   return angleDiffDeg(lineAngleDeg(ls, rs), lineAngleDeg(lh, rh));
 }
 
+// Camera overlord: same "sustained drift forces a full reacquisition, an isolated dip just gets
+// suppressed" two-check shape ImplementTracker/AvImplementTracker already established for a live
+// per-frame implement lock, adapted here to a post-hoc angle trace instead -- this module has no
+// live "lock" to drop (Pose/Vision re-detects every frame independently, there's nothing
+// stateful carried between calls), so the check operates on the resulting trace itself rather
+// than a running detector state.
+//
+// A real shoulder/hip separation can't physically snap by MAX_PLAUSIBLE_ROTATION_VELOCITY_DEG_PER_S
+// and back within a couple of frames -- that signature is a single misdetected frame (a brief
+// occlusion, a landmark momentarily swapped left/right), not a real rotation. An ISOLATED spike
+// (a short run, both ends bordered by frames back near the pre-spike trend) is interpolated
+// through, same repair kb-swing-tracking.ts's own rejectImplausible3dAccelerationSpikes applies
+// for the identical "a couple of bad frames, not a real trend" signature. A SUSTAINED run (many
+// consecutive frames all reading the same implausible velocity) reads differently -- either the
+// tracker lost the athlete's actual left/right sides for a real stretch, or a genuinely chaotic
+// misdetection -- and gets dropped from the trace outright instead of interpolated, the same
+// "force a fresh reacquisition, don't dead-reckon through it" stance a dropped ImplementTracker
+// lock takes rather than reporting a guessed position.
+//
+// Untuned starting values, no real footage to calibrate against yet -- same caveat every
+// heuristic constant in this codebase carries.
+const MAX_PLAUSIBLE_ROTATION_VELOCITY_DEG_PER_S = 1200;
+const SUSTAINED_DRIFT_MIN_RUN = 4;
+
+function cleanRotationTrace(trace: RotationSample[]): RotationSample[] {
+  if (trace.length < 3) return trace;
+  const flagged = new Array(trace.length).fill(false);
+  for (let i = 1; i < trace.length; i++) {
+    const dtSec = (trace[i].t - trace[i - 1].t) / 1000;
+    if (dtSec <= 0) continue;
+    const velocity = Math.abs(angleDiffDeg(trace[i].separationDeg, trace[i - 1].separationDeg)) / dtSec;
+    if (velocity > MAX_PLAUSIBLE_ROTATION_VELOCITY_DEG_PER_S) flagged[i] = true;
+  }
+
+  const cleaned: RotationSample[] = [];
+  let i = 0;
+  while (i < trace.length) {
+    if (!flagged[i]) {
+      cleaned.push(trace[i]);
+      i++;
+      continue;
+    }
+    let runEnd = i;
+    while (runEnd < trace.length && flagged[runEnd]) runEnd++;
+    const before = trace[i - 1];
+    const after = trace[runEnd];
+    // Sustained (long run), or a short run with no trustworthy frame on one side to
+    // interpolate between (the flagged run starts at index 0, or runs off the end) -- drop
+    // outright, same reasoning as the header comment above.
+    if (runEnd - i >= SUSTAINED_DRIFT_MIN_RUN || !before || !after) {
+      i = runEnd;
+      continue;
+    }
+    // Isolated dip -- interpolate across it.
+    const span = after.t - before.t;
+    for (let k = i; k < runEnd; k++) {
+      const frac = span > 0 ? (trace[k].t - before.t) / span : 0;
+      cleaned.push({ t: trace[k].t, separationDeg: before.separationDeg + (after.separationDeg - before.separationDeg) * frac });
+    }
+    i = runEnd;
+  }
+  return cleaned;
+}
+
 export type RotationSample = { t: number; separationDeg: number };
 
 export type RotationSummary = {
@@ -94,14 +158,16 @@ export type RotationSummary = {
 };
 
 export function summarizeRotation(frames: PoseFrame[]): RotationSummary | null {
-  const trace: RotationSample[] = [];
+  const rawTrace: RotationSample[] = [];
   const spreadTrace: { t: number; spread: number }[] = [];
   for (const f of frames) {
     const sep = computeSeparationDeg(f.worldLandmarks);
-    if (sep != null) trace.push({ t: f.t, separationDeg: sep });
+    if (sep != null) rawTrace.push({ t: f.t, separationDeg: sep });
     const spread = crossDiagonalSpread(f.worldLandmarks);
     if (spread != null) spreadTrace.push({ t: f.t, spread });
   }
+  // Camera overlord -- see cleanRotationTrace's own comment above.
+  const trace = cleanRotationTrace(rawTrace);
   if (trace.length < 6) return null;
 
   // 95th percentile of |separation|, not a raw max -- same protection
