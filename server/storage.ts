@@ -18520,9 +18520,18 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         and(inArray(assignments.coachId, coachIds), eq(assignmentCorrectives.exerciseId, exerciseId)),
       );
 
+    // estimatedOneRm stays in the unit the set was actually logged in --
+    // the leaderboard renders it as `${estimatedOneRm} ${weightUnit}`, so
+    // converting it would mislabel the number. Ranking, though, has to
+    // compare athletes (and an athlete's own sets from before/after a unit
+    // switch) on one scale: a 100 kg lift is a bigger lift than a 200 lb
+    // one, but sorts below it on the raw number. oneRmLbs is that shared
+    // scale, normalized with the same kg->lbs factor computeTeamChallenge-
+    // Progress and getFormOverwatchForExercise already use, and is never
+    // returned to the client.
     const bestByAthlete = new Map<
       number,
-      { estimatedOneRm: number; weight: number; reps: number; date: string; weightUnit: string }
+      { estimatedOneRm: number; oneRmLbs: number; weight: number; reps: number; date: string; weightUnit: string }
     >();
     for (const r of [...peRows, ...correctiveRows]) {
       if (r.weightMode !== "numeric" || !r.weight || !r.reps) continue;
@@ -18530,14 +18539,17 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       const reps = parseInt(r.reps, 10);
       if (Number.isNaN(weight) || Number.isNaN(reps) || reps <= 0) continue;
       const estimatedOneRm = Math.round(weight * (1 + reps / 30) * 10) / 10;
+      const weightUnit = r.weightUnit ?? "lbs";
+      const oneRmLbs = weightUnit === "kg" ? estimatedOneRm * 2.20462 : estimatedOneRm;
       const existing = bestByAthlete.get(r.athleteId);
-      if (!existing || estimatedOneRm > existing.estimatedOneRm) {
+      if (!existing || oneRmLbs > existing.oneRmLbs) {
         bestByAthlete.set(r.athleteId, {
           estimatedOneRm,
+          oneRmLbs,
           weight,
           reps,
           date: r.date,
-          weightUnit: r.weightUnit ?? "lbs",
+          weightUnit,
         });
       }
     }
@@ -18567,8 +18579,8 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         currentStreak: streaks.get(id)?.currentStreak ?? 0,
         totalCompleted: streaks.get(id)?.totalCompleted ?? 0,
       }))
-      .sort((a, b) => b.estimatedOneRm - a.estimatedOneRm)
-      .map((entry, rank) => ({ ...entry, rank }));
+      .sort((a, b) => b.oneRmLbs - a.oneRmLbs)
+      .map(({ oneRmLbs: _oneRmLbs, ...entry }, rank) => ({ ...entry, rank }));
   },
 
   // ---------- Speed & Agility leaderboard (Skills-side, fully separate from
