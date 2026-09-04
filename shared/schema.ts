@@ -311,6 +311,23 @@ export const users = pgTable(
     // tracked video or tracking metrics (see requireTrackingNotOptedOut in
     // routes.ts), not just hidden client-side.
     trackingOptOut: boolean("tracking_opt_out").notNull().default(false),
+    // The athlete's own IANA time zone (e.g. "America/Los_Angeles"),
+    // reported by their browser or app rather than asked for, and used to
+    // work out what "today" means for them.
+    //
+    // Everything dated in this app previously took the server's UTC date.
+    // Render runs in UTC, so for a US athlete that day flips at 4pm to 7pm
+    // local: an evening check-in was filed under tomorrow, the "check in
+    // today" prompt came back, the streak broke, and the nutrition day,
+    // ACWR windows and trophies all counted against the wrong day.
+    //
+    // Nullable, and every reader falls back to UTC when it is null -- an
+    // account that predates this, or a client that never reported one,
+    // behaves exactly as it did before rather than guessing a zone.
+    // Deliberately not derived from IP: a VPN or a road trip would silently
+    // move an athlete's training day, and the browser already knows the
+    // real answer.
+    timeZone: text("time_zone"),
     gender: genderEnum("gender"),
     heightIn: integer("height_in"),
     bodyWeightLbs: real("body_weight_lbs"),
@@ -6731,6 +6748,14 @@ export const updateHealthStatusSchema = z.object({
   healthStatus: z.enum(["healthy", "hurt"]),
 });
 export type UpdateHealthStatusInput = z.infer<typeof updateHealthStatusSchema>;
+
+// IANA zone name. Validated by asking Intl whether it can actually format
+// in it (see the route) rather than against a hardcoded list, which would
+// go stale as the tz database gains zones.
+export const setTimeZoneSchema = z.object({
+  timeZone: z.string().trim().min(1).max(64),
+});
+export type SetTimeZoneInput = z.infer<typeof setTimeZoneSchema>;
 
 export const setTrackingOptOutSchema = z.object({
   trackingOptOut: z.boolean(),

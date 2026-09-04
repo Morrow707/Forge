@@ -2490,6 +2490,11 @@ WHERE "trust_score_pct" IS NULL
     OR "kb_swing_trust_score" IS NOT NULL
   );
 
+-- The athlete's own IANA time zone, reported by their client -- see shared/schema.ts's own
+-- comment on users.timeZone. Nullable: every reader falls back to the server's UTC date when it
+-- is null, so an account that predates this behaves exactly as it did before.
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "time_zone" text;
+
 `;
 
 async function main() {

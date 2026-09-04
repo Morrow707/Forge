@@ -64,6 +64,7 @@ import {
   updateNotificationPrefsSchema,
   updatePushCategoryPrefsSchema,
   updateHealthStatusSchema,
+  setTimeZoneSchema,
   setTrackingOptOutSchema,
   pushSubscribeSchema,
   apnsSubscribeSchema,
@@ -4591,6 +4592,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // athlete needs this to re-skin their own AppShell too, not just coaches
   // editing it. Includes .features (see getCoachFeatures) so AppShell can
   // hide nav sections a coach has turned off for their program.
+  // The client reports its own IANA zone; the server does not infer one.
+  // See users.timeZone's schema comment for why this exists and why IP
+  // geolocation is the wrong source for it.
+  //
+  // Validated by asking Intl to build a formatter in the submitted zone
+  // rather than checking against a list: an unknown or malformed zone
+  // throws a RangeError, and a list would go stale as the tz database
+  // gains zones. That also means whatever is stored is guaranteed usable by
+  // the readers that format dates in it.
+  app.post("/api/me/time-zone", requireAuth, async (req, res) => {
+    const user = currentUser(req);
+    const parsed = setTimeZoneSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const { timeZone } = parsed.data;
+    try {
+      new Intl.DateTimeFormat("en-CA", { timeZone });
+    } catch {
+      return res.status(400).json({ message: "Unrecognized time zone." });
+    }
+    // Written unconditionally. The client only calls this when its resolved
+    // zone differs from the one /api/auth/me handed back, so the redundant
+    // case is already filtered where the current value is actually known,
+    // and re-reading the row here to filter it again would cost more than
+    // the occasional no-op UPDATE it would save.
+    await storage.setUserTimeZone(user.id, timeZone);
+    res.json({ timeZone });
+  });
+
   app.get("/api/branding/me", requireAuth, async (req, res) => {
     const user = currentUser(req);
     const branding = await storage.getEffectiveBrandingForUser(user.id);

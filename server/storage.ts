@@ -3267,6 +3267,15 @@ export const storage = {
     };
   },
 
+  // Reported by the client, not asked for -- see users.timeZone's own
+  // schema comment. Written only when it actually differs, so the common
+  // case (an athlete who hasn't travelled since their last visit) costs a
+  // read this function doesn't even make, because the caller already has
+  // the current value from /api/auth/me.
+  async setUserTimeZone(userId: number, timeZone: string) {
+    await db.update(users).set({ timeZone }).where(eq(users.id, userId));
+  },
+
   async updateUserPreferences(userId: number, input: UpdatePreferencesInput) {
     const [row] = await db
       .update(users)

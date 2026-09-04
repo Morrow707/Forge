@@ -159,6 +159,7 @@ function useLogoutMutation() {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const qc = useQueryClient();
   // The one query in the app that wants a 401 treated as valid data --
   // "no one is logged in" -- rather than an error (see queryClient.ts).
   // Retries against the global default (retry: false) specifically because
@@ -205,6 +206,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     logDebug("AUTH", isError ? "auth/me check errored" : `auth/me resolved: ${user ? `logged in as ${user.role}` : "logged out"}`);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoading, isError, user]);
+
+  // Report this device's time zone once a session resolves, and only when
+  // it differs from what the server already has. The server has no other
+  // way to know it -- it runs in UTC, and inferring a zone from the request
+  // IP would let a VPN or a road trip silently move an athlete's training
+  // day. See users.timeZone's own comment in shared/schema.ts for what
+  // depends on getting this right.
+  //
+  // Fire-and-forget: this is a background correction, and an athlete whose
+  // zone fails to save should still get their workout page. It retries
+  // naturally on the next app load, since the comparison below will still
+  // find a mismatch.
+  useEffect(() => {
+    if (!user) return;
+    const resolved = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (!resolved || resolved === user.timeZone) return;
+    apiRequest("POST", "/api/me/time-zone", { timeZone: resolved })
+      .then(() => {
+        // Patch the cached user rather than refetching the whole thing --
+        // this is one field, and leaving the cache stale would make every
+        // later mount re-post the same zone for the rest of the session.
+        qc.setQueryData(["/api/auth/me"], (prev: PublicUser | null | undefined) =>
+          prev ? { ...prev, timeZone: resolved } : prev,
+        );
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, user?.timeZone]);
 
   return (
     <AuthContext.Provider
