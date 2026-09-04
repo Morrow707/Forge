@@ -1761,9 +1761,61 @@ private final class AvCoreMlImplementDetector {
     // gives actual numbers to react to.
     private let minDetectionConfidence: VNConfidence = 0.4
 
+    // Camera overlord: recent boxes VNTrackObjectRequest has reported while actively locked
+    // on, oldest first -- lets a fresh observation be checked against the recent trend before
+    // being trusted, rather than accepted purely because Vision's own tracker still reports a
+    // confidence above minDetectionConfidence. VNTrackObjectRequest tracks visual continuity of
+    // a REGION, not "is this still the right class" (it never re-runs the classifier once
+    // locked on -- see track()'s own comment) -- a sudden implausible jump in the tracked
+    // region's position or size is the signature of the tracker having drifted onto a
+    // DIFFERENT nearby object (the exact "a plate in the background looks like the med ball"
+    // failure mode), not the same one legitimately moving fast.
+    private var recentBoxes: [CGRect] = []
+    private let boxHistoryWindow = 4
+
     func reset() {
         trackingRequest = nil
         trackingLabel = nil
+        recentBoxes = []
+    }
+
+    // Center-to-center normalized distance and area ratio between two boxes -- both in Vision's
+    // own normalized (0-1) box convention, so these are directly comparable across frames with
+    // no extra scaling. areaRatio is always expressed as the larger area over the smaller (>=
+    // 1), so both a sudden growth and a sudden shrink are caught by the same single threshold
+    // check at the call site.
+    private static func boxDelta(_ a: CGRect, _ b: CGRect) -> (centerDistance: Double, areaRatio: Double) {
+        let centerA = CGPoint(x: a.midX, y: a.midY)
+        let centerB = CGPoint(x: b.midX, y: b.midY)
+        let centerDistance = Double(hypot(centerA.x - centerB.x, centerA.y - centerB.y))
+        let areaA = Double(a.width * a.height)
+        let areaB = Double(b.width * b.height)
+        let areaRatio: Double
+        if areaA > 0 && areaB > 0 {
+            areaRatio = max(areaA, areaB) / min(areaA, areaB)
+        } else {
+            areaRatio = 1
+        }
+        return (centerDistance, areaRatio)
+    }
+
+    // Untuned starting thresholds, same "no real footage to calibrate against yet" caveat as
+    // every other heuristic constant in this file. maxPlausibleCenterJump is deliberately
+    // generous (over a third of the frame per single sampled frame) -- VNTrackObjectRequest
+    // already does its own local search around the previous frame's box, so a jump this large
+    // in ONE step is well beyond anything a real implement's actual motion, even airborne,
+    // plausibly covers between two adjacent sampled frames.
+    private let maxPlausibleCenterJump = 0.35
+    private let maxPlausibleAreaRatio = 3.0
+
+    private func isImplausibleJump(from lastBox: CGRect, to newBox: CGRect) -> Bool {
+        let delta = AvCoreMlImplementDetector.boxDelta(lastBox, newBox)
+        return delta.centerDistance > maxPlausibleCenterJump || delta.areaRatio > maxPlausibleAreaRatio
+    }
+
+    private func recordBox(_ box: CGRect) {
+        recentBoxes.append(box)
+        if recentBoxes.count > boxHistoryWindow { recentBoxes.removeFirst() }
     }
 
     // Which class VNTrackObjectRequest is currently locked onto, so a stale lock from a
@@ -1833,12 +1885,27 @@ private final class AvCoreMlImplementDetector {
                     observation.confidence >= minDetectionConfidence
                 else {
                     trackingRequest = nil
+                    recentBoxes = []
                     return nil
                 }
+                let newBox = observation.boundingBox
+                // Camera overlord: VNTrackObjectRequest only ever verifies visual continuity
+                // of the region it's already following -- it never re-checks "is this still
+                // targetLabel" once locked on. A jump this implausible against the recent
+                // trend reads as having drifted onto a different, nearby object, not the same
+                // one legitimately moving -- force a fresh classification next frame instead
+                // of trusting it.
+                if let lastBox = recentBoxes.last, isImplausibleJump(from: lastBox, to: newBox) {
+                    trackingRequest = nil
+                    recentBoxes = []
+                    return nil
+                }
+                recordBox(newBox)
                 request.inputObservation = observation
-                return (observation.boundingBox, observation.confidence)
+                return (newBox, observation.confidence)
             } catch {
                 trackingRequest = nil
+                recentBoxes = []
                 return nil
             }
         }
@@ -1875,6 +1942,9 @@ private final class AvCoreMlImplementDetector {
         let newRequest = VNTrackObjectRequest(detectedObjectObservation: seedObservation)
         newRequest.trackingLevel = .accurate
         trackingRequest = newRequest
+        // Fresh acquisition -- recentBoxes restarts clean rather than comparing against
+        // whatever a previous, unrelated lock last reported.
+        recentBoxes = [best.boundingBox]
         return (best.boundingBox, best.confidence)
     }
 }
@@ -2018,6 +2088,12 @@ private final class AvImplementTracker {
     // lockRampFrames -- see implement-tracking.ts's matching
     // driftRatioHistory for the full reasoning.
     private var driftRatioHistory: [Double] = []
+    // Camera overlord: rolling window of recent REPORTED confidence values (after any
+    // suppression already applied), separate from driftRatioHistory -- catches an isolated,
+    // extreme dip in an otherwise well-tracked rep (see checkForSuspiciousDip below), not the
+    // same signal as drift-from-wrist at all. Same driftHistoryWindow size, no reason for a
+    // second window-size constant.
+    private var confidenceHistory: [Double] = []
 
     func reset() {
         prevLuma = nil
@@ -2032,6 +2108,7 @@ private final class AvImplementTracker {
         lockStreak = 0
         lastColor = nil
         driftRatioHistory = []
+        confidenceHistory = []
     }
 
     // Average of driftRatioHistory, 0 (perfectly on the wrist) when
@@ -2044,6 +2121,52 @@ private final class AvImplementTracker {
 
     private func confidence() -> Double {
         min(1.0, lockStreak / lockRampFrames) * (1 - avgDriftRatio())
+    }
+
+    // Camera overlord, check 1 of 2 -- a lock that's technically "plausible" (within
+    // maxLockDriftFraction) but has spent its whole recent history hugging the very edge of
+    // that boundary, rather than sitting reasonably close to the wrist, is a suspicious
+    // pattern: a real held implement stays reasonably close to the hand frame to frame; a
+    // lock that's wandered onto something else nearby (a rack post, a training partner's arm)
+    // but just barely stays inside the drift ceiling looks exactly like this, and would
+    // otherwise keep climbing toward full confidence via lockStreak alone. Only fires once the
+    // rolling window is genuinely full (driftHistoryWindow samples), so a single noisy frame
+    // can't trigger it -- this is about a sustained pattern, not one reading. Untuned starting
+    // threshold, same "no real footage to calibrate against yet" caveat as every other
+    // heuristic constant in this file.
+    private let suspiciousDriftThreshold = 0.7
+
+    private func isSuspiciousLock() -> Bool {
+        driftRatioHistory.count == driftHistoryWindow && avgDriftRatio() > suspiciousDriftThreshold
+    }
+
+    // Camera overlord, check 2 of 2 -- an isolated, extreme confidence dip in the middle of an
+    // otherwise well-tracked rep is much more likely a single bad frame (motion blur, a
+    // momentary occlusion) than a genuine change in tracking quality; reporting it as-is would
+    // read as a real, wrong number rather than the noise it almost certainly is. Compares
+    // against the PRE-this-frame rolling average specifically so a real anomaly can't drag
+    // down its own baseline before being judged against it -- caller is responsible for
+    // pushing `current` into confidenceHistory only AFTER calling this. Requires the recent
+    // trend to have been reasonably good before this fires at all -- a rep that's already
+    // tracking poorly throughout doesn't get a "dip" flagged on top of already-low numbers,
+    // since there's no established good baseline to compare against. Untuned starting
+    // thresholds, same caveat as every other heuristic constant in this file.
+    private let minHistoryForDipCheck = 3
+    private let dipRecentAvgFloor = 0.5
+    private let dipRatioThreshold = 0.3
+
+    private func isSuspiciousDip(current: Double) -> Bool {
+        guard confidenceHistory.count >= minHistoryForDipCheck else { return false }
+        let recentAvg = confidenceHistory.reduce(0, +) / Double(confidenceHistory.count)
+        return recentAvg > dipRecentAvgFloor && current < recentAvg * dipRatioThreshold
+    }
+
+    // Pushes into confidenceHistory and applies the fixed window size -- the one place both
+    // callers of confidenceHistory.append should go through, so the window-size bookkeeping
+    // can't drift out of sync between them.
+    private func recordConfidence(_ value: Double) {
+        confidenceHistory.append(value)
+        if confidenceHistory.count > driftHistoryWindow { confidenceHistory.removeFirst() }
     }
 
     // Same escape hatch as both ports this descends from -- a caller-side fusion
@@ -2146,10 +2269,31 @@ private final class AvImplementTracker {
         driftRatioHistory.append(driftRatio)
         if driftRatioHistory.count > driftHistoryWindow { driftRatioHistory.removeFirst() }
 
+        // Camera overlord check 1: a lock that's spent its whole recent history hugging the
+        // edge of plausibility, rather than sitting near the wrist, is more likely wandered
+        // onto the wrong object than a real held implement -- force a fresh reacquisition
+        // instead of reporting a confidently-climbing number on it.
+        if isSuspiciousLock() {
+            dropLock()
+            return nil
+        }
+
+        let rawConfidence = confidence()
+
+        // Camera overlord check 2: an isolated, extreme dip against an otherwise-good recent
+        // trend reads as a single bad frame, not a real change in tracking quality -- checked
+        // against history BEFORE this frame's own reading is recorded into it, so the dip
+        // can't skew its own baseline.
+        if isSuspiciousDip(current: rawConfidence) {
+            recordConfidence(rawConfidence)
+            return nil
+        }
+        recordConfidence(rawConfidence)
+
         return TrackResult(
             x: centroid.x / Double(width),
             y: 1.0 - (centroid.y / Double(height)),
-            confidence: confidence(),
+            confidence: rawConfidence,
             color: lastColor
         )
     }
