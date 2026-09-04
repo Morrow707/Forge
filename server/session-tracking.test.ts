@@ -271,16 +271,12 @@ describe("resolveLocation", () => {
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
-  // DEFECT (not fixed here -- server/session-tracking.ts is owned by another
-  // session). PRIVATE_IP_PATTERNS misses three ranges the SSRF guard in
-  // server/safe-fetch.ts does block: 169.254.0.0/16 (link-local, and the cloud
-  // metadata address 169.254.169.254 with it), 100.64.0.0/10 (carrier-grade
-  // NAT), and the fd00::/8 half of the fc00::/7 unique-local range -- the
-  // pattern is /^fc00:/ rather than /^f[cd]/. Consequence is limited but real:
-  // an internal address reaches ipapi.co as an outbound request instead of
-  // being short-circuited, which leaks an internal address to a third party
-  // and burns a lookup that can only ever answer "unknown".
-  it.skip("skips the lookup for link-local, CGNAT, and fd00:: addresses too", async () => {
+  // Was skipped when this test was written, against the defect it describes:
+  // PRIVATE_IP_PATTERNS missed 169.254.0.0/16 (link-local, and the cloud
+  // metadata address with it), 100.64.0.0/10 (carrier-grade NAT), and the
+  // fd00::/8 half of fc00::/7. All three are now blocked -- see that array's
+  // own comment.
+  it("skips the lookup for link-local, CGNAT, and fd00:: addresses too", async () => {
     for (const ip of ["169.254.169.254", "169.254.0.1", "100.64.0.1", "fd12:3456::1"]) {
       await expect(resolveLocation(ip)).resolves.toBeNull();
     }

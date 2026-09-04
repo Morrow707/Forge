@@ -170,19 +170,12 @@ describe("verifyMediaUrl", () => {
     expect(verifyMediaUrl(path, exp, "not a signature")).toBe(false);
   });
 
-  // DEFECT (not fixed here -- server/media-url-signing.ts is owned by another
-  // session). verifyMediaUrl's first line is "if it is not a gated path, allow
-  // it", and isGatedUploadPath only matches the exact one-directory-deep shape
-  // /uploads/<dir>/<file>. Any path with an extra segment therefore falls
-  // through as "public, no signature needed" -- including one whose extra
-  // segment is a traversal that resolves back INTO a gated directory, e.g.
-  // "/uploads/lesson-videos/%2e%2e/form-videos/clip.mp4". Nothing is currently
-  // exploitable through it: express.static is mounted after this middleware in
-  // server/routes.ts and serve-static rejects a decoded path containing "..",
-  // so the request dies there instead. But the gate is being held shut by a
-  // dependency's behavior rather than by its own check. Normalizing the
-  // pathname before the gated-directory test would close it directly.
-  it.skip("refuses a signed path walked out of its gated directory", () => {
+  // Was skipped when this test was written, against the defect it describes:
+  // an unrecognized path under /uploads/ was treated as public, so one with
+  // an extra segment -- including a traversal resolving back into a gated
+  // directory -- was served without a signature. Such paths are now denied
+  // rather than waved through; see isWalkedUploadPath.
+  it("refuses a signed path walked out of its gated directory", () => {
     const { exp, sig } = parse(signMediaUrl(path));
     expect(verifyMediaUrl("/uploads/form-videos/../../../etc/passwd", exp, sig)).toBe(false);
     expect(verifyMediaUrl("/uploads/lesson-videos/../form-videos/a.mp4", undefined, undefined)).toBe(false);

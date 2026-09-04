@@ -21,13 +21,33 @@ export function normalizeIp(ip: string | undefined): string | undefined {
   return ip.startsWith("::ffff:") ? ip.slice(7) : ip;
 }
 
+// Kept deliberately in step with server/safe-fetch.ts's own blocklist. The
+// two exist for different reasons -- that one stops SSRF, this one stops a
+// pointless outbound lookup -- but they answer the same question, and this
+// one was missing three ranges that one already blocked:
+//
+//   - 169.254.0.0/16, link-local, which contains the cloud metadata address
+//     169.254.169.254. Sending that to a third-party geolocation service is
+//     the one address on this list it is least acceptable to leak.
+//   - 100.64.0.0/10, carrier-grade NAT. Real mobile traffic lands here.
+//   - fd00::/8. The pattern was /^fc00:/, but unique-local is fc00::/7,
+//     which is the fc00: and fd00: halves together -- so every fd-prefixed
+//     address, which in practice is most of them, was treated as public.
+//
+// Each miss meant an internal address was handed to ipapi.co as an outbound
+// request instead of being short-circuited: an internal address disclosed
+// to a third party, in exchange for a lookup that could only ever answer
+// "unknown".
 const PRIVATE_IP_PATTERNS = [
   /^127\./,
   /^10\./,
   /^192\.168\./,
   /^172\.(1[6-9]|2\d|3[01])\./,
+  /^169\.254\./,
+  /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./,
+  /^0\./,
   /^::1$/,
-  /^fc00:/i,
+  /^f[cd][0-9a-f]{0,2}:/i,
   /^fe80:/i,
 ];
 

@@ -81,7 +81,47 @@ export function signMediaUrl(url: string): string {
   return `${pathname}?exp=${exp}&sig=${sign(pathname, exp)}`;
 }
 
+// isGatedUploadPath answers "does this need a signature", and anything it
+// does not recognize is treated as public and waved through. That is the
+// right default for a genuinely public directory like lesson-videos, and
+// the wrong one for a path that only looks unrecognized because it has been
+// walked: /uploads/lesson-videos/../form-videos/clip.mp4 has three segments
+// rather than two, so the gate did not match it, so it was allowed without
+// a signature -- while resolving back into a gated directory.
+//
+// Nothing was exploitable through it, because express.static is mounted
+// after this middleware and serve-static rejects a decoded path containing
+// "..", so the request died one layer later. But the gate was being held
+// shut by a dependency's behaviour rather than by its own check, and that
+// is only true until someone reorders the middleware or serves these files
+// another way.
+//
+// So: under /uploads/, an unparseable or walked path is DENIED rather than
+// treated as public. Decoding repeats until stable so a double-encoded
+// "%252e%252e" is caught too, and a malformed escape denies rather than
+// throwing. Deliberately narrow -- it only ever turns an allow into a deny,
+// and only for /uploads/ -- so it cannot make a public file unreachable.
+// isGatedUploadPath itself is left alone, since signMediaUrl uses it to
+// decide what to sign and widening it there would start signing public
+// URLs.
+function isWalkedUploadPath(pathname: string): boolean {
+  let decoded = pathname;
+  try {
+    for (let i = 0; i < 3; i++) {
+      const next = decodeURIComponent(decoded);
+      if (next === decoded) break;
+      decoded = next;
+    }
+  } catch {
+    return true;
+  }
+  const normalized = decoded.replace(/\\/g, "/");
+  if (!normalized.startsWith("/uploads/")) return false;
+  return normalized.split("/").some((segment) => segment === "..");
+}
+
 export function verifyMediaUrl(pathname: string, exp: unknown, sig: unknown): boolean {
+  if (isWalkedUploadPath(pathname)) return false;
   if (!isGatedUploadPath(pathname)) return true;
   if (typeof exp !== "string" || typeof sig !== "string") return false;
   const expNum = Number(exp);
