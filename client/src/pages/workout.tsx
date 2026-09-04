@@ -964,6 +964,38 @@ export function WorkoutPage({
   // below it -- replaces the old separate "overview list" vs. "full-screen
   // single-exercise" viewMode split. null means nothing's expanded yet.
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  // One entry per rendered exercise card (keyed by ItemState.key), so the
+  // effect below can scroll whichever one just became the expanded one
+  // into view -- see that effect's own comment for why this exists at
+  // all. A plain Map ref rather than one ref per item: the item list
+  // itself is dynamic (superset membership, exercise substitutions), so
+  // there's no fixed number of hooks to declare refs for up front.
+  const itemRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  // Newly-expanded exercise scrolls itself to the top of the screen,
+  // rather than leaving the scroll position wherever the collapse (of
+  // whatever was previously open) and expand (of this one) reflow
+  // happened to land it -- reported directly: opening Box Jump while Back
+  // Squat was still open collapsed Back Squat and expanded Box Jump in
+  // the same reflow, and the net height change routinely left the
+  // viewport showing some arbitrary middle point of the page instead of
+  // the exercise the athlete just tapped, forcing a manual scroll up just
+  // to see what they opened. requestAnimationFrame (not a bare synchronous
+  // call) waits for that reflow to actually finish before measuring/
+  // scrolling, so this doesn't scroll to a stale pre-collapse position.
+  // scrollMarginTop on the card itself (set alongside the ref below) is
+  // what keeps this landing BELOW AppShell's sticky title bar instead of
+  // tucking the exercise name underneath it, using the same
+  // --app-shell-sticky-height CSS var that bar already publishes for
+  // exactly this kind of offset.
+  useEffect(() => {
+    if (!expandedKey) return;
+    const el = itemRefs.current.get(expandedKey);
+    if (!el) return;
+    const id = requestAnimationFrame(() => {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [expandedKey]);
   // The mini-rail under each exercise's name is the set pager, not just a
   // progress readout -- tapping segment N shows set N and nothing else
   // (see ExerciseLogContent's own visibleSetIndex). Keyed per exercise so
@@ -976,7 +1008,18 @@ export function WorkoutPage({
   // rest of the hooks, not next to those handlers, since this component
   // has an early return for the loading state further down and a hook
   // can't sit after that without breaking React's hook-order rule.
-  const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
+  // axis starts undecided each gesture and locks to whichever direction
+  // the first real movement reads as (see handleSwipeMove); target is the
+  // real DOM node the gesture started on, kept so the hand-attached
+  // touchmove listener (see handleSwipeStart's own comment on why it can't
+  // just be a JSX onTouchMove prop) can be removed again in handleSwipeEnd.
+  const swipeStartRef = useRef<{
+    x: number;
+    y: number;
+    axis: "horizontal" | "vertical" | null;
+    lastDx: number;
+    target: HTMLDivElement;
+  } | null>(null);
 
   // Keep the screen awake for the length of an active logging session --
   // athletes are usually mid-set with the phone propped up, not holding it.
@@ -1720,25 +1763,84 @@ export function WorkoutPage({
   // destination as tapping a rail segment. swipeStartRef (declared up with
   // the component's other hooks) is a single ref, which is enough since
   // only one exercise is ever expanded (and therefore swipeable) at a
-  // time. Requires a mostly-horizontal, decisively-past-a-scroll-flick
-  // drag so it doesn't fight the page's own vertical scroll.
+  // time.
+  //
+  // React's own onTouchMove JSX prop is attached as a PASSIVE listener (a
+  // perf default since React 17) -- calling preventDefault() from inside
+  // one is silently a no-op, so the browser's native vertical scroll was
+  // always free to kick in the instant a finger moved at all, regardless
+  // of how horizontal the drag actually was. That's the "it also either
+  // scrolls down or scrolls up" bug: the OLD version only judged
+  // horizontal-vs-vertical once, retroactively, on touchend -- by which
+  // point the page had usually already scrolled from the browser's own
+  // gesture handling. Fixed by hand-attaching a real, { passive: false }
+  // touchmove listener (the only way preventDefault() actually takes
+  // effect) in handleSwipeStart, removed again in handleSwipeEnd/
+  // handleSwipeCancel. handleSwipeMove locks the gesture's axis the first
+  // time real movement clears a small dead zone -- horizontal calls
+  // preventDefault() for the rest of the drag (blocking the page's own
+  // scroll so the swipe reads as a clean slide, not a fight), vertical
+  // does nothing and abandons swipe candidacy so an ordinary scroll is
+  // never interfered with either.
+  const SWIPE_AXIS_DEAD_ZONE_PX = 10;
+  const SWIPE_TRIGGER_PX = 40;
+
+  function handleSwipeMove(e: globalThis.TouchEvent) {
+    const state = swipeStartRef.current;
+    if (!state || state.axis === "vertical") return;
+    const t = e.touches[0];
+    if (!t) return;
+    const dx = t.clientX - state.x;
+    const dy = t.clientY - state.y;
+    if (state.axis === null) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) < SWIPE_AXIS_DEAD_ZONE_PX) return;
+      state.axis = Math.abs(dx) > Math.abs(dy) * 1.5 ? "horizontal" : "vertical";
+      if (state.axis === "vertical") return;
+    }
+    e.preventDefault();
+    state.lastDx = dx;
+  }
+
   function handleSwipeStart(e: TouchEvent<HTMLDivElement>) {
     const t = e.touches[0];
-    swipeStartRef.current = { x: t.clientX, y: t.clientY };
+    const target = e.currentTarget;
+    swipeStartRef.current = { x: t.clientX, y: t.clientY, axis: null, lastDx: 0, target };
+    target.addEventListener("touchmove", handleSwipeMove, { passive: false });
+  }
+
+  // Shared cleanup for both a completed gesture (handleSwipeEnd) and an
+  // interrupted one (handleSwipeCancel, e.g. a system dialog popping up
+  // mid-drag) -- removes the hand-attached listener above and hands back
+  // whatever state the gesture ended with.
+  function endSwipeGesture() {
+    const state = swipeStartRef.current;
+    swipeStartRef.current = null;
+    state?.target.removeEventListener("touchmove", handleSwipeMove);
+    return state;
   }
 
   function handleSwipeEnd(item: ItemState, e: TouchEvent<HTMLDivElement>) {
-    const start = swipeStartRef.current;
-    swipeStartRef.current = null;
-    if (!start || item.sets.length < 2) return;
+    const state = endSwipeGesture();
+    if (!state || state.axis !== "horizontal" || item.sets.length < 2) return;
+    // changedTouches can come back empty in rare cases (e.g. the OS
+    // cancels the touch sequence) -- lastDx (kept current by every
+    // preventDefault()-ed touchmove above) is the same measurement one
+    // frame stale, a fine fallback for a gesture that's already over.
     const t = e.changedTouches[0];
-    const dx = t.clientX - start.x;
-    const dy = t.clientY - start.y;
-    if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    const dx = t ? t.clientX - state.x : state.lastDx;
+    if (Math.abs(dx) < SWIPE_TRIGGER_PX) return;
     const current = visibleSetByKey[item.key] ?? 0;
     const next = current + (dx < 0 ? 1 : -1);
     if (next < 0 || next >= item.sets.length) return;
+    // The tactile "slider" snap the swipe was missing -- same cue
+    // jumpToSet's own rail-tap destination already earns a haptic
+    // elsewhere in this app for a successful, deliberate navigation.
+    hapticLight();
     jumpToSet(item, next);
+  }
+
+  function handleSwipeCancel() {
+    endSwipeGesture();
   }
 
   return (
@@ -1937,7 +2039,14 @@ export function WorkoutPage({
                           const label = page.labels[item.key];
                           const visibleSetIndex = visibleSetByKey[item.key] ?? 0;
                           return (
-                            <div key={item.key}>
+                            <div
+                              key={item.key}
+                              ref={(el) => {
+                                if (el) itemRefs.current.set(item.key, el);
+                                else itemRefs.current.delete(item.key);
+                              }}
+                              style={{ scrollMarginTop: "var(--app-shell-sticky-height)" }}
+                            >
                               <div className="flex w-full items-start gap-3 text-left">
                                 <span
                                   className={cn(
@@ -2017,6 +2126,7 @@ export function WorkoutPage({
                                   style={exerciseTheme?.backdropColor ? { backgroundColor: exerciseTheme.backdropColor } : undefined}
                                   onTouchStart={handleSwipeStart}
                                   onTouchEnd={(e) => handleSwipeEnd(item, e)}
+                                  onTouchCancel={handleSwipeCancel}
                                 >
                                   <ExerciseLogContent
                                     item={item}
