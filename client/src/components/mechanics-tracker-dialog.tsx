@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { apiRequest, getJson, resolveApiUrl } from "@/lib/queryClient";
 import { getPoseLandmarker, SubjectContinuityGate, MIN_VISIBILITY } from "@/lib/pose-tracking";
 import { lockCameraExposure } from "@/lib/camera-exposure";
+import { WebCameraChrome } from "@/components/web-camera-chrome";
 import { ensureCameraPermission, onAppForeground, onAppBackground } from "@/lib/native-camera";
 import {
   analyzeMechanics,
@@ -107,9 +108,15 @@ export function MechanicsTrackerDialog({
   const reviewVideoRef = useRef<HTMLVideoElement>(null);
   const reviewCanvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  // See bar-tracker-dialog.tsx's own videoTrackRef comment -- kept in sync with streamRef's
+  // video track so WebCameraChrome always reads the live track, even across an app-foreground
+  // reacquisition.
+  const videoTrackRef = useRef<MediaStreamTrack | null>(null);
+  const cameraChromeContainerRef = useRef<HTMLDivElement>(null);
   function stopCamera() {
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
+    videoTrackRef.current = null;
   }
   const rafRef = useRef<number | null>(null);
   const poseLandmarkerRef = useRef<PoseLandmarker | null>(null);
@@ -238,6 +245,7 @@ export function MechanicsTrackerDialog({
             // tracks, so it's also the motion a longer auto-exposure shutter
             // blurs hardest.
             const videoTrack = stream.getVideoTracks()[0];
+            videoTrackRef.current = videoTrack ?? null;
             if (videoTrack) void lockCameraExposure(videoTrack);
           })
           .catch(() => setCameraError("Camera access denied or unavailable."));
@@ -254,6 +262,7 @@ export function MechanicsTrackerDialog({
       if (!stillLive) {
         streamRef.current?.getTracks().forEach((t) => t.stop());
         streamRef.current = null;
+        videoTrackRef.current = null;
         acquireCamera();
       }
       if (!rafRef.current) rafRef.current = requestAnimationFrame(tick);
@@ -352,6 +361,7 @@ export function MechanicsTrackerDialog({
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
+    videoTrackRef.current = null;
 
     if (framesRef.current.length < 6) {
       toast.error("That capture was too short to analyze -- try again with the full motion in frame.");
@@ -519,9 +529,10 @@ export function MechanicsTrackerDialog({
             {modelLoading && !cameraError && (
               <p className="text-sm text-muted-foreground">Loading tracking model…</p>
             )}
-            <div className="relative overflow-hidden rounded-md bg-black">
+            <div ref={cameraChromeContainerRef} className="relative overflow-hidden rounded-md bg-black">
               <video ref={videoRef} autoPlay playsInline muted className="w-full" />
               <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />
+              <WebCameraChrome containerRef={cameraChromeContainerRef} videoTrackRef={videoTrackRef} active={step === "capture"} />
             </div>
             <p className="text-sm text-muted-foreground">
               {recording

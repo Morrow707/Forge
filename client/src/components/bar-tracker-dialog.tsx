@@ -26,6 +26,7 @@ import {
   type FirstPhaseHint,
 } from "@/lib/bar-tracking";
 import { lockCameraExposure } from "@/lib/camera-exposure";
+import { WebCameraChrome } from "@/components/web-camera-chrome";
 import { ensureCameraPermission, onAppForeground, onAppBackground } from "@/lib/native-camera";
 import {
   recordConfirmedAppearance,
@@ -399,6 +400,12 @@ export function BarTrackerDialog({
   const videoRef = useRef<HTMLVideoElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  // Kept in sync with streamRef's own video track (see attachStream below) -- WebCameraChrome
+  // reads this fresh on every pinch/tap so a track swapped in after an app-foreground
+  // reacquisition (see the onAppForeground handler further down) picks up zoom/focus for free,
+  // same reasoning as camera-zoom-focus.ts's own "read fresh every call" convention.
+  const videoTrackRef = useRef<MediaStreamTrack | null>(null);
+  const cameraChromeContainerRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number | null>(null);
   // World-space (meters) traces -- feed summarizeTrackedSet/summarizeJumpSet
   // for the actual metrics.
@@ -740,6 +747,7 @@ export function BarTrackerDialog({
       // purely diagnostic (confirming what a given device actually granted
       // in the field), never something the math depends on.
       const videoTrack = stream.getVideoTracks()[0];
+      videoTrackRef.current = videoTrack ?? null;
       const settings = videoTrack?.getSettings();
       if (settings) {
         console.debug(
@@ -819,6 +827,7 @@ export function BarTrackerDialog({
       if (!stillLive) {
         streamRef.current?.getTracks().forEach((t) => t.stop());
         streamRef.current = null;
+        videoTrackRef.current = null;
         acquireCamera();
       }
       // onAppBackground below always cancels the rAF loop outright,
@@ -852,6 +861,7 @@ export function BarTrackerDialog({
       if (mediaRecorderRef.current?.state === "recording") mediaRecorderRef.current.stop();
       streamRef.current?.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
+      videoTrackRef.current = null;
     });
 
     const handleOrientation = (e: DeviceOrientationEvent) => {
@@ -866,6 +876,7 @@ export function BarTrackerDialog({
       unsubscribeBackground();
       streamRef.current?.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
+      videoTrackRef.current = null;
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       // Closing mid-countdown shouldn't leave a startTracking() call queued
       // up to fire against a dialog nobody's looking at anymore.
@@ -1910,9 +1921,10 @@ export function BarTrackerDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="relative overflow-hidden rounded-md bg-black">
+        <div ref={cameraChromeContainerRef} className="relative overflow-hidden rounded-md bg-black">
           <video ref={videoRef} autoPlay playsInline muted className="w-full" />
           <canvas ref={overlayRef} className="pointer-events-none absolute inset-0 h-full w-full" />
+          <WebCameraChrome containerRef={cameraChromeContainerRef} videoTrackRef={videoTrackRef} active={open} />
 
           {step === "tracking" && (
             <div className="absolute inset-x-0 top-0 flex flex-col gap-1.5 p-3">

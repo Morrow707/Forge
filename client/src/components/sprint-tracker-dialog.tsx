@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { apiRequest, getJson, resolveApiUrl } from "@/lib/queryClient";
 import { getPoseLandmarker, SubjectContinuityGate, MIN_VISIBILITY, POSE_LANDMARKS, type PoseFrame } from "@/lib/pose-tracking";
 import { lockCameraExposure } from "@/lib/camera-exposure";
+import { WebCameraChrome } from "@/components/web-camera-chrome";
 import { ensureCameraPermission, onAppForeground, onAppBackground } from "@/lib/native-camera";
 import {
   deriveSprintReferencePoint,
@@ -118,6 +119,11 @@ export function SprintTrackerDialog({
   const reviewVideoRef = useRef<HTMLVideoElement>(null);
   const reviewCanvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  // See bar-tracker-dialog.tsx's own videoTrackRef comment -- kept in sync with streamRef's
+  // video track so WebCameraChrome always reads the live track, even across an app-foreground
+  // reacquisition.
+  const videoTrackRef = useRef<MediaStreamTrack | null>(null);
+  const cameraChromeContainerRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number | null>(null);
   const poseLandmarkerRef = useRef<PoseLandmarker | null>(null);
   // See SubjectContinuityGate's own comment -- rejects a detection that
@@ -216,6 +222,7 @@ export function SprintTrackerDialog({
       }
       streamRef.current?.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
+      videoTrackRef.current = null;
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
   }, [open]);
@@ -223,6 +230,7 @@ export function SprintTrackerDialog({
   function stopCamera() {
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
+    videoTrackRef.current = null;
   }
 
   // Camera only needs to actually turn on once the athlete's past the
@@ -285,6 +293,7 @@ export function SprintTrackerDialog({
             // comment. A sprint is exactly the fast-motion case a longer
             // auto-exposure shutter blurs hardest.
             const videoTrack = stream.getVideoTracks()[0];
+            videoTrackRef.current = videoTrack ?? null;
             if (videoTrack) void lockCameraExposure(videoTrack);
           })
           .catch(() => setCameraError("Camera access denied or unavailable."));
@@ -305,6 +314,7 @@ export function SprintTrackerDialog({
       if (!stillLive) {
         streamRef.current?.getTracks().forEach((t) => t.stop());
         streamRef.current = null;
+        videoTrackRef.current = null;
         acquireCamera();
       }
       if (!rafRef.current) rafRef.current = requestAnimationFrame(tick);
@@ -671,13 +681,17 @@ export function SprintTrackerDialog({
             {modelLoading && !cameraError && (
               <p className="text-sm text-muted-foreground">Loading tracking model…</p>
             )}
-            <div className="relative overflow-hidden rounded-md bg-black">
+            <div ref={cameraChromeContainerRef} className="relative overflow-hidden rounded-md bg-black">
               <video ref={videoRef} autoPlay playsInline muted className="w-full" />
               <canvas
                 ref={canvasRef}
                 onClick={handleCanvasClick}
                 className={cn("absolute inset-0 h-full w-full", step === "calibrate" && "cursor-crosshair")}
               />
+              {/* "capture" only, not "calibrate" -- that step's own canvas onClick above marks
+                  checkpoint taps, and a tap-to-focus ring flashing over the same gesture would
+                  read as visual noise on top of an already-meaningful tap. */}
+              <WebCameraChrome containerRef={cameraChromeContainerRef} videoTrackRef={videoTrackRef} active={step === "capture"} />
             </div>
 
             {step === "calibrate" && (
