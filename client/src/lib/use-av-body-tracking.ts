@@ -55,7 +55,10 @@ const ANALYSIS_SAMPLE_STRIDE = 2;
  * stays in the calling dialog; this hook only owns getting the camera live, a recording
  * captured, and raw analyzed frames flowing back out, same division of responsibility as its
  * ARKit counterpart. */
-export function useAvBodyTracking(active: boolean) {
+// orientation defaults to portrait, which is every tracker except the sprint one. See
+// AvBodyTrackingPlugin.swift's captureOrientation for why a sprint wants landscape and why
+// only a sprint is worth the sideways UI a portrait-locked app gives in exchange.
+export function useAvBodyTracking(active: boolean, orientation?: "portrait" | "landscape") {
   const containerRef = useRef<HTMLDivElement>(null);
   const [supported, setSupported] = useState<boolean | null>(null);
   const [supportError, setSupportError] = useState<string | undefined>(undefined);
@@ -124,7 +127,7 @@ export function useAvBodyTracking(active: boolean) {
       }
       started = true;
       setAvCameraActive(true);
-      startAvPreview(rect)
+      startAvPreview(rect, undefined, orientation)
         .then(() => {
           // start() is what actually requests camera access natively (see
           // AvBodyTrackingPlugin.swift's continueStart) -- the mount-time isAvBodyTrackingSupported
@@ -157,7 +160,7 @@ export function useAvBodyTracking(active: boolean) {
         void stopAvPreview();
       }
     };
-  }, [active]);
+  }, [active, orientation]);
 
   useEffect(() => onAvSessionError(setError), []);
 

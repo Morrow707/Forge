@@ -237,9 +237,33 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         }
     }
 
+    // Which way round the capture connections are oriented. Portrait everywhere except the
+    // sprint tracker, which asks for landscape.
+    //
+    // This app is portrait-LOCKED on iPhone (Info.plist UISupportedInterfaceOrientations), so
+    // the UI cannot rotate and the athlete sees a sideways interface while framing a landscape
+    // shot. That is an acceptable trade for exactly the sprint case and no other: a sprint
+    // phone is propped on the ground and walked away from, so nobody is looking at the screen
+    // during the run anyway -- unlike a bench or squat set, where the athlete is right next to
+    // the phone.
+    //
+    // Why it matters enough to accept that: a 16:9 sensor readout used in portrait puts the
+    // NARROW 1080 axis across the scene. For a 40- or 60-yard dash that is the wrong axis by a
+    // factor of nearly two, and the difference is entirely distance the coach has to walk
+    // backwards. Rough numbers for a 60-yard run on a main wide lens: ~237ft of standoff in
+    // portrait against ~89ft in landscape, and ~68ft in landscape on the ultra-wide. Aspect
+    // ratio cannot substitute -- cropping a frame narrower never widens what the lens sees --
+    // and zoom only ever narrows it further. Orientation and lens choice are the only two
+    // things that actually change field of view.
+    private var captureOrientation: AVCaptureVideoOrientation = .portrait
+
     @objc func start(_ call: CAPPluginCall) {
         diagLogBuffer.removeAll()
         logDiag("start() called")
+        // landscapeRight puts the phone's home-button edge to the right when propped on its
+        // long edge, which is the orientation a phone naturally rests in against a wall or a
+        // bag. Anything unrecognised stays portrait.
+        captureOrientation = call.getString("orientation") == "landscape" ? .landscapeRight : .portrait
         purgeStaleRecordings()
 
         // Explicit authorizationStatus handling -- ARKit's ARSession absorbed this
@@ -356,6 +380,14 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             if session.canAddOutput(movieOutput) {
                 session.addOutput(movieOutput)
                 self.movieOutput = movieOutput
+                // Separate connection from the preview layer's -- setting only that one would
+                // have rotated what the athlete sees while leaving every recorded file
+                // portrait, which is the half that actually matters. Written after addOutput
+                // because the connection does not exist until the output is attached.
+                if let movieConnection = movieOutput.connection(with: .video),
+                   movieConnection.isVideoOrientationSupported {
+                    movieConnection.videoOrientation = self.captureOrientation
+                }
             } else {
                 self.logDiag("WARNING: cannot add movie output -- recording unavailable")
             }
@@ -381,7 +413,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             layer.videoGravity = .resizeAspectFill
             layer.frame = layerView.bounds
             if let connection = layer.connection, connection.isVideoOrientationSupported {
-                connection.videoOrientation = .portrait
+                connection.videoOrientation = self.captureOrientation
             }
             layerView.layer.addSublayer(layer)
             container.insertSubview(layerView, belowSubview: webView)

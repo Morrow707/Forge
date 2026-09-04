@@ -215,7 +215,16 @@ export function AvSprintTrackerDialog({
     cancelRecording,
     stopRecordingAndAnalyze,
     cancelAnalysis,
-  } = useAvBodyTracking(open && (step === "calibrate" || step === "capture"));
+  } = useAvBodyTracking(
+    open && (step === "calibrate" || step === "capture"),
+    // The one tracker that records landscape. A sprint is the only capture here where the
+    // subject travels tens of metres ACROSS the frame, and a portrait 16:9 readout puts the
+    // narrow axis on exactly that travel -- roughly 237ft of standoff for a 60-yard run on the
+    // main lens, against roughly 89ft landscape and 68ft landscape on the ultra-wide. The app
+    // is portrait-locked so the UI reads sideways while framing, which is tolerable precisely
+    // here and nowhere else: a sprint phone is propped on the ground and walked away from.
+    "landscape",
+  );
 
   const { data: thresholds } = useQuery<SkillFaultThresholds>({
     queryKey: ["/api/athlete/skill-fault-thresholds", skillAssignmentId],
@@ -564,6 +573,16 @@ export function AvSprintTrackerDialog({
                 Checks hip drop during stance. Won't catch forward lean.
               </p>
             </button>
+            {/* The app is portrait-locked, so turning the phone leaves this UI sideways --
+                which reads as a bug unless it is asked for on purpose. Said here, on the last
+                screen before the camera opens, rather than over the live preview where it
+                would be competing with the framing guides. */}
+            <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+              <span className="font-semibold text-foreground">Turn the phone sideways for this one.</span>{" "}
+              A sprint runs across the frame, so landscape roughly halves how far back the phone
+              has to sit -- about 90ft instead of 240ft for a 60-yard run, or about 70ft on the
+              0.5x lens. The buttons will look rotated while you set up; that is expected.
+            </p>
             <DialogFooter>
               <Button disabled={!cameraAngle} onClick={() => changeStep("calibrate")}>
                 Continue

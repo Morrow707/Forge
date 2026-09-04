@@ -162,7 +162,7 @@ interface AvBodyTrackingPlugin {
     cameraPermission: "authorized" | "denied" | "restricted" | "notDetermined" | "unknown";
   }>;
   requestCameraPermission(): Promise<{ granted: boolean }>;
-  start(options: PreviewRect & { lens?: string }): Promise<void>;
+  start(options: PreviewRect & { lens?: string; orientation?: "portrait" | "landscape" }): Promise<void>;
   stop(): Promise<void>;
   updateRect(rect: PreviewRect): Promise<void>;
   listLenses(): Promise<{ lenses: LensInfo[] }>;
@@ -228,8 +228,15 @@ export async function requestAvCameraPermission(): Promise<boolean> {
   return granted;
 }
 
-export async function startAvPreview(rect: PreviewRect, lens?: string): Promise<void> {
-  await AvBodyTracking.start({ ...plainRect(rect), lens });
+// orientation "landscape" rotates BOTH the preview and the recording connections -- see
+// AvBodyTrackingPlugin.swift's captureOrientation for why the sprint tracker is the one caller
+// that wants it, and why a portrait-locked UI is an acceptable trade only there.
+export async function startAvPreview(
+  rect: PreviewRect,
+  lens?: string,
+  orientation?: "portrait" | "landscape",
+): Promise<void> {
+  await AvBodyTracking.start({ ...plainRect(rect), lens, orientation });
 }
 
 export async function stopAvPreview(): Promise<void> {
