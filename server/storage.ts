@@ -10809,62 +10809,93 @@ Hard rules, no exceptions:
   // which coaches. Runs after every create/rename so the queue stays live;
   // cheap full-table scan, fine at this app's scale.
   async detectTrendingExercises() {
-    const tracked = await db
-      .select({
-        id: exerciseSubmissions.id,
-        status: exerciseSubmissions.status,
-        name: exercises.name,
-      })
+    // Grouped and counted by Postgres rather than in Node. This is awaited
+    // inline by createExercise and by updateExercise on every rename, so it
+    // sits directly in the path a coach takes to add an exercise -- and the
+    // version this replaces loaded EVERY exercise in the platform, each with
+    // its coach row joined on, and grouped them in a JS loop. That got
+    // slower for every coach each time any coach anywhere added an exercise.
+    //
+    // The two NOT EXISTS clauses reproduce the old filter exactly: a name
+    // already owned by an admin is Forge-official and never a candidate, and
+    // a name whose submission has already been approved or rejected is
+    // settled. Written as NOT EXISTS rather than NOT IN because NOT IN
+    // against a subquery returning any NULL silently matches nothing.
+    //
+    // The HAVING clause is also what drives the removal pass below: the old
+    // code deleted a pending row when its group was missing OR had dropped
+    // under two distinct coaches, and "not present in these results" is
+    // precisely those two cases together.
+    const groupRows = await db.execute<{
+      name_key: string;
+      coach_count: string;
+      earliest_id: number;
+      earliest_coach_id: number;
+    }>(sql`
+      SELECT lower(btrim(e.name)) AS name_key,
+             count(DISTINCT e.coach_id) AS coach_count,
+             (array_agg(e.id ORDER BY e.created_at ASC, e.id ASC))[1] AS earliest_id,
+             (array_agg(e.coach_id ORDER BY e.created_at ASC, e.id ASC))[1] AS earliest_coach_id
+      FROM exercises e
+      JOIN users u ON u.id = e.coach_id
+      WHERE u.role = 'coach'
+        AND NOT EXISTS (
+          SELECT 1 FROM exercises fe
+          JOIN users fu ON fu.id = fe.coach_id
+          WHERE fu.role = 'admin' AND lower(btrim(fe.name)) = lower(btrim(e.name))
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM exercise_submissions s
+          JOIN exercises se ON se.id = s.exercise_id
+          WHERE s.status <> 'pending' AND lower(btrim(se.name)) = lower(btrim(e.name))
+        )
+      GROUP BY lower(btrim(e.name))
+      HAVING count(DISTINCT e.coach_id) >= 2
+    `);
+    const qualifying = new Map(
+      groupRows.rows.map((r) => [
+        r.name_key,
+        {
+          coachCount: Number(r.coach_count),
+          earliestId: r.earliest_id,
+          earliestCoachId: r.earliest_coach_id,
+        },
+      ]),
+    );
+
+    // The review queue itself, which is small by construction -- one row per
+    // candidate name, not per exercise.
+    const pendingRows = await db
+      .select({ id: exerciseSubmissions.id, name: exercises.name })
       .from(exerciseSubmissions)
-      .innerJoin(exercises, eq(exerciseSubmissions.exerciseId, exercises.id));
-    const resolvedNames = new Set(
-      tracked.filter((r) => r.status !== "pending").map((r) => r.name.trim().toLowerCase()),
-    );
+      .innerJoin(exercises, eq(exerciseSubmissions.exerciseId, exercises.id))
+      .where(eq(exerciseSubmissions.status, "pending"));
     const pendingByName = new Map(
-      tracked.filter((r) => r.status === "pending").map((r) => [r.name.trim().toLowerCase(), r.id]),
+      pendingRows.map((r) => [r.name.trim().toLowerCase(), r.id]),
     );
 
-    const allExercises = await db.query.exercises.findMany({ with: { coach: true } });
-    const forgeNames = new Set(
-      allExercises
-        .filter((e) => e.coach.role === "admin")
-        .map((e) => e.name.trim().toLowerCase()),
-    );
-
-    const groups = new Map<string, typeof allExercises>();
-    for (const ex of allExercises) {
-      if (ex.coach.role !== "coach") continue;
-      const key = ex.name.trim().toLowerCase();
-      if (resolvedNames.has(key) || forgeNames.has(key)) continue;
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key)!.push(ex);
+    // A pending candidate that no longer qualifies (someone deleted or
+    // renamed their copy, or an admin adopted the name) leaves the queue
+    // rather than sitting there as a stale nag.
+    const staleIds = [...pendingByName]
+      .filter(([key]) => !qualifying.has(key))
+      .map(([, id]) => id);
+    if (staleIds.length > 0) {
+      await db.delete(exerciseSubmissions).where(inArray(exerciseSubmissions.id, staleIds));
     }
 
-    // A pending candidate whose coach count has since dropped below 2
-    // (someone deleted or renamed their copy) no longer belongs in the
-    // queue -- remove it rather than leave a stale nag.
-    for (const [key, pendingId] of pendingByName) {
-      const group = groups.get(key);
-      if (!group || new Set(group.map((e) => e.coachId)).size < 2) {
-        await db.delete(exerciseSubmissions).where(eq(exerciseSubmissions.id, pendingId));
-      }
-    }
-
-    for (const [key, group] of groups) {
-      const distinctCoachIds = new Set(group.map((e) => e.coachId));
-      if (distinctCoachIds.size < 2) continue;
+    for (const [key, group] of qualifying) {
       const existingId = pendingByName.get(key);
       if (existingId) {
         await db
           .update(exerciseSubmissions)
-          .set({ coachCount: distinctCoachIds.size })
+          .set({ coachCount: group.coachCount })
           .where(eq(exerciseSubmissions.id, existingId));
       } else {
-        const earliest = group.reduce((a, b) => (a.createdAt < b.createdAt ? a : b));
         await db.insert(exerciseSubmissions).values({
-          exerciseId: earliest.id,
-          submittedBy: earliest.coachId,
-          coachCount: distinctCoachIds.size,
+          exerciseId: group.earliestId,
+          submittedBy: group.earliestCoachId,
+          coachCount: group.coachCount,
         });
       }
     }
@@ -16626,8 +16657,28 @@ ${catalog}`;
                 if (!s.weight || !s.reps) continue;
                 const key = `${entryWeightUnit}-${s.reps}`;
                 if (priorBestByKey.has(key)) continue;
-                const rows = await tx
-                  .select({ weight: workoutSetEntries.weight })
+                // MAX in Postgres, not every matching row pulled across the
+                // wire and reduced in Node. This runs inside the save
+                // transaction, once per distinct (unit, rep count) pair in
+                // the entry, and the row count it was fetching grows without
+                // bound as an athlete accumulates history -- so the version
+                // that materialized them got slower every week the athlete
+                // kept training, while holding locks.
+                //
+                // weight is a free-text column (a numeric one is its own
+                // finding), so the value is extracted the same way
+                // computeTeamChallengeProgress already does it: pull the
+                // leading number with regexp_match and cast that. This
+                // matches what parseFloat did here before, including a
+                // leading-decimal value like ".5" and any surrounding
+                // whitespace. A row whose weight has no leading number at
+                // all yields NULL rather than erroring, since subscripting a
+                // NULL match gives NULL -- and MAX ignores NULLs, exactly as
+                // the old loop skipped NaN.
+                const [priorBestRow] = await tx
+                  .select({
+                    best: sql<string | null>`MAX((regexp_match(${workoutSetEntries.weight}, '^\\s*([0-9]*\\.?[0-9]+)'))[1]::numeric)`,
+                  })
                   .from(workoutSetEntries)
                   .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
                   .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
@@ -16640,12 +16691,8 @@ ${catalog}`;
                       lt(workoutLogs.date, input.date),
                     ),
                   );
-                let best: number | null = null;
-                for (const r of rows) {
-                  const w = r.weight ? parseFloat(r.weight) : NaN;
-                  if (!Number.isNaN(w) && (best === null || w > best)) best = w;
-                }
-                priorBestByKey.set(key, best);
+                const best = priorBestRow?.best != null ? Number(priorBestRow.best) : null;
+                priorBestByKey.set(key, Number.isFinite(best as number) ? best : null);
               }
             }
           }
